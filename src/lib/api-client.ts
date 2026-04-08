@@ -1,0 +1,75 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { POLL_INTERVALS } from "./constants";
+import type {
+  Agent,
+  HealthStatus,
+  KnowledgeCollection,
+  MemoryEntry,
+} from "@/types";
+
+async function fetchJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  return res.json();
+}
+
+export function useAgents() {
+  return useQuery({
+    queryKey: ["agents"],
+    queryFn: () =>
+      fetchJSON<{ agents: Agent[]; timestamp: string }>("/api/agents"),
+    refetchInterval: POLL_INTERVALS.agents,
+  });
+}
+
+export function useTokenStats() {
+  return useQuery({
+    queryKey: ["tokens"],
+    queryFn: () =>
+      fetchJSON<{ stats: Record<string, unknown>; timestamp: string }>(
+        "/api/tokens"
+      ),
+    refetchInterval: POLL_INTERVALS.tokens,
+  });
+}
+
+export function useMemory(source?: string, query?: string) {
+  const params = new URLSearchParams();
+  if (source) params.set("source", source);
+  if (query) params.set("q", query);
+  return useQuery({
+    queryKey: ["memory", source, query],
+    queryFn: () =>
+      fetchJSON<{
+        claude?: MemoryEntry[];
+        mem0?: unknown;
+        timestamp: string;
+      }>(`/api/memory?${params}`),
+    refetchInterval: POLL_INTERVALS.memory,
+  });
+}
+
+export function useKnowledge() {
+  return useQuery({
+    queryKey: ["knowledge"],
+    queryFn: () =>
+      fetchJSON<{
+        collections: KnowledgeCollection[];
+        totalDocs: number;
+        totalCollections: number;
+        timestamp: string;
+      }>("/api/knowledge"),
+    refetchInterval: POLL_INTERVALS.knowledge,
+  });
+}
+
+export function useHealth() {
+  return useQuery({
+    queryKey: ["health"],
+    queryFn: () =>
+      fetchJSON<{ services: HealthStatus[]; timestamp: string }>("/api/health"),
+    refetchInterval: POLL_INTERVALS.health,
+  });
+}
