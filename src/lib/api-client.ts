@@ -73,3 +73,26 @@ export function useHealth() {
     refetchInterval: POLL_INTERVALS.health,
   });
 }
+
+export function useRemoteAgents() {
+  return useQuery({
+    queryKey: ["remote-agents"],
+    queryFn: () =>
+      fetchJSON<{
+        agents: Array<{
+          id: string;
+          name: string;
+          role: string;
+          platform: string;
+          location: string;
+          host: string;
+          port: number;
+          status: string;
+          latencyMs: number | null;
+          healthData: Record<string, unknown> | null;
+        }>;
+        timestamp: string;
+      }>("/api/remote-agents"),
+    refetchInterval: POLL_INTERVALS.health,
+  });
+}

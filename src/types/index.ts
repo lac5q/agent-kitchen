@@ -70,3 +70,17 @@ export interface FlowEdge {
   to: string;
   type: "request" | "knowledge" | "memory" | "error";
 }
+
+export type AgentLocation = "local" | "tailscale" | "cloudflare";
+
+export interface RemoteAgentConfig {
+  id: string;
+  name: string;
+  role: string;
+  platform: AgentPlatform;
+  location: AgentLocation;
+  host: string;
+  port: number;
+  healthEndpoint: string;
+  tunnelUrl?: string;
+}
