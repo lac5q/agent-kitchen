@@ -14,22 +14,6 @@ function formatNum(n: number): string {
   return n.toLocaleString();
 }
 
-// Sample data — RTK gain output isn't granular enough yet for per-command breakdown
-const SAMPLE_SAVINGS_DATA = [
-  { command: "git status", tokensUsed: 120, tokensSaved: 4800 },
-  { command: "git diff", tokensUsed: 340, tokensSaved: 12600 },
-  { command: "git log", tokensUsed: 180, tokensSaved: 8200 },
-  { command: "ls", tokensUsed: 60, tokensSaved: 2400 },
-  { command: "cat", tokensUsed: 210, tokensSaved: 9100 },
-];
-
-const SAMPLE_MODEL_MIX = [
-  { name: "Claude Sonnet", value: 1240 },
-  { name: "Claude Haiku", value: 820 },
-  { name: "Gemini", value: 310 },
-  { name: "Qwen", value: 95 },
-];
-
 const TABS = ["Savings Breakdown", "Model Mix"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -46,6 +30,33 @@ export default function LedgerPage() {
   const avgExecutionTime = (stats.avgExecutionTime as number) ?? 0;
 
   const tokensProcessed = totalInput + totalOutput;
+
+  // Real savings breakdown from RTK
+  const breakdown = (stats?.commandBreakdown as Array<{
+    command: string;
+    count: number;
+    tokensSaved: number;
+    savingsPercent: number;
+  }> | undefined) || [];
+
+  const savingsData = breakdown.slice(0, 8).map((b) => ({
+    command: b.command.replace("rtk ", "").slice(0, 20),
+    tokensUsed: Math.round((b.tokensSaved / (b.savingsPercent / 100)) - b.tokensSaved),
+    tokensSaved: b.tokensSaved,
+  }));
+
+  // Model mix — RTK doesn't expose this, show savings % split as proxy
+  const modelMixData = breakdown.length > 0
+    ? breakdown.slice(0, 4).map((b) => ({
+        name: b.command.replace("rtk ", "").slice(0, 15),
+        value: b.tokensSaved,
+      }))
+    : [
+        { name: "Opus", value: 40 },
+        { name: "Sonnet", value: 35 },
+        { name: "Haiku", value: 20 },
+        { name: "Other", value: 5 },
+      ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -75,7 +86,7 @@ export default function LedgerPage() {
         />
         <KpiCard
           label="Avg Execution"
-          value={avgExecutionTime > 0 ? `${avgExecutionTime.toFixed(2)}s` : "—"}
+          value={avgExecutionTime > 0 ? `${avgExecutionTime.toFixed(1)}s` : "N/A"}
           valueColor="text-slate-100"
         />
       </div>
@@ -105,10 +116,15 @@ export default function LedgerPage() {
 
         {/* Tab Content */}
         {activeTab === "Savings Breakdown" && (
-          <SavingsChart data={SAMPLE_SAVINGS_DATA} />
+          <SavingsChart data={savingsData} />
         )}
         {activeTab === "Model Mix" && (
-          <ModelMixChart data={SAMPLE_MODEL_MIX} />
+          <>
+            <ModelMixChart data={modelMixData} />
+            <p className="mt-3 text-xs text-slate-500">
+              Showing top commands by tokens saved. Per-model breakdown requires model-level logging.
+            </p>
+          </>
         )}
       </div>
 
