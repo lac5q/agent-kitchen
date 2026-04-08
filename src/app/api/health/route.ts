@@ -43,6 +43,10 @@ export async function GET() {
       const agentsPath = `${process.env.HOME}/github/knowledge/agent-configs`;
       await fsStat(agentsPath);
     }),
+    checkService("APO", async () => {
+      const { stat } = await import("fs/promises");
+      await stat(`${process.env.HOME}/.openclaw/skills/proposals`);
+    }),
   ]);
 
   return Response.json({ services, timestamp: new Date().toISOString() });

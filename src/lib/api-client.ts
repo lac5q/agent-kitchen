@@ -96,3 +96,30 @@ export function useRemoteAgents() {
     refetchInterval: POLL_INTERVALS.health,
   });
 }
+
+export function useApo() {
+  return useQuery({
+    queryKey: ["apo"],
+    queryFn: () =>
+      fetchJSON<{
+        proposals: Array<{
+          id: string;
+          filename: string;
+          skill: string;
+          subsystem: string;
+          timestamp: string;
+          content: string;
+          status: "pending" | "archived";
+        }>;
+        stats: {
+          lastRun: string | null;
+          totalProposals: number;
+          pendingProposals: number;
+          archivedProposals: number;
+          recentLogLines: string[];
+        };
+        timestamp: string;
+      }>("/api/apo"),
+    refetchInterval: 30000, // 30s
+  });
+}
