@@ -15,7 +15,7 @@ export function SummaryBar({ total, active, tasks, errors }: SummaryBarProps) {
     { label: "Incidents", value: errors, color: "text-rose-500" },
   ];
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {stats.map((s) => (
         <Card key={s.label} className="border-slate-800 bg-slate-900/50 p-4">
           <p className="text-xs text-slate-500">{s.label}</p>
