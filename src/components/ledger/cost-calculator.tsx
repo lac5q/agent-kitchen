@@ -27,7 +27,7 @@ export function CostCalculator({
   return (
     <Card className="border-slate-800 bg-slate-900/50 p-5">
       <p className="text-sm font-medium text-slate-300 mb-4">Cost Calculator</p>
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-slate-500">Input $/1M tokens</label>
           <Input
