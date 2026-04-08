@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/notebooks", label: "Notebook Wall", icon: "\u{1F9E0}" },
   { href: "/library", label: "The Library", icon: "\u{1F4DA}" },
   { href: "/flow", label: "The Flow", icon: "\u{1F504}" },
+  { href: "/apo", label: "The Sous Vide", icon: "\u{1F372}" },
 ];
 
 export function Sidebar() {

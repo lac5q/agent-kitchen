@@ -84,3 +84,21 @@ export interface RemoteAgentConfig {
   healthEndpoint: string;
   tunnelUrl?: string;
 }
+
+export interface ApoProposal {
+  id: string;
+  filename: string;
+  skill: string;
+  subsystem: string;
+  timestamp: string;
+  content: string;
+  status: "pending" | "archived";
+}
+
+export interface ApoCycleStats {
+  lastRun: string | null;
+  totalProposals: number;
+  pendingProposals: number;
+  archivedProposals: number;
+  recentLogLines: string[];
+}
