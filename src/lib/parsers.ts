@@ -18,13 +18,18 @@ function detectStatus(
 ): AgentStatus {
   if (!lastModified) return "dormant";
   const minutesAgo = (Date.now() - lastModified.getTime()) / 60000;
-  if (
-    heartbeatContent?.toLowerCase().includes("error") ||
-    heartbeatContent?.toLowerCase().includes("blocked")
-  )
-    return "error";
+
+  // Only flag as error on explicit error markers, not incidental word matches
+  if (heartbeatContent) {
+    const hasError =
+      /(\[BLOCKED\]|\[ERROR\]|STATUS:\s*error|STATUS:\s*blocked|\*\*BLOCKED\*\*|\*\*ERROR\*\*)/i.test(
+        heartbeatContent
+      );
+    if (hasError) return "error";
+  }
+
   if (minutesAgo < 5) return "active";
-  if (minutesAgo < 1440) return "idle";
+  if (minutesAgo < 1440) return "idle"; // within 24 hours
   return "dormant";
 }
 
@@ -169,10 +174,43 @@ function parseRtkOutput(output: string): Record<string, unknown> {
       const pctMatch = line.match(/([\d.]+)%/);
       if (pctMatch) stats.savingsPercent = parseFloat(pctMatch[1]);
     }
-    if (line.includes("Avg execution:") || line.includes("avg:")) {
-      const match = line.match(/([\d.]+)s/);
+    // Match "avg X.Xs" as produced by "Total exec time: 1053m34s (avg 4.8s)"
+    if (line.includes("avg ")) {
+      const match = line.match(/avg\s+([\d.]+)s/);
       if (match) stats.avgExecutionTime = parseFloat(match[1]);
     }
+  }
+
+  // Parse "By Command" section
+  const byCommandIndex = output.indexOf("By Command");
+  if (byCommandIndex !== -1) {
+    const section = output.slice(byCommandIndex);
+    const sectionLines = section.split("\n");
+    const breakdown: {
+      command: string;
+      count: number;
+      tokensSaved: number;
+      savingsPercent: number;
+    }[] = [];
+
+    for (const line of sectionLines) {
+      // Match lines like: " 1.  rtk find                    411   45.4M   68.0%    4.2s  ██████████"
+      const match = line.match(
+        /^\s*\d+\.\s+(rtk\s+\S+(?:\s+\S+)*?)\s{2,}(\d[\d,]*)\s+([\d,.]+[MKB]?)\s+([\d.]+)%/
+      );
+      if (match) {
+        // Trim the command name — it may be truncated with "..."
+        const command = match[1].trim().replace(/\s{2,}.*$/, "");
+        const count = parseInt(match[2].replace(/,/g, ""));
+        const tokensSaved = parseTokenCount(match[3]);
+        const savingsPercent = parseFloat(match[4]);
+        breakdown.push({ command, count, tokensSaved, savingsPercent });
+      }
+    }
+
+    // Sort descending by tokensSaved
+    breakdown.sort((a, b) => b.tokensSaved - a.tokensSaved);
+    stats.commandBreakdown = breakdown;
   }
 
   return stats;
