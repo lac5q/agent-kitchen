@@ -111,25 +111,27 @@ export async function parseAgents(configsPath: string): Promise<Agent[]> {
   });
 }
 
+// Default role mapping — extend or override for your agent naming conventions
+const DEFAULT_ROLES: Record<string, string> = {
+  ceo: "Head Chef",
+  cto: "Kitchen Architect",
+  cmo: "Front of House",
+  "chief-of-staff": "Sous Chef",
+  "chief-product-architect": "Menu Designer",
+  "founding-engineer": "Line Cook",
+  "growth-strategist": "Reservations",
+  "content-creator": "Pastry Chef",
+  "graphic-designer": "Plating Artist",
+  "seo-specialist": "Window Display",
+  "social-media-manager": "Town Crier",
+  "marketing-qa": "Health Inspector",
+  "claude-sonnet-engineer": "Prep Cook",
+  "gemini-senior-engineer": "Guest Chef",
+  "qwen-engineer": "Commis Chef",
+};
+
 function extractRole(dirName: string): string {
-  const roles: Record<string, string> = {
-    ceo: "Head Chef",
-    cto: "Kitchen Architect",
-    cmo: "Front of House",
-    "chief-of-staff": "Sous Chef",
-    "chief-product-architect": "Menu Designer",
-    "founding-engineer": "Line Cook",
-    "growth-strategist": "Reservations",
-    "content-creator": "Pastry Chef",
-    "graphic-designer": "Plating Artist",
-    "seo-specialist": "Window Display",
-    "social-media-manager": "Town Crier",
-    "marketing-qa": "Health Inspector",
-    "claude-sonnet-engineer": "Prep Cook",
-    "gemini-senior-engineer": "Guest Chef",
-    "qwen-engineer": "Commis Chef",
-  };
-  return roles[dirName] || "Kitchen Staff";
+  return DEFAULT_ROLES[dirName] || "Kitchen Staff";
 }
 
 export function parseTokenStats(): Record<string, unknown> | null {

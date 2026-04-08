@@ -1,6 +1,6 @@
 import { execFileSync } from "child_process";
 import { stat as fsStat } from "fs/promises";
-import { MEM0_URL } from "@/lib/constants";
+import { MEM0_URL, AGENT_CONFIGS_PATH } from "@/lib/constants";
 import type { HealthStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +40,7 @@ export async function GET() {
       execFileSync("which", ["qmd"], { timeout: 2000 });
     }),
     checkService("Agents", async () => {
-      const agentsPath = `${process.env.HOME}/github/knowledge/agent-configs`;
-      await fsStat(agentsPath);
+      await fsStat(AGENT_CONFIGS_PATH);
     }),
     checkService("APO", async () => {
       const { stat } = await import("fs/promises");

@@ -1,59 +1,23 @@
+import { readFileSync } from "fs";
+import path from "path";
 import type { RemoteAgentConfig } from "@/types";
 
-export const REMOTE_AGENTS: RemoteAgentConfig[] = [
-  {
-    id: "sophia",
-    name: "Sophia",
-    role: "Sous Chef (Marketing)",
-    platform: "claude",
-    location: "tailscale",
-    host: "100.x.x.x",
-    port: 18889,
-    healthEndpoint: "/health",
-  },
-  {
-    id: "maria",
-    name: "Maria",
-    role: "Pastry Chef (Content)",
-    platform: "claude",
-    location: "tailscale",
-    host: "100.x.x.x",
-    port: 8644,
-    healthEndpoint: "/health",
-  },
-  {
-    id: "lucia",
-    name: "Lucia",
-    role: "Kitchen Porter (Ops)",
-    platform: "claude",
-    location: "tailscale",
-    host: "100.89.143.17",
-    port: 18789,
-    healthEndpoint: "/health",
-  },
-  {
-    id: "alba",
-    name: "Alba",
-    role: "Head Chef (Coordinator)",
-    platform: "claude",
-    location: "cloudflare",
-    host: "localhost",
-    port: 18793,
-    healthEndpoint: "/health",
-    tunnelUrl: "https://alba.epiloguecapital.com",
-  },
-  {
-    id: "gwen",
-    name: "Gwen",
-    role: "Pastry Chef (Social/Pinterest)",
-    platform: "claude",
-    location: "cloudflare",
-    host: "localhost",
-    port: 18792,
-    healthEndpoint: "/health",
-    tunnelUrl: "https://gwen.example.com",
-  },
-];
+function loadAgentRegistry(): RemoteAgentConfig[] {
+  const configPath =
+    process.env.AGENTS_CONFIG_PATH ||
+    path.join(process.cwd(), "agents.config.json");
+  try {
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw);
+    return config.remoteAgents ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function getRemoteAgents(): RemoteAgentConfig[] {
+  return loadAgentRegistry();
+}
 
 export async function pollRemoteAgent(agent: RemoteAgentConfig): Promise<{
   id: string;
@@ -70,17 +34,13 @@ export async function pollRemoteAgent(agent: RemoteAgentConfig): Promise<{
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
     const data = await res.json().catch(() => null);
-    return {
-      id: agent.id,
-      reachable: res.ok,
-      latencyMs: Date.now() - start,
-      data,
-    };
+    return { id: agent.id, reachable: res.ok, latencyMs: Date.now() - start, data };
   } catch {
     return { id: agent.id, reachable: false, latencyMs: null, data: null };
   }
 }
 
 export async function pollAllRemoteAgents() {
-  return Promise.all(REMOTE_AGENTS.map(pollRemoteAgent));
+  const agents = getRemoteAgents();
+  return Promise.all(agents.map(pollRemoteAgent));
 }

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { REMOTE_AGENTS, pollAllRemoteAgents } from "@/lib/agent-registry";
+import { getRemoteAgents, pollAllRemoteAgents } from "@/lib/agent-registry";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const configs = getRemoteAgents();
   const polls = await pollAllRemoteAgents();
 
-  const agents = REMOTE_AGENTS.map((config) => {
+  const agents = configs.map((config) => {
     const poll = polls.find((p) => p.id === config.id);
     return {
       ...config,
