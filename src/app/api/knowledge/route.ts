@@ -1,35 +1,30 @@
+import { readFileSync } from "fs";
 import { readdir, stat } from "fs/promises";
 import path from "path";
 import type { KnowledgeCollection } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const COLLECTIONS: {
-  name: string;
-  category: KnowledgeCollection["category"];
-}[] = [
-  { name: "paperclip", category: "product" },
-  { name: "agent-configs", category: "agents" },
-  { name: "shared", category: "business" },
-  { name: "oms", category: "product" },
-  { name: "shopifybot", category: "product" },
-  { name: "memory", category: "agents" },
-  { name: "meet-recordings", category: "business" },
-  { name: "alex-docs", category: "other" },
-  { name: "turnedyellow-admin", category: "marketing" },
-  { name: "marketing-context", category: "marketing" },
-  { name: "brands", category: "marketing" },
-  { name: "marketing-domains", category: "marketing" },
-  { name: "sketchpop-docs", category: "product" },
-  { name: "business", category: "business" },
-  { name: "abtesting", category: "marketing" },
-];
+function loadCollections(): { name: string; category: KnowledgeCollection["category"] }[] {
+  const configPath =
+    process.env.COLLECTIONS_CONFIG_PATH ||
+    path.join(process.cwd(), "collections.config.json");
+  try {
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw);
+    return config.collections ?? [];
+  } catch {
+    // Fallback: return empty (no collections configured)
+    return [];
+  }
+}
 
 const KNOWLEDGE_BASE =
   process.env.KNOWLEDGE_BASE_PATH ||
   `${process.env.HOME}/github/knowledge`;
 
 export async function GET() {
+  const COLLECTIONS = loadCollections();
   const collections: KnowledgeCollection[] = [];
 
   for (const col of COLLECTIONS) {

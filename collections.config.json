@@ -1,0 +1,19 @@
+{
+  "collections": [
+    { "name": "paperclip", "category": "product" },
+    { "name": "agent-configs", "category": "agents" },
+    { "name": "shared", "category": "business" },
+    { "name": "oms", "category": "product" },
+    { "name": "shopifybot", "category": "product" },
+    { "name": "memory", "category": "agents" },
+    { "name": "meet-recordings", "category": "business" },
+    { "name": "alex-docs", "category": "other" },
+    { "name": "turnedyellow-admin", "category": "marketing" },
+    { "name": "marketing-context", "category": "marketing" },
+    { "name": "brands", "category": "marketing" },
+    { "name": "marketing-domains", "category": "marketing" },
+    { "name": "sketchpop-docs", "category": "product" },
+    { "name": "business", "category": "business" },
+    { "name": "abtesting", "category": "marketing" }
+  ]
+}

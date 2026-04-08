@@ -1,0 +1,57 @@
+{
+  "$schema": "./agents.config.schema.json",
+  "remoteAgents": [
+    {
+      "id": "sophia",
+      "name": "Sophia",
+      "role": "Sous Chef (Marketing)",
+      "platform": "claude",
+      "location": "tailscale",
+      "host": "100.101.88.44",
+      "port": 18889,
+      "healthEndpoint": "/health"
+    },
+    {
+      "id": "maria",
+      "name": "Maria",
+      "role": "Pastry Chef (Content)",
+      "platform": "claude",
+      "location": "tailscale",
+      "host": "100.109.19.110",
+      "port": 8644,
+      "healthEndpoint": "/health"
+    },
+    {
+      "id": "lucia",
+      "name": "Lucia",
+      "role": "Kitchen Porter (Ops)",
+      "platform": "claude",
+      "location": "tailscale",
+      "host": "100.89.143.17",
+      "port": 18789,
+      "healthEndpoint": "/health"
+    },
+    {
+      "id": "alba",
+      "name": "Alba",
+      "role": "Head Chef (Coordinator)",
+      "platform": "claude",
+      "location": "cloudflare",
+      "host": "localhost",
+      "port": 18793,
+      "healthEndpoint": "/health",
+      "tunnelUrl": "https://alba.epiloguecapital.com"
+    },
+    {
+      "id": "gwen",
+      "name": "Gwen",
+      "role": "Pastry Chef (Social)",
+      "platform": "claude",
+      "location": "cloudflare",
+      "host": "localhost",
+      "port": 18792,
+      "healthEndpoint": "/health",
+      "tunnelUrl": "https://gwen.epiloguecapital.com"
+    }
+  ]
+}
