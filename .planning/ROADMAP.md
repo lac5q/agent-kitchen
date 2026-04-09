@@ -10,7 +10,7 @@
 
 **Milestone Goal:** Connect isolated knowledge systems into a unified loop and polish the Flow diagram so the full agent graph is visible and readable.
 
-- [ ] **Phase 1: Knowledge Foundations** - Wire Obsidian vault, llm-wiki, and gitnexus into the automated refresh cycle (config + cron, no new infrastructure)
+- [x] **Phase 1: Knowledge Foundations** - Wire Obsidian vault, llm-wiki, and gitnexus into the automated refresh cycle (config + cron, no new infrastructure) (completed 2026-04-09)
 - [ ] **Phase 2: Knowledge Curator Agent** - Shell script + cron that orchestrates the nightly knowledge loop end-to-end
 - [ ] **Phase 3: Agent Awareness** - mem0 session-start preload so agents begin each session with relevant memory
 - [ ] **Phase 4: Flow Diagram Upgrade** - All React Flow visual and layout improvements, plus new nodes and edges for the knowledge graph
@@ -25,9 +25,9 @@
   1. Library view shows the Obsidian vault (`~/github/knowledge/`) as a tracked collection with doc count and freshness date
   2. llm-wiki wiki pages are indexed by QMD and return results when searched by agents
   3. `gitnexus analyze` runs automatically in the weekly refresh cron across all 8 indexed repos without manual intervention
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 01-01-PLAN.md — Wire collections config, add CollectionCard freshness date, integrate gitnexus into weekly cron
+- [x] 01-01-PLAN.md — Wire collections config, add CollectionCard freshness date, integrate gitnexus into weekly cron
 
 ### Phase 2: Knowledge Curator Agent
 **Goal**: A nightly cron job runs a Knowledge Curator shell script that executes gitnexus analysis, processes llm-wiki raw files, exports mem0 highlights to QMD-indexed markdown, runs `qmd update` for BM25 keyword search, and indexes all markdown collections into Qdrant Cloud (`knowledge_docs` collection) for semantic/vector search
@@ -70,7 +70,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Knowledge Foundations | v1.1 | 0/1 | Planned | - |
+| 1. Knowledge Foundations | v1.1 | 1/1 | Complete   | 2026-04-09 |
 | 2. Knowledge Curator Agent | v1.1 | 0/? | Not started | - |
 | 3. Agent Awareness | v1.1 | 0/? | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |

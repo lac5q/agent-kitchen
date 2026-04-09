@@ -8,9 +8,9 @@
 ### Knowledge Architecture
 
 - [ ] **KNOW-01**: System has a Knowledge Curator agent that runs nightly — executes `gitnexus analyze` across all indexed repos, processes `llm-wiki/raw/` into wiki pages, exports mem0 highlights to QMD-indexed markdown, runs `qmd update` (BM25 keyword index only), and indexes all markdown collections into Qdrant Cloud `knowledge_docs` collection for semantic/vector search. **`qmd embed` is FORBIDDEN** — it stores vectors in local SQLite, not Qdrant Cloud.
-- [ ] **KNOW-02**: Obsidian vault (`~/github/knowledge/`) appears as a tracked collection in the Library view with doc count and freshness
-- [ ] **KNOW-03**: `llm-wiki` wiki pages are indexed by QMD (add to collections.config.json, verify searchable by agents)
-- [ ] **KNOW-04**: GitNexus `analyze` runs automatically in the weekly refresh cron across all 8 indexed repos
+- [x] **KNOW-02**: Obsidian vault (`~/github/knowledge/`) appears as a tracked collection in the Library view with doc count and freshness
+- [x] **KNOW-03**: `llm-wiki` wiki pages are indexed by QMD (add to collections.config.json, verify searchable by agents)
+- [x] **KNOW-04**: GitNexus `analyze` runs automatically in the weekly refresh cron across all 8 indexed repos
 - [ ] **KNOW-05**: mem0 session-start preload — hook or CLAUDE.md instruction that calls `memory_search` with current project context so agents don't start cold every session
 
 ### Flow Dashboard
@@ -49,9 +49,9 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | KNOW-01 | Phase 2 | Pending |
-| KNOW-02 | Phase 1 | Pending |
-| KNOW-03 | Phase 1 | Pending |
-| KNOW-04 | Phase 1 | Pending |
+| KNOW-02 | Phase 1 | Complete |
+| KNOW-03 | Phase 1 | Complete |
+| KNOW-04 | Phase 1 | Complete |
 | KNOW-05 | Phase 3 | Pending |
 | FLOW-01 | Phase 4 | Pending |
 | FLOW-02 | Phase 4 | Pending |
