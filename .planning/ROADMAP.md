@@ -2,11 +2,11 @@
 
 ## Milestones
 
-- 🚧 **v1.1 Knowledge Architecture + Dashboard Polish** - Phases 1-4 (in progress)
+- **v1.1 Knowledge Architecture + Dashboard Polish** - Phases 1-4 (in progress)
 
 ## Phases
 
-### 🚧 v1.1 Knowledge Architecture + Dashboard Polish (In Progress)
+### v1.1 Knowledge Architecture + Dashboard Polish (In Progress)
 
 **Milestone Goal:** Connect isolated knowledge systems into a unified loop and polish the Flow diagram so the full agent graph is visible and readable.
 
@@ -25,7 +25,9 @@
   1. Library view shows the Obsidian vault (`~/github/knowledge/`) as a tracked collection with doc count and freshness date
   2. llm-wiki wiki pages are indexed by QMD and return results when searched by agents
   3. `gitnexus analyze` runs automatically in the weekly refresh cron across all 8 indexed repos without manual intervention
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 01-01-PLAN.md — Wire collections config, add CollectionCard freshness date, integrate gitnexus into weekly cron
 
 ### Phase 2: Knowledge Curator Agent
 **Goal**: A nightly cron job runs a Knowledge Curator shell script that executes gitnexus analysis, processes llm-wiki raw files, exports mem0 highlights to QMD-indexed markdown, and refreshes QMD embeddings
@@ -67,7 +69,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Knowledge Foundations | v1.1 | 0/? | Not started | - |
+| 1. Knowledge Foundations | v1.1 | 0/1 | Planned | - |
 | 2. Knowledge Curator Agent | v1.1 | 0/? | Not started | - |
 | 3. Agent Awareness | v1.1 | 0/? | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |
