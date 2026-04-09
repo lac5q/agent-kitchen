@@ -50,7 +50,7 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
         <div
           className={`h-10 w-10 shrink-0 rounded-full ring-2 ${ringClass} flex items-center justify-center bg-slate-800 text-sm font-bold text-slate-200 uppercase`}
         >
-          {agent.name.slice(0, 2)}
+          {agent.isRemote ? "🌐" : agent.name.slice(0, 2)}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -66,6 +66,15 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
             <Badge variant="outline" className="text-xs border-slate-700 text-slate-300">
               {platformLabel}
             </Badge>
+            {agent.isRemote && (
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                agent.location === "tailscale"
+                  ? "bg-sky-500/20 text-sky-400"
+                  : "bg-orange-500/20 text-orange-400"
+              }`}>
+                {agent.location === "tailscale" ? "Tailscale" : "CF Tunnel"}
+              </span>
+            )}
             <span
               className="text-xs font-medium"
               style={{ color: STATUS_COLORS[agent.status] }}
@@ -83,8 +92,14 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
             <span>Heartbeat: {timeAgo}</span>
             <div className="flex items-center gap-2">
-              <span>{agent.lessonsCount} lessons</span>
-              <span>{agent.todayMemoryCount} mem</span>
+              {agent.isRemote && agent.latencyMs ? (
+                <span className="text-sky-500">~{agent.latencyMs}ms</span>
+              ) : (
+                <>
+                  <span>{agent.lessonsCount} lessons</span>
+                  <span>{agent.todayMemoryCount} mem</span>
+                </>
+              )}
             </div>
           </div>
         </div>
