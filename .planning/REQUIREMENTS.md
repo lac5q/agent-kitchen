@@ -7,7 +7,7 @@
 
 ### Knowledge Architecture
 
-- [ ] **KNOW-01**: System has a Knowledge Curator agent that runs nightly — executes `gitnexus analyze` across all indexed repos, processes `llm-wiki/raw/` into wiki pages, exports mem0 highlights to QMD-indexed markdown, runs `qmd update && qmd embed`
+- [ ] **KNOW-01**: System has a Knowledge Curator agent that runs nightly — executes `gitnexus analyze` across all indexed repos, processes `llm-wiki/raw/` into wiki pages, exports mem0 highlights to QMD-indexed markdown, runs `qmd update` (BM25 keyword index only), and indexes all markdown collections into Qdrant Cloud `knowledge_docs` collection for semantic/vector search. **`qmd embed` is FORBIDDEN** — it stores vectors in local SQLite, not Qdrant Cloud.
 - [ ] **KNOW-02**: Obsidian vault (`~/github/knowledge/`) appears as a tracked collection in the Library view with doc count and freshness
 - [ ] **KNOW-03**: `llm-wiki` wiki pages are indexed by QMD (add to collections.config.json, verify searchable by agents)
 - [ ] **KNOW-04**: GitNexus `analyze` runs automatically in the weekly refresh cron across all 8 indexed repos

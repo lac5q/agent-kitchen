@@ -43,6 +43,8 @@ Progress: [░░░░░░░░░░] 0%
 - Remote agents Lucia=localhost:3001, Alba=localhost:18793 (both local, not Tailscale)
 - GitNexus AGENTS.md injected — run `npx gitnexus analyze` after commits
 - Phase 4 depends on Phase 1 (not Phase 3) — Flow work can proceed in parallel with mem0 preload
+- **Vector store architecture (CRITICAL):** QMD handles BM25/lexical keyword search ONLY (`qmd search`, `qmd query`, `qmd update`). ALL vector/semantic search uses **Qdrant Cloud** (AWS us-west-1). `qmd embed` is FORBIDDEN — it stores vectors in local SQLite, not Qdrant. Embeddings: Gemini `models/gemini-embedding-2-preview` (3072 dims). Qdrant collections: `agent_memory` (mem0 — DO NOT TOUCH), `knowledge_docs` (markdown indexing — built in Phase 2). Config: `~/github/knowledge/mem0-config.yaml`. Docs: `~/github/knowledge/shared/AGENT_INFRASTRUCTURE_SETUP.md`.
+- **Research protocol:** Any research touching search/indexing/embeddings/vectors MUST check `~/github/knowledge/mem0-config.yaml` and run `qmd search "qdrant vector store embed"` before assuming tool capabilities. The knowledge base is the source of truth for established infrastructure.
 
 ### Pending Todos
 
