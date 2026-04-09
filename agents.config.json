@@ -26,21 +26,20 @@
       "name": "Lucia",
       "role": "Kitchen Porter (Ops)",
       "platform": "claude",
-      "location": "tailscale",
-      "host": "100.89.143.17",
-      "port": 18789,
+      "location": "local",
+      "host": "localhost",
+      "port": 3001,
       "healthEndpoint": "/health"
     },
     {
       "id": "alba",
-      "name": "Alba",
+      "name": "Alba (Hermes)",
       "role": "Head Chef (Coordinator)",
-      "platform": "claude",
-      "location": "cloudflare",
+      "platform": "opencode",
+      "location": "local",
       "host": "localhost",
       "port": 18793,
-      "healthEndpoint": "/health",
-      "tunnelUrl": "https://alba.epiloguecapital.com"
+      "healthEndpoint": "/health"
     },
     {
       "id": "gwen",
