@@ -170,7 +170,7 @@ function buildNodes(
     {
       id: "librarian",
       label: "QMD",
-      subtitle: "3,445 docs",
+      subtitle: "BM25 · keyword",
       icon: "🔍",
       x: 620,
       y: 310,
@@ -217,6 +217,16 @@ function buildNodes(
       status: "idle",
       stats: { Domain: "6 topics", Status: "active", Maintainer: "Alba" },
     },
+    {
+      id: "qdrant",
+      label: "Qdrant Cloud",
+      subtitle: "vector store · AWS",
+      icon: "🗄️",
+      x: 740,
+      y: 310,
+      status: "idle",
+      stats: { Type: "Cloud", Region: "AWS us-west-1", Collections: 2 },
+    },
   ];
 
   const agentNodeIds = [...agentNodes.map((a) => a.id), "local-agents"];
@@ -253,6 +263,7 @@ function buildEdges(agentNodeIds: string[]): FlowEdge[] {
     { from: "local-agents", to: "llmwiki", type: "knowledge" },
     { from: "apo", to: "cookbooks", type: "apo" },
     { from: "local-agents", to: "apo", type: "apo" },
+    { from: "notebooks", to: "qdrant", type: "memory" as const },
   ];
 
   return [...baseEdges, ...agentEdges, ...supportEdges, ...intelligenceEdges];
