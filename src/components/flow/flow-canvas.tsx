@@ -1,62 +1,20 @@
 "use client";
 
+import { useMemo } from "react";
 import { FlowNodeComponent } from "./flow-node";
 import { FlowEdgeComponent } from "./flow-edge";
 import type { FlowNode, FlowEdge, HealthStatus } from "@/types";
 
-// Node positions
-const NODE_DEFS: Omit<FlowNode, "status" | "stats">[] = [
-  // Row 1 - main flow
-  { id: "request",    label: "User / Telegram", subtitle: "input channel",        icon: "📨", x: 20,  y: 50  },
-  { id: "gateways",   label: "Gateways",         subtitle: "Alba · Gwen · Sophia", icon: "🚪", x: 170, y: 50  },
-  { id: "manager",    label: "Paperclip",         subtitle: "task orchestrator",   icon: "📞", x: 350, y: 50  },
-  { id: "agents",     label: "Chef Fleet",        subtitle: "22 local + 5 remote", icon: "👨‍🍳", x: 530, y: 50  },
-  { id: "output",     label: "Response",          subtitle: "Discord · Telegram",  icon: "📤", x: 710, y: 50  },
-
-  // Row 2 - support systems
-  { id: "tunnels",    label: "CF Tunnels",        subtitle: "kitchen.epilogue...", icon: "📡", x: 170, y: 200 },
-  { id: "taskboard",  label: "Task Board",        subtitle: "Nerve Kanban",        icon: "📋", x: 350, y: 200 },
-  { id: "notebooks",  label: "mem0",              subtitle: "semantic memory",     icon: "🧠", x: 530, y: 200 },
-  { id: "librarian",  label: "QMD",               subtitle: "3,445 docs",          icon: "🔍", x: 660, y: 200 },
-
-  // Row 3 - intelligence layer
-  { id: "cookbooks",  label: "Skills",            subtitle: "skillshare · 405+",   icon: "📚", x: 350, y: 330 },
-  { id: "apo",        label: "Agent Lightning",   subtitle: "APO · self-learning", icon: "⚡", x: 480, y: 330 },
-  { id: "gitnexus",   label: "GitNexus",          subtitle: "code graph",          icon: "🗺️", x: 610, y: 330 },
-  { id: "llmwiki",    label: "LLM Wiki",          subtitle: "knowledge wiki",      icon: "📖", x: 740, y: 330 },
-];
-
-const EDGE_DEFS: FlowEdge[] = [
-  // Main flow (top row)
-  { from: "request",  to: "gateways",  type: "request"   },
-  { from: "gateways", to: "manager",   type: "request"   },
-  { from: "manager",  to: "agents",    type: "request"   },
-  { from: "agents",   to: "output",    type: "request"   },
-
-  // Vertical connections to support
-  { from: "gateways", to: "tunnels",   type: "request"   },
-  { from: "manager",  to: "taskboard", type: "request"   },
-  { from: "agents",   to: "notebooks", type: "memory"    },
-  { from: "agents",   to: "librarian", type: "knowledge" },
-
-  // Agent to intelligence layer
-  { from: "agents",   to: "cookbooks", type: "knowledge" },
-  { from: "agents",   to: "gitnexus",  type: "knowledge" },
-  { from: "agents",   to: "llmwiki",   type: "knowledge" },
-
-  // APO loop
-  { from: "apo",      to: "cookbooks", type: "apo"       },
-  { from: "agents",   to: "apo",       type: "apo"       },
-];
-
-// Anchor center of each node (rect is 70x70)
+// Node dimensions
 const NODE_W = 70;
 const NODE_H = 70;
 
-function nodeCenter(nodeId: string): { x: number; y: number } | null {
-  const def = NODE_DEFS.find((n) => n.id === nodeId);
-  if (!def) return null;
-  return { x: def.x + NODE_W / 2, y: def.y + NODE_H / 2 };
+interface RemoteAgentSummary {
+  id: string;
+  name: string;
+  status: string;
+  latencyMs: number | null;
+  location: string;
 }
 
 interface FlowCanvasProps {
@@ -66,19 +24,266 @@ interface FlowCanvasProps {
   memoryCount: number;
   knowledgeCount: number;
   skillCount: number;
-  nodeActivity: Record<string, number>; // minutesAgo for each node
+  nodeActivity: Record<string, number>;
   highlightedNode?: string | null;
+  // New: real named agents
+  remoteAgents?: RemoteAgentSummary[];
+  localActiveCount?: number;
+  localTotalCount?: number;
+}
+
+// Key agents in display order
+const KEY_AGENT_IDS = ["alba", "gwen", "sophia", "maria", "lucia"];
+
+const AGENT_ICONS: Record<string, string> = {
+  alba: "🤖",
+  gwen: "🌸",
+  sophia: "💼",
+  maria: "✍️",
+  lucia: "🔧",
+};
+
+function agentSubtitle(location: string): string {
+  if (location === "tailscale") return "Tailscale";
+  if (location === "cloudflare") return "CF";
+  return "local";
+}
+
+function buildNodes(
+  remoteAgents: RemoteAgentSummary[] = [],
+  localTotal: number,
+  localActive: number
+): { nodes: (FlowNode & { agentStatus?: string })[]; agentNodeIds: string[] } {
+  // Filter to key remote agents in defined order
+  const keyRemote = KEY_AGENT_IDS
+    .map((id) => remoteAgents.find((a) => a.id === id))
+    .filter((a): a is RemoteAgentSummary => Boolean(a));
+
+  const agentStartX = 200;
+  const agentSpacing = 100;
+  const agentY = 185;
+
+  const agentNodes: (FlowNode & { agentStatus?: string })[] = keyRemote.map(
+    (agent, i) => ({
+      id: `agent-${agent.id}`,
+      label: agent.name,
+      subtitle: agentSubtitle(agent.location),
+      icon: AGENT_ICONS[agent.id] ?? "🤖",
+      x: agentStartX + i * agentSpacing,
+      y: agentY,
+      status: (agent.status === "active" ? "active" : "idle") as FlowNode["status"],
+      stats: {
+        Location: agentSubtitle(agent.location),
+        ...(agent.latencyMs != null ? { Latency: `${agent.latencyMs}ms` } : {}),
+      },
+      agentStatus: agent.status,
+    })
+  );
+
+  const localX = agentStartX + keyRemote.length * agentSpacing;
+  const localNode: FlowNode & { agentStatus?: string } = {
+    id: "local-agents",
+    label: `${localActive} Active`,
+    subtitle: `${localTotal} local chefs`,
+    icon: "👨‍🍳",
+    x: localX,
+    y: agentY,
+    status: (localActive > 0 ? "active" : "idle") as FlowNode["status"],
+    stats: {
+      Active: localActive,
+      Total: localTotal,
+    },
+    agentStatus: localActive > 0 ? "active" : "idle",
+  };
+
+  const staticNodes: (FlowNode & { agentStatus?: string })[] = [
+    {
+      id: "request",
+      label: "User / Telegram",
+      subtitle: "input channel",
+      icon: "📨",
+      x: 20,
+      y: 50,
+      status: "active",
+      stats: {},
+    },
+    {
+      id: "gateways",
+      label: "Gateways",
+      subtitle: "Alba · Gwen · Sophia",
+      icon: "🚪",
+      x: 170,
+      y: 50,
+      status: "idle",
+      stats: { Alba: "18793", Gwen: "18792", "Sophia/Maria": "Tailscale" },
+    },
+    {
+      id: "manager",
+      label: "Paperclip",
+      subtitle: "task orchestrator",
+      icon: "📞",
+      x: 420,
+      y: 50,
+      status: "idle",
+      stats: { Platform: "Paperclip", Port: "3100" },
+    },
+    {
+      id: "output",
+      label: "Response",
+      subtitle: "Discord · Telegram",
+      icon: "📤",
+      x: 760,
+      y: 50,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "tunnels",
+      label: "CF Tunnels",
+      subtitle: "kitchen.epilogue...",
+      icon: "📡",
+      x: 170,
+      y: 310,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "taskboard",
+      label: "Task Board",
+      subtitle: "Nerve Kanban",
+      icon: "📋",
+      x: 350,
+      y: 310,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "notebooks",
+      label: "mem0",
+      subtitle: "semantic memory",
+      icon: "🧠",
+      x: 490,
+      y: 310,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "librarian",
+      label: "QMD",
+      subtitle: "3,445 docs",
+      icon: "🔍",
+      x: 620,
+      y: 310,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "cookbooks",
+      label: "Skills",
+      subtitle: "skillshare · 405+",
+      icon: "📚",
+      x: 350,
+      y: 410,
+      status: "idle",
+      stats: {},
+    },
+    {
+      id: "apo",
+      label: "Agent Lightning",
+      subtitle: "APO · hourly",
+      icon: "⚡",
+      x: 480,
+      y: 410,
+      status: "idle",
+      stats: { Proposals: "pending", Cycle: "hourly", Mode: "QA" },
+    },
+    {
+      id: "gitnexus",
+      label: "GitNexus",
+      subtitle: "code graph",
+      icon: "🗺️",
+      x: 610,
+      y: 410,
+      status: "idle",
+      stats: { Repos: 8, Symbols: "75k+", Edges: "100k+" },
+    },
+    {
+      id: "llmwiki",
+      label: "LLM Wiki",
+      subtitle: "knowledge wiki",
+      icon: "📖",
+      x: 740,
+      y: 410,
+      status: "idle",
+      stats: { Domain: "6 topics", Status: "active", Maintainer: "Alba" },
+    },
+  ];
+
+  const agentNodeIds = [...agentNodes.map((a) => a.id), "local-agents"];
+  return { nodes: [...staticNodes, ...agentNodes, localNode], agentNodeIds };
+}
+
+function buildEdges(agentNodeIds: string[]): FlowEdge[] {
+  const baseEdges: FlowEdge[] = [
+    { from: "request", to: "gateways", type: "request" },
+    { from: "gateways", to: "manager", type: "request" },
+    { from: "manager", to: "output", type: "request" },
+    { from: "gateways", to: "tunnels", type: "request" },
+    { from: "manager", to: "taskboard", type: "request" },
+  ];
+
+  // Paperclip -> each agent
+  const agentEdges: FlowEdge[] = agentNodeIds.map((id) => ({
+    from: "manager",
+    to: id,
+    type: "request" as const,
+  }));
+
+  // Agents -> support systems (limit to avoid visual noise)
+  const supportEdges: FlowEdge[] = agentNodeIds
+    .flatMap((id) => [
+      { from: id, to: "notebooks", type: "memory" as const },
+      { from: id, to: "librarian", type: "knowledge" as const },
+      { from: id, to: "cookbooks", type: "knowledge" as const },
+    ])
+    .slice(0, 9);
+
+  const intelligenceEdges: FlowEdge[] = [
+    { from: "local-agents", to: "gitnexus", type: "knowledge" },
+    { from: "local-agents", to: "llmwiki", type: "knowledge" },
+    { from: "apo", to: "cookbooks", type: "apo" },
+    { from: "local-agents", to: "apo", type: "apo" },
+  ];
+
+  return [...baseEdges, ...agentEdges, ...supportEdges, ...intelligenceEdges];
+}
+
+function nodeCenterFromList(
+  nodes: FlowNode[],
+  nodeId: string
+): { x: number; y: number } | null {
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) return null;
+  return { x: node.x + NODE_W / 2, y: node.y + NODE_H / 2 };
 }
 
 function getNodeStatus(
   nodeId: string,
   nodeActivity: Record<string, number>,
-  services: HealthStatus[]
-): "active" | "idle" | "error" {
+  services: HealthStatus[],
+  agentStatus?: string
+): FlowNode["status"] {
+  // Agent nodes: use real agent status
+  if (nodeId.startsWith("agent-") || nodeId === "local-agents") {
+    if (agentStatus === "active") return "active";
+    if (agentStatus === "error") return "error";
+    return "idle";
+  }
+
   const minsAgo = nodeActivity[nodeId];
   if (minsAgo !== undefined && minsAgo < 5) return "active";
   if (minsAgo !== undefined && minsAgo < 60) return "idle";
-  // Fall back to service health for infra nodes
+
   const svcMap: Record<string, string> = {
     gateways: "Agents",
     manager: "Paperclip",
@@ -102,36 +307,53 @@ export function FlowCanvas({
   skillCount,
   nodeActivity,
   highlightedNode,
+  remoteAgents = [],
+  localActiveCount,
+  localTotalCount,
 }: FlowCanvasProps) {
-  // Build full FlowNode list with status and stats
-  const nodes: FlowNode[] = NODE_DEFS.map((def) => {
-    const status = getNodeStatus(def.id, nodeActivity, services);
-    const stats: Record<string, string | number> = {};
+  const localActive = localActiveCount ?? activeCount;
+  const localTotal = localTotalCount ?? agentCount;
 
-    if (def.id === "agents")    { stats["Total"] = agentCount; stats["Active"] = activeCount; }
-    if (def.id === "notebooks") stats["Entries"] = memoryCount;
-    if (def.id === "librarian") { stats["Docs"] = knowledgeCount; stats["Collections"] = 15; }
-    if (def.id === "cookbooks") stats["Skills"] = skillCount || "405+";
-    if (def.id === "gateways")  { stats["Alba"] = "18793"; stats["Gwen"] = "18792"; stats["Sophia/Maria"] = "Tailscale"; }
-    if (def.id === "manager")   { stats["Platform"] = "Paperclip"; stats["Port"] = "3100"; }
-    if (def.id === "apo")       { stats["Proposals"] = "pending"; stats["Cycle"] = "hourly"; stats["Mode"] = "QA"; }
-    if (def.id === "gitnexus")  { stats["Repos"] = 8; stats["Symbols"] = "75k+"; stats["Edges"] = "100k+"; }
-    if (def.id === "llmwiki")   { stats["Domain"] = "6 topics"; stats["Status"] = "active"; stats["Maintainer"] = "Alba"; }
+  const { nodes: rawNodes, agentNodeIds } = useMemo(
+    () => buildNodes(remoteAgents, localTotal, localActive),
+    [remoteAgents, localTotal, localActive]
+  );
+
+  const edges = useMemo(() => buildEdges(agentNodeIds), [agentNodeIds]);
+
+  // Apply real-time status, stats overrides
+  const nodes: FlowNode[] = rawNodes.map((raw) => {
+    const status = getNodeStatus(
+      raw.id,
+      nodeActivity,
+      services,
+      raw.agentStatus
+    );
+
+    // Enrich static node stats with live data
+    const stats = { ...raw.stats };
+    if (raw.id === "notebooks") stats["Entries"] = memoryCount;
+    if (raw.id === "librarian") {
+      stats["Docs"] = knowledgeCount;
+      stats["Collections"] = 15;
+    }
+    if (raw.id === "cookbooks") stats["Skills"] = skillCount || "405+";
 
     const svcMatch = services.find((s) =>
-      s.service.toLowerCase().includes(def.id.toLowerCase())
+      s.service.toLowerCase().includes(raw.id.toLowerCase())
     );
     if (svcMatch?.latencyMs != null) {
       stats["latency"] = `${svcMatch.latencyMs}ms`;
     }
 
-    return { ...def, status, stats };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { agentStatus: _drop, ...rest } = raw;
+    return { ...rest, status, stats };
   });
 
-  // Build resolved edges with pixel coordinates
-  const resolvedEdges = EDGE_DEFS.map((edge, i) => {
-    const from = nodeCenter(edge.from);
-    const to = nodeCenter(edge.to);
+  const resolvedEdges = edges.map((edge, i) => {
+    const from = nodeCenterFromList(nodes, edge.from);
+    const to = nodeCenterFromList(nodes, edge.to);
     return {
       ...edge,
       key: `${edge.from}-${edge.to}-${i}`,
@@ -145,11 +367,11 @@ export function FlowCanvas({
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 overflow-x-auto">
       <svg
-        viewBox="0 0 830 430"
+        viewBox="0 0 900 500"
         className="w-full"
-        style={{ minWidth: 600, maxHeight: 450 }}
+        style={{ minWidth: 640, maxHeight: 520 }}
       >
-        {/* Edges (drawn first, under nodes) */}
+        {/* Edges drawn first, under nodes */}
         {resolvedEdges.map((edge) => (
           <FlowEdgeComponent key={edge.key} edge={edge} />
         ))}
@@ -160,7 +382,8 @@ export function FlowCanvas({
             key={node.id}
             node={node}
             highlighted={
-              (nodeActivity[node.id] !== undefined && nodeActivity[node.id] < 2) ||
+              (nodeActivity[node.id] !== undefined &&
+                nodeActivity[node.id] < 2) ||
               highlightedNode === node.id
             }
           />

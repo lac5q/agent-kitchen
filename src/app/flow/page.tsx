@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useHealth, useAgents, useKnowledge, useMemory, useActivity } from "@/lib/api-client";
+import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents } from "@/lib/api-client";
 import { FlowCanvas } from "@/components/flow/flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 
 export default function FlowPage() {
   const { data: healthData } = useHealth();
   const { data: agentsData } = useAgents();
+  const { data: remoteData } = useRemoteAgents();
   const { data: knowledgeData } = useKnowledge();
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
@@ -21,6 +22,16 @@ export default function FlowPage() {
   const knowledgeCount = knowledgeData?.totalDocs || 0;
   const nodeActivity = activityData?.nodeActivity || {};
   const events = activityData?.events || [];
+
+  const remoteAgents = (remoteData?.agents || []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    status: a.status,
+    latencyMs: a.latencyMs,
+    location: a.location,
+  }));
+  const localActiveCount = agentsData?.agents.filter((a: { status: string }) => a.status === "active").length || 0;
+  const localTotalCount = agentsData?.agents.length || 0;
 
   return (
     <div className="space-y-4">
@@ -38,6 +49,9 @@ export default function FlowPage() {
         skillCount={405}
         nodeActivity={nodeActivity}
         highlightedNode={hoveredNode}
+        remoteAgents={remoteAgents}
+        localActiveCount={localActiveCount}
+        localTotalCount={localTotalCount}
       />
 
       {/* Live event feed */}
