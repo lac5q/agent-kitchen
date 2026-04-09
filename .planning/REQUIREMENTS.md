@@ -48,24 +48,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KNOW-01 | — | Pending |
-| KNOW-02 | — | Pending |
-| KNOW-03 | — | Pending |
-| KNOW-04 | — | Pending |
-| KNOW-05 | — | Pending |
-| FLOW-01 | — | Pending |
-| FLOW-02 | — | Pending |
-| FLOW-03 | — | Pending |
-| FLOW-04 | — | Pending |
-| FLOW-05 | — | Pending |
-| FLOW-06 | — | Pending |
-| FLOW-07 | — | Pending |
+| KNOW-01 | Phase 2 | Pending |
+| KNOW-02 | Phase 1 | Pending |
+| KNOW-03 | Phase 1 | Pending |
+| KNOW-04 | Phase 1 | Pending |
+| KNOW-05 | Phase 3 | Pending |
+| FLOW-01 | Phase 4 | Pending |
+| FLOW-02 | Phase 4 | Pending |
+| FLOW-03 | Phase 4 | Pending |
+| FLOW-04 | Phase 4 | Pending |
+| FLOW-05 | Phase 4 | Pending |
+| FLOW-06 | Phase 4 | Pending |
+| FLOW-07 | Phase 4 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 12 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12/12 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-09*
-*Last updated: 2026-04-09 after initial definition*
+*Last updated: 2026-04-08 — Traceability mapped after v1.1 roadmap creation*
