@@ -8,16 +8,16 @@ import type { FlowNode, FlowEdge, HealthStatus } from "@/types";
 
 // Node positions
 const NODE_DEFS: Omit<FlowNode, "status" | "stats">[] = [
-  { id: "request",   label: "Request",   subtitle: "incoming",     icon: "📥", x: 30,  y: 120 },
-  { id: "gateways",  label: "Gateways",  subtitle: "discord/tg",   icon: "🚪", x: 180, y: 60  },
-  { id: "manager",   label: "Manager",   subtitle: "orchestrator",  icon: "📞", x: 350, y: 120 },
-  { id: "agents",    label: "Agents",    subtitle: "chefs",         icon: "👨‍🍳", x: 530, y: 120 },
-  { id: "output",    label: "Output",    subtitle: "response",      icon: "📤", x: 700, y: 120 },
-  { id: "tunnels",   label: "Tunnels",   subtitle: "tailscale",     icon: "📡", x: 180, y: 250 },
-  { id: "taskboard", label: "Taskboard", subtitle: "PMO tasks",     icon: "📋", x: 350, y: 250 },
-  { id: "cookbooks", label: "Cookbooks", subtitle: "skills",        icon: "📚", x: 480, y: 280 },
-  { id: "notebooks", label: "Notebooks", subtitle: "mem0",          icon: "🧠", x: 580, y: 280 },
-  { id: "librarian", label: "Librarian", subtitle: "knowledge",     icon: "🔍", x: 680, y: 280 },
+  { id: "request",   label: "User / Telegram", subtitle: "input channel",             icon: "📥", x: 30,  y: 120 },
+  { id: "gateways",  label: "Gateways",        subtitle: "Alba · Gwen · Sophia",      icon: "🚪", x: 180, y: 60  },
+  { id: "manager",   label: "Paperclip",       subtitle: "task orchestrator",          icon: "📞", x: 350, y: 120 },
+  { id: "agents",    label: "Chef Fleet",      subtitle: "22 local + 5 remote",       icon: "👨‍🍳", x: 530, y: 120 },
+  { id: "output",    label: "Response",        subtitle: "Discord · Telegram · API",  icon: "📤", x: 700, y: 120 },
+  { id: "tunnels",   label: "CF Tunnels",      subtitle: "kitchen.example.com", icon: "📡", x: 180, y: 250 },
+  { id: "taskboard", label: "Task Board",      subtitle: "Nerve Kanban",              icon: "📋", x: 350, y: 250 },
+  { id: "cookbooks", label: "Skills",          subtitle: "skillshare · 405+",         icon: "📚", x: 480, y: 280 },
+  { id: "notebooks", label: "mem0",            subtitle: "semantic memory",           icon: "🧠", x: 580, y: 280 },
+  { id: "librarian", label: "QMD",             subtitle: "3,445 docs",                icon: "🔍", x: 680, y: 280 },
 ];
 
 const EDGE_DEFS: FlowEdge[] = [
@@ -45,6 +45,7 @@ function nodeCenter(nodeId: string): { x: number; y: number } | null {
 interface FlowCanvasProps {
   services: HealthStatus[];
   agentCount: number;
+  activeCount: number;
   memoryCount: number;
   knowledgeCount: number;
   skillCount: number;
@@ -55,14 +56,14 @@ function deriveNodeStatus(
   services: HealthStatus[]
 ): FlowNode["status"] {
   const SERVICE_MAP: Record<string, string[]> = {
-    gateways:  ["discord", "telegram", "gateway"],
-    manager:   ["manager", "opencode", "openclaw"],
-    agents:    ["claude", "codex", "qwen", "gemini"],
+    gateways:  ["discord", "telegram", "gateway", "alba", "gwen", "sophia"],
+    manager:   ["manager", "paperclip", "opencode", "openclaw"],
+    agents:    ["claude", "codex", "qwen", "gemini", "chef"],
     notebooks: ["mem0", "memory"],
     librarian: ["knowledge", "qdrant", "qmd"],
-    tunnels:   ["tailscale", "tunnel"],
-    taskboard: ["pmo", "taskboard"],
-    cookbooks: ["skills", "cookbook"],
+    tunnels:   ["tailscale", "tunnel", "cloudflare", "cf"],
+    taskboard: ["pmo", "taskboard", "nerve", "kanban"],
+    cookbooks: ["skills", "cookbook", "skillshare"],
   };
 
   const keywords = SERVICE_MAP[nodeId];
@@ -81,6 +82,7 @@ function deriveNodeStatus(
 export function FlowCanvas({
   services,
   agentCount,
+  activeCount,
   memoryCount,
   knowledgeCount,
   skillCount,
@@ -96,10 +98,12 @@ export function FlowCanvas({
     const status = deriveNodeStatus(def.id, services);
     const stats: Record<string, string | number> = {};
 
-    if (def.id === "agents") stats["agents"] = agentCount;
-    if (def.id === "notebooks") stats["memories"] = memoryCount;
-    if (def.id === "librarian") stats["docs"] = knowledgeCount;
-    if (def.id === "cookbooks") stats["skills"] = skillCount;
+    if (def.id === "agents") { stats["Total"] = agentCount; stats["Active"] = activeCount; }
+    if (def.id === "notebooks") stats["Entries"] = memoryCount;
+    if (def.id === "librarian") { stats["Docs"] = knowledgeCount; stats["Collections"] = 15; }
+    if (def.id === "cookbooks") stats["Skills"] = skillCount || "405+";
+    if (def.id === "gateways") { stats["Alba"] = "18793"; stats["Gwen"] = "18792"; stats["Sophia/Maria"] = "Tailscale"; }
+    if (def.id === "manager") { stats["Platform"] = "Paperclip"; stats["Port"] = "3100"; }
 
     const svcMatch = services.find((s) =>
       s.service.toLowerCase().includes(def.id.toLowerCase())

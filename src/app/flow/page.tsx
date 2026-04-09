@@ -17,6 +17,7 @@ export default function FlowPage() {
 
   const services = healthData?.services ?? [];
   const agentCount = agentsData?.agents?.length ?? 0;
+  const activeCount = agentsData?.agents?.filter((a: { status: string }) => a.status === "active").length ?? 0;
   const knowledgeCount = knowledgeData?.totalDocs ?? 0;
 
   // Count memory entries from claude source
@@ -42,6 +43,7 @@ export default function FlowPage() {
       <FlowCanvas
         services={services}
         agentCount={agentCount}
+        activeCount={activeCount}
         memoryCount={memoryCount}
         knowledgeCount={knowledgeCount}
         skillCount={skillCount}

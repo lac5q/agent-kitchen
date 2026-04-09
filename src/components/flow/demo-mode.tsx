@@ -9,12 +9,13 @@ interface DemoStep {
 }
 
 const DEMO_STEPS: DemoStep[] = [
-  { nodeId: "agents",    caption: "1. A chef agent receives the task: write a Facebook Ad for PopSmiths" },
-  { nodeId: "notebooks", caption: "2. The agent checks its notebooks for brand voice and past campaigns" },
-  { nodeId: "cookbooks", caption: "3. It consults the cookbooks for proven ad templates and formulas" },
-  { nodeId: "librarian", caption: "4. The librarian searches the knowledge base for relevant product data" },
-  { nodeId: "agents",    caption: "5. The agent composes the ad copy using all gathered context" },
-  { nodeId: "notebooks", caption: "6. Final output is stored in notebooks for future reference" },
+  { nodeId: "agents",    caption: "1. Agent fails a task → OpenClaw logs the error" },
+  { nodeId: "notebooks", caption: "2. Hermes Audit scans mem0 for failure patterns" },
+  { nodeId: "librarian", caption: "3. QMD queries knowledge base for context" },
+  { nodeId: "cookbooks", caption: "4. Agent Lightning detects the failing skill" },
+  { nodeId: "taskboard", caption: "5. APO generates a proposal → queued in Nerve" },
+  { nodeId: "gateways",  caption: "6. Luis is alerted via Telegram / Discord" },
+  { nodeId: "cookbooks", caption: "7. After approval → skill updated, agents improve" },
 ];
 
 const STEP_DURATION = 3000; // 3 seconds per step
@@ -71,7 +72,7 @@ export function DemoMode({ onHighlight }: DemoModeProps) {
             : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
         }`}
       >
-        {running ? "Stop Demo" : "Demo: Write a Facebook Ad"}
+        {running ? "Stop Demo" : "Demo: APO Improvement Cycle"}
       </button>
 
       {/* Step progress dots */}
