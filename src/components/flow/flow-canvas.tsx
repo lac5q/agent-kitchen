@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import { FlowNodeComponent } from "./flow-node";
 import { FlowEdgeComponent } from "./flow-edge";
-import { DemoMode } from "./demo-mode";
 import type { FlowNode, FlowEdge, HealthStatus } from "@/types";
 
 // Node positions
@@ -49,34 +47,30 @@ interface FlowCanvasProps {
   memoryCount: number;
   knowledgeCount: number;
   skillCount: number;
+  nodeActivity: Record<string, number>; // minutesAgo for each node
 }
 
-function deriveNodeStatus(
+function getNodeStatus(
   nodeId: string,
+  nodeActivity: Record<string, number>,
   services: HealthStatus[]
-): FlowNode["status"] {
-  const SERVICE_MAP: Record<string, string[]> = {
-    gateways:  ["discord", "telegram", "gateway", "alba", "gwen", "sophia"],
-    manager:   ["manager", "paperclip", "opencode", "openclaw"],
-    agents:    ["claude", "codex", "qwen", "gemini", "chef"],
-    notebooks: ["mem0", "memory"],
-    librarian: ["knowledge", "qdrant", "qmd"],
-    tunnels:   ["tailscale", "tunnel", "cloudflare", "cf"],
-    taskboard: ["pmo", "taskboard", "nerve", "kanban"],
-    cookbooks: ["skills", "cookbook", "skillshare"],
+): "active" | "idle" | "error" {
+  const minsAgo = nodeActivity[nodeId];
+  if (minsAgo !== undefined && minsAgo < 5) return "active";
+  if (minsAgo !== undefined && minsAgo < 60) return "idle";
+  // Fall back to service health for infra nodes
+  const svcMap: Record<string, string> = {
+    gateways: "Agents",
+    manager: "Paperclip",
+    notebooks: "mem0",
+    librarian: "QMD",
   };
-
-  const keywords = SERVICE_MAP[nodeId];
-  if (!keywords) return "active";
-
-  const matched = services.filter((s) =>
-    keywords.some((kw) => s.service.toLowerCase().includes(kw))
-  );
-
-  if (matched.length === 0) return "idle";
-  if (matched.some((s) => s.status === "down")) return "error";
-  if (matched.some((s) => s.status === "degraded")) return "idle";
-  return "active";
+  const svcName = svcMap[nodeId];
+  if (!svcName) return "idle";
+  const svc = services.find((s) => s.service === svcName);
+  if (svc?.status === "up") return "active";
+  if (svc?.status === "down") return "error";
+  return "idle";
 }
 
 export function FlowCanvas({
@@ -86,16 +80,11 @@ export function FlowCanvas({
   memoryCount,
   knowledgeCount,
   skillCount,
+  nodeActivity,
 }: FlowCanvasProps) {
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-
-  const handleHighlight = useCallback((id: string | null) => {
-    setHighlightedId(id);
-  }, []);
-
   // Build full FlowNode list with status and stats
   const nodes: FlowNode[] = NODE_DEFS.map((def) => {
-    const status = deriveNodeStatus(def.id, services);
+    const status = getNodeStatus(def.id, nodeActivity, services);
     const stats: Record<string, string | number> = {};
 
     if (def.id === "agents") { stats["Total"] = agentCount; stats["Active"] = activeCount; }
@@ -130,34 +119,26 @@ export function FlowCanvas({
   });
 
   return (
-    <div className="space-y-6">
-      {/* SVG Canvas */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 overflow-x-auto">
-        <svg
-          viewBox="0 0 820 380"
-          className="w-full"
-          style={{ minWidth: 600, maxHeight: 420 }}
-        >
-          {/* Edges (drawn first, under nodes) */}
-          {resolvedEdges.map((edge) => (
-            <FlowEdgeComponent key={edge.key} edge={edge} />
-          ))}
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 overflow-x-auto">
+      <svg
+        viewBox="0 0 820 380"
+        className="w-full"
+        style={{ minWidth: 600, maxHeight: 420 }}
+      >
+        {/* Edges (drawn first, under nodes) */}
+        {resolvedEdges.map((edge) => (
+          <FlowEdgeComponent key={edge.key} edge={edge} />
+        ))}
 
-          {/* Nodes */}
-          {nodes.map((node) => (
-            <FlowNodeComponent
-              key={node.id}
-              node={node}
-              highlighted={highlightedId === node.id}
-            />
-          ))}
-        </svg>
-      </div>
-
-      {/* Demo mode */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-4">
-        <DemoMode onHighlight={handleHighlight} />
-      </div>
+        {/* Nodes */}
+        {nodes.map((node) => (
+          <FlowNodeComponent
+            key={node.id}
+            node={node}
+            highlighted={nodeActivity[node.id] !== undefined && nodeActivity[node.id] < 2}
+          />
+        ))}
+      </svg>
     </div>
   );
 }

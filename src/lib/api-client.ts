@@ -143,3 +143,22 @@ export function useApo() {
     refetchInterval: 30000, // 30s
   });
 }
+
+export function useActivity() {
+  return useQuery({
+    queryKey: ["activity"],
+    queryFn: () => fetchJSON<{
+      events: Array<{
+        id: string;
+        timestamp: string;
+        node: string;
+        type: string;
+        message: string;
+        severity: string;
+      }>;
+      nodeActivity: Record<string, number>;
+      timestamp: string;
+    }>("/api/activity"),
+    refetchInterval: 15000, // refresh every 15s
+  });
+}
