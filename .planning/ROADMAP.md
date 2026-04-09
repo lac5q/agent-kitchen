@@ -38,9 +38,9 @@ Plans:
   2. A cron entry runs the script nightly with output logged to an inspectable log file
   3. mem0 highlights from the previous day appear as searchable markdown files in QMD after the nightly run
   4. Markdown collections are indexed in Qdrant Cloud `knowledge_docs` collection and return results for semantic queries (verified via `curl` to Qdrant API)
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 02-01-PLAN.md — Create foundational scripts: llm-wiki checker, mem0 exporter, Qdrant indexer
+- [x] 02-01-PLAN.md — Create foundational scripts: llm-wiki checker, mem0 exporter, Qdrant indexer
 - [ ] 02-02-PLAN.md — Create orchestrator, register cron, run live integration test
 
 ### Phase 3: Agent Awareness
@@ -74,6 +74,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. Knowledge Foundations | v1.1 | 1/1 | Complete   | 2026-04-09 |
-| 2. Knowledge Curator Agent | v1.1 | 0/2 | Planned | - |
+| 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
 | 3. Agent Awareness | v1.1 | 0/? | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |
