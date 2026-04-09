@@ -14,6 +14,8 @@
     { "name": "marketing-domains", "category": "marketing" },
     { "name": "sketchpop-docs", "category": "product" },
     { "name": "business", "category": "business" },
-    { "name": "abtesting", "category": "marketing" }
+    { "name": "abtesting", "category": "marketing" },
+    { "name": "agent-lightning", "category": "agents", "basePath": "/Users/lcalderon/github/agent-lightning" },
+    { "name": "agent-lightning-docs", "category": "agents", "basePath": "/Users/lcalderon/github/agent-lightning/docs" }
   ]
 }

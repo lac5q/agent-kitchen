@@ -45,6 +45,7 @@ export interface KnowledgeCollection {
   docCount: number;
   category: "business" | "agents" | "marketing" | "product" | "other";
   lastUpdated: string | null;
+  basePath?: string;
 }
 
 export interface HealthStatus {

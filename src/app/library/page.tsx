@@ -1,12 +1,15 @@
 "use client";
 
-import { useKnowledge } from "@/lib/api-client";
+import { useKnowledge, useGitNexus } from "@/lib/api-client";
 import { CollectionCard } from "@/components/library/collection-card";
 import { CollectionTreemap } from "@/components/library/collection-treemap";
 import { HealthPanel } from "@/components/library/health-panel";
+import { GitNexusPanel } from "@/components/library/gitnexus-panel";
 
 export default function LibraryPage() {
   const { data, isLoading } = useKnowledge();
+  const { data: gnData } = useGitNexus();
+  const gnRepos = gnData?.repos || [];
 
   if (isLoading) {
     return (
@@ -63,6 +66,14 @@ export default function LibraryPage() {
           <HealthPanel collections={collections} totalDocs={totalDocs} />
         </div>
       </section>
+
+      {/* GitNexus code graph index */}
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-slate-400">
+          Code Graph Index <span className="text-xs text-slate-600 ml-2">via GitNexus</span>
+        </h2>
+        <GitNexusPanel repos={gnRepos} />
+      </div>
     </div>
   );
 }
