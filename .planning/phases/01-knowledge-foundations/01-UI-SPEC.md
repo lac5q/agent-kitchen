@@ -1,7 +1,7 @@
 ---
 phase: 1
 slug: knowledge-foundations
-status: draft
+status: approved
 shadcn_initialized: true
 preset: base-nova
 created: 2026-04-09
@@ -46,7 +46,6 @@ Declared values (must be multiples of 4):
 | 3xl | 64px | Page-level spacing |
 
 Exceptions:
-- `mt-0.5` (2px) — existing micro-gap between category badge and card elements (match existing pattern in `collection-card.tsx` line 66)
 - `p-4` (16px) — existing CardContent padding, do not change
 
 Source: existing Tailwind scale in `collection-card.tsx`, standard 8-point scale as default
@@ -58,9 +57,11 @@ Source: existing Tailwind scale in `collection-card.tsx`, standard 8-point scale
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 16px (text-base) | 400 (regular) | 1.5 |
-| Label | 14px (text-sm) | 500 (medium) | 1.4 |
+| Label | 14px (text-sm) | 400 (regular) | 1.4 |
 | Caption / Freshness date | 12px (text-xs) | 400 (regular) | 1.4 |
 | Heading (page-level) | 20px (text-xl) | 600 (semibold) | 1.2 |
+
+**Active weights:** 400 (regular) — all text roles; 600 (semibold) — page-level headings only.
 
 **Freshness date specifics:** `text-xs` (12px), weight 400, `text-slate-500` in dark mode (matches existing muted pattern in `collection-card.tsx`). Display format: `toLocaleDateString()` — locale-aware, no custom formatting.
 
@@ -107,7 +108,7 @@ Add below the category text line (after line 66 in current `collection-card.tsx`
 
 ```tsx
 {collection.lastUpdated && (
-  <p className="text-xs text-slate-500 mt-0.5" title={collection.lastUpdated}>
+  <p className="text-xs text-slate-500 mt-1" title={collection.lastUpdated}>
     {new Date(collection.lastUpdated).toLocaleDateString()}
   </p>
 )}
