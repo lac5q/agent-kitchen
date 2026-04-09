@@ -2,17 +2,25 @@
 
 import { useState } from "react";
 import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents } from "@/lib/api-client";
-import { FlowCanvas } from "@/components/flow/flow-canvas";
+import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
+import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
+
+interface SelectedNode {
+  id: string;
+  label: string;
+  icon: string;
+  stats: Record<string, string | number>;
+}
 
 export default function FlowPage() {
   const { data: healthData } = useHealth();
   const { data: agentsData } = useAgents();
-  const { data: remoteData } = useRemoteAgents();
   const { data: knowledgeData } = useKnowledge();
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
-
+  const { data: remoteData } = useRemoteAgents();
+  const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
   const services = healthData?.services || [];
@@ -22,39 +30,48 @@ export default function FlowPage() {
   const knowledgeCount = knowledgeData?.totalDocs || 0;
   const nodeActivity = activityData?.nodeActivity || {};
   const events = activityData?.events || [];
-
   const remoteAgents = (remoteData?.agents || []).map((a) => ({
-    id: a.id,
-    name: a.name,
-    status: a.status,
-    latencyMs: a.latencyMs,
-    location: a.location,
+    id: a.id, name: a.name, status: a.status, latencyMs: a.latencyMs, location: a.location,
   }));
   const localActiveCount = agentsData?.agents.filter((a: { status: string }) => a.status === "active").length || 0;
   const localTotalCount = agentsData?.agents.length || 0;
+
+  function handleNodeClick(nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) {
+    setSelectedNode(prev => prev?.id === nodeId ? null : { id: nodeId, label: nodeLabel, icon: nodeIcon, stats: nodeStats });
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-amber-500">The Flow</h1>
-        <p className="text-sm text-slate-400">Live system activity — Knowledge Restaurant in motion</p>
+        <p className="text-sm text-slate-400">Live system — drag nodes, zoom, click to drill down</p>
       </div>
 
-      <FlowCanvas
-        services={services}
-        agentCount={agentCount}
-        activeCount={activeCount}
-        memoryCount={memoryCount}
-        knowledgeCount={knowledgeCount}
-        skillCount={405}
-        nodeActivity={nodeActivity}
-        highlightedNode={hoveredNode}
-        remoteAgents={remoteAgents}
-        localActiveCount={localActiveCount}
-        localTotalCount={localTotalCount}
-      />
+      <div className="relative">
+        <ReactFlowCanvas
+          services={services}
+          agentCount={agentCount}
+          activeCount={activeCount}
+          memoryCount={memoryCount}
+          knowledgeCount={knowledgeCount}
+          skillCount={405}
+          nodeActivity={nodeActivity}
+          highlightedNode={hoveredNode || selectedNode?.id}
+          remoteAgents={remoteAgents}
+          localActiveCount={localActiveCount}
+          localTotalCount={localTotalCount}
+          onNodeClick={handleNodeClick}
+        />
+        <NodeDetailPanel
+          nodeId={selectedNode?.id || null}
+          nodeLabel={selectedNode?.label || ""}
+          nodeIcon={selectedNode?.icon || ""}
+          nodeStats={selectedNode?.stats || {}}
+          events={events}
+          onClose={() => setSelectedNode(null)}
+        />
+      </div>
 
-      {/* Live event feed */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-medium text-slate-500">Live Activity</p>
@@ -63,11 +80,7 @@ export default function FlowPage() {
             <span className="text-xs text-slate-600">polling every 15s</span>
           </div>
         </div>
-        <ActivityFeed
-          events={events}
-          onNodeHover={setHoveredNode}
-          highlightedNode={hoveredNode}
-        />
+        <ActivityFeed events={events} onNodeHover={setHoveredNode} highlightedNode={hoveredNode} />
       </div>
 
       <div className="flex gap-6 text-xs text-slate-500">
