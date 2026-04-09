@@ -17,6 +17,7 @@
     { "name": "abtesting", "category": "marketing" },
     { "name": "agent-lightning", "category": "agents", "basePath": "/Users/yourname/github/agent-lightning" },
     { "name": "agent-lightning-docs", "category": "agents", "basePath": "/Users/yourname/github/agent-lightning/docs" },
-    { "name": "llm-wiki", "category": "business" }
+    { "name": "llm-wiki", "category": "business", "basePath": "/Users/yourname/github/knowledge/llm-wiki/wiki" },
+    { "name": "knowledge", "category": "other", "basePath": "/Users/yourname/github/knowledge" }
   ]
 }
