@@ -4,6 +4,8 @@
 **Domain:** QMD collection management, Obsidian vault integration, llm-wiki indexing, gitnexus cron automation
 **Confidence:** HIGH (all findings verified against live system)
 
+> ⚠️ **ARCHITECTURE CORRECTION (2026-04-09):** This research incorrectly assumes `qmd embed` is the vector/semantic search solution. The established architecture uses **Qdrant Cloud** (AWS us-west-1) for ALL vector search. `qmd embed` stores vectors in local SQLite — this is the **wrong vector store**. References to `qmd embed` below apply only to keyword/BM25 indexing context. The Qdrant markdown indexing pipeline (`knowledge_docs` collection) is built in Phase 2, not Phase 1. See `~/github/knowledge/mem0-config.yaml` for the canonical vector store config.
+
 ---
 
 ## Summary
@@ -102,7 +104,7 @@ The `basePath` field overrides the default `KNOWLEDGE_BASE/name` resolution. Req
 # Source: verified via qmd --help and live test
 qmd collection add --path ~/github/knowledge --name knowledge
 qmd update
-qmd embed
+# DO NOT run qmd embed — vector/semantic search uses Qdrant Cloud, not SQLite
 ```
 
 ### Pattern 2: llm-wiki Path Discrepancy
@@ -249,7 +251,7 @@ echo "Running GitNexus analyze across repos..."
 # Source: verified via qmd --help and live test during research
 qmd collection add --path ~/github/knowledge --name knowledge
 qmd update
-qmd embed
+# DO NOT run qmd embed — vector/semantic search uses Qdrant Cloud, not SQLite
 ```
 
 ### Adding gitnexus to refresh-index.sh

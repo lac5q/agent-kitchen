@@ -30,13 +30,14 @@ Plans:
 - [ ] 01-01-PLAN.md — Wire collections config, add CollectionCard freshness date, integrate gitnexus into weekly cron
 
 ### Phase 2: Knowledge Curator Agent
-**Goal**: A nightly cron job runs a Knowledge Curator shell script that executes gitnexus analysis, processes llm-wiki raw files, exports mem0 highlights to QMD-indexed markdown, and refreshes QMD embeddings
+**Goal**: A nightly cron job runs a Knowledge Curator shell script that executes gitnexus analysis, processes llm-wiki raw files, exports mem0 highlights to QMD-indexed markdown, runs `qmd update` for BM25 keyword search, and indexes all markdown collections into Qdrant Cloud (`knowledge_docs` collection) for semantic/vector search
 **Depends on**: Phase 1
 **Requirements**: KNOW-01
 **Success Criteria** (what must be TRUE):
   1. A shell script exists that can be run manually and produces all four outputs (gitnexus analyze, llm-wiki processing, mem0→QMD export, qmd update)
   2. A cron entry runs the script nightly with output logged to an inspectable log file
   3. mem0 highlights from the previous day appear as searchable markdown files in QMD after the nightly run
+  4. Markdown collections are indexed in Qdrant Cloud `knowledge_docs` collection and return results for semantic queries (verified via `curl` to Qdrant API)
 **Plans**: TBD
 
 ### Phase 3: Agent Awareness
