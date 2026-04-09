@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.1
+milestone_name: Knowledge Architecture + Dashboard Polish
+status: verifying
+stopped_at: Completed 01-01-PLAN.md — Phase 1 Plan 1 complete, ready for verification
+last_updated: "2026-04-09T19:37:50.457Z"
+last_activity: 2026-04-09
+progress:
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 100
+---
+
 # State: Agent Kitchen
 
 ## Project Reference
@@ -5,20 +21,21 @@
 See: .planning/PROJECT.md (updated 2026-04-09)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** v1.1 Phase 1 — Knowledge Foundations
+**Current focus:** Phase 01 — knowledge-foundations
 
 ## Current Position
 
-Phase: 1 of 4 (Knowledge Foundations)
-Plan: — of — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-04-08 — Roadmap created for v1.1
+Phase: 01 (knowledge-foundations) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-04-09
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: —
 - Total execution time: —
@@ -30,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 *Updated after each plan completion*
+| Phase 01 P01 | 251 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -45,6 +63,9 @@ Progress: [░░░░░░░░░░] 0%
 - Phase 4 depends on Phase 1 (not Phase 3) — Flow work can proceed in parallel with mem0 preload
 - **Vector store architecture (CRITICAL):** QMD handles BM25/lexical keyword search ONLY (`qmd search`, `qmd query`, `qmd update`). ALL vector/semantic search uses **Qdrant Cloud** (AWS us-west-1). `qmd embed` is FORBIDDEN — it stores vectors in local SQLite, not Qdrant. Embeddings: Gemini `models/gemini-embedding-2-preview` (3072 dims). Qdrant collections: `agent_memory` (mem0 — DO NOT TOUCH), `knowledge_docs` (markdown indexing — built in Phase 2). Config: `~/github/knowledge/mem0-config.yaml`. Docs: `~/github/knowledge/shared/AGENT_INFRASTRUCTURE_SETUP.md`.
 - **Research protocol:** Any research touching search/indexing/embeddings/vectors MUST check `~/github/knowledge/mem0-config.yaml` and run `qmd search "qdrant vector store embed"` before assuming tool capabilities. The knowledge base is the source of truth for established infrastructure.
+- [Phase 01]: Use destructured lastUpdated in CollectionCard for consistency with existing destructuring pattern
+- [Phase 01]: knowledge vault registered as single top-level collection at vault root, not split by subdir
+- [Phase 01]: Non-fatal gitnexus call in refresh-index.sh via || echo to satisfy T-01-04 (set -e would abort qmd update on failure)
 
 ### Pending Todos
 
@@ -56,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08
-Stopped at: Roadmap created — ready to begin Phase 1 planning
+Last session: 2026-04-09T19:37:50.453Z
+Stopped at: Completed 01-01-PLAN.md — Phase 1 Plan 1 complete, ready for verification
 Resume file: None
