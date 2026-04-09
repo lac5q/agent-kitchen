@@ -11,6 +11,9 @@ export interface Agent {
   currentTask: string | null;
   lessonsCount: number;
   todayMemoryCount: number;
+  location?: "local" | "tailscale" | "cloudflare";
+  isRemote?: boolean;
+  latencyMs?: number | null;
 }
 
 export interface TokenStats {

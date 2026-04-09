@@ -8,6 +8,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { STATUS_COLORS, PLATFORM_LABELS } from "@/lib/constants";
 import type { Agent } from "@/types";
 
@@ -100,20 +101,37 @@ export function AgentDrawer({ agent, open, onOpenChange }: AgentDrawerProps) {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3">
-              <p className="text-xs text-slate-500">Lessons</p>
-              <p className="text-xl font-bold text-amber-500">
-                {agent.lessonsCount}
-              </p>
+          {!agent.isRemote && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3">
+                <p className="text-xs text-slate-500">Lessons</p>
+                <p className="text-xl font-bold text-amber-500">
+                  {agent.lessonsCount}
+                </p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3">
+                <p className="text-xs text-slate-500">Today&apos;s Memories</p>
+                <p className="text-xl font-bold text-sky-500">
+                  {agent.todayMemoryCount}
+                </p>
+              </div>
             </div>
-            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3">
-              <p className="text-xs text-slate-500">Today&apos;s Memories</p>
-              <p className="text-xl font-bold text-sky-500">
-                {agent.todayMemoryCount}
-              </p>
-            </div>
-          </div>
+          )}
+
+          {/* Remote Connection */}
+          {agent.isRemote && (
+            <>
+              <Separator className="bg-slate-800" />
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-2">Remote Connection</p>
+                <div className="space-y-1 text-sm text-slate-300">
+                  <p><span className="text-slate-500">Location:</span> {agent.location}</p>
+                  <p><span className="text-slate-500">Latency:</span> {agent.latencyMs ? `${agent.latencyMs}ms` : "N/A"}</p>
+                  <p><span className="text-slate-500">Last seen:</span> {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleTimeString() : "Unreachable"}</p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
