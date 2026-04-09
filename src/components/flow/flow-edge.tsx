@@ -9,6 +9,7 @@ const EDGE_COLORS: Record<FlowEdge["type"], string> = {
   knowledge: "#10b981", // emerald
   memory: "#0ea5e9",    // sky
   error: "#f43f5e",     // rose
+  apo: "#8b5cf6",       // purple
 };
 
 interface FlowEdgeProps {
