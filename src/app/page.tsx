@@ -28,11 +28,11 @@ export default function KitchenFloor() {
     latencyMs: r.latencyMs,
   }));
 
+  // Show local agents immediately, remote agents populate when ready
   const allAgents = [...localAgents, ...remoteAgents];
   const active = allAgents.filter((a) => a.status === "active").length;
   const errors = allAgents.filter((a) => a.status === "error").length;
   const tasks = allAgents.filter((a) => a.currentTask && !a.isRemote).length;
-  const isLoading = localLoading && remoteLoading;
 
   return (
     <div className="space-y-6">
@@ -41,7 +41,7 @@ export default function KitchenFloor() {
         <p className="text-sm text-slate-400">Real-time agent status board</p>
       </div>
       <SummaryBar total={allAgents.length} active={active} tasks={tasks} errors={errors} />
-      {isLoading ? (
+      {localLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
         </div>
