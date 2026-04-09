@@ -5,7 +5,7 @@ import type { KnowledgeCollection } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-function loadCollections(): { name: string; category: KnowledgeCollection["category"] }[] {
+function loadCollections(): { name: string; category: KnowledgeCollection["category"]; basePath?: string }[] {
   const configPath =
     process.env.COLLECTIONS_CONFIG_PATH ||
     path.join(process.cwd(), "collections.config.json");
@@ -28,7 +28,7 @@ export async function GET() {
   const collections: KnowledgeCollection[] = [];
 
   for (const col of COLLECTIONS) {
-    const colPath = path.join(KNOWLEDGE_BASE, col.name);
+    const colPath = col.basePath ?? path.join(KNOWLEDGE_BASE, col.name);
     try {
       const files = await readdir(colPath, { recursive: true });
       const mdFiles = (files as string[]).filter((f) => f.endsWith(".md"));

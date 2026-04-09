@@ -97,6 +97,26 @@ export function useRemoteAgents() {
   });
 }
 
+export function useGitNexus() {
+  return useQuery({
+    queryKey: ["gitnexus"],
+    queryFn: () => fetchJSON<{
+      repos: Array<{
+        name: string;
+        path: string;
+        files: number;
+        symbols: number;
+        edges: number;
+        clusters: number;
+        processes: number;
+        lastIndexed: string | null;
+      }>;
+      timestamp: string;
+    }>("/api/gitnexus"),
+    refetchInterval: 60000,
+  });
+}
+
 export function useApo() {
   return useQuery({
     queryKey: ["apo"],
