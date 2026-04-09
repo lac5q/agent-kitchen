@@ -27,7 +27,13 @@ interface Event {
   severity: string;
 }
 
-export function ActivityFeed({ events }: { events: Event[] }) {
+interface ActivityFeedProps {
+  events: Event[];
+  onNodeHover?: (nodeId: string | null) => void;
+  highlightedNode?: string | null;
+}
+
+export function ActivityFeed({ events, onNodeHover, highlightedNode }: ActivityFeedProps) {
   if (events.length === 0) {
     return (
       <p className="text-xs text-slate-600 text-center py-2">No recent activity detected</p>
@@ -42,6 +48,7 @@ export function ActivityFeed({ events }: { events: Event[] }) {
           const icon = TYPE_ICONS[event.type] || "•";
           const minsAgo = Math.round((Date.now() - new Date(event.timestamp).getTime()) / 60000);
           const timeLabel = minsAgo < 1 ? "just now" : minsAgo < 60 ? `${minsAgo}m ago` : `${Math.round(minsAgo / 60)}h ago`;
+          const isHighlighted = highlightedNode === event.node;
 
           return (
             <motion.div
@@ -49,7 +56,11 @@ export function ActivityFeed({ events }: { events: Event[] }) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              className="flex items-start gap-2 text-xs"
+              className={`flex items-start gap-2 text-xs rounded px-1 py-0.5 cursor-pointer transition-colors ${
+                isHighlighted ? "bg-slate-800/80" : "hover:bg-slate-800/40"
+              }`}
+              onMouseEnter={() => onNodeHover?.(event.node)}
+              onMouseLeave={() => onNodeHover?.(null)}
             >
               <span>{icon}</span>
               <span className="text-slate-500 shrink-0 w-14">{timeLabel}</span>

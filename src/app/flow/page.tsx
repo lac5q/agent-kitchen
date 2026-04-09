@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useHealth, useAgents, useKnowledge, useMemory, useActivity } from "@/lib/api-client";
 import { FlowCanvas } from "@/components/flow/flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
@@ -10,6 +11,8 @@ export default function FlowPage() {
   const { data: knowledgeData } = useKnowledge();
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
+
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
   const services = healthData?.services || [];
   const agentCount = agentsData?.agents.length || 0;
@@ -34,6 +37,7 @@ export default function FlowPage() {
         knowledgeCount={knowledgeCount}
         skillCount={405}
         nodeActivity={nodeActivity}
+        highlightedNode={hoveredNode}
       />
 
       {/* Live event feed */}
@@ -45,7 +49,11 @@ export default function FlowPage() {
             <span className="text-xs text-slate-600">polling every 15s</span>
           </div>
         </div>
-        <ActivityFeed events={events} />
+        <ActivityFeed
+          events={events}
+          onNodeHover={setHoveredNode}
+          highlightedNode={hoveredNode}
+        />
       </div>
 
       <div className="flex gap-6 text-xs text-slate-500">

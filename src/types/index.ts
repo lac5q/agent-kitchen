@@ -72,7 +72,7 @@ export interface FlowNode {
 export interface FlowEdge {
   from: string;
   to: string;
-  type: "request" | "knowledge" | "memory" | "error";
+  type: "request" | "knowledge" | "memory" | "error" | "apo";
 }
 
 export type AgentLocation = "local" | "tailscale" | "cloudflare";
