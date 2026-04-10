@@ -60,22 +60,21 @@ All type is rendered in dark mode. No light-mode variant for Flow page.
 | Role | Size | Weight | Line Height | Usage | Source |
 |------|------|--------|-------------|-------|--------|
 | Page heading | 24px (text-2xl) | 700 (bold) | 1.2 | "The Flow" H1 | flow/page.tsx |
-| Node label | 9px | 600 (semibold) | 1.2 | FlowNode label text below icon | D-01 (reduced from 10px) |
-| Node subtitle | 7px | 400 (regular) | 1.2 | FlowNode subtitle (type, location) | D-01 |
+| Node micro (label) | 8px | 700 (bold) | 1.2 | FlowNode label text below icon | D-01 (reduced; bold distinguishes label from subtitle at same size) |
+| Node micro (subtitle) | 8px | 400 (regular) | 1.2 | FlowNode subtitle (type, location) | D-01 |
 | Panel label | 14px (text-sm) | 700 (bold) | 1.2 | Node name in detail panel header | node-detail-panel.tsx |
-| Panel section heading | 12px (text-xs) | 500 (medium) | 1.5 | "Stats", "Last State", "Recent Activity" | node-detail-panel.tsx |
-| Panel body / stats | 12px (text-xs) | 400 (regular) | 1.5 | Stat values, event messages, heartbeat text | node-detail-panel.tsx |
-| Activity feed row | 12px (text-xs) | 400 (regular) | 1.5 | Feed node name, message, time label | activity-feed.tsx |
-| Page subheading | 14px (text-sm) | 400 (regular) | 1.5 | "Live system — drag nodes..." | flow/page.tsx |
+| Panel body / stats | 12px (text-xs) | 400 (regular) | 1.5 | Stat values, event messages, heartbeat text, section headings, activity feed rows | node-detail-panel.tsx + activity-feed.tsx |
 
-**Declared sizes:** 7px, 9px, 12px, 14px, 24px (5 total — node micro-sizes require sub-Tailwind values; use inline style)
-**Declared weights:** 400 (regular) and 700 (bold) for page/panel; 600 (semibold) for node label only
+**Declared sizes:** 8px (node micro), 12px (panel body), 14px (panel label), 24px (page heading) — 4 total. Node micro sizes require inline style (below Tailwind's text-xs floor).
+**Declared weights:** 400 (regular) and 700 (bold) — 2 total.
 
 ---
 
 ## Color
 
 The design is dark-mode only. All values are from `globals.css` dark vars and existing hardcoded tokens in the canvas.
+
+**Primary focal point on initial load:** the animated amber edges radiating from active agent nodes — these draw attention to the live data-flow state.
 
 | Role | Value | Usage | Source |
 |------|-------|-------|--------|
@@ -105,9 +104,9 @@ Components modified in this phase (no new shadcn components required):
 
 | Component | File | Change |
 |-----------|------|--------|
-| FlowNode | `src/components/flow/react-flow-canvas.tsx` | Remove `truncate` CSS from label and subtitle `<p>`; set label 9px/semibold, subtitle 7px/regular (D-01) |
+| FlowNode | `src/components/flow/react-flow-canvas.tsx` | Remove `truncate` CSS from label and subtitle `<p>`; set label 8px/bold, subtitle 8px/regular via inline style (D-01) |
 | ReactFlowCanvas | `src/components/flow/react-flow-canvas.tsx` | Add `knowledge-curator` and `obsidian` static nodes; retune all y-positions for 4-row layout; add new edges per D-11–D-13; increase canvas height to 720px (D-15–D-17) |
-| NodeDetailPanel | `src/components/flow/node-detail-panel.tsx` | Add "Last State" heartbeat section below stats grid; toggle panel section label between "Node Activity" and "Last State" per D-06 |
+| NodeDetailPanel | `src/components/flow/node-detail-panel.tsx` | Add "Last State" heartbeat section below stats grid; toggle panel section label between "Node Activity" and "Last State" per D-06; panel close (×) must carry `aria-label="Close node detail panel"` |
 | ActivityFeed | `src/components/flow/activity-feed.tsx` | No structural changes — cleanup applied upstream in API route |
 | `/api/activity/route.ts` | `src/app/api/activity/route.ts` | Add regex transforms for log noise stripping (D-07, D-08) |
 
@@ -203,6 +202,7 @@ Example: `=== APO Cycle Starting 2026-04-09T14:33:22 ===` → `APO Cycle Startin
 | Panel section: events (default) | "Node Activity" | D-06 |
 | Panel: no events | "No recent activity for this node" | node-detail-panel.tsx (existing — retain) |
 | Panel: loading heartbeat | "Loading state..." | default |
+| Panel close button | aria-label: "Close node detail panel" | accessibility requirement |
 | Activity feed: empty state | "No recent activity detected" | activity-feed.tsx (existing — retain) |
 | Knowledge Curator node subtitle (no log) | "nightly · curator" | D-09 |
 | Knowledge Curator node subtitle (log readable) | "Last run: {relative time}" e.g. "Last run: 3h ago" | D-14 |
@@ -218,7 +218,7 @@ Example: `=== APO Cycle Starting 2026-04-09T14:33:22 ===` → `APO Cycle Startin
 |-------------|----------|
 | Node click | Opens NodeDetailPanel (slide in from right, framer-motion spring) |
 | Same node click again | Closes panel (toggle) |
-| Panel close (×) | setSelectedNode(null), panel slides out |
+| Panel close (×) | setSelectedNode(null), panel slides out; aria-label="Close node detail panel" |
 | Activity feed row hover | Highlights corresponding node on canvas (existing pattern — retain) |
 | Node hover via feed | Node border glows with amber highlight |
 | Canvas zoom | ReactFlow built-in, minZoom 0.3 / maxZoom 2 |
