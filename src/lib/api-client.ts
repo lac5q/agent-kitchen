@@ -144,6 +144,25 @@ export function useApo() {
   });
 }
 
+export function useDevToolsStatus() {
+  return useQuery({
+    queryKey: ["devtools-status"],
+    queryFn: () =>
+      fetchJSON<{
+        tools: Array<{
+          id: string;
+          name: string;
+          mem0: "connected" | "partial" | "not-wired";
+          qmd: "connected" | "partial" | "not-wired";
+          overall: "connected" | "partial" | "not-wired";
+        }>;
+        mem0Reachable: boolean;
+        timestamp: string;
+      }>("/api/devtools-status"),
+    refetchInterval: 30000,
+  });
+}
+
 export function useActivity() {
   return useQuery({
     queryKey: ["activity"],
