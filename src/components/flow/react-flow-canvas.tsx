@@ -47,10 +47,10 @@ function FlowNode({ data }: {
       >
         <span style={{ fontSize: 28 }}>{data.icon}</span>
       </div>
-      <p style={{ fontSize: 10, fontWeight: 600, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88 }} className="truncate">
+      <p style={{ fontSize: 8, fontWeight: 700, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
         {data.label}
       </p>
-      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88 }} className="truncate">
+      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
         {data.subtitle}
       </p>
       <Handle type="source" position={Position.Right} style={{ opacity: 0, top: 40 }} />
