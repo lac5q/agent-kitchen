@@ -7,7 +7,7 @@ stopped_at: Completed 02-01-PLAN.md — three Knowledge Curator scripts created 
 last_updated: "2026-04-10T17:10:53.275Z"
 last_activity: 2026-04-10 -- Phase 03 execution started
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
   total_plans: 4
   completed_plans: 4
@@ -68,6 +68,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 01]: knowledge vault registered as single top-level collection at vault root, not split by subdir
 - [Phase 01]: Non-fatal gitnexus call in refresh-index.sh via || echo to satisfy T-01-04 (set -e would abort qmd update on failure)
 - [Phase 02-knowledge-curator-agent]: llm-wiki processing remains manual (check-only + warn via Alba); qdrant-indexer.py indexes 5 paths (4 basePath collections + mem0-exports) with stable hash IDs for idempotent upserts; assert guard prevents accidental agent_memory writes
+
+### Roadmap Evolution
+
+- Phase 05 added: Personal Knowledge Ingestion Pipeline — email (replied threads), calendar, Google Meet + Spark transcripts → mem0, QMD/Qdrant, Obsidian. gws CLI, 6h cadence.
 
 ### Pending Todos
 
