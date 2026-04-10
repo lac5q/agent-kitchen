@@ -3,17 +3,6 @@ import { readdir, stat } from "fs/promises";
 import path from "path";
 import type { KnowledgeCollection } from "@/types";
 
-/**
- * Knowledge API — returns collection metadata (doc count, freshness) from collections.config.json.
- *
- * Search architecture:
- *   - BM25/keyword search: QMD (`qmd search`, `qmd query`) via MCP or CLI
- *   - Vector/semantic search: Qdrant Cloud collection `knowledge_docs` (built in Phase 2)
- *   - `qmd embed` is FORBIDDEN — QMD vectors use SQLite, not Qdrant Cloud
- *
- * This route reads the filesystem only. It does NOT perform any search or embedding.
- */
-
 export const dynamic = "force-dynamic";
 
 function loadCollections(): { name: string; category: KnowledgeCollection["category"]; basePath?: string }[] {

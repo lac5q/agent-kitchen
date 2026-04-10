@@ -47,10 +47,10 @@ function FlowNode({ data }: {
       >
         <span style={{ fontSize: 28 }}>{data.icon}</span>
       </div>
-      <p style={{ fontSize: 10, fontWeight: 600, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88 }} className="truncate">
+      <p style={{ fontSize: 8, fontWeight: 700, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
         {data.label}
       </p>
-      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88 }} className="truncate">
+      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
         {data.subtitle}
       </p>
       <Handle type="source" position={Position.Right} style={{ opacity: 0, top: 40 }} />
@@ -103,7 +103,7 @@ export function ReactFlowCanvas({
     const minsAgo = nodeActivity[nodeId];
     if (minsAgo !== undefined && minsAgo < 5) return "active";
     if (minsAgo !== undefined && minsAgo < 60) return "idle";
-    const svcMap: Record<string, string> = { gateways: "Agents", manager: "Paperclip", notebooks: "mem0", librarian: "QMD", qdrant: "Qdrant" };
+    const svcMap: Record<string, string> = { gateways: "Agents", manager: "Paperclip", notebooks: "mem0", librarian: "QMD" };
     const svc = services.find(s => s.service === svcMap[nodeId]);
     if (svc?.status === "up") return "active";
     if (svc?.status === "down") return "error";
@@ -115,7 +115,6 @@ export function ReactFlowCanvas({
       case "agents": return { "Total": agentCount, "Active": activeCount };
       case "notebooks": return { "Entries": memoryCount };
       case "librarian": return { "Docs": knowledgeCount, "Collections": 15 };
-      case "qdrant": return { "Type": "Cloud", "Region": "AWS us-west-1", "Collections": 2 };
       case "cookbooks": return { "Skills": skillCount };
       case "gateways": return { "Alba": "18793", "Gwen": "18792" };
       case "manager": return { "Platform": "Paperclip", "Port": "3100" };
@@ -144,12 +143,11 @@ export function ReactFlowCanvas({
       { id: "tunnels",   position: { x: 20,  y: 420 }, data: { label: "CF Tunnels",       subtitle: "kitchen.epilogue...",  icon: "📡", status: getStatus("tunnels"),   highlighted: highlightedNode === "tunnels"   }, type: "flowNode" },
       { id: "taskboard", position: { x: 160, y: 420 }, data: { label: "Task Board",       subtitle: "Nerve Kanban",         icon: "📋", status: getStatus("taskboard"), highlighted: highlightedNode === "taskboard" }, type: "flowNode" },
       { id: "notebooks", position: { x: 460, y: 420 }, data: { label: "mem0",             subtitle: "semantic memory",      icon: "🧠", status: getStatus("notebooks"), highlighted: highlightedNode === "notebooks" }, type: "flowNode" },
-      { id: "librarian", position: { x: 600, y: 420 }, data: { label: "QMD",              subtitle: "BM25 · keyword",       icon: "🔍", status: getStatus("librarian"), highlighted: highlightedNode === "librarian" }, type: "flowNode" },
+      { id: "librarian", position: { x: 600, y: 420 }, data: { label: "QMD",              subtitle: "3,445 docs",           icon: "🔍", status: getStatus("librarian"), highlighted: highlightedNode === "librarian" }, type: "flowNode" },
       { id: "cookbooks", position: { x: 160, y: 560 }, data: { label: "Skills",           subtitle: "skillshare · 405+",   icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" }, type: "flowNode" },
       { id: "apo",       position: { x: 320, y: 560 }, data: { label: "Agent Lightning",  subtitle: "APO · hourly",         icon: "⚡", status: getStatus("apo"),       highlighted: highlightedNode === "apo"       }, type: "flowNode" },
       { id: "gitnexus",  position: { x: 480, y: 560 }, data: { label: "GitNexus",         subtitle: "code graph",           icon: "🗺️", status: getStatus("gitnexus"),  highlighted: highlightedNode === "gitnexus"  }, type: "flowNode" },
       { id: "llmwiki",   position: { x: 640, y: 560 }, data: { label: "LLM Wiki",         subtitle: "knowledge wiki",       icon: "📖", status: getStatus("llmwiki"),   highlighted: highlightedNode === "llmwiki"   }, type: "flowNode" },
-      { id: "qdrant",    position: { x: 760, y: 420 }, data: { label: "Qdrant Cloud",      subtitle: "vector store · AWS",   icon: "🗄️", status: getStatus("qdrant"),    highlighted: highlightedNode === "qdrant"    }, type: "flowNode" },
     ];
 
     const agentNodes: Node[] = keyRemote.map((agent, i) => ({
@@ -192,7 +190,6 @@ export function ReactFlowCanvas({
       { id: "gw-tun",  source: "gateways", target: "tunnels",   animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
       { id: "mgr-tb",  source: "manager",  target: "taskboard", animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
       { id: "apo-sk",  source: "apo",      target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 2 } },
-      { id: "mem-qdr", source: "notebooks", target: "qdrant",    animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
     ];
 
     const agentEdges: Edge[] = allAgentIds.flatMap((id) => [
