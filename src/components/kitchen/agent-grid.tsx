@@ -41,11 +41,19 @@ function SectionHeader({
   );
 }
 
+const STATUS_ORDER: Record<string, number> = { active: 0, idle: 1, dormant: 2, error: 0 };
+function sortByStatus(agents: Agent[]) {
+  return [...agents].sort((a, b) => (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3));
+}
+
 export function AgentGrid({ agenticAgents, devToolAgents }: AgentGridProps) {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [devToolsOpen, setDevToolsOpen] = useState(true);
   const [agenticOpen, setAgenticOpen] = useState(true);
+
+  const sortedDevTools = sortByStatus(devToolAgents);
+  const sortedAgentic = sortByStatus(agenticAgents);
 
   function handleAgentClick(agent: Agent) {
     setSelectedAgent(agent);
@@ -71,7 +79,7 @@ export function AgentGrid({ agenticAgents, devToolAgents }: AgentGridProps) {
         />
         {devToolsOpen && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {devToolAgents.map((agent) => (
+            {sortedDevTools.map((agent) => (
               <AgentCard key={agent.id} agent={agent} onClick={handleAgentClick} />
             ))}
           </div>
@@ -93,7 +101,7 @@ export function AgentGrid({ agenticAgents, devToolAgents }: AgentGridProps) {
             <p className="text-sm text-slate-500 py-4">No agents found.</p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {agenticAgents.map((agent) => (
+              {sortedAgentic.map((agent) => (
                 <AgentCard key={agent.id} agent={agent} onClick={handleAgentClick} />
               ))}
             </div>

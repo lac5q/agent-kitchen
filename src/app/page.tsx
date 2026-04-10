@@ -58,11 +58,13 @@ export default function KitchenFloor() {
   });
 
   const agenticAgents = [...localAgents.map(a => ({ ...a, agentKind: "agentic" as const })), ...remoteAgents];
-  const allAgents = [...agenticAgents, ...devToolAgents];
-  const active = allAgents.filter((a) => a.status === "active").length;
+  // On Shift = agentic agents actually running tasks/heartbeating (not dev tools — those are config state)
+  const onShift = agenticAgents.filter((a) => a.status === "active").length;
   const errors = agenticAgents.filter((a) => a.status === "error").length;
   const tasks = agenticAgents.filter((a) => a.currentTask && !a.isRemote).length;
-  const devToolsWired = devToolAgents.filter((a) => a.status === "active" || a.status === "idle").length;
+  // Dev tools: connected = fully wired, partial = partially wired, not-wired = gap
+  const devToolsConnected = devToolAgents.filter((a) => a.status === "active").length;
+  const devToolsPartial = devToolAgents.filter((a) => a.status === "idle").length;
 
   return (
     <div className="space-y-6">
@@ -70,7 +72,15 @@ export default function KitchenFloor() {
         <h1 className="text-2xl font-bold text-amber-500">The Kitchen Floor</h1>
         <p className="text-sm text-slate-400">Real-time agent status board</p>
       </div>
-      <SummaryBar total={allAgents.length} active={active} tasks={tasks} errors={errors} devToolsWired={devToolsWired} devToolsTotal={devToolAgents.length} />
+      <SummaryBar
+        agentTotal={agenticAgents.length}
+        onShift={onShift}
+        tasks={tasks}
+        errors={errors}
+        devToolsConnected={devToolsConnected}
+        devToolsPartial={devToolsPartial}
+        devToolsTotal={devToolAgents.length}
+      />
       {localLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
