@@ -46,7 +46,7 @@
       "name": "Gwen",
       "role": "Pastry Chef (Social)",
       "platform": "claude",
-      "location": "cloudflare",
+      "location": "local",
       "host": "localhost",
       "port": 18792,
       "healthEndpoint": "/health",
