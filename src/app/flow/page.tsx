@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents } from "@/lib/api-client";
+import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents, useDevToolsStatus } from "@/lib/api-client";
 import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
@@ -20,6 +20,7 @@ export default function FlowPage() {
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
   const { data: remoteData } = useRemoteAgents();
+  const { data: devToolsData } = useDevToolsStatus();
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -61,6 +62,7 @@ export default function FlowPage() {
           localActiveCount={localActiveCount}
           localTotalCount={localTotalCount}
           onNodeClick={handleNodeClick}
+          devToolsStatus={devToolsData?.tools}
         />
         <NodeDetailPanel
           nodeId={selectedNode?.id || null}

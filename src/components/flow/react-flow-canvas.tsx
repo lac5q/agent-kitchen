@@ -69,6 +69,16 @@ function FlowNode({ data }: {
 
 const nodeTypes: NodeTypes = { flowNode: FlowNode, labelNode: LabelNode };
 
+type WireStatus = "connected" | "partial" | "not-wired";
+
+interface DevToolStatus {
+  id: string;
+  name: string;
+  mem0: WireStatus;
+  qmd: WireStatus;
+  overall: WireStatus;
+}
+
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
   agentCount: number;
@@ -81,6 +91,7 @@ interface ReactFlowCanvasProps {
   remoteAgents?: Array<{ id: string; name: string; status: string; latencyMs: number | null; location: string }>;
   localActiveCount?: number;
   localTotalCount?: number;
+  devToolsStatus?: DevToolStatus[];
   onNodeClick: (nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) => void;
 }
 
@@ -103,8 +114,11 @@ export function ReactFlowCanvas({
   remoteAgents = [],
   localActiveCount = 0,
   localTotalCount = 0,
+  devToolsStatus = [],
   onNodeClick,
 }: ReactFlowCanvasProps) {
+  // Build a lookup for quick access
+  const devToolsMap = Object.fromEntries(devToolsStatus.map(t => [t.id, t]));
 
   function getStatus(nodeId: string, agentStatus?: string): "active" | "idle" | "dormant" | "error" {
     if (agentStatus) return agentStatus === "active" ? "active" : "dormant";
@@ -134,10 +148,10 @@ export function ReactFlowCanvas({
       case "llmwiki": return { "Topics": 6, "Maintainer": "Alba" };
       case "knowledge-curator": return { "Schedule": "nightly 2am", "Steps": 4 };
       case "obsidian": return { "Type": "Knowledge Vault", "Docs": "3,400+" };
-      case "claude-code": return { "mem0": "hook (read)", "QMD": "not wired", "Status": "partial" };
-      case "qwen-cli": return { "mem0": "MCP ✓", "QMD": "not wired", "Status": "partial" };
-      case "gemini-cli": return { "mem0": "not wired", "QMD": "not wired", "Status": "gap" };
-      case "codex": return { "mem0": "not wired", "QMD": "not wired", "Status": "gap" };
+      case "claude-code": { const t = devToolsMap["claude-code"]; return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "hook (read)", "QMD": "not wired", "Status": "partial" }; }
+      case "qwen-cli":   { const t = devToolsMap["qwen-cli"];   return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "MCP ✓", "QMD": "not wired", "Status": "partial" }; }
+      case "gemini-cli": { const t = devToolsMap["gemini-cli"]; return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
+      case "codex":      { const t = devToolsMap["codex"];      return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
       default: return {};
     }
   }
@@ -171,11 +185,30 @@ export function ReactFlowCanvas({
       // Section labels
       { id: "label-agents",   position: { x: agentStartX - 10, y: agentY - 28 },  data: { label: "Server Agents" },   type: "labelNode" },
       { id: "label-devtools", position: { x: 10, y: 692 },                         data: { label: "Dev Tools" },       type: "labelNode" },
-      // Dev tool nodes (Row 5 — y=720)
-      { id: "claude-code", position: { x: 20,  y: 720 }, data: { label: "Claude Code", subtitle: "mem0 hook · local",  icon: "🔷", status: "idle",    highlighted: highlightedNode === "claude-code" }, type: "flowNode" },
-      { id: "qwen-cli",    position: { x: 160, y: 720 }, data: { label: "Qwen CLI",    subtitle: "mem0 ✓ · local",    icon: "🐉", status: "active",  highlighted: highlightedNode === "qwen-cli"   }, type: "flowNode" },
-      { id: "gemini-cli",  position: { x: 300, y: 720 }, data: { label: "Gemini CLI",  subtitle: "not wired · local",  icon: "✨", status: "dormant", highlighted: highlightedNode === "gemini-cli" }, type: "flowNode" },
-      { id: "codex",       position: { x: 440, y: 720 }, data: { label: "Codex",       subtitle: "not wired · local",  icon: "📝", status: "dormant", highlighted: highlightedNode === "codex"      }, type: "flowNode" },
+      // Dev tool nodes (Row 5 — y=720) — status derived from live devtools-status API
+      ...([
+        { id: "claude-code", label: "Claude Code", icon: "🔷" },
+        { id: "qwen-cli",    label: "Qwen CLI",    icon: "🐉" },
+        { id: "gemini-cli",  label: "Gemini CLI",  icon: "✨" },
+        { id: "codex",       label: "Codex",       icon: "📝" },
+      ].map(({ id, label, icon }, i) => {
+        const t = devToolsMap[id];
+        const wireStatus: WireStatus = t ? t.overall : "not-wired";
+        const statusMap: Record<WireStatus, "active" | "idle" | "dormant"> = {
+          connected: "active",
+          partial: "idle",
+          "not-wired": "dormant",
+        };
+        const subtitle = t
+          ? `mem0: ${t.mem0} · qmd: ${t.qmd}`
+          : "checking...";
+        return {
+          id,
+          position: { x: 20 + i * 140, y: 720 },
+          data: { label, subtitle, icon, status: statusMap[wireStatus], highlighted: highlightedNode === id },
+          type: "flowNode",
+        };
+      })),
     ];
 
     const agentNodes: Node[] = keyRemote.map((agent, i) => ({
@@ -241,6 +274,20 @@ export function ReactFlowCanvas({
       { id: `${id}-sk`,   source: id,           target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
     ]);
 
+    // Dev tool edges — conditionally added based on live wiring status
+    const devToolIds = ["claude-code", "qwen-cli", "gemini-cli", "codex"];
+    const devToolEdges: Edge[] = devToolIds.flatMap(id => {
+      const t = devToolsMap[id];
+      const result: Edge[] = [];
+      if (t && t.mem0 !== "not-wired") {
+        result.push({ id: `${id}-mem`, source: id, target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory, strokeWidth: 1 } });
+      }
+      if (t && t.qmd !== "not-wired") {
+        result.push({ id: `${id}-qmd-edge`, source: id, target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } });
+      }
+      return result;
+    });
+
     const extraEdges: Edge[] = [
       // Local agent pool edges
       { id: "agents-apo",  source: "local-agents", target: "apo",       animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
@@ -249,13 +296,12 @@ export function ReactFlowCanvas({
       { id: "agents-mem",  source: "local-agents", target: "notebooks",  animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
       { id: "agents-qmd",  source: "local-agents", target: "librarian",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
       { id: "agents-sk",   source: "local-agents", target: "cookbooks",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      // Dev tools — only Qwen is wired to mem0 today
-      { id: "qwen-mem",    source: "qwen-cli",      target: "notebooks",  animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      ...devToolEdges,
     ];
 
     return [...base, ...agentEdges, ...extraEdges];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAgentIds]);
+  }, [allAgentIds, devToolsMap]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const statsId = node.id.startsWith("agent-") ? node.id.replace("agent-", "") : node.id;
