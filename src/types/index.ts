@@ -14,6 +14,8 @@ export interface Agent {
   location?: "local" | "tailscale" | "cloudflare";
   isRemote?: boolean;
   latencyMs?: number | null;
+  agentKind?: "agentic" | "devtool";
+  icon?: string;
 }
 
 export interface TokenStats {
