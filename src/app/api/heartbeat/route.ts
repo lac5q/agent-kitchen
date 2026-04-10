@@ -9,8 +9,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const agentId = searchParams.get("agent");
 
-  // Path traversal guard (T-04-01)
-  if (!agentId || agentId.includes("..") || agentId.includes("/") || agentId.includes("\\")) {
+  // Path traversal guard (T-04-01) — allowlist only safe chars
+  if (!agentId || !/^[a-zA-Z0-9_-]+$/.test(agentId)) {
     return NextResponse.json({ content: null }, { status: 400 });
   }
 
