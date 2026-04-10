@@ -432,7 +432,7 @@ useEffect(() => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Knowledge Curator subtitle: server-side or client-side read?**
    - What we know: The subtitle needs last-run time from `/tmp/knowledge-curator.log`, and the canvas is a client component. Reading a local file requires a server-side API call.
