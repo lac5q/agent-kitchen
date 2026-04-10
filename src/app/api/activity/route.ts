@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile, readdir, stat } from "fs/promises";
 import path from "path";
+import { cleanMessage } from "@/lib/activity-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -31,48 +32,53 @@ export async function GET() {
       const ts = tsMatch?.[1] ? new Date(tsMatch[1]).toISOString() : new Date().toISOString();
 
       if (line.includes("PROPOSAL") || line.includes("proposal")) {
-        events.push({
+        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
+        if (msg) events.push({
           id: `apo-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "cookbooks",
           type: "apo",
-          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
+          message: msg,
           severity: "info",
         });
       } else if (line.includes("ERROR") || line.includes("FAIL") || line.includes("error")) {
-        events.push({
+        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
+        if (msg) events.push({
           id: `err-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "agents",
           type: "error",
-          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
+          message: msg,
           severity: "error",
         });
       } else if (line.includes("audit") || line.includes("scan") || line.includes("QMD") || line.includes("search")) {
-        events.push({
+        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
+        if (msg) events.push({
           id: `qmd-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "librarian",
           type: "knowledge",
-          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
+          message: msg,
           severity: "info",
         });
       } else if (line.includes("mem0") || line.includes("memory") || line.includes("remember")) {
-        events.push({
+        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
+        if (msg) events.push({
           id: `mem-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "notebooks",
           type: "memory",
-          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
+          message: msg,
           severity: "info",
         });
       } else if (line.includes("Starting") || line.includes("Complete") || line.includes("cycle")) {
-        events.push({
+        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
+        if (msg) events.push({
           id: `apo-cycle-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "taskboard",
           type: "apo",
-          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
+          message: msg,
           severity: "info",
         });
       }
