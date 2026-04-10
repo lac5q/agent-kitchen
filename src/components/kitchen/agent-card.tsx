@@ -35,14 +35,25 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, onClick }: AgentCardProps) {
+  const isDevTool = agent.agentKind === "devtool";
   const ringClass = STATUS_RING[agent.status] ?? "ring-slate-500";
   const dotClass = STATUS_DOT[agent.status] ?? "bg-slate-500";
   const platformLabel = PLATFORM_LABELS[agent.platform] ?? agent.platform;
   const timeAgo = formatTimeAgo(agent.lastHeartbeat);
 
+  const cardBg = isDevTool
+    ? "border-blue-900/60 bg-blue-950/30 hover:border-blue-800/60 hover:bg-blue-950/50"
+    : "border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800/60";
+
+  const avatarContent = isDevTool && agent.icon
+    ? <span className="text-lg">{agent.icon}</span>
+    : agent.isRemote
+      ? "🌐"
+      : agent.name.slice(0, 2);
+
   return (
     <Card
-      className="border-slate-800 bg-slate-900/50 p-4 cursor-pointer hover:border-slate-700 hover:bg-slate-800/60 transition-colors"
+      className={`p-4 cursor-pointer transition-colors ${cardBg}`}
       onClick={() => onClick(agent)}
     >
       <div className="flex items-start gap-3">
@@ -50,7 +61,7 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
         <div
           className={`h-10 w-10 shrink-0 rounded-full ring-2 ${ringClass} flex items-center justify-center bg-slate-800 text-sm font-bold text-slate-200 uppercase`}
         >
-          {agent.isRemote ? "🌐" : agent.name.slice(0, 2)}
+          {avatarContent}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -63,10 +74,16 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
           <p className="text-xs text-slate-400 truncate">{agent.role}</p>
 
           <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className="text-xs border-slate-700 text-slate-300">
-              {platformLabel}
-            </Badge>
-            {agent.isRemote && (
+            {isDevTool ? (
+              <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-blue-500/20 text-blue-300">
+                dev tool
+              </span>
+            ) : (
+              <Badge variant="outline" className="text-xs border-slate-700 text-slate-300">
+                {platformLabel}
+              </Badge>
+            )}
+            {!isDevTool && agent.isRemote && (
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                 agent.location === "tailscale"
                   ? "bg-sky-500/20 text-sky-400"
@@ -90,16 +107,22 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
           )}
 
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>Heartbeat: {timeAgo}</span>
+            {isDevTool ? (
+              <span className={agent.status === "active" ? "text-emerald-400" : agent.status === "idle" ? "text-amber-400" : "text-slate-500"}>
+                {agent.status === "active" ? "fully wired" : agent.status === "idle" ? "partial" : "not wired"}
+              </span>
+            ) : (
+              <span>Heartbeat: {timeAgo}</span>
+            )}
             <div className="flex items-center gap-2">
-              {agent.isRemote && agent.latencyMs ? (
+              {!isDevTool && (agent.isRemote && agent.latencyMs ? (
                 <span className="text-sky-500">~{agent.latencyMs}ms</span>
               ) : (
                 <>
                   <span>{agent.lessonsCount} lessons</span>
                   <span>{agent.todayMemoryCount} mem</span>
                 </>
-              )}
+              ))}
             </div>
           </div>
         </div>
