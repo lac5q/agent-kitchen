@@ -11,6 +11,7 @@ interface DemoStep {
 const DEMO_STEPS: DemoStep[] = [
   { nodeId: "agents",    caption: "1. Agent fails a task → OpenClaw logs the error" },
   { nodeId: "notebooks", caption: "2. Hermes Audit scans mem0 for failure patterns" },
+  { nodeId: "qdrant",    caption: "2b. mem0 semantic memory backed by Qdrant Cloud vectors" },
   { nodeId: "librarian", caption: "3. QMD queries knowledge base for context" },
   { nodeId: "cookbooks", caption: "4. Agent Lightning detects the failing skill" },
   { nodeId: "taskboard", caption: "5. APO generates a proposal → queued in Nerve" },
