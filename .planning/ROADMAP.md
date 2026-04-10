@@ -79,3 +79,13 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
 | 3. Agent Awareness | v1.1 | 0/1 | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |
+
+### Phase 5: Personal Knowledge Ingestion Pipeline — ingest emails (threads where Luis has ever replied), calendar events, Google Meet transcripts (Drive), and Spark meeting transcripts (SQLite) into mem0, QMD/Qdrant, and Obsidian. Email/calendar runs every 6 hours via scheduled agent using gws CLI. Transcripts run nightly. Obsidian gets daily notes (email digest + meetings) and project-based meeting notes.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 5 to break down)
