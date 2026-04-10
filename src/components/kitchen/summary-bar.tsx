@@ -1,30 +1,62 @@
 import { Card } from "@/components/ui/card";
 
 interface SummaryBarProps {
-  total: number;
-  active: number;
+  agentTotal: number;
+  onShift: number;
   tasks: number;
   errors: number;
-  devToolsWired: number;
+  devToolsConnected: number;
+  devToolsPartial: number;
   devToolsTotal: number;
 }
 
-export function SummaryBar({ total, active, tasks, errors, devToolsWired, devToolsTotal }: SummaryBarProps) {
-  const stats = [
-    { label: "Total Agents", value: total, color: "text-slate-100" },
-    { label: "On Shift", value: active, color: "text-emerald-500" },
-    { label: "Dev Tools Wired", value: `${devToolsWired}/${devToolsTotal}`, color: "text-blue-400" },
-    { label: "Orders Active", value: tasks, color: "text-amber-500" },
-    { label: "Incidents", value: errors, color: "text-rose-500" },
-  ];
+export function SummaryBar({
+  agentTotal,
+  onShift,
+  tasks,
+  errors,
+  devToolsConnected,
+  devToolsPartial,
+  devToolsTotal,
+}: SummaryBarProps) {
+  const devToolsGap = devToolsTotal - devToolsConnected - devToolsPartial;
+
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-      {stats.map((s) => (
-        <Card key={s.label} className="border-slate-800 bg-slate-900/50 p-4">
-          <p className="text-xs text-slate-500">{s.label}</p>
-          <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-        </Card>
-      ))}
+      {/* Agentic agents */}
+      <Card className="border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs text-slate-500">Agents</p>
+        <p className="text-2xl font-bold text-slate-100">{agentTotal}</p>
+      </Card>
+      <Card className="border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs text-slate-500">On Shift</p>
+        <p className="text-2xl font-bold text-emerald-500">{onShift}</p>
+      </Card>
+      <Card className="border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs text-slate-500">Orders Active</p>
+        <p className="text-2xl font-bold text-amber-500">{tasks}</p>
+      </Card>
+      <Card className="border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs text-slate-500">Incidents</p>
+        <p className="text-2xl font-bold text-rose-500">{errors}</p>
+      </Card>
+
+      {/* Dev tools — single card with inline breakdown */}
+      <Card className="border-blue-900/50 bg-blue-950/20 p-4">
+        <p className="text-xs text-slate-500">Dev Tools</p>
+        <div className="flex items-end gap-1 mt-0.5">
+          <p className="text-2xl font-bold text-blue-400">{devToolsConnected}</p>
+          <p className="text-sm text-slate-500 mb-0.5">/{devToolsTotal}</p>
+        </div>
+        <div className="flex gap-2 mt-1 text-xs">
+          {devToolsPartial > 0 && (
+            <span className="text-amber-400">{devToolsPartial} partial</span>
+          )}
+          {devToolsGap > 0 && (
+            <span className="text-slate-500">{devToolsGap} gap</span>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
