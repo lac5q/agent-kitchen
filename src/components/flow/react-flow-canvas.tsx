@@ -15,6 +15,15 @@ import {
 import "@xyflow/react/dist/style.css";
 import type { HealthStatus } from "@/types";
 
+// Section label node — non-interactive cluster header
+function LabelNode({ data }: { data: { label: string } }) {
+  return (
+    <div style={{ padding: "2px 10px", background: "#1e293b", borderRadius: 6, border: "1px solid #334155", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>{data.label}</span>
+    </div>
+  );
+}
+
 // Custom node component
 function FlowNode({ data }: {
   data: {
@@ -58,7 +67,7 @@ function FlowNode({ data }: {
   );
 }
 
-const nodeTypes: NodeTypes = { flowNode: FlowNode };
+const nodeTypes: NodeTypes = { flowNode: FlowNode, labelNode: LabelNode };
 
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
@@ -125,6 +134,10 @@ export function ReactFlowCanvas({
       case "llmwiki": return { "Topics": 6, "Maintainer": "Alba" };
       case "knowledge-curator": return { "Schedule": "nightly 2am", "Steps": 4 };
       case "obsidian": return { "Type": "Knowledge Vault", "Docs": "3,400+" };
+      case "claude-code": return { "mem0": "hook (read)", "QMD": "not wired", "Status": "partial" };
+      case "qwen-cli": return { "mem0": "MCP ✓", "QMD": "not wired", "Status": "partial" };
+      case "gemini-cli": return { "mem0": "not wired", "QMD": "not wired", "Status": "gap" };
+      case "codex": return { "mem0": "not wired", "QMD": "not wired", "Status": "gap" };
       default: return {};
     }
   }
@@ -155,6 +168,14 @@ export function ReactFlowCanvas({
       { id: "llmwiki",            position: { x: 410, y: 580 }, data: { label: "LLM Wiki",            subtitle: "knowledge wiki",       icon: "📖", status: getStatus("llmwiki"),            highlighted: highlightedNode === "llmwiki"            }, type: "flowNode" },
       { id: "knowledge-curator",  position: { x: 540, y: 580 }, data: { label: "Knowledge Curator",   subtitle: "nightly \u00b7 curator", icon: "\ud83e\uddf9", status: getStatus("knowledge-curator"),  highlighted: highlightedNode === "knowledge-curator"  }, type: "flowNode" },
       { id: "obsidian",           position: { x: 670, y: 580 }, data: { label: "Obsidian",            subtitle: "knowledge vault",      icon: "\ud83d\udcd3", status: getStatus("obsidian"),           highlighted: highlightedNode === "obsidian"           }, type: "flowNode" },
+      // Section labels
+      { id: "label-agents",   position: { x: agentStartX - 10, y: agentY - 28 },  data: { label: "Server Agents" },   type: "labelNode" },
+      { id: "label-devtools", position: { x: 10, y: 692 },                         data: { label: "Dev Tools" },       type: "labelNode" },
+      // Dev tool nodes (Row 5 — y=720)
+      { id: "claude-code", position: { x: 20,  y: 720 }, data: { label: "Claude Code", subtitle: "mem0 hook · local",  icon: "🔷", status: "idle",    highlighted: highlightedNode === "claude-code" }, type: "flowNode" },
+      { id: "qwen-cli",    position: { x: 160, y: 720 }, data: { label: "Qwen CLI",    subtitle: "mem0 ✓ · local",    icon: "🐉", status: "active",  highlighted: highlightedNode === "qwen-cli"   }, type: "flowNode" },
+      { id: "gemini-cli",  position: { x: 300, y: 720 }, data: { label: "Gemini CLI",  subtitle: "not wired · local",  icon: "✨", status: "dormant", highlighted: highlightedNode === "gemini-cli" }, type: "flowNode" },
+      { id: "codex",       position: { x: 440, y: 720 }, data: { label: "Codex",       subtitle: "not wired · local",  icon: "📝", status: "dormant", highlighted: highlightedNode === "codex"      }, type: "flowNode" },
     ];
 
     const agentNodes: Node[] = keyRemote.map((agent, i) => ({
@@ -187,7 +208,8 @@ export function ReactFlowCanvas({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount]);
 
-  const allAgentIds = [...keyRemote.map(a => `agent-${a.id}`), "local-agents"];
+  // Only key remote agents here — local-agents has its own edges in extraEdges
+  const allAgentIds = keyRemote.map(a => `agent-${a.id}`);
 
   const edges: Edge[] = useMemo(() => {
     const base: Edge[] = [
@@ -217,12 +239,18 @@ export function ReactFlowCanvas({
       { id: `${id}-mem`,  source: id,           target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
       { id: `${id}-qmd`,  source: id,           target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
       { id: `${id}-sk`,   source: id,           target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-    ]).slice(0, 20);
+    ]);
 
     const extraEdges: Edge[] = [
-      { id: "agents-apo",  source: "local-agents", target: "apo",      animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
-      { id: "agents-gnx",  source: "local-agents", target: "gitnexus", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "agents-wiki", source: "local-agents", target: "llmwiki",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      // Local agent pool edges
+      { id: "agents-apo",  source: "local-agents", target: "apo",       animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
+      { id: "agents-gnx",  source: "local-agents", target: "gitnexus",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "agents-wiki", source: "local-agents", target: "llmwiki",   animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "agents-mem",  source: "local-agents", target: "notebooks",  animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      { id: "agents-qmd",  source: "local-agents", target: "librarian",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: "agents-sk",   source: "local-agents", target: "cookbooks",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      // Dev tools — only Qwen is wired to mem0 today
+      { id: "qwen-mem",    source: "qwen-cli",      target: "notebooks",  animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
     ];
 
     return [...base, ...agentEdges, ...extraEdges];
@@ -237,7 +265,7 @@ export function ReactFlowCanvas({
   }, [onNodeClick]);
 
   return (
-    <div style={{ width: "100%", height: 720, borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
+    <div style={{ width: "100%", height: 860, borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
