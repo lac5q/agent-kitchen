@@ -21,3 +21,22 @@ Items waiting to be planned into a phase.
 **Origin:** User request 2026-04-10
 
 ---
+
+---
+
+## BACK-02 — Wire all Dev Tools to mem0 + QMD
+
+**Summary:** Claude Code, Gemini CLI, and Codex are not writing to or reading from mem0/QMD. Qwen CLI has mem0 MCP but QMD is unwired.
+
+**Current state:**
+- Claude Code: reads mem0 via session hook only (no write MCP) — gap
+- Qwen CLI: mem0 MCP ✓, QMD not wired — partial
+- Gemini CLI: nothing wired — gap
+- Codex: nothing wired — gap
+
+**Goal:** All 4 CLIs should write session learnings to mem0 and be able to query QMD for context.
+
+**How to verify:** The Flow page should show active green edges from each CLI to mem0/QMD. Currently only Qwen has one edge.
+
+**Origin:** User request 2026-04-10 — "if they are not wired then it's a failure in the stack"
+
