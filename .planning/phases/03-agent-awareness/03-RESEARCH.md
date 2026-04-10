@@ -420,22 +420,25 @@ PROJECT=$(basename "$CWD")
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the hook also search by the current git branch name?**
    - What we know: `git -C "$CWD" branch --show-current` is available in hook context
    - What's unclear: Will branch-based queries produce meaningfully different results from project-name queries alone?
    - Recommendation: Start with project name only; add git context in a follow-up if results are too noisy
+   - **RESOLVED:** Project name only for Phase 3. Git branch search deferred to a follow-up iteration once corpus quality is measurable.
 
 2. **Which `source` values should trigger the preload?**
    - What we know: `source` can be `startup`, `resume`, `clear`, `compact`
    - What's unclear: Should `resume` sessions also get a preload? They already have context in transcript
    - Recommendation: `startup` only for Phase 3. Avoids double-injection on resume.
+   - **RESOLVED:** `startup` only. Resume sessions already have context in transcript; double-injection adds noise.
 
 3. **Should scores below 0.55 be shown if no results exceed threshold?**
    - What we know: Current corpus returns mostly 0.5–0.7 for project queries
    - What's unclear: Is "no results shown" better UX than "low-confidence results shown"?
    - Recommendation: Show results if any exist (no threshold filter), but display score so Claude can judge relevance. Alternatively: threshold 0.50 for Phase 3, revisit.
+   - **RESOLVED:** Threshold set to **0.50** for Phase 3 (permissive, to account for sparse corpus at launch). The summary section's mention of 0.55 was aspirational; 0.50 is the shipped value. Revisit after Phase 2 nightly exports run for ≥7 days and corpus quality is measurable.
 
 ---
 
