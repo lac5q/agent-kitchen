@@ -5,7 +5,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   type Node,
   type Edge,
   type NodeTypes,
@@ -253,13 +252,6 @@ export function ReactFlowCanvas({
       >
         <Background color="#1e293b" gap={24} variant={BackgroundVariant.Dots} />
         <Controls className="bg-slate-900 border border-slate-800" />
-        <MiniMap
-          style={{ background: "#0f172a", border: "1px solid #1e293b" }}
-          nodeColor={(node) => {
-            const status = (node.data as { status: string }).status;
-            return status === "active" ? "#10b981" : status === "error" ? "#f43f5e" : "#475569";
-          }}
-        />
       </ReactFlow>
     </div>
   );
