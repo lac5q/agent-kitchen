@@ -52,7 +52,7 @@ Plans:
   2. Starting a new Claude Code session on any known project surfaces at least one relevant mem0 memory without the user manually requesting it
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — Create mem0 session preload hook, register in settings.json, add CLAUDE.md instruction
+- [x] 03-01-PLAN.md — Create mem0 session preload hook, register in settings.json, add CLAUDE.md instruction
 
 ### Phase 4: Flow Diagram Upgrade
 **Goal**: The Flow page shows a clean, non-overlapping graph with readable labels, real heartbeat content in the detail panel, a human-readable activity feed, and new nodes for the Knowledge Curator and Obsidian hub with accurate data flow edges
