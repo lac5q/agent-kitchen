@@ -65,7 +65,11 @@ Plans:
   4. A Knowledge Curator node appears in the diagram connected to GitNexus, LLM Wiki, mem0, and QMD — displaying last-run time and next scheduled run from live cron data
   5. An Obsidian/Knowledge Base node appears as the ground truth hub, with edges from QMD, LLM Wiki, and Knowledge Curator connecting to it
   6. New edges show the mem0->QMD bridge and llm-wiki->QMD indexing data flows
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 04-01-PLAN.md — Canvas visual upgrade: fix label truncation, 4-row layout, add Knowledge Curator + Obsidian nodes with 9 new edges
+- [ ] 04-02-PLAN.md — API routes + panel: heartbeat endpoint, activity feed noise-stripping, panel heartbeat section
+- [ ] 04-03-PLAN.md — Visual verification checkpoint: human confirms all 7 FLOW requirements
 **UI hint**: yes
 
 ## Progress
@@ -78,7 +82,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Knowledge Foundations | v1.1 | 1/1 | Complete   | 2026-04-09 |
 | 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
 | 3. Agent Awareness | v1.1 | 0/1 | Not started | - |
-| 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |
+| 4. Flow Diagram Upgrade | v1.1 | 0/3 | Not started | - |
 
 ### Phase 5: Personal Knowledge Ingestion Pipeline — ingest emails (threads where Luis has ever replied), calendar events, Google Meet transcripts (Drive), and Spark meeting transcripts (SQLite) into mem0, QMD/Qdrant, and Obsidian. Email/calendar runs every 6 hours via scheduled agent using gws CLI. Transcripts run nightly. Obsidian gets daily notes (email digest + meetings) and project-based meeting notes.
 
