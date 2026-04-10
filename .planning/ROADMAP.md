@@ -50,7 +50,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A CLAUDE.md instruction or hook exists that calls `memory_search` with the current project context at session start
   2. Starting a new Claude Code session on any known project surfaces at least one relevant mem0 memory without the user manually requesting it
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — Create mem0 session preload hook, register in settings.json, add CLAUDE.md instruction
 
 ### Phase 4: Flow Diagram Upgrade
 **Goal**: The Flow page shows a clean, non-overlapping graph with readable labels, real heartbeat content in the detail panel, a human-readable activity feed, and new nodes for the Knowledge Curator and Obsidian hub with accurate data flow edges
@@ -75,5 +77,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|-----------|----------------|--------|-----------|
 | 1. Knowledge Foundations | v1.1 | 1/1 | Complete   | 2026-04-09 |
 | 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
-| 3. Agent Awareness | v1.1 | 0/? | Not started | - |
+| 3. Agent Awareness | v1.1 | 0/1 | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/? | Not started | - |
