@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Event {
@@ -31,6 +32,22 @@ const TYPE_COLORS: Record<string, string> = {
 export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose }: NodeDetailPanelProps) {
   const nodeEvents = events.filter(e => e.node === nodeId).slice(0, 15);
 
+  const [heartbeatContent, setHeartbeatContent] = useState<string | null>(null);
+  const [heartbeatLoading, setHeartbeatLoading] = useState(false);
+
+  useEffect(() => {
+    if (!nodeId) {
+      setHeartbeatContent(null);
+      return;
+    }
+    setHeartbeatLoading(true);
+    fetch(`/api/heartbeat?agent=${nodeId}`)
+      .then(r => r.json())
+      .then(d => setHeartbeatContent(d.content ?? null))
+      .catch(() => setHeartbeatContent(null))
+      .finally(() => setHeartbeatLoading(false));
+  }, [nodeId]);
+
   return (
     <AnimatePresence>
       {nodeId && (
@@ -47,10 +64,12 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
               <span className="text-2xl">{nodeIcon}</span>
               <div>
                 <p className="text-sm font-bold text-amber-500">{nodeLabel}</p>
-                <p className="text-xs text-slate-500">Node Activity</p>
+                <p className="text-xs text-slate-500">
+                  {heartbeatContent ? "Last State" : "Node Activity"}
+                </p>
               </div>
             </div>
-            <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-lg">×</button>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-lg" aria-label="Close node detail panel">×</button>
           </div>
 
           {/* Stats */}
@@ -65,6 +84,19 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Heartbeat / Last State */}
+          {heartbeatLoading && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs text-slate-500">Loading state...</p>
+            </div>
+          )}
+          {!heartbeatLoading && heartbeatContent && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Last State</p>
+              <pre className="font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">{heartbeatContent}</pre>
             </div>
           )}
 
