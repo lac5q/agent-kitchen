@@ -98,8 +98,8 @@ export async function GET() {
 
   // Codex — ~/.codex/config.toml
   const codexTOML = await readTOML("~/.codex/config.toml");
-  const codexMem0: WireStatus = codexTOML.includes("[mcp_servers.mem0]") ? "connected" : "not-wired";
-  const codexQmd: WireStatus = codexTOML.includes("[mcp_servers.qmd]") ? "connected" : "not-wired";
+  const codexMem0: WireStatus = /^\[mcp_servers\.mem0\]/m.test(codexTOML) ? "connected" : "not-wired";
+  const codexQmd: WireStatus  = /^\[mcp_servers\.qmd\]/m.test(codexTOML)  ? "connected" : "not-wired";
   results.push({
     id: "codex",
     name: "Codex",
