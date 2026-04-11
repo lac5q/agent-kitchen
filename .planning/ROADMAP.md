@@ -67,15 +67,36 @@ Plans:
   6. New edges show the mem0->QMD bridge and llm-wiki->QMD indexing data flows
 **Plans:** 3 plans
 Plans:
-- [ ] 04-01-PLAN.md — Canvas visual upgrade: fix label truncation, 4-row layout, add Knowledge Curator + Obsidian nodes with 9 new edges
-- [ ] 04-02-PLAN.md — API routes + panel: heartbeat endpoint, activity feed noise-stripping, panel heartbeat section
-- [ ] 04-03-PLAN.md — Visual verification checkpoint: human confirms all 7 FLOW requirements
+- [x] 04-01-PLAN.md — Canvas visual upgrade: fix label truncation, 4-row layout, add Knowledge Curator + Obsidian nodes with 9 new edges
+- [x] 04-02-PLAN.md — API routes + panel: heartbeat endpoint, activity feed noise-stripping, panel heartbeat section
+- [x] 04-03-PLAN.md — Visual verification checkpoint: human confirms all 7 FLOW requirements
 **UI hint**: yes
+
+### Phase 5: Personal Knowledge Ingestion Pipeline
+**Goal**: A fully automated pipeline ingests emails (threads Luis replied to), calendar events, Google Meet transcripts (Drive), and Spark meeting transcripts (SQLite) into mem0, QMD/Qdrant, and Obsidian — with email/calendar running every 6 hours and transcripts running nightly via knowledge-curator.sh
+**Depends on**: Phase 4
+**Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-18, D-19, D-20
+**Success Criteria** (what must be TRUE):
+  1. Email threads where Luis replied are saved as markdown in `~/github/knowledge/emails/` and appear in Obsidian daily note Email Digest section
+  2. Calendar events are stored as mem0 memories with metadata (title, date, attendees)
+  3. Google Drive "Notes by Gemini" transcripts are exported and saved as markdown in `~/github/knowledge/gdrive/meet-recordings/`
+  4. Multi-event doc collisions are handled with index notes per event pointing to one canonical file
+  5. Spark meetTranscriptEvent rows are saved as markdown in `~/github/knowledge/spark-recordings/`
+  6. All new content directories are indexed by qdrant-indexer.py into Qdrant Cloud `knowledge_docs`
+  7. ingestion-state.json tracks watermarks preventing re-processing across runs
+  8. Email cron runs every 6 hours; transcript ingestion runs nightly via knowledge-curator.sh
+**Plans:** 5 plans
+Plans:
+- [ ] 05-01-PLAN.md — Foundation: state file, shared Python utilities, smoke test
+- [ ] 05-02-PLAN.md — Email ingestion: Gmail thread fetch + Obsidian daily note digest
+- [ ] 05-03-PLAN.md — Calendar + Meet transcripts: events to mem0, Drive export with collision handling
+- [ ] 05-04-PLAN.md — Spark transcripts + qdrant-indexer.py PATHS update
+- [ ] 05-05-PLAN.md — Cron wiring + live integration test + human verification
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -83,13 +104,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
 | 3. Agent Awareness | v1.1 | 0/1 | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/3 | Not started | - |
-
-### Phase 5: Personal Knowledge Ingestion Pipeline — ingest emails (threads where Luis has ever replied), calendar events, Google Meet transcripts (Drive), and Spark meeting transcripts (SQLite) into mem0, QMD/Qdrant, and Obsidian. Email/calendar runs every 6 hours via scheduled agent using gws CLI. Transcripts run nightly. Obsidian gets daily notes (email digest + meetings) and project-based meeting notes.
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 4
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 5 to break down)
+| 5. Personal Knowledge Ingestion | v1.1 | 0/5 | Not started | - |
