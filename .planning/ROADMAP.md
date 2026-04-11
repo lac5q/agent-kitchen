@@ -85,13 +85,13 @@ Plans:
   6. All new content directories are indexed by qdrant-indexer.py into Qdrant Cloud `knowledge_docs`
   7. ingestion-state.json tracks watermarks preventing re-processing across runs
   8. Email cron runs every 6 hours; transcript ingestion runs nightly via knowledge-curator.sh
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 Plans:
-- [ ] 05-01-PLAN.md — Foundation: state file, shared Python utilities, smoke test
-- [ ] 05-02-PLAN.md — Email ingestion: Gmail thread fetch + Obsidian daily note digest
-- [ ] 05-03-PLAN.md — Calendar + Meet transcripts: events to mem0, Drive export with collision handling
-- [ ] 05-04-PLAN.md — Spark transcripts + qdrant-indexer.py PATHS update
-- [ ] 05-05-PLAN.md — Cron wiring + live integration test + human verification
+- [x] 05-01-PLAN.md — Foundation: state file, shared Python utilities, smoke test
+- [x] 05-02-PLAN.md — Email ingestion: Gmail thread fetch + Obsidian daily note digest
+- [x] 05-03-PLAN.md — Calendar + Meet transcripts: events to mem0, Drive export with collision handling
+- [x] 05-04-PLAN.md — Spark transcripts + qdrant-indexer.py PATHS update
+- [x] 05-05-PLAN.md — Cron wiring + live integration test + human verification
 
 ## Progress
 
@@ -104,4 +104,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Knowledge Curator Agent | v1.1 | 1/2 | In Progress|  |
 | 3. Agent Awareness | v1.1 | 0/1 | Not started | - |
 | 4. Flow Diagram Upgrade | v1.1 | 0/3 | Not started | - |
-| 5. Personal Knowledge Ingestion | v1.1 | 0/5 | Not started | - |
+| 5. Personal Knowledge Ingestion | v1.1 | 5/5 | Complete   | 2026-04-11 |

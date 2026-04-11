@@ -18,9 +18,9 @@ decisions:
   - full 155-event calendar backfill is slow (~6s/event via mem0) — cron runs incrementally so subsequent runs will be fast
   - transcript ingestion limited to 1 event in test due to mem0 call latency (6s each); pipeline verified working end-to-end
 metrics:
-  duration: "~25 minutes"
+  duration: "~30 minutes"
   completed: "2026-04-11"
-  tasks_completed: 2
+  tasks_completed: 3
   tasks_total: 3
   files_modified: 1
 ---
@@ -35,6 +35,7 @@ Email ingestion cron registered (every 6 hours), transcript ingestion wired into
 |------|------|--------|-------|
 | 1 | Register cron entries and update knowledge-curator.sh | 0cec193 (knowledge repo) | ~/github/knowledge/knowledge-curator.sh |
 | 2 | Run live integration test | (no code changes — live test only) | ingestion-state.json, journals/*.md (runtime artifacts) |
+| 3 | Human verification of pipeline output | (checkpoint verified) | — |
 
 ## What Was Built
 
@@ -128,15 +129,21 @@ The T-05-18 (Repudiation — no audit trail) mitigation is satisfied:
 - Transcript ingestion logs via knowledge-curator.sh to `/tmp/knowledge-curator.log`
 - `ingestion-state.json` records `last_run` timestamps for all four ingestion channels
 
-## Checkpoint Awaiting
+## Human Verification (Task 3) — APPROVED
 
-**Task 3 (human-verify)** is pending. Human verification required:
+**Verified by:** Luis Calderon on 2026-04-11
 
-1. Check email output: `ls ~/github/knowledge/emails/` (50 .md files present)
-2. Check transcript state: `jq . ~/github/knowledge/ingestion-state.json`
-3. Check daily note: `cat ~/github/knowledge/journals/2026-04-10.md` (Email Digest section)
-4. Check cron: `crontab -l | grep personal` (email every 6h entry)
-5. Open Obsidian and visually confirm daily note formatting
+| Check | Result |
+|-------|--------|
+| Email output: 50 .md files in ~/github/knowledge/emails/ | CONFIRMED |
+| State file: gmail.last_run = 2026-04-11T02:54:58Z, calendar.last_run = 2026-04-11T03:07:21Z | CONFIRMED |
+| Daily note 2026-04-10.md: ## Email Digest with 50 thread summaries | CONFIRMED |
+| Meetings section empty in 2026-04-11.md | CONFIRMED — expected behavior (see note below) |
+
+**Note on empty Meetings section:** The `## Meetings` header in `2026-04-11.md` is correct and expected. No content follows because:
+- `gdrive_meet.last_run` and `spark.last_run` remain at `2026-01-01T00:00:00Z` — neither Drive Meet transcript docs nor Spark recordings have been processed yet
+- Google Drive "Notes by Gemini" requires meetings to be recorded and processed by Gemini before transcript docs appear in Drive
+- The header being present confirms calendar ingestion ran correctly; content will populate once transcript sources produce output
 
 ## Self-Check: PASSED
 
