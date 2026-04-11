@@ -172,7 +172,7 @@ export function ReactFlowCanvas({
     return "idle";
   }
 
-  function nodeStats(id: string): Record<string, string | number> {
+  const nodeStats = useCallback((id: string): Record<string, string | number> => {
     switch (id) {
       case "agents":              return { "Total": agentCount, "Active": activeCount };
       case "notebooks":           return { "Entries": memoryCount };
@@ -192,7 +192,7 @@ export function ReactFlowCanvas({
       case "codex":      { const t = devToolsMap["codex"];      return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
       default:                    return {};
     }
-  }
+  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, devToolsMap]);
 
   const nodes: Node[] = useMemo(() => {
     const DEV_TOOLS = [
@@ -292,8 +292,7 @@ export function ReactFlowCanvas({
 
     // Group boxes must be first so they render behind everything else
     return [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteAgents, keyRemote, nodeActivity, highlightedNode, localActiveCount, localTotalCount, devToolsMap]);
+  }, [remoteAgents, keyRemote, nodeActivity, highlightedNode, localActiveCount, localTotalCount, devToolsMap, nodeStats]);
 
   const allAgentIds = useMemo(
     () => keyRemote.map(a => `agent-${a.id}`),
@@ -354,8 +353,7 @@ export function ReactFlowCanvas({
     const statsId = node.id.startsWith("agent-") ? node.id.replace("agent-", "") : node.id;
     const stats = nodeStats(statsId);
     onNodeClick(node.id, node.data.label as string, node.data.icon as string, stats);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onNodeClick, devToolsMap]);
+  }, [onNodeClick, nodeStats]);
 
   return (
     <div style={{ width: "100%", height: 900, borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
