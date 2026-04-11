@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
+import path from "path";
 
 export const dynamic = "force-dynamic";
 
@@ -13,25 +14,44 @@ interface DevToolStatus {
   overall: WireStatus;
 }
 
-async function readJSON(path: string): Promise<Record<string, unknown>> {
+async function readJSON(filePath: string): Promise<Record<string, unknown>> {
   try {
-    const raw = await readFile(path.replace("~", process.env.HOME || ""), "utf-8");
+    const home = process.env.HOME ?? "";
+    const resolved = path.resolve(filePath.replace(/^~/, home));
+    // Guard: resolved path must stay within home directory
+    if (!resolved.startsWith(home + path.sep)) {
+      return {};
+    }
+    const raw = await readFile(resolved, "utf-8");
     return JSON.parse(raw);
   } catch {
     return {};
   }
 }
 
-async function readTOML(path: string): Promise<string> {
+async function readTOML(filePath: string): Promise<string> {
   try {
-    return await readFile(path.replace("~", process.env.HOME || ""), "utf-8");
+    const home = process.env.HOME ?? "";
+    const resolved = path.resolve(filePath.replace(/^~/, home));
+    // Guard: resolved path must stay within home directory
+    if (!resolved.startsWith(home + path.sep)) {
+      return "";
+    }
+    return await readFile(resolved, "utf-8");
   } catch {
     return "";
   }
 }
 
-function hasMem0InMCPServers(mcpServers: Record<string, unknown>): boolean {
-  return Object.keys(mcpServers).some(k => k.toLowerCase().includes("mem0"));
+function hasKeyInMCPServers(mcpServers: Record<string, unknown>, key: string): boolean {
+  return Object.keys(mcpServers).some(k => k.toLowerCase().includes(key));
+}
+
+function computeOverall(mem0: WireStatus, qmd: WireStatus): WireStatus {
+  const wired = [mem0, qmd].filter(s => s === "connected").length;
+  if (wired === 2) return "connected";
+  if (wired === 1) return "partial";
+  return "not-wired";
 }
 
 export async function GET() {
@@ -40,51 +60,52 @@ export async function GET() {
   // Claude Code — ~/.claude/settings.json
   const claudeSettings = await readJSON("~/.claude/settings.json");
   const claudeMCPs = (claudeSettings.mcpServers as Record<string, unknown>) || {};
-  const claudeHasMem0 = hasMem0InMCPServers(claudeMCPs);
-  // Also check for session hook as partial credit
-  const claudeHasHook = await readFile(`${process.env.HOME}/.claude/hooks/mem0-session-preload.sh`, "utf-8")
-    .then(() => true).catch(() => false);
+  const claudeMem0: WireStatus = hasKeyInMCPServers(claudeMCPs, "mem0") ? "connected" : "not-wired";
+  const claudeQmd: WireStatus = hasKeyInMCPServers(claudeMCPs, "qmd") ? "connected" : "not-wired";
   results.push({
     id: "claude-code",
     name: "Claude Code",
-    mem0: claudeHasMem0 ? "connected" : claudeHasHook ? "partial" : "not-wired",
-    qmd: "not-wired",
-    overall: claudeHasMem0 ? "connected" : claudeHasHook ? "partial" : "not-wired",
+    mem0: claudeMem0,
+    qmd: claudeQmd,
+    overall: computeOverall(claudeMem0, claudeQmd),
   });
 
   // Qwen CLI — ~/.qwen/settings.json
   const qwenSettings = await readJSON("~/.qwen/settings.json");
   const qwenMCPs = (qwenSettings.mcpServers as Record<string, unknown>) || {};
-  const qwenHasMem0 = hasMem0InMCPServers(qwenMCPs);
+  const qwenMem0: WireStatus = hasKeyInMCPServers(qwenMCPs, "mem0") ? "connected" : "not-wired";
+  const qwenQmd: WireStatus = hasKeyInMCPServers(qwenMCPs, "qmd") ? "connected" : "not-wired";
   results.push({
     id: "qwen-cli",
     name: "Qwen CLI",
-    mem0: qwenHasMem0 ? "connected" : "not-wired",
-    qmd: "not-wired",
-    overall: qwenHasMem0 ? "partial" : "not-wired", // partial until QMD also wired
+    mem0: qwenMem0,
+    qmd: qwenQmd,
+    overall: computeOverall(qwenMem0, qwenQmd),
   });
 
   // Gemini CLI — ~/.gemini/settings.json
   const geminiSettings = await readJSON("~/.gemini/settings.json");
   const geminiMCPs = (geminiSettings.mcpServers as Record<string, unknown>) || {};
-  const geminiHasMem0 = hasMem0InMCPServers(geminiMCPs);
+  const geminiMem0: WireStatus = hasKeyInMCPServers(geminiMCPs, "mem0") ? "connected" : "not-wired";
+  const geminiQmd: WireStatus = hasKeyInMCPServers(geminiMCPs, "qmd") ? "connected" : "not-wired";
   results.push({
     id: "gemini-cli",
     name: "Gemini CLI",
-    mem0: geminiHasMem0 ? "connected" : "not-wired",
-    qmd: "not-wired",
-    overall: geminiHasMem0 ? "partial" : "not-wired",
+    mem0: geminiMem0,
+    qmd: geminiQmd,
+    overall: computeOverall(geminiMem0, geminiQmd),
   });
 
   // Codex — ~/.codex/config.toml
   const codexTOML = await readTOML("~/.codex/config.toml");
-  const codexHasMem0 = codexTOML.includes("[mcp_servers.mem0]") || codexTOML.includes("mcp_servers.mem0");
+  const codexMem0: WireStatus = codexTOML.includes("[mcp_servers.mem0]") ? "connected" : "not-wired";
+  const codexQmd: WireStatus = codexTOML.includes("[mcp_servers.qmd]") ? "connected" : "not-wired";
   results.push({
     id: "codex",
     name: "Codex",
-    mem0: codexHasMem0 ? "connected" : "not-wired",
-    qmd: "not-wired",
-    overall: codexHasMem0 ? "partial" : "not-wired",
+    mem0: codexMem0,
+    qmd: codexQmd,
+    overall: computeOverall(codexMem0, codexQmd),
   });
 
   // Verify mem0 is actually reachable
