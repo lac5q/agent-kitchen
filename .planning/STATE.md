@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Knowledge Architecture + Dashboard Polish
-status: executing
-stopped_at: Completed 05-05-PLAN.md — human verification approved
-last_updated: "2026-04-11T03:14:49.155Z"
+status: complete
+stopped_at: Milestone v1.1 archived — shipped 2026-04-11
+last_updated: "2026-04-11T16:10:00.000Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 5
@@ -18,19 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-09)
+See: .planning/PROJECT.md (updated 2026-04-11 after v1.1)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** Phase 05 — knowledge-ingestion-pipeline
+**Current focus:** Planning next milestone — run `/gsd-new-milestone` to start v1.2
 
 ## Current Position
 
-Phase: 05 (knowledge-ingestion-pipeline) — EXECUTING
-Plan: 2 of 5
-Status: Ready to execute
-Last activity: 2026-04-11
+Milestone v1.1 complete. All 5 phases shipped, 12/12 requirements satisfied.
+Last activity: 2026-04-11 — archived milestone, tagged v1.1
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
