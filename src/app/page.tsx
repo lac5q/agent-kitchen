@@ -11,6 +11,8 @@ const DEV_TOOL_DEFS: { id: string; name: string; icon: string; platform: Agent["
   { id: "codex",       name: "Codex",       icon: "📝", platform: "codex" },
 ];
 
+const VALID_PLATFORMS = new Set<Agent["platform"]>(["claude", "codex", "qwen", "gemini", "opencode"]);
+
 export default function KitchenFloor() {
   const { data: localData, isLoading: localLoading } = useAgents();
   const { data: remoteData } = useRemoteAgents();
@@ -23,7 +25,9 @@ export default function KitchenFloor() {
     id: `remote-${r.id}`,
     name: r.name,
     role: r.role,
-    platform: r.platform as Agent["platform"],
+    platform: VALID_PLATFORMS.has(r.platform as Agent["platform"])
+      ? (r.platform as Agent["platform"])
+      : "claude", // fallback for unknown platform strings
     status: r.status === "active" ? "active" : "dormant",
     lastHeartbeat: r.status === "active" ? new Date().toISOString() : null,
     currentTask: r.healthData ? `${r.location} · ${r.latencyMs}ms` : null,
