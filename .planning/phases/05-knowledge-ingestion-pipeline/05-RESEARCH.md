@@ -600,22 +600,19 @@ This is a greenfield pipeline (no rename/refactor). No existing runtime state to
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Which gws account should Drive and Gmail queries use?**
+1. **Which gws account should Drive and Gmail queries use?** **(RESOLVED)**
    - What we know: Default account is `luis@epiloguecapital.com`. Drive query returned "Notes by Gemini" docs successfully. Gmail `from:me` query returns ~16,076 threads.
-   - What's unclear: Are any transcripts in `luis.calderon@gmail.com` account? Personal emails may be in the personal Gmail account.
-   - Recommendation: Test both accounts by using `GOOGLE_WORKSPACE_CLI_ACCOUNT=luis.calderon@gmail.com gws gmail users threads list ...` and compare thread counts. Plan should include a note to set account appropriately per data source.
+   - **Resolution:** Use `luis@epiloguecapital.com` (workspace account) for all queries — this is where all business email, calendar, and Meet recordings live. The pipeline targets business communications, not personal Gmail. Personal Gmail (`luis.calderon@gmail.com`) is out of scope for this phase.
 
-2. **What agent_id should personal memories use in mem0?**
+2. **What agent_id should personal memories use in mem0?** **(RESOLVED)**
    - What we know: Existing user_ids are role-based (ceo, cto, etc.) or tool-based (claude, qwen). None are person-named.
-   - What's unclear: Should calendar/transcript memories go to `"luis"` (new) or `"shared"` (existing) or `"chief_of_staff"`?
-   - Recommendation: Create `"luis"` as the personal user_id. Memories about Luis's meetings and emails should be searchable from his personal context.
+   - **Resolution:** Use `"luis"` as the personal user_id for all personal memories (calendar events, meeting transcripts). This is a new user_id scoped to Luis's personal context. Plans already reflect this choice.
 
-3. **Should Spark transcripts check `search_fts5.sqlite` for full body content?**
+3. **Should Spark transcripts check `search_fts5.sqlite` for full body content?** **(RESOLVED)**
    - What we know: `meetTranscriptEvent.summary` is ~30 chars (meeting title). `search_fts5.sqlite` has `messagesfts` FTS5 table with `searchBody` column. The database is 845MB with WAL files active.
-   - What's unclear: Does `searchBody` contain the full AI transcript content, or just the email text?
-   - Recommendation: Wave 0 investigation — run one sample query: `SELECT searchBody FROM messagesfts WHERE messagePk = {sample_pk} LIMIT 1` against search_fts5.sqlite to verify content before committing to this approach.
+   - **Resolution:** Use `meetTranscriptEvent.summary` as the content for now (it's a meeting title/topic). Prefer Google Drive "Notes by Gemini" transcripts as the primary rich content source — these have full AI-generated summaries (71KB+). Spark is a fallback for meetings NOT in Drive. Full `search_fts5.sqlite` body extraction is deferred to a follow-up phase once content quality is verified.
 
 ---
 
