@@ -42,7 +42,10 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
     }
     setHeartbeatLoading(true);
     fetch(`/api/heartbeat?agent=${nodeId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`heartbeat ${r.status}`);
+        return r.json();
+      })
       .then(d => setHeartbeatContent(d.content ?? null))
       .catch(() => setHeartbeatContent(null))
       .finally(() => setHeartbeatLoading(false));
