@@ -26,7 +26,7 @@ export async function GET() {
     const log = await readFile(CRON_LOG, "utf-8");
     const lines = log.split("\n").filter(l => l.trim()).slice(-50);
 
-    for (const line of lines) {
+    lines.forEach((line, idx) => {
       // Extract timestamp if present
       const tsMatch = line.match(/(\d{4}-\d{2}-\d{2}T?\d{2}:\d{2}:\d{2})/);
       const ts = tsMatch?.[1] ? new Date(tsMatch[1]).toISOString() : new Date().toISOString();
@@ -34,7 +34,7 @@ export async function GET() {
       if (line.includes("PROPOSAL") || line.includes("proposal")) {
         const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
         if (msg) events.push({
-          id: `apo-${ts}-${Math.random()}`,
+          id: `apo-${ts}-${idx}`,
           timestamp: ts,
           node: "cookbooks",
           type: "apo",
@@ -44,7 +44,7 @@ export async function GET() {
       } else if (line.includes("ERROR") || line.includes("FAIL") || line.includes("error")) {
         const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
         if (msg) events.push({
-          id: `err-${ts}-${Math.random()}`,
+          id: `err-${ts}-${idx}`,
           timestamp: ts,
           node: "agents",
           type: "error",
@@ -54,7 +54,7 @@ export async function GET() {
       } else if (line.includes("audit") || line.includes("scan") || line.includes("QMD") || line.includes("search")) {
         const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
         if (msg) events.push({
-          id: `qmd-${ts}-${Math.random()}`,
+          id: `qmd-${ts}-${idx}`,
           timestamp: ts,
           node: "librarian",
           type: "knowledge",
@@ -64,7 +64,7 @@ export async function GET() {
       } else if (line.includes("mem0") || line.includes("memory") || line.includes("remember")) {
         const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
         if (msg) events.push({
-          id: `mem-${ts}-${Math.random()}`,
+          id: `mem-${ts}-${idx}`,
           timestamp: ts,
           node: "notebooks",
           type: "memory",
@@ -74,7 +74,7 @@ export async function GET() {
       } else if (line.includes("Starting") || line.includes("Complete") || line.includes("cycle")) {
         const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
         if (msg) events.push({
-          id: `apo-cycle-${ts}-${Math.random()}`,
+          id: `apo-cycle-${ts}-${idx}`,
           timestamp: ts,
           node: "taskboard",
           type: "apo",
@@ -82,7 +82,7 @@ export async function GET() {
           severity: "info",
         });
       }
-    }
+    });
   } catch { /* log not available */ }
 
   // 2. Check recent heartbeat activity per agent
