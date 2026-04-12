@@ -27,9 +27,18 @@ Every agent and knowledge system is visible, connected, and self-improving — s
 - ✓ Flow diagram: 4-row layout, 21 nodes, readable labels, heartbeat panel, noise-stripped activity feed (FLOW-01..07) — v1.1
 - ✓ Personal knowledge ingestion: emails, calendar, Meet + Spark transcripts → mem0/Qdrant/Obsidian (Phase 5) — v1.1
 
+## Current Milestone: v1.2 Live Data + Knowledge Sync
+
+**Goal:** Wire live heartbeat data into the Flow diagram, fix the Library path bug, and close the mem0↔Obsidian feedback loop.
+
+**Target features:**
+- Live heartbeat for obsidian + knowledge-curator nodes (replace hardcoded statuses with real health checks)
+- Fix meet-recordings basePath divergence in Library view
+- KNOW-06: bidirectional mem0 ↔ Obsidian sync
+
 ### Active
 
-<!-- v1.2 requirements — to be defined via /gsd-new-milestone -->
+<!-- v1.2 requirements — populated by /gsd-new-milestone -->
 
 ### Out of Scope
 
@@ -105,4 +114,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after v1.1 milestone*
+*Last updated: 2026-04-11 — v1.2 milestone started*
