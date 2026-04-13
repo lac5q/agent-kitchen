@@ -25,7 +25,7 @@ Full archive: `.planning/milestones/v1.1-ROADMAP.md`
 - [ ] **Phase 6: Library Config Fixes** - Fix meet-recordings basePath + expose mem0-exports in Library
 - [ ] **Phase 7: Live Heartbeat** - Wire obsidian + knowledge-curator nodes to real health signals
 - [x] **Phase 8: Bidirectional Knowledge Sync** - Obsidian journals → mem0 nightly with dedup guards (completed 2026-04-13)
-- [ ] **Phase 9: Skill Management Dashboard** - Expose skill sync pipeline in Flow diagram
+- [x] **Phase 9: Skill Management Dashboard** - Expose skill sync pipeline in Flow diagram (completed 2026-04-13)
 - [ ] **Phase 10: Flow Diagram UX** - Auto-fit viewport + visual polish
 - [ ] **Phase 11: Gwen Self-Improving Loop** - Install + configure self-improving-agent for Gwen
 
@@ -86,8 +86,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — JSONL bridge activation (cron fix) + /api/skills route + useSkills() hook + test suite
-- [ ] 09-02-PLAN.md — Canvas stats panel, dashed cyan edges, live skillCount, activity JSONL events, legend
+- [x] 09-01-PLAN.md — JSONL bridge activation (cron fix) + /api/skills route + useSkills() hook + test suite
+- [x] 09-02-PLAN.md — Canvas stats panel, dashed cyan edges, live skillCount, activity JSONL events, legend
 
 ### Phase 10: Flow Diagram UX
 **Goal**: Flow diagram fits the viewport on load and presents nodes at a readable, non-cramped scale
@@ -121,6 +121,6 @@ Plans:
 | 6. Library Config Fixes | v1.2 | 0/1 | Planned | - |
 | 7. Live Heartbeat | v1.2 | 0/1 | Planned | - |
 | 8. Bidirectional Knowledge Sync | v1.2 | 1/1 | Complete   | 2026-04-13 |
-| 9. Skill Management Dashboard | v1.2 | 0/2 | Not started | - |
+| 9. Skill Management Dashboard | v1.2 | 2/2 | Complete   | 2026-04-13 |
 | 10. Flow Diagram UX | v1.2 | 0/1 | Not started | - |
 | 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Not started | - |

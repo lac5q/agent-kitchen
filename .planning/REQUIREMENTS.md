@@ -24,11 +24,11 @@
 
 ### SKILL — Skill Management Dashboard
 
-- [ ] **SKILL-01**: `skill-sync.py` appends events to `skill-contributions.jsonl` after each sync/prune run (JSONL bridge — ~10 lines added to existing script)
-- [ ] **SKILL-02**: `/api/skills` route returns live skill stats (total count, contributed by Hermes, contributed by Gwen, stale count, last pruned date)
-- [ ] **SKILL-03**: Cookbooks node in Flow shows live skill stats panel — Skills · From Hermes · From Gwen · Last Pruned · Stale
-- [ ] **SKILL-04**: Dashed cyan edges appear in Flow: alba→cookbooks and cookbooks→gateways (skill contribution flow)
-- [ ] **SKILL-05**: Activity feed shows skill contribution events (last 2h from JSONL) when cookbooks node is selected
+- [x] **SKILL-01**: `skill-sync.py` appends events to `skill-contributions.jsonl` after each sync/prune run (JSONL bridge — ~10 lines added to existing script)
+- [x] **SKILL-02**: `/api/skills` route returns live skill stats (total count, contributed by Hermes, contributed by Gwen, stale count, last pruned date)
+- [x] **SKILL-03**: Cookbooks node in Flow shows live skill stats panel — Skills · From Hermes · From Gwen · Last Pruned · Stale
+- [x] **SKILL-04**: Dashed cyan edges appear in Flow: alba→cookbooks and cookbooks→gateways (skill contribution flow)
+- [x] **SKILL-05**: Activity feed shows skill contribution events (last 2h from JSONL) when cookbooks node is selected
 
 ### AGENT — Gwen Self-Improving Loop
 
@@ -80,11 +80,11 @@
 | FLOW-11 | Phase 10 | Pending |
 | KNOW-06 | Phase 8 | Complete |
 | KNOW-07 | Phase 8 | Complete |
-| SKILL-01 | Phase 9 | Pending |
-| SKILL-02 | Phase 9 | Pending |
-| SKILL-03 | Phase 9 | Pending |
-| SKILL-04 | Phase 9 | Pending |
-| SKILL-05 | Phase 9 | Pending |
+| SKILL-01 | Phase 9 | Complete |
+| SKILL-02 | Phase 9 | Complete |
+| SKILL-03 | Phase 9 | Complete |
+| SKILL-04 | Phase 9 | Complete |
+| SKILL-05 | Phase 9 | Complete |
 | AGENT-01 | Phase 11 | Pending |
 | AGENT-02 | Phase 11 | Pending |
 | AGENT-03 | Phase 11 | Pending |
