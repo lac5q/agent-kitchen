@@ -21,11 +21,13 @@ interface JournalEvent {
 export async function GET() {
   // 1. Count skills in master dir (exclude dot-prefixed dirs and non-directories)
   let totalSkills = 0;
+  let skillDirNames: string[] = [];
   try {
     const entries = await readdir(SKILLS_PATH, { withFileTypes: true });
-    totalSkills = entries.filter(
-      e => e.isDirectory() && !e.name.startsWith(".")
-    ).length;
+    skillDirNames = entries
+      .filter(e => e.isDirectory() && !e.name.startsWith("."))
+      .map(e => e.name);
+    totalSkills = skillDirNames.length;
   } catch {
     /* directory inaccessible — return 0 */
   }
@@ -33,16 +35,31 @@ export async function GET() {
   // 2. Read sync state for lastPruned and lastUpdated
   let lastPruned: string | null = null;
   let lastUpdated: string | null = null;
+  let skillUsage: Record<string, unknown> = {};
   try {
     const raw = await readFile(SKILL_SYNC_STATE, "utf-8");
     const state = JSON.parse(raw);
     lastPruned = state.last_prune ?? null;
     lastUpdated = state.last_sync ?? null;
+    if (state.skill_usage && typeof state.skill_usage === "object") {
+      skillUsage = state.skill_usage as Record<string, unknown>;
+    }
   } catch {
-    /* state file may not exist — null is correct */
+    /* state file may not exist — null is correct, skillUsage stays {} */
   }
 
-  // 3. Parse JSONL for contribution stats
+  // 3. Compute coverage gaps — skills with no usage or unused for 30+ days
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const coverageGaps: string[] = skillDirNames.filter(name => {
+    const raw = skillUsage[name];
+    if (raw == null) return true;                          // never used
+    const ts = typeof raw === "number" ? raw : new Date(String(raw)).getTime();
+    if (!Number.isFinite(ts)) return true;                 // malformed timestamp → treat as unused
+    return (now - ts) > THIRTY_DAYS_MS;                    // stale (strictly > 30 days)
+  });
+
+  // 4. Parse JSONL for contribution stats
   let recentContributions: Array<{
     skill: string;
     contributor: string;
@@ -95,6 +112,7 @@ export async function GET() {
     recentContributions,
     lastPruned,
     staleCandidates,
+    coverageGaps,
     lastUpdated,
     timestamp: new Date().toISOString(),
   });
