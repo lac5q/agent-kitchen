@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { readFile, readdir, stat } from "fs/promises";
 import path from "path";
-import { cleanMessage } from "@/lib/activity-cleanup";
 
 export const dynamic = "force-dynamic";
 
 const CRON_LOG = process.env.APO_CRON_LOG_PATH || `${process.env.HOME}/.openclaw/logs/agent-lightning-cron.log`;
 const AGENT_CONFIGS = process.env.AGENT_CONFIGS_PATH || `${process.env.HOME}/github/knowledge/agent-configs`;
 const PROPOSALS_PATH = process.env.APO_PROPOSALS_PATH || `${process.env.HOME}/.openclaw/skills/proposals`;
-const SKILL_LOG = process.env.SKILL_CONTRIBUTIONS_LOG ||
-  `${process.env.HOME}/github/knowledge/skill-contributions.jsonl`;
 
 export interface ActivityEvent {
   id: string;
@@ -28,63 +25,58 @@ export async function GET() {
     const log = await readFile(CRON_LOG, "utf-8");
     const lines = log.split("\n").filter(l => l.trim()).slice(-50);
 
-    lines.forEach((line, idx) => {
+    for (const line of lines) {
       // Extract timestamp if present
       const tsMatch = line.match(/(\d{4}-\d{2}-\d{2}T?\d{2}:\d{2}:\d{2})/);
       const ts = tsMatch?.[1] ? new Date(tsMatch[1]).toISOString() : new Date().toISOString();
 
       if (line.includes("PROPOSAL") || line.includes("proposal")) {
-        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
-        if (msg) events.push({
-          id: `apo-${ts}-${idx}`,
+        events.push({
+          id: `apo-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "cookbooks",
           type: "apo",
-          message: msg,
+          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
           severity: "info",
         });
       } else if (line.includes("ERROR") || line.includes("FAIL") || line.includes("error")) {
-        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
-        if (msg) events.push({
-          id: `err-${ts}-${idx}`,
+        events.push({
+          id: `err-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "agents",
           type: "error",
-          message: msg,
+          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
           severity: "error",
         });
       } else if (line.includes("audit") || line.includes("scan") || line.includes("QMD") || line.includes("search")) {
-        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
-        if (msg) events.push({
-          id: `qmd-${ts}-${idx}`,
+        events.push({
+          id: `qmd-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "librarian",
           type: "knowledge",
-          message: msg,
+          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
           severity: "info",
         });
       } else if (line.includes("mem0") || line.includes("memory") || line.includes("remember")) {
-        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
-        if (msg) events.push({
-          id: `mem-${ts}-${idx}`,
+        events.push({
+          id: `mem-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "notebooks",
           type: "memory",
-          message: msg,
+          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
           severity: "info",
         });
       } else if (line.includes("Starting") || line.includes("Complete") || line.includes("cycle")) {
-        const msg = cleanMessage(line.replace(/^\[.*?\]\s*/, "").trim()).slice(0, 80);
-        if (msg) events.push({
-          id: `apo-cycle-${ts}-${idx}`,
+        events.push({
+          id: `apo-cycle-${ts}-${Math.random()}`,
           timestamp: ts,
           node: "taskboard",
           type: "apo",
-          message: msg,
+          message: line.replace(/^\[.*?\]\s*/, "").trim().slice(0, 80),
           severity: "info",
         });
       }
-    });
+    }
   } catch { /* log not available */ }
 
   // 2. Check recent heartbeat activity per agent
@@ -128,42 +120,6 @@ export async function GET() {
       }
     }
   } catch { /* skip */ }
-
-  // 4. Read recent skill contribution events from JSONL (last 2 hours)
-  try {
-    const raw = await readFile(SKILL_LOG, "utf-8");
-    const lines = raw.split("\n").filter(l => l.trim());
-    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-    for (const line of lines) {
-      try {
-        const event = JSON.parse(line) as {
-          skill: string;
-          action: string;
-          contributor: string;
-          timestamp: string;
-        };
-        if (new Date(event.timestamp).getTime() < twoHoursAgo) continue;
-        const actionLabel =
-          event.action === "contributed"
-            ? `contributed by ${event.contributor}`
-            : event.action === "pruned"
-            ? "pruned (unused 30+ days)"
-            : event.action;
-        events.push({
-          id: `skill-${event.skill}-${event.timestamp}`,
-          timestamp: event.timestamp,
-          node: "cookbooks",
-          type: "knowledge",
-          message: `Skill "${event.skill}" ${actionLabel}`,
-          severity: "info",
-        });
-      } catch {
-        /* skip malformed JSONL line */
-      }
-    }
-  } catch {
-    /* JSONL missing or empty — skip silently (expected initial state) */
-  }
 
   // Sort by timestamp descending, take most recent 20
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
