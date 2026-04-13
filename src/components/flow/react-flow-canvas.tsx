@@ -114,6 +114,8 @@ interface SkillsStats {
   staleCandidates: number;
   coverageGaps?: string[];
   lastUpdated: string | null;
+  failuresByAgent?: Record<string, number>;
+  failuresByErrorType?: Record<string, number>;
   timestamp: string;
 }
 
@@ -198,6 +200,21 @@ export function ReactFlowCanvas({
     return "idle"; // "degraded" falls here → amber, which is correct for idle/warning states
   }
 
+  // Phase 14: derive primitive counts from failuresByAgent/failuresByErrorType.
+  // Declared before nodeStats so they can be referenced in its useCallback deps.
+  // Follows Phase 09 pattern — primitives outside nodes useMemo (STATE.md decision).
+  const failureCount = useMemo(() => {
+    const byAgent = skillsStats?.failuresByAgent ?? {};
+    return Object.values(byAgent).reduce((sum, n) => sum + (n ?? 0), 0);
+  }, [skillsStats?.failuresByAgent]);
+
+  const topErrorType = useMemo(() => {
+    const byType = skillsStats?.failuresByErrorType ?? {};
+    const entries = Object.entries(byType);
+    if (entries.length === 0) return null;
+    return entries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+  }, [skillsStats?.failuresByErrorType]);
+
   const nodeStats = useCallback((id: string): Record<string, string | number> => {
     switch (id) {
       case "agents":              return { "Total": agentCount, "Active": activeCount };
@@ -213,6 +230,8 @@ export function ReactFlowCanvas({
           ? new Date(skillsStats.lastPruned).toLocaleDateString()
           : "Never",
         "Stale":       skillsStats?.staleCandidates ?? 0,
+        "Failures":    failureCount,
+        ...(topErrorType ? { "Top Error": topErrorType } : {}),
       };
       case "gateways":            return { "Alba": "18793", "Gwen": "18792" };
       case "manager":             return { "Platform": "Paperclip", "Port": "3100" };
@@ -227,7 +246,7 @@ export function ReactFlowCanvas({
       case "codex":      { const t = devToolsMap["codex"];      return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
       default:                    return {};
     }
-  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, skillsStats, devToolsMap]);
+  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, skillsStats, devToolsMap, failureCount, topErrorType]);
 
   const gapCount = skillsStats?.coverageGaps?.length ?? 0;
 
@@ -281,7 +300,7 @@ export function ReactFlowCanvas({
       { id: "notebooks",         position: { x: 380, y: 440 }, data: { label: "mem0",                subtitle: "semantic memory",        icon: "🧠", status: getStatus("notebooks"),         highlighted: highlightedNode === "notebooks"         }, type: "flowNode" },
       { id: "librarian",         position: { x: 520, y: 440 }, data: { label: "QMD",                 subtitle: "BM25 · keyword",         icon: "🔍", status: getStatus("librarian"),         highlighted: highlightedNode === "librarian"         }, type: "flowNode" },
       { id: "qdrant",            position: { x: 660, y: 440 }, data: { label: "Qdrant Cloud",        subtitle: "vector store · AWS",     icon: "🗄️", status: getStatus("qdrant"),            highlighted: highlightedNode === "qdrant"            }, type: "flowNode" },
-      { id: "cookbooks",         position: { x: 20,  y: 580 }, data: { label: "Skills",              subtitle: gapCount > 0 ? `skillshare · ${skillCount} · ${gapCount} stale` : `skillshare · ${skillCount}`,     icon: "📚", status: getStatus("cookbooks"),         highlighted: highlightedNode === "cookbooks"         }, type: "flowNode" },
+      { id: "cookbooks",         position: { x: 20,  y: 580 }, data: { label: "Skills",              subtitle: gapCount > 0 ? `skillshare · ${skillCount} · ${gapCount} stale` : `skillshare · ${skillCount}`,     icon: "📚", status: getStatus("cookbooks"),         highlighted: highlightedNode === "cookbooks",        failureCount, topErrorType }, type: "flowNode" },
       { id: "apo",               position: { x: 150, y: 580 }, data: { label: "Agent Lightning",     subtitle: "APO · hourly",           icon: "⚡", status: getStatus("apo"),               highlighted: highlightedNode === "apo"               }, type: "flowNode" },
       { id: "gitnexus",          position: { x: 280, y: 580 }, data: { label: "GitNexus",            subtitle: "code graph",             icon: "🗺️", status: getStatus("gitnexus"),          highlighted: highlightedNode === "gitnexus"          }, type: "flowNode" },
       { id: "llmwiki",           position: { x: 410, y: 580 }, data: { label: "LLM Wiki",            subtitle: "knowledge wiki",         icon: "📖", status: getStatus("llmwiki"),           highlighted: highlightedNode === "llmwiki"           }, type: "flowNode" },
@@ -329,7 +348,7 @@ export function ReactFlowCanvas({
 
     // Group boxes must be first so they render behind everything else
     return [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
-  }, [remoteAgents, keyRemote, nodeActivity, highlightedNode, localActiveCount, localTotalCount, devToolsMap, nodeStats, gapCount]);
+  }, [remoteAgents, keyRemote, nodeActivity, highlightedNode, localActiveCount, localTotalCount, devToolsMap, nodeStats, gapCount, failureCount, topErrorType]);
 
   const allAgentIds = useMemo(
     () => keyRemote.map(a => `agent-${a.id}`),

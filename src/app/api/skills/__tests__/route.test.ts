@@ -9,6 +9,7 @@ vi.mock("fs/promises", async (importOriginal) => {
 vi.mock("@/lib/constants", () => ({
   SKILLS_PATH: "/tmp/test-skills",
   SKILL_CONTRIBUTIONS_LOG: "/tmp/test-skill-contributions.jsonl",
+  FAILURES_LOG: "/tmp/test-failures.log",
 }));
 
 const { GET } = await import("../route");
@@ -27,19 +28,50 @@ function makeJsonl(events: object[]): string {
   return events.map(e => JSON.stringify(e)).join("\n");
 }
 
+// Helper: build a failure entry JSON string (single-line)
+function makeFailureEntry(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    timestamp: "2026-04-13T10:00:00Z",
+    agent_id: "hermes",
+    error_type: "permission_denied",
+    ...overrides,
+  });
+}
+
+// Helper: build a multi-line pretty-printed failure entry
+function makeMultiLineFailureEntry(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify(
+    {
+      timestamp: "2026-04-13T10:00:00Z",
+      agent_id: "gwen",
+      error_type: "timeout",
+      ...overrides,
+    },
+    null,
+    2
+  );
+}
+
 const FAKE_STATE = JSON.stringify({
   last_sync: "2026-04-11T04:00:15.000000",
   last_prune: "2026-04-06T05:00:08.000000",
 });
+
+// Convenience: ENOENT error factory
+const enoent = () => Object.assign(new Error("ENOENT"), { code: "ENOENT" });
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("GET /api/skills", () => {
+  // NOTE: readFile call order in route is: (1) state file, (2) JSONL, (3) failures.log
+  // Tests using mockRejectedValue (non-Once) cover all calls including failures.log.
+  // Tests using chained mockXxxOnce need 3 entries.
+
   it("returns HTTP 200", async () => {
     mockReaddir.mockResolvedValue([]);
-    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReadFile.mockRejectedValue(enoent());
     const res = await GET();
     expect(res.status).toBe(200);
   });
@@ -51,15 +83,15 @@ describe("GET /api/skills", () => {
       makeDirEntry(".hermes-staging", true),  // excluded: dot-prefix
       makeDirEntry("audit-report.md", false),  // excluded: not a directory
     ] as never);
-    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReadFile.mockRejectedValue(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.totalSkills).toBe(2);
   });
 
   it("returns totalSkills=0 when skills directory is inaccessible", async () => {
-    mockReaddir.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
-    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReaddir.mockRejectedValue(enoent());
+    mockReadFile.mockRejectedValue(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.totalSkills).toBe(0);
@@ -67,10 +99,10 @@ describe("GET /api/skills", () => {
 
   it("returns all contribution zeros when JSONL file does not exist", async () => {
     mockReaddir.mockResolvedValue([]);
-    // First readFile = state file, second = JSONL (throw ENOENT for JSONL)
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })) // state file
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })); // JSONL
+      .mockRejectedValueOnce(enoent()) // (1) state file
+      .mockRejectedValueOnce(enoent()) // (2) JSONL
+      .mockRejectedValueOnce(enoent()); // (3) failures.log
     const res = await GET();
     const body = await res.json();
     expect(body.contributedByHermes).toBe(0);
@@ -82,8 +114,9 @@ describe("GET /api/skills", () => {
   it("returns all zeros when JSONL file is empty", async () => {
     mockReaddir.mockResolvedValue([]);
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })) // state
-      .mockResolvedValueOnce("" as never); // empty JSONL
+      .mockRejectedValueOnce(enoent())      // (1) state
+      .mockResolvedValueOnce("" as never)   // (2) empty JSONL
+      .mockRejectedValueOnce(enoent());     // (3) failures.log
     const res = await GET();
     const body = await res.json();
     expect(body.contributedByHermes).toBe(0);
@@ -100,8 +133,9 @@ describe("GET /api/skills", () => {
       { skill: "old-skill",      action: "contributed", contributor: "master",  timestamp: new Date().toISOString(), metadata: {} },
     ];
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })) // state
-      .mockResolvedValueOnce(makeJsonl(events) as never);
+      .mockRejectedValueOnce(enoent())                        // (1) state
+      .mockResolvedValueOnce(makeJsonl(events) as never)      // (2) JSONL
+      .mockRejectedValueOnce(enoent());                       // (3) failures.log
     const res = await GET();
     const body = await res.json();
     expect(body.contributedByHermes).toBe(2);
@@ -116,8 +150,9 @@ describe("GET /api/skills", () => {
       { skill: "archived-skill", action: "archived",     contributor: "hermes", timestamp: new Date().toISOString(), metadata: {} },
     ];
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-      .mockResolvedValueOnce(makeJsonl(events) as never);
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.contributedByHermes).toBe(1); // only the "contributed" one
@@ -131,8 +166,9 @@ describe("GET /api/skills", () => {
       { skill: "active",  action: "contributed", contributor: "hermes", timestamp: new Date().toISOString(), metadata: {} },
     ];
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-      .mockResolvedValueOnce(makeJsonl(events) as never);
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.staleCandidates).toBe(2);
@@ -147,8 +183,9 @@ describe("GET /api/skills", () => {
       { skill: "recent-skill", action: "contributed", contributor: "hermes", timestamp: recent,      metadata: {} },
     ];
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-      .mockResolvedValueOnce(makeJsonl(events) as never);
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.recentContributions).toHaveLength(1);
@@ -158,8 +195,9 @@ describe("GET /api/skills", () => {
   it("reads lastPruned from state file last_prune field", async () => {
     mockReaddir.mockResolvedValue([]);
     mockReadFile
-      .mockResolvedValueOnce(FAKE_STATE as never)  // state file
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })); // JSONL
+      .mockResolvedValueOnce(FAKE_STATE as never)  // (1) state file
+      .mockRejectedValueOnce(enoent())             // (2) JSONL
+      .mockRejectedValueOnce(enoent());            // (3) failures.log
     const res = await GET();
     const body = await res.json();
     expect(body.lastPruned).toBe("2026-04-06T05:00:08.000000");
@@ -167,7 +205,7 @@ describe("GET /api/skills", () => {
 
   it("returns lastPruned=null when state file is inaccessible", async () => {
     mockReaddir.mockResolvedValue([]);
-    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReadFile.mockRejectedValue(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.lastPruned).toBeNull();
@@ -182,8 +220,9 @@ describe("GET /api/skills", () => {
       JSON.stringify({ skill: "also-good", action: "contributed", contributor: "gwen", timestamp: new Date().toISOString(), metadata: {} }),
     ].join("\n");
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-      .mockResolvedValueOnce(mixedLines as never);
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(mixedLines as never)
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.contributedByHermes).toBe(1);
@@ -192,11 +231,125 @@ describe("GET /api/skills", () => {
 
   it("always includes a timestamp field in the response", async () => {
     mockReaddir.mockResolvedValue([]);
-    mockReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReadFile.mockRejectedValue(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.timestamp).toBeDefined();
     expect(() => new Date(body.timestamp)).not.toThrow();
+  });
+});
+
+describe("failuresByAgent + failuresByErrorType (SKILL-06)", () => {
+  // readFile order: (1) state, (2) JSONL, (3) failures.log
+
+  it("Test 1 (happy path): returns correct failure counts from failures.log", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const failureEntries = [
+      makeFailureEntry({ agent_id: "hermes", error_type: "permission_denied" }),
+      makeFailureEntry({ agent_id: "hermes", error_type: "timeout" }),
+      makeFailureEntry({ agent_id: "gwen",   error_type: "permission_denied" }),
+      makeFailureEntry({ agent_id: "gwen",   error_type: "file_not_found" }),
+      makeFailureEntry({ agent_id: "alba",   error_type: "timeout" }),
+    ].join("\n");
+    mockReadFile
+      .mockRejectedValueOnce(enoent())                            // (1) state
+      .mockRejectedValueOnce(enoent())                            // (2) JSONL
+      .mockResolvedValueOnce(failureEntries as never);             // (3) failures.log
+    const res = await GET();
+    const body = await res.json();
+    expect(body.failuresByAgent).toEqual({ hermes: 2, gwen: 2, alba: 1 });
+    expect(body.failuresByErrorType).toEqual({ permission_denied: 2, timeout: 2, file_not_found: 1 });
+  });
+
+  it("Test 2 (disk_critical filtered): disk_critical never appears in response", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const failureEntries = [
+      makeFailureEntry({ agent_id: "hermes", error_type: "disk_critical" }),
+      makeFailureEntry({ agent_id: "hermes", error_type: "disk_critical" }),
+      makeFailureEntry({ agent_id: "hermes", error_type: "disk_critical" }),
+      makeFailureEntry({ agent_id: "gwen",   error_type: "permission_denied" }),
+      makeFailureEntry({ agent_id: "gwen",   error_type: "permission_denied" }),
+    ].join("\n");
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(failureEntries as never);
+    const res = await GET();
+    const body = await res.json();
+    expect(body.failuresByErrorType).toEqual({ permission_denied: 2 });
+    expect(body.failuresByErrorType).not.toHaveProperty("disk_critical");
+    // disk_critical agents are excluded from agent count too (entries filtered before counting)
+    expect(body.failuresByAgent).toEqual({ gwen: 2 });
+  });
+
+  it("Test 3 (missing log file): returns 200 with empty objects when failures.log absent", async () => {
+    mockReaddir.mockResolvedValue([]);
+    mockReadFile
+      .mockRejectedValueOnce(enoent())  // (1) state
+      .mockRejectedValueOnce(enoent())  // (2) JSONL
+      .mockRejectedValueOnce(enoent()); // (3) failures.log — missing
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.failuresByAgent).toEqual({});
+    expect(body.failuresByErrorType).toEqual({});
+  });
+
+  it("Test 4 (empty log file): returns empty objects when failures.log is 0 bytes", async () => {
+    mockReaddir.mockResolvedValue([]);
+    mockReadFile
+      .mockRejectedValueOnce(enoent())         // (1) state
+      .mockRejectedValueOnce(enoent())         // (2) JSONL
+      .mockResolvedValueOnce("" as never);     // (3) failures.log — empty
+    const res = await GET();
+    const body = await res.json();
+    expect(body.failuresByAgent).toEqual({});
+    expect(body.failuresByErrorType).toEqual({});
+  });
+
+  it("Test 5 (multi-line round-trip): pretty-printed multi-line entry counted as 1, not per-line", async () => {
+    mockReaddir.mockResolvedValue([]);
+    // A pretty-printed entry spans many lines — naive parser would count each line or crash
+    const multiLineEntry = makeMultiLineFailureEntry({ agent_id: "gwen", error_type: "timeout" });
+    expect(multiLineEntry.split("\n").length).toBeGreaterThan(1);
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(multiLineEntry as never);
+    const res = await GET();
+    const body = await res.json();
+    // Must be exactly 1 gwen failure, not 8 (one per line of the pretty-printed object)
+    expect(body.failuresByAgent).toEqual({ gwen: 1 });
+    expect(body.failuresByErrorType).toEqual({ timeout: 1 });
+  });
+
+  it("Test 6 (no regression): Phase 9 + 13 fields still present with correct values", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("bash-scripting", true),
+      makeDirEntry("python-async", true),
+    ] as never);
+    const events = [
+      { skill: "bash-scripting", action: "contributed", contributor: "hermes", timestamp: new Date().toISOString(), metadata: {} },
+      { skill: "gwen-skill",     action: "contributed", contributor: "gwen",   timestamp: new Date().toISOString(), metadata: {} },
+    ];
+    mockReadFile
+      .mockResolvedValueOnce(FAKE_STATE as never)
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    // Phase 9 fields
+    expect(body.totalSkills).toBe(2);
+    expect(body.contributedByHermes).toBe(1);
+    expect(body.contributedByGwen).toBe(1);
+    expect(body.lastPruned).toBe("2026-04-06T05:00:08.000000");
+    expect(body.lastUpdated).toBe("2026-04-11T04:00:15.000000");
+    expect(body.timestamp).toBeDefined();
+    // Phase 13 fields
+    expect(Array.isArray(body.coverageGaps)).toBe(true);
+    // Phase 14 new fields
+    expect(body.failuresByAgent).toEqual({});
+    expect(body.failuresByErrorType).toEqual({});
   });
 });
 
@@ -205,6 +358,10 @@ describe("coverageGaps", () => {
     vi.useRealTimers();
   });
 
+  // NOTE: these tests use 2-entry chains (state + JSONL).
+  // The failures.log call (3rd) falls through to mockRejectedValue default or gets undefined.
+  // We add a third rejection to be safe where chains are explicit.
+
   it("includes skills never used", async () => {
     mockReaddir.mockResolvedValue([
       makeDirEntry("bash-scripting", true),
@@ -212,7 +369,8 @@ describe("coverageGaps", () => {
     ] as never);
     mockReadFile
       .mockResolvedValueOnce(JSON.stringify({ last_sync: "2026-04-11T04:00:15.000000", last_prune: "2026-04-06T05:00:08.000000", skill_usage: {} }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(new Set(body.coverageGaps)).toEqual(new Set(["bash-scripting", "python-async"]));
@@ -234,7 +392,8 @@ describe("coverageGaps", () => {
           "fresh-skill": "2026-04-10T00:00:00Z",  // 3 days ago
         },
       }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).toContain("stale-skill");
@@ -251,7 +410,8 @@ describe("coverageGaps", () => {
       .mockResolvedValueOnce(JSON.stringify({
         skill_usage: { "boundary-skill": "2026-03-14T00:00:00Z" },
       }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).not.toContain("boundary-skill");
@@ -263,7 +423,8 @@ describe("coverageGaps", () => {
       .mockResolvedValueOnce(JSON.stringify({
         skill_usage: { "boundary-skill": "2026-03-13T23:59:59Z" },
       }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res2 = await GET();
     const body2 = await res2.json();
     expect(body2.coverageGaps).toContain("boundary-skill");
@@ -276,8 +437,9 @@ describe("coverageGaps", () => {
       makeDirEntry("c", true),
     ] as never);
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))  // state file
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })); // JSONL
+      .mockRejectedValueOnce(enoent())   // (1) state file
+      .mockRejectedValueOnce(enoent())   // (2) JSONL
+      .mockRejectedValueOnce(enoent());  // (3) failures.log
     const res = await GET();
     const body = await res.json();
     expect(new Set(body.coverageGaps)).toEqual(new Set(["a", "b", "c"]));
@@ -290,17 +452,19 @@ describe("coverageGaps", () => {
     ] as never);
     mockReadFile
       .mockResolvedValueOnce(JSON.stringify({ last_sync: "2026-04-11T04:00:15.000000", last_prune: "2026-04-06T05:00:08.000000" }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(new Set(body.coverageGaps)).toEqual(new Set(["a", "b"]));
   });
 
   it("returns [] when SKILLS_PATH is inaccessible", async () => {
-    mockReaddir.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReaddir.mockRejectedValue(enoent());
     mockReadFile
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).toEqual([]);
@@ -314,7 +478,8 @@ describe("coverageGaps", () => {
     ] as never);
     mockReadFile
       .mockResolvedValueOnce(JSON.stringify({ skill_usage: {} }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).toEqual(["real-skill"]);
@@ -334,7 +499,8 @@ describe("coverageGaps", () => {
           "bad-skill": "not-a-date",            // malformed — treated as stale
         },
       }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).toContain("bad-skill");
@@ -350,7 +516,8 @@ describe("coverageGaps", () => {
       .mockResolvedValueOnce(JSON.stringify({
         skill_usage: { "num-skill": tenDaysAgoEpoch },
       }) as never)
-      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
     const res = await GET();
     const body = await res.json();
     expect(body.coverageGaps).not.toContain("num-skill");

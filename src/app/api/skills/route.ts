@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { readFile, readdir } from "fs/promises";
 import path from "path";
-import { SKILLS_PATH, SKILL_CONTRIBUTIONS_LOG } from "@/lib/constants";
+import { SKILLS_PATH, SKILL_CONTRIBUTIONS_LOG, FAILURES_LOG } from "@/lib/constants";
+import { parseFailuresLog, aggregateFailures } from "@/lib/failures-parser";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,18 @@ export async function GET() {
     /* JSONL empty or missing — all zeros is correct initial state */
   }
 
+  // 5. Parse failures.log for agent/error_type aggregates (SKILL-06)
+  let failuresByAgent: Record<string, number> = {};
+  let failuresByErrorType: Record<string, number> = {};
+  try {
+    const entries = await parseFailuresLog(FAILURES_LOG);
+    const agg = aggregateFailures(entries);
+    failuresByAgent = agg.failuresByAgent;
+    failuresByErrorType = agg.failuresByErrorType;
+  } catch {
+    /* parser already returns [] on ENOENT; defensive catch for any other I/O surprise */
+  }
+
   return NextResponse.json({
     totalSkills,
     contributedByHermes,
@@ -114,6 +127,8 @@ export async function GET() {
     staleCandidates,
     coverageGaps,
     lastUpdated,
+    failuresByAgent,
+    failuresByErrorType,
     timestamp: new Date().toISOString(),
   });
 }

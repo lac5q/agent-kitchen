@@ -45,3 +45,5 @@ export const SKILLS_PATH = process.env.SKILLS_PATH ||
   `${process.env.HOME}/github/knowledge/skills`;
 export const SKILL_CONTRIBUTIONS_LOG = process.env.SKILL_CONTRIBUTIONS_LOG ||
   `${process.env.HOME}/github/knowledge/skill-contributions.jsonl`;
+export const FAILURES_LOG = process.env.FAILURES_LOG ||
+  `${process.env.HOME}/.openclaw/failures.log`;
