@@ -59,7 +59,57 @@ function FlowNode({ data }: {
   );
 }
 
-const nodeTypes: NodeTypes = { flowNode: FlowNode };
+// Group box node — dashed border container for a cluster of child nodes.
+// Plan 17-02 will make this interactive (collapse/expand); for now it is
+// purely visual and non-interactive (pointerEvents: "none").
+function GroupBoxNode({ data }: {
+  data: {
+    label: string;
+    width: number;
+    height: number;
+  }
+}) {
+  return (
+    <div
+      style={{
+        width: data.width,
+        height: data.height,
+        border: "1.5px dashed #334155",
+        borderRadius: 12,
+        background: "rgba(15, 23, 42, 0.4)",
+        pointerEvents: "none",
+        position: "relative",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 6,
+          left: 12,
+          fontSize: 9,
+          fontWeight: 600,
+          color: "#475569",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}
+      >
+        {data.label}
+      </span>
+    </div>
+  );
+}
+
+const nodeTypes: NodeTypes = { flowNode: FlowNode, groupBoxNode: GroupBoxNode };
+
+// Layout constants — agent group
+const agentSpacing = 120;
+const agentStartX = 100;
+const agentY = 280;
+
+// Layout constants — dev tool group
+const DEV_TOOL_SPACING = 160;
+const DEV_TOOL_START_X = 160;
+const DEV_TOOL_Y = 560;
 
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
@@ -130,11 +180,8 @@ export function ReactFlowCanvas({
   const keyRemote = KEY_AGENTS.map(id => remoteAgents.find(a => a.id === id)).filter(Boolean) as typeof remoteAgents;
   const AGENT_ICONS: Record<string, string> = { alba: "🤖", gwen: "🌸", sophia: "💼", maria: "✍️", lucia: "🔧" };
 
-  const agentSpacing = 120;
-  const agentStartX = 100;
-  const agentY = 280;
-
   const nodes: Node[] = useMemo(() => {
+    // Ungrouped static nodes — these stay at absolute coordinates and do NOT get parentId
     const staticNodes: Node[] = [
       { id: "request",   position: { x: 20,  y: 100 }, data: { label: "User / Telegram", subtitle: "input channel",        icon: "📨", status: getStatus("request"),   highlighted: highlightedNode === "request"   }, type: "flowNode" },
       { id: "gateways",  position: { x: 160, y: 100 }, data: { label: "Gateways",         subtitle: "Alba · Gwen · Sophia", icon: "🚪", status: getStatus("gateways"),  highlighted: highlightedNode === "gateways"  }, type: "flowNode" },
@@ -144,15 +191,40 @@ export function ReactFlowCanvas({
       { id: "taskboard", position: { x: 160, y: 420 }, data: { label: "Task Board",       subtitle: "Nerve Kanban",         icon: "📋", status: getStatus("taskboard"), highlighted: highlightedNode === "taskboard" }, type: "flowNode" },
       { id: "notebooks", position: { x: 460, y: 420 }, data: { label: "mem0",             subtitle: "semantic memory",      icon: "🧠", status: getStatus("notebooks"), highlighted: highlightedNode === "notebooks" }, type: "flowNode" },
       { id: "librarian", position: { x: 600, y: 420 }, data: { label: "QMD",              subtitle: "3,445 docs",           icon: "🔍", status: getStatus("librarian"), highlighted: highlightedNode === "librarian" }, type: "flowNode" },
-      { id: "cookbooks", position: { x: 160, y: 560 }, data: { label: "Skills",           subtitle: "skillshare · 405+",   icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" }, type: "flowNode" },
-      { id: "apo",       position: { x: 320, y: 560 }, data: { label: "Agent Lightning",  subtitle: "APO · hourly",         icon: "⚡", status: getStatus("apo"),       highlighted: highlightedNode === "apo"       }, type: "flowNode" },
-      { id: "gitnexus",  position: { x: 480, y: 560 }, data: { label: "GitNexus",         subtitle: "code graph",           icon: "🗺️", status: getStatus("gitnexus"),  highlighted: highlightedNode === "gitnexus"  }, type: "flowNode" },
-      { id: "llmwiki",   position: { x: 640, y: 560 }, data: { label: "LLM Wiki",         subtitle: "knowledge wiki",       icon: "📖", status: getStatus("llmwiki"),   highlighted: highlightedNode === "llmwiki"   }, type: "flowNode" },
     ];
 
+    // Group box nodes — parent containers; MUST appear BEFORE their children in the array.
+    // These keep absolute canvas positions (they are roots, no parentId).
+    // zIndex: -1 so they render behind their child nodes.
+    const groupBoxNodes: Node[] = [
+      {
+        id: "group-agents",
+        type: "groupBoxNode",
+        position: { x: agentStartX - 15, y: agentY - 32 }, // { x: 85, y: 248 }
+        style: { zIndex: -1 },
+        data: { label: "Server Agents", width: 840, height: 160 },
+        selectable: false,
+        draggable: false,
+      },
+      {
+        id: "group-devtools",
+        type: "groupBoxNode",
+        position: { x: DEV_TOOL_START_X - 15, y: DEV_TOOL_Y - 32 }, // { x: 145, y: 528 }
+        style: { zIndex: -1 },
+        data: { label: "Dev Tools", width: 600, height: 160 },
+        selectable: false,
+        draggable: false,
+      },
+    ];
+
+    // Agent child nodes — parent-relative positions.
+    // Absolute: { x: agentStartX + i * agentSpacing, y: agentY }
+    // Relative:  absolute - parent = { x: 15 + i * agentSpacing, y: 32 }
     const agentNodes: Node[] = keyRemote.map((agent, i) => ({
       id: `agent-${agent.id}`,
-      position: { x: agentStartX + i * agentSpacing, y: agentY },
+      parentId: "group-agents",
+      extent: "parent" as const,
+      position: { x: 15 + i * agentSpacing, y: 32 },
       data: {
         label: agent.name,
         subtitle: agent.location,
@@ -163,9 +235,14 @@ export function ReactFlowCanvas({
       type: "flowNode",
     }));
 
+    // Local-agents node — parent-relative position.
+    // Absolute: { x: agentStartX + keyRemote.length * agentSpacing, y: agentY }
+    // Relative:  { x: 15 + keyRemote.length * agentSpacing, y: 32 }
     const localNode: Node = {
       id: "local-agents",
-      position: { x: agentStartX + keyRemote.length * agentSpacing, y: agentY },
+      parentId: "group-agents",
+      extent: "parent" as const,
+      position: { x: 15 + keyRemote.length * agentSpacing, y: 32 },
       data: {
         label: `${localActiveCount} Active`,
         subtitle: `${localTotalCount} local chefs`,
@@ -176,7 +253,24 @@ export function ReactFlowCanvas({
       type: "flowNode",
     };
 
-    return [...staticNodes, ...agentNodes, localNode];
+    // Dev tool child nodes — parent-relative positions.
+    // Absolute: { x: DEV_TOOL_START_X + i * DEV_TOOL_SPACING, y: DEV_TOOL_Y }
+    // Relative:  { x: 15 + i * DEV_TOOL_SPACING, y: 32 }
+    const devToolNodes: Node[] = [
+      { id: "cookbooks", data: { label: "Skills",          subtitle: "skillshare · 405+",  icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" } },
+      { id: "apo",       data: { label: "Agent Lightning", subtitle: "APO · hourly",        icon: "⚡", status: getStatus("apo"),       highlighted: highlightedNode === "apo"       } },
+      { id: "gitnexus",  data: { label: "GitNexus",        subtitle: "code graph",          icon: "🗺️", status: getStatus("gitnexus"),  highlighted: highlightedNode === "gitnexus"  } },
+      { id: "llmwiki",   data: { label: "LLM Wiki",        subtitle: "knowledge wiki",      icon: "📖", status: getStatus("llmwiki"),   highlighted: highlightedNode === "llmwiki"   } },
+    ].map((node, i) => ({
+      ...node,
+      parentId: "group-devtools",
+      extent: "parent" as const,
+      position: { x: 15 + i * DEV_TOOL_SPACING, y: 32 },
+      type: "flowNode",
+    }));
+
+    // CRITICAL: group box nodes MUST come before their children (React Flow v12 parentId requirement)
+    return [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount]);
 
@@ -210,6 +304,8 @@ export function ReactFlowCanvas({
   }, [allAgentIds]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    // Group box nodes are non-interactive — skip click handling
+    if (node.type === "groupBoxNode") return;
     const statsId = node.id.startsWith("agent-") ? node.id.replace("agent-", "") : node.id;
     const stats = nodeStats(statsId);
     onNodeClick(node.id, node.data.label as string, node.data.icon as string, stats);
