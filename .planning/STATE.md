@@ -4,14 +4,14 @@ milestone: v1.3
 milestone_name: Advanced Observability + Knowledge Depth
 status: executing
 stopped_at: Roadmap defined — 6 phases (12-17), 7 requirements, 0 orphans
-last_updated: "2026-04-13T19:59:43.719Z"
-last_activity: 2026-04-13 -- Phase 14 execution started
+last_updated: "2026-04-13T21:03:30.571Z"
+last_activity: 2026-04-13 -- Phase 17 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 6
+  percent: 75
 ---
 
 # State: Agent Kitchen
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-13 for v1.3)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** Phase 14 — skill-failure-rate
+**Current focus:** Phase 17 — collapsible-node-groups
 
 ## Current Position
 
-Phase: 14 (skill-failure-rate) — EXECUTING
+Phase: 17 (collapsible-node-groups) — EXECUTING
 Plan: 1 of 2
-Status: Executing Phase 14
-Last activity: 2026-04-13 -- Phase 14 execution started
+Status: Executing Phase 17
+Last activity: 2026-04-13 -- Phase 17 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
