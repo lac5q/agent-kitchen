@@ -4,6 +4,7 @@ export const POLL_INTERVALS = {
   memory: 15000,
   knowledge: 60000,
   health: 10000,
+  skills: 60000,
 } as const;
 
 export const COLORS = {
@@ -38,3 +39,6 @@ export const AGENT_CONFIGS_PATH = process.env.AGENT_CONFIGS_PATH || `${process.e
 export const PMO_MEMORY_PATH = process.env.PMO_MEMORY_PATH || `${process.env.HOME}/github/PMO/memory`;
 export const CLAUDE_MEMORY_PATH = process.env.CLAUDE_MEMORY_PATH || `${process.env.HOME}/.claude/projects`;
 export const MEM0_URL = process.env.MEM0_URL || "http://localhost:3201";
+export const SKILLS_PATH = process.env.SKILLS_PATH || `${process.env.HOME}/.claude/skills`;
+export const SKILL_CONTRIBUTIONS_LOG = process.env.SKILL_CONTRIBUTIONS_LOG || `${process.env.HOME}/.openclaw/skill-contributions.jsonl`;
+export const FAILURES_LOG = process.env.FAILURES_LOG || `${process.env.HOME}/.openclaw/failures.log`;
