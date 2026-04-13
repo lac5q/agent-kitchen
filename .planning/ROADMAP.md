@@ -89,7 +89,8 @@ Plans:
   2. Hovering a cell shows the date and contribution count without triggering a re-render of the full grid (local hover state, memoized cell array)
   3. The heatmap label clearly identifies the data as "Contribution Activity" (not invocation telemetry) to avoid misinterpretation
   4. The component handles an empty or sparse contribution list without error (clamps column count to minimum 1)
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 15-01-PLAN.md — Extend /api/skills with contributionHistory + build SkillHeatmap component (CSS grid, memoized cells) and render in NodeDetailPanel for the Cookbooks node
 **UI hint**: yes
 
 ### Phase 16: Per-Node Activity Panel
@@ -101,7 +102,10 @@ Plans:
   2. Nodes previously unmapped (qdrant, obsidian, knowledge-curator, per-agent nodes) return at least their available events rather than an empty panel
   3. The heartbeat fetch in the panel includes an `AbortController` that cancels in-flight requests when the panel is closed or the selected node changes
   4. Nodes with sparse event coverage display a documented "limited activity data" indicator rather than a broken or misleading empty state
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 16-01-PLAN.md — Extend NodeDetailPanel with keyword-map event filter (qdrant/obsidian/agent-* coverage), AbortController cleanup, 10-event cap, and documented sparse-data indicator
 **UI hint**: yes
 
 ### Phase 17: Collapsible Node Groups
@@ -113,7 +117,11 @@ Plans:
   2. Clicking a group node toggles it between expanded and collapsed states; collapsed groups show a single summary box with aggregate health color
   3. Edges connected to hidden child nodes remain properly hidden (not dangling to canvas origin at 0,0) when a group is collapsed, and reappear correctly on expand
   4. The collapse/expand interaction works correctly after page reload (state resets to expanded by default — no persistence needed)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 17-01-PLAN.md — parentId coordinate migration (children → parent-relative offsets, no toggle logic)
+- [ ] 17-02-PLAN.md — Collapse/expand toggle with aggregate health color + pure collapse-logic module
 **UI hint**: yes
 
 ## Progress
@@ -136,4 +144,4 @@ Plans:
 | 14. Skill Failure Rate | v1.3 | 0/? | Not started | - |
 | 15. Skill Heatmap | v1.3 | 0/? | Not started | - |
 | 16. Per-Node Activity Panel | v1.3 | 0/? | Not started | - |
-| 17. Collapsible Node Groups | v1.3 | 0/? | Not started | - |
+| 17. Collapsible Node Groups | v1.3 | 0/2 | Not started | - |
