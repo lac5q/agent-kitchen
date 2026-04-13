@@ -110,7 +110,10 @@ Plans:
   1. `self-improving-agent` skill is installed in Gwen's OpenClaw workspace with Cognee-OpenClaw explicitly NOT enabled
   2. Skills Gwen creates during sessions appear in `~/github/knowledge/skills/.hermes-staging/` for Hermes pickup (not in `~/skills/`)
   3. Gwen's reflection cron is scheduled at 3am (confirmed no collision with Hermes 4am sync cron)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 11-01-PLAN.md — Verify self-improving-agent install + add staging pickup to skill-sync.py (TDD) + register 3am gwen-reflection cron
 
 ## Progress
 
@@ -126,4 +129,4 @@ Plans:
 | 8. Bidirectional Knowledge Sync | v1.2 | 1/1 | Complete   | 2026-04-13 |
 | 9. Skill Management Dashboard | v1.2 | 2/2 | Complete   | 2026-04-13 |
 | 10. Flow Diagram UX | v1.2 | 0/1 | Planned | - |
-| 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Not started | - |
+| 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Planned | - |
