@@ -55,7 +55,9 @@ Full archive: `.planning/milestones/v1.2-ROADMAP.md`
   2. Markdown files from `~/github/knowledge/projects/` subdirectories appear in mem0 under `agent_id="shared"` with `project` metadata matching their parent directory name
   3. Re-running the script on the same files produces no duplicate mem0 entries (idempotent — mtime watermark + content-hash guards active)
   4. Each project directory tracks its own watermark key in `projects-ingestion-state.json` (isolated from `obsidian-ingestion-state.json`)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — TDD implementation of projects-to-mem0.py with 3-guard dedup and Step 7 curator wiring
 
 ### Phase 13: Skill Coverage Gaps
 **Goal**: Users can see which skills have gone unused for 30+ days so stale skills can be identified and pruned
@@ -129,7 +131,7 @@ Full archive: `.planning/milestones/v1.2-ROADMAP.md`
 | 9. Skill Management Dashboard | v1.2 | 2/2 | Complete | 2026-04-13 |
 | 10. Flow Diagram UX | v1.2 | 1/1 | Complete | 2026-04-12 |
 | 11. Gwen Self-Improving Loop | v1.2 | 1/1 | Complete | 2026-04-12 |
-| 12. Projects Knowledge Ingestion | v1.3 | 0/? | Not started | - |
+| 12. Projects Knowledge Ingestion | v1.3 | 0/1 | Not started | - |
 | 13. Skill Coverage Gaps | v1.3 | 0/? | Not started | - |
 | 14. Skill Failure Rate | v1.3 | 0/? | Not started | - |
 | 15. Skill Heatmap | v1.3 | 0/? | Not started | - |
