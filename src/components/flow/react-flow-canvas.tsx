@@ -269,9 +269,9 @@ export function ReactFlowCanvas({
 
     const staticNodes: Node[] = [
       { id: "request",           position: { x: 20,  y: 100 }, data: { label: "User / Telegram",    subtitle: "input channel",          icon: "📨", status: getStatus("request"),           highlighted: highlightedNode === "request"           }, type: "flowNode" },
-      { id: "gateways",          position: { x: 180, y: 100 }, data: { label: "Gateways",            subtitle: "Alba · Gwen · Sophia",   icon: "🚪", status: getStatus("gateways"),          highlighted: highlightedNode === "gateways"          }, type: "flowNode" },
-      { id: "manager",           position: { x: 520, y: 100 }, data: { label: "Paperclip",           subtitle: "orchestrator",           icon: "📞", status: getStatus("manager"),           highlighted: highlightedNode === "manager"           }, type: "flowNode" },
-      { id: "output",            position: { x: 680, y: 100 }, data: { label: "Response",            subtitle: "Discord · Telegram",     icon: "📤", status: getStatus("output"),            highlighted: highlightedNode === "output"            }, type: "flowNode" },
+      { id: "gateways",          position: { x: 160, y: 100 }, data: { label: "Gateways",            subtitle: "Alba · Gwen · Sophia",   icon: "🚪", status: getStatus("gateways"),          highlighted: highlightedNode === "gateways"          }, type: "flowNode" },
+      { id: "manager",           position: { x: 380, y: 100 }, data: { label: "Paperclip",           subtitle: "orchestrator",           icon: "📞", status: getStatus("manager"),           highlighted: highlightedNode === "manager"           }, type: "flowNode" },
+      { id: "output",            position: { x: 530, y: 100 }, data: { label: "Response",            subtitle: "Discord · Telegram",     icon: "📤", status: getStatus("output"),            highlighted: highlightedNode === "output"            }, type: "flowNode" },
       { id: "tunnels",           position: { x: 20,  y: 440 }, data: { label: "CF Tunnels",          subtitle: "kitchen.example...",    icon: "📡", status: getStatus("tunnels"),           highlighted: highlightedNode === "tunnels"           }, type: "flowNode" },
       { id: "taskboard",         position: { x: 160, y: 440 }, data: { label: "Task Board",          subtitle: "Nerve Kanban",           icon: "📋", status: getStatus("taskboard"),         highlighted: highlightedNode === "taskboard"         }, type: "flowNode" },
       { id: "notebooks",         position: { x: 380, y: 440 }, data: { label: "mem0",                subtitle: "semantic memory",        icon: "🧠", status: getStatus("notebooks"),         highlighted: highlightedNode === "notebooks"         }, type: "flowNode" },
@@ -334,47 +334,47 @@ export function ReactFlowCanvas({
 
   const edges: Edge[] = useMemo(() => {
     const base: Edge[] = [
-      { id: "req-gw",       source: "request",           target: "gateways",  animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "gw-mgr",       source: "gateways",          target: "manager",   animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "mgr-out",      source: "manager",           target: "output",    animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "gw-tun",       source: "gateways",          target: "tunnels",   animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "mgr-tb",       source: "manager",           target: "taskboard", animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "apo-sk",       source: "apo",               target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 2 } },
-      { id: "mem-qdr",      source: "notebooks",         target: "qdrant",    animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
-      { id: "curator-gnx",  source: "knowledge-curator", target: "gitnexus",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-wiki", source: "knowledge-curator", target: "llmwiki",   animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-mem",  source: "knowledge-curator", target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
-      { id: "curator-qmd",  source: "knowledge-curator", target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "lib-obs",      source: "librarian",         target: "obsidian",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "wiki-obs",     source: "llmwiki",           target: "obsidian",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-obs",  source: "knowledge-curator", target: "obsidian",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "mem-qmd",      source: "notebooks",         target: "librarian", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: "wiki-qmd",     source: "llmwiki",           target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: "req-gw",       source: "request",           target: "gateways",  type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "gw-mgr",       source: "gateways",          target: "manager",   type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "mgr-out",      source: "manager",            target: "output",    type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "gw-tun",       source: "gateways",          target: "tunnels",   type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "mgr-tb",       source: "manager",            target: "taskboard", type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "apo-sk",       source: "apo",               target: "cookbooks", type: "straight",   animated: false, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 2 } },
+      { id: "mem-qdr",      source: "notebooks",         target: "qdrant",    type: "straight",   animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
+      { id: "curator-gnx",  source: "knowledge-curator", target: "gitnexus",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "curator-wiki", source: "knowledge-curator", target: "llmwiki",   type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "curator-mem",  source: "knowledge-curator", target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
+      { id: "curator-qmd",  source: "knowledge-curator", target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "lib-obs",      source: "librarian",         target: "obsidian",  type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "wiki-obs",     source: "llmwiki",           target: "obsidian",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "curator-obs",  source: "knowledge-curator", target: "obsidian",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "mem-qmd",      source: "notebooks",         target: "librarian", type: "straight",   animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      { id: "wiki-qmd",     source: "llmwiki",           target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
     ];
 
     const agentEdges: Edge[] = allAgentIds.flatMap((id) => [
-      { id: `mgr-${id}`, source: "manager", target: id,          animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 1.5 } },
-      { id: `${id}-mem`, source: id,        target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: `${id}-qmd`, source: id,        target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      { id: `${id}-sk`,  source: id,        target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: `mgr-${id}`, source: "manager", target: id,          type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 1.5 } },
+      { id: `${id}-mem`, source: id,        target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      { id: `${id}-qmd`, source: id,        target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: `${id}-sk`,  source: id,        target: "cookbooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
     ]);
 
     // Dev tool edges — only add when actually wired
     const devToolEdges: Edge[] = ["claude-code", "qwen-cli", "gemini-cli", "codex"].flatMap(id => {
       const t = devToolsMap[id];
       const result: Edge[] = [];
-      if (t && t.mem0 !== "not-wired") result.push({ id: `${id}-mem`, source: id, target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory, strokeWidth: 1 } });
-      if (t && t.qmd !== "not-wired")  result.push({ id: `${id}-qmd-edge`, source: id, target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } });
+      if (t && t.mem0 !== "not-wired") result.push({ id: `${id}-mem`,      source: id, target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } });
+      if (t && t.qmd !== "not-wired")  result.push({ id: `${id}-qmd-edge`, source: id, target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } });
       return result;
     });
 
     const extraEdges: Edge[] = [
-      { id: "agents-apo",  source: "local-agents", target: "apo",      animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
-      { id: "agents-gnx",  source: "local-agents", target: "gitnexus", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "agents-wiki", source: "local-agents", target: "llmwiki",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "agents-mem",  source: "local-agents", target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: "agents-qmd",  source: "local-agents", target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      { id: "agents-sk",   source: "local-agents", target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: "agents-apo",  source: "local-agents", target: "apo",       type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
+      { id: "agents-gnx",  source: "local-agents", target: "gitnexus",  type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "agents-wiki", source: "local-agents", target: "llmwiki",   type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "agents-mem",  source: "local-agents", target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      { id: "agents-qmd",  source: "local-agents", target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: "agents-sk",   source: "local-agents", target: "cookbooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
       ...devToolEdges,
     ];
 
@@ -386,6 +386,7 @@ export function ReactFlowCanvas({
         id: "alba-cookbooks-skill",
         source: "agent-alba",
         target: "cookbooks",
+        type: "smoothstep",
         animated: false,          // static dashed, not flowing
         style: {
           stroke: EDGE_COLORS.sync,
@@ -397,6 +398,7 @@ export function ReactFlowCanvas({
         id: "cookbooks-gateways-skill",
         source: "cookbooks",
         target: "gateways",
+        type: "smoothstep",
         animated: false,
         style: {
           stroke: EDGE_COLORS.sync,
@@ -417,14 +419,14 @@ export function ReactFlowCanvas({
   }, [onNodeClick, nodeStats]);
 
   return (
-    <div style={{ width: "100%", height: 900, borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
+    <div style={{ width: "100%", height: "min(900px, calc(100vh - 220px))", borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.2, duration: 200 }}
         minZoom={0.3}
         maxZoom={2}
         attributionPosition="bottom-left"
