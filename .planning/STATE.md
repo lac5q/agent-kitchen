@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Live Data + Knowledge Sync
 status: completed
-stopped_at: Completed Phase 09 Plan 02 — Flow canvas skills wiring (live skillCount + dashed edges + JSONL activity)
-last_updated: "2026-04-13T08:14:19.621Z"
+stopped_at: Completed Phase 10 Plan 01 — Flow diagram UX fixes (orthogonal edges + selective animation + fitView)
+last_updated: "2026-04-13T08:37:49Z"
 last_activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
 progress:
   total_phases: 6
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-11 for v1.2)
 
 ## Current Position
 
-Phase: Phase 7 — Live Heartbeat (COMPLETE)
+Phase: Phase 10 — Flow Diagram UX (COMPLETE)
 Plan: 01/01 — complete
-Status: Phase 7 done; ready for Phase 8
-Last activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
+Status: Phase 10 done; all 3 tasks complete
+Last activity: 2026-04-13 — Phase 10 Plan 01 complete (orthogonal edges + selective animation + fitView)
 
 Progress: [####░░░░░░] 33%
 
@@ -51,6 +51,7 @@ Progress: [####░░░░░░] 33%
 | Phase 08-bidirectional-knowledge-sync P01 | 4m | 3 tasks | 3 files |
 | Phase 09 P01 | 8m | 3 tasks | 4 files |
 | Phase 09-skill-management-dashboard P02 | 12m | 3 tasks | 3 files |
+| Phase 10-flow-diagram-ux P01 | 2.5m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
