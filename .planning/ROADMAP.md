@@ -39,7 +39,10 @@ Full archive: `.planning/milestones/v1.1-ROADMAP.md`
   1. Library view shows ~100 documents for meet-recordings (matching actual ingestion output at `~/github/knowledge/gdrive/meet-recordings`)
   2. mem0-exports collection appears as a card in Library view alongside Obsidian, llm-wiki, and GitNexus
   3. No other Library collection entries are affected by the changes
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 06-01-PLAN.md — Fix meet-recordings basePath and add mem0-exports entry to collections.config.json
 
 ### Phase 7: Live Heartbeat
 **Goal**: Obsidian and knowledge-curator Flow nodes reflect real health status based on filesystem and log signals
@@ -51,8 +54,10 @@ Full archive: `.planning/milestones/v1.1-ROADMAP.md`
   3. Obsidian node turns red (error) when vault directory is missing or inaccessible
   4. knowledge-curator node turns green when `/tmp/knowledge-curator.log` is < 26h old and last line confirms successful completion
   5. knowledge-curator node turns red (error) when log is missing or more than 26h old (missed cron)
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md — Add constants, checkServiceTristate helper, obsidianStatus + curatorStatus to health API, remove hardcoded canvas lines
 
 ### Phase 8: Bidirectional Knowledge Sync
 **Goal**: Obsidian daily journal notes are fed into mem0 nightly with full deduplication protection
@@ -107,8 +112,8 @@ Full archive: `.planning/milestones/v1.1-ROADMAP.md`
 | 3. Agent Awareness | v1.1 | 1/1 | Complete | 2026-04-10 |
 | 4. Flow Diagram Upgrade | v1.1 | 3/3 | Complete | 2026-04-10 |
 | 5. Personal Knowledge Ingestion | v1.1 | 5/5 | Complete | 2026-04-11 |
-| 6. Library Config Fixes | v1.2 | 0/1 | Not started | - |
-| 7. Live Heartbeat | v1.2 | 0/1 | Not started | - |
+| 6. Library Config Fixes | v1.2 | 0/1 | Planned | - |
+| 7. Live Heartbeat | v1.2 | 0/1 | Planned | - |
 | 8. Bidirectional Knowledge Sync | v1.2 | 0/1 | Not started | - |
 | 9. Skill Management Dashboard | v1.2 | 0/2 | Not started | - |
 | 10. Flow Diagram UX | v1.2 | 0/1 | Not started | - |
