@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Live Data + Knowledge Sync
-status: in_progress
-stopped_at: "Phase 7 Plan 01 complete — live heartbeat for obsidian + knowledge-curator"
-last_updated: "2026-04-13T07:23:00.000Z"
-last_activity: 2026-04-13
+status: completed
+stopped_at: Phase 8 Plan 01 complete — obsidian journals synced to mem0 under agent_id=claude (KNOW-06, KNOW-07 satisfied)
+last_updated: "2026-04-13T07:42:50.362Z"
+last_activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 33
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
 ---
 
 # State: Agent Kitchen
@@ -48,6 +48,7 @@ Progress: [####░░░░░░] 33%
 | 07 — Live Heartbeat | 1 | ~6m | ~6m |
 
 *Updated after each plan completion*
+| Phase 08-bidirectional-knowledge-sync P01 | 4m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Progress: [####░░░░░░] 33%
 - **basePath fix scope:** Only `meet-recordings` entry in collections.config.json. Do not touch `alex-docs` or `turnedyellow-admin` (different base intentionally).
 - **Vitest ESM mocks:** Use `// @vitest-environment node` + `await import()` after `vi.mock()` for node modules (child_process, fs/promises). Static imports cause mocks to not intercept correctly in vitest 4.x.
 - **checkServiceTristate:** 3-state health helper for up/degraded/down — keep separate from binary checkService to avoid risk to existing services.
+- [Phase 08-bidirectional-knowledge-sync]: AGENT_ID fixed to claude — journals must land under correct agent per KNOW-06; previous value gwen was a draft artifact
+- [Phase 08-bidirectional-knowledge-sync]: STATE_FILE isolated to obsidian-ingestion-state.json — prevents collision with Phase 5 ingestion-state.json (gmail/calendar/gdrive_meet/spark)
+- [Phase 08-bidirectional-knowledge-sync]: All three KNOW-07 guards active — origin tag is not informational; it actively signals mem0-export.sh to skip obsidian-originated memories
 
 ### Roadmap Evolution
 
@@ -86,7 +90,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-13
-Stopped at: Phase 7 Plan 01 complete — live heartbeat (FLOW-08, FLOW-09 satisfied)
+Last session: 2026-04-13T07:42:50.359Z
+Stopped at: Phase 8 Plan 01 complete — obsidian journals synced to mem0 under agent_id=claude (KNOW-06, KNOW-07 satisfied)
 Resume file: None
 Next action: `/gsd-plan-phase 8`

@@ -24,7 +24,7 @@ Full archive: `.planning/milestones/v1.1-ROADMAP.md`
 
 - [ ] **Phase 6: Library Config Fixes** - Fix meet-recordings basePath + expose mem0-exports in Library
 - [ ] **Phase 7: Live Heartbeat** - Wire obsidian + knowledge-curator nodes to real health signals
-- [ ] **Phase 8: Bidirectional Knowledge Sync** - Obsidian journals → mem0 nightly with dedup guards
+- [x] **Phase 8: Bidirectional Knowledge Sync** - Obsidian journals → mem0 nightly with dedup guards (completed 2026-04-13)
 - [ ] **Phase 9: Skill Management Dashboard** - Expose skill sync pipeline in Flow diagram
 - [ ] **Phase 10: Flow Diagram UX** - Auto-fit viewport + visual polish
 - [ ] **Phase 11: Gwen Self-Improving Loop** - Install + configure self-improving-agent for Gwen
@@ -71,7 +71,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 08-01-PLAN.md — Fix 3 deviations in obsidian-to-mem0.py (agent_id, state file, docstring) + 10-scenario TDD pytest suite
+- [x] 08-01-PLAN.md — Fix 3 deviations in obsidian-to-mem0.py (agent_id, state file, docstring) + 10-scenario TDD pytest suite
 
 ### Phase 9: Skill Management Dashboard
 **Goal**: Skill sync pipeline activity is visible in the Flow diagram via a live Cookbooks node panel
@@ -117,7 +117,7 @@ Plans:
 | 5. Personal Knowledge Ingestion | v1.1 | 5/5 | Complete | 2026-04-11 |
 | 6. Library Config Fixes | v1.2 | 0/1 | Planned | - |
 | 7. Live Heartbeat | v1.2 | 0/1 | Planned | - |
-| 8. Bidirectional Knowledge Sync | v1.2 | 0/1 | Planned | - |
+| 8. Bidirectional Knowledge Sync | v1.2 | 1/1 | Complete   | 2026-04-13 |
 | 9. Skill Management Dashboard | v1.2 | 0/2 | Not started | - |
 | 10. Flow Diagram UX | v1.2 | 0/1 | Not started | - |
 | 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Not started | - |
