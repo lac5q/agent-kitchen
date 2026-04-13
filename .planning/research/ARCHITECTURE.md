@@ -1,309 +1,310 @@
-# Architecture Research: v1.2 Feature Integration
+# Architecture Patterns — v1.3 Integration Analysis
 
 **Project:** agent-kitchen
-**Milestone:** v1.2 Live Data + Knowledge Sync
-**Researched:** 2026-04-11
+**Milestone:** v1.3 Advanced Observability + Knowledge Depth
+**Researched:** 2026-04-13
 **Overall Confidence:** HIGH (all findings from direct codebase inspection)
 
 ---
 
-## Existing Architecture (Verified)
+## Existing Architecture Baseline
+
+### Component Inventory
+
+| File | Role | Key Constraint |
+|------|------|---------------|
+| `src/app/api/skills/route.ts` | Reads skill dir + skill-contributions.jsonl | Returns global stats only, no per-skill time series |
+| `src/app/api/activity/route.ts` | Aggregates events from 4 sources | Max 20 events global, last 2h window, maps to ~5 node IDs |
+| `src/components/flow/react-flow-canvas.tsx` | Renders 21+ nodes + edges via useMemo | GroupBoxNode uses `pointerEvents: none`, not React Flow parent/child |
+| `src/components/flow/node-detail-panel.tsx` | Side panel on node click | Already filters events by `e.node === nodeId` from global feed |
+| `src/app/flow/page.tsx` | Orchestrates data fetching, passes to canvas | Passes `activityData.events` (global) to NodeDetailPanel |
+| `~/github/knowledge/scripts/obsidian-to-mem0.py` | Journals → mem0 sync | Hardcodes `JOURNALS_DIR` and `AGENT_ID = "claude"`, state keyed per source |
+| `~/github/knowledge/scripts/skill-sync.py` | Syncs skills, logs to skill-contributions.jsonl | Logs `contributed` and `pruned` actions only — NO failure events |
+
+### Data Flow (Current)
 
 ```
-Browser (TanStack Query polling)
-  └─ /api/health          → checkService() for RTK, mem0, QMD, Agents, APO
-  └─ /api/heartbeat?agent=X → reads ~/github/knowledge/agent-configs/<X>/HEARTBEAT_STATE.md
-  └─ /api/knowledge       → reads collections.config.json, stats each basePath on filesystem
-  └─ /api/activity        → reads cron/activity logs, produces nodeActivity map
-  └─ /api/devtools-status → checks dev tool wiring
-  └─ /api/remote-agents   → polls Tailscale/CF agent health endpoints
+skill-sync.py → skill-contributions.jsonl → /api/skills → ReactFlowCanvas (skillsStats)
+                                           → /api/activity → NodeDetailPanel (events[])
 
-flow/page.tsx
-  → ReactFlowCanvas (receives healthData, activityData, remoteAgents, devToolsStatus)
-    → getStatus(nodeId) — decision tree for each node's color
-      → "obsidian": hardcoded return "active"
-      → "knowledge-curator": hardcoded return "idle"
-      → others: nodeActivity[nodeId] minsAgo, or services[] lookup
+APO cron log → /api/activity → events[]
+HEARTBEAT.md → /api/activity → events[]
+APO proposals → /api/activity → events[]
 
-library/page.tsx
-  → useKnowledge() → /api/knowledge
-    → reads collections.config.json
-    → stats basePath for each collection (doc count, mtime)
+obsidian-to-mem0.py ← JOURNALS_DIR only
+  state key: "obsidian-journals"
+  agent_id: "claude" (hardcoded)
 ```
+
+### Activity Node Mapping Gap (Critical for FLOW-13)
+
+The activity API keyword-matches log lines to node IDs. Current coverage:
+
+| Node ID in canvas | Mapped in /api/activity |
+|-------------------|------------------------|
+| `cookbooks` | Yes (PROPOSAL, skill contributions) |
+| `agents` | Yes (ERROR/FAIL, heartbeats) |
+| `librarian` | Yes (audit, scan, QMD, search) |
+| `notebooks` | Yes (mem0, memory, remember) |
+| `taskboard` | Yes (Starting, Complete, cycle) |
+| `qdrant`, `obsidian`, `gitnexus`, `llmwiki`, `knowledge-curator` | No mapping |
+| `agent-alba`, `agent-gwen`, `agent-sophia`, etc. | No mapping |
 
 ---
 
-## Feature 1: Live Heartbeat for obsidian + knowledge-curator Nodes
+## Feature Integration Analysis
 
-### Integration Point
+### FLOW-12: Collapsible Node Groups
 
-The hardcoded statuses live in `getStatus()` in `react-flow-canvas.tsx` lines 163–164:
+**Integration point:** `react-flow-canvas.tsx` only — internal refactor, no API changes.
 
-```typescript
-if (nodeId === "obsidian") return "active";
-if (nodeId === "knowledge-curator") return "idle";
-```
+**Current state:** `GroupBoxNode` is a visual backdrop div (`pointerEvents: none`, `selectable: false`, `zIndex: -1`). It does not use React Flow's built-in parent/child node system. Groups cannot be clicked or toggled.
 
-These bypass the entire health-check pipeline. Replacing them requires a signal source for each.
+**What must change:**
 
-### Signal Sources (Verified from Codebase)
+1. Add `collapsedGroups: Set<string>` state to `ReactFlowCanvas` (or lifted to `flow/page.tsx` if persistence across tab navigation is wanted).
+2. Make `GroupBoxNode` clickable — remove `pointerEvents: none`, add click handler, pass a `collapsed` bool via `data`.
+3. Gate node visibility in the `useMemo` nodes array: when a group is collapsed, filter out its child nodes and inject a single summary node in their place.
+4. Gate edge visibility in the `useMemo` edges array: remove edges whose source or target is inside a collapsed group; add a single aggregate edge from the summary node boundary.
 
-**obsidian node** — health signal = filesystem accessibility of `~/github/knowledge/`
+**Groups to make collapsible:**
+- `group-agents` (children: all `agent-*` nodes + `local-agents`)
+- `group-devtools` (children: `claude-code`, `qwen-cli`, `gemini-cli`, `codex`)
 
-The Obsidian vault IS `~/github/knowledge/`. A stat() check on that path (or a sentinel file inside it like `journals/` or `.obsidian/`) returns meaningful health: if stat fails, the vault is unmounted or inaccessible. mtime of `journals/` gives freshness. This is exactly what the existing `/api/health` `Agents` check does (`fsStat(AGENT_CONFIGS_PATH)`) — same pattern.
+**Risk note:** The node list is computed in a single `useMemo` with 8+ dependencies. Adding collapse state adds a new dependency and new filter logic. The edge generation also references `allAgentIds` (a derived memo) which must be gated by collapse state. Test collapse/expand cycle in the `useMemo` output before wiring the UI — missing edge cleanup causes React Flow to render floating endpoints.
 
-**knowledge-curator node** — health signal = `/tmp/knowledge-curator.log` age + last line
-
-The cron writes to `/tmp/knowledge-curator.log` (confirmed in healthcheck.sh and the cron header: `>> /tmp/knowledge-curator.log 2>&1`). The last line is `[2026-04-11 03:44:04] Knowledge Curator complete.` The relevant checks are: (a) does the log exist, (b) how old is the last `Knowledge Curator complete` timestamp (should be < 25 hours for a nightly 2am cron), and (c) does the file contain recent warnings.
-
-### Where to Add the Signal
-
-**Option A: Extend `/api/health`** — add two more `checkService()` entries.
-
-Pros: Already consumed by FlowPage, already fed into `getStatus()` via the `svcMap`. The svcMap in `getStatus()` already maps node IDs to service names (`{ gateways: "Agents", notebooks: "mem0", ... }`). Adding `obsidian: "Obsidian"` and `knowledge-curator: "Curator"` to svcMap wires the display with zero changes to flow/page.tsx.
-
-Cons: `/api/health` is a simple up/down check. The curator has richer health semantics (last-run age, step warnings). But returning `"up"` / `"degraded"` / `"down"` is sufficient for the node status colors.
-
-**Option B: New `/api/knowledge-health` route** — richer response (last run time, step results, vault doc count, freshness).
-
-Pros: Can carry metadata that NodeDetailPanel can display when user clicks the node.
-Cons: Requires new hook in api-client.ts, new prop threading through FlowPage → ReactFlowCanvas.
-
-**Recommendation: Option A for status colors (extend /api/health), with enriched stats surfaced through the existing nodeStats() callback.**
-
-The `nodeStats()` for `knowledge-curator` already returns `{ Schedule: "nightly 2am", Steps: 5 }`. This can be enriched to include `lastRun` and `status` without any new API route — just read `/tmp/knowledge-curator.log` inside the health check and return additional fields on the HealthStatus object, or compute it in the existing route.
-
-### Data Flow After Fix
-
-```
-/api/health (extended)
-  → checkService("Obsidian", async () => fsStat("~/github/knowledge"))
-  → checkService("Curator", async () => {
-      stat /tmp/knowledge-curator.log
-      parse last timestamp
-      if age > 25h → throw (down)
-      if age > 12h → return "degraded"
-    })
-
-ReactFlowCanvas.getStatus()
-  svcMap: { obsidian: "Obsidian", "knowledge-curator": "Curator", ... }
-  → drives node color from services[] array
-```
-
-### New vs Modified Components
-
-| Component | Change Type | Notes |
-|-----------|-------------|-------|
-| `src/app/api/health/route.ts` | MODIFIED | Add 2 checkService() entries |
-| `src/components/flow/react-flow-canvas.tsx` | MODIFIED | Add obsidian + knowledge-curator to svcMap, remove hardcoded returns |
-| `src/types/index.ts` | POSSIBLY MODIFIED | HealthStatus already has status "up"/"degraded"/"down" — no change needed |
-
-No new files needed for the minimal implementation.
+**New/modified components:**
+- MODIFY: `src/components/flow/react-flow-canvas.tsx`
+- No new routes, no new components required
 
 ---
 
-## Feature 2: Fix meet-recordings basePath in Library
+### FLOW-13: Per-Node Activity Panel (Last 10 Events)
 
-### Root Cause (Confirmed from Codebase)
+**Integration points:** `/api/activity/route.ts` (extend), `node-detail-panel.tsx` (extend).
 
-`collections.config.json` line 9:
-```json
-{ "name": "meet-recordings", "basePath": "/Users/yourname/knowledge/gdrive/meet-recordings" }
-```
+**Current state:** `NodeDetailPanel` already calls `events.filter(e => e.node === nodeId)` from a parent-passed global feed. The wiring exists. The data fidelity problems are: (a) most canvas node IDs have no events mapped to them, and (b) the global feed is capped at 20 events total across all nodes with a 2-hour window.
 
-Actual path where `personal-ingestion-transcripts.py` writes:
-```python
-KNOWLEDGE_ROOT = Path.home() / "github/knowledge"
-MEET_DIR = KNOWLEDGE_ROOT / "gdrive" / "meet-recordings"
-# → ~/github/knowledge/gdrive/meet-recordings
-```
+**What must change:**
 
-Confirmed both paths exist on disk:
-- `~/knowledge/gdrive/meet-recordings/` — has 5 files (older Meet Notes files from Google Drive sync)
-- `~/github/knowledge/gdrive/meet-recordings/` — has 105 files (ingestion output)
+1. **Extend `/api/activity`** to accept `?node=X` query param. When `node` is provided:
+   - Remove the 2-hour window restriction (or widen to 24h)
+   - Return up to 10 events matching that node ID
+   - Expand the node mapping in the log parser to cover missing nodes (see gap table above):
+     - `obsidian` — match "obsidian", "vault", "journal"
+     - `knowledge-curator` — match "curator", "pipeline", "step"
+     - `qdrant` — match "qdrant", "vector", "embed"
+     - Per-agent nodes — match heartbeat events by agent name
 
-The Library is showing the wrong path and getting 5 docs instead of 105.
+2. **Refactor `NodeDetailPanel`** to self-fetch on `nodeId` change: `fetch("/api/activity?node=" + nodeId)`. This avoids contaminating the global 20-event feed with per-node queries and keeps the panel self-contained.
 
-### Fix Location
+3. **`flow/page.tsx`**: No structural change needed once NodeDetailPanel self-fetches.
 
-One-line fix in `collections.config.json`:
-
-```json
-{ "name": "meet-recordings", "category": "business", "basePath": "/Users/yourname/github/knowledge/gdrive/meet-recordings" }
-```
-
-### Pipeline After Fix
-
-No API route changes needed. `/api/knowledge/route.ts` already reads `col.basePath` from config and stats it. The fix is entirely in config.
-
-Also verify the `alex-docs` and `turnedyellow-admin` entries use `~/knowledge/gdrive/...` paths (not `~/github/knowledge/gdrive/...`). If those paths point to the Google Drive sync folder (not the ingestion output), they may be intentionally different — do not change them without confirming.
-
-### New vs Modified Components
-
-| Component | Change Type | Notes |
-|-----------|-------------|-------|
-| `collections.config.json` | MODIFIED | Fix meet-recordings basePath (1 line) |
-
-No code changes needed.
+**New/modified components:**
+- MODIFY: `src/app/api/activity/route.ts` — add `?node` param, widen time window, expand node mapping
+- MODIFY: `src/components/flow/node-detail-panel.tsx` — self-fetch per node instead of consuming parent events
 
 ---
 
-## Feature 3: KNOW-06 — Bidirectional mem0 ↔ Obsidian Sync
+### SKILL-07: Coverage Gaps Report (Zero-Usage Skills, 30 Days)
 
-### Current State (One-Way Only)
+**Integration point:** `/api/skills/route.ts` (extend with new output field).
 
-Existing flows (all one-directional):
+**Current state:** `skill-sync-state.json` already contains `skill_usage: { skillName -> last_used_timestamp }`. The route already reads this file for `lastPruned` and `lastUpdated`. The data needed for coverage gap detection is present.
 
-```
-mem0 → Obsidian:
-  mem0-export.sh (Step 3 of knowledge-curator.sh)
-  → writes ~/github/knowledge/mem0-exports/<agent>-<date>.md
-  → these ARE in the knowledge vault (Obsidian can read them)
-  → BUT mem0-exports is not in collections.config.json
-     (so Library doesn't show them, and QMD doesn't index them)
+**What must change:**
 
-Obsidian → mem0:
-  NO mechanism exists. The only ingestion scripts are:
-  - personal-ingestion-transcripts.py (Meet/Spark → mem0 + Obsidian)
-  - personal-ingestion-email.sh (email → Obsidian daily notes)
-  Neither reads existing Obsidian notes and pushes them to mem0.
-```
-
-### What KNOW-06 Requires
-
-Bidirectional means two separate data flows:
-
-**Direction A: mem0 → Obsidian** (already partially working)
-
-The mem0-export.sh writes markdown files into the knowledge vault. The gap is that these files are not re-indexed into QMD/Qdrant after export. `qmd update` in Step 4 picks them up if they're in a tracked collection. Currently `mem0-exports/` is inside `~/github/knowledge/` which IS the `knowledge` collection root, so they may already be indexed. Confirm: add `mem0-exports` to `collections.config.json` to make it visible in Library.
-
-**Direction B: Obsidian → mem0** (does not exist, needs to be built)
-
-Target documents: Obsidian notes that agents and Luis write that contain information worth remembering across sessions. Candidates:
-- `journals/<date>.md` — daily notes with decisions, meetings, tasks
-- `projects/<project>/meetings/*.md` — meeting notes from ingestion pipeline
-- `shared/PENDING_FACTS.md` — facts routed for distribution
-- `shared/CURRENT_PRIORITIES.md` — strategic priorities
-
-These should be pushed to mem0 with `agent_id="shared"` (for cross-agent access) or `agent_id="claude"` for Luis-specific context.
-
-### Required New Components
-
-**New Python script: `~/github/knowledge/obsidian-to-mem0.py`**
-
-Responsible for:
-1. Reading a set of target Obsidian files (configured list or glob pattern)
-2. Chunking them into meaningful units (paragraphs, headers, bullet groups)
-3. Checking against a watermark file (like `ingestion-state.json` pattern) to avoid re-ingesting unchanged content — use mtime or content hash
-4. Calling mem0 API (`POST /memory/add`) for each new chunk
-5. Writing updated watermarks back to state file
-
-Pattern to follow: `ingestion-state.json` watermark approach (atomic write via `os.replace()`) already established in `personal-ingestion-transcripts.py`.
-
-**Modified `knowledge-curator.sh`**
-
-Add Step 6 (or integrate into Step 3 alongside mem0-export):
-
-```bash
-# Step 6 — Obsidian highlights → mem0
-log "[6/6] Obsidian → mem0 sync..."
-~/github/knowledge/.venv/bin/python3 ~/github/knowledge/obsidian-to-mem0.py || log "  Warning: obsidian-to-mem0 failed (non-fatal)"
-```
-
-Non-fatal guard consistent with existing pattern.
-
-### Data Flow
+In the `/api/skills` GET handler, after reading `skill-sync-state.json`, cross-reference all skill directory names against `skill_usage` timestamps:
 
 ```
-DIRECTION A (already exists, confirm coverage):
-  mem0 API → mem0-export.sh → ~/github/knowledge/mem0-exports/<agent>-<date>.md
-  knowledge-curator.sh Step 4 → qmd update → indexes mem0-exports/
-  → Obsidian reads native vault files
-
-DIRECTION B (new):
-  ~/github/knowledge/journals/<date>.md
-  ~/github/knowledge/projects/*/meetings/*.md
-  ~/github/knowledge/shared/PENDING_FACTS.md
-    → obsidian-to-mem0.py
-      → reads file, extracts chunks
-      → checks obsidian-ingestion-state.json (mtime watermark)
-      → POST /memory/add to mem0 (agent_id="shared")
-      → updates obsidian-ingestion-state.json
-    → knowledge-curator.sh Step 6 (nightly 2am)
+const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+coverageGaps = allSkillNames.filter(name =>
+  !state.skill_usage[name] ||
+  new Date(state.skill_usage[name]).getTime() < thirtyDaysAgo
+)
 ```
 
-### State File Location
+Return `coverageGaps: string[]` and `coverageGapCount: number` in the response JSON. Surface in the `cookbooks` node stats.
 
-```
-~/github/knowledge/obsidian-ingestion-state.json
-```
+**New/modified components:**
+- MODIFY: `src/app/api/skills/route.ts` — read `skill_usage`, compute gaps, add to response
+- MODIFY: `src/components/flow/react-flow-canvas.tsx` nodeStats for `cookbooks` — add gap count
 
-Same directory as existing `ingestion-state.json`, same atomic-write pattern.
+---
 
-### API Shape (mem0 call)
+### SKILL-06: Failure Rate Tracking
+
+**Critical finding: the data source does not exist yet.**
+
+`skill-contributions.jsonl` records only `contributed` and `pruned` actions — confirmed by reading `skill-sync.py`, which calls `append_jsonl_event()` exclusively with those action types. No failure events are logged anywhere in the current pipeline.
+
+**The data path must be built first.**
+
+Extend `skill-sync.py` to call `append_jsonl_event(skill, "failed", contributor, metadata)` when a sync operation fails for a specific skill (copy error, validation error, etc.). This extends the existing JSONL contract without new files or new log sources.
+
+Do not write the API extension until failure events are confirmed appearing in the JSONL. Writing the route first will silently return zero failure rate — correct-looking but wrong.
+
+**After the data path exists:**
+
+Extend `/api/skills` to count `action === "failed"` per skill and globally. Return `failureCount: number` and optionally `failuresBySkill: Record<string, number>` in the response.
+
+**New/modified components:**
+- MODIFY: `~/github/knowledge/scripts/skill-sync.py` — add failure event logging (prerequisite, must come first)
+- MODIFY: `src/app/api/skills/route.ts` — parse failure events, add to response
+
+---
+
+### SKILL-08: Per-Skill Usage Heatmap
+
+**Critical finding: "usage" and "contribution" are different data, and only contribution data exists.**
+
+The JSONL contains timestamped contribution and prune events. If "usage" means "how often was this skill invoked by an agent," that telemetry does not exist. If it means "how often was it contributed or pruned," the data is present.
+
+**Two scopes:**
+
+- **Scope A — Contribution heatmap (achievable now):** Group JSONL events by `(skill, week)` for contributions and prunes. Shows skill modification activity, not invocation frequency.
+- **Scope B — Invocation heatmap (requires new telemetry):** Requires agents to log skill invocations to a new JSONL. No such logging exists.
+
+**Recommendation:** Build Scope A. Document the scope clearly in the UI label ("skill contribution activity" not "skill usage"). Flag Scope B as a v1.4 item.
+
+**Dependency:** SKILL-06 should be complete first because failure events should be included in the time-series bucketing, and the expanded JSONL vocabulary confirms the data path is reliable.
+
+**New/modified components:**
+- NEW: `src/components/skills/skill-heatmap.tsx` — Recharts grid or Calendar chart
+- MODIFY: `src/app/api/skills/route.ts` — add `contributionsBySkill: Record<string, {week: string, count: number}[]>`
+
+---
+
+### KNOW-08: `projects/` Subdirectory Ingestion
+
+**Integration point:** `~/github/knowledge/scripts/obsidian-to-mem0.py` — extend with a second pass.
+
+**Vault structure confirmed:** `~/github/knowledge/projects/` contains 46 project directories (e.g., `alex/`, `epiloguecapital/`, `agent-kitchen/`). Each project has subdirectories like `meetings/` containing timestamped markdown files.
+
+**Current state:** Script walks `JOURNALS_DIR = VAULT / "journals"` only. Uses three dedup guards (content hash, mtime watermark, origin tag). State is stored in `obsidian-ingestion-state.json` using `state.setdefault("obsidian-journals", {...})`.
+
+**What must change:**
+
+Add `sync_projects(state)` function that walks `VAULT / "projects"` recursively. The `state.setdefault("obsidian-journals", ...)` pattern scales directly to per-project keys with no state file format change:
 
 ```python
-payload = {
-    "agent_id": "shared",
-    "text": chunk_text,
-    "metadata": {
-        "source": "obsidian",
-        "file": str(relative_path),
-        "ingested_at": now_iso
-    }
-}
-requests.post(f"{MEM0_URL}/memory/add", json=payload, timeout=10)
+PROJECTS_DIR = VAULT / "projects"
+
+def sync_projects(state: dict):
+    for project_dir in sorted(PROJECTS_DIR.iterdir()):
+        if not project_dir.is_dir():
+            continue
+        project_name = project_dir.name
+        state_key = f"project-{project_name}"
+        proj_state = state.setdefault(state_key, {
+            "last_mtime": None,
+            "processed_hashes": [],
+        })
+        for md_file in sorted(project_dir.rglob("*.md")):
+            # Apply same three dedup guards as journals pass
+            ...
 ```
 
-`agent_id="shared"` is established convention for cross-agent knowledge. File-specific memories that are Luis-only would use `agent_id="claude"`.
+**New/modified components:**
+- MODIFY: `~/github/knowledge/scripts/obsidian-to-mem0.py` — add `sync_projects()`, call from `main()`
 
-### Deduplication Strategy
+---
 
-mem0 has its own semantic deduplication via Qdrant but it's not guaranteed to catch identical text re-posted across runs. Use mtime watermarking: store `{file_path: mtime_float}` in state file. Only re-ingest if mtime changed. This is cheaper than content hashing and consistent with the existing `ingested_doc_ids` watermark pattern.
+### KNOW-09: Per-Project `agent_id` Routing
 
-### New vs Modified Components
+**Integration point:** Same script edit as KNOW-08 — implement together in one change.
 
-| Component | Change Type | Notes |
-|-----------|-------------|-------|
-| `~/github/knowledge/obsidian-to-mem0.py` | NEW | Core sync script, Python, ~150-200 lines |
-| `~/github/knowledge/knowledge-curator.sh` | MODIFIED | Add Step 6 call to obsidian-to-mem0.py |
-| `~/github/knowledge/obsidian-ingestion-state.json` | NEW | Created on first run, not tracked in agent-kitchen |
-| `collections.config.json` | MODIFIED | Add mem0-exports entry to make it visible in Library |
+**Current state:** `AGENT_ID = "claude"` is a module-level constant. All memories land under the `claude` agent namespace regardless of source.
 
-No Next.js changes required for KNOW-06. The feature is entirely in the Python/shell layer.
+**Approach:** Derive `agent_id` from the project directory name in `sync_projects()`. The mem0 `/memory/add` call passes `agent_id` as a payload field — no API change required, only the caller must pass the right value.
+
+```python
+agent_id = project_name  # e.g., "alex", "epiloguecapital", "agent-kitchen"
+```
+
+Refactor `post_to_mem0()` to accept `agent_id` as a parameter rather than using the module global.
+
+**Validation gate:** Confirm the mem0 instance accepts arbitrary agent_ids (it does — mem0 creates new agent namespaces on first use). The existing `source="obsidian-sync"` origin tag prevents re-ingestion loops regardless of agent_id.
+
+**Side effect to flag:** Routing 46 project dirs to 46 agent namespaces in mem0 will create 46 new agent_id entries. Confirm the session-start preload hook does not attempt to load all agent namespaces on startup (it uses specific agent_ids via env var, so this is safe).
+
+**New/modified components:**
+- MODIFY: `~/github/knowledge/scripts/obsidian-to-mem0.py` (same file as KNOW-08 — one combined edit)
+
+---
+
+## Component Summary Table
+
+| Feature | New Components | Modified Components | New API Routes |
+|---------|---------------|--------------------|----|
+| FLOW-12 | None | `react-flow-canvas.tsx` | None |
+| FLOW-13 | None | `/api/activity/route.ts`, `node-detail-panel.tsx` | None |
+| SKILL-07 | None | `/api/skills/route.ts`, `react-flow-canvas.tsx` | None |
+| SKILL-06 | None | `skill-sync.py` (prereq), `/api/skills/route.ts` | None |
+| SKILL-08 | `components/skills/skill-heatmap.tsx` | `/api/skills/route.ts` | None |
+| KNOW-08 | None | `obsidian-to-mem0.py` | None |
+| KNOW-09 | None | `obsidian-to-mem0.py` (same edit as KNOW-08) | None |
+
+**Key observation:** Zero new API routes required across all 7 features. Every feature extends existing routes or scripts.
 
 ---
 
 ## Recommended Build Order
 
-Dependencies flow as follows:
+### Phase 1 — KNOW-08 + KNOW-09 (Python-only, no frontend risk)
 
-```
-Feature 2 (basePath fix) ← No dependencies, 1 line change
-Feature 1 (heartbeat)    ← Depends on understanding /api/health pattern (read first)
-Feature 3 (KNOW-06)      ← Depends on nothing in the dashboard, standalone pipeline work
-```
+Build together in a single script edit. Self-contained, no frontend changes, no API changes. Validates the per-project `agent_id` routing pattern before any UI depends on it. Dedup guards are already battle-tested from v1.2.
 
-**Recommended order:**
+**Dependency:** None.
 
-1. **Feature 2 first** — Single config line change, zero risk, immediately visible in Library (doc count corrects from ~5 to ~105). Confirms understanding of the config pipeline before touching it for KNOW-06.
+### Phase 2 — SKILL-07 (Data source exists, straightforward API extension)
 
-2. **Feature 1 second** — Extend /api/health, update svcMap, remove hardcoded statuses. Clear test: run the dev server, kill Obsidian, confirm node turns red. Restore, confirm green.
+`skill_usage` map already exists in `skill-sync-state.json`. Extends `/api/skills` response with a gap list. Low risk of breaking the existing `skillsStats` consumer in the canvas.
 
-3. **Feature 3 last** — Most work, most moving parts (new Python script, state file, curator integration). Can be built and tested independently from the dashboard. Test by running `obsidian-to-mem0.py` manually, then verifying entries appear in mem0 via `/api/memory?source=claude`.
+**Dependency:** None. Build after KNOW phases to keep Python and frontend work separated.
+
+### Phase 3 — SKILL-06 (Requires new Python data path first)
+
+Extend `skill-sync.py` to emit `failed` events. Commit and let it run. Confirm failure events appear in `skill-contributions.jsonl`. Then extend `/api/skills`. The Python prerequisite and the API extension should be separate commits so the data path can be verified independently.
+
+**Dependency:** `skill-sync.py` change must be running and producing events before API work starts.
+
+### Phase 4 — SKILL-08 (Heatmap, depends on SKILL-06 vocabulary)
+
+Build Scope A (contribution heatmap). Requires SKILL-06 done first so failure events are included in the time-series buckets. New `skill-heatmap.tsx` component using Recharts.
+
+**Dependency:** SKILL-06 complete.
+
+### Phase 5 — FLOW-13 (API + panel, independent of skills track)
+
+Extend `/api/activity` with `?node` filter, widen time window, expand node mapping. Refactor `NodeDetailPanel` to self-fetch. Can run in parallel with the skills track if desired, but sequentially is safer.
+
+**Dependency:** None from skills track.
+
+### Phase 6 — FLOW-12 (Hardest UI change, save for last)
+
+Modify GroupBoxNode to be clickable, add collapse state, gate node/edge arrays. This is the riskiest change — touches the core `useMemo` logic for the entire canvas. Build last when all other features are validated and the canvas code is stable.
+
+**Dependency:** FLOW-13 must be complete so the panel refactor is settled before adding collapse state to the same canvas.
 
 ---
 
-## Pitfalls to Watch
+## Critical Warnings
 
-| Area | Risk | Mitigation |
-|------|------|------------|
-| /api/health timeout | obsidian stat() hangs on network volume | Use `AbortSignal.timeout(2000)` like mem0 check |
-| Curator log age check | `/tmp/` cleared on reboot; first run after reboot shows no log | Handle ENOENT → return "down" gracefully, same as heartbeat route pattern |
-| Obsidian → mem0 chunk size | mem0 has implicit token limits per memory | Chunk by paragraph or heading section, max ~500 chars per chunk |
-| meet-recordings dual path | `~/knowledge/gdrive/` still exists — don't delete it | Only update collections.config.json; the other path may be Google Drive sync mount |
-| mem0-exports not in Library | Already written to vault but invisible | Add to collections.config.json as "agents" category |
-| KNOW-06 re-ingestion | journals grow daily; re-ingesting unchanged days wastes API calls | mtime watermark prevents this; only new or modified files get re-processed |
+### SKILL-06: Data Path Does Not Exist
+Do not write the failure rate API extension until `skill-sync.py` is actively logging `failed` events. Writing the route first silently returns zero failure rate — looks correct but is not.
+
+### SKILL-08: Scope Ambiguity
+"Usage heatmap" likely implies invocation frequency, but no invocation telemetry exists. Build the contribution heatmap (Scope A) and label it accurately in the UI. Flag invocation telemetry as a v1.4 item.
+
+### FLOW-13: Activity Coverage is Sparse
+After extending `/api/activity?node=X`, most canvas nodes will show sparse or empty panels because the log only produces events for ~5 node types. This is expected. Do not try to fake events — document which nodes have live activity vs. which are observation-only.
+
+### FLOW-12: Edge Orphan Risk
+When collapsing a group, edges from collapsed agent nodes to `notebooks`, `librarian`, `cookbooks` must be removed or replaced with a group-level edge. Missing this causes React Flow to render floating edge endpoints with no source node. Test the collapse/expand cycle in the `useMemo` output in isolation before wiring the click handler.
+
+### KNOW-09: mem0 Namespace Proliferation
+46 new `agent_id` namespaces will be created in mem0. Confirm the session-start preload hook uses specific agent_ids from env vars (it does) and will not attempt to load all 46 namespaces on startup.
 
 ---
 
@@ -311,8 +312,20 @@ Feature 3 (KNOW-06)      ← Depends on nothing in the dashboard, standalone pip
 
 | Area | Confidence | Basis |
 |------|------------|-------|
-| Heartbeat integration point | HIGH | Direct code inspection of getStatus(), hardcoded lines confirmed |
-| basePath fix root cause | HIGH | Both paths confirmed on filesystem, Python script KNOWLEDGE_ROOT traced |
-| /api/health extension pattern | HIGH | checkService() pattern is clean and consistent |
-| KNOW-06 data flow | HIGH | mem0-export.sh, ingestion-state.json pattern, mem0 API shape all verified |
-| obsidian-to-mem0.py scope | MEDIUM | Logic is straightforward; mem0 semantic dedup behavior under load not tested |
+| FLOW-12 GroupBoxNode approach | HIGH | Direct code inspection of canvas, GroupBoxNode props confirmed |
+| FLOW-13 activity gap | HIGH | Node mapping table confirmed by reading activity route in full |
+| SKILL-07 data source | HIGH | `skill_usage` field confirmed in state file reading pattern |
+| SKILL-06 missing data path | HIGH | `append_jsonl_event()` call sites in skill-sync.py confirm no "failed" action |
+| SKILL-08 scope | HIGH | JSONL schema confirmed; invocation logs confirmed absent |
+| KNOW-08 project structure | HIGH | 46 dirs confirmed, sample files inspected, state file pattern confirmed |
+| KNOW-09 agent_id routing | MEDIUM | mem0 namespace creation on first use expected to work; not tested with 46 agents |
+
+---
+
+## Sources
+
+- Direct code reading: `src/app/api/skills/route.ts`, `src/app/api/activity/route.ts`, `src/components/flow/react-flow-canvas.tsx`, `src/components/flow/node-detail-panel.tsx`, `src/app/flow/page.tsx`
+- Direct code reading: `~/github/knowledge/scripts/obsidian-to-mem0.py`, `~/github/knowledge/scripts/skill-sync.py`
+- Vault structure inspection: `~/github/knowledge/projects/` (46 dirs confirmed, `alex/meetings/*.md` sampled)
+- Constants: `src/lib/constants.ts`
+- Project context: `.planning/PROJECT.md` (v1.3 target features, existing decisions)
