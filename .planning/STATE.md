@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Live Data + Knowledge Sync
-status: completed
-stopped_at: Completed Phase 10 Plan 01 — Flow diagram UX fixes (orthogonal edges + selective animation + fitView)
-last_updated: "2026-04-13T08:37:49Z"
-last_activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
+status: in_progress
+stopped_at: Completed Phase 11 Plan 01 — Gwen self-improving loop (staging pickup TDD + 3am cron)
+last_updated: "2026-04-13T09:03:10Z"
+last_activity: 2026-04-13 — Phase 11 Plan 01 complete (Gwen staging pickup 6/6 tests + reflection cron)
 progress:
   total_phases: 6
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-11 for v1.2)
 
 ## Current Position
 
-Phase: Phase 10 — Flow Diagram UX (COMPLETE)
+Phase: Phase 11 — Gwen Self-Improving Loop (COMPLETE)
 Plan: 01/01 — complete
-Status: Phase 10 done; all 3 tasks complete
-Last activity: 2026-04-13 — Phase 10 Plan 01 complete (orthogonal edges + selective animation + fitView)
+Status: Phase 11 done; all 2 tasks complete (6/6 pytest green, cron registered, AGENT-01/02/03 verified)
+Last activity: 2026-04-13 — Phase 11 Plan 01 complete (Gwen staging pickup TDD + 3am reflection cron)
 
 Progress: [####░░░░░░] 33%
 
@@ -52,6 +52,7 @@ Progress: [####░░░░░░] 33%
 | Phase 09 P01 | 8m | 3 tasks | 4 files |
 | Phase 09-skill-management-dashboard P02 | 12m | 3 tasks | 3 files |
 | Phase 10-flow-diagram-ux P01 | 2.5m | 3 tasks | 2 files |
+| Phase 11-gwen-self-improving-loop P01 | 25m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Progress: [####░░░░░░] 33%
 - [Phase 09]: Route reads SKILL_SYNC_STATE from ~/.openclaw/skill-sync-state.json for lastPruned/lastUpdated
 - [Phase 09-skill-management-dashboard]: Use allAgentIds (already in edges useMemo deps) not keyRemote for alba guard — prevents stale closure (T-09-06)
 - [Phase 09-skill-management-dashboard]: cookbooks subtitle uses skillCount prop (not skillsStats) to avoid adding skillsStats to nodes useMemo deps
+- [Phase 11-gwen-self-improving-loop]: STAGING_DIR constant derived from CONFIG["master_dir"] so tests can monkeypatch both together
+- [Phase 11-gwen-self-improving-loop]: Grace period fix — replaced hardcoded 90-day value with CONFIG["hermes_contrib_grace_days"] (365d); staging-promoted skills auto-qualify via "hermes" in synced_from path
+- [Phase 11-gwen-self-improving-loop]: Gwen reflection cron at 0 3 * * * America/Los_Angeles — 1h before Hermes skill-sync (0 4 * * *), no collision confirmed
 
 ### Roadmap Evolution
 
