@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 const CRON_LOG = process.env.APO_CRON_LOG_PATH || `${process.env.HOME}/.openclaw/logs/agent-lightning-cron.log`;
 const AGENT_CONFIGS = process.env.AGENT_CONFIGS_PATH || `${process.env.HOME}/github/knowledge/agent-configs`;
 const PROPOSALS_PATH = process.env.APO_PROPOSALS_PATH || `${process.env.HOME}/.openclaw/skills/proposals`;
+const SKILL_LOG = process.env.SKILL_CONTRIBUTIONS_LOG ||
+  `${process.env.HOME}/github/knowledge/skill-contributions.jsonl`;
 
 export interface ActivityEvent {
   id: string;
@@ -126,6 +128,42 @@ export async function GET() {
       }
     }
   } catch { /* skip */ }
+
+  // 4. Read recent skill contribution events from JSONL (last 2 hours)
+  try {
+    const raw = await readFile(SKILL_LOG, "utf-8");
+    const lines = raw.split("\n").filter(l => l.trim());
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line) as {
+          skill: string;
+          action: string;
+          contributor: string;
+          timestamp: string;
+        };
+        if (new Date(event.timestamp).getTime() < twoHoursAgo) continue;
+        const actionLabel =
+          event.action === "contributed"
+            ? `contributed by ${event.contributor}`
+            : event.action === "pruned"
+            ? "pruned (unused 30+ days)"
+            : event.action;
+        events.push({
+          id: `skill-${event.skill}-${event.timestamp}`,
+          timestamp: event.timestamp,
+          node: "cookbooks",
+          type: "knowledge",
+          message: `Skill "${event.skill}" ${actionLabel}`,
+          severity: "info",
+        });
+      } catch {
+        /* skip malformed JSONL line */
+      }
+    }
+  } catch {
+    /* JSONL missing or empty — skip silently (expected initial state) */
+  }
 
   // Sort by timestamp descending, take most recent 20
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
