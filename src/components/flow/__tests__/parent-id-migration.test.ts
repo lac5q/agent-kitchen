@@ -53,17 +53,17 @@ describe("parentId migration invariants — react-flow-canvas.tsx", () => {
     expect(relativeYMatches.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("Test 7: groupBoxNodes spread appears BEFORE agentNodes, localNode, and devToolNodes in the useMemo return", () => {
-    // Find the nodes useMemo return statement
-    const returnMatch = SRC.match(/return\s*\[\.\.\.groupBoxNodes[\s\S]*?\]/);
-    expect(returnMatch).not.toBeNull();
+  it("Test 7: groupBoxNodes spread appears BEFORE agentNodes, localNode, and devToolNodes in the baseNodes array", () => {
+    // Plan 17-02 wraps the array in applyCollapseToNodes; ordering lives in baseNodes assignment
+    const baseNodesMatch = SRC.match(/const baseNodes[\s\S]*?\[\.\.\.groupBoxNodes[\s\S]*?\];/);
+    expect(baseNodesMatch).not.toBeNull();
 
     // Verify ordering: groupBoxNodes THEN staticNodes/agentNodes/localNode/devToolNodes
-    const returnStmt = returnMatch![0];
-    const groupBoxIdx = returnStmt.indexOf("...groupBoxNodes");
-    const agentNodesIdx = returnStmt.indexOf("...agentNodes");
-    const localNodeIdx = returnStmt.indexOf("localNode");
-    const devToolNodesIdx = returnStmt.indexOf("...devToolNodes");
+    const stmt = baseNodesMatch![0];
+    const groupBoxIdx = stmt.indexOf("...groupBoxNodes");
+    const agentNodesIdx = stmt.indexOf("...agentNodes");
+    const localNodeIdx = stmt.indexOf("localNode");
+    const devToolNodesIdx = stmt.indexOf("...devToolNodes");
 
     expect(groupBoxIdx).toBeGreaterThanOrEqual(0);
     expect(agentNodesIdx).toBeGreaterThanOrEqual(0);
@@ -82,8 +82,8 @@ describe("parentId migration invariants — react-flow-canvas.tsx", () => {
     expect(SRC).toMatch(/label:\s*["']/);
     expect(SRC).toMatch(/width:\s*\d/);
     expect(SRC).toMatch(/height:\s*\d/);
-    // No collapse/expand fields — those come in Plan 17-02
-    expect(SRC).not.toContain("collapsed:");
-    expect(SRC).not.toContain("onToggleCollapse");
+    // collapsed/onToggleCollapse fields are present — added by Plan 17-02
+    expect(SRC).toContain("collapsed:");
+    expect(SRC).toContain("onToggleCollapse");
   });
 });
