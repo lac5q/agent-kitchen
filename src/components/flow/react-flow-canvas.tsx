@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -15,6 +15,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { HealthStatus } from "@/types";
+import { applyCollapseToNodes, applyCollapseToEdges, aggregateHealthColor } from "@/lib/flow/collapse-logic";
 
 // Custom node component
 function FlowNode({ data }: {
@@ -60,25 +61,33 @@ function FlowNode({ data }: {
 }
 
 // Group box node — dashed border container for a cluster of child nodes.
-// Plan 17-02 will make this interactive (collapse/expand); for now it is
-// purely visual and non-interactive (pointerEvents: "none").
+// Clickable: calls data.onToggleCollapse() to collapse/expand children.
+// When collapsed, shows aggregateColor as the border accent.
 function GroupBoxNode({ data }: {
   data: {
     label: string;
     width: number;
     height: number;
+    collapsed?: boolean;
+    aggregateColor?: string;
+    onToggleCollapse?: () => void;
   }
 }) {
+  const borderColor = data.collapsed && data.aggregateColor ? data.aggregateColor : "#334155";
+  const bgColor = data.collapsed ? "rgba(15, 23, 42, 0.7)" : "rgba(15, 23, 42, 0.4)";
+
   return (
     <div
+      onClick={data.onToggleCollapse}
       style={{
         width: data.width,
-        height: data.height,
-        border: "1.5px dashed #334155",
+        height: data.collapsed ? 40 : data.height,
+        border: `1.5px dashed ${borderColor}`,
         borderRadius: 12,
-        background: "rgba(15, 23, 42, 0.4)",
-        pointerEvents: "none",
+        background: bgColor,
         position: "relative",
+        cursor: "pointer",
+        transition: "all 0.2s",
       }}
     >
       <span
@@ -88,12 +97,23 @@ function GroupBoxNode({ data }: {
           left: 12,
           fontSize: 9,
           fontWeight: 600,
-          color: "#475569",
+          color: data.collapsed ? (data.aggregateColor ?? "#475569") : "#475569",
           textTransform: "uppercase",
           letterSpacing: "0.05em",
         }}
       >
         {data.label}
+      </span>
+      <span
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 12,
+          fontSize: 9,
+          color: "#475569",
+        }}
+      >
+        {data.collapsed ? "▶" : "▼"}
       </span>
     </div>
   );
@@ -147,6 +167,19 @@ export function ReactFlowCanvas({
   localTotalCount = 0,
   onNodeClick,
 }: ReactFlowCanvasProps) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+
+  const toggleGroup = useCallback((id: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   function getStatus(nodeId: string, agentStatus?: string): "active" | "idle" | "dormant" | "error" {
     if (agentStatus) return agentStatus === "active" ? "active" : "dormant";
@@ -193,6 +226,13 @@ export function ReactFlowCanvas({
       { id: "librarian", position: { x: 600, y: 420 }, data: { label: "QMD",              subtitle: "3,445 docs",           icon: "🔍", status: getStatus("librarian"), highlighted: highlightedNode === "librarian" }, type: "flowNode" },
     ];
 
+    // Compute aggregate health colors for each group from their children's statuses
+    const agentStatuses = [
+      ...keyRemote.map(a => (a.status === "active" ? "active" : "dormant")),
+      localActiveCount > 0 ? "active" : "idle",
+    ];
+    const devToolStatuses = ["cookbooks", "apo", "gitnexus", "llmwiki"].map(id => getStatus(id));
+
     // Group box nodes — parent containers; MUST appear BEFORE their children in the array.
     // These keep absolute canvas positions (they are roots, no parentId).
     // zIndex: -1 so they render behind their child nodes.
@@ -202,7 +242,14 @@ export function ReactFlowCanvas({
         type: "groupBoxNode",
         position: { x: agentStartX - 15, y: agentY - 32 }, // { x: 85, y: 248 }
         style: { zIndex: -1 },
-        data: { label: "Server Agents", width: 840, height: 160 },
+        data: {
+          label: "Server Agents",
+          width: 840,
+          height: 160,
+          collapsed: collapsedGroups.has("group-agents"),
+          aggregateColor: aggregateHealthColor(agentStatuses),
+          onToggleCollapse: () => toggleGroup("group-agents"),
+        },
         selectable: false,
         draggable: false,
       },
@@ -211,7 +258,14 @@ export function ReactFlowCanvas({
         type: "groupBoxNode",
         position: { x: DEV_TOOL_START_X - 15, y: DEV_TOOL_Y - 32 }, // { x: 145, y: 528 }
         style: { zIndex: -1 },
-        data: { label: "Dev Tools", width: 600, height: 160 },
+        data: {
+          label: "Dev Tools",
+          width: 600,
+          height: 160,
+          collapsed: collapsedGroups.has("group-devtools"),
+          aggregateColor: aggregateHealthColor(devToolStatuses),
+          onToggleCollapse: () => toggleGroup("group-devtools"),
+        },
         selectable: false,
         draggable: false,
       },
@@ -270,9 +324,16 @@ export function ReactFlowCanvas({
     }));
 
     // CRITICAL: group box nodes MUST come before their children (React Flow v12 parentId requirement)
-    return [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
+    const baseNodes = [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
+    return applyCollapseToNodes(baseNodes, collapsedGroups);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount]);
+  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount, collapsedGroups, toggleGroup]);
+
+  // Derive hidden node IDs from the processed nodes array (after collapse applied)
+  const hiddenNodeIds = useMemo(
+    () => new Set(nodes.filter(n => n.hidden).map(n => n.id)),
+    [nodes]
+  );
 
   const allAgentIds = [...keyRemote.map(a => `agent-${a.id}`), "local-agents"];
 
@@ -299,12 +360,13 @@ export function ReactFlowCanvas({
       { id: "agents-wiki", source: "local-agents", target: "llmwiki",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
     ];
 
-    return [...base, ...agentEdges, ...extraEdges];
+    const allEdges = [...base, ...agentEdges, ...extraEdges];
+    return applyCollapseToEdges(allEdges, hiddenNodeIds);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAgentIds]);
+  }, [allAgentIds, hiddenNodeIds]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    // Group box nodes are non-interactive — skip click handling
+    // Group box node clicks are handled by the node's own onClick (onToggleCollapse in data)
     if (node.type === "groupBoxNode") return;
     const statsId = node.id.startsWith("agent-") ? node.id.replace("agent-", "") : node.id;
     const stats = nodeStats(statsId);
