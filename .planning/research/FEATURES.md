@@ -1,239 +1,278 @@
-# Features Research: v1.2 Live Data + Knowledge Sync
+# Feature Landscape
 
-**Domain:** Observability dashboard for AI agent infrastructure
-**Researched:** 2026-04-11
-**Overall confidence:** HIGH — all three features grounded in first-party codebase inspection and actual pipeline logs
-
----
-
-## Feature 1: Live Heartbeat for Obsidian + knowledge-curator Flow Nodes
-
-### Current State (verified)
-
-The `getStatus()` function in `react-flow-canvas.tsx` has two hardcoded lines:
-
-```typescript
-if (nodeId === "obsidian") return "active";
-if (nodeId === "knowledge-curator") return "idle";
-```
-
-Every other node derives status from `nodeActivity` (minutes-since-last-activity) or the `services` health array. These two nodes are the only ones that never reflect real state.
-
-### What "Healthy" Looks Like for Each Node
-
-**Obsidian (the filesystem vault at `~/github/knowledge/`)**
-
-Obsidian is a passive vault — it has no running process to ping. "Healthy" means the vault has been written to recently. Ground-truth signals, verified against the actual filesystem:
-
-| Signal | Healthy | Stale | Dead |
-|--------|---------|-------|------|
-| `~/github/knowledge/journals/YYYY-MM-DD.md` mtime | exists today | exists yesterday | missing >1 day |
-| Directory mtime of `~/github/knowledge/` | < 24h ago | 24–48h ago | > 48h ago |
-| mem0-exports dir has today's date files | present | absent | absent + previous also missing |
-| `.obsidian/workspace.json` mtime | < 12h (active user) | 12–48h (not opened) | > 48h |
-
-Recommended primary signal: whether today's journal file exists at `~/github/knowledge/journals/YYYY-MM-DD.md`. This is written by the personal ingestion pipeline whenever emails/transcripts arrive, so its absence is meaningful. Secondary: directory mtime for the vault root.
-
-**knowledge-curator (the cron at `0 2 * * * knowledge-curator.sh`)**
-
-The curator is a nightly shell script. Its ground-truth signals are the log file and the mem0-exports output:
-
-| Signal | Healthy | Warning | Dead |
-|--------|---------|---------|------|
-| `/tmp/knowledge-curator.log` contains today's "Knowledge Curator complete." | yes | yesterday's date | no entry within 26h |
-| mem0-exports has files dated yesterday | yes (run completed) | stale by 2 days | absent |
-| Log contains any "Warning:" lines | 0 warnings | 1–2 warnings (non-fatal) | all 5 steps warned |
-| Last log timestamp vs now | < 26h (cron runs at 2am) | 26–50h | > 50h |
-
-Recommended primary signal: parse the last "Starting Knowledge Curator..." timestamp from `/tmp/knowledge-curator.log`. If `now - lastRun > 26h`, status is `idle` (missed a run). If `> 50h`, status is `error`. If last run contains no "Warning:" lines, status is `active`.
-
-### Table Stakes Behaviors
-
-| Behavior | Why Required | Complexity |
-|----------|--------------|------------|
-| Obsidian shows `active` if today's journal file exists | Vault is live | Low — one `stat()` call |
-| Obsidian shows `stale` if last journal is yesterday | Missing day's ingestion | Low |
-| Obsidian shows `error` if no journal in 48h+ | Pipeline has failed | Low |
-| knowledge-curator shows `active` if ran within 26h, no warnings | Healthy nightly run | Low — parse last log timestamp |
-| knowledge-curator shows `idle` if ran within 26h with warnings | Non-fatal step failures | Low |
-| knowledge-curator shows `error` if last run > 26h ago | Missed cron | Low |
-
-### Differentiators
-
-| Behavior | Value | Complexity |
-|----------|-------|------------|
-| Show time-since-last-run in node subtitle (e.g., "ran 6h ago") | At-a-glance pipeline health | Low — already have subtitle field |
-| Show warning count in tooltip/panel for curator | Surfaces partial failures | Low — grep log for "Warning:" count |
-| Show doc count delta (today vs yesterday) for Obsidian | Shows vault growth | Medium — requires two stat calls |
-
-### Anti-Features / Scope Boundaries
-
-| Anti-Feature | Why Avoid |
-|--------------|-----------|
-| Spawning a process to check Obsidian's internal state | Obsidian has no health API; filesystem signals are sufficient |
-| Polling the log file more than once per minute | Log is append-only, polling interval is already dashboard-wide |
-| Alerting/notification system | Out of scope for v1.2; dashboard is read-only |
-| Checking `qmd embed` status | Forbidden per architecture decisions |
-
-### Dependencies on Existing Features
-
-- `getStatus()` in `react-flow-canvas.tsx` — direct modification of the two hardcoded lines
-- A new `/api/knowledge-status` route (or extending `/api/knowledge`) to do the `stat()` checks and log parsing server-side (client cannot access filesystem)
-- The existing heartbeat polling loop (TanStack Query) can carry this — no new polling needed
-- Constants file already has `AGENT_CONFIGS_PATH` pattern — similar pattern for `KNOWLEDGE_BASE_PATH`
+**Domain:** Observability dashboard for AI agent infrastructure + knowledge ingestion pipeline
+**Researched:** 2026-04-13
+**Milestone:** v1.3 — Advanced Observability + Knowledge Depth
 
 ---
 
-## Feature 2: Fix meet-recordings basePath Divergence
+## Feature-by-Feature Analysis
 
-### Root Cause (verified)
+### FLOW-12: Collapsible Node Groups
 
-Two separate directories exist on disk:
+**What it is:** Fold/expand inactive agent clusters in the React Flow diagram so the canvas isn't cluttered when a group of agents is dormant.
 
-| Path | Files | Used by |
-|------|-------|---------|
-| `~/knowledge/gdrive/meet-recordings/` | 105 files | `collections.config.json` basePath |
-| `~/github/knowledge/gdrive/meet-recordings/` | 100 files | `personal-ingestion-transcripts.py` MEET_DIR |
+**Table stakes or differentiator:** Differentiator. Most observability dashboards don't offer this. It becomes table stakes only if the diagram grows beyond ~30 nodes and becomes hard to scan.
 
-The ingestion script hardcodes `KNOWLEDGE_ROOT = Path.home() / "github/knowledge"` and writes new transcripts to `~/github/knowledge/gdrive/meet-recordings/`. The Library view reads from `collections.config.json` which points to `~/knowledge/gdrive/meet-recordings/` — a different directory that is no longer receiving new files.
+**Expected behavior:**
+- Clicking a group header (e.g., "Remote Agents") collapses all child nodes into a single summary node showing aggregate status (worst-case health color)
+- Collapsed state persists for the session (not across reloads — no persistent state needed)
+- Edges that previously terminated at hidden child nodes reroute visually to the group summary node
+- Expand restores original layout (positions remembered)
 
-Result: Library shows 105 docs (the stale path), new transcripts accumulate at the `github/knowledge` path invisibly, and the two paths will diverge further with every nightly run.
+**Edge cases:**
+- A group contains a mix of active and dormant nodes — collapsed node should show amber or worst-status color, not green
+- Collapse while a child node has an open NodeDetailPanel — panel should auto-close
+- Group with only one node — still collapsible, but low priority
 
-### Table Stakes Behaviors
+**User interaction:** Single click on group label or a toggle chevron. No drag interaction needed.
 
-| Behavior | Why Required | Complexity |
-|----------|--------------|------------|
-| Library `meet-recordings` card shows live file count from the path where new files are actually written | Correctness — 5 files are already invisible | Low — one-line config change |
-| Config change is in `collections.config.json` (not hardcoded) | Config-driven is the existing pattern | Low |
-| Path resolution validates the target directory exists at startup | Surfaces misconfiguration early | Low — already handled by the `catch` in `knowledge/route.ts` which returns `docCount: 0` |
+**Complexity:** MEDIUM. The existing `GroupBoxNode` has `pointerEvents: "none"` — it is purely decorative and not interactive. Making groups collapsible requires replacing it with a proper interactive implementation using React Flow's `useExpandCollapse` hook or explicit `hidden` flag management on child nodes. The pattern exists in React Flow's official examples (https://reactflow.dev/examples/layout/expand-collapse). Main work: toggling `hidden` on child nodes + recalculating edges + summary node render. No new API route needed.
 
-### How Config-Driven Path Resolution Works in This Codebase
-
-The existing pattern (verified in `knowledge/route.ts`):
-
-1. `collections.config.json` is the single source of truth for `basePath`
-2. The API reads it at request time (no caching, `force-dynamic`)
-3. If `basePath` does not exist on disk, the API returns `docCount: 0` and `lastUpdated: null` gracefully
-4. No validation of path correctness at config load time — a mismatched path just silently shows 0 docs
-
-The fix requires updating `collections.config.json` line 9:
-```
-"basePath": "/Users/lcalderon/knowledge/gdrive/meet-recordings"
-→
-"basePath": "/Users/lcalderon/github/knowledge/gdrive/meet-recordings"
-```
-
-However, this decision deserves more than a config edit — the right question is which path is canonical. The `~/knowledge/gdrive/` tree appears to be a Google Drive sync location. The `~/github/knowledge/gdrive/` tree is inside the knowledge vault (QMD-indexed, Obsidian-visible, ingestion-written). The ingestion script is the authoritative writer; the config should match it.
-
-### Differentiators
-
-| Behavior | Value | Complexity |
-|----------|-------|------------|
-| Add path existence validation to the Library API response (return `{ exists: bool }` per collection) | Collection cards can show a "path not found" warning badge | Low |
-| Surface in the Library HealthPanel when any collection basePath returns 0 docs | Catches future divergences | Low — HealthPanel already exists |
-
-### Anti-Features / Scope Boundaries
-
-| Anti-Feature | Why Avoid |
-|--------------|-----------|
-| Merging or symlinking the two directories | Would create data duplication; figure out canonical path first |
-| Auto-discovering basePaths | Overkill for a single-user config; manual config is the explicit design decision |
-| Moving files from old path to new | Risky file operation outside dashboard scope |
-
-### Dependencies on Existing Features
-
-- `collections.config.json` — the only file that needs changing for the fix
-- `knowledge/route.ts` — may benefit from a `pathExists` boolean in the response for surface-level validation
-- Library HealthPanel — could display warnings for zero-doc collections
+**Depends on:** Existing `react-flow-canvas.tsx` GroupBoxNode, existing node/edge definitions.
 
 ---
 
-## Feature 3: KNOW-06 — Bidirectional mem0 ↔ Obsidian Sync
+### FLOW-13: Per-Node Activity Drill-Down
 
-### What This Means in This System
+**What it is:** Show the last 10 activity events for a node inline when it is selected.
 
-"Bidirectional" here is specific to this architecture:
+**Important clarification needed:** The existing `NodeDetailPanel` (`node-detail-panel.tsx`) already does this — it slides over from the right, filters `events.filter(e => e.node === nodeId).slice(0, 15)`, and renders them in a Framer Motion panel. The v1.3 spec says "inline" — this must mean *on the canvas node itself* (tooltip or popover), not the existing sidebar. If it means sidebar, this feature is already built and only needs a limit change from 15 to 10.
 
-- **mem0 → Obsidian (already partially working):** `mem0-export.sh` runs nightly as Step 3 of the curator. It writes yesterday's memories as `~/github/knowledge/mem0-exports/{agent_id}-YYYY-MM-DD.md`. These files land in the Obsidian vault, get QMD-indexed, and become searchable. The flow is one-way and batch.
+**Assuming "inline" means on-node popover:**
 
-- **Obsidian → mem0 (the missing direction):** When Luis or an agent writes something significant in Obsidian — a journal entry, a project note, a decision log — that content is not fed back into mem0 as a memory. Agents start sessions with mem0 context preloaded (KNOW-05), but they don't see what's been written directly into the vault since the last export.
+**Table stakes or differentiator:** Table stakes for observability dashboards where sidebar feels too disruptive. In-context details without losing diagram orientation is a standard pattern in tools like Grafana and Datadog.
 
-### Expected Behaviors
+**Expected behavior:**
+- Clicking a node shows a small popover anchored to that node (above or to the right)
+- Popover lists last 10 events: timestamp, type icon, message (truncated to ~60 chars)
+- Popover closes on click-outside or pressing Escape
+- Popover coexists with (or replaces) the sidebar panel — needs a UX decision
 
-| Behavior | Direction | Trigger | Complexity |
-|----------|-----------|---------|------------|
-| Nightly mem0 export to `mem0-exports/` already works | mem0 → Obsidian | 2am cron | Done |
-| New Obsidian daily notes get summarized and ingested into mem0 | Obsidian → mem0 | nightly curator Step 6 | Medium |
-| Session preload pulls from both mem0 memories AND recent vault markdown | Obsidian → agents | SessionStart hook | Medium |
-| mem0 memories written during the day appear in vault by next morning | mem0 → Obsidian | curator Step 3 | Done |
-| Vault edits from today appear in mem0 before next session | Obsidian → mem0 | curator or on-demand | Medium |
+**Edge cases:**
+- Node near canvas edge — popover flips to stay on screen
+- Node with zero events — shows "No recent activity" empty state
+- Multiple nodes selected — only the most recently clicked shows popover
 
-### Conflict Resolution
+**User interaction:** Click node to open, click elsewhere to dismiss. No hover-only (hover is too fragile on touch/desktop).
 
-mem0 and Obsidian are not competing stores — they serve different purposes:
+**Complexity:** LOW if this is an enhancement to the existing NodeDetailPanel (change limit 15→10, adjust label). MEDIUM if it means a true inline canvas popover distinct from the sidebar — React Flow custom nodes can render arbitrary JSX inside the node component, so a conditional popover div is feasible, but z-index and click event propagation on the canvas require care.
 
-- **mem0** = structured semantic memory, searchable by agent, used for session preload and recall
-- **Obsidian** = long-form markdown, human-readable, source of truth for content
-
-There is no true conflict because they don't store the same format. The practical edge cases:
-
-| Edge Case | Resolution |
-|-----------|------------|
-| A journal note duplicates something already in mem0 | Ingest anyway — mem0 deduplication is by content hash internally; near-duplicates are low risk |
-| A mem0 export was already exported yesterday, vault file already exists | `mem0-export.sh` already handles idempotency: `if [ -f "$OUTFILE" ]; then skip` |
-| A vault file is edited after being ingested into mem0 | mem0 does not update memories automatically; vault is source of truth, re-ingest on next run |
-| mem0 is down during curator run | Step 3 is non-fatal (`|| log "Warning: mem0 export failed"`) — curator continues |
-
-### Table Stakes Behaviors
-
-| Behavior | Why Required | Complexity |
-|----------|--------------|------------|
-| Today's journal `~/github/knowledge/journals/YYYY-MM-DD.md` is read and key facts ingested into mem0 as memories | Closes the loop — vault writes become agent context | Medium — new Python script, mem0 POST API |
-| Ingestion is idempotent (watermark by file mtime or content hash) | Prevents flooding mem0 with duplicates on re-runs | Medium — needs ingestion-state tracking |
-| Runs as Step 6 in `knowledge-curator.sh` (non-fatal) | Follows existing curator pattern | Low — one line addition |
-| New memories stored under `agent_id=shared` or `agent_id=claude` | Consistent with existing agent_id conventions in `mem0-export.sh` | Low |
-
-### Differentiators
-
-| Behavior | Value | Complexity |
-|----------|-------|------------|
-| Selective ingestion — only ingest headings, bullet lists, decisions; skip raw transcripts already in Qdrant | Avoids mem0 bloat from already-indexed content | Medium — requires heuristic filtering |
-| Surface "last vault → mem0 sync" timestamp in Library or Flow panel | Closes the observability loop | Low — read from ingestion-state.json |
-| Support `projects/` subdirectory ingestion (not just daily journals) | Richer context for project-specific agents | High — requires per-project agent_id routing |
-
-### Anti-Features / Scope Boundaries
-
-| Anti-Feature | Why Avoid |
-|--------------|-----------|
-| Real-time / file-watcher triggered sync | Obsidian uses iCloud/filesystem sync; file events are unreliable. Nightly batch is safer and sufficient. |
-| Syncing ALL vault markdown into mem0 | mem0 is for semantic memories, not document storage. Qdrant + QMD already serve full-text search. Flooding mem0 defeats the point. |
-| Writing from mem0 back to Obsidian markdown (beyond the existing export) | Export files already serve this. Two-way file writes create edit conflicts. |
-| Deleting old mem0 memories when vault files are edited | mem0 has no update-by-content API; deletion + re-add is fragile and lossy |
-| Exposing mem0's internal API surface in the dashboard | Read-only dashboard constraint |
-| Per-memory conflict UI | Overkill — these stores are not competing; append-only is correct |
-
-### Dependencies on Existing Features
-
-- **knowledge-curator.sh** — new Step 6 is an extension of the existing 5-step pipeline
-- **`ingestion-state.json` watermarks** — the existing pattern from Phase 5 personal ingestion; reuse for vault → mem0 tracking
-- **mem0 REST API at `localhost:3201`** — already used by `mem0-export.sh`; `POST /memory/add` is the ingest endpoint
-- **KNOW-05 session preload** — downstream beneficiary; richer mem0 content means better cold-start context
-- **Flow diagram obsidian ↔ notebooks edge** — currently no edge exists between obsidian and notebooks nodes; a bidirectional edge should be added once sync is live
+**Depends on:** `node-detail-panel.tsx` (if sidebar enhancement), or `flow-node.tsx` custom node component (if inline popover). Existing activity events from `/api/activity`.
 
 ---
 
-## Summary: Feature Ordering and Dependencies
+### SKILL-06: Skill Failure Rate
+
+**What it is:** Track failed skill invocations from log files and surface the failure rate per skill in the dashboard.
+
+**CRITICAL BLOCKER — New Telemetry Required:** The existing `skill-contributions.jsonl` contains only `action: "synced"` events (235 events, all from a single bulk sync run). It records when skills are copied into the master directory, not when skills are *invoked* by agents. There is no current data source for skill invocation attempts, successes, or failures.
+
+The `gateway.err.log` contains skill *discovery* warnings (symlink path issues), not runtime invocation failures.
+
+**This means SKILL-06 requires two phases before display is possible:**
+1. Instrument skill invocations somewhere (gateway logs, agent session logs, or a new JSONL append in the skill runner)
+2. Parse that new log source in a `/api/skills/stats` route and display it
+
+**Table stakes or differentiator:** Differentiator. Failure rate visibility is standard in SRE dashboards (Grafana, Datadog) but not typically built for personal AI agent stacks. It becomes table stakes only once the scale of skill failures is high enough to cause real problems.
+
+**Expected behavior (once instrumented):**
+- Dashboard shows per-skill: invocation count (last 30 days), failure count, failure rate %
+- Sorted by failure rate descending
+- Threshold coloring: >10% failure = red, >5% = amber, <5% = green
+
+**Edge cases:**
+- Skill invoked 1 time and failed — 100% failure rate misleading on tiny sample; need minimum invocation threshold (suggest: N>=5 before showing rate)
+- Skills never invoked — show "no data" not "0% failure rate"
+- Log rotation — parser must handle log files being rotated or truncated
+
+**Complexity:** HIGH overall, split: HIGH for instrumentation, LOW for display once data exists. Do not build the display until the data source exists.
+
+**Depends on:** New telemetry — either gateway log enhancement or new JSONL append-on-invocation mechanism. None of this exists today.
+
+---
+
+### SKILL-07: Skill Coverage Gaps
+
+**What it is:** Identify skills with zero usage in the last 30 days.
+
+**Same blocker as SKILL-06:** No invocation data exists. "Zero usage" requires an invocation log. Without that, every skill would appear as a coverage gap by default.
+
+**Table stakes or differentiator:** Differentiator. Pruning unused skills is already semi-automated (skill-sync.py has prune logic with a 365-day grace period). This would surface that signal visually before the pruner runs.
+
+**Expected behavior (once instrumented):**
+- List of skills not invoked in 30 days
+- Sorted by last-invoked date ascending (oldest unused first)
+- "Prune candidate" badge on skills beyond 365-day threshold
+- Can cross-reference with SKILL-06 failure rate (zero-use may mean broken, not just unused)
+
+**Edge cases:**
+- Skills that are invoked only during rare events (e.g., "calendar" skill only used when scheduling) — 30-day window may produce false positives; consider making the window configurable
+- Skills recently added (less than 30 days old) — should not appear as coverage gaps
+- 248 total skills — UI must paginate or filter, not show a wall of 248 rows
+
+**Complexity:** HIGH overall (same blocker as SKILL-06). Display complexity is MEDIUM due to pagination/filtering needs.
+
+**Depends on:** Same instrumentation as SKILL-06. Recommend building SKILL-06 and SKILL-07 together once the telemetry layer exists.
+
+---
+
+### SKILL-08: Per-Skill Usage Heatmap
+
+**What it is:** Visualize skill usage frequency over time as a calendar heatmap (GitHub contributions-style or Recharts-based time grid).
+
+**Same blocker as SKILL-06/07:** No invocation data exists.
+
+**Table stakes or differentiator:** Differentiator. Calendar heatmaps are a polished visualization borrowed from GitHub's contribution graph and developer productivity tools. High perceived value, but purely informational — it does not enable any action that SKILL-07's list doesn't already enable.
+
+**Expected behavior (once instrumented):**
+- X-axis: days (last 90 days), Y-axis: skills (top N by usage)
+- Cell color intensity = invocation count for that skill on that day
+- Hover: shows exact count
+- Filterable by contributor (hermes / gwen / all)
+
+**Edge cases:**
+- Sparse data (early days post-instrumentation) — heatmap will look mostly empty; communicate data age explicitly
+- Skills with very high single-day usage skew color scale — use log scale for color mapping
+- 248 skills — limit Y-axis to top 20 by usage, not all skills
+
+**Complexity:** HIGH overall (same telemetry blocker). Display complexity is MEDIUM — Recharts does not have a built-in heatmap; requires a custom grid render or a small wrapper, but is achievable with a div-grid plus color interpolation.
+
+**Depends on:** Same instrumentation as SKILL-06/07. Treat SKILL-06, 07, 08 as a single phase: "Skill Telemetry Pipeline + Display."
+
+---
+
+### KNOW-08: projects/ Ingestion
+
+**What it is:** Ingest `~/github/knowledge/projects/` subdirectories into mem0, in addition to the existing daily journals ingestion.
+
+**Table stakes or differentiator:** Table stakes for the knowledge loop. The projects/ directory contains meeting notes for real client/business projects (10+ subdirectories confirmed: omnisend, codethread, boringmarketing, alex, turnedyellow, holifrog, dealmakerwealthsociety, epiloguecapital, multifunding, cordant). These are high-value contextual documents that agents currently don't have access to via mem0.
+
+**Confirmed structure:**
+```
+projects/
+  omnisend/meetings/2025-06-20-*.md
+  codethread/meetings/2025-06-05-*.md
+  turnedyellow/meetings/2025-05-08-*.md
+  ...
+```
+
+**Expected behavior:**
+- Script walks each `projects/<project>/meetings/*.md` file
+- Ingests each file as a mem0 memory with metadata: `source=projects-sync`, `project=<project-name>`, `type=meeting`
+- Deduplication: same mtime watermark approach used in `obsidian-to-mem0.py` (per-file hash or mtime tracking)
+- Idempotent: second run on same file produces 0 new memories
+
+**Edge cases:**
+- Projects without a `meetings/` subdirectory — graceful skip
+- Very long meeting transcript (>10K words) — may need chunking before mem0 add; test this
+- New project directory added in the future — script must auto-discover, not use a hardcoded list
+- Cross-project references (a meeting mentions multiple projects) — store under originating project, do not duplicate
+
+**Complexity:** LOW. `obsidian-to-mem0.py` is the direct template. Main work is parameterizing the walk path and adding `project` metadata. Estimated ~40-60 lines of new Python on top of the existing pattern.
+
+**Depends on:** `obsidian-to-mem0.py` pattern (existing). Python mem0 client (existing). `obsidian-ingestion-state.json` pattern for dedup watermarks. KNOW-09 must come after this.
+
+---
+
+### KNOW-09: Per-Project agent_id Routing
+
+**What it is:** Route different project directories to different mem0 `agent_id` values when ingesting, so agents can query memories scoped to their relevant projects.
+
+**Table stakes or differentiator:** Differentiator. Most users put everything under one agent_id. This feature allows, for example, a shopify-focused agent to query only its project memories without noise from unrelated projects. Enables proper knowledge isolation between client/project contexts.
+
+**Expected behavior:**
+- Config-driven mapping: `project_name -> agent_id` stored in a JSON file
+- Default fallback: projects not in the map use `agent_id=claude` (same as journals)
+- Config follows the existing `agents.config.json` pattern
+- Ingestion script reads config at startup, routes each project's memories accordingly
+
+**Edge cases:**
+- Config file missing or malformed — fall back to default `agent_id=claude`, log a warning, do not crash
+- Same meeting file re-run after config changes — memories already ingested under old agent_id remain; new ingestion goes to new agent_id (duplicate risk); recommend a re-ingestion flag or explicit migration step
+- agent_id that doesn't exist in mem0 — mem0 creates it implicitly (non-issue)
+- Querying cross-project — agents must know which agent_ids to query; this is a usage-pattern concern, not a data-storage concern
+
+**Complexity:** LOW. Adds ~20 lines to the KNOW-08 script: load a JSON config, map project name to agent_id, fall back to default. The larger complexity is organizational — the agent_id taxonomy must be decided before coding.
+
+**Depends on:** KNOW-08 (must exist first). A defined agent_id taxonomy decision (what are the target agent_ids for each project?).
+
+---
+
+## Table Stakes vs Differentiators
+
+| Feature | Category | Rationale |
+|---------|----------|-----------|
+| KNOW-08 projects/ ingestion | Table Stakes | High-value documents currently invisible to agents; closes a real knowledge gap |
+| FLOW-13 per-node drill-down | Table Stakes | Already partially exists (sidebar); clarify "inline" before building |
+| KNOW-09 per-project agent_id | Differentiator | Useful isolation, not blocking any current workflow |
+| FLOW-12 collapsible groups | Differentiator | UX improvement, not blocking visibility |
+| SKILL-06 failure rate | Differentiator | Requires new telemetry — no current value without instrumentation |
+| SKILL-07 coverage gaps | Differentiator | Requires new telemetry — same blocker as SKILL-06 |
+| SKILL-08 usage heatmap | Differentiator | Most polish-heavy; lowest marginal value relative to SKILL-07 |
+
+---
+
+## Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Real-time WebSocket skill event streaming | v1.2 explicitly chose JSONL bridge over WebSocket to avoid HMR/CF tunnel issues; reopening this is high-risk low-gain | Keep the polling/JSONL pattern; refresh on page visit |
+| Hardcoded project->agent_id mapping in source code | Config-driven architecture is a v1.0 decision; hardcoding breaks portability | JSON config file for the mapping |
+| Building SKILL-06/07/08 display before telemetry exists | Produces a dashboard with empty charts — misleading and wasteful | Instrument first, display second; treat as one phase |
+| Inline heatmap on the Flow canvas nodes | Visually overwhelming; canvas nodes are already information-dense | Keep heatmap in a separate Library or Skills view |
+| Rebuilding NodeDetailPanel for FLOW-13 | Existing sidebar panel already works well | Decide: enhance sidebar (Low) OR add inline popover (Medium); don't build both |
+
+---
+
+## Feature Dependencies
 
 ```
-Feature 2 (basePath fix)        — no dependencies, 1 config line, do first
-Feature 1 (heartbeat)           — needs new API route + 2-line fix in canvas
-Feature 3 (bidirectional sync)  — depends on nothing in the dashboard but is
-                                   the most complex (new Python script + curator step)
+KNOW-08 -> KNOW-09 (routing requires ingestion to exist first)
+
+SKILL-06 (telemetry instrumentation) -> SKILL-07 (coverage gaps display)
+SKILL-06 (telemetry instrumentation) -> SKILL-08 (usage heatmap display)
+SKILL-07 and SKILL-08 share the same new telemetry pipeline — build as one phase
+
+FLOW-13 depends on: /api/activity (existing), node-detail-panel (existing or new inline component)
+FLOW-12 depends on: react-flow-canvas GroupBoxNode replacement
 ```
 
-**MVP for v1.2:** Fix meet-recordings config (Feature 2) + wire heartbeat status for both nodes (Feature 1). KNOW-06 (Feature 3) is a phase unto itself — the Obsidian → mem0 direction requires a new ingestion script with watermarks and filtering logic.
+---
 
-**Phase ordering rationale:**
-- Feature 2 is a one-liner that fixes a silent correctness bug. Ship first.
-- Feature 1 is 2–3 components (new API endpoint, updated `getStatus()`, updated nodeStats). Low risk, high visibility.
-- Feature 3 is medium complexity but follows the established Phase 5 ingestion pattern closely — the main work is the Python script and watermark logic, not dashboard wiring.
+## MVP Recommendation for v1.3
+
+Build in this order:
+
+1. **KNOW-08** — Highest value, lowest risk. Closes a real knowledge gap. Pure Python, template exists.
+2. **KNOW-09** — Small addon to KNOW-08. Requires one config decision (agent_id taxonomy) before coding.
+3. **FLOW-13** — Clarify "inline" vs sidebar first. If sidebar enhancement: half a day. If inline canvas popover: two days.
+4. **FLOW-12** — Collapsible groups. Medium effort, high visual payoff. No new data sources.
+5. **SKILL-06/07/08 as one phase** — Build telemetry instrumentation first, then wire display. Do not split into three separate phases without a confirmed data source.
+
+**Defer if timeline is tight:**
+- SKILL-08 (heatmap) — most complex display, least actionable; defer until SKILL-06/07 prove the data is rich enough to visualize
+- FLOW-12 — nice-to-have UX; defer if the SKILL telemetry phase is slipping
+
+---
+
+## Open Questions Before Building
+
+1. **FLOW-13 "inline" semantics:** Does this mean on-node popover (Medium complexity) or enhanced sidebar (Low complexity)? Needs a UX decision before implementation starts.
+2. **SKILL-06 telemetry source:** Where should skill invocations be logged — gateway.log additions, a new `skill-invocations.jsonl`, or agent session hooks? This decision gates all three SKILL features.
+3. **KNOW-09 agent_id taxonomy:** What are the target agent_ids for each project? Needs a config decision before coding.
+4. **SKILL-07 window:** Is 30 days the right threshold? Skills like `calendar` or `voice-call` may only be invoked monthly — configurable window vs hardcoded?
+
+---
+
+## Confidence Assessment
+
+| Feature | Confidence | Basis |
+|---------|------------|-------|
+| FLOW-12 collapsible groups | HIGH | React Flow official examples confirm useExpandCollapse pattern exists; existing GroupBoxNode code inspected directly |
+| FLOW-13 drill-down | HIGH | node-detail-panel.tsx read directly; behavior is partially implemented in sidebar already |
+| SKILL-06 failure rate | HIGH | skill-contributions.jsonl inspected (only "synced" actions confirmed); gateway.err.log inspected (discovery warnings only); no invocation data confirmed absent |
+| SKILL-07 coverage gaps | HIGH | Same evidence as SKILL-06 |
+| SKILL-08 usage heatmap | HIGH | Same evidence as SKILL-06/07; Recharts has no built-in heatmap confirmed |
+| KNOW-08 projects/ ingestion | HIGH | projects/ directory inspected directly (10+ subdirs, meetings/*.md structure confirmed); obsidian-to-mem0.py is the template |
+| KNOW-09 agent_id routing | HIGH | mem0 agent_id scoping is standard mem0 usage; config-driven pattern matches existing codebase conventions |

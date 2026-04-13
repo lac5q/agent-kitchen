@@ -1,224 +1,256 @@
-# Pitfalls Research: v1.2 Features
+# Domain Pitfalls — v1.3 Feature Integration
 
-**Project:** Agent Kitchen
-**Researched:** 2026-04-11
-**Features covered:** Heartbeat health checks, basePath config fix, bidirectional mem0/Obsidian sync
-
----
-
-## Feature 1: Live Heartbeat Health Checks (obsidian + knowledge-curator nodes)
-
-### Critical Pitfall 1-A: Using Wrong Signal Type for Each Node
-
-**What goes wrong:** The two nodes need fundamentally different signal types. Obsidian is a filesystem vault — its health is a directory stat (does the path exist, how recently was a file modified). knowledge-curator is a cron job — its health is a log file's mtime and content. Treating both with the same mechanism (e.g., both checking HEARTBEAT_STATE.md in agent-configs) will fail because neither node lives in the agent-configs directory. The existing heartbeat route at `/api/heartbeat` reads `AGENT_CONFIGS_PATH/{agentId}/HEARTBEAT_STATE.md` — this path is valid for named agents like alba/gwen but will silently return `{ content: null }` for obsidian and knowledge-curator, because there are no subdirectories for them there.
-
-**Warning sign:** The node shows `{ content: null }` in the heartbeat panel. No error, no 400 — just empty, because the route catches all errors and returns null gracefully (per D-05). This is the correct behavior for agents, but for obsidian/knowledge-curator it masks the wrong path silently.
-
-**Prevention:** Implement separate health signals per node type. For obsidian: `stat()` the vault root (`~/github/knowledge/`) and sample mtime of 3-5 recent files to derive freshness. For knowledge-curator: read mtime of `/tmp/knowledge-curator.log` (the cron log defined in knowledge-curator.sh line 3) and optionally tail its last line to confirm "Knowledge Curator complete." appeared. Both should be separate API routes or a single route that dispatches by nodeId with an explicit allowlist.
-
-**Phase:** Heartbeat implementation phase.
+**Project:** Agent Kitchen v1.3
+**Researched:** 2026-04-13
+**Scope:** Adding FLOW-12, FLOW-13, SKILL-06/07/08, KNOW-08/09 to existing codebase
 
 ---
 
-### Critical Pitfall 1-B: Stale File Detection — mtime vs. Content
+## Critical Pitfalls
 
-**What goes wrong:** File mtime is set by the OS at write time, not at meaningful completion. The knowledge-curator.sh script writes intermediate output throughout its 5-step run. A check that fires mid-run will see a very recent mtime and report "active" — but the curator is mid-flight, not complete. Conversely, after a successful 2am run, the log will be ~22 hours stale by midnight — a naive "modified in last 1h" check will permanently show "idle" or "error" throughout the day.
+### PITFALL-1: React Flow parentId changes absolute coordinates to parent-relative
 
-**Warning sign:** The node oscillates between active/idle randomly, or permanently shows "stale" even after successful runs.
+**Feature:** FLOW-12 (Collapsible node groups)
+**What goes wrong:** When `parentId` is set on a child node, React Flow (@xyflow/react v12) interprets that node's `position` as relative to the parent container node's origin — not the canvas origin. The existing `GroupBoxNode` nodes (`group-agents`, `group-devtools`) currently use absolute canvas positions and have `pointerEvents: none`. If you add `parentId` to agent/devtool nodes to make them "inside" the group, every node's `x/y` must be recalculated as an offset from the group box's position rather than the canvas. Failure to do this produces nodes that jump to wrong positions on first render.
 
-**Prevention:** Check mtime against an expected cadence window. The curator runs at 2am (`0 2 * * *`). "Fresh" means the log was written sometime between 2:00am and 2:30am today (or yesterday if checked before 2am). The logic should be: `ageHours = (now - logMtime) / 3600`. If `ageHours < 24` and the final line of the log contains "Knowledge Curator complete.", status is healthy. If `ageHours >= 28`, status is stale (missed a run). Between 24-28h is the grace window for slow runs. Additionally grep the last line — not just the mtime — to confirm the run completed (not interrupted mid-step).
+**Why it happens:** React Flow's parent/child containment model was designed for true nesting, not visual grouping. The current implementation uses group boxes purely as z-index=-1 decorators with manual pixel math. Adding `parentId` retrofits a different system onto that manual math.
 
-**Phase:** Heartbeat implementation phase.
+**Consequences:** Agent nodes visually relocate to wrong positions, edges route to wrong anchor points, and `fitView` zooms to the wrong bounding box. The bug is invisible in dev mode if you hardcode positions but breaks dynamically sized groups (which `group-agents` is — width depends on `keyRemote.length`).
 
----
+**Prevention:**
+- Before setting `parentId`, calculate child positions as `(child_canvas_x - group_x, child_canvas_y - group_y)`. Current values: `AGENT_START_X=100`, group `x=AGENT_START_X-15=85`; so child offset_x = `100 - 85 = 15`. Do this math explicitly in a constant.
+- Also add `extent: "parent"` on child nodes so they cannot be dragged outside the group boundary.
+- The group node itself must have explicit `width` and `height` on the node object (not just in `data`) — React Flow v12 uses those for boundary calculations. Add `width` and `height` directly to the `Node` object for group nodes, not only in `data`.
+- Test collapse/expand with 3 agents (minimum), 5 agents (normal), and 0 agents (edge case) because `agentBoxWidth` is dynamically computed.
 
-### Moderate Pitfall 1-C: Performance Impact — `readdir` on Vault Root Is Expensive
+**Detection:** After adding `parentId`, if nodes appear at (0,0) or cluster at top-left corner of canvas, the coordinate recalculation is wrong.
 
-**What goes wrong:** The Obsidian vault (`~/github/knowledge/`) has 518+ markdown files across nested directories. If the heartbeat API calls `readdir({ recursive: true })` on the vault root to compute "doc count" or find the newest file mtime, it does a full directory walk on every poll cycle (the Flow page polls every 15s). On production (`npm start`), this blocks the event loop equivalent — not catastrophic but adds 20-200ms per cycle and generates inode access at high frequency.
-
-**Warning sign:** Library API and heartbeat API start returning slower, especially when knowledge-curator is running and creating/modifying files simultaneously.
-
-**Prevention:** For the obsidian heartbeat, do NOT walk the tree. Instead: (1) `stat()` the vault root directory itself — its mtime updates when any direct child changes; (2) stat 3-5 specific known files (e.g., today's journal `journals/YYYY-MM-DD.md`) that are updated nightly. This is O(5) stats, not O(500) readdir. The Library API already does the expensive `readdir` on its own cycle — don't duplicate it in the heartbeat route.
-
-**Phase:** Heartbeat implementation phase.
-
----
-
-### Moderate Pitfall 1-D: Production Build Doesn't Hot-Reload API Routes
-
-**What goes wrong:** Production runs as `npm start` (compiled output). Any change to `/api/heartbeat/route.ts` or a new API route requires a full `npm run build && npm start`. Developers testing in dev mode see changes immediately and may declare the feature "working" — then deploy to production and find the old code is still running. This has burned time in previous phases.
-
-**Warning sign:** Changes to API routes appear to have no effect in production. Dashboard continues to show hardcoded values after deployment.
-
-**Prevention:** After any API route change, run `npm run build` first, confirm the build succeeds, then restart `npm start`. Add a test that hits the actual API endpoint shape (status field, not just `content: null`) so CI catches wrong shapes before deploy.
-
-**Phase:** All implementation phases.
+**Phase:** FLOW-12 (collapsible group phase)
 
 ---
 
-### Minor Pitfall 1-E: Security Hook Blocks exec/execSync for Log Reading
+### PITFALL-2: GroupBoxNode collapse breaks edge routing
 
-**What goes wrong:** The temptation to check whether knowledge-curator is "currently running" via `ps aux | grep knowledge-curator` requires `exec` or `execSync`, both of which are blocked by the project security hook. Using `execFileSync('ps', ['-ax'])` is the permitted path, but it still spawns a subprocess on every heartbeat poll — which is wasteful.
+**Feature:** FLOW-12
+**What goes wrong:** Currently `GroupBoxNode` has `pointerEvents: none` and `selectable: false, draggable: false`. Making it interactive for collapse requires removing `pointerEvents: none`. But when the group is collapsed, the child nodes need to either be hidden (removed from nodes array) or moved inside the group bounds. If you simply hide child nodes by removing them from the array, all their edges (`mgr-${id}`, `${id}-mem`, etc.) will render as dangling edges with no target — React Flow v12 does NOT silently discard edges to missing nodes; it throws console warnings and the edge line renders to coordinate (0,0).
 
-**Warning sign:** Build or runtime error: "execSync is not allowed."
+**Why it happens:** The edges array is computed independently from nodes. When nodes are conditionally removed during collapse, edge sources/targets become stale.
 
-**Prevention:** Don't check process liveness. Check the log file instead (mtime + last line). Log file state is ground truth for a cron job — if the cron ran and completed, the log reflects it. Live process checks are only needed if the job were long-running/daemonic, which knowledge-curator is not (it runs and exits).
+**Consequences:** Console errors, visual artifacts (edges running to canvas corner), potential layout thrash on every render cycle because the missing-node edges trigger reconciliation.
 
-**Phase:** Heartbeat implementation phase.
+**Prevention:**
+- On collapse: filter edges to remove any edge whose source or target is in the collapsed group before passing to ReactFlow.
+- Alternative: keep child nodes in the array but set `hidden: true` on them. React Flow v12 supports `hidden` on nodes and automatically hides edges connected to hidden nodes. This is cleaner than array manipulation.
+- Use `hidden: true` approach — it avoids rebuilding the edges useMemo on every collapse state change.
 
----
+**Detection:** Edges visually shooting to top-left corner of canvas when a group is collapsed.
 
-## Feature 2: meet-recordings basePath Fix
-
-### Critical Pitfall 2-A: Two Different Directories, Both Valid — Wrong Fix Target
-
-**What goes wrong:** There are two separate meet-recordings directories:
-- `/Users/lcalderon/knowledge/gdrive/meet-recordings/` — the old GDrive-synced path (pre-ingestion pipeline). Contains human-readable named files like "1 on 1 Sync (Chris Rhine) - 2025-06-18 Notes by Gemini.md". This is what `collections.config.json` currently points to.
-- `/Users/lcalderon/github/knowledge/gdrive/meet-recordings/` — the new canonical path where `personal-ingestion-transcripts.py` writes processed transcripts. Contains date-stamped machine-generated filenames like "2026-01-29-1afbj6VNUEc7wuO.md".
-
-These are different directories with different file counts, different naming conventions, and different update mechanisms. The config fix must point to the right one based on intent: the Library view should show what the ingestion pipeline produces (the `~/github/knowledge/gdrive/meet-recordings/` path). Simply fixing the typo while misidentifying which directory is "correct" would silently show wrong counts.
-
-**Warning sign:** After the fix, the doc count in the Library changes but is still wrong (e.g., shows 5 instead of 105, or vice versa).
-
-**Prevention:** Confirm intent before editing: the Library should reflect what the nightly pipeline produces. The ingestion writes to `~/github/knowledge/gdrive/meet-recordings/`. Update `collections.config.json` to `basePath: "/Users/lcalderon/github/knowledge/gdrive/meet-recordings"`. Do not modify the old path — it may still be used by QMD's own collection index, which is separate from the Library view.
-
-**Phase:** basePath fix phase (one-line config change).
+**Phase:** FLOW-12
 
 ---
 
-### Moderate Pitfall 2-B: Config Change Requires Rebuild
+### PITFALL-3: failures.log format is not guaranteed stable
 
-**What goes wrong:** `collections.config.json` is read at runtime via `readFileSync` inside `loadCollections()` in the knowledge API route. In dev mode, Next.js hot-reloads the module and re-reads the file. In production (`npm start`), the compiled output may not re-read the config until the process is restarted. Some engineers assume a JSON config change doesn't need a rebuild — it does not need a full `npm run build`, but it does require a process restart (`npm start` restart).
+**Feature:** SKILL-06 (failure rate tracking)
+**What goes wrong:** The actual failures.log format is:
+```
+2026-04-08 11:37:18,487 | ERROR | {"timestamp": "...", "error_type": "...", "details": {...}, "exception": "...", "traceback": "..."}
+```
+The milestone context states the format as `[datetime] | ERROR | {json}` — accurate but incomplete. Key risks:
+1. The header line `# Failures log cleared 2026-04-05 21:16:16 PDT` is not a parseable log line and will cause JSON parse errors if not handled.
+2. The JSON blob after `| ERROR |` contains embedded newlines in the `traceback` field. A naive line-by-line parser splits tracebacks across multiple lines and corrupts the JSON.
+3. The `error_type` field is not enumerated — observed types include `memory_add_failed`, `disk_critical`. New error types will be added without notice.
+4. Not all entries have `| ERROR |` level — the file is multi-severity.
 
-**Warning sign:** Config change applied, but Library still shows old doc count.
+**Consequences:** Parser crash on comment header line; silently incorrect failure counts because multi-line traceback entries are counted as multiple events; wrong failure attribution when grouping by `agent_id` (not all error types have `agent_id` in details — `disk_critical` has none).
 
-**Prevention:** After editing `collections.config.json`, restart `npm start`. No rebuild needed (the route reads the file at request time with `readFileSync`, not at compile time), but the process must restart to clear any module cache if there is one.
+**Prevention:**
+- Parse with a stateful reader: split on the delimiter pattern `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \| ERROR \|` (anchored on timestamp, not line start), treat everything between two such anchors as one entry.
+- Skip lines starting with `#`.
+- After extracting the JSON portion, parse it with try/except and discard malformed entries (don't crash).
+- Group by `error_type` first, then by `details.agent_id` only for types that have it.
+- The log file is 515 lines and growing. Use tail-read (last N bytes) with a configurable lookback window — do not read the entire file on every 10s poll. Use a lookback of 7 days by timestamp.
 
-**Phase:** basePath fix phase.
+**Detection:** Test parser against the actual file before integrating. Any parse that yields exactly 1 error per line has missed multi-line tracebacks.
 
----
-
-### Minor Pitfall 2-C: Breaking Other Collections by Editing the Wrong Entry
-
-**What goes wrong:** `collections.config.json` has 19 collections. A global find-replace on the wrong substring (e.g., replacing all `knowledge/gdrive/` paths) would corrupt the `alex-docs` and `turnedyellow-admin` entries, which share the same `~/knowledge/gdrive/` prefix and are pointing to correct locations.
-
-**Warning sign:** Library shows 0 docs for alex-docs or turnedyellow-admin after the fix.
-
-**Prevention:** Edit only the `meet-recordings` entry. Treat every other entry as read-only during this change. The fix is surgical: one entry, one value, one path segment change (`/Users/lcalderon/knowledge/` → `/Users/lcalderon/github/knowledge/`). Verify the other gdrive entries are unchanged after the edit.
-
-**Phase:** basePath fix phase.
-
----
-
-## Feature 3: Bidirectional mem0 ↔ Obsidian Sync (KNOW-06)
-
-### Critical Pitfall 3-A: Infinite Loop — mem0 Write Triggers Obsidian Watcher, Which Writes Back to mem0
-
-**What goes wrong:** The classic bidirectional sync loop. If the sync is triggered by file events (inotify/FSEvents on the Obsidian vault), writing a new markdown file to the vault (mem0 → Obsidian direction) fires the watcher, which then attempts to sync back (Obsidian → mem0 direction), creating a new mem0 memory, which triggers another Obsidian write, and so on. This is not hypothetical — it is the default failure mode of any bidirectional sync without loop detection.
-
-**Warning sign:** mem0 memory count grows unboundedly. `/tmp/knowledge-curator.log` shows repeated identical entries. The Obsidian vault's `mem0-exports/` directory fills with duplicate files.
-
-**Prevention:** Three interlocking guards are required, not just one:
-
-1. **Origin tagging:** When mem0 writes a memory that comes from Obsidian (direction: Obsidian → mem0), tag it with `metadata.source = "obsidian"`. When the sync checks memories to export to Obsidian (direction: mem0 → Obsidian), skip any memory with `source = "obsidian"`. This breaks the first feedback path.
-
-2. **Write lock file:** Before writing to the Obsidian vault, create a lockfile (e.g., `/tmp/mem0-obsidian-sync.lock`). The vault watcher checks for this lockfile before initiating a mem0 write. If the lockfile exists, skip. Remove the lockfile after the write completes. Use a timeout (30s max) to prevent stale locks.
-
-3. **Content hash deduplication:** Before adding a memory to mem0 from Obsidian, compute a hash of the content and check if an identical memory already exists. The mem0 REST API does not provide a deduplication guarantee — it will create duplicates if called with the same text twice.
-
-**Phase:** KNOW-06 implementation phase — must address all three guards before any live sync.
+**Phase:** SKILL-06
 
 ---
 
-### Critical Pitfall 3-B: Modifying agent_memory Qdrant Collection Directly
+### PITFALL-4: SKILL-07 coverage gap must not recurse vault
 
-**What goes wrong:** KNOW-06 is explicitly constrained: "mem0 agent_memory Qdrant collection must NOT be modified directly." The bidirectional sync must go through the mem0 REST API (`http://localhost:3201`), not through Qdrant's API directly. Bypassing mem0 and writing points directly to Qdrant would: (1) skip mem0's deduplication logic; (2) skip mem0's fact extraction (mem0 converts raw text into condensed memories, not stored verbatim); (3) leave mem0's SQLite history out of sync with Qdrant, causing phantom memories.
+**Feature:** SKILL-07 (coverage gaps — skills with zero usage in 30 days)
+**What goes wrong:** SKILL-07 requires cross-referencing available skills on disk. The natural approach is `Path(skills_dir).iterdir()`. The master skills dir (`~/github/knowledge/skills/`) is safe — 264 entries, shallow. The vault root (`~/github/knowledge/`) is NOT. If the implementation accidentally calls `iterdir()` or `glob("**/*")` on the vault root instead of the skills subdirectory, it will recurse 518+ files. The constraint "never recursive readdir on vault" applies here because the skills dir is inside the vault.
 
-**Warning sign:** Memories appear in Qdrant `agent_memory` but are not returned by `GET /memory/all?agent_id=...`. Or `sqlite3 ~/.mem0/history.db` shows no record of a memory that exists in Qdrant.
+**Consequences:** At 10s polling cadence, `rglob` on the vault is catastrophic inode load. This regression was hit in v1.1.
 
-**Prevention:** All writes to mem0 must use `POST /memory/add` with `{"agent_id": "...", "text": "...", "metadata": {...}}`. Never use `qmd embed`. Never use the Qdrant SDK or REST API to write to `agent_memory`. Treat the mem0 REST API as the only write path.
+**Prevention:**
+- Use `Path(CONFIG["master_dir"]).iterdir()` (non-recursive, shallow) — same pattern as `get_skills_in_dir()` already in skill-sync.py.
+- Never pass vault root to any glob. Only use absolute paths to specific subdirs.
+- CRITICAL: skill-contributions.jsonl only contains `action: "synced"` events (confirmed by inspection — no `"used"` events exist). SKILL-07 cannot determine "usage" from this file. It must read skill usage from `~/.openclaw/skill-sync-state.json` (the `skill_usage` dict), NOT from the JSONL. Verify this before building the route.
 
-**Phase:** KNOW-06 implementation phase.
+**Detection:** If the API route for SKILL-07 takes >500ms, it is almost certainly recursing too wide. Benchmark on first implementation.
 
----
-
-### Critical Pitfall 3-C: Obsidian File Format Corruption from Naive Writes
-
-**What goes wrong:** Obsidian markdown files are not plain markdown — they use YAML frontmatter, wikilinks (`[[...]]`), tags (`#tag`), and occasionally Dataview inline metadata. Writing mem0 memories into Obsidian as raw bullet points into a file that has frontmatter will either: (1) append below the frontmatter correctly (if the writer is careful); or (2) write into the middle of a YAML block, corrupting the frontmatter and breaking Obsidian's parsing for that file. Obsidian silently ignores malformed frontmatter, so the corruption may not be obvious until QMD re-indexes and returns unexpected results.
-
-The Obsidian vault is also the QMD source. A corrupted or malformed file gets indexed by QMD with wrong metadata, silently poisoning keyword search results.
-
-**Warning sign:** QMD returns empty or wrong results for a previously working query. Obsidian shows a file with `---` at unexpected positions. The file's doc count in the Library view is unchanged (the file exists) but its content is wrong.
-
-**Prevention:** Write mem0 memories to a dedicated, append-only subdirectory that is NOT in the existing note hierarchy. The existing export pattern (`mem0-exports/{agent_id}-{date}.md`) is the correct model — it isolates writes to a predictable location with a simple format that has no frontmatter. Do not write into existing Obsidian notes (journals, wikis, etc.). If the goal is to create new Obsidian notes from mem0 memories, generate them with valid YAML frontmatter (`---\ntags: [mem0, sync]\ncreated: ...\n---`).
-
-**Phase:** KNOW-06 implementation phase.
+**Phase:** SKILL-07
 
 ---
 
-### Critical Pitfall 3-D: Conflict Resolution When Both Sides Modified Between Syncs
+## Moderate Pitfalls
 
-**What goes wrong:** The sync runs nightly. Luis edits a memory in Obsidian during the day, and the same underlying fact is also updated in mem0 (by an agent session) during the day. When the nightly sync runs, both versions differ from the last-synced baseline. Without a baseline snapshot, the sync cannot distinguish "edit" from "conflict" and will either: (1) blindly overwrite mem0 with the Obsidian version (losing the agent session's learning); or (2) blindly overwrite Obsidian with the mem0 version (losing Luis's manual edit).
+### PITFALL-5: CSS grid heatmap renders 0px cells when skill count is 0
 
-**Warning sign:** After a sync run, a note Luis edited during the day has been reverted. Or a memory Luis deleted in Obsidian reappears the next day.
+**Feature:** SKILL-08 (per-skill usage heatmap)
+**What goes wrong:** A CSS grid heatmap using `grid-template-columns: repeat(N, 1fr)` where N=0 is invalid CSS and produces a broken layout. The `skillCount` prop can be 0 on first load before data arrives (TanStack Query returns `undefined` while loading).
 
-**Prevention:** Adopt a last-write-wins strategy with explicit timestamps, since this is a single-user system with no concurrent multi-user conflicts. The rule: compare `created_at` / `updated_at` from mem0 against file mtime from Obsidian. Take whichever was modified most recently. Document this decision explicitly in the sync script. This is simpler than three-way merge and appropriate for a personal knowledge base. Store the last sync timestamp in `ingestion-state.json` (which already uses atomic writes via `os.replace()` — reuse this pattern).
+**Prevention:**
+- Guard: `if (!skills || skills.length === 0) return <EmptyState />` before rendering the grid.
+- Clamp N to a minimum of 1: `Math.max(1, Math.ceil(Math.sqrt(skills.length)))` for column count.
+- Use `isLoading` from TanStack Query to show a skeleton, not a 0-column grid.
 
-**Phase:** KNOW-06 implementation phase.
-
----
-
-### Moderate Pitfall 3-E: mem0 Deduplication Is Not Guaranteed
-
-**What goes wrong:** mem0's fact extraction process condenses free-text into memory facts. If Obsidian has 10 notes about "Luis prefers concise agent responses," running them through `POST /memory/add` 10 times will not necessarily produce 1 memory — it may produce 2-4 near-duplicate memories depending on mem0's internal deduplication heuristics. The mem0 REST API does not expose a "check if this already exists" endpoint. Over multiple sync runs (nightly for weeks), the memory count for an agent_id grows with near-duplicates.
-
-**Warning sign:** `GET /memory/all?agent_id=claude` returns 200+ entries where many are semantically identical. The Notebook Wall view shows a higher-than-expected memory count.
-
-**Prevention:** Before calling `POST /memory/add`, fetch all existing memories for the agent_id and compute similarity client-side. A simple approach: normalize the text (lowercase, strip punctuation, strip whitespace) and compare with existing memories using exact string match. For near-duplicate detection, check if the new text shares >80% of its words with an existing memory. Skip the add if a match is found. This client-side gate is cheaper than letting mem0 store duplicates and cleaning them up later.
-
-**Phase:** KNOW-06 implementation phase.
+**Phase:** SKILL-08
 
 ---
 
-### Moderate Pitfall 3-F: Obsidian → mem0 Direction Must Choose the Right agent_id
+### PITFALL-6: SKILL-08 heatmap performance — 264 cells at 10s poll
 
-**What goes wrong:** mem0 has 17 known agent_ids (claude, shared, ceo, cto, etc.). When syncing Obsidian notes to mem0, which agent_id receives the memory? If all notes go to `shared`, they become globally visible to all agents but lose personal/role specificity. If they go to `claude`, they are only visible when claude agent_id is used in sessions. If the wrong agent_id is chosen, the session-start preload (KNOW-05) will not surface the memory to the right agent.
+**Feature:** SKILL-08
+**What goes wrong:** There are 264 skills in the master registry. A heatmap with 264 cells, each with individual hover state, re-renders at every 10s data poll if the parent component holds the hover state. In React, hovering cell #1 and receiving a data update triggers a full 264-cell diff.
 
-**Warning sign:** A fact that Luis added to Obsidian is not shown in Claude Code session preloads. Or it appears in an unrelated agent's context.
+**Prevention:**
+- Move hover state into a local `useState` in the heatmap component, not in the page component.
+- Memoize the cell array with `useMemo` keyed on skill data. Cells should be stable references between polls if skill counts haven't changed.
+- Do NOT use `useQuery` with `refetchInterval: 10000` directly in the heatmap component — pull data from the parent and pass as props so the heatmap doesn't independently trigger polling.
+- Do not add Framer Motion animation to individual heatmap cells — this creates 264 simultaneous animation instances.
 
-**Prevention:** Use the directory structure of the Obsidian vault to determine agent_id. Notes in `shared/` → `agent_id: shared`. Notes in `journals/` → `agent_id: claude` (personal). Notes in role-specific directories → the corresponding role agent_id. Document the mapping in a config or as comments in the sync script. Default to `shared` for uncategorized notes.
-
-**Phase:** KNOW-06 implementation phase.
-
----
-
-### Minor Pitfall 3-G: QMD Index Becomes Stale When mem0-exports Directory Grows
-
-**What goes wrong:** `mem0-exports/` is inside the Obsidian vault (`~/github/knowledge/mem0-exports/`) and is a QMD-indexed collection. As KNOW-06 generates more files in this directory (or in a new sync output directory), QMD's BM25 index becomes stale. QMD requires `qmd update` to re-index. This is already handled by knowledge-curator.sh step 4, but KNOW-06 syncs may run independently or at different times.
-
-**Warning sign:** QMD keyword search returns outdated results for recently synced content.
-
-**Prevention:** If KNOW-06 runs as a standalone script outside knowledge-curator.sh, append a `qmd update` call at the end. If it runs as a new step 6 inside knowledge-curator.sh, it inherits the existing `qmd update` in step 4. The Qdrant vector index (qdrant-indexer.py) must also re-run to pick up new markdown files. Do not assume QMD auto-updates — it requires explicit `qmd update`.
-
-**Phase:** KNOW-06 implementation phase and integration into knowledge-curator.sh.
+**Phase:** SKILL-08
 
 ---
 
-## Phase-Specific Warning Summary
+### PITFALL-7: KNOW-08 new script must use isolated state file
 
-| Phase / Feature | Pitfall | Mitigation |
-|-----------------|---------|------------|
-| Heartbeat — obsidian | Wrong signal type (HEARTBEAT_STATE.md won't exist) | Stat vault root + journal mtime, not agent-configs path |
-| Heartbeat — knowledge-curator | Stale mtime mid-run or 22h after valid run | Check log mtime vs. 24h cadence + grep last line for "complete" |
-| Heartbeat — obsidian | readdir on vault = expensive | Stat 3-5 known files only, never recursive readdir |
-| Heartbeat — both | execSync blocked by security hook | Read log file; don't check process liveness |
-| basePath fix | Two directories, both valid | Point to `~/github/knowledge/gdrive/meet-recordings/` (ingestion output) |
-| basePath fix | Edit bleeds into adjacent gdrive entries | Surgical edit, only meet-recordings entry |
-| basePath fix | Config change invisible in prod | Restart `npm start` after editing JSON |
-| KNOW-06 | Infinite sync loop | Origin tag + lockfile + content hash — all three required |
-| KNOW-06 | Direct Qdrant write to agent_memory | mem0 REST API only, never Qdrant SDK/HTTP directly |
-| KNOW-06 | Obsidian file corruption | Write to isolated `mem0-exports/`-style directory, not into existing notes |
-| KNOW-06 | Conflict resolution | Last-write-wins by timestamp; store sync watermark in ingestion-state.json |
-| KNOW-06 | mem0 duplicates over time | Client-side deduplication check before every POST /memory/add |
-| KNOW-06 | Wrong agent_id for Obsidian notes | Directory-based routing map; default to `shared` |
-| KNOW-06 + QMD | Stale QMD index after new files | Ensure `qmd update` runs after any sync that writes new markdown |
+**Feature:** KNOW-08/09 (projects/ subdir ingestion)
+**What goes wrong:** `obsidian-to-mem0.py` writes to `obsidian-ingestion-state.json`. A new `projects-to-mem0.py` script sharing that state file creates a read-modify-write race — both scripts run from `knowledge-curator.sh`, potentially overlapping. The second writer silently overwrites the first writer's state updates.
+
+**Prevention:**
+- Give the projects script its own state file: `projects-ingestion-state.json` — same isolation pattern used when `obsidian-ingestion-state.json` was separated from `ingestion-state.json` in Phase 08. This is the proven precedent in this codebase.
+
+**Phase:** KNOW-08
+
+---
+
+### PITFALL-8: KNOW-09 per-project agent_id routing creates memories never surfaced
+
+**Feature:** KNOW-09 (per-project agent_id routing)
+**What goes wrong:** If each project routes to its own `agent_id` (e.g., `agent_id: "epilogue"`, `agent_id: "alex"`), memories become fragmented across agent IDs. The session-start mem0 preload hook only preloads `agent_id: "claude"` and `agent_id: "shared"`. Project-specific memories under custom agent IDs will never be preloaded at session start. Loading all project agent IDs at session start would hit Gemini embedding quota — the `429 RESOURCE_EXHAUSTED` error is already occurring in failures.log.
+
+**Consequences:** Project memories exist in mem0 but deliver zero value because they are never surfaced.
+
+**Prevention:**
+- Use `agent_id: "shared"` with `project` in metadata for all project content. Simple, immediately surfaced at session start, no quota risk.
+- Defer per-project agent_id routing to v1.4 only if on-demand preload (`--project` flag on session hook) is implemented first.
+
+**Phase:** KNOW-09
+
+---
+
+### PITFALL-9: KNOW-08 projects/ depth is 3+ levels with 341 markdown files
+
+**Feature:** KNOW-08
+**What goes wrong:** `projects/` contains 46 project directories with nested subdirectories (e.g., `projects/epilogue/meetings/`). A shallow `iterdir()` on `projects/` only finds project name directories, not the actual markdown files. A `rglob("*.md")` on `projects/` pulls all 341 files — safe for a nightly cron job, but must NEVER be called from an API route polling at 10s.
+
+The mtime watermark logic from `obsidian-to-mem0.py` must work on per-file mtime (not per-directory mtime) because a directory's mtime only updates when direct children change, not grandchildren.
+
+**Prevention:**
+- Use `Path(PROJECTS_DIR).rglob("*.md")` in the nightly Python script only. 341 files is fine for cron.
+- Do NOT expose a `/api/projects-ingest` endpoint. Keep ingestion in Python cron only; the API should read pre-computed state from the ingestion state file.
+- The mtime watermark should track the latest file mtime seen across all successfully processed files, same as obsidian-to-mem0.py pattern.
+
+**Phase:** KNOW-08
+
+---
+
+### PITFALL-10: FLOW-13 node-detail-panel already fetches heartbeat — second fetch needs AbortController
+
+**Feature:** FLOW-13 (per-node activity drill-down)
+**What goes wrong:** `node-detail-panel.tsx` already calls `/api/heartbeat?agent={nodeId}` in a `useEffect` on nodeId change with no cleanup. If FLOW-13 adds a second `useEffect` for activity events, both effects fire simultaneously on every node click. If the user clicks multiple nodes quickly, N in-flight fetches run with stale nodeId values that update state for the wrong node.
+
+**Additionally:** The activity events data (`events: Event[]` filtered by `e.node === nodeId`) is already passed as a prop and sliced to 15 items. FLOW-13 most likely only needs to increase that limit or improve the display — it does NOT need a new fetch. Adding a second fetch introduces complexity for no gain.
+
+**Prevention:**
+- Add AbortController cleanup to the existing heartbeat useEffect: return `() => controller.abort()`.
+- For activity events, use the existing prop — do not add a second fetch inside this component.
+- If new failure event types need to surface in FLOW-13, add them to the events array at the API/data-fetching level in the parent, not with a new fetch in the panel component.
+
+**Phase:** FLOW-13
+
+---
+
+## Minor Pitfalls
+
+### PITFALL-11: failures.log disk_critical entries inflate failure rate metrics
+
+**Feature:** SKILL-06
+**What goes wrong:** `disk_critical` errors are not skill execution failures — they are infrastructure events. The most recent entries in failures.log (as of 2026-04-13) are entirely disk_critical events, not skill failures. Counting all log entries as skill failures will show false spikes tied to disk events.
+
+**Prevention:** Filter by `error_type` allowlist in the route handler. For skill failure tracking, include only `memory_add_failed` and agent-execution error types. Document the allowlist explicitly in code. Consider surfacing `disk_critical` as a separate infrastructure health indicator in the heartbeat panel rather than mixed into skill metrics.
+
+**Phase:** SKILL-06
+
+---
+
+### PITFALL-12: Vitest ESM mocks required for all new filesystem-reading routes
+
+**Feature:** SKILL-06, SKILL-07
+**What goes wrong:** Any new API route reading from the filesystem (failures.log, skill-sync-state.json) using `fs/promises` requires the established Vitest ESM mock pattern. Static imports cause mocks to not intercept correctly in Vitest 4.x with ESM. This pattern is documented in STATE.md but will be forgotten for new routes.
+
+**Prevention:** Apply to all new route tests: `// @vitest-environment node` at top, `vi.mock('fs/promises')` before any import, then `await import('./route')` after the mock declaration.
+
+**Phase:** Any phase adding new `/api/` routes for SKILL-06/07
+
+---
+
+### PITFALL-13: skill-contributions.jsonl has no usage events — wrong data source for SKILL-07/08
+
+**Feature:** SKILL-07, SKILL-08
+**What goes wrong:** The JSONL file contains only `action: "synced"` events (confirmed by inspection of the actual file). Zero `action: "used"` events exist. Building SKILL-07 (coverage gaps) or SKILL-08 (usage heatmap) from this JSONL produces only sync history, not usage frequency.
+
+**Prevention:**
+- Skill usage data lives in `~/.openclaw/skill-sync-state.json` under the `skill_usage` dict (key: skill name, value: last_used_timestamp).
+- For v1.3, read usage from the state file. Display last-used timestamps.
+- The JSONL is the correct source for contribution attribution (who added which skill) but not usage frequency.
+- Real-time usage tracking requires instrumentation at the OpenClaw runtime level — defer to v1.4.
+
+**Phase:** SKILL-07, SKILL-08 — understand this before designing the data model for either feature
+
+---
+
+## Phase-Specific Warnings Summary
+
+| Feature | Pitfall | Mitigation |
+|---------|---------|------------|
+| FLOW-12 | Child node coordinates become parent-relative when parentId is set | Recalculate all offsets as `(child_x - group_x, child_y - group_y)` |
+| FLOW-12 | Collapsed group leaves dangling edges to missing nodes | Use `hidden: true` on child nodes; do not remove them from array |
+| FLOW-12 | GroupBoxNode needs explicit `width`/`height` on Node object (not only in data) | Add to node definition alongside `data.width`/`data.height` |
+| FLOW-13 | Double-fetch if second useEffect added to panel | Activity events already in props; use AbortController on existing fetch |
+| SKILL-06 | Multi-line tracebacks corrupt line-by-line JSON parser | Stateful parser anchored on timestamp regex, not line boundaries |
+| SKILL-06 | disk_critical entries inflate skill failure count | Filter by error_type allowlist |
+| SKILL-07 | skill-contributions.jsonl has no usage events | Use skill-sync-state.json skill_usage dict instead |
+| SKILL-07 | iterdir accidentally recurses vault | Only call iterdir on CONFIG["master_dir"], never vault root |
+| SKILL-08 | 0-column CSS grid when skill count is 0 | Guard before render; clamp column count to minimum 1 |
+| SKILL-08 | 264-cell hover re-render at 10s poll | Local useState for hover; memoize cell array; no Framer Motion per cell |
+| KNOW-08 | Read-modify-write race if sharing obsidian-ingestion-state.json | Use isolated projects-ingestion-state.json |
+| KNOW-08 | rglob on projects/ acceptable in nightly script but not in API | Keep ingestion in Python cron only; API reads pre-computed state |
+| KNOW-09 | Per-project agent_id creates memories never surfaced at session start | Use agent_id: "shared" + project metadata for v1.3 |
+
+---
+
+## Sources
+
+- Direct inspection: `/Users/lcalderon/github/knowledge/scripts/obsidian-to-mem0.py` — confirmed 3 dedup guards, state structure, atomic write pattern, AGENT_ID="claude"
+- Direct inspection: `/Users/lcalderon/github/knowledge/skill-contributions.jsonl` — confirmed only `action: "synced"` events exist (no "used" events)
+- Direct inspection: `/Users/lcalderon/github/knowledge/logs/failures.log` (515 lines) — confirmed actual format: `timestamp | ERROR | {json-with-multiline-traceback}`, comment header line, disk_critical as dominant recent error type
+- Direct inspection: `/Users/lcalderon/github/agent-kitchen/src/components/flow/react-flow-canvas.tsx` — confirmed GroupBoxNode structure (pointerEvents:none, absolute coordinates), dynamic agentBoxWidth, node/edge construction pattern
+- Direct inspection: `/Users/lcalderon/github/agent-kitchen/src/components/flow/node-detail-panel.tsx` — confirmed existing heartbeat fetch with no AbortController cleanup
+- Direct file count: `projects/` directory — 46 subdirs, 341 markdown files at 3+ levels depth
+- Project decisions in `.planning/STATE.md` — vitest ESM mock pattern, obsidian state isolation precedent, heartbeat window constraints, mem0 write-only via POST
+- @xyflow/react v12 parentId coordinate behavior: MEDIUM confidence (consistent with React Flow documented containment model and observed v11→v12 migration notes; not independently verified via Context7 for v12 exact behavior)
