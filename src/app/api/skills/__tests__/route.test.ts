@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fs/promises")>();
@@ -197,5 +197,162 @@ describe("GET /api/skills", () => {
     const body = await res.json();
     expect(body.timestamp).toBeDefined();
     expect(() => new Date(body.timestamp)).not.toThrow();
+  });
+});
+
+describe("coverageGaps", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("includes skills never used", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("bash-scripting", true),
+      makeDirEntry("python-async", true),
+    ] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({ last_sync: "2026-04-11T04:00:15.000000", last_prune: "2026-04-06T05:00:08.000000", skill_usage: {} }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(new Set(body.coverageGaps)).toEqual(new Set(["bash-scripting", "python-async"]));
+  });
+
+  it("includes skills unused for 30+ days and excludes fresh skills", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T00:00:00Z"));
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("stale-skill", true),
+      makeDirEntry("fresh-skill", true),
+    ] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({
+        last_sync: "2026-04-11T04:00:15.000000",
+        last_prune: "2026-04-06T05:00:08.000000",
+        skill_usage: {
+          "stale-skill": "2026-03-01T00:00:00Z",  // 43 days ago
+          "fresh-skill": "2026-04-10T00:00:00Z",  // 3 days ago
+        },
+      }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).toContain("stale-skill");
+    expect(body.coverageGaps).not.toContain("fresh-skill");
+  });
+
+  it("excludes skills used exactly at the 30-day boundary (strictly > 30 days is stale)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T00:00:00Z"));
+
+    // boundary-skill used exactly 30 days ago (March 14 = 30 days before April 13)
+    mockReaddir.mockResolvedValue([makeDirEntry("boundary-skill", true)] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({
+        skill_usage: { "boundary-skill": "2026-03-14T00:00:00Z" },
+      }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).not.toContain("boundary-skill");
+
+    // Now: skill used just over 30 days ago (March 13 23:59:59 = 30d+1s)
+    vi.clearAllMocks();
+    mockReaddir.mockResolvedValue([makeDirEntry("boundary-skill", true)] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({
+        skill_usage: { "boundary-skill": "2026-03-13T23:59:59Z" },
+      }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res2 = await GET();
+    const body2 = await res2.json();
+    expect(body2.coverageGaps).toContain("boundary-skill");
+  });
+
+  it("falls back to full skill list when skill-sync-state.json is missing", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("a", true),
+      makeDirEntry("b", true),
+      makeDirEntry("c", true),
+    ] as never);
+    mockReadFile
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))  // state file
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" })); // JSONL
+    const res = await GET();
+    const body = await res.json();
+    expect(new Set(body.coverageGaps)).toEqual(new Set(["a", "b", "c"]));
+  });
+
+  it("falls back to full skill list when skill_usage key is absent from state", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("a", true),
+      makeDirEntry("b", true),
+    ] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({ last_sync: "2026-04-11T04:00:15.000000", last_prune: "2026-04-06T05:00:08.000000" }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(new Set(body.coverageGaps)).toEqual(new Set(["a", "b"]));
+  });
+
+  it("returns [] when SKILLS_PATH is inaccessible", async () => {
+    mockReaddir.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    mockReadFile
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).toEqual([]);
+  });
+
+  it("ignores dot-prefixed and non-directory entries", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("real-skill", true),
+      makeDirEntry(".staging", true),
+      makeDirEntry("notes.md", false),
+    ] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({ skill_usage: {} }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).toEqual(["real-skill"]);
+  });
+
+  it("tolerates malformed skill_usage entries — treats bad-date as stale gap", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T00:00:00Z"));
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("ok-skill", true),
+      makeDirEntry("bad-skill", true),
+    ] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({
+        skill_usage: {
+          "ok-skill": "2026-04-10T00:00:00Z",  // 3 days ago — fresh
+          "bad-skill": "not-a-date",            // malformed — treated as stale
+        },
+      }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).toContain("bad-skill");
+    expect(body.coverageGaps).not.toContain("ok-skill");
+  });
+
+  it("accepts epoch-ms numeric timestamps as well as ISO strings", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T00:00:00Z"));
+    const tenDaysAgoEpoch = new Date("2026-04-13T00:00:00Z").getTime() - 10 * 86400 * 1000;
+    mockReaddir.mockResolvedValue([makeDirEntry("num-skill", true)] as never);
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({
+        skill_usage: { "num-skill": tenDaysAgoEpoch },
+      }) as never)
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await GET();
+    const body = await res.json();
+    expect(body.coverageGaps).not.toContain("num-skill");
   });
 });
