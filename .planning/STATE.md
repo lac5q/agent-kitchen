@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Live Data + Knowledge Sync
 status: completed
-stopped_at: Completed Phase 09 Plan 01 — /api/skills route TDD (13/13 tests GREEN)
-last_updated: "2026-04-13T08:08:41.870Z"
+stopped_at: Completed Phase 09 Plan 02 — Flow canvas skills wiring (live skillCount + dashed edges + JSONL activity)
+last_updated: "2026-04-13T08:14:19.621Z"
 last_activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # State: Agent Kitchen
@@ -50,6 +50,7 @@ Progress: [####░░░░░░] 33%
 *Updated after each plan completion*
 | Phase 08-bidirectional-knowledge-sync P01 | 4m | 3 tasks | 3 files |
 | Phase 09 P01 | 8m | 3 tasks | 4 files |
+| Phase 09-skill-management-dashboard P02 | 12m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Progress: [####░░░░░░] 33%
 - [Phase 08-bidirectional-knowledge-sync]: STATE_FILE isolated to obsidian-ingestion-state.json — prevents collision with Phase 5 ingestion-state.json (gmail/calendar/gdrive_meet/spark)
 - [Phase 08-bidirectional-knowledge-sync]: All three KNOW-07 guards active — origin tag is not informational; it actively signals mem0-export.sh to skip obsidian-originated memories
 - [Phase 09]: Route reads SKILL_SYNC_STATE from ~/.openclaw/skill-sync-state.json for lastPruned/lastUpdated
+- [Phase 09-skill-management-dashboard]: Use allAgentIds (already in edges useMemo deps) not keyRemote for alba guard — prevents stale closure (T-09-06)
+- [Phase 09-skill-management-dashboard]: cookbooks subtitle uses skillCount prop (not skillsStats) to avoid adding skillsStats to nodes useMemo deps
 
 ### Roadmap Evolution
 
@@ -92,7 +95,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-13T08:08:41.789Z
-Stopped at: Completed Phase 09 Plan 01 — /api/skills route TDD (13/13 tests GREEN)
+Last session: 2026-04-13T08:14:19.618Z
+Stopped at: Completed Phase 09 Plan 02 — Flow canvas skills wiring (live skillCount + dashed edges + JSONL activity)
 Resume file: None
 Next action: `/gsd-plan-phase 8`
