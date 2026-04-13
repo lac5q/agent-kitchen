@@ -160,16 +160,22 @@ export function ReactFlowCanvas({
 
   function getStatus(nodeId: string, agentStatus?: string): "active" | "idle" | "dormant" | "error" {
     if (agentStatus) return agentStatus === "active" ? "active" : "dormant";
-    if (nodeId === "obsidian") return "active";
-    if (nodeId === "knowledge-curator") return "idle";
     const minsAgo = nodeActivity[nodeId];
     if (minsAgo !== undefined && minsAgo < 5) return "active";
     if (minsAgo !== undefined && minsAgo < 60) return "idle";
-    const svcMap: Record<string, string> = { gateways: "Agents", manager: "Paperclip", notebooks: "mem0", librarian: "QMD", qdrant: "Qdrant" };
+    const svcMap: Record<string, string> = {
+      gateways: "Agents",
+      manager: "Paperclip",
+      notebooks: "mem0",
+      librarian: "QMD",
+      qdrant: "Qdrant",
+      obsidian: "Obsidian",
+      "knowledge-curator": "Curator",
+    };
     const svc = services.find(s => s.service === svcMap[nodeId]);
     if (svc?.status === "up") return "active";
     if (svc?.status === "down") return "error";
-    return "idle";
+    return "idle"; // "degraded" falls here → amber, which is correct for idle/warning states
   }
 
   const nodeStats = useCallback((id: string): Record<string, string | number> => {
@@ -184,7 +190,7 @@ export function ReactFlowCanvas({
       case "apo":                 return { "Mode": "QA", "Cycle": "hourly" };
       case "gitnexus":            return { "Repos": 8, "Symbols": "75k+" };
       case "llmwiki":             return { "Topics": 6, "Maintainer": "Alba" };
-      case "knowledge-curator":   return { "Schedule": "nightly 2am", "Steps": 4 };
+      case "knowledge-curator":   return { "Schedule": "nightly 2am", "Steps": 5 };
       case "obsidian":            return { "Type": "Knowledge Vault", "Docs": "3,400+" };
       case "claude-code": { const t = devToolsMap["claude-code"]; return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "hook (read)", "QMD": "not wired", "Status": "partial" }; }
       case "qwen-cli":   { const t = devToolsMap["qwen-cli"];   return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "MCP ✓", "QMD": "not wired", "Status": "partial" }; }
