@@ -38,3 +38,5 @@ export const AGENT_CONFIGS_PATH = process.env.AGENT_CONFIGS_PATH || `${process.e
 export const PMO_MEMORY_PATH = process.env.PMO_MEMORY_PATH || `${process.env.HOME}/github/PMO/memory`;
 export const CLAUDE_MEMORY_PATH = process.env.CLAUDE_MEMORY_PATH || `${process.env.HOME}/.claude/projects`;
 export const MEM0_URL = process.env.MEM0_URL || "http://localhost:3201";
+export const OBSIDIAN_VAULT_PATH = process.env.OBSIDIAN_VAULT_PATH || `${process.env.HOME}/github/knowledge`;
+export const CURATOR_LOG_PATH = process.env.CURATOR_LOG_PATH || "/tmp/knowledge-curator.log";
