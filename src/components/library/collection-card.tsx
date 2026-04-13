@@ -32,7 +32,7 @@ interface CollectionCardProps {
 }
 
 export function CollectionCard({ collection, maxCount }: CollectionCardProps) {
-  const { name, docCount, category, lastUpdated } = collection;
+  const { name, docCount, category } = collection;
   const fillPercent = maxCount > 0 ? (docCount / maxCount) * 100 : 0;
   const borderColor = CATEGORY_COLORS[category];
   const barColor = CATEGORY_BAR_COLORS[category];
@@ -64,11 +64,6 @@ export function CollectionCard({ collection, maxCount }: CollectionCardProps) {
           />
         </div>
         <p className={`text-xs mt-1.5 ${textColor} capitalize`}>{category}</p>
-        {lastUpdated && (
-          <p className="text-xs text-slate-500 mt-1" title={lastUpdated}>
-            {new Date(lastUpdated).toLocaleDateString()}
-          </p>
-        )}
       </CardContent>
     </Card>
   );

@@ -5,6 +5,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MiniMap,
   type Node,
   type Edge,
   type NodeTypes,
@@ -14,36 +15,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { HealthStatus } from "@/types";
-
-// Group box node — rendered behind nodes as a visual cluster boundary
-function GroupBoxNode({ data }: { data: { label: string; width: number; height: number } }) {
-  return (
-    <div
-      style={{
-        width: data.width,
-        height: data.height,
-        border: "1px solid #334155",
-        borderRadius: 12,
-        background: "rgba(30,41,59,0.35)",
-        pointerEvents: "none",
-        position: "relative",
-      }}
-    >
-      <span style={{
-        position: "absolute",
-        top: 7,
-        left: 14,
-        fontSize: 9,
-        fontWeight: 700,
-        color: "#64748b",
-        letterSpacing: "0.09em",
-        textTransform: "uppercase",
-      }}>
-        {data.label}
-      </span>
-    </div>
-  );
-}
 
 // Custom node component
 function FlowNode({ data }: {
@@ -76,10 +47,10 @@ function FlowNode({ data }: {
       >
         <span style={{ fontSize: 28 }}>{data.icon}</span>
       </div>
-      <p style={{ fontSize: 8, fontWeight: 700, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
+      <p style={{ fontSize: 10, fontWeight: 600, color: "#f59e0b", marginTop: 4, textAlign: "center", maxWidth: 88 }} className="truncate">
         {data.label}
       </p>
-      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88, lineHeight: 1.2 }}>
+      <p style={{ fontSize: 8, color: "#64748b", textAlign: "center", maxWidth: 88 }} className="truncate">
         {data.subtitle}
       </p>
       <Handle type="source" position={Position.Right} style={{ opacity: 0, top: 40 }} />
@@ -88,37 +59,7 @@ function FlowNode({ data }: {
   );
 }
 
-const nodeTypes: NodeTypes = { flowNode: FlowNode, groupBoxNode: GroupBoxNode };
-
-type WireStatus = "connected" | "partial" | "not-wired";
-
-interface DevToolStatus {
-  id: string;
-  name: string;
-  mem0: WireStatus;
-  qmd: WireStatus;
-  overall: WireStatus;
-}
-
-interface SkillsStats {
-  totalSkills: number;
-  contributedByHermes: number;
-  contributedByGwen: number;
-  recentContributions: Array<{
-    skill: string;
-    contributor: string;
-    timestamp: string;
-    action: string;
-  }>;
-  lastPruned: string | null;
-  staleCandidates: number;
-  coverageGaps?: string[];
-  lastUpdated: string | null;
-  failuresByAgent?: Record<string, number>;
-  failuresByErrorType?: Record<string, number>;
-  contributionHistory?: Array<{ skill: string; date: string; count: number }>;
-  timestamp: string;
-}
+const nodeTypes: NodeTypes = { flowNode: FlowNode };
 
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
@@ -132,8 +73,6 @@ interface ReactFlowCanvasProps {
   remoteAgents?: Array<{ id: string; name: string; status: string; latencyMs: number | null; location: string }>;
   localActiveCount?: number;
   localTotalCount?: number;
-  devToolsStatus?: DevToolStatus[];
-  skillsStats?: SkillsStats | null;
   onNodeClick: (nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) => void;
 }
 
@@ -142,16 +81,7 @@ const EDGE_COLORS = {
   knowledge: "#10b981",
   memory: "#0ea5e9",
   apo: "#8b5cf6",
-  sync: "#06b6d4",
 };
-
-const KEY_AGENTS = ["alba", "gwen", "sophia", "maria", "lucia"];
-const AGENT_ICONS: Record<string, string> = { alba: "🤖", gwen: "🌸", sophia: "💼", maria: "✍️", lucia: "🔧" };
-const AGENT_SPACING = 120;
-const AGENT_START_X = 100;
-const AGENT_Y = 280;
-const DEV_TOOL_Y = 740;
-const DEV_TOOL_SPACING = 140;
 
 export function ReactFlowCanvas({
   services,
@@ -165,165 +95,64 @@ export function ReactFlowCanvas({
   remoteAgents = [],
   localActiveCount = 0,
   localTotalCount = 0,
-  devToolsStatus = [],
-  skillsStats = null,
   onNodeClick,
 }: ReactFlowCanvasProps) {
-
-  // Memoize devToolsMap so useMemo deps are stable
-  const devToolsMap = useMemo(
-    () => Object.fromEntries(devToolsStatus.map(t => [t.id, t])),
-    [devToolsStatus]
-  );
-
-  const keyRemote = useMemo(
-    () => KEY_AGENTS.map(id => remoteAgents.find(a => a.id === id)).filter(Boolean) as typeof remoteAgents,
-    [remoteAgents]
-  );
 
   function getStatus(nodeId: string, agentStatus?: string): "active" | "idle" | "dormant" | "error" {
     if (agentStatus) return agentStatus === "active" ? "active" : "dormant";
     const minsAgo = nodeActivity[nodeId];
     if (minsAgo !== undefined && minsAgo < 5) return "active";
     if (minsAgo !== undefined && minsAgo < 60) return "idle";
-    const svcMap: Record<string, string> = {
-      gateways: "Agents",
-      manager: "Paperclip",
-      notebooks: "mem0",
-      librarian: "QMD",
-      qdrant: "Qdrant",
-      obsidian: "Obsidian",
-      "knowledge-curator": "Curator",
-    };
+    const svcMap: Record<string, string> = { gateways: "Agents", manager: "Paperclip", notebooks: "mem0", librarian: "QMD" };
     const svc = services.find(s => s.service === svcMap[nodeId]);
     if (svc?.status === "up") return "active";
     if (svc?.status === "down") return "error";
-    return "idle"; // "degraded" falls here → amber, which is correct for idle/warning states
+    return "idle";
   }
 
-  // Phase 14: derive primitive counts from failuresByAgent/failuresByErrorType.
-  // Declared before nodeStats so they can be referenced in its useCallback deps.
-  // Follows Phase 09 pattern — primitives outside nodes useMemo (STATE.md decision).
-  const failureCount = useMemo(() => {
-    const byAgent = skillsStats?.failuresByAgent ?? {};
-    return Object.values(byAgent).reduce((sum, n) => sum + (n ?? 0), 0);
-  }, [skillsStats?.failuresByAgent]);
-
-  const topErrorType = useMemo(() => {
-    const byType = skillsStats?.failuresByErrorType ?? {};
-    const entries = Object.entries(byType);
-    if (entries.length === 0) return null;
-    return entries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
-  }, [skillsStats?.failuresByErrorType]);
-
-  const nodeStats = useCallback((id: string): Record<string, string | number> => {
+  function nodeStats(id: string): Record<string, string | number> {
     switch (id) {
-      case "agents":              return { "Total": agentCount, "Active": activeCount };
-      case "notebooks":           return { "Entries": memoryCount };
-      case "librarian":           return { "Docs": knowledgeCount, "Collections": 15 };
-      case "qdrant":              return { "Type": "Cloud", "Region": "AWS us-west-1", "Collections": 2 };
-      case "cookbooks": return {
-        "Skills":      skillsStats?.totalSkills ?? skillCount,
-        "From Hermes": skillsStats?.contributedByHermes ?? 0,
-        "From Gwen":   skillsStats?.contributedByGwen ?? 0,
-        "Stale 30d+":  skillsStats?.coverageGaps?.length ?? 0,
-        "Last Pruned": skillsStats?.lastPruned
-          ? new Date(skillsStats.lastPruned).toLocaleDateString()
-          : "Never",
-        "Stale":       skillsStats?.staleCandidates ?? 0,
-        "Failures":    failureCount,
-        ...(topErrorType ? { "Top Error": topErrorType } : {}),
-      };
-      case "gateways":            return { "Alba": "18793", "Gwen": "18792" };
-      case "manager":             return { "Platform": "Paperclip", "Port": "3100" };
-      case "apo":                 return { "Mode": "QA", "Cycle": "hourly" };
-      case "gitnexus":            return { "Repos": 8, "Symbols": "75k+" };
-      case "llmwiki":             return { "Topics": 6, "Maintainer": "Alba" };
-      case "knowledge-curator":   return { "Schedule": "nightly 2am", "Steps": 5 };
-      case "obsidian":            return { "Type": "Knowledge Vault", "Docs": "3,400+" };
-      case "claude-code": { const t = devToolsMap["claude-code"]; return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "hook (read)", "QMD": "not wired", "Status": "partial" }; }
-      case "qwen-cli":   { const t = devToolsMap["qwen-cli"];   return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "MCP ✓", "QMD": "not wired", "Status": "partial" }; }
-      case "gemini-cli": { const t = devToolsMap["gemini-cli"]; return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
-      case "codex":      { const t = devToolsMap["codex"];      return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
-      default:                    return {};
+      case "agents": return { "Total": agentCount, "Active": activeCount };
+      case "notebooks": return { "Entries": memoryCount };
+      case "librarian": return { "Docs": knowledgeCount, "Collections": 15 };
+      case "cookbooks": return { "Skills": skillCount };
+      case "gateways": return { "Alba": "18793", "Gwen": "18792" };
+      case "manager": return { "Platform": "Paperclip", "Port": "3100" };
+      case "apo": return { "Mode": "QA", "Cycle": "hourly" };
+      case "gitnexus": return { "Repos": 8, "Symbols": "75k+" };
+      case "llmwiki": return { "Topics": 6, "Maintainer": "Alba" };
+      default: return {};
     }
-  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, skillsStats, devToolsMap, failureCount, topErrorType]);
+  }
 
-  const gapCount = skillsStats?.coverageGaps?.length ?? 0;
+  // Build agent nodes dynamically from real remote agents
+  const KEY_AGENTS = ["alba", "gwen", "sophia", "maria", "lucia"];
+  const keyRemote = KEY_AGENTS.map(id => remoteAgents.find(a => a.id === id)).filter(Boolean) as typeof remoteAgents;
+  const AGENT_ICONS: Record<string, string> = { alba: "🤖", gwen: "🌸", sophia: "💼", maria: "✍️", lucia: "🔧" };
+
+  const agentSpacing = 120;
+  const agentStartX = 100;
+  const agentY = 280;
 
   const nodes: Node[] = useMemo(() => {
-    const DEV_TOOLS = [
-      { id: "claude-code", label: "Claude Code", icon: "🔷" },
-      { id: "qwen-cli",    label: "Qwen CLI",    icon: "🐉" },
-      { id: "gemini-cli",  label: "Gemini CLI",  icon: "✨" },
-      { id: "codex",       label: "Codex",       icon: "📝" },
-    ];
-
-    const wireStatusToNodeStatus: Record<WireStatus, "active" | "idle" | "dormant"> = {
-      connected: "active",
-      partial: "idle",
-      "not-wired": "dormant",
-    };
-
-    // Group box dimensions
-    const agentNodeCount = keyRemote.length + 1; // +1 for local-agents
-    const agentBoxWidth = agentNodeCount * AGENT_SPACING + 90 + 20;
-    const devToolBoxWidth = DEV_TOOLS.length * DEV_TOOL_SPACING + 20;
-
-    const groupBoxNodes: Node[] = [
-      {
-        id: "group-agents",
-        position: { x: AGENT_START_X - 15, y: AGENT_Y - 32 },
-        data: { label: "Server Agents", width: agentBoxWidth, height: 142 },
-        type: "groupBoxNode",
-        zIndex: -1,
-        selectable: false,
-        draggable: false,
-      },
-      {
-        id: "group-devtools",
-        position: { x: 5, y: DEV_TOOL_Y - 32 },
-        data: { label: "Dev Tools", width: devToolBoxWidth, height: 152 },
-        type: "groupBoxNode",
-        zIndex: -1,
-        selectable: false,
-        draggable: false,
-      },
-    ];
-
     const staticNodes: Node[] = [
-      { id: "request",           position: { x: 20,  y: 100 }, data: { label: "User / Telegram",    subtitle: "input channel",          icon: "📨", status: getStatus("request"),           highlighted: highlightedNode === "request"           }, type: "flowNode" },
-      { id: "gateways",          position: { x: 160, y: 100 }, data: { label: "Gateways",            subtitle: "Alba · Gwen · Sophia",   icon: "🚪", status: getStatus("gateways"),          highlighted: highlightedNode === "gateways"          }, type: "flowNode" },
-      { id: "manager",           position: { x: 380, y: 100 }, data: { label: "Paperclip",           subtitle: "orchestrator",           icon: "📞", status: getStatus("manager"),           highlighted: highlightedNode === "manager"           }, type: "flowNode" },
-      { id: "output",            position: { x: 530, y: 100 }, data: { label: "Response",            subtitle: "Discord · Telegram",     icon: "📤", status: getStatus("output"),            highlighted: highlightedNode === "output"            }, type: "flowNode" },
-      { id: "tunnels",           position: { x: 20,  y: 440 }, data: { label: "CF Tunnels",          subtitle: "kitchen.epilogue...",    icon: "📡", status: getStatus("tunnels"),           highlighted: highlightedNode === "tunnels"           }, type: "flowNode" },
-      { id: "taskboard",         position: { x: 160, y: 440 }, data: { label: "Task Board",          subtitle: "Nerve Kanban",           icon: "📋", status: getStatus("taskboard"),         highlighted: highlightedNode === "taskboard"         }, type: "flowNode" },
-      { id: "notebooks",         position: { x: 380, y: 440 }, data: { label: "mem0",                subtitle: "semantic memory",        icon: "🧠", status: getStatus("notebooks"),         highlighted: highlightedNode === "notebooks"         }, type: "flowNode" },
-      { id: "librarian",         position: { x: 520, y: 440 }, data: { label: "QMD",                 subtitle: "BM25 · keyword",         icon: "🔍", status: getStatus("librarian"),         highlighted: highlightedNode === "librarian"         }, type: "flowNode" },
-      { id: "qdrant",            position: { x: 660, y: 440 }, data: { label: "Qdrant Cloud",        subtitle: "vector store · AWS",     icon: "🗄️", status: getStatus("qdrant"),            highlighted: highlightedNode === "qdrant"            }, type: "flowNode" },
-      { id: "cookbooks",         position: { x: 20,  y: 580 }, data: { label: "Skills",              subtitle: gapCount > 0 ? `skillshare · ${skillCount} · ${gapCount} stale` : `skillshare · ${skillCount}`,     icon: "📚", status: getStatus("cookbooks"),         highlighted: highlightedNode === "cookbooks",        failureCount, topErrorType }, type: "flowNode" },
-      { id: "apo",               position: { x: 150, y: 580 }, data: { label: "Agent Lightning",     subtitle: "APO · hourly",           icon: "⚡", status: getStatus("apo"),               highlighted: highlightedNode === "apo"               }, type: "flowNode" },
-      { id: "gitnexus",          position: { x: 280, y: 580 }, data: { label: "GitNexus",            subtitle: "code graph",             icon: "🗺️", status: getStatus("gitnexus"),          highlighted: highlightedNode === "gitnexus"          }, type: "flowNode" },
-      { id: "llmwiki",           position: { x: 410, y: 580 }, data: { label: "LLM Wiki",            subtitle: "knowledge wiki",         icon: "📖", status: getStatus("llmwiki"),           highlighted: highlightedNode === "llmwiki"           }, type: "flowNode" },
-      { id: "knowledge-curator", position: { x: 540, y: 580 }, data: { label: "Knowledge Curator",   subtitle: "nightly · curator",      icon: "🧹", status: getStatus("knowledge-curator"), highlighted: highlightedNode === "knowledge-curator" }, type: "flowNode" },
-      { id: "obsidian",          position: { x: 670, y: 580 }, data: { label: "Obsidian",            subtitle: "knowledge vault",        icon: "📓", status: getStatus("obsidian"),          highlighted: highlightedNode === "obsidian"          }, type: "flowNode" },
+      { id: "request",   position: { x: 20,  y: 100 }, data: { label: "User / Telegram", subtitle: "input channel",        icon: "📨", status: getStatus("request"),   highlighted: highlightedNode === "request"   }, type: "flowNode" },
+      { id: "gateways",  position: { x: 160, y: 100 }, data: { label: "Gateways",         subtitle: "Alba · Gwen · Sophia", icon: "🚪", status: getStatus("gateways"),  highlighted: highlightedNode === "gateways"  }, type: "flowNode" },
+      { id: "manager",   position: { x: 560, y: 100 }, data: { label: "Paperclip",        subtitle: "orchestrator",         icon: "📞", status: getStatus("manager"),   highlighted: highlightedNode === "manager"   }, type: "flowNode" },
+      { id: "output",    position: { x: 720, y: 100 }, data: { label: "Response",         subtitle: "Discord · Telegram",   icon: "📤", status: getStatus("output"),    highlighted: highlightedNode === "output"    }, type: "flowNode" },
+      { id: "tunnels",   position: { x: 20,  y: 420 }, data: { label: "CF Tunnels",       subtitle: "kitchen.epilogue...",  icon: "📡", status: getStatus("tunnels"),   highlighted: highlightedNode === "tunnels"   }, type: "flowNode" },
+      { id: "taskboard", position: { x: 160, y: 420 }, data: { label: "Task Board",       subtitle: "Nerve Kanban",         icon: "📋", status: getStatus("taskboard"), highlighted: highlightedNode === "taskboard" }, type: "flowNode" },
+      { id: "notebooks", position: { x: 460, y: 420 }, data: { label: "mem0",             subtitle: "semantic memory",      icon: "🧠", status: getStatus("notebooks"), highlighted: highlightedNode === "notebooks" }, type: "flowNode" },
+      { id: "librarian", position: { x: 600, y: 420 }, data: { label: "QMD",              subtitle: "3,445 docs",           icon: "🔍", status: getStatus("librarian"), highlighted: highlightedNode === "librarian" }, type: "flowNode" },
+      { id: "cookbooks", position: { x: 160, y: 560 }, data: { label: "Skills",           subtitle: "skillshare · 405+",   icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" }, type: "flowNode" },
+      { id: "apo",       position: { x: 320, y: 560 }, data: { label: "Agent Lightning",  subtitle: "APO · hourly",         icon: "⚡", status: getStatus("apo"),       highlighted: highlightedNode === "apo"       }, type: "flowNode" },
+      { id: "gitnexus",  position: { x: 480, y: 560 }, data: { label: "GitNexus",         subtitle: "code graph",           icon: "🗺️", status: getStatus("gitnexus"),  highlighted: highlightedNode === "gitnexus"  }, type: "flowNode" },
+      { id: "llmwiki",   position: { x: 640, y: 560 }, data: { label: "LLM Wiki",         subtitle: "knowledge wiki",       icon: "📖", status: getStatus("llmwiki"),   highlighted: highlightedNode === "llmwiki"   }, type: "flowNode" },
     ];
-
-    const devToolNodes: Node[] = DEV_TOOLS.map(({ id, label, icon }, i) => {
-      const t = devToolsMap[id];
-      const wireStatus: WireStatus = t ? t.overall : "not-wired";
-      const subtitle = t ? `mem0: ${t.mem0} · qmd: ${t.qmd}` : "checking...";
-      return {
-        id,
-        position: { x: 20 + i * DEV_TOOL_SPACING, y: DEV_TOOL_Y },
-        data: { label, subtitle, icon, status: wireStatusToNodeStatus[wireStatus], highlighted: highlightedNode === id },
-        type: "flowNode",
-      };
-    });
 
     const agentNodes: Node[] = keyRemote.map((agent, i) => ({
       id: `agent-${agent.id}`,
-      position: { x: AGENT_START_X + i * AGENT_SPACING, y: AGENT_Y },
+      position: { x: agentStartX + i * agentSpacing, y: agentY },
       data: {
         label: agent.name,
         subtitle: agent.location,
@@ -336,7 +165,7 @@ export function ReactFlowCanvas({
 
     const localNode: Node = {
       id: "local-agents",
-      position: { x: AGENT_START_X + keyRemote.length * AGENT_SPACING, y: AGENT_Y },
+      position: { x: agentStartX + keyRemote.length * agentSpacing, y: agentY },
       data: {
         label: `${localActiveCount} Active`,
         subtitle: `${localTotalCount} local chefs`,
@@ -347,110 +176,55 @@ export function ReactFlowCanvas({
       type: "flowNode",
     };
 
-    // Group boxes must be first so they render behind everything else
-    return [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
-  }, [remoteAgents, keyRemote, nodeActivity, highlightedNode, localActiveCount, localTotalCount, devToolsMap, nodeStats, gapCount, failureCount, topErrorType]);
+    return [...staticNodes, ...agentNodes, localNode];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount]);
 
-  const allAgentIds = useMemo(
-    () => keyRemote.map(a => `agent-${a.id}`),
-    [keyRemote]
-  );
+  const allAgentIds = [...keyRemote.map(a => `agent-${a.id}`), "local-agents"];
 
   const edges: Edge[] = useMemo(() => {
     const base: Edge[] = [
-      { id: "req-gw",       source: "request",           target: "gateways",  type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "gw-mgr",       source: "gateways",          target: "manager",   type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "mgr-out",      source: "manager",            target: "output",    type: "straight",   animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "gw-tun",       source: "gateways",          target: "tunnels",   type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "mgr-tb",       source: "manager",            target: "taskboard", type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
-      { id: "apo-sk",       source: "apo",               target: "cookbooks", type: "straight",   animated: false, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 2 } },
-      { id: "mem-qdr",      source: "notebooks",         target: "qdrant",    type: "straight",   animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
-      { id: "curator-gnx",  source: "knowledge-curator", target: "gitnexus",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-wiki", source: "knowledge-curator", target: "llmwiki",   type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-mem",  source: "knowledge-curator", target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1.5 } },
-      { id: "curator-qmd",  source: "knowledge-curator", target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "lib-obs",      source: "librarian",         target: "obsidian",  type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "wiki-obs",     source: "llmwiki",           target: "obsidian",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "curator-obs",  source: "knowledge-curator", target: "obsidian",  type: "straight",   animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "mem-qmd",      source: "notebooks",         target: "librarian", type: "straight",   animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: "wiki-qmd",     source: "llmwiki",           target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: "req-gw",  source: "request",  target: "gateways",  animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "gw-mgr", source: "gateways", target: "manager",   animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "mgr-out", source: "manager",  target: "output",    animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "gw-tun",  source: "gateways", target: "tunnels",   animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "mgr-tb",  source: "manager",  target: "taskboard", animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 2 } },
+      { id: "apo-sk",  source: "apo",      target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 2 } },
     ];
 
     const agentEdges: Edge[] = allAgentIds.flatMap((id) => [
-      { id: `mgr-${id}`, source: "manager", target: id,          type: "smoothstep", animated: true,  style: { stroke: EDGE_COLORS.request,   strokeWidth: 1.5 } },
-      { id: `${id}-mem`, source: id,        target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: `${id}-qmd`, source: id,        target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      { id: `${id}-sk`,  source: id,        target: "cookbooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-    ]);
-
-    // Dev tool edges — only add when actually wired
-    const devToolEdges: Edge[] = ["claude-code", "qwen-cli", "gemini-cli", "codex"].flatMap(id => {
-      const t = devToolsMap[id];
-      const result: Edge[] = [];
-      if (t && t.mem0 !== "not-wired") result.push({ id: `${id}-mem`,      source: id, target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } });
-      if (t && t.qmd !== "not-wired")  result.push({ id: `${id}-qmd-edge`, source: id, target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } });
-      return result;
-    });
+      { id: `mgr-${id}`,  source: "manager",   target: id,          animated: true, style: { stroke: EDGE_COLORS.request,   strokeWidth: 1.5 } },
+      { id: `${id}-mem`,  source: id,           target: "notebooks", animated: true, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
+      { id: `${id}-qmd`,  source: id,           target: "librarian", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+      { id: `${id}-sk`,   source: id,           target: "cookbooks", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
+    ]).slice(0, 20);
 
     const extraEdges: Edge[] = [
-      { id: "agents-apo",  source: "local-agents", target: "apo",       type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
-      { id: "agents-gnx",  source: "local-agents", target: "gitnexus",  type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "agents-wiki", source: "local-agents", target: "llmwiki",   type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
-      { id: "agents-mem",  source: "local-agents", target: "notebooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.memory,    strokeWidth: 1 } },
-      { id: "agents-qmd",  source: "local-agents", target: "librarian", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      { id: "agents-sk",   source: "local-agents", target: "cookbooks", type: "smoothstep", animated: false, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1 } },
-      ...devToolEdges,
+      { id: "agents-apo",  source: "local-agents", target: "apo",      animated: true, style: { stroke: EDGE_COLORS.apo,       strokeWidth: 1.5 } },
+      { id: "agents-gnx",  source: "local-agents", target: "gitnexus", animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
+      { id: "agents-wiki", source: "local-agents", target: "llmwiki",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
     ];
 
-    // Skill sync flow edges — dashed cyan, only when alba is in the remote agents graph
-    // Use allAgentIds (already in deps) not keyRemote (not in deps — would cause stale closure)
-    const albaInGraph = allAgentIds.includes("agent-alba");
-    const skillSyncEdges: Edge[] = albaInGraph ? [
-      {
-        id: "alba-cookbooks-skill",
-        source: "agent-alba",
-        target: "cookbooks",
-        type: "smoothstep",
-        animated: false,          // static dashed, not flowing
-        style: {
-          stroke: EDGE_COLORS.sync,
-          strokeWidth: 1.5,
-          strokeDasharray: "5,5",
-        },
-      },
-      {
-        id: "cookbooks-gateways-skill",
-        source: "cookbooks",
-        target: "gateways",
-        type: "smoothstep",
-        animated: false,
-        style: {
-          stroke: EDGE_COLORS.sync,
-          strokeWidth: 1.5,
-          strokeDasharray: "5,5",
-        },
-      },
-    ] : [];
-
-    return [...base, ...agentEdges, ...extraEdges, ...skillSyncEdges];
-  }, [allAgentIds, devToolsMap]);
+    return [...base, ...agentEdges, ...extraEdges];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAgentIds]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.type === "groupBoxNode") return;
     const statsId = node.id.startsWith("agent-") ? node.id.replace("agent-", "") : node.id;
     const stats = nodeStats(statsId);
     onNodeClick(node.id, node.data.label as string, node.data.icon as string, stats);
-  }, [onNodeClick, nodeStats]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onNodeClick]);
 
   return (
-    <div style={{ width: "100%", height: "min(900px, calc(100vh - 220px))", borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
+    <div style={{ width: "100%", height: 620, borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         fitView
-        fitViewOptions={{ padding: 0.2, duration: 200 }}
+        fitViewOptions={{ padding: 0.2 }}
         minZoom={0.3}
         maxZoom={2}
         attributionPosition="bottom-left"
@@ -458,6 +232,13 @@ export function ReactFlowCanvas({
       >
         <Background color="#1e293b" gap={24} variant={BackgroundVariant.Dots} />
         <Controls className="bg-slate-900 border border-slate-800" />
+        <MiniMap
+          style={{ background: "#0f172a", border: "1px solid #1e293b" }}
+          nodeColor={(node) => {
+            const status = (node.data as { status: string }).status;
+            return status === "active" ? "#10b981" : status === "error" ? "#f43f5e" : "#475569";
+          }}
+        />
       </ReactFlow>
     </div>
   );

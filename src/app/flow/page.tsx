@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents, useDevToolsStatus, useSkills } from "@/lib/api-client";
+import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents } from "@/lib/api-client";
 import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
@@ -20,8 +20,6 @@ export default function FlowPage() {
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
   const { data: remoteData } = useRemoteAgents();
-  const { data: devToolsData } = useDevToolsStatus();
-  const { data: skillsData } = useSkills();
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -56,15 +54,13 @@ export default function FlowPage() {
           activeCount={activeCount}
           memoryCount={memoryCount}
           knowledgeCount={knowledgeCount}
-          skillCount={skillsData?.totalSkills ?? 0}
-          skillsStats={skillsData ?? null}
+          skillCount={405}
           nodeActivity={nodeActivity}
           highlightedNode={hoveredNode || selectedNode?.id}
           remoteAgents={remoteAgents}
           localActiveCount={localActiveCount}
           localTotalCount={localTotalCount}
           onNodeClick={handleNodeClick}
-          devToolsStatus={devToolsData?.tools}
         />
         <NodeDetailPanel
           nodeId={selectedNode?.id || null}
@@ -92,10 +88,6 @@ export default function FlowPage() {
         <div className="flex items-center gap-1.5"><div className="h-2 w-6 rounded-full bg-emerald-500" /> Knowledge</div>
         <div className="flex items-center gap-1.5"><div className="h-2 w-6 rounded-full bg-sky-500" /> Memory</div>
         <div className="flex items-center gap-1.5"><div className="h-2 w-6 rounded-full bg-purple-500" /> APO</div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-6 border-t-2 border-dashed border-cyan-400" style={{ marginTop: 1 }} />
-          <span>Skill Sync</span>
-        </div>
       </div>
     </div>
   );
