@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Advanced Observability + Knowledge Depth
 status: in_progress
-stopped_at: Defining requirements
-last_updated: "2026-04-13T18:05:00Z"
-last_activity: 2026-04-13 — Milestone v1.3 started
+stopped_at: Roadmap created — ready to plan Phase 12
+last_updated: "2026-04-13T18:30:00Z"
+last_activity: 2026-04-13 — Roadmap defined (6 phases, 7 requirements)
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-13 for v1.3)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 12 — Projects Knowledge Ingestion (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-13 — Milestone v1.3 started
+Status: Roadmap defined — ready to plan
+Last activity: 2026-04-13 — Roadmap created (6 phases, 7 requirements, 0 orphans)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -77,11 +77,15 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 11-gwen-self-improving-loop]: STAGING_DIR constant derived from CONFIG["master_dir"] so tests can monkeypatch both together
 - [Phase 11-gwen-self-improving-loop]: Grace period fix — replaced hardcoded 90-day value with CONFIG["hermes_contrib_grace_days"] (365d); staging-promoted skills auto-qualify via "hermes" in synced_from path
 - [Phase 11-gwen-self-improving-loop]: Gwen reflection cron at 0 3 * * * America/Los_Angeles — 1h before Hermes skill-sync (0 4 * * *), no collision confirmed
+- [v1.3 roadmap]: KNOW-08+09 combined into Phase 12 — isolated projects-ingestion-state.json, agent_id="shared" + project metadata (not 46 per-project namespaces — quota risk)
+- [v1.3 roadmap]: SKILL-07 before SKILL-06 — skill_usage dict available now; failures.log requires new instrumentation before SKILL-06 API is meaningful
+- [v1.3 roadmap]: SKILL-06 requires two-commit sequence — stateful parser first, then API + UI; naive line-by-line parser breaks on multi-line tracebacks
+- [v1.3 roadmap]: FLOW-12 last — riskiest change; parentId coordinate migration must happen first before any toggle logic is wired
 
 ### Roadmap Evolution
 
 - v1.2 roadmap defined 2026-04-12: 6 phases (6-11), 16 requirements mapped, 0 orphans
-- v1.3 roadmap: TBD — phases 12+, 7 requirements deferred from v1.2
+- v1.3 roadmap defined 2026-04-13: 6 phases (12-17), 7 requirements mapped, 0 orphans
 
 ### Pending Todos
 
@@ -89,11 +93,12 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- 5 pre-existing Vitest test failures (smoke.test.tsx SummaryBar + .worktrees collection-card) — not introduced by v1.2, carry forward as known debt
+- FLOW-11 verified programmatically; full visual QA at kitchen.epiloguecapital.com recommended before Phase 16/17
 
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Milestone v1.3 started — researching + defining requirements
+Stopped at: Roadmap defined — 6 phases (12-17), 7 requirements, 0 orphans
 Resume file: None
 Next action: `/gsd-plan-phase 12`
