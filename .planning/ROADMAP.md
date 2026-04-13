@@ -96,8 +96,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Flow diagram auto-fits to the viewport on initial page load without the user needing to manually zoom or pan
   2. All 21 nodes are visible and readable at default zoom without overlapping labels or crossing edges that obscure meaning
-**Plans**: TBD
+**Plans**: 1 plan
 **UI hint**: yes
+
+Plans:
+- [ ] 10-01-PLAN.md — Edge type fix (smoothstep/straight), selective animation, fitView duration, position compaction
 
 ### Phase 11: Gwen Self-Improving Loop
 **Goal**: Gwen has a persistent self-improvement loop that routes memories to mem0 and skills to Hermes staging
@@ -122,5 +125,5 @@ Plans:
 | 7. Live Heartbeat | v1.2 | 0/1 | Planned | - |
 | 8. Bidirectional Knowledge Sync | v1.2 | 1/1 | Complete   | 2026-04-13 |
 | 9. Skill Management Dashboard | v1.2 | 2/2 | Complete   | 2026-04-13 |
-| 10. Flow Diagram UX | v1.2 | 0/1 | Not started | - |
+| 10. Flow Diagram UX | v1.2 | 0/1 | Planned | - |
 | 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Not started | - |
