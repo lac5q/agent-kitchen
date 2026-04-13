@@ -523,3 +523,183 @@ describe("coverageGaps", () => {
     expect(body.coverageGaps).not.toContain("num-skill");
   });
 });
+
+describe("contributionHistory (SKILL-08)", () => {
+  // readFile order in route: (1) state file, (2) JSONL, (3) failures.log
+  // These tests use 3-entry chains for explicit coverage.
+
+  it("Test 1 (happy path — synced events): 5 synced events for alpha across 3 distinct days → 3 entries summing to 5", async () => {
+    mockReaddir.mockResolvedValue([]);
+    // Create dates within the last 30 days
+    const day1 = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    const day2 = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const day3 = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const events = [
+      { skill: "alpha", action: "synced", contributor: "hermes", timestamp: day1 },
+      { skill: "alpha", action: "synced", contributor: "hermes", timestamp: day1 },
+      { skill: "alpha", action: "synced", contributor: "hermes", timestamp: day2 },
+      { skill: "alpha", action: "synced", contributor: "gwen",   timestamp: day2 },
+      { skill: "alpha", action: "synced", contributor: "hermes", timestamp: day3 },
+    ];
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    const alphaEntries = body.contributionHistory.filter((e: { skill: string; date: string; count: number }) => e.skill === "alpha");
+    expect(alphaEntries).toHaveLength(3);
+    const totalCount = alphaEntries.reduce((sum: number, e: { count: number }) => sum + e.count, 0);
+    expect(totalCount).toBe(5);
+  });
+
+  it("Test 2 (failed events counted): 2 synced + 3 failed for beta on same day → count 5", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const today = new Date().toISOString();
+    const events = [
+      { skill: "beta", action: "synced", contributor: "hermes", timestamp: today },
+      { skill: "beta", action: "synced", contributor: "hermes", timestamp: today },
+      { skill: "beta", action: "failed", contributor: "gwen",   timestamp: today },
+      { skill: "beta", action: "failed", contributor: "gwen",   timestamp: today },
+      { skill: "beta", action: "failed", contributor: "gwen",   timestamp: today },
+    ];
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    const betaEntries = body.contributionHistory.filter((e: { skill: string; count: number }) => e.skill === "beta");
+    expect(betaEntries).toHaveLength(1);
+    expect(betaEntries[0].count).toBe(5);
+  });
+
+  it("Test 3 (other actions ignored): pruned + contributed events do NOT appear in contributionHistory", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const today = new Date().toISOString();
+    const events = [
+      { skill: "gamma", action: "pruned",      contributor: "hermes", timestamp: today },
+      { skill: "gamma", action: "contributed", contributor: "gwen",   timestamp: today },
+    ];
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    const gammaEntries = body.contributionHistory.filter((e: { skill: string }) => e.skill === "gamma");
+    expect(gammaEntries).toHaveLength(0);
+  });
+
+  it("Test 4 (30-day window): events older than 30 days excluded; 29-day-old event included", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const within30 = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString();
+    const outside30 = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const events = [
+      { skill: "delta", action: "synced", contributor: "hermes", timestamp: within30 },
+      { skill: "delta", action: "synced", contributor: "hermes", timestamp: outside30 },
+    ];
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    const deltaEntries = body.contributionHistory.filter((e: { skill: string; count: number }) => e.skill === "delta");
+    expect(deltaEntries.length).toBeGreaterThan(0);
+    const totalCount = deltaEntries.reduce((sum: number, e: { count: number }) => sum + e.count, 0);
+    expect(totalCount).toBe(1);
+  });
+
+  it("Test 5 (multiple skills + days): 3 skills × entries on 4 distinct days → 12 entries, sorted skill then date asc", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const days = [1, 2, 3, 4].map(d => new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString());
+    const events = ["skill-a", "skill-b", "skill-c"].flatMap(skill =>
+      days.map(ts => ({ skill, action: "synced", contributor: "hermes", timestamp: ts }))
+    );
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    const hist = body.contributionHistory;
+    expect(hist).toHaveLength(12);
+    const skillAEntries = hist.filter((e: { skill: string; date: string }) => e.skill === "skill-a");
+    expect(skillAEntries).toHaveLength(4);
+    for (let i = 1; i < skillAEntries.length; i++) {
+      expect(skillAEntries[i].date >= skillAEntries[i - 1].date).toBe(true);
+    }
+    expect(hist[0].skill).toBe("skill-a");
+    expect(hist[hist.length - 1].skill).toBe("skill-c");
+  });
+
+  it("Test 6 (missing JSONL): returns contributionHistory: [] not undefined and not 500", async () => {
+    mockReaddir.mockResolvedValue([]);
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent())
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.contributionHistory).toBeDefined();
+    expect(Array.isArray(body.contributionHistory)).toBe(true);
+    expect(body.contributionHistory).toHaveLength(0);
+  });
+
+  it("Test 7 (empty JSONL): returns contributionHistory: [] when file is empty", async () => {
+    mockReaddir.mockResolvedValue([]);
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce("" as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    expect(Array.isArray(body.contributionHistory)).toBe(true);
+    expect(body.contributionHistory).toHaveLength(0);
+  });
+
+  it("Test 8 (existing fields untouched): all Phase 9 + 13 + 14 fields present with correct values", async () => {
+    mockReaddir.mockResolvedValue([
+      makeDirEntry("bash-scripting", true),
+      makeDirEntry("python-async", true),
+    ] as never);
+    const events = [
+      { skill: "bash-scripting", action: "contributed", contributor: "hermes", timestamp: new Date().toISOString() },
+      { skill: "gwen-skill",     action: "contributed", contributor: "gwen",   timestamp: new Date().toISOString() },
+    ];
+    mockReadFile
+      .mockResolvedValueOnce(FAKE_STATE as never)
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    const res = await GET();
+    const body = await res.json();
+    expect(body.totalSkills).toBe(2);
+    expect(body.contributedByHermes).toBe(1);
+    expect(body.contributedByGwen).toBe(1);
+    expect(body.lastPruned).toBe("2026-04-06T05:00:08.000000");
+    expect(body.lastUpdated).toBe("2026-04-11T04:00:15.000000");
+    expect(body.timestamp).toBeDefined();
+    expect(Array.isArray(body.coverageGaps)).toBe(true);
+    expect(body.failuresByAgent).toBeDefined();
+    expect(body.failuresByErrorType).toBeDefined();
+    expect(Array.isArray(body.contributionHistory)).toBe(true);
+  });
+
+  it("Test 9 (no double-read): SKILL_CONTRIBUTIONS_LOG read at most once", async () => {
+    mockReaddir.mockResolvedValue([]);
+    const events = [
+      { skill: "epsilon", action: "synced", contributor: "hermes", timestamp: new Date().toISOString() },
+    ];
+    mockReadFile
+      .mockRejectedValueOnce(enoent())
+      .mockResolvedValueOnce(makeJsonl(events) as never)
+      .mockRejectedValueOnce(enoent());
+    await GET();
+    const jsonlCalls = mockReadFile.mock.calls.filter(
+      (args) => args[0] === "/tmp/test-skill-contributions.jsonl"
+    );
+    expect(jsonlCalls.length).toBeLessThanOrEqual(1);
+  });
+});

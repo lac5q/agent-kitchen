@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSkills } from "@/lib/api-client";
+import { SkillHeatmap } from "@/components/skill-heatmap";
 
 interface Event {
   id: string;
@@ -31,6 +33,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose }: NodeDetailPanelProps) {
   const nodeEvents = events.filter(e => e.node === nodeId).slice(0, 15);
+  const { data: skillsData } = useSkills();
 
   const [heartbeatContent, setHeartbeatContent] = useState<string | null>(null);
   const [heartbeatLoading, setHeartbeatLoading] = useState(false);
@@ -100,6 +103,16 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
             <div className="p-4 border-b border-slate-800">
               <p className="text-xs font-medium text-slate-500 mb-2">Last State</p>
               <pre className="font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">{heartbeatContent}</pre>
+            </div>
+          )}
+
+          {/* Contribution Activity Heatmap — cookbooks node only */}
+          {nodeId === "cookbooks" && (
+            <div className="p-4 border-b border-slate-800">
+              <SkillHeatmap
+                contributionHistory={skillsData?.contributionHistory ?? []}
+                className="text-slate-200"
+              />
             </div>
           )}
 

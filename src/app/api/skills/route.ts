@@ -70,11 +70,11 @@ export async function GET() {
   let contributedByHermes = 0;
   let contributedByGwen = 0;
   let staleCandidates = 0;
+  let events: JournalEvent[] = [];
 
   try {
     const raw = await readFile(SKILL_CONTRIBUTIONS_LOG, "utf-8");
     const lines = raw.split("\n").filter(l => l.trim());
-    const events: JournalEvent[] = [];
 
     for (const line of lines) {
       try {
@@ -118,6 +118,31 @@ export async function GET() {
     /* parser already returns [] on ENOENT; defensive catch for any other I/O surprise */
   }
 
+  // 6. Build 30-day contributionHistory from the events array (SKILL-08)
+  // Counts both `synced` and `failed` actions; ignores pruned/contributed/etc.
+  // Operates on the already-parsed `events` array — does NOT re-read SKILL_CONTRIBUTIONS_LOG.
+  const THIRTY_DAYS_MS_HEATMAP = 30 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - THIRTY_DAYS_MS_HEATMAP;
+  const buckets = new Map<string, number>(); // key = `${skill}|${date}`
+  for (const ev of events) {
+    if (ev.action !== "synced" && ev.action !== "failed") continue;
+    const ts = new Date(ev.timestamp).getTime();
+    if (!Number.isFinite(ts) || ts < cutoff) continue;
+    const date = new Date(ts).toISOString().slice(0, 10);
+    const key = `${ev.skill}|${date}`;
+    buckets.set(key, (buckets.get(key) ?? 0) + 1);
+  }
+  const contributionHistory = Array.from(buckets.entries())
+    .map(([key, count]) => {
+      const [skill, date] = key.split("|");
+      return { skill, date, count };
+    })
+    .sort((a, b) =>
+      a.skill === b.skill
+        ? a.date.localeCompare(b.date)
+        : a.skill.localeCompare(b.skill)
+    );
+
   return NextResponse.json({
     totalSkills,
     contributedByHermes,
@@ -129,6 +154,7 @@ export async function GET() {
     lastUpdated,
     failuresByAgent,
     failuresByErrorType,
+    contributionHistory,
     timestamp: new Date().toISOString(),
   });
 }

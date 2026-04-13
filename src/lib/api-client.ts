@@ -198,7 +198,11 @@ export function useSkills() {
         }>;
         lastPruned: string | null;
         staleCandidates: number;
+        coverageGaps: string[];
         lastUpdated: string | null;
+        failuresByAgent: Record<string, number>;
+        failuresByErrorType: Record<string, number>;
+        contributionHistory: Array<{ skill: string; date: string; count: number }>;
         timestamp: string;
       }>("/api/skills"),
     refetchInterval: POLL_INTERVALS.skills,
