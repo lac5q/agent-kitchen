@@ -116,6 +116,7 @@ interface SkillsStats {
   lastUpdated: string | null;
   failuresByAgent?: Record<string, number>;
   failuresByErrorType?: Record<string, number>;
+  contributionHistory?: Array<{ skill: string; date: string; count: number }>;
   timestamp: string;
 }
 
