@@ -15,9 +15,9 @@ export interface NodeEvent {
   id: string;
   timestamp: string;
   node: string;
-  type: "request" | "knowledge" | "memory" | "error" | "apo";
+  type: string;
   message: string;
-  severity: "info" | "warn" | "error";
+  severity: string;
 }
 
 export interface NodeKeywordEntry {
