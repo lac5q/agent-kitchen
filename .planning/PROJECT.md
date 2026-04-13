@@ -27,19 +27,18 @@ Every agent and knowledge system is visible, connected, and self-improving — s
 - ✓ Flow diagram: 4-row layout, 21 nodes, readable labels, heartbeat panel, noise-stripped activity feed (FLOW-01..07) — v1.1
 - ✓ Personal knowledge ingestion: emails, calendar, Meet + Spark transcripts → mem0/Qdrant/Obsidian (Phase 5) — v1.1
 
-## Current State: v1.2 Shipped (2026-04-12)
+## Current Milestone: v1.3 Advanced Observability + Knowledge Depth
 
-**Shipped:** v1.2 Live Data + Knowledge Sync — 6 phases, 7 plans, 16/16 requirements satisfied
+**Goal:** Surface deeper insights across agent skills, Flow diagram, and Obsidian knowledge — closing all deferred items from v1.2.
 
-**Key accomplishments (v1.2):**
-- Live heartbeat for obsidian + knowledge-curator Flow nodes (tristate: active/idle/error)
-- Library path bug fixed; mem0-exports collection surfaced alongside other collections
-- Obsidian journals → mem0 nightly with 3-guard dedup (mtime watermark + content-hash + origin tag)
-- Skill sync pipeline visible in Flow via live Cookbooks node panel (5-row stats, dashed cyan edges)
-- Flow diagram visual overhaul: smoothstep edges, selective animation, fitView on load
-- Gwen self-improving loop: self-improving-agent installed, staging pickup wired, 3am reflection cron registered
-
-**Next milestone:** `/gsd-new-milestone` to define v1.3
+**Target features:**
+- FLOW-12: Collapsible node groups (fold inactive agent clusters in Flow diagram)
+- FLOW-13: Per-node activity drill-down (last 10 events inline on node click)
+- SKILL-06: Skill failure rate tracking from logs
+- SKILL-07: Skill coverage gaps report (zero-usage skills in 30 days)
+- SKILL-08: Per-skill usage heatmap in dashboard
+- KNOW-08: `projects/` subdirectory ingestion into mem0 (beyond daily journals)
+- KNOW-09: Per-project `agent_id` routing for vault → mem0 ingestion
 
 ### Out of Scope
 
