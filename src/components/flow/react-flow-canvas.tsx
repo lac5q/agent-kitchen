@@ -100,6 +100,22 @@ interface DevToolStatus {
   overall: WireStatus;
 }
 
+interface SkillsStats {
+  totalSkills: number;
+  contributedByHermes: number;
+  contributedByGwen: number;
+  recentContributions: Array<{
+    skill: string;
+    contributor: string;
+    timestamp: string;
+    action: string;
+  }>;
+  lastPruned: string | null;
+  staleCandidates: number;
+  lastUpdated: string | null;
+  timestamp: string;
+}
+
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
   agentCount: number;
@@ -113,6 +129,7 @@ interface ReactFlowCanvasProps {
   localActiveCount?: number;
   localTotalCount?: number;
   devToolsStatus?: DevToolStatus[];
+  skillsStats?: SkillsStats | null;
   onNodeClick: (nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) => void;
 }
 
@@ -121,6 +138,7 @@ const EDGE_COLORS = {
   knowledge: "#10b981",
   memory: "#0ea5e9",
   apo: "#8b5cf6",
+  sync: "#06b6d4",
 };
 
 const KEY_AGENTS = ["alba", "gwen", "sophia", "maria", "lucia"];
@@ -144,6 +162,7 @@ export function ReactFlowCanvas({
   localActiveCount = 0,
   localTotalCount = 0,
   devToolsStatus = [],
+  skillsStats = null,
   onNodeClick,
 }: ReactFlowCanvasProps) {
 
@@ -184,7 +203,15 @@ export function ReactFlowCanvas({
       case "notebooks":           return { "Entries": memoryCount };
       case "librarian":           return { "Docs": knowledgeCount, "Collections": 15 };
       case "qdrant":              return { "Type": "Cloud", "Region": "AWS us-west-1", "Collections": 2 };
-      case "cookbooks":           return { "Skills": skillCount };
+      case "cookbooks": return {
+        "Skills":      skillsStats?.totalSkills ?? skillCount,
+        "From Hermes": skillsStats?.contributedByHermes ?? 0,
+        "From Gwen":   skillsStats?.contributedByGwen ?? 0,
+        "Last Pruned": skillsStats?.lastPruned
+          ? new Date(skillsStats.lastPruned).toLocaleDateString()
+          : "Never",
+        "Stale":       skillsStats?.staleCandidates ?? 0,
+      };
       case "gateways":            return { "Alba": "18793", "Gwen": "18792" };
       case "manager":             return { "Platform": "Paperclip", "Port": "3100" };
       case "apo":                 return { "Mode": "QA", "Cycle": "hourly" };
@@ -198,7 +225,7 @@ export function ReactFlowCanvas({
       case "codex":      { const t = devToolsMap["codex"];      return t ? { "mem0": t.mem0, "QMD": t.qmd, "Status": t.overall } : { "mem0": "not wired", "QMD": "not wired", "Status": "gap" }; }
       default:                    return {};
     }
-  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, devToolsMap]);
+  }, [agentCount, activeCount, memoryCount, knowledgeCount, skillCount, skillsStats, devToolsMap]);
 
   const nodes: Node[] = useMemo(() => {
     const DEV_TOOLS = [
@@ -250,7 +277,7 @@ export function ReactFlowCanvas({
       { id: "notebooks",         position: { x: 380, y: 440 }, data: { label: "mem0",                subtitle: "semantic memory",        icon: "🧠", status: getStatus("notebooks"),         highlighted: highlightedNode === "notebooks"         }, type: "flowNode" },
       { id: "librarian",         position: { x: 520, y: 440 }, data: { label: "QMD",                 subtitle: "BM25 · keyword",         icon: "🔍", status: getStatus("librarian"),         highlighted: highlightedNode === "librarian"         }, type: "flowNode" },
       { id: "qdrant",            position: { x: 660, y: 440 }, data: { label: "Qdrant Cloud",        subtitle: "vector store · AWS",     icon: "🗄️", status: getStatus("qdrant"),            highlighted: highlightedNode === "qdrant"            }, type: "flowNode" },
-      { id: "cookbooks",         position: { x: 20,  y: 580 }, data: { label: "Skills",              subtitle: "skillshare · 405+",     icon: "📚", status: getStatus("cookbooks"),         highlighted: highlightedNode === "cookbooks"         }, type: "flowNode" },
+      { id: "cookbooks",         position: { x: 20,  y: 580 }, data: { label: "Skills",              subtitle: `skillshare · ${skillCount}`,     icon: "📚", status: getStatus("cookbooks"),         highlighted: highlightedNode === "cookbooks"         }, type: "flowNode" },
       { id: "apo",               position: { x: 150, y: 580 }, data: { label: "Agent Lightning",     subtitle: "APO · hourly",           icon: "⚡", status: getStatus("apo"),               highlighted: highlightedNode === "apo"               }, type: "flowNode" },
       { id: "gitnexus",          position: { x: 280, y: 580 }, data: { label: "GitNexus",            subtitle: "code graph",             icon: "🗺️", status: getStatus("gitnexus"),          highlighted: highlightedNode === "gitnexus"          }, type: "flowNode" },
       { id: "llmwiki",           position: { x: 410, y: 580 }, data: { label: "LLM Wiki",            subtitle: "knowledge wiki",         icon: "📖", status: getStatus("llmwiki"),           highlighted: highlightedNode === "llmwiki"           }, type: "flowNode" },
@@ -351,7 +378,35 @@ export function ReactFlowCanvas({
       ...devToolEdges,
     ];
 
-    return [...base, ...agentEdges, ...extraEdges];
+    // Skill sync flow edges — dashed cyan, only when alba is in the remote agents graph
+    // Use allAgentIds (already in deps) not keyRemote (not in deps — would cause stale closure)
+    const albaInGraph = allAgentIds.includes("agent-alba");
+    const skillSyncEdges: Edge[] = albaInGraph ? [
+      {
+        id: "alba-cookbooks-skill",
+        source: "agent-alba",
+        target: "cookbooks",
+        animated: false,          // static dashed, not flowing
+        style: {
+          stroke: EDGE_COLORS.sync,
+          strokeWidth: 1.5,
+          strokeDasharray: "5,5",
+        },
+      },
+      {
+        id: "cookbooks-gateways-skill",
+        source: "cookbooks",
+        target: "gateways",
+        animated: false,
+        style: {
+          stroke: EDGE_COLORS.sync,
+          strokeWidth: 1.5,
+          strokeDasharray: "5,5",
+        },
+      },
+    ] : [];
+
+    return [...base, ...agentEdges, ...extraEdges, ...skillSyncEdges];
   }, [allAgentIds, devToolsMap]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
