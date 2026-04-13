@@ -181,3 +181,26 @@ export function useActivity() {
     refetchInterval: 15000, // refresh every 15s
   });
 }
+
+export function useSkills() {
+  return useQuery({
+    queryKey: ["skills"],
+    queryFn: () =>
+      fetchJSON<{
+        totalSkills: number;
+        contributedByHermes: number;
+        contributedByGwen: number;
+        recentContributions: Array<{
+          skill: string;
+          contributor: string;
+          timestamp: string;
+          action: string;
+        }>;
+        lastPruned: string | null;
+        staleCandidates: number;
+        lastUpdated: string | null;
+        timestamp: string;
+      }>("/api/skills"),
+    refetchInterval: POLL_INTERVALS.skills,
+  });
+}
