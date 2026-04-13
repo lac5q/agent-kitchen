@@ -27,18 +27,19 @@ Every agent and knowledge system is visible, connected, and self-improving — s
 - ✓ Flow diagram: 4-row layout, 21 nodes, readable labels, heartbeat panel, noise-stripped activity feed (FLOW-01..07) — v1.1
 - ✓ Personal knowledge ingestion: emails, calendar, Meet + Spark transcripts → mem0/Qdrant/Obsidian (Phase 5) — v1.1
 
-## Current Milestone: v1.2 Live Data + Knowledge Sync
+## Current State: v1.2 Shipped (2026-04-12)
 
-**Goal:** Wire live heartbeat data into the Flow diagram, fix the Library path bug, and close the mem0↔Obsidian feedback loop.
+**Shipped:** v1.2 Live Data + Knowledge Sync — 6 phases, 7 plans, 16/16 requirements satisfied
 
-**Target features:**
-- Live heartbeat for obsidian + knowledge-curator nodes (replace hardcoded statuses with real health checks)
-- Fix meet-recordings basePath divergence in Library view
-- KNOW-06: bidirectional mem0 ↔ Obsidian sync
+**Key accomplishments (v1.2):**
+- Live heartbeat for obsidian + knowledge-curator Flow nodes (tristate: active/idle/error)
+- Library path bug fixed; mem0-exports collection surfaced alongside other collections
+- Obsidian journals → mem0 nightly with 3-guard dedup (mtime watermark + content-hash + origin tag)
+- Skill sync pipeline visible in Flow via live Cookbooks node panel (5-row stats, dashed cyan edges)
+- Flow diagram visual overhaul: smoothstep edges, selective animation, fitView on load
+- Gwen self-improving loop: self-improving-agent installed, staging pickup wired, 3am reflection cron registered
 
-### Active
-
-<!-- v1.2 requirements — populated by /gsd-new-milestone -->
+**Next milestone:** `/gsd-new-milestone` to define v1.3
 
 ### Out of Scope
 
@@ -59,15 +60,18 @@ Every agent and knowledge system is visible, connected, and self-improving — s
 - Knowledge pipeline: 3,115+ docs in Qdrant Cloud `knowledge_docs` collection
 - Ingestion: 50+ email threads, calendar events, Meet/Spark transcripts piped nightly
 
-**Current state (v1.1):**
+**Current state (v1.2):**
 - Knowledge loop fully automated: emails arrive → Obsidian daily note; transcripts processed nightly; mem0 exports to QMD
-- Flow diagram shows full agent + knowledge graph with data-flow edges
+- Obsidian journals synced to mem0 nightly with full dedup guards (obsidian-to-mem0.py, Step 6 of curator)
+- Flow diagram shows live health for all nodes (obsidian + knowledge-curator via tristate signals)
+- Skill sync pipeline visible in Flow: Cookbooks node shows live stats, dashed cyan edges, activity feed
+- Gwen has persistent self-improving loop: stages skills to Hermes, reflection cron at 3am
 - Agents start each Claude Code session with relevant mem0 context preloaded
 - Production confirmed working at kitchen.epiloguecapital.com (production build, not dev server)
 
 **Known tech debt:**
-- Flow nodes `obsidian` and `knowledge-curator` have hardcoded statuses — pending live heartbeat wiring (v1.2)
-- meet-recordings basePath divergence between Library view and Phase 5 ingestion output (v1.2)
+- 5 pre-existing Vitest test failures (smoke.test.tsx SummaryBar + .worktrees collection-card) — not introduced by v1.2, deferred to v1.3
+- FLOW-11 verified programmatically; full visual QA at kitchen.epiloguecapital.com recommended before v1.3
 - Nyquist validation incomplete for Phases 01, 02, 04
 
 ## Key Decisions
@@ -114,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 — v1.2 milestone started*
+*Last updated: 2026-04-12 — v1.2 shipped*
