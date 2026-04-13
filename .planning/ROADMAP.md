@@ -68,7 +68,10 @@ Plans:
   2. Running the sync twice on the same day does not create duplicate mem0 memories (mtime watermark + content-hash dedup prevent re-ingestion)
   3. Memories synced from Obsidian carry `metadata.source = "obsidian-sync"` so mem0 exports do not re-ingest them back
   4. `knowledge-curator.sh` Step 6 runs `obsidian-to-mem0.py` as a non-fatal step (failure does not abort curator)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 08-01-PLAN.md — Fix 3 deviations in obsidian-to-mem0.py (agent_id, state file, docstring) + 10-scenario TDD pytest suite
 
 ### Phase 9: Skill Management Dashboard
 **Goal**: Skill sync pipeline activity is visible in the Flow diagram via a live Cookbooks node panel
@@ -114,7 +117,7 @@ Plans:
 | 5. Personal Knowledge Ingestion | v1.1 | 5/5 | Complete | 2026-04-11 |
 | 6. Library Config Fixes | v1.2 | 0/1 | Planned | - |
 | 7. Live Heartbeat | v1.2 | 0/1 | Planned | - |
-| 8. Bidirectional Knowledge Sync | v1.2 | 0/1 | Not started | - |
+| 8. Bidirectional Knowledge Sync | v1.2 | 0/1 | Planned | - |
 | 9. Skill Management Dashboard | v1.2 | 0/2 | Not started | - |
 | 10. Flow Diagram UX | v1.2 | 0/1 | Not started | - |
 | 11. Gwen Self-Improving Loop | v1.2 | 0/1 | Not started | - |
