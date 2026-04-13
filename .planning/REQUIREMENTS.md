@@ -19,8 +19,8 @@
 
 ### KNOW — Knowledge Sync
 
-- [ ] **KNOW-06**: Obsidian daily journal notes are ingested into mem0 nightly as memories (Obsidian → mem0 direction, running as curator Step 6)
-- [ ] **KNOW-07**: Ingestion is idempotent — mtime watermark + content-hash dedup + origin tag prevent duplicate memories across runs
+- [x] **KNOW-06**: Obsidian daily journal notes are ingested into mem0 nightly as memories (Obsidian → mem0 direction, running as curator Step 6)
+- [x] **KNOW-07**: Ingestion is idempotent — mtime watermark + content-hash dedup + origin tag prevent duplicate memories across runs
 
 ### SKILL — Skill Management Dashboard
 
@@ -78,8 +78,8 @@
 | FLOW-09 | Phase 7 | Pending |
 | FLOW-10 | Phase 10 | Pending |
 | FLOW-11 | Phase 10 | Pending |
-| KNOW-06 | Phase 8 | Pending |
-| KNOW-07 | Phase 8 | Pending |
+| KNOW-06 | Phase 8 | Complete |
+| KNOW-07 | Phase 8 | Complete |
 | SKILL-01 | Phase 9 | Pending |
 | SKILL-02 | Phase 9 | Pending |
 | SKILL-03 | Phase 9 | Pending |
