@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Live Data + Knowledge Sync
 status: in_progress
-stopped_at: "Phase 6 Plan 01 complete — library config fixes"
-last_updated: "2026-04-12T00:00:00.000Z"
-last_activity: 2026-04-12
+stopped_at: "Phase 7 Plan 01 complete — live heartbeat for obsidian + knowledge-curator"
+last_updated: "2026-04-13T07:23:00.000Z"
+last_activity: 2026-04-13
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 17
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 33
 ---
 
 # State: Agent Kitchen
@@ -25,26 +25,27 @@ See: .planning/PROJECT.md (updated 2026-04-11 for v1.2)
 
 ## Current Position
 
-Phase: Phase 6 — Library Config Fixes (COMPLETE)
+Phase: Phase 7 — Live Heartbeat (COMPLETE)
 Plan: 01/01 — complete
-Status: Phase 6 done; ready for Phase 7
-Last activity: 2026-04-12 — Phase 6 Plan 01 complete (library config fixes)
+Status: Phase 7 done; ready for Phase 8
+Last activity: 2026-04-13 — Phase 7 Plan 01 complete (live heartbeat — obsidian + curator nodes)
 
-Progress: [##░░░░░░░░] 17%
+Progress: [####░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
-- Average duration: ~30m
-- Total execution time: ~30m
+- Total plans completed: 2
+- Average duration: ~18m
+- Total execution time: ~36m
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 06 — Library Config Fixes | 1 | ~30m | ~30m |
+| 07 — Live Heartbeat | 1 | ~6m | ~6m |
 
 *Updated after each plan completion*
 
@@ -68,6 +69,8 @@ Progress: [##░░░░░░░░] 17%
 - **Skill sync:** `skill-sync.py` is the single sync engine — do NOT create parallel scripts
 - **Gwen memory:** Cognee-OpenClaw explicitly NOT installed — conflicts with mem0/Qdrant architecture
 - **basePath fix scope:** Only `meet-recordings` entry in collections.config.json. Do not touch `alex-docs` or `turnedyellow-admin` (different base intentionally).
+- **Vitest ESM mocks:** Use `// @vitest-environment node` + `await import()` after `vi.mock()` for node modules (child_process, fs/promises). Static imports cause mocks to not intercept correctly in vitest 4.x.
+- **checkServiceTristate:** 3-state health helper for up/degraded/down — keep separate from binary checkService to avoid risk to existing services.
 
 ### Roadmap Evolution
 
@@ -83,7 +86,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-12
-Stopped at: Phase 6 Plan 01 complete — library config fixes (CONFIG-01, CONFIG-02 satisfied)
+Last session: 2026-04-13
+Stopped at: Phase 7 Plan 01 complete — live heartbeat (FLOW-08, FLOW-09 satisfied)
 Resume file: None
-Next action: `/gsd-plan-phase 7`
+Next action: `/gsd-plan-phase 8`
