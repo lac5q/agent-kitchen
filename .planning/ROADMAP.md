@@ -83,8 +83,11 @@ Plans:
   3. Dashed cyan edges appear in Flow connecting alba to cookbooks and cookbooks to gateways
   4. Selecting the Cookbooks node in the activity feed shows skill contribution events from the last 2 hours
   5. `skill-sync.py` appends structured events to `skill-contributions.jsonl` after each sync/prune run (existing script extended, no parallel scripts created)
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — JSONL bridge activation (cron fix) + /api/skills route + useSkills() hook + test suite
+- [ ] 09-02-PLAN.md — Canvas stats panel, dashed cyan edges, live skillCount, activity JSONL events, legend
 
 ### Phase 10: Flow Diagram UX
 **Goal**: Flow diagram fits the viewport on load and presents nodes at a readable, non-cramped scale
