@@ -59,19 +59,19 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FLOW-12 | Phase ? | Planned |
-| FLOW-13 | Phase ? | Planned |
-| SKILL-06 | Phase ? | Planned |
-| SKILL-07 | Phase ? | Planned |
-| SKILL-08 | Phase ? | Planned |
-| KNOW-08 | Phase ? | Planned |
-| KNOW-09 | Phase ? | Planned |
+| KNOW-08 | Phase 12 | Planned |
+| KNOW-09 | Phase 12 | Planned |
+| SKILL-07 | Phase 13 | Planned |
+| SKILL-06 | Phase 14 | Planned |
+| SKILL-08 | Phase 15 | Planned |
+| FLOW-13 | Phase 16 | Planned |
+| FLOW-12 | Phase 17 | Planned |
 
 **Coverage:**
 - v1.3 requirements: 7 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 7 (to be filled by roadmapper)
+- Mapped to phases: 7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-13*
-*Last updated: 2026-04-13 after v1.3 research synthesis*
+*Last updated: 2026-04-13 after roadmap creation*

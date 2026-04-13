@@ -4,6 +4,7 @@
 
 - ✅ **v1.1 Knowledge Architecture + Dashboard Polish** — Phases 1-5 (shipped 2026-04-11)
 - ✅ **v1.2 Live Data + Knowledge Sync** — Phases 6-11 (shipped 2026-04-12)
+- 🔄 **v1.3 Advanced Observability + Knowledge Depth** — Phases 12-17 (in progress)
 
 ## Phases
 
@@ -34,6 +35,85 @@ Full archive: `.planning/milestones/v1.2-ROADMAP.md`
 
 </details>
 
+### v1.3 Advanced Observability + Knowledge Depth
+
+- [ ] **Phase 12: Projects Knowledge Ingestion** - Ingest Obsidian projects/ subdirectory into mem0 nightly with per-project metadata tagging
+- [ ] **Phase 13: Skill Coverage Gaps** - Surface skills with zero usage in last 30 days in the dashboard
+- [ ] **Phase 14: Skill Failure Rate** - Track and display skill failure counts by agent and error type from failures.log
+- [ ] **Phase 15: Skill Heatmap** - Visualize per-skill contribution activity over 30 days as a CSS grid heatmap
+- [ ] **Phase 16: Per-Node Activity Panel** - Complete the node detail sidebar to show last 10 events for any selected canvas node
+- [ ] **Phase 17: Collapsible Node Groups** - Allow agent cluster group nodes to collapse/expand in the Flow diagram
+
+## Phase Details
+
+### Phase 12: Projects Knowledge Ingestion
+**Goal**: All Obsidian `projects/` subdirectory content is ingested into mem0 nightly and retrievable at session start
+**Depends on**: Phase 8 (Bidirectional Knowledge Sync pattern — proven template)
+**Requirements**: KNOW-08, KNOW-09
+**Success Criteria** (what must be TRUE):
+  1. Running `knowledge-curator.sh` includes a Step 7 that executes `projects-to-mem0.py` without error
+  2. Markdown files from `~/github/knowledge/projects/` subdirectories appear in mem0 under `agent_id="shared"` with `project` metadata matching their parent directory name
+  3. Re-running the script on the same files produces no duplicate mem0 entries (idempotent — mtime watermark + content-hash guards active)
+  4. Each project directory tracks its own watermark key in `projects-ingestion-state.json` (isolated from `obsidian-ingestion-state.json`)
+**Plans**: TBD
+
+### Phase 13: Skill Coverage Gaps
+**Goal**: Users can see which skills have gone unused for 30+ days so stale skills can be identified and pruned
+**Depends on**: Phase 9 (Skill Management Dashboard — `/api/skills` route and Cookbooks node exist)
+**Requirements**: SKILL-07
+**Success Criteria** (what must be TRUE):
+  1. The `/api/skills` response includes a `coverageGaps` array listing skill names with no usage event in the last 30 days
+  2. The Cookbooks node (or Library view) displays a gap count that updates on each poll cycle
+  3. The gap calculation reads timestamps from `~/.openclaw/skill-sync-state.json` `skill_usage` dict and cross-references against the full skill directory listing (shallow `iterdir` only — no vault recursion)
+**Plans**: TBD
+
+### Phase 14: Skill Failure Rate
+**Goal**: Users can see how many skill invocations have failed, grouped by agent and error type, so systemic issues are visible
+**Depends on**: Phase 13 (Skill Coverage Gaps — `/api/skills` extended; confirms pattern for further extension)
+**Requirements**: SKILL-06
+**Success Criteria** (what must be TRUE):
+  1. `skill-sync.py` emits `failed` events to `skill-contributions.jsonl` when a skill operation errors — confirmed by a new entry appearing after a triggered failure
+  2. The `/api/skills` response includes `failuresByAgent` and `failuresByErrorType` fields sourced from a stateful `failures.log` parser
+  3. `disk_critical` error type entries are excluded from all failure counts
+  4. The skills panel in the dashboard renders failure counts without crashing when `failures.log` is absent or empty
+**Plans**: TBD
+
+### Phase 15: Skill Heatmap
+**Goal**: Users can see a 30-day contribution activity heatmap for skills, revealing which skills are actively evolving vs. dormant
+**Depends on**: Phase 14 (Skill Failure Rate — failure events ingested into JSONL before heatmap reads time-series)
+**Requirements**: SKILL-08
+**Success Criteria** (what must be TRUE):
+  1. A `skill-heatmap.tsx` component renders a CSS grid heatmap (30 columns x N skill rows) with color intensity reflecting daily contribution count
+  2. Hovering a cell shows the date and contribution count without triggering a re-render of the full grid (local hover state, memoized cell array)
+  3. The heatmap label clearly identifies the data as "Contribution Activity" (not invocation telemetry) to avoid misinterpretation
+  4. The component handles an empty or sparse contribution list without error (clamps column count to minimum 1)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 16: Per-Node Activity Panel
+**Goal**: Clicking any node in the Flow diagram shows the last 10 relevant activity events in the sidebar panel, for all canvas node types
+**Depends on**: Phase 15 (Skill Heatmap — canvas code settled before sidebar changes; FLOW work begins after SKILL track complete)
+**Requirements**: FLOW-13
+**Success Criteria** (what must be TRUE):
+  1. Clicking any canvas node opens the `NodeDetailPanel` sidebar showing up to 10 recent activity events filtered to that node's ID
+  2. Nodes previously unmapped (qdrant, obsidian, knowledge-curator, per-agent nodes) return at least their available events rather than an empty panel
+  3. The heartbeat fetch in the panel includes an `AbortController` that cancels in-flight requests when the panel is closed or the selected node changes
+  4. Nodes with sparse event coverage display a documented "limited activity data" indicator rather than a broken or misleading empty state
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 17: Collapsible Node Groups
+**Goal**: Users can collapse inactive agent cluster group nodes in the Flow diagram to reduce visual clutter, and expand them again without losing edge connections
+**Depends on**: Phase 16 (Per-Node Activity Panel — all canvas refactors complete before the riskiest canvas change)
+**Requirements**: FLOW-12
+**Success Criteria** (what must be TRUE):
+  1. Child nodes of a group (Remote Agents, Dev Tools) have their coordinates expressed as parent-relative offsets — verified by confirming positions are unchanged visually after the parentId migration
+  2. Clicking a group node toggles it between expanded and collapsed states; collapsed groups show a single summary box with aggregate health color
+  3. Edges connected to hidden child nodes remain properly hidden (not dangling to canvas origin at 0,0) when a group is collapsed, and reappear correctly on expand
+  4. The collapse/expand interaction works correctly after page reload (state resets to expanded by default — no persistence needed)
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -49,3 +129,9 @@ Full archive: `.planning/milestones/v1.2-ROADMAP.md`
 | 9. Skill Management Dashboard | v1.2 | 2/2 | Complete | 2026-04-13 |
 | 10. Flow Diagram UX | v1.2 | 1/1 | Complete | 2026-04-12 |
 | 11. Gwen Self-Improving Loop | v1.2 | 1/1 | Complete | 2026-04-12 |
+| 12. Projects Knowledge Ingestion | v1.3 | 0/? | Not started | - |
+| 13. Skill Coverage Gaps | v1.3 | 0/? | Not started | - |
+| 14. Skill Failure Rate | v1.3 | 0/? | Not started | - |
+| 15. Skill Heatmap | v1.3 | 0/? | Not started | - |
+| 16. Per-Node Activity Panel | v1.3 | 0/? | Not started | - |
+| 17. Collapsible Node Groups | v1.3 | 0/? | Not started | - |
