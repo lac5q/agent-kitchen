@@ -144,6 +144,25 @@ export function useApo() {
   });
 }
 
+export function useDevToolsStatus() {
+  return useQuery({
+    queryKey: ["devtools-status"],
+    queryFn: () =>
+      fetchJSON<{
+        tools: Array<{
+          id: string;
+          name: string;
+          mem0: "connected" | "partial" | "not-wired";
+          qmd: "connected" | "partial" | "not-wired";
+          overall: "connected" | "partial" | "not-wired";
+        }>;
+        mem0Reachable: boolean;
+        timestamp: string;
+      }>("/api/devtools-status"),
+    refetchInterval: 30000,
+  });
+}
+
 export function useActivity() {
   return useQuery({
     queryKey: ["activity"],
@@ -160,5 +179,32 @@ export function useActivity() {
       timestamp: string;
     }>("/api/activity"),
     refetchInterval: 15000, // refresh every 15s
+  });
+}
+
+export function useSkills() {
+  return useQuery({
+    queryKey: ["skills"],
+    queryFn: () =>
+      fetchJSON<{
+        totalSkills: number;
+        contributedByHermes: number;
+        contributedByGwen: number;
+        recentContributions: Array<{
+          skill: string;
+          contributor: string;
+          timestamp: string;
+          action: string;
+        }>;
+        lastPruned: string | null;
+        staleCandidates: number;
+        coverageGaps: string[];
+        lastUpdated: string | null;
+        failuresByAgent: Record<string, number>;
+        failuresByErrorType: Record<string, number>;
+        contributionHistory: Array<{ skill: string; date: string; count: number }>;
+        timestamp: string;
+      }>("/api/skills"),
+    refetchInterval: POLL_INTERVALS.skills,
   });
 }

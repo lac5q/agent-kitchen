@@ -1,6 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSkills } from "@/lib/api-client";
+import { SkillHeatmap } from "@/components/skill-heatmap";
+import { matchEventsForNode, isSparseNode } from "@/lib/node-keyword-map";
 
 interface Event {
   id: string;
@@ -29,7 +33,40 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose }: NodeDetailPanelProps) {
-  const nodeEvents = events.filter(e => e.node === nodeId).slice(0, 15);
+  const nodeEvents = matchEventsForNode(nodeId ?? "", events).slice(0, 10);
+  const { data: skillsData } = useSkills();
+
+  const [heartbeatContent, setHeartbeatContent] = useState<string | null>(null);
+  const [heartbeatLoading, setHeartbeatLoading] = useState(false);
+
+  useEffect(() => {
+    if (!nodeId) {
+      setHeartbeatContent(null);
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    setHeartbeatLoading(true);
+    fetch(`/api/heartbeat?agent=${nodeId}`, { signal: controller.signal })
+      .then(r => {
+        if (!r.ok) throw new Error(`heartbeat ${r.status}`);
+        return r.json();
+      })
+      .then(d => {
+        if (!cancelled) setHeartbeatContent(d.content ?? null);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        if (!cancelled) setHeartbeatContent(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHeartbeatLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [nodeId]);
 
   return (
     <AnimatePresence>
@@ -47,10 +84,12 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
               <span className="text-2xl">{nodeIcon}</span>
               <div>
                 <p className="text-sm font-bold text-amber-500">{nodeLabel}</p>
-                <p className="text-xs text-slate-500">Node Activity</p>
+                <p className="text-xs text-slate-500">
+                  {heartbeatContent ? "Last State" : "Node Activity"}
+                </p>
               </div>
             </div>
-            <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-lg">×</button>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-lg" aria-label="Close node detail panel">×</button>
           </div>
 
           {/* Stats */}
@@ -68,13 +107,40 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
             </div>
           )}
 
+          {/* Heartbeat / Last State */}
+          {heartbeatLoading && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs text-slate-500">Loading state...</p>
+            </div>
+          )}
+          {!heartbeatLoading && heartbeatContent && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Last State</p>
+              <pre className="font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">{heartbeatContent}</pre>
+            </div>
+          )}
+
+          {/* Contribution Activity Heatmap — cookbooks node only */}
+          {nodeId === "cookbooks" && (
+            <div className="p-4 border-b border-slate-800">
+              <SkillHeatmap
+                contributionHistory={skillsData?.contributionHistory ?? []}
+                className="text-slate-200"
+              />
+            </div>
+          )}
+
           {/* Events */}
           <div className="flex-1 overflow-y-auto p-4">
             <p className="text-xs font-medium text-slate-500 mb-3">
               Recent Activity {nodeEvents.length > 0 ? `(${nodeEvents.length})` : "(none)"}
             </p>
             {nodeEvents.length === 0 ? (
-              <p className="text-xs text-slate-600">No recent activity for this node</p>
+              isSparseNode(nodeId ?? "") ? (
+                <p aria-label="limited-activity-data" className="text-xs italic text-slate-600">Limited activity data for this node type</p>
+              ) : (
+                <p className="text-xs text-slate-600">No recent activity for this node</p>
+              )
             ) : (
               <div className="space-y-2">
                 {nodeEvents.map(event => {
@@ -82,7 +148,7 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
                   const timeLabel = minsAgo < 1 ? "just now" : minsAgo < 60 ? `${minsAgo}m ago` : `${Math.round(minsAgo / 60)}h ago`;
                   const color = TYPE_COLORS[event.type] || "#64748b";
                   return (
-                    <div key={event.id} className="text-xs border-l-2 pl-2 py-1" style={{ borderColor: color }}>
+                    <div key={event.id} data-testid="node-event" className="text-xs border-l-2 pl-2 py-1" style={{ borderColor: color }}>
                       <p className="text-slate-500 mb-0.5">{timeLabel}</p>
                       <p className={`${event.severity === "error" ? "text-rose-400" : "text-slate-300"}`}>
                         {event.message}
