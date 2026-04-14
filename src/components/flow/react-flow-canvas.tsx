@@ -138,6 +138,8 @@ interface ReactFlowCanvasProps {
   memoryCount: number;
   knowledgeCount: number;
   skillCount: number;
+  coverageGapsCount?: number;
+  topFailureAgent?: string | null;
   nodeActivity: Record<string, number>;
   highlightedNode?: string | null;
   remoteAgents?: Array<{ id: string; name: string; status: string; latencyMs: number | null; location: string }>;
@@ -160,6 +162,8 @@ export function ReactFlowCanvas({
   memoryCount,
   knowledgeCount,
   skillCount,
+  coverageGapsCount = 0,
+  topFailureAgent = null,
   nodeActivity,
   highlightedNode,
   remoteAgents = [],
@@ -198,7 +202,7 @@ export function ReactFlowCanvas({
       case "agents": return { "Total": agentCount, "Active": activeCount };
       case "notebooks": return { "Entries": memoryCount };
       case "librarian": return { "Docs": knowledgeCount, "Collections": 15 };
-      case "cookbooks": return { "Skills": skillCount };
+      case "cookbooks": return { "Skills": skillCount, "Gaps": coverageGapsCount, ...(topFailureAgent ? { "Top Failure": topFailureAgent } : {}) };
       case "gateways": return { "Alba": "18793", "Gwen": "18792" };
       case "manager": return { "Platform": "Paperclip", "Port": "3100" };
       case "apo": return { "Mode": "QA", "Cycle": "hourly" };
@@ -311,7 +315,7 @@ export function ReactFlowCanvas({
     // Absolute: { x: DEV_TOOL_START_X + i * DEV_TOOL_SPACING, y: DEV_TOOL_Y }
     // Relative:  { x: 15 + i * DEV_TOOL_SPACING, y: 32 }
     const devToolNodes: Node[] = [
-      { id: "cookbooks", data: { label: "Skills",          subtitle: "skillshare · 405+",  icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" } },
+      { id: "cookbooks", data: { label: "Skills",          subtitle: skillCount > 0 ? `${skillCount} skills · ${coverageGapsCount} gaps` : "skillshare", icon: "📚", status: getStatus("cookbooks"), highlighted: highlightedNode === "cookbooks" } },
       { id: "apo",       data: { label: "Agent Lightning", subtitle: "APO · hourly",        icon: "⚡", status: getStatus("apo"),       highlighted: highlightedNode === "apo"       } },
       { id: "gitnexus",  data: { label: "GitNexus",        subtitle: "code graph",          icon: "🗺️", status: getStatus("gitnexus"),  highlighted: highlightedNode === "gitnexus"  } },
       { id: "llmwiki",   data: { label: "LLM Wiki",        subtitle: "knowledge wiki",      icon: "📖", status: getStatus("llmwiki"),   highlighted: highlightedNode === "llmwiki"   } },
@@ -327,7 +331,7 @@ export function ReactFlowCanvas({
     const baseNodes = [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
     return applyCollapseToNodes(baseNodes, collapsedGroups);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount, collapsedGroups, toggleGroup]);
+  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount, collapsedGroups, toggleGroup, skillCount, coverageGapsCount, topFailureAgent]);
 
   // Derive hidden node IDs from the processed nodes array (after collapse applied)
   const hiddenNodeIds = useMemo(
