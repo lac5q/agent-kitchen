@@ -36,6 +36,17 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
   const nodeEvents = matchEventsForNode(nodeId ?? "", events).slice(0, 10);
   const { data: skillsData } = useSkills();
 
+  // For cookbooks node, use live skills data instead of click-time snapshot
+  const effectiveStats: Record<string, string | number> = nodeId === "cookbooks" && skillsData
+    ? {
+        "Skills": skillsData.totalSkills,
+        "Gaps": skillsData.coverageGaps?.length ?? 0,
+        ...(Object.keys(skillsData.failuresByAgent ?? {}).length > 0
+          ? { "Failures": Object.values(skillsData.failuresByAgent as Record<string, number>).reduce((a, b) => a + b, 0) }
+          : {}),
+      }
+    : nodeStats;
+
   const [heartbeatContent, setHeartbeatContent] = useState<string | null>(null);
   const [heartbeatLoading, setHeartbeatLoading] = useState(false);
 
@@ -93,11 +104,11 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
           </div>
 
           {/* Stats */}
-          {Object.keys(nodeStats).length > 0 && (
+          {Object.keys(effectiveStats).length > 0 && (
             <div className="p-4 border-b border-slate-800">
               <p className="text-xs font-medium text-slate-500 mb-2">Stats</p>
               <div className="grid grid-cols-2 gap-2">
-                {Object.entries(nodeStats).map(([k, v]) => (
+                {Object.entries(effectiveStats).map(([k, v]) => (
                   <div key={k} className="bg-slate-900 rounded p-2">
                     <p className="text-xs text-slate-500">{k}</p>
                     <p className="text-sm font-bold text-slate-200">{v}</p>

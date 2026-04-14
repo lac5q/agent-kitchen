@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents } from "@/lib/api-client";
+import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents, useSkills } from "@/lib/api-client";
 import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
@@ -20,6 +20,7 @@ export default function FlowPage() {
   const { data: memoryData } = useMemory("claude");
   const { data: activityData } = useActivity();
   const { data: remoteData } = useRemoteAgents();
+  const { data: skillsData } = useSkills();
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -35,6 +36,9 @@ export default function FlowPage() {
   }));
   const localActiveCount = agentsData?.agents.filter((a: { status: string }) => a.status === "active").length || 0;
   const localTotalCount = agentsData?.agents.length || 0;
+  const skillCount = skillsData?.totalSkills ?? 0;
+  const coverageGapsCount = skillsData?.coverageGaps?.length ?? 0;
+  const topFailureAgent = Object.entries(skillsData?.failuresByAgent ?? {}).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] ?? null;
 
   function handleNodeClick(nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) {
     setSelectedNode(prev => prev?.id === nodeId ? null : { id: nodeId, label: nodeLabel, icon: nodeIcon, stats: nodeStats });
@@ -54,7 +58,9 @@ export default function FlowPage() {
           activeCount={activeCount}
           memoryCount={memoryCount}
           knowledgeCount={knowledgeCount}
-          skillCount={405}
+          skillCount={skillCount}
+          coverageGapsCount={coverageGapsCount}
+          topFailureAgent={topFailureAgent}
           nodeActivity={nodeActivity}
           highlightedNode={hoveredNode || selectedNode?.id}
           remoteAgents={remoteAgents}
