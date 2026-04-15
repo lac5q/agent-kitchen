@@ -1,5 +1,23 @@
 # Milestones
 
+## v1.4 Cookbooks (Shipped: 2026-04-15)
+
+**Phases completed:** 7 phases, 9 plans, 3 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- One-liner:
+- Path:
+- 1. [Rule 1 - Bug] failureCount/topErrorType declared after nodeStats useCallback
+- One-liner:
+- One-liner:
+- One-liner:
+- One-liner:
+- Status
+
+---
+
 ## v1.3 Advanced Observability + Knowledge Depth (Shipped: 2026-04-15)
 
 **Phases:** 12–17 | **Plans:** 8 | **Commits:** 46 | **+6,553 lines** across 38 files | **2 days (Apr 13–15)**
