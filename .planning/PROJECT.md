@@ -1,6 +1,18 @@
 # Project: Agent Kitchen
 
-*Last updated: 2026-04-15 after v1.3 milestone*
+*Last updated: 2026-04-15 — v1.4 started*
+
+---
+
+## Current Milestone: v1.4 Cookbooks
+
+**Goal:** Give skills a first-class home in the sidebar with health, heatmap, and full skill list.
+
+**Target features:**
+- "The Cookbooks" sidebar nav entry at `/cookbooks`
+- Gaps/health panel (coverage gaps count, failures by agent + error type)
+- 30-day contribution heatmap
+- Full skills list (all skills, gaps highlighted)
 
 ---
 
@@ -32,10 +44,12 @@ Every agent and knowledge system is visible, connected, and self-improving.
 
 ### Active
 
-- [ ] Dedicated Skills/Cookbooks page in sidebar navigation
+- [ ] Dedicated Cookbooks page in sidebar navigation — v1.4 (COOK-01)
+- [ ] Skill gaps/health panel on Cookbooks page — v1.4 (COOK-02)
+- [ ] 30-day heatmap on Cookbooks page — v1.4 (COOK-03)
+- [ ] Full skills list on Cookbooks page — v1.4 (COOK-04)
 - [ ] Update flow trigger button (kick off `qmd update` from UI)
 - [ ] Library freshness: force-touch or show "last indexed" timestamp vs file mtime
-- [ ] v1.4 requirements TBD — run `/gsd-new-milestone`
 
 ### Out of Scope
 

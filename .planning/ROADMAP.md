@@ -5,7 +5,7 @@
 - ✅ **v1.1 Knowledge Architecture + Dashboard Polish** — Phases 1-5 (shipped 2026-04-11)
 - ✅ **v1.2 Live Data + Knowledge Sync** — Phases 6-11 (shipped 2026-04-12)
 - ✅ **v1.3 Advanced Observability + Knowledge Depth** — Phases 12-17 (shipped 2026-04-15)
-- 📋 **v1.4** — TBD (run /gsd-new-milestone)
+- 🔨 **v1.4 Cookbooks** — Phase 18 (in progress)
 
 ## Phases
 
@@ -129,6 +129,16 @@ Plans:
 - [ ] 17-01-PLAN.md — parentId coordinate migration (children → parent-relative offsets, no toggle logic)
 - [ ] 17-02-PLAN.md — Collapse/expand toggle with aggregate health color + pure collapse-logic module
 **UI hint**: yes
+
+### Phase 18: cookbooks-page
+**Goal**: Dedicated Cookbooks page in sidebar with gaps/health, heatmap, and full skills list
+**Requirements**: COOK-01, COOK-02, COOK-03, COOK-04
+**Success Criteria**:
+  1. "The Cookbooks" appears in sidebar nav and navigates to `/cookbooks`
+  2. Gaps/health panel shows coverage gap count, failures by agent, failures by error type
+  3. 30-day heatmap renders (reuses existing `SkillHeatmap` component)
+  4. Full skills list renders all skills with coverage gaps visually highlighted
+**Plans**: 1 plan
 
 ## Progress
 
