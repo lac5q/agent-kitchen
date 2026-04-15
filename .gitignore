@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gitnexus
+
+# Local tool caches & worktrees
+.claude/
+.playwright-mcp/
+.worktrees/
+
+# Screenshots / debug output (root only)
+/*.png
+/download.txt
+/data/
+/logs/
+
+# GSD internal counters
+.planning/.next-call-count
