@@ -35,6 +35,17 @@ export function useTokenStats() {
   });
 }
 
+export function useModelUsage() {
+  return useQuery({
+    queryKey: ["model-usage"],
+    queryFn: () =>
+      fetchJSON<{ usage: import("@/lib/parsers").ModelUsage; timestamp: string }>(
+        "/api/model-usage"
+      ),
+    refetchInterval: POLL_INTERVALS.tokens,
+  });
+}
+
 export function useMemory(source?: string, query?: string) {
   const params = new URLSearchParams();
   if (source) params.set("source", source);
