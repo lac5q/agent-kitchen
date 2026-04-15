@@ -188,6 +188,7 @@ export function useSkills() {
     queryFn: () =>
       fetchJSON<{
         totalSkills: number;
+        allSkills: string[];
         contributedByHermes: number;
         contributedByGwen: number;
         recentContributions: Array<{
