@@ -17,6 +17,7 @@ export default function CookbooksPage() {
   }
 
   const totalSkills = data?.totalSkills ?? 0;
+  const allSkills = data?.allSkills ?? [];
   const coverageGaps = data?.coverageGaps ?? [];
   const failuresByAgent = data?.failuresByAgent ?? {};
   const failuresByErrorType = data?.failuresByErrorType ?? {};
@@ -66,6 +67,7 @@ export default function CookbooksPage() {
         </h2>
         <SkillsList
           totalSkills={totalSkills}
+          allSkills={allSkills}
           coverageGaps={coverageGaps}
         />
       </section>

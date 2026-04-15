@@ -145,6 +145,7 @@ export async function GET() {
 
   return NextResponse.json({
     totalSkills,
+    allSkills: skillDirNames,
     contributedByHermes,
     contributedByGwen,
     recentContributions,

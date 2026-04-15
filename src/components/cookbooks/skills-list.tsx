@@ -2,11 +2,13 @@
 
 export interface SkillsListProps {
   totalSkills: number;
+  allSkills: string[];
   coverageGaps: string[];
 }
 
-export function SkillsList({ totalSkills, coverageGaps }: SkillsListProps) {
-  const healthyCount = totalSkills - coverageGaps.length;
+export function SkillsList({ totalSkills, allSkills, coverageGaps }: SkillsListProps) {
+  const gapSet = new Set(coverageGaps);
+  const gapCount = coverageGaps.length;
 
   return (
     <div className="space-y-4">
@@ -16,42 +18,35 @@ export function SkillsList({ totalSkills, coverageGaps }: SkillsListProps) {
           {totalSkills} skills
         </span>
         <span className="rounded-full bg-slate-800 border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-400">
-          {coverageGaps.length} gaps
+          {gapCount} gaps
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Coverage Gaps sub-section */}
-        <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Coverage Gaps
-          </h3>
-          {coverageGaps.length === 0 ? (
-            <p className="text-xs text-slate-500">No gaps</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {coverageGaps.map((skill) => (
+      {/* All skills as badges — gaps highlighted amber, healthy neutral */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        {allSkills.length === 0 ? (
+          <p className="text-xs text-slate-500">No skills found</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {allSkills.map((skill) =>
+              gapSet.has(skill) ? (
                 <span
                   key={skill}
                   className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-xs text-amber-400"
                 >
                   {skill}
                 </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Healthy Skills sub-section */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Healthy Skills
-          </h3>
-          <div className="flex items-center gap-3">
-            <p className="text-3xl font-bold text-slate-200">{healthyCount}</p>
-            <p className="text-xs text-slate-500">skills with recent activity</p>
+              ) : (
+                <span
+                  key={skill}
+                  className="rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300"
+                >
+                  {skill}
+                </span>
+              )
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
