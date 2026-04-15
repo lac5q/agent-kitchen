@@ -42,6 +42,32 @@
 
 ---
 
+## Milestone: v1.4 — Cookbooks
+
+**Shipped:** 2026-04-15
+**Phases:** 1 (Phase 18) | **Plans:** 1
+
+### What Was Built
+
+- Dedicated `/cookbooks` sidebar page with gaps/health panel, 30-day heatmap, full 254-skill list
+- Real model usage tracking in The Ledger — reads `~/.claude/projects/**/*.jsonl`, aggregates per model with dedup by `requestId`
+- Fixed GitNexus API field names (meta.stats.nodes/edges/communities)
+
+### What Worked
+
+- **Reuse over rebuild** — SkillHeatmap component dropped in without modification; `/api/skills` extended with one new field rather than a new endpoint
+
+### What Was Inefficient
+
+- Phase 18 had no formal GSD artifacts (PLAN.md/SUMMARY.md) — shipped directly then retroactively documented at close
+
+### Key Lessons
+
+- Model mix data was always available in JSONL session logs — just needed a readline parser; no external telemetry required
+- `qwen3.5-plus` appearing in Claude Code JSONL suggests some sessions route through non-Claude models
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | LOC Added | Key Theme |
@@ -49,3 +75,4 @@
 | v1.1 | 5 | 12 | 3 | ~3,000 | Knowledge architecture foundations |
 | v1.2 | 6 | 8 | 2 | ~4,500 | Live data + sync pipelines |
 | v1.3 | 6 | 8 | 2 | +6,553 | Observability depth + canvas UX |
+| v1.4 | 1 | 1 | 1 | ~500 | Cookbooks page + model usage tracking |
