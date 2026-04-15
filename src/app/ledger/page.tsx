@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTokenStats } from "@/lib/api-client";
+import { useTokenStats, useModelUsage } from "@/lib/api-client";
 import { KpiCard } from "@/components/ledger/kpi-card";
 import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
@@ -19,6 +19,7 @@ type Tab = (typeof TABS)[number];
 
 export default function LedgerPage() {
   const { data } = useTokenStats();
+  const { data: modelData } = useModelUsage();
   const [activeTab, setActiveTab] = useState<Tab>("Savings Breakdown");
 
   const stats = data?.stats ?? {};
@@ -45,18 +46,11 @@ export default function LedgerPage() {
     tokensSaved: b.tokensSaved,
   }));
 
-  // Model mix — RTK doesn't expose this, show savings % split as proxy
-  const modelMixData = breakdown.length > 0
-    ? breakdown.slice(0, 4).map((b) => ({
-        name: b.command.replace("rtk ", "").slice(0, 15),
-        value: b.tokensSaved,
-      }))
-    : [
-        { name: "Opus", value: 40 },
-        { name: "Sonnet", value: 35 },
-        { name: "Haiku", value: 20 },
-        { name: "Other", value: 5 },
-      ];
+  // Real model mix from Claude Code JSONL session logs
+  const modelMixData = (modelData?.usage.models ?? []).map((m) => ({
+    name: m.name,
+    value: m.totalTokens,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,7 +116,7 @@ export default function LedgerPage() {
           <>
             <ModelMixChart data={modelMixData} />
             <p className="mt-3 text-xs text-slate-500">
-              Showing top commands by tokens saved. Per-model breakdown requires model-level logging.
+              Aggregated from Claude Code session logs (~/.claude/projects). Total tokens = input + output.
             </p>
           </>
         )}

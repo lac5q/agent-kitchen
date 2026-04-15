@@ -1,7 +1,25 @@
 import { readdir, readFile, stat } from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
+import readline from "readline";
 import { execFileSync } from "child_process";
 import type { Agent, AgentStatus, AgentPlatform, MemoryEntry } from "@/types";
+
+export interface ModelUsageStat {
+  id: string;
+  name: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheCreation: number;
+  requests: number;
+  totalTokens: number;
+}
+
+export interface ModelUsage {
+  models: ModelUsageStat[];
+  total: { inputTokens: number; outputTokens: number; requests: number };
+}
 
 function detectPlatform(agentName: string): AgentPlatform {
   const name = agentName.toLowerCase();
@@ -269,4 +287,143 @@ export async function parseClaudeMemory(
   return entries.sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
+}
+
+function normalizeModelName(modelId: string): string {
+  const m = modelId.toLowerCase();
+  if (m.includes("opus")) {
+    if (m.includes("4-6") || m.includes("4.6")) return "Opus 4.6";
+    if (m.includes("4-5") || m.includes("4.5")) return "Opus 4.5";
+    return "Opus";
+  }
+  if (m.includes("sonnet")) {
+    if (m.includes("4-6") || m.includes("4.6")) return "Sonnet 4.6";
+    if (m.includes("4-5") || m.includes("4.5")) return "Sonnet 4.5";
+    return "Sonnet";
+  }
+  if (m.includes("haiku")) {
+    if (m.includes("4-5") || m.includes("4.5")) return "Haiku 4.5";
+    return "Haiku";
+  }
+  return modelId.length > 20 ? modelId.slice(0, 20) : modelId;
+}
+
+async function aggregateJsonlFile(
+  filePath: string,
+  acc: Map<string, ModelUsageStat>,
+  seen: Set<string>
+): Promise<void> {
+  return new Promise((resolve) => {
+    let stream: ReturnType<typeof createReadStream>;
+    try {
+      stream = createReadStream(filePath, { encoding: "utf-8" });
+    } catch {
+      resolve();
+      return;
+    }
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    rl.on("line", (line) => {
+      if (!line) return;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type !== "assistant") return;
+        const msg = entry.message;
+        if (!msg?.model || !msg?.usage) return;
+        const reqId = entry.requestId as string | undefined;
+        if (reqId) {
+          if (seen.has(reqId)) return;
+          seen.add(reqId);
+        }
+        const { model } = msg;
+        const u = msg.usage as Record<string, number>;
+        const inputTokens = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+        const outputTokens = u.output_tokens ?? 0;
+        const cacheRead = u.cache_read_input_tokens ?? 0;
+        const cacheCreation = u.cache_creation_input_tokens ?? 0;
+        const existing = acc.get(model);
+        if (existing) {
+          existing.inputTokens += inputTokens;
+          existing.outputTokens += outputTokens;
+          existing.cacheRead += cacheRead;
+          existing.cacheCreation += cacheCreation;
+          existing.requests += 1;
+          existing.totalTokens += inputTokens + outputTokens;
+        } else {
+          acc.set(model, {
+            id: model,
+            name: normalizeModelName(model),
+            inputTokens,
+            outputTokens,
+            cacheRead,
+            cacheCreation,
+            requests: 1,
+            totalTokens: inputTokens + outputTokens,
+          });
+        }
+      } catch {
+        /* skip malformed lines */
+      }
+    });
+    rl.on("close", resolve);
+    rl.on("error", () => resolve());
+  });
+}
+
+export async function parseModelUsage(): Promise<ModelUsage> {
+  const claudeProjectsPath = `${process.env.HOME}/.claude/projects`;
+  const acc = new Map<string, ModelUsageStat>();
+  const seen = new Set<string>();
+
+  let projects: string[];
+  try {
+    projects = await readdir(claudeProjectsPath);
+  } catch {
+    return { models: [], total: { inputTokens: 0, outputTokens: 0, requests: 0 } };
+  }
+
+  for (const project of projects) {
+    const projectDir = path.join(claudeProjectsPath, project);
+    let entries: string[];
+    try {
+      const s = await stat(projectDir);
+      if (!s.isDirectory()) continue;
+      entries = await readdir(projectDir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (entry.endsWith(".jsonl")) {
+        await aggregateJsonlFile(path.join(projectDir, entry), acc, seen);
+      } else {
+        // session dir — check for subagents/
+        const subagentsDir = path.join(projectDir, entry, "subagents");
+        let saFiles: string[];
+        try {
+          saFiles = await readdir(subagentsDir);
+        } catch {
+          continue;
+        }
+        for (const saFile of saFiles) {
+          if (saFile.endsWith(".jsonl")) {
+            await aggregateJsonlFile(path.join(subagentsDir, saFile), acc, seen);
+          }
+        }
+      }
+    }
+  }
+
+  const models = Array.from(acc.values())
+    .filter((m) => m.totalTokens > 0)
+    .sort((a, b) => b.totalTokens - a.totalTokens);
+  const total = models.reduce(
+    (t, m) => ({
+      inputTokens: t.inputTokens + m.inputTokens,
+      outputTokens: t.outputTokens + m.outputTokens,
+      requests: t.requests + m.requests,
+    }),
+    { inputTokens: 0, outputTokens: 0, requests: 0 }
+  );
+
+  return { models, total };
 }
