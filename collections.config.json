@@ -1,5 +1,6 @@
 {
   "collections": [
+    { "name": "knowledge", "category": "business" },
     { "name": "paperclip", "category": "product" },
     { "name": "agent-configs", "category": "agents" },
     { "name": "shared", "category": "business" },
