@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: Advanced Observability + Knowledge Depth
-status: complete
-stopped_at: All 6 phases complete (12-17) — all plans have SUMMARYs; ROADMAP was stale from worktree merge
-last_updated: "2026-04-15T00:00:00.000Z"
-last_activity: 2026-04-15 -- v1.3 verified complete, ready for /gsd-complete-milestone 1.3
+milestone_name: Advanced Observability + Knowledge Depth — SHIPPED 2026-04-15
+status: executing
+stopped_at: Roadmap defined — 6 phases (12-17), 7 requirements, 0 orphans
+last_updated: "2026-04-15T19:12:37.339Z"
+last_activity: 2026-04-15
 progress:
   total_phases: 6
   completed_phases: 6
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-13 for v1.3)
 Phase: 17 (collapsible-node-groups) — EXECUTING
 Plan: 1 of 2
 Status: Executing Phase 17
-Last activity: 2026-04-13 -- Phase 17 execution started
+Last activity: 2026-04-15
 
 Progress: [░░░░░░░░░░] 0%
 
