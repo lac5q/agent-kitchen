@@ -38,16 +38,21 @@ export async function GET() {
         meta = JSON.parse(await readFile(metaPath, "utf-8"));
       } catch { /* no meta */ }
 
+      // Stats are nested under meta.stats (nodes/edges/communities/processes/files)
+      // Fall back to registry entry's own stats field if meta.json lacks them
+      const metaStats = (meta.stats || {}) as Record<string, unknown>;
+      const entryStats = (entry.stats || {}) as Record<string, unknown>;
+
       const name = (entry.name as string) || path.basename(repoPath);
       repos.push({
         name,
         path: repoPath,
-        files: (meta.files as number) || (meta.fileCount as number) || 0,
-        symbols: (meta.symbols as number) || (meta.symbolCount as number) || 0,
-        edges: (meta.edges as number) || (meta.edgeCount as number) || 0,
-        clusters: (meta.clusters as number) || (meta.clusterCount as number) || 0,
-        processes: (meta.processes as number) || (meta.processCount as number) || 0,
-        lastIndexed: (meta.timestamp as string) || (meta.indexedAt as string) || null,
+        files: (metaStats.files as number) || (entryStats.files as number) || (meta.files as number) || 0,
+        symbols: (metaStats.nodes as number) || (entryStats.nodes as number) || (meta.symbols as number) || 0,
+        edges: (metaStats.edges as number) || (entryStats.edges as number) || (meta.edges as number) || 0,
+        clusters: (metaStats.communities as number) || (entryStats.communities as number) || (meta.clusters as number) || 0,
+        processes: (metaStats.processes as number) || (entryStats.processes as number) || (meta.processes as number) || 0,
+        lastIndexed: (meta.indexedAt as string) || (entry.indexedAt as string) || (meta.timestamp as string) || null,
       });
     }
   } catch {
