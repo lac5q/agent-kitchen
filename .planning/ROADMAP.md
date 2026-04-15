@@ -35,14 +35,14 @@ Full archive: `.planning/milestones/v1.2-ROADMAP.md`
 
 </details>
 
-### v1.3 Advanced Observability + Knowledge Depth
+### ✅ v1.3 Advanced Observability + Knowledge Depth — SHIPPED 2026-04-15
 
-- [ ] **Phase 12: Projects Knowledge Ingestion** - Ingest Obsidian projects/ subdirectory into mem0 nightly with per-project metadata tagging
-- [ ] **Phase 13: Skill Coverage Gaps** - Surface skills with zero usage in last 30 days in the dashboard
-- [ ] **Phase 14: Skill Failure Rate** - Track and display skill failure counts by agent and error type from failures.log
-- [ ] **Phase 15: Skill Heatmap** - Visualize per-skill contribution activity over 30 days as a CSS grid heatmap
-- [ ] **Phase 16: Per-Node Activity Panel** - Complete the node detail sidebar to show last 10 events for any selected canvas node
-- [ ] **Phase 17: Collapsible Node Groups** - Allow agent cluster group nodes to collapse/expand in the Flow diagram
+- [x] **Phase 12: Projects Knowledge Ingestion** - Ingest Obsidian projects/ subdirectory into mem0 nightly with per-project metadata tagging
+- [x] **Phase 13: Skill Coverage Gaps** - Surface skills with zero usage in last 30 days in the dashboard
+- [x] **Phase 14: Skill Failure Rate** - Track and display skill failure counts by agent and error type from failures.log
+- [x] **Phase 15: Skill Heatmap** - Visualize per-skill contribution activity over 30 days as a CSS grid heatmap
+- [x] **Phase 16: Per-Node Activity Panel** - Complete the node detail sidebar to show last 10 events for any selected canvas node
+- [x] **Phase 17: Collapsible Node Groups** - Allow agent cluster group nodes to collapse/expand in the Flow diagram
 
 ## Phase Details
 
@@ -139,9 +139,9 @@ Plans:
 | 9. Skill Management Dashboard | v1.2 | 2/2 | Complete | 2026-04-13 |
 | 10. Flow Diagram UX | v1.2 | 1/1 | Complete | 2026-04-12 |
 | 11. Gwen Self-Improving Loop | v1.2 | 1/1 | Complete | 2026-04-12 |
-| 12. Projects Knowledge Ingestion | v1.3 | 0/1 | Not started | - |
-| 13. Skill Coverage Gaps | v1.3 | 0/? | Not started | - |
-| 14. Skill Failure Rate | v1.3 | 0/? | Not started | - |
-| 15. Skill Heatmap | v1.3 | 0/? | Not started | - |
-| 16. Per-Node Activity Panel | v1.3 | 0/? | Not started | - |
-| 17. Collapsible Node Groups | v1.3 | 0/2 | Not started | - |
+| 12. Projects Knowledge Ingestion | v1.3 | 1/1 | Complete | 2026-04-14 |
+| 13. Skill Coverage Gaps | v1.3 | 1/1 | Complete | 2026-04-14 |
+| 14. Skill Failure Rate | v1.3 | 2/2 | Complete | 2026-04-14 |
+| 15. Skill Heatmap | v1.3 | 1/1 | Complete | 2026-04-14 |
+| 16. Per-Node Activity Panel | v1.3 | 1/1 | Complete | 2026-04-14 |
+| 17. Collapsible Node Groups | v1.3 | 2/2 | Complete | 2026-04-14 |
