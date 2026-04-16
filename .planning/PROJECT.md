@@ -1,10 +1,25 @@
 # Project: Agent Kitchen
 
-*Last updated: 2026-04-15 — v1.4 Cookbooks shipped*
+*Last updated: 2026-04-16 — v1.5 Agent Coordination + Voice started*
 
 ---
 
-## Current State: v1.4 Shipped
+## Current Milestone: v1.5 Agent Coordination + Voice
+
+**Goal:** Give every agent a shared SQLite memory backbone and cross-server coordination layer, bring Paperclip into the hive as a contributing fleet node, and add a voice interface.
+
+**Target features:**
+- SQLite FTS5 conversation store (shared backbone for all agents)
+- Hive mind coordination table (cross-agent action logging + task delegation)
+- Paperclip fleet node (collapsible group in Flow; full hive mind participation)
+- Pipecat voice server (Python, Gemini Live + STT/TTS cascade)
+- Memory consolidation + decay engine (LLM-backed, 4-tier salience)
+- Security / exfiltration guard + audit log
+- Dashboard tracking (hive mind feed, fleet panel, voice log, SQLite health)
+
+---
+
+## Previous State: v1.4 Shipped
 
 All four milestones complete. The dashboard surfaces agent health, knowledge sync, skill analytics, flow diagrams, and a dedicated Cookbooks skills page.
 
