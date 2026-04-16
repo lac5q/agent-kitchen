@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Agent Coordination + Voice
-status: defining_requirements
+status: ready_to_plan
 stopped_at: ~
 last_updated: "2026-04-16T00:00:00.000Z"
 last_activity: 2026-04-16
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-13 for v1.3)
+See: .planning/PROJECT.md (updated 2026-04-16 for v1.5)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** Phase 17 — collapsible-node-groups
+**Current focus:** Phase 19 — SQLite Conversation Store
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 19 of 24 (SQLite Conversation Store)
 Plan: —
-Status: Defining requirements for v1.5
-Last activity: 2026-04-16 — Milestone v1.5 started
+Status: Ready to plan
+Last activity: 2026-04-16 — v1.5 roadmap created (Phases 19-24, 28 requirements mapped)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,40 +52,14 @@ Progress: [░░░░░░░░░░] 0%
 
 - Production runs on port 3002 via `npm start -- --port 3002`; kill existing: `lsof -ti :3002 | xargs kill -9`
 - After any build change: rebuild with `npm run build` then restart
-- base-ui tooltip: use `className` prop not `asChild` on TooltipTrigger
-- Agents config: agents.config.json at project root (not hardcoded)
-- Collections config: collections.config.json at project root
-- Remote agents Lucia=localhost:3001, Alba=localhost:18793 (both local, not Tailscale)
-- GitNexus AGENTS.md injected — run `npx gitnexus analyze` after commits
-- **Vector store architecture (CRITICAL):** QMD handles BM25/lexical keyword search ONLY. ALL vector/semantic search uses Qdrant Cloud (AWS us-west-1). `qmd embed` is FORBIDDEN. Embeddings: Gemini `models/gemini-embedding-2-preview` (3072 dims). Qdrant collections: `agent_memory` (mem0 — DO NOT TOUCH), `knowledge_docs` (markdown indexing).
+- **Vector store architecture (CRITICAL):** QMD handles BM25/lexical only. ALL vector/semantic search uses Qdrant Cloud. `qmd embed` is FORBIDDEN.
 - **Security:** No `execSync`/`exec` — use `execFileSync` or pure `fs/promises` only
-- **Obsidian heartbeat:** stat 3-5 known paths only — never recursive readdir on vault (518+ files, 10s poll = catastrophic inode load)
-- **Curator heartbeat window:** 26h (not 1h) — cron runs at 2am; by midnight it is 22h stale
-- **KNOW-06 dedup:** Three guards required — origin tag + content-hash gate + mtime watermark. Missing any one allows duplicates.
-- **mem0 writes:** Only via `POST http://localhost:3201/memory/add` — never touch `agent_memory` Qdrant collection directly
-- **Skill sync:** `skill-sync.py` is the single sync engine — do NOT create parallel scripts
-- **Gwen memory:** Cognee-OpenClaw explicitly NOT installed — conflicts with mem0/Qdrant architecture
-- **basePath fix scope:** Only `meet-recordings` entry in collections.config.json. Do not touch `alex-docs` or `turnedyellow-admin` (different base intentionally).
-- **Vitest ESM mocks:** Use `// @vitest-environment node` + `await import()` after `vi.mock()` for node modules (child_process, fs/promises). Static imports cause mocks to not intercept correctly in vitest 4.x.
-- **checkServiceTristate:** 3-state health helper for up/degraded/down — keep separate from binary checkService to avoid risk to existing services.
-- [Phase 08-bidirectional-knowledge-sync]: AGENT_ID fixed to claude — journals must land under correct agent per KNOW-06; previous value gwen was a draft artifact
-- [Phase 08-bidirectional-knowledge-sync]: STATE_FILE isolated to obsidian-ingestion-state.json — prevents collision with Phase 5 ingestion-state.json (gmail/calendar/gdrive_meet/spark)
-- [Phase 08-bidirectional-knowledge-sync]: All three KNOW-07 guards active — origin tag is not informational; it actively signals mem0-export.sh to skip obsidian-originated memories
-- [Phase 09]: Route reads SKILL_SYNC_STATE from ~/.openclaw/skill-sync-state.json for lastPruned/lastUpdated
-- [Phase 09-skill-management-dashboard]: Use allAgentIds (already in edges useMemo deps) not keyRemote for alba guard — prevents stale closure (T-09-06)
-- [Phase 09-skill-management-dashboard]: cookbooks subtitle uses skillCount prop (not skillsStats) to avoid adding skillsStats to nodes useMemo deps
-- [Phase 11-gwen-self-improving-loop]: STAGING_DIR constant derived from CONFIG["master_dir"] so tests can monkeypatch both together
-- [Phase 11-gwen-self-improving-loop]: Grace period fix — replaced hardcoded 90-day value with CONFIG["hermes_contrib_grace_days"] (365d); staging-promoted skills auto-qualify via "hermes" in synced_from path
-- [Phase 11-gwen-self-improving-loop]: Gwen reflection cron at 0 3 * * * America/Los_Angeles — 1h before Hermes skill-sync (0 4 * * *), no collision confirmed
-- [v1.3 roadmap]: KNOW-08+09 combined into Phase 12 — isolated projects-ingestion-state.json, agent_id="shared" + project metadata (not 46 per-project namespaces — quota risk)
-- [v1.3 roadmap]: SKILL-07 before SKILL-06 — skill_usage dict available now; failures.log requires new instrumentation before SKILL-06 API is meaningful
-- [v1.3 roadmap]: SKILL-06 requires two-commit sequence — stateful parser first, then API + UI; naive line-by-line parser breaks on multi-line tracebacks
-- [v1.3 roadmap]: FLOW-12 last — riskiest change; parentId coordinate migration must happen first before any toggle logic is wired
-
-### Roadmap Evolution
-
-- v1.2 roadmap defined 2026-04-12: 6 phases (6-11), 16 requirements mapped, 0 orphans
-- v1.3 roadmap defined 2026-04-13: 6 phases (12-17), 7 requirements mapped, 0 orphans
+- **mem0 writes:** Only via `POST http://localhost:3201/memory/add` — never touch `agent_memory` Qdrant directly
+- **Group children:** Use `parentId` + `extent:'parent'` pattern (Phase 17 — already in codebase)
+- [v1.5 roadmap]: DASH requirements woven into feature phases — DASH-01→P19, DASH-02→P20, DASH-03→P21, DASH-04→P22
+- [v1.5 roadmap]: Voice (Phase 22) depends on Phase 19 (SQLDB) for transcript storage, not on Phase 21 (PAPER) — parallel track
+- [v1.5 roadmap]: Security (Phase 24) depends on Phase 20 (HIVE) — audit log needs hive_mind table established first
+- [v1.5 roadmap]: SQLite DB = single shared file; all tables (hive_mind, memories, audit_log, warroom_transcript) in one DB
 
 ### Pending Todos
 
@@ -93,12 +67,12 @@ None.
 
 ### Blockers/Concerns
 
-- 5 pre-existing Vitest test failures (smoke.test.tsx SummaryBar + .worktrees collection-card) — not introduced by v1.2, carry forward as known debt
-- FLOW-11 verified programmatically; full visual QA at kitchen.epiloguecapital.com recommended before Phase 16/17
+- 5 pre-existing Vitest test failures (smoke.test.tsx SummaryBar + .worktrees collection-card) — carry-forward known debt
+- Voice server is a standalone Python Pipecat service — not embedded in Next.js; requires separate process management
 
 ## Session Continuity
 
-Last session: 2026-04-15T20:02:13.937Z
-Stopped at: context exhaustion at 90% (2026-04-15)
+Last session: 2026-04-16
+Stopped at: Roadmap created for v1.5 (Phases 19-24)
 Resume file: None
-Next action: `/gsd-plan-phase 12`
+Next action: `/gsd-plan-phase 19`
