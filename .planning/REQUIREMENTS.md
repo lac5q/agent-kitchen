@@ -77,35 +77,35 @@
 
 ## Traceability
 
-*Filled in by roadmapper*
+*Filled in by roadmapper — 2026-04-16*
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| SQLDB-01 | — | Pending |
-| SQLDB-02 | — | Pending |
-| SQLDB-03 | — | Pending |
-| SQLDB-04 | — | Pending |
-| HIVE-01 | — | Pending |
-| HIVE-02 | — | Pending |
-| HIVE-03 | — | Pending |
-| HIVE-04 | — | Pending |
-| HIVE-05 | — | Pending |
-| PAPER-01 | — | Pending |
-| PAPER-02 | — | Pending |
-| PAPER-03 | — | Pending |
-| PAPER-04 | — | Pending |
-| VOICE-01 | — | Pending |
-| VOICE-02 | — | Pending |
-| VOICE-03 | — | Pending |
-| VOICE-04 | — | Pending |
-| VOICE-05 | — | Pending |
-| MEM-01 | — | Pending |
-| MEM-02 | — | Pending |
-| MEM-03 | — | Pending |
-| SEC-01 | — | Pending |
-| SEC-02 | — | Pending |
-| SEC-03 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
+| SQLDB-01 | Phase 19 | Pending |
+| SQLDB-02 | Phase 19 | Pending |
+| SQLDB-03 | Phase 19 | Pending |
+| SQLDB-04 | Phase 19 | Pending |
+| HIVE-01 | Phase 20 | Pending |
+| HIVE-02 | Phase 20 | Pending |
+| HIVE-03 | Phase 20 | Pending |
+| HIVE-04 | Phase 20 | Pending |
+| HIVE-05 | Phase 20 | Pending |
+| PAPER-01 | Phase 21 | Pending |
+| PAPER-02 | Phase 21 | Pending |
+| PAPER-03 | Phase 21 | Pending |
+| PAPER-04 | Phase 21 | Pending |
+| VOICE-01 | Phase 22 | Pending |
+| VOICE-02 | Phase 22 | Pending |
+| VOICE-03 | Phase 22 | Pending |
+| VOICE-04 | Phase 22 | Pending |
+| VOICE-05 | Phase 22 | Pending |
+| MEM-01 | Phase 23 | Pending |
+| MEM-02 | Phase 23 | Pending |
+| MEM-03 | Phase 23 | Pending |
+| SEC-01 | Phase 24 | Pending |
+| SEC-02 | Phase 24 | Pending |
+| SEC-03 | Phase 24 | Pending |
+| DASH-01 | Phase 19 | Pending |
+| DASH-02 | Phase 20 | Pending |
+| DASH-03 | Phase 21 | Pending |
+| DASH-04 | Phase 22 | Pending |
