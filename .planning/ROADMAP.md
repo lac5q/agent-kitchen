@@ -65,7 +65,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 **Milestone Goal:** Give every agent a shared SQLite memory backbone and cross-server coordination layer, bring Paperclip into the hive as a contributing fleet node, and add a voice interface.
 
 - [ ] **Phase 19: SQLite Conversation Store** - Shared SQLite backbone with FTS5 index; all JSONL sessions ingested; health panel visible in Ledger
-- [ ] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard
+- [x] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard (completed 2026-04-17)
 - [ ] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery
 - [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
 - [ ] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard
@@ -99,10 +99,10 @@ Plans:
   3. Agent can delegate a task with priority and status tracking; interrupted tasks resume from last checkpoint
   4. Dashboard hive feed shows last N cross-agent actions in real time with agent, action_type, summary, and timestamp
   5. Paperclip contributions appear in the hive feed under `agent_id="paperclip"` alongside all other agents
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 20-01-PLAN.md — Schema DDL (hive_actions + hive_delegations + FTS5), busy_timeout pragma, /api/hive route with tests
-- [ ] 20-02-PLAN.md — useHiveFeed() hook, HiveFeed component, wired into Kitchen Floor page
+- [x] 20-01-PLAN.md — Schema DDL (hive_actions + hive_delegations + FTS5), busy_timeout pragma, /api/hive route with tests
+- [x] 20-02-PLAN.md — useHiveFeed() hook, HiveFeed component, wired into Kitchen Floor page
 **UI hint**: yes
 
 ### Phase 21: Paperclip Fleet Node
@@ -175,7 +175,7 @@ Plans:
 | 17. Collapsible Node Groups | v1.3 | 2/2 | Complete | 2026-04-15 |
 | 18. Cookbooks Page | v1.4 | 1/1 | Complete | 2026-04-15 |
 | 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
-| 20. Hive Mind Coordination | v1.5 | 0/2 | Planning | - |
+| 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
 | 21. Paperclip Fleet Node | v1.5 | 0/? | Not started | - |
 | 22. Voice Server | v1.5 | 0/? | Not started | - |
 | 23. Memory Intelligence | v1.5 | 0/? | Not started | - |
