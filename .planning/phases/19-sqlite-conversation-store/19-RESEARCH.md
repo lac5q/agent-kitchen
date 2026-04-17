@@ -437,17 +437,19 @@ export default nextConfig;
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Ingest trigger: on-demand vs. scheduled**
    - What we know: No scheduler exists yet in the project; ingest could be called from `/api/recall` lazily or from a dedicated `/api/recall/ingest` endpoint.
    - What's unclear: Should the Ledger page trigger ingest on mount, or should ingest be a manual action?
    - Recommendation: Expose `/api/recall/ingest` (POST) as an explicit action button in the Ledger panel. Lazy ingest on recall would add latency. Scheduled ingest requires a background worker not yet in scope.
+   - RESOLVED: Explicit "Run Ingest" button in Ledger panel triggers POST /api/recall/ingest. Implemented in Plan 02 (ingest route) and Plan 03 (UI button).
 
 2. **FTS5 query escaping**
    - What we know: FTS5 `MATCH` syntax is not SQL LIKE; special characters (`"`, `*`, `-`, `.`) in query strings can cause parse errors.
    - What's unclear: Should the API sanitize/escape the `q` parameter before passing to FTS5?
    - Recommendation: Wrap the query in double quotes for phrase matching: `MATCH '"' || ? || '"'`; fall back to plain `MATCH ?` if phrase match returns zero results.
+   - RESOLVED: Plan 02 Task 1 implements phrase-quote wrapping with plain-match fallback on zero results.
 
 ---
 
