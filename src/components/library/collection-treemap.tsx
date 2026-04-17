@@ -24,12 +24,45 @@ interface CollectionTreemapProps {
   collections: KnowledgeCollection[];
 }
 
+/** Break a string into lines that fit within maxChars characters each. */
+function wrapText(text: string, maxChars: number): string[] {
+  const words = text.replace(/-/g, "- ").split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if ((current + " " + word).length <= maxChars) {
+      current += " " + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function CustomContent(props: TreemapNode) {
   const { x, y, width, height, name, fill, docCount } = props as TreemapNode & {
     fill: string;
     docCount: number;
   };
   const showLabel = width >= 40 && height >= 30;
+
+  // Estimate how many chars fit per line (~6.5px per char at font-size 11)
+  const charsPerLine = Math.max(4, Math.floor((width - 8) / 6.5));
+  const rawLines = wrapText(String(name ?? ""), charsPerLine);
+  // Max 3 lines; truncate with ellipsis if more
+  const maxLines = 3;
+  const lines =
+    rawLines.length > maxLines
+      ? [...rawLines.slice(0, maxLines - 1), rawLines[maxLines - 1].slice(0, charsPerLine - 1) + "…"]
+      : rawLines;
+
+  const lineHeight = 13;
+  const blockHeight = lines.length * lineHeight + 14; // +14 for doc count line
+  const startY = y + height / 2 - blockHeight / 2;
 
   return (
     <g>
@@ -46,21 +79,24 @@ function CustomContent(props: TreemapNode) {
       />
       {showLabel && (
         <>
+          {lines.map((line, i) => (
+            <text
+              key={i}
+              x={x + width / 2}
+              y={startY + i * lineHeight + lineHeight / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={11}
+              fontWeight={600}
+              fill="#f8fafc"
+              style={{ pointerEvents: "none" }}
+            >
+              {line}
+            </text>
+          ))}
           <text
             x={x + width / 2}
-            y={y + height / 2 - 6}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={11}
-            fontWeight={600}
-            fill="#f8fafc"
-            style={{ pointerEvents: "none" }}
-          >
-            {name}
-          </text>
-          <text
-            x={x + width / 2}
-            y={y + height / 2 + 9}
+            y={startY + lines.length * lineHeight + 7}
             textAnchor="middle"
             dominantBaseline="middle"
             fontSize={10}
