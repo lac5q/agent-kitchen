@@ -82,7 +82,11 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
   2. All Claude Code JSONL sessions in `~/.claude/projects/` are ingested with FTS5 index on content, timestamp, project, and agent_id
   3. DB path is declared once in project config and all consumers (agents, dashboard, voice) reference the same file
   4. Ledger panel shows row count, DB size, last ingest timestamp, and last recall query
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 19-01-PLAN.md — Install better-sqlite3, configure Next.js, create DB singleton and schema
+- [ ] 19-02-PLAN.md — JSONL ingestion engine and recall/ingest/stats API routes
+- [ ] 19-03-PLAN.md — SqliteHealthPanel component wired into Ledger page
 **UI hint**: yes
 
 ### Phase 20: Hive Mind Coordination
@@ -167,7 +171,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 | 16. Per-Node Activity Panel | v1.3 | 1/1 | Complete | 2026-04-14 |
 | 17. Collapsible Node Groups | v1.3 | 2/2 | Complete | 2026-04-15 |
 | 18. Cookbooks Page | v1.4 | 1/1 | Complete | 2026-04-15 |
-| 19. SQLite Conversation Store | v1.5 | 0/? | Not started | - |
+| 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
 | 20. Hive Mind Coordination | v1.5 | 0/? | Not started | - |
 | 21. Paperclip Fleet Node | v1.5 | 0/? | Not started | - |
 | 22. Voice Server | v1.5 | 0/? | Not started | - |
