@@ -2,6 +2,8 @@
 import { useAgents, useRemoteAgents } from "@/lib/api-client";
 import { SummaryBar } from "@/components/kitchen/summary-bar";
 import { AgentGrid } from "@/components/kitchen/agent-grid";
+import { InfoTip } from "@/components/ui/info-tip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Agent } from "@/types";
 
 export default function KitchenFloor() {
@@ -35,9 +37,13 @@ export default function KitchenFloor() {
   const tasks = allAgents.filter((a) => a.currentTask && !a.isRemote).length;
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-amber-500">The Kitchen Floor</h1>
+        <h1 className="flex items-center text-2xl font-bold text-amber-500">
+          The Kitchen Floor
+          <InfoTip text="Real-time status board for all agents in the system. Shows both local agents running on this machine and remote agents from connected instances. Data refreshes automatically via the agents API." />
+        </h1>
         <p className="text-sm text-slate-400">Real-time agent status board</p>
       </div>
       <SummaryBar total={allAgents.length} active={active} tasks={tasks} errors={errors} />
@@ -49,5 +55,6 @@ export default function KitchenFloor() {
         <AgentGrid agents={allAgents} />
       )}
     </div>
+    </TooltipProvider>
   );
 }
