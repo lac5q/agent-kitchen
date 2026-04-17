@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/ledger/kpi-card";
 import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
 import { CostCalculator } from "@/components/ledger/cost-calculator";
+import { SqliteHealthPanel } from "@/components/ledger/sqlite-health-panel";
 
 function formatNum(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
@@ -128,6 +129,9 @@ export default function LedgerPage() {
         totalOutput={totalOutput}
         tokensSaved={tokensSaved}
       />
+
+      {/* SQLite Store Health Panel */}
+      <SqliteHealthPanel />
     </div>
   );
 }
