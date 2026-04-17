@@ -5,6 +5,7 @@ export const POLL_INTERVALS = {
   knowledge: 60000,
   health: 10000,
   skills: 60000,
+  hive: 5000,
 } as const;
 
 export const COLORS = {
