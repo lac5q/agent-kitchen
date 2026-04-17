@@ -7,6 +7,8 @@ import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
 import { CostCalculator } from "@/components/ledger/cost-calculator";
 import { SqliteHealthPanel } from "@/components/ledger/sqlite-health-panel";
+import { InfoTip } from "@/components/ui/info-tip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function formatNum(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
@@ -54,6 +56,7 @@ export default function LedgerPage() {
   }));
 
   return (
+    <TooltipProvider>
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-amber-500">The Ledger</h1>
@@ -67,22 +70,26 @@ export default function LedgerPage() {
           value={formatNum(tokensProcessed)}
           valueColor="text-sky-400"
           subtitle={`${formatNum(totalInput)} in / ${formatNum(totalOutput)} out`}
+          tooltip="Total tokens sent to and received from AI models — input (prompts) plus output (responses). Sourced from RTK's SQLite session log. Tracks cumulative usage across all Claude Code sessions."
         />
         <KpiCard
           label="Tokens Saved"
           value={formatNum(tokensSaved)}
           valueColor="text-emerald-400"
           subtitle={savingsPercent > 0 ? `${savingsPercent.toFixed(1)}% savings rate` : undefined}
+          tooltip="Tokens that would have been sent without RTK's output filtering. RTK compresses verbose CLI output (git, npm, etc.) before it reaches Claude, reducing token usage by 60–90% on dev operations."
         />
         <KpiCard
           label="Total Commands"
           value={formatNum(totalCommands)}
           valueColor="text-amber-400"
+          tooltip="Number of CLI commands executed through the RTK proxy. Each command is a hook intercept where RTK filtered the output before it was passed to Claude as context."
         />
         <KpiCard
           label="Avg Execution"
           value={avgExecutionTime > 0 ? `${avgExecutionTime.toFixed(1)}s` : "N/A"}
           valueColor="text-slate-100"
+          tooltip="Average wall-clock time per RTK-proxied command, in seconds. Measured from command start to output delivery. High values may indicate slow disk I/O or large repository operations."
         />
       </div>
 
@@ -104,6 +111,12 @@ export default function LedgerPage() {
                 ].join(" ")}
               >
                 {tab}
+                {tab === "Savings Breakdown" && (
+                  <InfoTip text="Per-command breakdown of token savings. Shows which CLI commands (git, npm, etc.) saved the most tokens via RTK's output filtering. Top 8 commands by savings volume." />
+                )}
+                {tab === "Model Mix" && (
+                  <InfoTip text="Distribution of token usage across Claude model tiers (Haiku, Sonnet, Opus). Sourced from ~/.claude/projects JSONL session logs. Helps identify which tasks are consuming expensive model capacity." />
+                )}
               </button>
             );
           })}
@@ -133,5 +146,6 @@ export default function LedgerPage() {
       {/* SQLite Store Health Panel */}
       <SqliteHealthPanel />
     </div>
+    </TooltipProvider>
   );
 }

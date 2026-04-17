@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { InfoTip } from "@/components/ui/info-tip";
 
 interface CostCalculatorProps {
   totalInput: number;
@@ -26,7 +27,10 @@ export function CostCalculator({
 
   return (
     <Card className="border-slate-800 bg-slate-900/50 p-5">
-      <p className="text-sm font-medium text-slate-300 mb-4">Cost Calculator</p>
+      <p className="flex items-center text-sm font-medium text-slate-300 mb-4">
+        Cost Calculator
+        <InfoTip text="Estimates your AI spend based on actual token usage from RTK logs. Enter your model's per-million-token rates to see Estimated Spend (what you paid) and RTK Savings (what RTK avoided by filtering CLI output before it reached Claude)." />
+      </p>
       <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-slate-500">Input $/1M tokens</label>
