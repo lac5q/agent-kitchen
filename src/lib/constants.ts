@@ -42,3 +42,7 @@ export const MEM0_URL = process.env.MEM0_URL || "http://localhost:3201";
 export const SKILLS_PATH = process.env.SKILLS_PATH || `${process.env.HOME}/.claude/skills`;
 export const SKILL_CONTRIBUTIONS_LOG = process.env.SKILL_CONTRIBUTIONS_LOG || `${process.env.HOME}/.openclaw/skill-contributions.jsonl`;
 export const FAILURES_LOG = process.env.FAILURES_LOG || `${process.env.HOME}/.openclaw/failures.log`;
+
+// SQLite conversation store path — resolved relative to process.cwd() in db.ts
+// Keep as plain string (no path import) so this file stays safe for client-side imports
+export const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || 'data/conversations.db';
