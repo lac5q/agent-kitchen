@@ -220,3 +220,18 @@ export function useSkills() {
     refetchInterval: POLL_INTERVALS.skills,
   });
 }
+
+export function useRecallStats() {
+  return useQuery({
+    queryKey: ["recall-stats"],
+    queryFn: () =>
+      fetchJSON<{
+        rowCount: number;
+        lastIngest: string | null;
+        lastRecallQuery: string | null;
+        dbSizeBytes: number;
+        timestamp: string;
+      }>("/api/recall/stats"),
+    // No auto-refresh — manual via "Run Ingest" button
+  });
+}
