@@ -1,47 +1,37 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import Database from "better-sqlite3";
-import { initSchema } from "@/lib/db-schema";
 
-// Use a real in-memory SQLite DB with the actual schema
-let testDb: Database.Database;
+// Create a shared in-memory DB for the entire test suite
+const testDb = new Database(":memory:");
 
-vi.mock("@/lib/db", () => {
-  const Database = require("better-sqlite3");
-  const { initSchema } = require("@/lib/db-schema");
-  testDb = new Database(":memory:");
-  initSchema(testDb);
-  return {
-    getDb: () => testDb,
-    closeDb: () => {},
-  };
-});
+// Apply the real schema to the in-memory DB
+// Use dynamic import to get the real initSchema after aliases are resolved
+const { initSchema } = await import("@/lib/db-schema");
+initSchema(testDb);
+
+// Mock @/lib/db to return the in-memory DB
+vi.mock("@/lib/db", () => ({
+  getDb: () => testDb,
+  closeDb: () => {},
+}));
 
 // Import route handlers after mock is set up
 const { GET, POST } = await import("../route");
 
-// Helper: build a NextRequest-like object
-function makeRequest(
-  method: string,
-  url: string,
-  body?: unknown
-): Request {
-  const init: RequestInit = { method };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
-    init.headers = { "Content-Type": "application/json" };
-  }
-  return new Request(url, init);
-}
-
+// Helper: build a Request
 function makeGetRequest(params: Record<string, string> = {}): Request {
   const url = new URL("http://localhost/api/hive");
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  return makeRequest("GET", url.toString());
+  return new Request(url.toString(), { method: "GET" });
 }
 
 function makePostRequest(body: unknown): Request {
-  return makeRequest("POST", "http://localhost/api/hive", body);
+  return new Request("http://localhost/api/hive", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 afterAll(() => {
@@ -78,7 +68,7 @@ describe("POST /api/hive — actions", () => {
   it("Test 3 (HIVE-01): POST with artifacts object stores JSON; GET returns it as string", async () => {
     const artifacts = { filesProcessed: 42, nextBatch: "batch-2" };
     const postReq = makePostRequest({
-      agent_id: "claude-code",
+      agent_id: "artifacts-agent",
       action_type: "continue",
       summary: "Artifacts test",
       artifacts,
@@ -87,7 +77,7 @@ describe("POST /api/hive — actions", () => {
     expect(postRes.status).toBe(200);
     const { id } = await postRes.json();
 
-    const getReq = makeGetRequest({ agent: "claude-code" });
+    const getReq = makeGetRequest({ agent: "artifacts-agent" });
     const getRes = await GET(getReq as any);
     const data = await getRes.json();
     const row = data.actions.find((a: any) => a.id === id);
@@ -99,7 +89,7 @@ describe("POST /api/hive — actions", () => {
 
 describe("GET /api/hive — action queries", () => {
   beforeAll(async () => {
-    // Seed some actions for filter tests
+    // Seed actions for filter tests
     const actions = [
       { agent_id: "claude", action_type: "continue", summary: "claude continue action" },
       { agent_id: "claude", action_type: "stop", summary: "claude stopping now" },
@@ -113,16 +103,17 @@ describe("GET /api/hive — action queries", () => {
   it("Test 4 (HIVE-02): GET ?agent=claude returns only actions by that agent_id", async () => {
     const req = makeGetRequest({ agent: "claude" });
     const res = await GET(req as any);
-    const data = await res.json();
     expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.actions.length).toBeGreaterThan(0);
     expect(data.actions.every((a: any) => a.agent_id === "claude")).toBe(true);
   });
 
   it("Test 5 (HIVE-02): GET ?q=keyword returns FTS-matched results", async () => {
     const req = makeGetRequest({ q: "keyword" });
     const res = await GET(req as any);
-    const data = await res.json();
     expect(res.status).toBe(200);
+    const data = await res.json();
     expect(data.actions.length).toBeGreaterThan(0);
     expect(data.actions.some((a: any) => a.summary.includes("keyword"))).toBe(true);
   });
@@ -130,8 +121,8 @@ describe("GET /api/hive — action queries", () => {
   it("Test 6 (HIVE-02): GET ?agent=claude&q=stopping combines both filters", async () => {
     const req = makeGetRequest({ agent: "claude", q: "stopping" });
     const res = await GET(req as any);
-    const data = await res.json();
     expect(res.status).toBe(200);
+    const data = await res.json();
     expect(data.actions.length).toBeGreaterThan(0);
     expect(data.actions.every((a: any) => a.agent_id === "claude")).toBe(true);
   });
@@ -151,8 +142,8 @@ describe("GET /api/hive — action queries", () => {
     }
     const req = makeGetRequest({ limit: "5" });
     const res = await GET(req as any);
-    const data = await res.json();
     expect(res.status).toBe(200);
+    const data = await res.json();
     expect(data.actions.length).toBeLessThanOrEqual(5);
   });
 });
@@ -177,13 +168,14 @@ describe("POST /api/hive — delegations", () => {
 
     const getReq = makeGetRequest({ type: "delegation" });
     const getRes = await GET(getReq as any);
+    expect(getRes.status).toBe(200);
     const getData = await getRes.json();
     expect(Array.isArray(getData.delegations)).toBe(true);
     const row = getData.delegations.find((d: any) => d.task_id === taskId);
     expect(row).toBeDefined();
   });
 
-  it("Test 9 (HIVE-03): POST delegation with same task_id updates status and checkpoint (UPSERT)", async () => {
+  it("Test 9 (HIVE-03): POST delegation with same task_id updates status (UPSERT)", async () => {
     const taskId = `task-upsert-${Date.now()}`;
     await POST(makePostRequest({
       type: "delegation",
@@ -250,8 +242,8 @@ describe("HIVE-05: Paperclip agent_id round-trip", () => {
 
     const getReq = makeGetRequest({ agent: "paperclip" });
     const getRes = await GET(getReq as any);
+    expect(getRes.status).toBe(200);
     const data = await getRes.json();
-    expect(res.status).toBe(200);
     expect(data.actions.some((a: any) => a.agent_id === "paperclip")).toBe(true);
   });
 });
