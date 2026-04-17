@@ -235,3 +235,22 @@ export function useRecallStats() {
     // No auto-refresh — manual via "Run Ingest" button
   });
 }
+
+export function useHiveFeed(limit = 20) {
+  return useQuery({
+    queryKey: ["hive-feed"],
+    queryFn: () =>
+      fetchJSON<{
+        actions: Array<{
+          id: number;
+          agent_id: string;
+          action_type: string;
+          summary: string;
+          artifacts: string | null;
+          timestamp: string;
+        }>;
+        timestamp: string;
+      }>(`/api/hive?limit=${limit}`),
+    refetchInterval: POLL_INTERVALS.hive,
+  });
+}
