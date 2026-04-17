@@ -63,4 +63,69 @@ export function initSchema(db: Database.Database): void {
       value TEXT
     );
   `);
+
+  // hive_actions: append-only cross-agent action log (HIVE-01, HIVE-02, HIVE-05)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS hive_actions (
+      id          INTEGER PRIMARY KEY,
+      agent_id    TEXT    NOT NULL,
+      action_type TEXT    NOT NULL
+                  CHECK(action_type IN ('continue','loop','checkpoint','trigger','stop','error')),
+      summary     TEXT    NOT NULL,
+      artifacts   TEXT,
+      session_id  TEXT,
+      timestamp   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS hive_actions_agent_ts
+      ON hive_actions(agent_id, timestamp DESC);
+  `);
+
+  // hive_actions_fts: FTS5 external-content table (same pattern as messages_fts)
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS hive_actions_fts
+      USING fts5(
+        summary,
+        agent_id    UNINDEXED,
+        action_type UNINDEXED,
+        timestamp   UNINDEXED,
+        content=hive_actions,
+        content_rowid=id,
+        tokenize='unicode61'
+      );
+  `);
+
+  // AFTER INSERT trigger keeps FTS index in sync with hive_actions
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS hive_actions_ai AFTER INSERT ON hive_actions BEGIN
+      INSERT INTO hive_actions_fts(rowid, summary, agent_id, action_type, timestamp)
+      VALUES (new.id, new.summary, new.agent_id, new.action_type, new.timestamp);
+    END;
+  `);
+
+  // AFTER DELETE trigger for FTS cleanup (hive_actions is append-only, but ensures correctness)
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS hive_actions_ad AFTER DELETE ON hive_actions BEGIN
+      INSERT INTO hive_actions_fts(hive_actions_fts, rowid, summary, agent_id, action_type, timestamp)
+      VALUES ('delete', old.id, old.summary, old.agent_id, old.action_type, old.timestamp);
+    END;
+  `);
+
+  // hive_delegations: mutable task tracking with checkpoint recovery (HIVE-03)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS hive_delegations (
+      id            INTEGER PRIMARY KEY,
+      task_id       TEXT    NOT NULL UNIQUE,
+      from_agent    TEXT    NOT NULL,
+      to_agent      TEXT    NOT NULL,
+      task_summary  TEXT    NOT NULL,
+      priority      INTEGER NOT NULL DEFAULT 5,
+      status        TEXT    NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','active','paused','completed','failed')),
+      checkpoint    TEXT,
+      created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS hive_delegations_to_agent
+      ON hive_delegations(to_agent, status);
+  `);
 }

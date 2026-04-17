@@ -17,6 +17,7 @@ export function getDb(): Database.Database {
     const db = new Database(resolved);
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
+    db.pragma('busy_timeout = 5000');
     initSchema(db);
     _db = db;
   }
