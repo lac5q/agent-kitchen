@@ -96,30 +96,32 @@ export default function LedgerPage() {
       {/* Chart Tabs */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
         {/* Tab List */}
-        <div className="flex gap-1 mb-5 w-fit rounded-lg bg-slate-800/60 p-1">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={[
-                  "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                    : "text-slate-400 hover:text-slate-200",
-                ].join(" ")}
-              >
-                {tab}
-                {tab === "Savings Breakdown" && (
-                  <InfoTip text="Per-command breakdown of token savings. Shows which CLI commands (git, npm, etc.) saved the most tokens via RTK's output filtering. Top 8 commands by savings volume." />
-                )}
-                {tab === "Model Mix" && (
-                  <InfoTip text="Distribution of token usage across Claude model tiers (Haiku, Sonnet, Opus). Sourced from ~/.claude/projects JSONL session logs. Helps identify which tasks are consuming expensive model capacity." />
-                )}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex gap-1 w-fit rounded-lg bg-slate-800/60 p-1">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={[
+                    "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                      : "text-slate-400 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  {tab}
+                </button>
+              );
+            })}
+          </div>
+          {activeTab === "Savings Breakdown" && (
+            <InfoTip text="Per-command breakdown of token savings. Shows which CLI commands (git, npm, etc.) saved the most tokens via RTK's output filtering. Top 8 commands by savings volume." />
+          )}
+          {activeTab === "Model Mix" && (
+            <InfoTip text="Distribution of token usage across Claude model tiers (Haiku, Sonnet, Opus). Sourced from ~/.claude/projects JSONL session logs. Helps identify which tasks are consuming expensive model capacity." />
+          )}
         </div>
 
         {/* Tab Content */}
