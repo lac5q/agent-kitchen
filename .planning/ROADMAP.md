@@ -99,7 +99,10 @@ Plans:
   3. Agent can delegate a task with priority and status tracking; interrupted tasks resume from last checkpoint
   4. Dashboard hive feed shows last N cross-agent actions in real time with agent, action_type, summary, and timestamp
   5. Paperclip contributions appear in the hive feed under `agent_id="paperclip"` alongside all other agents
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 20-01-PLAN.md — Schema DDL (hive_actions + hive_delegations + FTS5), busy_timeout pragma, /api/hive route with tests
+- [ ] 20-02-PLAN.md — useHiveFeed() hook, HiveFeed component, wired into Kitchen Floor page
 **UI hint**: yes
 
 ### Phase 21: Paperclip Fleet Node
@@ -172,7 +175,7 @@ Plans:
 | 17. Collapsible Node Groups | v1.3 | 2/2 | Complete | 2026-04-15 |
 | 18. Cookbooks Page | v1.4 | 1/1 | Complete | 2026-04-15 |
 | 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
-| 20. Hive Mind Coordination | v1.5 | 0/? | Not started | - |
+| 20. Hive Mind Coordination | v1.5 | 0/2 | Planning | - |
 | 21. Paperclip Fleet Node | v1.5 | 0/? | Not started | - |
 | 22. Voice Server | v1.5 | 0/? | Not started | - |
 | 23. Memory Intelligence | v1.5 | 0/? | Not started | - |
