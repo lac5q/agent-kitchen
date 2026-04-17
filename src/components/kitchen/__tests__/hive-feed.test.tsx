@@ -75,9 +75,9 @@ describe("HiveFeed", () => {
 
     render(<HiveFeed />);
 
-    // Check agent_ids are visible
+    // Check agent_ids are visible (hermes appears twice — use getAllByText)
     expect(screen.getByText("claude")).toBeInTheDocument();
-    expect(screen.getByText("hermes")).toBeInTheDocument();
+    expect(screen.getAllByText("hermes").length).toBeGreaterThan(0);
 
     // Check action_types are visible (as chips)
     expect(screen.getByText("continue")).toBeInTheDocument();
