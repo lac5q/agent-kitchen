@@ -4,6 +4,8 @@ import { useSkills } from "@/lib/api-client";
 import { HealthPanel } from "@/components/cookbooks/health-panel";
 import { SkillHeatmap } from "@/components/skill-heatmap";
 import { SkillsList } from "@/components/cookbooks/skills-list";
+import { InfoTip } from "@/components/ui/info-tip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function CookbooksPage() {
   const { data, isLoading } = useSkills();
@@ -26,6 +28,7 @@ export default function CookbooksPage() {
   const contributionHistory = data?.contributionHistory ?? [];
 
   return (
+    <TooltipProvider>
     <div className="space-y-8">
       {/* Header */}
       <div>
@@ -37,8 +40,9 @@ export default function CookbooksPage() {
 
       {/* Health panel */}
       <section>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <h2 className="flex items-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
           Health Overview
+          <InfoTip text="Aggregate health metrics for all agent skill files (.claude/skills/). Shows total skill count, coverage gaps (skills unused for 30+ days), stale candidates, and failure breakdowns. Sourced from the skills API on each page load." />
         </h2>
         <HealthPanel
           totalSkills={totalSkills}
@@ -52,8 +56,9 @@ export default function CookbooksPage() {
 
       {/* Heatmap */}
       <section>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <h2 className="flex items-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
           Contribution Heatmap
+          <InfoTip text="Daily skill-file activity over the last 30 days. Each cell represents one day; darker cells mean more skill files were created or modified that day. Helps identify periods of active skill development." />
         </h2>
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
           <SkillHeatmap contributionHistory={contributionHistory} days={30} />
@@ -62,8 +67,9 @@ export default function CookbooksPage() {
 
       {/* Skills list */}
       <section>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <h2 className="flex items-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
           Skills
+          <InfoTip text="Full list of agent skill files discovered across all .claude/skills/ directories. Each skill is a reusable instruction set an agent can load. Coverage gaps are skills with no recent usage recorded." />
         </h2>
         <SkillsList
           totalSkills={totalSkills}
@@ -72,5 +78,6 @@ export default function CookbooksPage() {
         />
       </section>
     </div>
+    </TooltipProvider>
   );
 }

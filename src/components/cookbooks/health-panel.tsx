@@ -1,5 +1,8 @@
 "use client";
 
+import { InfoTip } from "@/components/ui/info-tip";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 export interface HealthPanelProps {
   totalSkills: number;
   coverageGaps: string[];
@@ -27,21 +30,24 @@ export function HealthPanel({
   const gapCount = coverageGaps.length;
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       {/* Stat cards row */}
       <div className="grid grid-cols-3 gap-3">
         {/* Total Skills */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          <p className="flex items-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Total Skills
+            <InfoTip text="Count of SKILL.md files discovered across all .claude/skills/ directories in agent repos. Each file represents one reusable capability an agent can load as context." />
           </p>
           <p className="text-2xl font-bold text-amber-500">{totalSkills}</p>
         </div>
 
         {/* Coverage Gaps */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          <p className="flex items-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Coverage Gaps
+            <InfoTip text="Skills that have not been invoked or updated in 30+ days. These may be obsolete or under-promoted — candidates for review, promotion, or removal." />
           </p>
           <p className={`text-2xl font-bold ${gapCount > 0 ? "text-amber-500" : "text-slate-400"}`}>
             {gapCount}
@@ -51,8 +57,9 @@ export function HealthPanel({
 
         {/* Stale Candidates */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          <p className="flex items-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Stale Candidates
+            <InfoTip text="Skills flagged by the APO (Agent Performance Optimizer) as candidates for improvement or deprecation based on failure patterns and low usage signals." />
           </p>
           <p className="text-2xl font-bold text-slate-400">{staleCandidates}</p>
         </div>
@@ -104,5 +111,6 @@ export function HealthPanel({
         Last synced: {formatDate(lastUpdated)}
       </p>
     </div>
+    </TooltipProvider>
   );
 }
