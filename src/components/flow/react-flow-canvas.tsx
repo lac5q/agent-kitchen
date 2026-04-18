@@ -14,7 +14,7 @@ import {
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import type { HealthStatus } from "@/types";
+import type { HealthStatus, PaperclipFleetResponse } from "@/types";
 import { applyCollapseToNodes, applyCollapseToEdges, aggregateHealthColor } from "@/lib/flow/collapse-logic";
 
 // Custom node component
@@ -131,6 +131,11 @@ const DEV_TOOL_SPACING = 160;
 const DEV_TOOL_START_X = 160;
 const DEV_TOOL_Y = 560;
 
+// Layout constants — Paperclip fleet group
+const PAPERCLIP_START_X = 560;
+const PAPERCLIP_Y = 700;
+const PAPERCLIP_SPACING = 120;
+
 interface ReactFlowCanvasProps {
   services: HealthStatus[];
   agentCount: number;
@@ -146,6 +151,7 @@ interface ReactFlowCanvasProps {
   localActiveCount?: number;
   localTotalCount?: number;
   onNodeClick: (nodeId: string, nodeLabel: string, nodeIcon: string, nodeStats: Record<string, string | number>) => void;
+  paperclipFleet?: PaperclipFleetResponse | null;
 }
 
 const EDGE_COLORS = {
@@ -170,6 +176,7 @@ export function ReactFlowCanvas({
   localActiveCount = 0,
   localTotalCount = 0,
   onNodeClick,
+  paperclipFleet = null,
 }: ReactFlowCanvasProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
@@ -205,6 +212,12 @@ export function ReactFlowCanvas({
       case "cookbooks": return { "Skills": skillCount, "Gaps": coverageGapsCount, ...(topFailureAgent ? { "Top Failure": topFailureAgent } : {}) };
       case "gateways": return { "Alba": "18793", "Gwen": "18792" };
       case "manager": return { "Platform": "Paperclip", "Port": "3100" };
+      case "group-paperclip": return {
+        "Fleet": paperclipFleet?.summary.fleetStatus ?? "offline",
+        "Agents": `${paperclipFleet?.summary.activeAgents ?? 0}/${paperclipFleet?.summary.totalAgents ?? 0}`,
+        "Active Tasks": paperclipFleet?.summary.activeTasks ?? 0,
+        "Paused": paperclipFleet?.summary.pausedRecoveries ?? 0,
+      };
       case "apo": return { "Mode": "QA", "Cycle": "hourly" };
       case "gitnexus": return { "Repos": 8, "Symbols": "75k+" };
       case "llmwiki": return { "Topics": 6, "Maintainer": "Alba" };
@@ -236,6 +249,28 @@ export function ReactFlowCanvas({
       localActiveCount > 0 ? "active" : "idle",
     ];
     const devToolStatuses = ["cookbooks", "apo", "gitnexus", "llmwiki"].map(id => getStatus(id));
+
+    // Paperclip fleet statuses — derived from live fleet data
+    const paperclipStatuses = (paperclipFleet?.agents ?? []).map(a => a.status);
+
+    // Paperclip child nodes — dynamically generated from usePaperclipFleet() data
+    const paperclipChildNodes: Node[] = (paperclipFleet?.agents ?? []).map((agent, i) => ({
+      id: `paperclip-${agent.id}`,
+      parentId: "group-paperclip",
+      extent: "parent" as const,
+      position: { x: 15 + i * PAPERCLIP_SPACING, y: 32 },
+      data: {
+        label: agent.name,
+        subtitle: agent.autonomyMode,
+        icon: "📎",
+        status: agent.status,
+        highlighted: highlightedNode === `paperclip-${agent.id}`,
+      },
+      type: "flowNode",
+    }));
+
+    // Dynamic width for the Paperclip group based on agent count (min 300)
+    const paperclipGroupWidth = Math.max(300, 30 + (paperclipFleet?.agents.length ?? 0) * PAPERCLIP_SPACING);
 
     // Group box nodes — parent containers; MUST appear BEFORE their children in the array.
     // These keep absolute canvas positions (they are roots, no parentId).
@@ -269,6 +304,22 @@ export function ReactFlowCanvas({
           collapsed: collapsedGroups.has("group-devtools"),
           aggregateColor: aggregateHealthColor(devToolStatuses),
           onToggleCollapse: () => toggleGroup("group-devtools"),
+        },
+        selectable: false,
+        draggable: false,
+      },
+      {
+        id: "group-paperclip",
+        type: "groupBoxNode",
+        position: { x: PAPERCLIP_START_X - 15, y: PAPERCLIP_Y - 32 },
+        style: { zIndex: -1 },
+        data: {
+          label: "Paperclip Fleet",
+          width: paperclipGroupWidth,
+          height: 160,
+          collapsed: collapsedGroups.has("group-paperclip"),
+          aggregateColor: aggregateHealthColor(paperclipStatuses.length > 0 ? paperclipStatuses : ["dormant"]),
+          onToggleCollapse: () => toggleGroup("group-paperclip"),
         },
         selectable: false,
         draggable: false,
@@ -328,10 +379,10 @@ export function ReactFlowCanvas({
     }));
 
     // CRITICAL: group box nodes MUST come before their children (React Flow v12 parentId requirement)
-    const baseNodes = [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes];
+    const baseNodes = [...groupBoxNodes, ...staticNodes, ...agentNodes, localNode, ...devToolNodes, ...paperclipChildNodes];
     return applyCollapseToNodes(baseNodes, collapsedGroups);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount, collapsedGroups, toggleGroup, skillCount, coverageGapsCount, topFailureAgent]);
+  }, [remoteAgents, nodeActivity, highlightedNode, localActiveCount, localTotalCount, collapsedGroups, toggleGroup, skillCount, coverageGapsCount, topFailureAgent, paperclipFleet]);
 
   // Derive hidden node IDs from the processed nodes array (after collapse applied)
   const hiddenNodeIds = useMemo(
@@ -364,10 +415,19 @@ export function ReactFlowCanvas({
       { id: "agents-wiki", source: "local-agents", target: "llmwiki",  animated: true, style: { stroke: EDGE_COLORS.knowledge, strokeWidth: 1.5 } },
     ];
 
-    const allEdges = [...base, ...agentEdges, ...extraEdges];
+    // Edges from manager to each Paperclip fleet agent
+    const paperclipEdges: Edge[] = (paperclipFleet?.agents ?? []).map(agent => ({
+      id: `mgr-paperclip-${agent.id}`,
+      source: "manager",
+      target: `paperclip-${agent.id}`,
+      animated: true,
+      style: { stroke: EDGE_COLORS.request, strokeWidth: 1.5 },
+    }));
+
+    const allEdges = [...base, ...agentEdges, ...extraEdges, ...paperclipEdges];
     return applyCollapseToEdges(allEdges, hiddenNodeIds);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAgentIds, hiddenNodeIds]);
+  }, [allAgentIds, hiddenNodeIds, paperclipFleet]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     // Group box node clicks are handled by the node's own onClick (onToggleCollapse in data)

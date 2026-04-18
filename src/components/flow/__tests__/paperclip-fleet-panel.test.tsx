@@ -7,7 +7,7 @@
  * Coverage:
  *   Test 1 (DASH-03): per-agent rows with name, autonomy badge, active task, last heartbeat
  *   Test 2 (PAPER-03): autonomy badge vocabulary — Interactive, Autonomous, Continuous, Hybrid
- *   Test 3 (PAPER-04): recovery rows with sessionId, completedSteps, resumeFrom, status
+ *   Test 3 (PAPER-04): recovery rows with sessionId, completedSteps count, resumeFrom, and status
  *   Test 4 (PAPER-02): dispatch form POSTs to /api/paperclip with taskSummary + requestedBy
  *   Test 5 (PAPER-02): successful dispatch shows success state and clears the input
  *   Test 6 (PAPER-02): failed dispatch surfaces an inline error message
@@ -15,6 +15,7 @@
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, afterEach } from "vitest";
 import { PaperclipFleetPanel } from "../paperclip-fleet-panel";
 import type { PaperclipFleetResponse } from "@/types";
 
@@ -83,7 +84,7 @@ const FLEET_FIXTURE: PaperclipFleetResponse = {
 
 describe("PaperclipFleetPanel", () => {
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("Test 1 (DASH-03): renders per-agent rows with name, autonomy badge, active task, and last heartbeat", () => {
@@ -97,8 +98,8 @@ describe("PaperclipFleetPanel", () => {
     // Active task is shown for Alpha
     expect(screen.getByText("Processing user request")).toBeInTheDocument();
 
-    // Null active task shows "idle" or similar fallback
-    const idleLabels = screen.getAllByText(/idle/i);
+    // Null active task shows "idle" fallback for Beta and Gamma
+    const idleLabels = screen.getAllByText(/^idle$/i);
     expect(idleLabels.length).toBeGreaterThanOrEqual(1);
 
     // Heartbeat text is shown (at least one "ago" reference or "never")
@@ -114,29 +115,34 @@ describe("PaperclipFleetPanel", () => {
     expect(screen.getByText("Autonomous")).toBeInTheDocument();
     expect(screen.getByText("Continuous")).toBeInTheDocument();
 
-    // Hybrid should NOT appear in this fixture but the vocabulary is validated by not showing unknown values
+    // Hybrid should NOT appear in this fixture
+    expect(screen.queryByText("Hybrid")).not.toBeInTheDocument();
+    // No unknown/invalid values
     expect(screen.queryByText(/unknown|invalid/i)).not.toBeInTheDocument();
   });
 
   it("Test 3 (PAPER-04): recovery rows render sessionId, completedSteps count, resumeFrom, and status", () => {
     render(<PaperclipFleetPanel fleet={FLEET_FIXTURE} isLoading={false} />);
 
-    // Session IDs are visible (truncated or full)
-    expect(screen.getByText(/sess-xyz/)).toBeInTheDocument();
-    expect(screen.getByText(/sess-uvw/)).toBeInTheDocument();
+    // Session IDs are visible (truncated or full) — use getAllByText to handle multiple matches
+    const xyzMatches = screen.getAllByText(/sess-xyz/);
+    expect(xyzMatches.length).toBeGreaterThanOrEqual(1);
 
-    // completedSteps count for the paused operation (3 steps)
-    expect(screen.getByText(/3/)).toBeInTheDocument();
+    const uvwMatches = screen.getAllByText(/sess-uvw/);
+    expect(uvwMatches.length).toBeGreaterThanOrEqual(1);
+
+    // completedSteps count for the paused operation (3 steps) — "3 steps completed"
+    expect(screen.getByText(/3 step/)).toBeInTheDocument();
 
     // resumeFrom for the paused operation
     expect(screen.getByText(/step-analysis/)).toBeInTheDocument();
 
-    // status chips
-    expect(screen.getByText(/paused/i)).toBeInTheDocument();
+    // status chip for paused operation
+    expect(screen.getAllByText(/paused/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("Test 4 (PAPER-02): submitting the dispatch form POSTs to /api/paperclip with taskSummary and requestedBy", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true, taskId: "task-new-001", sessionId: "sess-new-001" }),
     });
@@ -149,7 +155,7 @@ describe("PaperclipFleetPanel", () => {
     fireEvent.change(input, { target: { value: "Process new batch" } });
 
     // Submit the form
-    const submitBtn = screen.getByRole("button", { name: /dispatch|send|submit/i });
+    const submitBtn = screen.getByRole("button", { name: /dispatch/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -169,7 +175,7 @@ describe("PaperclipFleetPanel", () => {
   });
 
   it("Test 5 (PAPER-02): successful dispatch shows success state and clears the input", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true, taskId: "task-success-001", sessionId: "sess-success-001" }),
     });
@@ -178,11 +184,11 @@ describe("PaperclipFleetPanel", () => {
 
     const input = screen.getByPlaceholderText(/task|dispatch/i);
     fireEvent.change(input, { target: { value: "My task" } });
-    fireEvent.click(screen.getByRole("button", { name: /dispatch|send|submit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /dispatch/i }));
 
     // Success message is shown (contains taskId)
     await waitFor(() => {
-      expect(screen.getByText(/task-success-001|dispatched|success/i)).toBeInTheDocument();
+      expect(screen.getByText(/task-success-001/i)).toBeInTheDocument();
     });
 
     // Input is cleared
@@ -192,7 +198,7 @@ describe("PaperclipFleetPanel", () => {
   });
 
   it("Test 6 (PAPER-02): failed dispatch surfaces an inline error message", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
       json: async () => ({ error: "Upstream unavailable" }),
@@ -202,10 +208,10 @@ describe("PaperclipFleetPanel", () => {
 
     const input = screen.getByPlaceholderText(/task|dispatch/i);
     fireEvent.change(input, { target: { value: "Failing task" } });
-    fireEvent.click(screen.getByRole("button", { name: /dispatch|send|submit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /dispatch/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/error|failed|unavailable/i)).toBeInTheDocument();
+      expect(screen.getByText(/error:|upstream unavailable/i)).toBeInTheDocument();
     });
   });
 

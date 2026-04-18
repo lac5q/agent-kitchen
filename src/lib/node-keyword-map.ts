@@ -124,6 +124,16 @@ export const NODE_KEYWORD_MAP: Record<string, NodeKeywordEntry> = {
     keywords: [/obsidian/i, /vault/i, /journal/i],
   },
 
+  // Paperclip fleet group and dynamic child nodes (Phase 21)
+  "group-paperclip": {
+    aliases: ["paperclip-fleet", "fleet"],
+    keywords: [/paperclip.fleet/i, /fleet.status/i],
+  },
+  "paperclip-agent": {
+    aliases: [],
+    keywords: [/\bpaperclip\b/i, /paperclip.agent/i],
+  },
+
   // Dev tools
   "claude-code": { aliases: [], keywords: [] },
   "qwen-cli": { aliases: [], keywords: [] },
