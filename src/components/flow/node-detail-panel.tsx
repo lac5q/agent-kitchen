@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSkills } from "@/lib/api-client";
 import { SkillHeatmap } from "@/components/skill-heatmap";
 import { matchEventsForNode, isSparseNode } from "@/lib/node-keyword-map";
+import { PaperclipFleetPanel } from "./paperclip-fleet-panel";
+import type { PaperclipFleetResponse } from "@/types";
 
 interface Event {
   id: string;
@@ -22,6 +24,8 @@ interface NodeDetailPanelProps {
   nodeStats: Record<string, string | number>;
   events: Event[];
   onClose: () => void;
+  paperclipFleet?: PaperclipFleetResponse | null;
+  paperclipLoading?: boolean;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -32,7 +36,7 @@ const TYPE_COLORS: Record<string, string> = {
   apo: "#8b5cf6",
 };
 
-export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose }: NodeDetailPanelProps) {
+export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose, paperclipFleet = null, paperclipLoading = false }: NodeDetailPanelProps) {
   const nodeEvents = matchEventsForNode(nodeId ?? "", events).slice(0, 10);
   const { data: skillsData } = useSkills();
 
@@ -115,6 +119,14 @@ export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Paperclip Fleet Panel — manager node only (DASH-03) */}
+          {nodeId === "manager" && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Fleet</p>
+              <PaperclipFleetPanel fleet={paperclipFleet ?? null} isLoading={paperclipLoading ?? false} />
             </div>
           )}
 

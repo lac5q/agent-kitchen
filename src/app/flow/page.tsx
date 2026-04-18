@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents, useSkills } from "@/lib/api-client";
+import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAgents, useSkills, usePaperclipFleet } from "@/lib/api-client";
 import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
@@ -21,6 +21,7 @@ export default function FlowPage() {
   const { data: activityData } = useActivity();
   const { data: remoteData } = useRemoteAgents();
   const { data: skillsData } = useSkills();
+  const { data: paperclipFleet, isLoading: paperclipLoading } = usePaperclipFleet();
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -67,6 +68,7 @@ export default function FlowPage() {
           localActiveCount={localActiveCount}
           localTotalCount={localTotalCount}
           onNodeClick={handleNodeClick}
+          paperclipFleet={paperclipFleet ?? null}
         />
         <NodeDetailPanel
           nodeId={selectedNode?.id || null}
@@ -75,6 +77,8 @@ export default function FlowPage() {
           nodeStats={selectedNode?.stats || {}}
           events={events}
           onClose={() => setSelectedNode(null)}
+          paperclipFleet={paperclipFleet ?? null}
+          paperclipLoading={paperclipLoading}
         />
       </div>
 
