@@ -89,7 +89,8 @@ src/
 ├── app/api/
 │   ├── memory-stats/route.ts            # NEW -- MEM-03 dashboard stats
 │   ├── agent-peers/route.ts             # NEW -- MEM-04 peer listing
-│   └── memory-consolidate/route.ts      # NEW -- manual trigger endpoint
+│   ├── memory-consolidate/route.ts      # NEW -- manual trigger endpoint
+│   └── recall/route.ts                  # MODIFY -- add access_count increment
 └── components/
     ├── kitchen/
     │   └── agent-peers-panel.tsx        # NEW -- MEM-04 live peer panel
@@ -338,6 +339,36 @@ export function startConsolidationScheduler(): void {
 }
 ```
 
+### Pattern 7: Access Count Increment in Recall Route
+
+**What:** After the existing `/api/recall` route returns FTS5 search results, increment `access_count` on `memory_salience` for all matched message IDs. This makes the decay engine's access-resistance formula functional.
+
+**When to use:** Every time a recall query returns results.
+
+**Example:**
+```typescript
+// In src/app/api/recall/route.ts, after recallByKeyword() returns results:
+const ids = results.map((r: { id: number }) => r.id).filter(Boolean);
+if (ids.length > 0) {
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`
+      UPDATE memory_salience
+      SET access_count = access_count + 1,
+          last_accessed = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+      WHERE message_id IN (${placeholders})
+    `).run(...ids);
+  } catch {
+    // memory_salience table may not exist yet (pre-Phase 23) -- silently ignore
+  }
+}
+```
+
+**Key constraints:**
+- The UPDATE is fire-and-forget -- it must never block or break the recall response
+- Wrapped in try/catch for backward compatibility (table may not exist pre-Phase 23)
+- Uses parameterized placeholders (no SQL injection risk)
+
 ### Anti-Patterns to Avoid
 
 - **Opening a second DB connection:** Always use `getDb()` -- never `new Database(path)` in routes or lib files.
@@ -576,6 +607,7 @@ export async function register() {
 | MEM-02 | Pinned tier `salience_score` never changes | unit | `npx vitest run src/lib/__tests__/memory-decay.test.ts` | No -- Wave 0 |
 | MEM-02 | `salience_score` never goes below 0 after multiple decay cycles | unit | `npx vitest run src/lib/__tests__/memory-decay.test.ts` | No -- Wave 0 |
 | MEM-02 | `last_decay_at` updated; second same-day run does NOT decay again | unit | `npx vitest run src/lib/__tests__/memory-decay.test.ts` | No -- Wave 0 |
+| MEM-02 | `/api/recall` increments `access_count` on recalled messages | unit | `npx vitest run src/app/api/recall/__tests__/route.test.ts` | Yes -- extend existing |
 | MEM-03 | GET /api/memory-stats returns `lastRun`, `pendingUnconsolidated`, `tierStats` | unit | `npx vitest run src/app/api/memory-stats/__tests__/route.test.ts` | No -- Wave 0 |
 | MEM-03 | `pendingUnconsolidated` count decreases after consolidation run | unit | `npx vitest run src/app/api/memory-stats/__tests__/route.test.ts` | No -- Wave 0 |
 | MEM-04 | GET /api/agent-peers returns correct GROUP BY result from hive_actions | unit | `npx vitest run src/app/api/agent-peers/__tests__/route.test.ts` | No -- Wave 0 |
@@ -637,27 +669,23 @@ vi.mock('@anthropic-ai/sdk', () => ({
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Which exact Anthropic model ID to use for consolidation?**
-   - What we know: `@anthropic-ai/sdk` 0.90.0 is latest; haiku-class is cheapest
-   - What's unclear: Exact current model IDs (training data may be stale)
-   - Recommendation: At implementation time, check https://docs.anthropic.com/en/docs/about-claude/models for current IDs
+1. **Which exact Anthropic model ID to use for consolidation?** (RESOLVED)
+   - Decision: Use `claude-haiku-4-5` as default. Executor should verify current model IDs at implementation time via https://docs.anthropic.com/en/docs/about-claude/models and update if needed.
+   - Implemented in: Plan 01, Task 2 (memory-consolidation.ts)
 
-2. **Should consolidation be manually triggerable from the dashboard?**
-   - What we know: MEM-03 requires showing stats; MEM-01 requires background scheduling
-   - What's unclear: Whether an "Run Now" button is expected
-   - Recommendation: Add `POST /api/memory-consolidate` for manual trigger; wire to a button in the MemoryIntelligencePanel (mirrors SqliteHealthPanel's "Run Ingest" pattern)
+2. **Should consolidation be manually triggerable from the dashboard?** (RESOLVED)
+   - Decision: Yes. `POST /api/memory-consolidate` endpoint added as manual trigger. "Run Now" button wired into MemoryIntelligencePanel (mirrors SqliteHealthPanel's "Run Ingest" pattern).
+   - Implemented in: Plan 01, Task 3 (memory-consolidate route); Plan 02, Task 2 (MemoryIntelligencePanel)
 
-3. **Do existing messages (pre-Phase 23) get salience rows seeded automatically?**
-   - What we know: `memory_salience` references `messages(id)`; rows must be inserted before decay can run
-   - What's unclear: Whether a migration step is needed for all existing messages
-   - Recommendation: Wave 1 task should include a one-time seed: `INSERT OR IGNORE INTO memory_salience(message_id) SELECT id FROM messages` -- run inside initSchema or a migration function
+3. **Do existing messages (pre-Phase 23) get salience rows seeded automatically?** (RESOLVED)
+   - Decision: Yes. One-time seed runs inside `initSchema()`: `INSERT OR IGNORE INTO memory_salience(message_id) SELECT id FROM messages`. Safe to re-run on every startup.
+   - Implemented in: Plan 01, Task 1 (db-schema.ts step 3e)
 
-4. **Is access_count incremented by the `/api/recall` query route or by a separate API?**
-   - What we know: `/api/recall` (Phase 19) returns messages; `access_count` on `memory_salience` tracks usage
-   - What's unclear: Whether Phase 19 route needs to be modified to increment access_count
-   - Recommendation: Add a lightweight UPDATE to the recall route (or a separate `/api/memory/access` endpoint). Scope this as a Phase 23 task.
+4. **Is access_count incremented by the `/api/recall` query route or by a separate API?** (RESOLVED)
+   - Decision: Increment directly in the existing `/api/recall` route. After `recallByKeyword()` returns results, run `UPDATE memory_salience SET access_count = access_count + 1, last_accessed = now WHERE message_id IN (recalled IDs)`. Wrapped in try/catch for backward compatibility (table may not exist pre-Phase 23). No separate endpoint needed.
+   - Implemented in: Plan 01, Task 3 (recall/route.ts modification)
 
 ---
 
