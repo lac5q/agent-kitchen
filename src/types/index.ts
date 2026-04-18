@@ -106,3 +106,47 @@ export interface ApoCycleStats {
   archivedProposals: number;
   recentLogLines: string[];
 }
+
+// Paperclip fleet types (Phase 21 — PAPER-02, PAPER-03, PAPER-04)
+
+export type PaperclipAutonomyMode =
+  | "Interactive"
+  | "Autonomous"
+  | "Continuous"
+  | "Hybrid";
+
+export interface PaperclipFleetSummary {
+  fleetStatus: "active" | "degraded" | "offline";
+  totalAgents: number;
+  activeAgents: number;
+  activeTasks: number;
+  pausedRecoveries: number;
+  autonomyMix: Record<PaperclipAutonomyMode, number>;
+  lastHeartbeat: string | null;
+}
+
+export interface PaperclipFleetAgent {
+  id: string;
+  name: string;
+  status: "active" | "idle" | "dormant" | "error";
+  autonomyMode: PaperclipAutonomyMode;
+  activeTask: string | null;
+  lastHeartbeat: string | null;
+}
+
+export interface PaperclipOperation {
+  taskId: string;
+  sessionId: string;
+  status: "pending" | "active" | "paused" | "completed" | "failed";
+  summary: string;
+  resumeFrom: string | null;
+  completedSteps: string[];
+  updatedAt: string;
+}
+
+export interface PaperclipFleetResponse {
+  summary: PaperclipFleetSummary;
+  agents: PaperclipFleetAgent[];
+  operations: PaperclipOperation[];
+  timestamp: string;
+}
