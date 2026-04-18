@@ -66,7 +66,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 
 - [ ] **Phase 19: SQLite Conversation Store** - Shared SQLite backbone with FTS5 index; all JSONL sessions ingested; health panel visible in Ledger
 - [x] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard (completed 2026-04-17)
-- [ ] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery
+- [x] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery (completed 2026-04-18)
 - [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
 - [ ] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard
 - [ ] **Phase 24: Security + Audit** - Exfiltration guard with 15+ regex patterns; SQLite audit log; last 20 entries visible in dashboard
@@ -114,7 +114,10 @@ Plans:
   2. Work can be dispatched to the Paperclip fleet from the dashboard; fleet distributes internally
   3. Expanded fleet panel shows each agent's autonomy mode (Interactive / Autonomous / Continuous / Hybrid) and active task
   4. Long-running fleet operations record completed steps with session IDs so work survives interruption and can resume
-**Plans**: TBD
+**Plans:** 2/2 plans complete
+Plans:
+- [x] 21-01-PLAN.md — Paperclip adapter route, fleet types, dispatch/recovery, client hook
+- [x] 21-02-PLAN.md — Flow group node, fleet detail panel, dashboard dispatch UI
 **UI hint**: yes
 
 ### Phase 22: Voice Server
@@ -176,7 +179,7 @@ Plans:
 | 18. Cookbooks Page | v1.4 | 1/1 | Complete | 2026-04-15 |
 | 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
 | 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
-| 21. Paperclip Fleet Node | v1.5 | 0/? | Not started | - |
+| 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 22. Voice Server | v1.5 | 0/? | Not started | - |
 | 23. Memory Intelligence | v1.5 | 0/? | Not started | - |
 | 24. Security + Audit | v1.5 | 0/? | Not started | - |
