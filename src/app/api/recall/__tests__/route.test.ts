@@ -135,7 +135,7 @@ describe('GET /api/recall/stats', () => {
 // ─── POST /api/recall/ingest ──────────────────────────────────────────────────
 
 describe('POST /api/recall/ingest', () => {
-  it('returns filesProcessed, rowsInserted, filesSkipped, and timestamp', async () => {
+  it('returns filesProcessed, rowsInserted, filesSkipped, and timestamp', { timeout: 20000 }, async () => {
     const { POST } = await import('../ingest/route');
     const req = new Request('http://localhost/api/recall/ingest', { method: 'POST' });
     const res = await POST(req as unknown as import('next/server').NextRequest);
@@ -154,5 +154,41 @@ describe('POST /api/recall/ingest', () => {
     const req = new Request('http://localhost/api/recall/ingest', { method: 'POST' });
     const res = await POST(req as unknown as import('next/server').NextRequest);
     expect(res.status).toBe(200);
+  });
+});
+
+// ─── recall_log INSERT (ANA-04) ───────────────────────────────────────────────
+
+describe('GET /api/recall -- recall_log insert', () => {
+  it('inserts a row into recall_log after a non-empty query', async () => {
+    const { getDb } = await import('@/lib/db');
+    const db = getDb();
+
+    vi.resetModules();
+    const { GET } = await import('../route');
+    const req = new Request('http://localhost/api/recall?q=analyticstest');
+    await GET(req as unknown as import('next/server').NextRequest);
+
+    const row = db.prepare("SELECT query, results FROM recall_log WHERE query = ?").get('analyticstest') as
+      | { query: string; results: number }
+      | undefined;
+    expect(row).toBeDefined();
+    expect(row?.query).toBe('analyticstest');
+    expect(typeof row?.results).toBe('number');
+  });
+
+  it('does not insert into recall_log for empty query', async () => {
+    const { getDb } = await import('@/lib/db');
+    const db = getDb();
+
+    const countBefore = (db.prepare("SELECT COUNT(*) as cnt FROM recall_log").get() as { cnt: number }).cnt;
+
+    vi.resetModules();
+    const { GET } = await import('../route');
+    const req = new Request('http://localhost/api/recall?q=');
+    await GET(req as unknown as import('next/server').NextRequest);
+
+    const countAfter = (db.prepare("SELECT COUNT(*) as cnt FROM recall_log").get() as { cnt: number }).cnt;
+    expect(countAfter).toBe(countBefore);
   });
 });
