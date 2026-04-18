@@ -4,6 +4,7 @@ import { SummaryBar } from "@/components/kitchen/summary-bar";
 import { AgentGrid } from "@/components/kitchen/agent-grid";
 import { HiveFeed } from "@/components/kitchen/hive-feed";
 import { AgentPeersPanel } from "@/components/kitchen/agent-peers-panel";
+import { AuditLogPanel } from "@/components/kitchen/audit-log-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Agent } from "@/types";
@@ -58,6 +59,7 @@ export default function KitchenFloor() {
       )}
       <HiveFeed />
       <AgentPeersPanel />
+      <AuditLogPanel />
     </div>
     </TooltipProvider>
   );
