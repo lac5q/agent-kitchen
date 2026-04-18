@@ -683,27 +683,27 @@ export async function GET(_req: NextRequest) {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **"Active agent" routing scope**
    - What we know: Phase 20 hive mind tracks agents; VOICE-02/03 say "routed to the active agent"
    - What's unclear: Is there a defined protocol for selecting which agent handles voice queries?
-   - Recommendation: For Phase 22 scope, fix LLM to Claude via `VOICE_AGENT_MODEL` env var. Defer dynamic routing.
+   - RESOLVED: For Phase 22 scope, fix LLM to Claude via `VOICE_AGENT_MODEL` env var. Dynamic agent routing deferred to a future phase.
 
 2. **Gemini Live user transcript reliability in 1.0.0**
    - What we know: Issue #3350 documents missing user transcription
    - What's unclear: Whether 1.0.0 fixed this
-   - Recommendation: Implement the `transcript_proc.user()` pattern as shown; add a fallback that reads user message from `LLMContext` at turn end.
+   - RESOLVED: Implement the `transcript_proc.user()` pattern after `agg.user()`; handle both `frame.content` and `frame.text` via getattr fallback. If user turns are still empty at runtime, supplement by extracting from LLMContext at turn boundaries.
 
 3. **SQLITE_DB_PATH absolute path coordination**
    - What we know: Next.js uses `process.cwd()/data/conversations.db`; Python must use same path
    - What's unclear: Whether a root `.env` already exists or needs to be created
-   - Recommendation: Wave 0 task: create `voice-server/.env` with `SQLITE_DB_PATH=$(pwd)/data/conversations.db` resolved to absolute path at setup time.
+   - RESOLVED: `voice-server/.env.example` documents `SQLITE_DB_PATH` as an absolute path. User populates `voice-server/.env` at setup time with the resolved absolute path.
 
 4. **Launch mechanism for the two Python processes**
    - What we know: Project uses LaunchAgent + `npm start` for Next.js (per memory)
    - What's unclear: Whether to add voice-server to LaunchAgent, use a Procfile, or launch manually
-   - Recommendation: For Phase 22, document manual launch (`./voice-server/start.sh`). Production LaunchAgent integration is a follow-up.
+   - RESOLVED: Phase 22 uses manual launch (`python voice-server/server.py` and `python voice-server/health.py`). Production LaunchAgent integration deferred to a follow-up phase.
 
 ---
 
