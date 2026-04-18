@@ -58,9 +58,9 @@
 
 ### Usage Analytics (ANA)
 
-- [ ] **ANA-01**: Ledger page shows time-series panels with day/week/month toggle — knowledge docs ingested, memory writes, and recall queries plotted as line graphs over the selected window
-- [ ] **ANA-02**: Library page shows a line graph of document ingest count and collection growth over time, with the same day/week/month toggle
-- [ ] **ANA-03**: Cookbooks page shows skill execution count and failure rate as line graphs over time, with day/week/month toggle
+- [x] **ANA-01**: Ledger page shows time-series panels with day/week/month toggle — knowledge docs ingested, memory writes, and recall queries plotted as line graphs over the selected window
+- [x] **ANA-02**: Library page shows a line graph of document ingest count and collection growth over time, with the same day/week/month toggle
+- [x] **ANA-03**: Cookbooks page shows skill execution count and failure rate as line graphs over time, with day/week/month toggle
 - [x] **ANA-04**: A shared `TimeSeriesChart` component and `useTimeSeries(metric, window)` hook powers all three pages — single source of truth for aggregation queries and chart rendering
 
 ---
@@ -111,9 +111,9 @@
 | MEM-02 | Phase 23 | Pending |
 | MEM-03 | Phase 23 | Pending |
 | MEM-04 | Phase 23 | Pending |
-| ANA-01 | Phase 25 | Pending |
-| ANA-02 | Phase 25 | Pending |
-| ANA-03 | Phase 25 | Pending |
+| ANA-01 | Phase 25 | Complete |
+| ANA-02 | Phase 25 | Complete |
+| ANA-03 | Phase 25 | Complete |
 | ANA-04 | Phase 25 | Complete |
 | SEC-01 | Phase 24 | Pending |
 | SEC-02 | Phase 24 | Pending |
