@@ -68,7 +68,6 @@ export default function FlowPage() {
           localActiveCount={localActiveCount}
           localTotalCount={localTotalCount}
           onNodeClick={handleNodeClick}
-          paperclipFleet={paperclipFleet ?? null}
         />
         <NodeDetailPanel
           nodeId={selectedNode?.id || null}

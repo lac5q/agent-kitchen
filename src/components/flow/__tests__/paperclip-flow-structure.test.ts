@@ -4,15 +4,15 @@
  * File-introspection tests that lock in the Paperclip fleet wiring invariants.
  * Uses the same readFileSync + string/regex assertion pattern as parent-id-migration.test.ts.
  *
- * All 6 tests must be RED before Task 2 and GREEN after Task 2.
+ * Design: fleet detail lives in the NodeDetailPanel only (no group box in the canvas).
  *
  * Tests:
- *   Test 1 (PAPER-01): react-flow-canvas.tsx contains a group-paperclip group box node
- *   Test 2 (PAPER-01): Paperclip child nodes use parentId: "group-paperclip" and extent: "parent"
+ *   Test 1: manager node exists in the main canvas path
+ *   Test 2: react-flow-canvas.tsx does NOT render a group-paperclip group box
  *   Test 3: manager remains in the main path and is NOT assigned parentId: "group-paperclip"
- *   Test 4 (PAPER-01): collapsed summary references live fleet data (not a hard-coded string)
+ *   Test 4: flow/page.tsx wires usePaperclipFleet and passes fleet data to NodeDetailPanel
  *   Test 5 (DASH-03): node-detail-panel.tsx renders PaperclipFleetPanel when nodeId is manager
- *   Test 6: flow/page.tsx imports usePaperclipFleet and passes paperclipFleet into child components
+ *   Test 6: PaperclipFleetPanel is wired with fleet and loading props
  */
 
 import { readFileSync } from "fs";
@@ -38,62 +38,37 @@ const PAGE_SRC = readFileSync(
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("Paperclip fleet flow structure invariants", () => {
-  it("Test 1 (PAPER-01): react-flow-canvas.tsx contains a group-paperclip group box node", () => {
-    // The canvas must define a node with id "group-paperclip"
-    expect(CANVAS_SRC).toContain('"group-paperclip"');
-    // It must use the groupBoxNode type
-    expect(CANVAS_SRC).toMatch(/id:\s*["']group-paperclip["'][\s\S]*?type:\s*["']groupBoxNode["']|type:\s*["']groupBoxNode["'][\s\S]*?id:\s*["']group-paperclip["']/);
+  it("Test 1: manager node exists in the main canvas path", () => {
+    expect(CANVAS_SRC).toContain('id: "manager"');
   });
 
-  it("Test 2 (PAPER-01): Paperclip child nodes use parentId: 'group-paperclip' and extent: 'parent'", () => {
-    // Child nodes must wire to the group via parentId
-    expect(CANVAS_SRC).toContain('parentId: "group-paperclip"');
-    // And must use the parent-extent constraint to stay inside the box
-    // Count total extent: "parent" occurrences — should be at least 3 (agents, devtools, paperclip children)
-    const extentMatches = CANVAS_SRC.match(/extent:\s*["']parent["']/g) ?? [];
-    expect(extentMatches.length).toBeGreaterThanOrEqual(3);
+  it("Test 2: react-flow-canvas.tsx does NOT render a group-paperclip group box", () => {
+    // Fleet lives in the detail panel only — no canvas group box
+    expect(CANVAS_SRC).not.toContain('"group-paperclip"');
   });
 
   it("Test 3: manager remains in the main path and is NOT assigned parentId: 'group-paperclip'", () => {
-    // The manager node id must exist in the canvas (it's a static node)
-    expect(CANVAS_SRC).toContain('"manager"');
-
-    // Critically: manager must NOT have parentId pointing to group-paperclip
-    // We check that no block containing id: "manager" has parentId: "group-paperclip" near it
-    // Strategy: look for the staticNodes array — manager should be there, not in a grouped mapper
     expect(CANVAS_SRC).toContain('id: "manager"');
-
-    // The safest structural check: "manager" should appear in staticNodes (defined without parentId)
-    // Verify the manager node definition does NOT immediately follow parentId: "group-paperclip"
     const paperclipParentPattern = /parentId:\s*["']group-paperclip["'][^}]*id:\s*["']manager["']|id:\s*["']manager["'][^}]*parentId:\s*["']group-paperclip["']/;
     expect(CANVAS_SRC).not.toMatch(paperclipParentPattern);
   });
 
-  it("Test 4 (PAPER-01): collapsed summary references live fleet data (not a hard-coded string)", () => {
-    // The paperclip group node's aggregateColor must be derived from paperclipFleet/paperclipStatuses
-    // Not a hard-coded color string like "#64748b" or "dormant"
-    expect(CANVAS_SRC).toMatch(/paperclipStatuses|paperclipFleet.*agents/);
-    // aggregateHealthColor must be called with the dynamic statuses
-    expect(CANVAS_SRC).toMatch(/aggregateHealthColor\s*\(\s*paperclipStatuses/);
+  it("Test 4: flow/page.tsx wires usePaperclipFleet and passes fleet data to NodeDetailPanel", () => {
+    expect(PAGE_SRC).toContain("usePaperclipFleet");
+    expect(PAGE_SRC).toMatch(/usePaperclipFleet\s*\(/);
+    // Fleet data flows to NodeDetailPanel, not ReactFlowCanvas
+    expect(PAGE_SRC).toContain("paperclipFleet");
+    expect(PAGE_SRC).toMatch(/NodeDetailPanel[\s\S]*?paperclipFleet|paperclipFleet[\s\S]*?NodeDetailPanel/);
   });
 
   it("Test 5 (DASH-03): node-detail-panel.tsx renders PaperclipFleetPanel when nodeId is manager", () => {
-    // The panel must import PaperclipFleetPanel
     expect(PANEL_SRC).toContain("PaperclipFleetPanel");
-    // It must conditionally render it for the manager node
     expect(PANEL_SRC).toMatch(/nodeId\s*===\s*["']manager["']/);
-    // It must render the component (JSX)
     expect(PANEL_SRC).toContain("<PaperclipFleetPanel");
   });
 
-  it("Test 6: flow/page.tsx imports usePaperclipFleet and passes paperclipFleet into child components", () => {
-    // The page must import usePaperclipFleet
-    expect(PAGE_SRC).toContain("usePaperclipFleet");
-    // It must invoke it (hook call)
-    expect(PAGE_SRC).toMatch(/usePaperclipFleet\s*\(/);
-    // paperclipFleet must be passed as a prop
-    expect(PAGE_SRC).toContain("paperclipFleet");
-    // It must appear in the ReactFlowCanvas JSX
-    expect(PAGE_SRC).toMatch(/ReactFlowCanvas[\s\S]*?paperclipFleet|paperclipFleet[\s\S]*?ReactFlowCanvas/);
+  it("Test 6: PaperclipFleetPanel is wired with fleet and loading props", () => {
+    expect(PANEL_SRC).toMatch(/fleet=\{/);
+    expect(PANEL_SRC).toMatch(/isLoading=\{/);
   });
 });
