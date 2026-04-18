@@ -30,6 +30,7 @@ interface JsonlEntry {
 }
 
 export interface RecallResult {
+  id: number;
   session_id: string;
   project: string;
   agent_id: string;
@@ -301,6 +302,7 @@ export function ingestAllSessions(db: Database.Database): {
 
 const RECALL_SQL = `
   SELECT
+    m.id,
     m.session_id,
     m.project,
     m.agent_id,
