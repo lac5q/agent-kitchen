@@ -5,6 +5,7 @@ import { useHealth, useAgents, useKnowledge, useMemory, useActivity, useRemoteAg
 import { ReactFlowCanvas } from "@/components/flow/react-flow-canvas";
 import { ActivityFeed } from "@/components/flow/activity-feed";
 import { NodeDetailPanel } from "@/components/flow/node-detail-panel";
+import { VoicePanel } from "@/components/voice/VoicePanel";
 
 interface SelectedNode {
   id: string;
@@ -80,6 +81,8 @@ export default function FlowPage() {
           paperclipLoading={paperclipLoading}
         />
       </div>
+
+      <VoicePanel />
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-3">
         <div className="flex items-center justify-between mb-2">
