@@ -8,9 +8,27 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl ?? new URL(req.url);
   const q = url.searchParams.get('q') ?? '';
   const limitParam = Number(url.searchParams.get('limit') ?? '20');
+  const agentId = url.searchParams.get('agent_id');
   const timestamp = new Date().toISOString();
 
-  // Return empty results for blank query
+  // When agent_id is provided but q is empty, return messages for that agent
+  if (agentId && !q.trim()) {
+    const db = getDb();
+    const safeLimit = Math.min(limitParam, 100);
+    const rows = db.prepare(
+      `SELECT id, session_id, project, agent_id, role, content, timestamp
+       FROM messages
+       WHERE agent_id = ?
+       ORDER BY timestamp DESC
+       LIMIT ?`
+    ).all(agentId, safeLimit) as Array<{
+      id: number; session_id: string; project: string; agent_id: string;
+      role: string; content: string; timestamp: string;
+    }>;
+    return Response.json({ results: rows, agent_id: agentId, timestamp });
+  }
+
+  // Return empty results for blank query (no agent_id filter either)
   if (!q.trim()) {
     return Response.json({ results: [], timestamp });
   }
@@ -20,7 +38,11 @@ export async function GET(req: NextRequest) {
   // Persist last recall query for Ledger panel (DASH-01)
   db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('last_recall_query', ?)").run(q);
 
-  const results = recallByKeyword(db, q, limitParam);
+  const rawResults = recallByKeyword(db, q, limitParam);
+  // When agent_id is also provided, post-filter FTS results by agent_id
+  const results = agentId
+    ? rawResults.filter((r: { agent_id: string }) => r.agent_id === agentId)
+    : rawResults;
 
   // ANA-04: fire-and-forget insert into recall_log for time-series analytics
   try {

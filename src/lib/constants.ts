@@ -7,6 +7,7 @@ export const POLL_INTERVALS = {
   skills: 60000,
   hive: 5000,
   paperclip: 5000,
+  voice: 2000,
 } as const;
 
 export const COLORS = {
@@ -40,6 +41,9 @@ export const PLATFORM_LABELS: Record<string, string> = {
 export const AGENT_CONFIGS_PATH = process.env.AGENT_CONFIGS_PATH || `${process.env.HOME}/github/knowledge/agent-configs`;
 export const PMO_MEMORY_PATH = process.env.PMO_MEMORY_PATH || `${process.env.HOME}/github/PMO/memory`;
 export const CLAUDE_MEMORY_PATH = process.env.CLAUDE_MEMORY_PATH || `${process.env.HOME}/.claude/projects`;
+export const QWEN_MEMORY_PATH = process.env.QWEN_MEMORY_PATH || `${process.env.HOME}/.qwen/projects`;
+export const HERMES_MEMORY_PATH = process.env.HERMES_MEMORY_PATH || `${process.env.HOME}/.hermes/sessions`;
+export const CODEX_MEMORY_PATH = process.env.CODEX_MEMORY_PATH || `${process.env.HOME}/.codex/sessions`;
 export const MEM0_URL = process.env.MEM0_URL || "http://localhost:3201";
 export const SKILLS_PATH = process.env.SKILLS_PATH || `${process.env.HOME}/.claude/skills`;
 export const SKILL_CONTRIBUTIONS_LOG = process.env.SKILL_CONTRIBUTIONS_LOG || `${process.env.HOME}/.openclaw/skill-contributions.jsonl`;

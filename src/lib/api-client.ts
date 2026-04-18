@@ -302,6 +302,20 @@ export function useAuditLog(limit = 20) {
   });
 }
 
+export function useVoiceStatus() {
+  return useQuery({
+    queryKey: ["voice-status"],
+    queryFn: () => fetchJSON<{
+      active: boolean;
+      session_id: string | null;
+      started_at: string | null;
+      duration_secs: number | null;
+      error?: string;
+    }>("/api/voice-status"),
+    refetchInterval: POLL_INTERVALS.voice,
+  });
+}
+
 export function useMemoryStats() {
   return useQuery({
     queryKey: ["memory-stats"],
