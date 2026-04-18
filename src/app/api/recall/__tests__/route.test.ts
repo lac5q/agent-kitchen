@@ -82,6 +82,38 @@ describe('GET /api/recall', () => {
   });
 });
 
+// ─── GET /api/recall access_count increment (MEM-02) ─────────────────────────
+
+describe('GET /api/recall -- access_count increment', () => {
+  it('increments access_count and sets last_accessed on memory_salience for recalled messages', async () => {
+    // Insert a message and a FTS entry so recall can find it
+    const { getDb } = await import('@/lib/db');
+    const db = getDb();
+
+    const msgId = db.prepare(
+      "INSERT INTO messages(session_id, project, agent_id, role, content, timestamp) VALUES(?,?,?,?,?,?)"
+    ).run('sess-ac1', 'p1', 'agent', 'user', 'zypherium keyword unique', '2024-01-01T00:00:00Z').lastInsertRowid as number;
+
+    // Seed memory_salience with access_count=0
+    db.prepare('INSERT OR IGNORE INTO memory_salience(message_id, access_count) VALUES(?, 0)').run(msgId);
+
+    // Verify initial state
+    const before = db.prepare('SELECT access_count, last_accessed FROM memory_salience WHERE message_id = ?').get(msgId) as { access_count: number; last_accessed: string | null };
+    expect(before.access_count).toBe(0);
+    expect(before.last_accessed).toBeNull();
+
+    vi.resetModules();
+    const { GET } = await import('../route');
+    const req = new Request('http://localhost/api/recall?q=zypherium');
+    await GET(req as unknown as import('next/server').NextRequest);
+
+    // Verify access_count incremented and last_accessed set
+    const after = db.prepare('SELECT access_count, last_accessed FROM memory_salience WHERE message_id = ?').get(msgId) as { access_count: number; last_accessed: string | null };
+    expect(after.access_count).toBe(1);
+    expect(after.last_accessed).not.toBeNull();
+  });
+});
+
 // ─── GET /api/recall/stats ────────────────────────────────────────────────────
 
 describe('GET /api/recall/stats', () => {
