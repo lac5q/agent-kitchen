@@ -159,7 +159,10 @@ Plans:
   1. 15+ regex patterns scan all outbound content before it reaches the dashboard or external channels; matched content is blocked and the event is flagged
   2. Every significant agent action is written to the SQLite audit log with actor, action, target, and timestamp
   3. Dashboard shows the last 20 audit log entries
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 24-01-PLAN.md — Content scanner utility, audit_log schema, writeAuditLog helper, route integrations, GET /api/audit-log endpoint
+- [ ] 24-02-PLAN.md — useAuditLog hook, AuditLogPanel component, wired into Kitchen Floor page
 **UI hint**: yes
 
 ### Phase 25: Usage Analytics
@@ -201,5 +204,5 @@ Plans:
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
 | 23. Memory Intelligence | v1.5 | 2/2 | Complete   | 2026-04-18 |
-| 24. Security + Audit | v1.5 | 0/? | Not started | - |
+| 24. Security + Audit | v1.5 | 0/2 | Planning | - |
 | 25. Usage Analytics | v1.5 | 0/? | Not started | - |
