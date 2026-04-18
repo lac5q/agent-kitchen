@@ -130,7 +130,10 @@ Plans:
   3. Cascade mode (Groq Whisper STT → Cartesia TTS with defined fallback chain) handles the non-Gemini path
   4. Every voice session transcript is written to the SQLite conversation store and retrievable via `/api/recall`
   5. Dashboard voice panel shows active/inactive status, last session duration, and a scrollable transcript log
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Python voice server scaffold, pipelines, transcript persistence, /api/voice-status proxy
+- [ ] 22-02-PLAN.md — VoicePanel component, voice hooks, recall agent_id filter, wired into Flow page
 **UI hint**: yes
 
 ### Phase 23: Memory Intelligence
@@ -180,6 +183,6 @@ Plans:
 | 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
 | 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
-| 22. Voice Server | v1.5 | 0/? | Not started | - |
+| 22. Voice Server | v1.5 | 0/2 | Planning | - |
 | 23. Memory Intelligence | v1.5 | 0/? | Not started | - |
 | 24. Security + Audit | v1.5 | 0/? | Not started | - |
