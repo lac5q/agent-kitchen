@@ -68,7 +68,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 - [x] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard (completed 2026-04-17)
 - [x] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery (completed 2026-04-18)
 - [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
-- [ ] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard
+- [x] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard (completed 2026-04-18)
 - [ ] **Phase 24: Security + Audit** - Exfiltration guard with 15+ regex patterns; SQLite audit log; last 20 entries visible in dashboard
 
 ## Phase Details
@@ -145,10 +145,10 @@ Plans:
   2. Salience decay runs on schedule with 4-tier rates (pinned=0%, high=1%, mid=2%, low=5%/day); frequently accessed memories accumulate access-resistance
   3. Dashboard shows consolidation last-run timestamp, pending unconsolidated count, and per-tier decay stats
   4. `GET /api/agent-peers` returns all active agents with current_task, status, and last_seen; dashboard shows a live peer-awareness panel so agents and users can see what every other agent is working on
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 23-01-PLAN.md — Schema DDL, consolidation engine, decay engine, instrumentation scheduler, API routes
-- [ ] 23-02-PLAN.md — MemoryIntelligencePanel, AgentPeersPanel, hooks, wired into Ledger and Kitchen Floor
+- [x] 23-02-PLAN.md — MemoryIntelligencePanel, AgentPeersPanel, hooks, wired into Ledger and Kitchen Floor
 **UI hint**: yes
 
 ### Phase 24: Security + Audit
@@ -200,6 +200,6 @@ Plans:
 | 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
-| 23. Memory Intelligence | v1.5 | 1/2 | In Progress|  |
+| 23. Memory Intelligence | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 24. Security + Audit | v1.5 | 0/? | Not started | - |
 | 25. Usage Analytics | v1.5 | 0/? | Not started | - |
