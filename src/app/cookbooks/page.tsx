@@ -2,6 +2,7 @@
 
 import { useSkills } from "@/lib/api-client";
 import { HealthPanel } from "@/components/cookbooks/health-panel";
+import { CookbooksAnalyticsPanel } from "@/components/cookbooks/analytics-panel";
 import { SkillHeatmap } from "@/components/skill-heatmap";
 import { SkillsList } from "@/components/cookbooks/skills-list";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -52,6 +53,11 @@ export default function CookbooksPage() {
           lastUpdated={lastUpdated}
           staleCandidates={staleCandidates}
         />
+      </section>
+
+      {/* Usage Trends */}
+      <section>
+        <CookbooksAnalyticsPanel />
       </section>
 
       {/* Heatmap */}
