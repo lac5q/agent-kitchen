@@ -282,6 +282,26 @@ export function useAgentPeers(windowMinutes = 60) {
   });
 }
 
+export function useAuditLog(limit = 20) {
+  return useQuery({
+    queryKey: ["audit-log", limit],
+    queryFn: () =>
+      fetchJSON<{
+        entries: Array<{
+          id: number;
+          actor: string;
+          action: string;
+          target: string;
+          detail: string | null;
+          severity: string;
+          timestamp: string;
+        }>;
+        timestamp: string;
+      }>(`/api/audit-log?limit=${limit}`),
+    refetchInterval: POLL_INTERVALS.hive,
+  });
+}
+
 export function useMemoryStats() {
   return useQuery({
     queryKey: ["memory-stats"],
@@ -299,8 +319,10 @@ export function useMemoryStats() {
           count: number;
           avg_score: number;
         }>;
+        consolidationModel: string;
+        sources: Array<{ agent_id: string; cnt: number }>;
         timestamp: string;
       }>("/api/memory-stats"),
-    refetchInterval: 30000, // 30s -- consolidation is slow; 5s poll unnecessary
+    refetchInterval: 30000,
   });
 }
