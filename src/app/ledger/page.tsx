@@ -6,8 +6,7 @@ import { KpiCard } from "@/components/ledger/kpi-card";
 import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
 import { CostCalculator } from "@/components/ledger/cost-calculator";
-import { SqliteHealthPanel } from "@/components/ledger/sqlite-health-panel";
-import { MemoryIntelligencePanel } from "@/components/ledger/memory-intelligence-panel";
+import { LedgerAnalyticsPanel } from "@/components/ledger/analytics-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -146,11 +145,9 @@ export default function LedgerPage() {
         tokensSaved={tokensSaved}
       />
 
-      {/* SQLite Store Health Panel */}
-      <SqliteHealthPanel />
+      {/* Usage Trends */}
+      <LedgerAnalyticsPanel />
 
-      {/* Memory Intelligence Panel */}
-      <MemoryIntelligencePanel />
     </div>
     </TooltipProvider>
   );

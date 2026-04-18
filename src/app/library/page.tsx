@@ -5,6 +5,9 @@ import { CollectionCard } from "@/components/library/collection-card";
 import { CollectionTreemap } from "@/components/library/collection-treemap";
 import { HealthPanel } from "@/components/library/health-panel";
 import { GitNexusPanel } from "@/components/library/gitnexus-panel";
+import { SqliteHealthPanel } from "@/components/ledger/sqlite-health-panel";
+import { MemoryIntelligencePanel } from "@/components/ledger/memory-intelligence-panel";
+import { LibraryAnalyticsPanel } from "@/components/library/analytics-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -73,13 +76,31 @@ export default function LibraryPage() {
       </section>
 
       {/* GitNexus code graph index */}
-      <div>
-        <h2 className="flex items-center mb-3 text-sm font-medium text-slate-400">
-          Code Graph Index <span className="text-xs text-slate-600 ml-2">via GitNexus</span>
+      <section>
+        <h2 className="flex items-center mb-3 text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          Code Graph Index <span className="text-xs text-slate-600 ml-2 normal-case">via GitNexus</span>
           <InfoTip text="GitNexus symbol graph for indexed repositories. Shows symbol count, relationship count, and execution flow count per repo. Use this to navigate code, assess blast radius before edits, and trace bugs through execution flows." />
         </h2>
         <GitNexusPanel repos={gnRepos} />
-      </div>
+      </section>
+
+      {/* Conversation Memory */}
+      <section className="flex flex-col gap-6">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          Conversation Memory
+        </h2>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+          <SqliteHealthPanel />
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+          <MemoryIntelligencePanel />
+        </div>
+      </section>
+
+      {/* Usage Trends */}
+      <section>
+        <LibraryAnalyticsPanel />
+      </section>
     </div>
     </TooltipProvider>
   );
