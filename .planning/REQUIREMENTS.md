@@ -47,7 +47,7 @@
 
 - [ ] **SEC-01**: All outbound content is scanned by 15+ regex patterns before reaching dashboard or external channels; matched content is blocked and flagged
 - [ ] **SEC-02**: All significant agent actions are written to an audit log table in SQLite (actor, action, target, timestamp)
-- [ ] **SEC-03**: Dashboard shows last 20 audit log entries
+- [x] **SEC-03**: Dashboard shows last 20 audit log entries
 
 ### Dashboard Tracking (DASH)
 
@@ -117,7 +117,7 @@
 | ANA-04 | Phase 25 | Pending |
 | SEC-01 | Phase 24 | Pending |
 | SEC-02 | Phase 24 | Pending |
-| SEC-03 | Phase 24 | Pending |
+| SEC-03 | Phase 24 | Complete |
 | DASH-01 | Phase 19 | Pending |
 | DASH-02 | Phase 20 | Pending |
 | DASH-03 | Phase 21 | Complete |

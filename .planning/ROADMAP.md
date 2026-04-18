@@ -69,7 +69,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 - [x] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery (completed 2026-04-18)
 - [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
 - [x] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard (completed 2026-04-18)
-- [ ] **Phase 24: Security + Audit** - Exfiltration guard with 15+ regex patterns; SQLite audit log; last 20 entries visible in dashboard
+- [x] **Phase 24: Security + Audit** - Exfiltration guard with 15+ regex patterns; SQLite audit log; last 20 entries visible in dashboard (completed 2026-04-18)
 
 ## Phase Details
 
@@ -159,10 +159,10 @@ Plans:
   1. 15+ regex patterns scan all outbound content before it reaches the dashboard or external channels; matched content is blocked and the event is flagged
   2. Every significant agent action is written to the SQLite audit log with actor, action, target, and timestamp
   3. Dashboard shows the last 20 audit log entries
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 24-01-PLAN.md — Content scanner utility, audit_log schema, writeAuditLog helper, route integrations, GET /api/audit-log endpoint
-- [ ] 24-02-PLAN.md — useAuditLog hook, AuditLogPanel component, wired into Kitchen Floor page
+- [x] 24-01-PLAN.md — Content scanner utility, audit_log schema, writeAuditLog helper, route integrations, GET /api/audit-log endpoint
+- [x] 24-02-PLAN.md — useAuditLog hook, AuditLogPanel component, wired into Kitchen Floor page
 **UI hint**: yes
 
 ### Phase 25: Usage Analytics
@@ -204,5 +204,5 @@ Plans:
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
 | 23. Memory Intelligence | v1.5 | 2/2 | Complete   | 2026-04-18 |
-| 24. Security + Audit | v1.5 | 0/2 | Planning | - |
+| 24. Security + Audit | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 25. Usage Analytics | v1.5 | 0/? | Not started | - |
