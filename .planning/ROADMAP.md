@@ -137,13 +137,14 @@ Plans:
 **UI hint**: yes
 
 ### Phase 23: Memory Intelligence
-**Goal**: A background engine consolidates raw memories into patterns, applies salience decay on schedule, and the dashboard shows consolidation health
-**Depends on**: Phase 19
-**Requirements**: MEM-01, MEM-02, MEM-03
+**Goal**: A background engine consolidates raw memories into patterns, applies salience decay on schedule, the dashboard shows consolidation health, and any agent can query peer agents' current activity
+**Depends on**: Phase 19, Phase 20
+**Requirements**: MEM-01, MEM-02, MEM-03, MEM-04
 **Success Criteria** (what must be TRUE):
   1. Background consolidation engine runs on schedule, batches unconsolidated memories, and writes LLM-extracted meta-insights back to SQLite
   2. Salience decay runs on schedule with 4-tier rates (pinned=0%, high=1%, mid=2%, low=5%/day); frequently accessed memories accumulate access-resistance
   3. Dashboard shows consolidation last-run timestamp, pending unconsolidated count, and per-tier decay stats
+  4. `GET /api/agent-peers` returns all active agents with current_task, status, and last_seen; dashboard shows a live peer-awareness panel so agents and users can see what every other agent is working on
 **Plans**: TBD
 **UI hint**: yes
 
