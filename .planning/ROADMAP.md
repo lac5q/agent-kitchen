@@ -159,6 +159,18 @@ Plans:
 **Plans**: TBD
 **UI hint**: yes
 
+### Phase 25: Usage Analytics
+**Goal**: Ledger, Library, and Cookbooks pages each show time-series line graphs with day/week/month toggles so usage and growth trends are visible at a glance
+**Depends on**: Phase 19
+**Requirements**: ANA-01, ANA-02, ANA-03, ANA-04
+**Success Criteria** (what must be TRUE):
+  1. Ledger shows line graphs for docs ingested, memory writes, and recall queries over the selected time window (day/week/month)
+  2. Library shows collection growth and ingest rate as a line graph with the same time toggle
+  3. Cookbooks shows skill execution count and failure rate as line graphs over time
+  4. A shared `TimeSeriesChart` component and `useTimeSeries(metric, window)` hook powers all three — one aggregation pattern, three pages
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -187,3 +199,4 @@ Plans:
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
 | 23. Memory Intelligence | v1.5 | 0/? | Not started | - |
 | 24. Security + Audit | v1.5 | 0/? | Not started | - |
+| 25. Usage Analytics | v1.5 | 0/? | Not started | - |
