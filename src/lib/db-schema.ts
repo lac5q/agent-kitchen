@@ -128,4 +128,58 @@ export function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS hive_delegations_to_agent
       ON hive_delegations(to_agent, status);
   `);
+
+  // memory_salience: tracks tier, decay score, and access resistance per message (MEM-02)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_salience (
+      message_id     INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      tier           TEXT    NOT NULL DEFAULT 'mid'
+                     CHECK(tier IN ('pinned','high','mid','low')),
+      salience_score REAL    NOT NULL DEFAULT 1.0
+                     CHECK(salience_score >= 0.0 AND salience_score <= 1.0),
+      access_count   INTEGER NOT NULL DEFAULT 0,
+      last_accessed  TEXT,
+      last_decay_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS memory_salience_tier
+      ON memory_salience(tier, last_decay_at);
+  `);
+
+  // memory_consolidation_runs: audit log of consolidation runs (MEM-01)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_consolidation_runs (
+      id               INTEGER PRIMARY KEY,
+      started_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      completed_at     TEXT,
+      batch_size       INTEGER NOT NULL DEFAULT 0,
+      insights_written INTEGER NOT NULL DEFAULT 0,
+      status           TEXT    NOT NULL DEFAULT 'running'
+                       CHECK(status IN ('running','completed','failed')),
+      error_message    TEXT
+    );
+  `);
+
+  // memory_meta_insights: LLM-extracted patterns/contradictions/summaries (MEM-01)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_meta_insights (
+      id           INTEGER PRIMARY KEY,
+      run_id       INTEGER NOT NULL REFERENCES memory_consolidation_runs(id),
+      insight_type TEXT    NOT NULL
+                   CHECK(insight_type IN ('pattern','contradiction','summary')),
+      content      TEXT    NOT NULL,
+      source_ids   TEXT    NOT NULL,
+      created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+  `);
+
+  // Additive migration: add consolidated column to messages (safe on re-run)
+  try {
+    db.exec('ALTER TABLE messages ADD COLUMN consolidated INTEGER NOT NULL DEFAULT 0');
+  } catch {
+    // Column already exists -- safe to ignore on subsequent startups
+  }
+
+  // One-time salience seed: ensures every existing message has a salience row
+  db.exec('INSERT OR IGNORE INTO memory_salience(message_id) SELECT id FROM messages');
 }
