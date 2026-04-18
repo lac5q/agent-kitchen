@@ -247,3 +247,150 @@ describe("HIVE-05: Paperclip agent_id round-trip", () => {
     expect(data.actions.some((a: any) => a.agent_id === "paperclip")).toBe(true);
   });
 });
+
+// ────────────────────────────────────────────────────────────────
+// SEC-01: Content scanner blocking
+// ────────────────────────────────────────────────────────────────
+describe("SEC-01: Content scanner — POST /api/hive action branch", () => {
+  it("Test SEC-01a: HIGH-severity content in summary returns 403", async () => {
+    const req = makePostRequest({
+      agent_id: "claude",
+      action_type: "continue",
+      summary: "key AKIAIOSFODNN7EXAMPLE found in config",
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error).toMatch(/blocked/i);
+  });
+
+  it("Test SEC-01b: MEDIUM-severity content in summary returns 200 (flagged only)", async () => {
+    const req = makePostRequest({
+      agent_id: "claude",
+      action_type: "continue",
+      summary: "Contact support at support@example.com for help",
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(200);
+  });
+
+  it("Test SEC-01c: Clean summary returns 200", async () => {
+    const req = makePostRequest({
+      agent_id: "claude",
+      action_type: "continue",
+      summary: "Task completed successfully",
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(200);
+  });
+
+  it("Test SEC-01d: HIGH-severity content in delegation task_summary returns 403", async () => {
+    const req = makePostRequest({
+      type: "delegation",
+      task_id: `task-sec-block-${Date.now()}`,
+      from_agent: "claude",
+      to_agent: "paperclip",
+      task_summary: "Process key AKIAIOSFODNN7EXAMPLE from config",
+      status: "pending",
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error).toMatch(/blocked/i);
+  });
+
+  it("Test SEC-01e: Clean delegation task_summary returns 200", async () => {
+    const req = makePostRequest({
+      type: "delegation",
+      task_id: `task-sec-clean-${Date.now()}`,
+      from_agent: "claude",
+      to_agent: "paperclip",
+      task_summary: "Index all JSONL files from yesterday",
+      status: "pending",
+    });
+    const res = await POST(req as any);
+    expect(res.status).toBe(200);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// SEC-02: Audit log writes
+// ────────────────────────────────────────────────────────────────
+describe("SEC-02: Audit log — POST /api/hive writes audit rows", () => {
+  it("Test SEC-02a: Clean action writes audit row with action='hive_action_write' severity='info'", async () => {
+    const agentId = `audit-clean-${Date.now()}`;
+    const req = makePostRequest({
+      agent_id: agentId,
+      action_type: "continue",
+      summary: "Clean audit test",
+    });
+    await POST(req as any);
+
+    const row = testDb
+      .prepare(
+        `SELECT * FROM audit_log WHERE actor=? AND action='hive_action_write' ORDER BY timestamp DESC LIMIT 1`
+      )
+      .get(agentId) as any;
+    expect(row).toBeDefined();
+    expect(row.severity).toBe("info");
+    expect(row.target).toBe("hive_actions");
+  });
+
+  it("Test SEC-02b: MEDIUM content writes audit row with action='content_flagged' severity='medium'", async () => {
+    const agentId = `audit-medium-${Date.now()}`;
+    const req = makePostRequest({
+      agent_id: agentId,
+      action_type: "continue",
+      summary: "Contact support at medium@example.com for help",
+    });
+    await POST(req as any);
+
+    const row = testDb
+      .prepare(
+        `SELECT * FROM audit_log WHERE actor=? AND action='content_flagged' ORDER BY timestamp DESC LIMIT 1`
+      )
+      .get(agentId) as any;
+    expect(row).toBeDefined();
+    expect(row.severity).toBe("medium");
+  });
+
+  it("Test SEC-02c: HIGH content writes audit row with action='content_blocked' severity='high'", async () => {
+    const agentId = `audit-blocked-${Date.now()}`;
+    const req = makePostRequest({
+      agent_id: agentId,
+      action_type: "continue",
+      summary: "key AKIAIOSFODNN7EXAMPLE found",
+    });
+    await POST(req as any);
+
+    const row = testDb
+      .prepare(
+        `SELECT * FROM audit_log WHERE actor=? AND action='content_blocked' ORDER BY timestamp DESC LIMIT 1`
+      )
+      .get(agentId) as any;
+    expect(row).toBeDefined();
+    expect(row.severity).toBe("high");
+  });
+
+  it("Test SEC-02d: Clean delegation writes audit row with action='hive_delegation_upsert'", async () => {
+    const taskId = `task-audit-deleg-${Date.now()}`;
+    const req = makePostRequest({
+      type: "delegation",
+      task_id: taskId,
+      from_agent: "claude",
+      to_agent: "paperclip",
+      task_summary: "Audit delegation test task",
+      status: "pending",
+    });
+    await POST(req as any);
+
+    const row = testDb
+      .prepare(
+        `SELECT * FROM audit_log WHERE action='hive_delegation_upsert' ORDER BY timestamp DESC LIMIT 1`
+      )
+      .get() as any;
+    expect(row).toBeDefined();
+    expect(row.severity).toBe("info");
+    expect(row.target).toBe("hive_delegations");
+  });
+});

@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
+import { scanContent } from '@/lib/content-scanner';
+import { writeAuditLog } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +99,27 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // SEC-01: Scan delegation task_summary before DB write
+    const delegationScan = scanContent(body.task_summary ?? '');
+    const delegationAuditAction = delegationScan.blocked
+      ? 'content_blocked'
+      : delegationScan.matches.length > 0
+        ? 'content_flagged'
+        : 'hive_delegation_upsert';
+    writeAuditLog(db, {
+      actor: body.from_agent ?? 'unknown',
+      action: delegationAuditAction,
+      target: 'hive_delegations',
+      detail: delegationScan.matches.length > 0
+        ? JSON.stringify(delegationScan.matches.map(m => m.patternName))
+        : null,
+      severity: delegationScan.blocked ? 'high' : delegationScan.matches.length > 0 ? 'medium' : 'info',
+    });
+    if (delegationScan.blocked) {
+      return Response.json({ error: 'Content blocked by security scanner' }, { status: 403 });
+    }
+
     db.prepare(
       `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, checkpoint)
        VALUES (@task_id, @from_agent, @to_agent, @task_summary, @priority, @status, @checkpoint)
@@ -108,7 +131,7 @@ export async function POST(req: NextRequest) {
       task_id: body.task_id,
       from_agent: body.from_agent,
       to_agent: body.to_agent,
-      task_summary: body.task_summary,
+      task_summary: delegationScan.cleanContent,
       priority: body.priority ?? 5,
       status: body.status ?? 'pending',
       checkpoint: body.checkpoint ? JSON.stringify(body.checkpoint) : null,
@@ -127,6 +150,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // SEC-01: Scan action summary before DB write
+  const scan = scanContent(body.summary ?? '');
+  const auditAction = scan.blocked
+    ? 'content_blocked'
+    : scan.matches.length > 0
+      ? 'content_flagged'
+      : 'hive_action_write';
+  writeAuditLog(db, {
+    actor: body.agent_id ?? 'unknown',
+    action: auditAction,
+    target: 'hive_actions',
+    detail: scan.matches.length > 0
+      ? JSON.stringify(scan.matches.map(m => m.patternName))
+      : null,
+    severity: scan.blocked ? 'high' : scan.matches.length > 0 ? 'medium' : 'info',
+  });
+  if (scan.blocked) {
+    return Response.json({ error: 'Content blocked by security scanner' }, { status: 403 });
+  }
+
   const result = db
     .prepare(
       `INSERT INTO hive_actions(agent_id, action_type, summary, artifacts, session_id)
@@ -135,7 +178,7 @@ export async function POST(req: NextRequest) {
     .run({
       agent_id: body.agent_id,
       action_type: body.action_type,
-      summary: body.summary,
+      summary: scan.cleanContent,
       artifacts: body.artifacts ? JSON.stringify(body.artifacts) : null,
       session_id: body.session_id ?? null,
     });
