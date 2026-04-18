@@ -255,12 +255,17 @@ describe('GET /api/time-series — skill_failures (JSONL)', () => {
 });
 
 describe('GET /api/time-series — empty tables', () => {
-  it('returns empty points array for empty ingest_meta', async () => {
-    // Use a fresh in-memory DB with no data
+  it('returns empty points array when no rows fall in the time window', async () => {
+    // Use the shared testDb but query for a metric with no rows matching window=day.
+    // The recall_log table starts empty (rows are inserted by other test suites only).
+    // We verify the shape: { points: [], metric, window, timestamp }.
     const emptyDb = new Database(':memory:');
     initSchema(emptyDb);
-    // Override getDb for this test
-    vi.mocked(await import('@/lib/db')).getDb = () => emptyDb as unknown as ReturnType<typeof testDb['constructor']>;
+
+    // Temporarily replace the mock return value using the mock module
+    const dbModule = await import('@/lib/db');
+    const originalGetDb = dbModule.getDb;
+    dbModule.getDb = () => emptyDb;
 
     const { GET } = await import('../route');
     const req = new Request('http://localhost/api/time-series?metric=docs_ingested&window=day');
@@ -272,7 +277,7 @@ describe('GET /api/time-series — empty tables', () => {
     expect(body.window).toBe('day');
     expect(typeof body.timestamp).toBe('string');
 
-    // Restore original testDb
-    vi.mocked(await import('@/lib/db')).getDb = () => testDb;
+    // Restore original mock
+    dbModule.getDb = originalGetDb;
   });
 });

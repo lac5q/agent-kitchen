@@ -326,3 +326,27 @@ export function useMemoryStats() {
     refetchInterval: 30000,
   });
 }
+
+export type TimeSeriesMetric =
+  | "docs_ingested"
+  | "memory_writes"
+  | "recall_queries"
+  | "collection_growth"
+  | "skill_executions"
+  | "skill_failures";
+
+export type TimeSeriesWindow = "day" | "week" | "month";
+
+export function useTimeSeries(metric: TimeSeriesMetric, window: TimeSeriesWindow) {
+  return useQuery({
+    queryKey: ["time-series", metric, window],
+    queryFn: () =>
+      fetchJSON<{
+        points: Array<{ bucket: string; value: number }>;
+        metric: string;
+        window: string;
+        timestamp: string;
+      }>(`/api/time-series?metric=${metric}&window=${window}`),
+    refetchInterval: POLL_INTERVALS.knowledge, // 60s -- analytics don't need real-time
+  });
+}
