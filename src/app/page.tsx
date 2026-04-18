@@ -3,6 +3,7 @@ import { useAgents, useRemoteAgents } from "@/lib/api-client";
 import { SummaryBar } from "@/components/kitchen/summary-bar";
 import { AgentGrid } from "@/components/kitchen/agent-grid";
 import { HiveFeed } from "@/components/kitchen/hive-feed";
+import { AgentPeersPanel } from "@/components/kitchen/agent-peers-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Agent } from "@/types";
@@ -56,6 +57,7 @@ export default function KitchenFloor() {
         <AgentGrid agents={allAgents} />
       )}
       <HiveFeed />
+      <AgentPeersPanel />
     </div>
     </TooltipProvider>
   );
