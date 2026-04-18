@@ -263,3 +263,44 @@ export function usePaperclipFleet() {
     refetchInterval: POLL_INTERVALS.paperclip,
   });
 }
+
+export function useAgentPeers(windowMinutes = 60) {
+  return useQuery({
+    queryKey: ["agent-peers", windowMinutes],
+    queryFn: () =>
+      fetchJSON<{
+        peers: Array<{
+          agent_id: string;
+          current_task: string;
+          status: string;
+          last_seen: string;
+        }>;
+        window_minutes: number;
+        timestamp: string;
+      }>(`/api/agent-peers?window=${windowMinutes}`),
+    refetchInterval: POLL_INTERVALS.hive, // 5000ms -- same as hive feed
+  });
+}
+
+export function useMemoryStats() {
+  return useQuery({
+    queryKey: ["memory-stats"],
+    queryFn: () =>
+      fetchJSON<{
+        lastRun: {
+          completed_at: string;
+          batch_size: number;
+          insights_written: number;
+          status: string;
+        } | null;
+        pendingUnconsolidated: number;
+        tierStats: Array<{
+          tier: string;
+          count: number;
+          avg_score: number;
+        }>;
+        timestamp: string;
+      }>("/api/memory-stats"),
+    refetchInterval: 30000, // 30s -- consolidation is slow; 5s poll unnecessary
+  });
+}
