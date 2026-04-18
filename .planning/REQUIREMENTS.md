@@ -34,7 +34,7 @@
 - [ ] **VOICE-02**: Gemini Live mode available — speech-to-speech, low latency, routed to active agent
 - [ ] **VOICE-03**: Legacy cascade mode available — Groq Whisper STT → Cartesia TTS; whisper-cpp fallback for STT, ElevenLabs → Gradium → Kokoro → macOS `say` fallback for TTS
 - [ ] **VOICE-04**: All voice session transcripts written to SQLite conversation store (searchable via SQLDB-01)
-- [ ] **VOICE-05**: Dashboard shows active voice session status and scrollable transcript log
+- [x] **VOICE-05**: Dashboard shows active voice session status and scrollable transcript log
 
 ### Memory Intelligence (MEM)
 
@@ -54,7 +54,7 @@
 - [ ] **DASH-01**: SQLite health panel visible in Ledger — row count, DB size, last ingest time, last recall query
 - [ ] **DASH-02**: Hive mind activity feed component — real-time cross-agent action log with agent, action_type, summary, and timestamp
 - [x] **DASH-03**: Paperclip fleet panel in Flow node detail — per-agent status, autonomy mode, active task, last heartbeat
-- [ ] **DASH-04**: Voice session log in dashboard — active/inactive indicator, last session duration, scrollable transcript
+- [x] **DASH-04**: Voice session log in dashboard — active/inactive indicator, last session duration, scrollable transcript
 
 ### Usage Analytics (ANA)
 
@@ -106,7 +106,7 @@
 | VOICE-02 | Phase 22 | Pending |
 | VOICE-03 | Phase 22 | Pending |
 | VOICE-04 | Phase 22 | Pending |
-| VOICE-05 | Phase 22 | Pending |
+| VOICE-05 | Phase 22 | Complete |
 | MEM-01 | Phase 23 | Pending |
 | MEM-02 | Phase 23 | Pending |
 | MEM-03 | Phase 23 | Pending |
@@ -121,4 +121,4 @@
 | DASH-01 | Phase 19 | Pending |
 | DASH-02 | Phase 20 | Pending |
 | DASH-03 | Phase 21 | Complete |
-| DASH-04 | Phase 22 | Pending |
+| DASH-04 | Phase 22 | Complete |

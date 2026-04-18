@@ -67,7 +67,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 - [x] **Phase 19: SQLite Conversation Store** - Shared SQLite backbone with FTS5 index; all JSONL sessions ingested; health panel visible in Library (completed 2026-04-18)
 - [x] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard (completed 2026-04-17)
 - [x] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery (completed 2026-04-18)
-- [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
+- [x] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard (completed 2026-04-18)
 - [x] **Phase 23: Memory Intelligence** - Background consolidation engine; 4-tier salience decay; consolidation stats in dashboard (completed 2026-04-18)
 - [x] **Phase 24: Security + Audit** - Exfiltration guard with 15+ regex patterns; SQLite audit log; last 20 entries visible in dashboard (completed 2026-04-18)
 
@@ -130,10 +130,10 @@ Plans:
   3. Cascade mode (Groq Whisper STT → Cartesia TTS with defined fallback chain) handles the non-Gemini path
   4. Every voice session transcript is written to the SQLite conversation store and retrievable via `/api/recall`
   5. Dashboard voice panel shows active/inactive status, last session duration, and a scrollable transcript log
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 22-01-PLAN.md — Python voice server scaffold, pipelines, transcript persistence, /api/voice-status proxy
-- [ ] 22-02-PLAN.md — VoicePanel component, voice hooks, recall agent_id filter, wired into Flow page
+- [x] 22-01-PLAN.md — Python voice server scaffold, pipelines, transcript persistence, /api/voice-status proxy
+- [x] 22-02-PLAN.md — VoicePanel component, voice hooks, recall agent_id filter, wired into Flow page
 **UI hint**: yes
 
 ### Phase 23: Memory Intelligence
@@ -205,7 +205,7 @@ Plans:
 | 19. SQLite Conversation Store | v1.5 | 3/3 | Complete   | 2026-04-18 |
 | 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
-| 22. Voice Server | v1.5 | 0/2 | Planning | - |
+| 22. Voice Server | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 23. Memory Intelligence | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 24. Security + Audit | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 25. Usage Analytics | v1.5 | 2/2 | Complete   | 2026-04-18 |

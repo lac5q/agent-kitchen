@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Agent Coordination + Voice
 status: verifying
-stopped_at: Completed 25-02-PLAN.md
-last_updated: "2026-04-18T17:58:23.386Z"
+stopped_at: Completed 22-voice-server-02-PLAN.md (Task 3 is human checkpoint pending)
+last_updated: "2026-04-18T22:52:54.638Z"
 last_activity: 2026-04-18
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 15
+  percent: 100
 ---
 
 # State: Agent Kitchen
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-16 for v1.5)
 
 Phase: 25 (usage-analytics) — COMPLETE
 Plan: 2 of 2
-Status: All plans complete — v1.5 milestone at 93%
+Status: Phase complete — ready for verification
 Last activity: 2026-04-18
 
 Progress: [░░░░░░░░░░] 0%
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 24-security-audit P02 | 12m | 2 tasks | 4 files |
 | Phase 25 P01 | 6m | 2 tasks | 6 files |
 | Phase 25-usage-analytics P02 | 12m | 2 tasks | 8 files |
+| Phase 22-voice-server P02 | 525602 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 25]: TimeSeriesMetric and TimeSeriesWindow exported as named types from api-client.ts for Plan 02 component reuse
 - [Phase 25-usage-analytics]: Window toggle state lives in analytics panel (not shared chart) — all charts share one toggle via coordinated state lift
 - [Phase 25-usage-analytics]: TimeSeriesChart is pure presentational — receives data as props, no hook calls inside
+- [Phase 22-voice-server]: agent_id-only recall uses direct SELECT on messages table (not FTS) to support transcript retrieval without keyword search
+- [Phase 22-voice-server]: VoicePanel scrollIntoView guarded with typeof check for jsdom compatibility
 
 ### Pending Todos
 
@@ -84,7 +87,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-18T17:58:23.383Z
-Stopped at: Completed 25-02-PLAN.md
+Last session: 2026-04-18T22:52:54.635Z
+Stopped at: Completed 22-voice-server-02-PLAN.md (Task 3 is human checkpoint pending)
 Resume file: None
 Next action: `/gsd-plan-phase 19`
