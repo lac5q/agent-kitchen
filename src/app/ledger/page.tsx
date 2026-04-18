@@ -7,6 +7,7 @@ import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
 import { CostCalculator } from "@/components/ledger/cost-calculator";
 import { SqliteHealthPanel } from "@/components/ledger/sqlite-health-panel";
+import { MemoryIntelligencePanel } from "@/components/ledger/memory-intelligence-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -147,6 +148,9 @@ export default function LedgerPage() {
 
       {/* SQLite Store Health Panel */}
       <SqliteHealthPanel />
+
+      {/* Memory Intelligence Panel */}
+      <MemoryIntelligencePanel />
     </div>
     </TooltipProvider>
   );
