@@ -198,4 +198,15 @@ export function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS audit_log_ts
       ON audit_log(timestamp DESC);
   `);
+
+  // recall_log: time-series tracking of recall queries (ANA-04)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recall_log (
+      id        INTEGER PRIMARY KEY,
+      query     TEXT    NOT NULL,
+      results   INTEGER NOT NULL DEFAULT 0,
+      timestamp TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS recall_log_ts ON recall_log(timestamp);
+  `);
 }

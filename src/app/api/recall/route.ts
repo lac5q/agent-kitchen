@@ -22,6 +22,13 @@ export async function GET(req: NextRequest) {
 
   const results = recallByKeyword(db, q, limitParam);
 
+  // ANA-04: fire-and-forget insert into recall_log for time-series analytics
+  try {
+    db.prepare('INSERT INTO recall_log(query, results) VALUES(?, ?)').run(q, results.length);
+  } catch {
+    // recall_log may not exist on older DB -- silently ignore
+  }
+
   // MEM-02: increment access_count on memory_salience for recalled messages
   // Fire-and-forget so it never blocks or breaks the recall response (T-23-07)
   const ids = results.map((r: { id: number }) => r.id).filter(Boolean);
