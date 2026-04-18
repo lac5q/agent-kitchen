@@ -41,6 +41,7 @@
 - [ ] **MEM-01**: Background consolidation engine batches unconsolidated memories, extracts patterns and contradictions via LLM, writes meta-insights back to SQLite
 - [ ] **MEM-02**: 4-tier salience decay runs on schedule — pinned=0%/day, high=1%/day, mid=2%/day, low=5%/day; frequently accessed memories resist decay
 - [ ] **MEM-03**: Dashboard shows consolidation last-run timestamp, pending unconsolidated count, and decay stats
+- [ ] **MEM-04**: Any agent can query `GET /api/agent-peers` to see what other active agents are currently working on (agent_id, current_task, status, last_seen); dashboard shows a live peer-awareness panel
 
 ### Security (SEC)
 
@@ -102,6 +103,7 @@
 | MEM-01 | Phase 23 | Pending |
 | MEM-02 | Phase 23 | Pending |
 | MEM-03 | Phase 23 | Pending |
+| MEM-04 | Phase 23 | Pending |
 | SEC-01 | Phase 24 | Pending |
 | SEC-02 | Phase 24 | Pending |
 | SEC-03 | Phase 24 | Pending |
