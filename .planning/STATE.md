@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-16 for v1.5)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** Phase 24 — security-audit
+**Current focus:** Phase 25 — usage-analytics
 
 ## Current Position
 
-Phase: 24 (security-audit) — EXECUTING
+Phase: 25 (usage-analytics) — COMPLETE
 Plan: 2 of 2
-Status: Phase complete — ready for verification
+Status: All plans complete — v1.5 milestone at 93%
 Last activity: 2026-04-18
 
 Progress: [░░░░░░░░░░] 0%
