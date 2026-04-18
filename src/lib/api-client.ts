@@ -7,6 +7,7 @@ import type {
   HealthStatus,
   KnowledgeCollection,
   MemoryEntry,
+  PaperclipFleetResponse,
 } from "@/types";
 
 async function fetchJSON<T>(url: string): Promise<T> {
@@ -252,5 +253,13 @@ export function useHiveFeed(limit = 20) {
         timestamp: string;
       }>(`/api/hive?limit=${limit}`),
     refetchInterval: POLL_INTERVALS.hive,
+  });
+}
+
+export function usePaperclipFleet() {
+  return useQuery({
+    queryKey: ["paperclip-fleet"],
+    queryFn: () => fetchJSON<PaperclipFleetResponse>("/api/paperclip"),
+    refetchInterval: POLL_INTERVALS.paperclip,
   });
 }
