@@ -174,9 +174,9 @@ Plans:
   2. Library shows collection growth and ingest rate as a line graph with the same time toggle
   3. Cookbooks shows skill execution count and failure rate as line graphs over time
   4. A shared `TimeSeriesChart` component and `useTimeSeries(metric, window)` hook powers all three — one aggregation pattern, three pages
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 25-01-PLAN.md — recall_log schema, recall route integration, /api/time-series endpoint, useTimeSeries hook
+- [x] 25-01-PLAN.md — recall_log schema, recall route integration, /api/time-series endpoint, useTimeSeries hook
 - [ ] 25-02-PLAN.md — TimeSeriesChart component, analytics panels for Ledger/Library/Cookbooks, page wiring
 **UI hint**: yes
 
@@ -208,4 +208,4 @@ Plans:
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
 | 23. Memory Intelligence | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 24. Security + Audit | v1.5 | 2/2 | Complete   | 2026-04-18 |
-| 25. Usage Analytics | v1.5 | 0/2 | Planning | - |
+| 25. Usage Analytics | v1.5 | 1/2 | In Progress|  |
