@@ -182,4 +182,20 @@ export function initSchema(db: Database.Database): void {
 
   // One-time salience seed: ensures every existing message has a salience row
   db.exec('INSERT OR IGNORE INTO memory_salience(message_id) SELECT id FROM messages');
+
+  // audit_log: immutable record of all significant agent actions (SEC-02)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id        INTEGER PRIMARY KEY,
+      actor     TEXT    NOT NULL,
+      action    TEXT    NOT NULL,
+      target    TEXT    NOT NULL,
+      detail    TEXT,
+      severity  TEXT    NOT NULL DEFAULT 'info'
+                CHECK(severity IN ('info','medium','high')),
+      timestamp TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS audit_log_ts
+      ON audit_log(timestamp DESC);
+  `);
 }
