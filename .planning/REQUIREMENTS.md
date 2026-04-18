@@ -23,10 +23,10 @@
 
 ### Paperclip Fleet Node (PAPER)
 
-- [ ] **PAPER-01**: Paperclip appears as a collapsible group node in Flow diagram (Phase 17 parentId pattern); collapsed shows fleet health summary, expanded shows individual agent status
-- [ ] **PAPER-02**: Work can be assigned to Paperclip at fleet level from the dashboard; fleet dispatches internally
-- [ ] **PAPER-03**: Each Paperclip agent has a declared autonomy mode (Interactive / Autonomous / Continuous / Hybrid) visible in the expanded fleet panel
-- [ ] **PAPER-04**: Long-running fleet operations track completed steps with session IDs for recovery after interruption
+- [x] **PAPER-01**: Paperclip appears as a collapsible group node in Flow diagram (Phase 17 parentId pattern); collapsed shows fleet health summary, expanded shows individual agent status
+- [x] **PAPER-02**: Work can be assigned to Paperclip at fleet level from the dashboard; fleet dispatches internally
+- [x] **PAPER-03**: Each Paperclip agent has a declared autonomy mode (Interactive / Autonomous / Continuous / Hybrid) visible in the expanded fleet panel
+- [x] **PAPER-04**: Long-running fleet operations track completed steps with session IDs for recovery after interruption
 
 ### Voice Server (VOICE)
 
@@ -52,7 +52,7 @@
 
 - [ ] **DASH-01**: SQLite health panel visible in Ledger — row count, DB size, last ingest time, last recall query
 - [ ] **DASH-02**: Hive mind activity feed component — real-time cross-agent action log with agent, action_type, summary, and timestamp
-- [ ] **DASH-03**: Paperclip fleet panel in Flow node detail — per-agent status, autonomy mode, active task, last heartbeat
+- [x] **DASH-03**: Paperclip fleet panel in Flow node detail — per-agent status, autonomy mode, active task, last heartbeat
 - [ ] **DASH-04**: Voice session log in dashboard — active/inactive indicator, last session duration, scrollable transcript
 
 ---
@@ -90,10 +90,10 @@
 | HIVE-03 | Phase 20 | Pending |
 | HIVE-04 | Phase 20 | Pending |
 | HIVE-05 | Phase 20 | Pending |
-| PAPER-01 | Phase 21 | Pending |
-| PAPER-02 | Phase 21 | Pending |
-| PAPER-03 | Phase 21 | Pending |
-| PAPER-04 | Phase 21 | Pending |
+| PAPER-01 | Phase 21 | Complete |
+| PAPER-02 | Phase 21 | Complete |
+| PAPER-03 | Phase 21 | Complete |
+| PAPER-04 | Phase 21 | Complete |
 | VOICE-01 | Phase 22 | Pending |
 | VOICE-02 | Phase 22 | Pending |
 | VOICE-03 | Phase 22 | Pending |
@@ -107,5 +107,5 @@
 | SEC-03 | Phase 24 | Pending |
 | DASH-01 | Phase 19 | Pending |
 | DASH-02 | Phase 20 | Pending |
-| DASH-03 | Phase 21 | Pending |
+| DASH-03 | Phase 21 | Complete |
 | DASH-04 | Phase 22 | Pending |
