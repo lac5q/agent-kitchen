@@ -64,7 +64,7 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
 
 **Milestone Goal:** Give every agent a shared SQLite memory backbone and cross-server coordination layer, bring Paperclip into the hive as a contributing fleet node, and add a voice interface.
 
-- [ ] **Phase 19: SQLite Conversation Store** - Shared SQLite backbone with FTS5 index; all JSONL sessions ingested; health panel visible in Ledger
+- [x] **Phase 19: SQLite Conversation Store** - Shared SQLite backbone with FTS5 index; all JSONL sessions ingested; health panel visible in Library (completed 2026-04-18)
 - [x] **Phase 20: Hive Mind Coordination** - Agents log and query cross-agent actions; task delegation with recovery; live hive feed in dashboard (completed 2026-04-17)
 - [x] **Phase 21: Paperclip Fleet Node** - Paperclip as collapsible group in Flow; work assignment from dashboard; fleet panel with autonomy modes and step recovery (completed 2026-04-18)
 - [ ] **Phase 22: Voice Server** - Pipecat Python service with Gemini Live + cascade fallback; transcripts written to SQLite; voice log in dashboard
@@ -82,11 +82,11 @@ Full archive: `.planning/milestones/v1.4-ROADMAP.md`
   2. All Claude Code JSONL sessions in `~/.claude/projects/` are ingested with FTS5 index on content, timestamp, project, and agent_id
   3. DB path is declared once in project config and all consumers (agents, dashboard, voice) reference the same file
   4. Ledger panel shows row count, DB size, last ingest timestamp, and last recall query
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete — delivered retroactively across Phases 23–25
 Plans:
-- [ ] 19-01-PLAN.md — Install better-sqlite3, configure Next.js, create DB singleton and schema
-- [ ] 19-02-PLAN.md — JSONL ingestion engine and recall/ingest/stats API routes
-- [ ] 19-03-PLAN.md — SqliteHealthPanel component wired into Ledger page
+- [x] 19-01-PLAN.md — Install better-sqlite3, configure Next.js, create DB singleton and schema (delivered in Phase 23)
+- [x] 19-02-PLAN.md — JSONL ingestion engine and recall/ingest/stats API routes (delivered in Phase 23)
+- [x] 19-03-PLAN.md — SqliteHealthPanel component wired into Library page (delivered in Phase 23)
 **UI hint**: yes
 
 ### Phase 20: Hive Mind Coordination
@@ -202,7 +202,7 @@ Plans:
 | 16. Per-Node Activity Panel | v1.3 | 1/1 | Complete | 2026-04-14 |
 | 17. Collapsible Node Groups | v1.3 | 2/2 | Complete | 2026-04-15 |
 | 18. Cookbooks Page | v1.4 | 1/1 | Complete | 2026-04-15 |
-| 19. SQLite Conversation Store | v1.5 | 0/3 | Planning | - |
+| 19. SQLite Conversation Store | v1.5 | 3/3 | Complete   | 2026-04-18 |
 | 20. Hive Mind Coordination | v1.5 | 2/2 | Complete   | 2026-04-17 |
 | 21. Paperclip Fleet Node | v1.5 | 2/2 | Complete   | 2026-04-18 |
 | 22. Voice Server | v1.5 | 0/2 | Planning | - |
