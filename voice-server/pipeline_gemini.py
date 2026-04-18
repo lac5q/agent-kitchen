@@ -30,22 +30,44 @@ from pipecat.pipeline.pipeline import Pipeline
 from transcript_proc_helper import build_transcript_proc
 
 
-def build_gemini_pipeline(transport, session_id: str) -> Pipeline:
+AGENT_INSTRUCTIONS: dict[str, str] = {
+    "kitchen": (
+        "You are the Kitchen Floor assistant embedded in the Agent Kitchen dashboard. "
+        "You have deep knowledge of the agents, skills, knowledge collections, and metrics visible on the dashboard. "
+        "Help the user understand what's happening across their agent fleet, interpret metrics, and navigate their knowledge base. "
+        "Keep responses concise and conversational."
+    ),
+    "flow": (
+        "You are the Flow assistant specializing in agent coordination and orchestration. "
+        "Help design agent workflows, debug coordination issues, and analyze hive mind activity. "
+        "You are familiar with the Pipecat, GSD, and OpenClaw ecosystems. "
+        "Keep responses concise and technical."
+    ),
+    "general": (
+        "You are a helpful AI assistant embedded in Agent Kitchen. "
+        "Help with any questions about AI agents, skills, knowledge management, and analytics."
+    ),
+}
+
+
+def build_gemini_pipeline(transport, session_id: str, agent: str = "kitchen") -> Pipeline:
     """
     Build a Gemini Live speech-to-speech pipeline.
 
     Args:
         transport:  WebsocketServerTransport instance (provides input/output)
         session_id: UUID string for the current voice session
+        agent:      Agent ID — selects the system instruction ("kitchen", "flow", "general")
 
     Returns:
         Pipeline ready to be wrapped in PipelineTask
     """
+    system_instruction = AGENT_INSTRUCTIONS.get(agent, AGENT_INSTRUCTIONS["general"])
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
         settings=GeminiLiveLLMService.Settings(
             model="models/gemini-2.5-flash-native-audio-preview-12-2025",
-            system_instruction="You are a helpful kitchen assistant for Agent Kitchen.",
+            system_instruction=system_instruction,
             voice="Puck",
             vad=GeminiVADParams(silence_duration_ms=500),
         ),
