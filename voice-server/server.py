@@ -43,7 +43,21 @@ def _write_state(active: bool, session_id: str | None) -> None:
         json.dump(state, f)
 
 
-async def build_pipeline(transport, session_id: str) -> Pipeline:
+def _parse_agent(websocket) -> str:
+    """Extract ?agent= query param from the WebSocket path, defaulting to 'kitchen'."""
+    try:
+        path = getattr(websocket, "path", "") or ""
+        if "?" in path:
+            qs = path.split("?", 1)[1]
+            for part in qs.split("&"):
+                if part.startswith("agent="):
+                    return part[6:] or "kitchen"
+    except Exception:
+        pass
+    return "kitchen"
+
+
+async def build_pipeline(transport, session_id: str, agent: str = "kitchen") -> Pipeline:
     """Build the appropriate pipeline based on VOICE_MODE env var."""
     mode = os.getenv("VOICE_MODE", "gemini").lower()
     if mode == "cascade":
@@ -51,7 +65,7 @@ async def build_pipeline(transport, session_id: str) -> Pipeline:
         return build_cascade_pipeline(transport, session_id)
     else:
         from pipeline_gemini import build_gemini_pipeline
-        return build_gemini_pipeline(transport, session_id)
+        return build_gemini_pipeline(transport, session_id, agent=agent)
 
 
 async def run_voice_server() -> None:
@@ -64,8 +78,9 @@ async def run_voice_server() -> None:
     @transport.event_handler("on_client_connected")
     async def on_connected(transport, websocket):
         session_id = str(uuid.uuid4())
+        agent = _parse_agent(websocket)
         _write_state(active=True, session_id=session_id)
-        pipeline = await build_pipeline(transport, session_id)
+        pipeline = await build_pipeline(transport, session_id, agent=agent)
         task = PipelineTask(pipeline, params=PipelineParams(enable_metrics=True))
         runner = PipelineRunner(handle_sigint=False)
         await runner.run(task)
