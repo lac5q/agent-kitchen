@@ -180,6 +180,60 @@ export function initSchema(db: Database.Database): void {
     // Column already exists -- safe to ignore on subsequent startups
   }
 
+  // Additive migration: add context_id to hive_delegations (dispatch chain grouping)
+  try {
+    db.exec('ALTER TABLE hive_delegations ADD COLUMN context_id TEXT');
+  } catch {
+    // Column already exists
+  }
+
+  // Additive migration: add result to hive_delegations (terminal payload storage)
+  try {
+    db.exec('ALTER TABLE hive_delegations ADD COLUMN result TEXT');
+  } catch {
+    // Column already exists
+  }
+
+  // One-shot migration: rebuild hive_delegations CHECK constraint to add 'canceled' status.
+  // Guarded by meta flag -- SQLite cannot ALTER a CHECK constraint in place.
+  const migrated = db
+    .prepare(`SELECT value FROM meta WHERE key = 'hive_delegations_v2_migrated'`)
+    .get() as { value: string } | undefined;
+  if (!migrated) {
+    db.exec(`
+      CREATE TABLE hive_delegations_new (
+        id            INTEGER PRIMARY KEY,
+        task_id       TEXT    NOT NULL UNIQUE,
+        from_agent    TEXT    NOT NULL,
+        to_agent      TEXT    NOT NULL,
+        task_summary  TEXT    NOT NULL,
+        priority      INTEGER NOT NULL DEFAULT 5,
+        status        TEXT    NOT NULL DEFAULT 'pending'
+                      CHECK(status IN ('pending','active','paused','completed','failed','canceled')),
+        checkpoint    TEXT,
+        context_id    TEXT,
+        result        TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+      );
+      INSERT INTO hive_delegations_new
+        SELECT id, task_id, from_agent, to_agent, task_summary, priority, status,
+               checkpoint, context_id, result, created_at, updated_at
+        FROM hive_delegations;
+      DROP TABLE hive_delegations;
+      ALTER TABLE hive_delegations_new RENAME TO hive_delegations;
+    `);
+    db.prepare(`INSERT OR REPLACE INTO meta(key,value) VALUES('hive_delegations_v2_migrated','1')`).run();
+  }
+
+  // Indexes for dispatch query patterns
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS hive_delegations_context
+      ON hive_delegations(context_id);
+    CREATE INDEX IF NOT EXISTS hive_delegations_status_priority
+      ON hive_delegations(status, priority DESC, created_at ASC);
+  `);
+
   // One-time salience seed: ensures every existing message has a salience row
   db.exec('INSERT OR IGNORE INTO memory_salience(message_id) SELECT id FROM messages');
 
