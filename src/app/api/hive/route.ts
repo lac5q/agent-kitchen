@@ -6,7 +6,7 @@ import { writeAuditLog } from '@/lib/audit';
 export const dynamic = 'force-dynamic';
 
 const VALID_ACTION_TYPES = ['continue', 'loop', 'checkpoint', 'trigger', 'stop', 'error'] as const;
-const VALID_STATUSES = ['pending', 'active', 'paused', 'completed', 'failed'] as const;
+const VALID_STATUSES = ['pending', 'active', 'paused', 'completed', 'failed', 'canceled'] as const;
 
 /**
  * GET /api/hive
@@ -25,16 +25,88 @@ export async function GET(req: NextRequest) {
   const timestamp = new Date().toISOString();
   const db = getDb();
 
+  // Lineage: task_id or context_id takes precedence over all other params
+  const taskId = url.searchParams.get('task_id') ?? '';
+  const contextId = url.searchParams.get('context_id') ?? '';
+
+  if (taskId) {
+    const delegation = db
+      .prepare(`SELECT * FROM hive_delegations WHERE task_id = ?`)
+      .get(taskId) as Record<string, unknown> | undefined ?? null;
+    const actions = db
+      .prepare(
+        `SELECT id, agent_id, action_type, summary, artifacts, timestamp
+         FROM hive_actions
+         WHERE json_extract(artifacts, '$.task_id') = ?
+         ORDER BY timestamp ASC, id ASC`
+      )
+      .all(taskId) as Record<string, unknown>[];
+    const parsedActions = actions.map((a) => ({
+      ...a,
+      artifacts: a.artifacts
+        ? (() => { try { return JSON.parse(a.artifacts as string); } catch { return a.artifacts; } })()
+        : null,
+    }));
+    return Response.json({
+      task_id: taskId,
+      context_id: (delegation?.context_id as string) ?? null,
+      delegation,
+      actions: parsedActions,
+      timestamp,
+    });
+  }
+
+  if (contextId) {
+    const delegations = db
+      .prepare(`SELECT * FROM hive_delegations WHERE context_id = ? ORDER BY created_at ASC`)
+      .all(contextId) as Record<string, unknown>[];
+    const actions = db
+      .prepare(
+        `SELECT id, agent_id, action_type, summary, artifacts, timestamp
+         FROM hive_actions
+         WHERE json_extract(artifacts, '$.context_id') = ?
+         ORDER BY timestamp ASC, id ASC`
+      )
+      .all(contextId) as Record<string, unknown>[];
+    const parsedActions = actions.map((a) => ({
+      ...a,
+      artifacts: a.artifacts
+        ? (() => { try { return JSON.parse(a.artifacts as string); } catch { return a.artifacts; } })()
+        : null,
+    }));
+    return Response.json({ context_id: contextId, delegations, actions: parsedActions, timestamp });
+  }
+
   if (type === 'delegation') {
-    const rows = agent
-      ? db
-          .prepare(
-            `SELECT * FROM hive_delegations WHERE to_agent = ? ORDER BY created_at DESC LIMIT ?`
-          )
-          .all(agent, limit)
-      : db
-          .prepare(`SELECT * FROM hive_delegations ORDER BY created_at DESC LIMIT ?`)
-          .all(limit);
+    const toAgent = url.searchParams.get('to_agent') ?? agent;
+    const statusFilter = url.searchParams.get('status') ?? '';
+    if (statusFilter && !(VALID_STATUSES as readonly string[]).includes(statusFilter)) {
+      return Response.json({ error: `Invalid status filter: ${statusFilter}` }, { status: 400 });
+    }
+    let rows: unknown[];
+    if (toAgent && statusFilter) {
+      rows = db
+        .prepare(
+          `SELECT * FROM hive_delegations WHERE to_agent = ? AND status = ?
+           ORDER BY priority ASC, created_at ASC LIMIT ?`
+        )
+        .all(toAgent, statusFilter, limit);
+    } else if (toAgent) {
+      rows = db
+        .prepare(`SELECT * FROM hive_delegations WHERE to_agent = ? ORDER BY created_at DESC LIMIT ?`)
+        .all(toAgent, limit);
+    } else if (statusFilter) {
+      rows = db
+        .prepare(
+          `SELECT * FROM hive_delegations WHERE status = ?
+           ORDER BY priority ASC, created_at ASC LIMIT ?`
+        )
+        .all(statusFilter, limit);
+    } else {
+      rows = db
+        .prepare(`SELECT * FROM hive_delegations ORDER BY created_at DESC LIMIT ?`)
+        .all(limit);
+    }
     return Response.json({ delegations: rows, timestamp });
   }
 
@@ -121,11 +193,13 @@ export async function POST(req: NextRequest) {
     }
 
     db.prepare(
-      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, checkpoint)
-       VALUES (@task_id, @from_agent, @to_agent, @task_summary, @priority, @status, @checkpoint)
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, checkpoint, context_id, result)
+       VALUES (@task_id, @from_agent, @to_agent, @task_summary, @priority, @status, @checkpoint, @context_id, @result)
        ON CONFLICT(task_id) DO UPDATE SET
          status     = excluded.status,
          checkpoint = excluded.checkpoint,
+         context_id = COALESCE(excluded.context_id, context_id),
+         result     = COALESCE(excluded.result, result),
          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')`
     ).run({
       task_id: body.task_id,
@@ -135,6 +209,8 @@ export async function POST(req: NextRequest) {
       priority: body.priority ?? 5,
       status: body.status ?? 'pending',
       checkpoint: body.checkpoint ? JSON.stringify(body.checkpoint) : null,
+      context_id: body.context_id ?? null,
+      result: body.result ? JSON.stringify(body.result) : null,
     });
     return Response.json({ ok: true, task_id: body.task_id });
   }
