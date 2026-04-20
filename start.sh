@@ -10,10 +10,11 @@ cd "$SCRIPT_DIR"
 NEXTJS_PORT=3002
 PIPECAT_PORT=7860
 HEALTH_PORT=7861
+AGENTMEMORY_PORT=3111
 VENV="$SCRIPT_DIR/voice-server/.venv/bin/python3.12"
 
 # ── Kill existing processes on our ports ─────────────────────────────────────
-for port in $NEXTJS_PORT $PIPECAT_PORT $HEALTH_PORT; do
+for port in $NEXTJS_PORT $PIPECAT_PORT $HEALTH_PORT $AGENTMEMORY_PORT; do
   pids=$(lsof -ti ":$port" 2>/dev/null) || true
   if [ -n "$pids" ]; then
     echo "Killing existing process on port $port..."
@@ -21,6 +22,12 @@ for port in $NEXTJS_PORT $PIPECAT_PORT $HEALTH_PORT; do
   fi
 done
 sleep 1
+
+# ── Start agentmemory (iii-engine backend on port 3111) ──────────────────────
+echo "Starting agentmemory server (port $AGENTMEMORY_PORT)..."
+npx @agentmemory/agentmemory >/tmp/agentmemory.log 2>&1 &
+AGENTMEMORY_PID=$!
+echo "  agentmemory PID: $AGENTMEMORY_PID"
 
 # ── Start Python voice servers ────────────────────────────────────────────────
 if [ -x "$VENV" ]; then

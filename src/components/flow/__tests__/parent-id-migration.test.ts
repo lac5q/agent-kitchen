@@ -8,6 +8,7 @@
  * All 8 tests must be RED before Task 2 and GREEN after Task 2.
  */
 
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
