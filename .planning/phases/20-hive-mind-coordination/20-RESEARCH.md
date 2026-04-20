@@ -534,22 +534,19 @@ SKIPPED — Phase 20 is pure code/config changes. No new external tools, service
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Artifacts field contract**
+1. **Artifacts field contract** (RESOLVED: schema-free JSON column)
    - What we know: HIVE-01 says "artifacts JSON" with no further specification
-   - What's unclear: Whether Phase 21 (Paperclip) or Phase 24 (Audit) requires a specific artifacts schema
-   - Recommendation: Keep schema-free for now; agents can add a `_type` key convention (e.g., `"_type": "file-list"`) so consumers can detect structure without a migration
+   - Resolution: Keep schema-free TEXT column storing JSON.stringify'd value. Agents may add a `_type` key convention (e.g., `"_type": "file-list"`) so consumers can detect structure without a migration. No fixed schema required by Phase 21 or Phase 24 at this time.
 
-2. **Dashboard placement: Kitchen Floor vs. dedicated /hive page**
+2. **Dashboard placement: Kitchen Floor vs. dedicated /hive page** (RESOLVED: Kitchen Floor)
    - What we know: DASH-02 says "hive mind activity feed component"; Ledger is for cost analytics
-   - What's unclear: Whether the feed merits its own route at this scale
-   - Recommendation: Start on Kitchen Floor below AgentGrid; extract to `/hive` in a later phase if needed
+   - Resolution: HiveFeed placed on Kitchen Floor (main page) below AgentGrid. Extract to `/hive` route only if feed complexity warrants it in a later phase.
 
-3. **busy_timeout pragma placement**
+3. **busy_timeout pragma placement** (RESOLVED: add in Task 1 of Plan 20-01)
    - What we know: `getDb()` currently sets `journal_mode` and `synchronous` pragmas
-   - What's unclear: Whether Phase 19 implementation already added `busy_timeout`
-   - Recommendation: Inspect `src/lib/db.ts` in Wave 0 task before adding — avoid duplicate pragma calls
+   - Resolution: Phase 19 did not add `busy_timeout`. Task 1 of Plan 20-01 adds `db.pragma('busy_timeout = 5000')` after the `synchronous` pragma. Idempotent — SQLite ignores duplicate pragma calls.
 
 ---
 
