@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useAgents } from "@/lib/api-client";
+import { PLATFORM_LABELS } from "@/lib/constants";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,10 +89,11 @@ export function VoicePanel() {
   const { data: agentsData } = useAgents();
   const rawAgents = agentsData?.agents ?? [];
 
-  // Sort alphabetically by company then name; agents without company sort last
   const agents = [...rawAgents].sort((a, b) => {
-    const aLabel = a.company ? `${a.company} ${a.name}` : `zzz ${a.name}`;
-    const bLabel = b.company ? `${b.company} ${b.name}` : `zzz ${b.name}`;
+    const runtimeA = PLATFORM_LABELS[a.platform as string] ?? a.platform ?? "zzz";
+    const runtimeB = PLATFORM_LABELS[b.platform as string] ?? b.platform ?? "zzz";
+    const aLabel = `${runtimeA} ${a.name}`;
+    const bLabel = `${runtimeB} ${b.name}`;
     return aLabel.localeCompare(bLabel);
   });
 
@@ -264,7 +266,9 @@ export function VoicePanel() {
           >
             {agents.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.company ? `${a.company} → ${a.name}` : a.name}
+                {a.platform
+                  ? `${PLATFORM_LABELS[a.platform as string] ?? a.platform} → ${a.name}`
+                  : a.name}
               </option>
             ))}
           </select>
