@@ -27,10 +27,19 @@ export async function GET(_req: NextRequest) {
     )
     .all() as { tier: string; count: number; avg_score: number }[];
 
+  // Source breakdown — count distinct agent_ids so the panel can show what was ingested
+  const sourcesRows = db
+    .prepare('SELECT agent_id, COUNT(*) AS cnt FROM messages GROUP BY agent_id ORDER BY cnt DESC')
+    .all() as { agent_id: string; cnt: number }[];
+
+  const consolidationModel = process.env.CONSOLIDATION_MODEL ?? 'claude-haiku-4-5-20251001';
+
   return Response.json({
     lastRun: lastRunRow ?? null,
     pendingUnconsolidated: pendingRow.cnt,
     tierStats,
+    consolidationModel,
+    sources: sourcesRows,
     timestamp: new Date().toISOString(),
   });
 }

@@ -31,6 +31,20 @@ function formatNum(n: number): string {
   return n.toLocaleString();
 }
 
+// ── tooltip ───────────────────────────────────────────────────────────────────
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative inline-flex">
+      <span className="cursor-help text-xs text-slate-500 hover:text-slate-300">ⓘ</span>
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-60 -translate-x-1/2 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs leading-snug text-slate-300 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+        {text}
+        <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-700" />
+      </div>
+    </div>
+  );
+}
+
 // ── button state type ─────────────────────────────────────────────────────────
 
 type ButtonState = "idle" | "loading" | "success" | "error";
@@ -109,6 +123,10 @@ export function SqliteHealthPanel() {
       <div className="col-span-2 lg:col-span-4 flex items-center gap-2">
         <span className="text-xs font-medium text-amber-500 uppercase tracking-wide">
           SQLite Store — all time
+        </span>
+        <InfoTooltip text="Local SQLite database storing all agent conversation history. 'Run Ingest' scans Claude, Qwen, Hermes, and Codex session files and indexes them for semantic search and recall." />
+        <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+          Local FTS5
         </span>
         <div className="flex-1 h-px bg-amber-900/40" />
         <button
