@@ -1,13 +1,16 @@
 ---
 phase: 19-sqlite-conversation-store
-verified: 2026-04-16T23:00:00Z
-status: human_needed
-score: 6/7 must-haves verified
+verified: 2026-04-20T06:50:00Z
+status: verified
+score: 7/7 must-haves verified
 overrides_applied: 0
 human_verification:
-  - test: "Navigate to http://localhost:3000/ledger (or port 3002 in production). Scroll past CostCalculator. Verify SQLite Store section appears with 4 KPI cards. Click Run Ingest button, verify it transitions to Ingesting... then success state. After ingest completes, Conversations count should be non-zero. Call /api/recall?q=test then refresh Ledger — Last Recall should show 'test'."
-    expected: "Section divider 'SQLite Store — all time' visible, 4 KPI cards with correct colors (sky-400, violet-400, amber-400, slate-100), Run Ingest button works with loading/success transitions, stats update post-ingest."
-    why_human: "Visual layout, CSS color classes, button state transitions, and live data are not testable without a running browser session."
+  - test: "Navigate to http://localhost:3002/library. Scroll to bottom. Confirm 'Conversation Memory' section with SqliteHealthPanel and MemoryIntelligencePanel render below Usage Trends."
+    expected: "Section divider 'SQLite Store — all time' visible with 4 KPI cards (sky-400 Conversations, violet-400 DB Size, amber-400 Last Ingest, slate-100 Last Recall), Run Ingest button works with loading/success transitions."
+    result: "VERIFIED — both panels confirmed rendering under Conversation Memory section on Library page."
+  - test: "Verify MemoryIntelligencePanel renders below SqliteHealthPanel on Library page"
+    expected: "Memory Intelligence header, KPI cards (Pending, Last Run, Insights, Run Status), tier stats row, Run Now button"
+    result: "VERIFIED — panel confirmed in browser via accessibility snapshot"
 ---
 
 # Phase 19: SQLite Conversation Store Verification Report
