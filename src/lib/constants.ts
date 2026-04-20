@@ -36,6 +36,8 @@ export const PLATFORM_LABELS: Record<string, string> = {
   qwen: "Qwen",
   gemini: "Gemini",
   opencode: "OpenCode",
+  hermes: "Hermes",
+  openclaw: "OpenClaw",
 };
 
 export const AGENT_CONFIGS_PATH = process.env.AGENT_CONFIGS_PATH || `${process.env.HOME}/github/knowledge/agent-configs`;

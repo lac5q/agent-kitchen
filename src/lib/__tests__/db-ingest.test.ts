@@ -13,6 +13,9 @@ const TEST_MEMORY_PATH = path.join(TEST_DB_DIR, 'projects');
 // Override env vars before importing modules
 process.env.SQLITE_DB_PATH = TEST_DB_PATH;
 process.env.CLAUDE_MEMORY_PATH = TEST_MEMORY_PATH;
+process.env.HERMES_MEMORY_PATH = path.join(TEST_DB_DIR, 'hermes-sessions');
+process.env.QWEN_MEMORY_PATH = path.join(TEST_DB_DIR, 'qwen-projects');
+process.env.CODEX_MEMORY_PATH = path.join(TEST_DB_DIR, 'codex-sessions');
 
 // Lazy imports after env vars are set
 let getDb: () => import('better-sqlite3').Database;

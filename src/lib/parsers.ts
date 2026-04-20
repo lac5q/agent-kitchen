@@ -18,15 +18,17 @@ export interface ModelUsageStat {
 
 export interface ModelUsage {
   models: ModelUsageStat[];
-  total: { inputTokens: number; outputTokens: number; requests: number };
+  total: { inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; requests: number };
 }
 
 function detectPlatform(agentName: string): AgentPlatform {
   const name = agentName.toLowerCase();
+  if (name.includes("hermes")) return "hermes";
+  if (name.includes("openclaw")) return "openclaw";
   if (name.includes("qwen")) return "qwen";
   if (name.includes("gemini")) return "gemini";
   if (name.includes("codex")) return "codex";
-  if (name.includes("opencode") || name.includes("hermes")) return "opencode";
+  if (name.includes("opencode")) return "opencode";
   return "claude";
 }
 
@@ -87,6 +89,42 @@ export async function parseAgents(configsPath: string): Promise<Agent[]> {
       /* no state file */
     }
 
+    // Extract company by scanning all files and applying priority order.
+    // Business companies outrank platform names (e.g. PopSmiths > OpenClaw)
+    // so an agent that merely uses OpenClaw as a platform isn't mislabeled.
+    const companyFiles = ["SOUL.md", "HEARTBEAT.md", "LESSONS.md", "USER.md", "AGENTS.md"];
+    const hits = new Set<string>();
+    for (const cf of companyFiles) {
+      try {
+        const content = await readFile(path.join(agentDir, cf), "utf-8");
+        if (/popsmiths/i.test(content)) hits.add("PopSmiths");
+        if (/epilogue capital/i.test(content)) hits.add("Epilogue Capital");
+        if (/growthalchemy/i.test(content)) hits.add("GrowthAlchemy");
+        if (/handdrawn|hand[- ]drawn/i.test(content)) hits.add("HandDrawn");
+        if (/openclaw/i.test(content)) hits.add("OpenClaw");
+      } catch { /* file absent */ }
+    }
+    // Priority: specific business companies first, platform last
+    const priority = ["PopSmiths", "HandDrawn", "GrowthAlchemy", "Epilogue Capital", "OpenClaw"];
+    const company = priority.find((c) => hits.has(c));
+
+    // Detect master agent — scan AGENTS.md and SOUL.md for explicit master declarations
+    let masterId: string | undefined;
+    const masterFiles = ["AGENTS.md", "SOUL.md", "USER.md"];
+    for (const mf of masterFiles) {
+      try {
+        const content = await readFile(path.join(agentDir, mf), "utf-8");
+        if (/\bhermes\b.*master/i.test(content) || /master.*\bhermes\b/i.test(content) || /reports to.*hermes/i.test(content)) {
+          masterId = "hermes";
+          break;
+        }
+        if (/\bopenclaw\b.*master/i.test(content) || /master.*\bopenclaw\b/i.test(content) || /reports to.*openclaw/i.test(content)) {
+          masterId = "openclaw";
+          break;
+        }
+      } catch { /* file absent */ }
+    }
+
     let lessonsCount = 0;
     try {
       const lessons = await readFile(
@@ -114,12 +152,14 @@ export async function parseAgents(configsPath: string): Promise<Agent[]> {
         .replace(/-/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase()),
       role: extractRole(entry),
+      company,
       platform: detectPlatform(entry),
       status: detectStatus(heartbeatContent, heartbeatMtime),
       lastHeartbeat: heartbeatMtime?.toISOString() || null,
       currentTask,
       lessonsCount,
       todayMemoryCount,
+      masterId,
     });
   }
 
@@ -311,7 +351,8 @@ function normalizeModelName(modelId: string): string {
 async function aggregateJsonlFile(
   filePath: string,
   acc: Map<string, ModelUsageStat>,
-  seen: Set<string>
+  seen: Set<string>,
+  since?: Date
 ): Promise<void> {
   return new Promise((resolve) => {
     let stream: ReturnType<typeof createReadStream>;
@@ -327,6 +368,10 @@ async function aggregateJsonlFile(
       try {
         const entry = JSON.parse(line);
         if (entry.type !== "assistant") return;
+        if (since && entry.timestamp) {
+          const ts = new Date(entry.timestamp as string);
+          if (ts < since) return;
+        }
         const msg = entry.message;
         if (!msg?.model || !msg?.usage) return;
         const reqId = entry.requestId as string | undefined;
@@ -369,7 +414,7 @@ async function aggregateJsonlFile(
   });
 }
 
-export async function parseModelUsage(): Promise<ModelUsage> {
+export async function parseModelUsage(since?: Date): Promise<ModelUsage> {
   const claudeProjectsPath = `${process.env.HOME}/.claude/projects`;
   const acc = new Map<string, ModelUsageStat>();
   const seen = new Set<string>();
@@ -378,7 +423,7 @@ export async function parseModelUsage(): Promise<ModelUsage> {
   try {
     projects = await readdir(claudeProjectsPath);
   } catch {
-    return { models: [], total: { inputTokens: 0, outputTokens: 0, requests: 0 } };
+    return { models: [], total: { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 } };
   }
 
   for (const project of projects) {
@@ -394,7 +439,7 @@ export async function parseModelUsage(): Promise<ModelUsage> {
 
     for (const entry of entries) {
       if (entry.endsWith(".jsonl")) {
-        await aggregateJsonlFile(path.join(projectDir, entry), acc, seen);
+        await aggregateJsonlFile(path.join(projectDir, entry), acc, seen, since);
       } else {
         // session dir — check for subagents/
         const subagentsDir = path.join(projectDir, entry, "subagents");
@@ -406,7 +451,7 @@ export async function parseModelUsage(): Promise<ModelUsage> {
         }
         for (const saFile of saFiles) {
           if (saFile.endsWith(".jsonl")) {
-            await aggregateJsonlFile(path.join(subagentsDir, saFile), acc, seen);
+            await aggregateJsonlFile(path.join(subagentsDir, saFile), acc, seen, since);
           }
         }
       }
@@ -420,9 +465,11 @@ export async function parseModelUsage(): Promise<ModelUsage> {
     (t, m) => ({
       inputTokens: t.inputTokens + m.inputTokens,
       outputTokens: t.outputTokens + m.outputTokens,
+      cacheRead: t.cacheRead + m.cacheRead,
+      cacheCreation: t.cacheCreation + m.cacheCreation,
       requests: t.requests + m.requests,
     }),
-    { inputTokens: 0, outputTokens: 0, requests: 0 }
+    { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 }
   );
 
   return { models, total };

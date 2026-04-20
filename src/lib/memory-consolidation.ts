@@ -53,10 +53,11 @@ export async function runConsolidation(): Promise<void> {
       .map((m, i) => `[${i + 1}] ${m.content.slice(0, 500)}`)
       .join('\n');
 
-    // Call Anthropic
+    // Call Anthropic — model configurable via CONSOLIDATION_MODEL env var
+    const consolidationModel = process.env.CONSOLIDATION_MODEL ?? 'claude-haiku-4-5-20251001';
     const client = new Anthropic();
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
+      model: consolidationModel,
       max_tokens: 1024,
       messages: [{ role: 'user', content: CONSOLIDATION_PROMPT + batchText }],
     });
