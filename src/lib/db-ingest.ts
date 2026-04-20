@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { CLAUDE_MEMORY_PATH } from './constants';
+import { CLAUDE_MEMORY_PATH, QWEN_MEMORY_PATH, HERMES_MEMORY_PATH, CODEX_MEMORY_PATH } from './constants';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -210,12 +210,221 @@ export function ingestFile(
   return inserted;
 }
 
+// ─── Hermes Ingestion ─────────────────────────────────────────────────────────
+// Format: flat JSONL, each line is {role, content (string), timestamp}
+
+interface HermesEntry {
+  role?: string;
+  content?: string;
+  timestamp?: string;
+}
+
+export function ingestHermesFile(
+  db: Database.Database,
+  filePath: string
+): number {
+  const sessionId = path.basename(filePath, '.jsonl');
+  const agentId = 'hermes';
+  const project = 'hermes';
+
+  const insertStmt = db.prepare(`
+    INSERT OR IGNORE INTO messages
+      (session_id, project, agent_id, role, content, timestamp, cwd, git_branch, request_id)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const lines = raw.split('\n').filter((l) => l.trim());
+  let inserted = 0;
+
+  const run = db.transaction(() => {
+    for (const line of lines) {
+      let entry: HermesEntry;
+      try { entry = JSON.parse(line) as HermesEntry; } catch { continue; }
+
+      const role = entry.role === 'user' ? 'user' : entry.role === 'assistant' ? 'assistant' : null;
+      if (!role) continue;
+
+      const content = typeof entry.content === 'string' ? entry.content.slice(0, 8000) : null;
+      if (!content) continue;
+
+      const info = insertStmt.run(
+        sessionId, project, agentId, role, content,
+        entry.timestamp ?? new Date().toISOString(),
+        null, null, null
+      );
+      inserted += Number(info.changes);
+    }
+  });
+  run();
+  return inserted;
+}
+
+// ─── Qwen Ingestion ───────────────────────────────────────────────────────────
+// Format: same outer structure as Claude ({type, sessionId, timestamp, cwd, gitBranch, message})
+// but message.parts[].text instead of message.content
+
+interface QwenPart { text?: string }
+interface QwenMessage { role?: string; parts?: QwenPart[] }
+interface QwenEntry {
+  type?: string;
+  sessionId?: string;
+  timestamp?: string;
+  cwd?: string;
+  gitBranch?: string;
+  message?: QwenMessage;
+}
+
+export function ingestQwenFile(
+  db: Database.Database,
+  filePath: string,
+  projectDirName: string
+): number {
+  const sessionId = path.basename(filePath, '.jsonl');
+  const agentId = deriveAgentId(projectDirName);
+  const project = `qwen:${agentId}`;
+
+  const insertStmt = db.prepare(`
+    INSERT OR IGNORE INTO messages
+      (session_id, project, agent_id, role, content, timestamp, cwd, git_branch, request_id)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const lines = raw.split('\n').filter((l) => l.trim());
+  let inserted = 0;
+
+  const run = db.transaction(() => {
+    for (const line of lines) {
+      let entry: QwenEntry;
+      try { entry = JSON.parse(line) as QwenEntry; } catch { continue; }
+
+      const type = entry.type;
+      if (type !== 'user' && type !== 'assistant') continue;
+
+      const role = type === 'user' ? 'user' : 'assistant';
+      const parts = entry.message?.parts ?? [];
+      const content = parts
+        .map((p) => p.text ?? '')
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 8000);
+      if (!content) continue;
+
+      const info = insertStmt.run(
+        sessionId, project, agentId, role, content,
+        entry.timestamp ?? new Date().toISOString(),
+        entry.cwd ?? null, entry.gitBranch ?? null, null
+      );
+      inserted += Number(info.changes);
+    }
+  });
+  run();
+  return inserted;
+}
+
+// ─── Codex Ingestion ──────────────────────────────────────────────────────────
+// Format: event-stream JSONL; extract type=response_item with role=user|assistant
+// content is array of {type: "input_text"|"output_text", text: string}
+
+interface CodexContentBlock { type?: string; text?: string }
+interface CodexPayload {
+  type?: string;
+  role?: string;
+  content?: CodexContentBlock[];
+}
+interface CodexEntry {
+  type?: string;
+  timestamp?: string;
+  payload?: CodexPayload;
+}
+
+export function ingestCodexFile(
+  db: Database.Database,
+  filePath: string,
+  sessionId: string
+): number {
+  const agentId = 'codex';
+  const project = 'codex';
+
+  const insertStmt = db.prepare(`
+    INSERT OR IGNORE INTO messages
+      (session_id, project, agent_id, role, content, timestamp, cwd, git_branch, request_id)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const lines = raw.split('\n').filter((l) => l.trim());
+  let inserted = 0;
+
+  const run = db.transaction(() => {
+    for (const line of lines) {
+      let entry: CodexEntry;
+      try { entry = JSON.parse(line) as CodexEntry; } catch { continue; }
+
+      if (entry.type !== 'response_item') continue;
+      const payload = entry.payload;
+      if (!payload) continue;
+
+      const role = payload.role === 'user' ? 'user' : payload.role === 'assistant' ? 'assistant' : null;
+      if (!role) continue;
+
+      const blocks = payload.content ?? [];
+      const content = blocks
+        .filter((b) => b.type === 'input_text' || b.type === 'output_text')
+        .map((b) => b.text ?? '')
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 8000);
+      if (!content) continue;
+
+      const info = insertStmt.run(
+        sessionId, project, agentId, role, content,
+        entry.timestamp ?? new Date().toISOString(),
+        null, null, null
+      );
+      inserted += Number(info.changes);
+    }
+  });
+  run();
+  return inserted;
+}
+
 // ─── Incremental Ingestion ────────────────────────────────────────────────────
 
 /**
  * Scans CLAUDE_MEMORY_PATH, ingests all new/modified JSONL files, skips unchanged ones.
  * Fully synchronous (better-sqlite3 pattern).
  */
+// ─── Generic file-scan helper ─────────────────────────────────────────────────
+
+function scanJsonlFiles(
+  rootPath: string,
+  recursive: boolean
+): { filePath: string; relDir: string }[] {
+  const results: { filePath: string; relDir: string }[] = [];
+  try {
+    const entries = fs.readdirSync(rootPath);
+    for (const entry of entries) {
+      const full = path.join(rootPath, entry);
+      let stat: fs.Stats;
+      try { stat = fs.statSync(full); } catch { continue; }
+
+      if (stat.isDirectory() && recursive) {
+        for (const sub of scanJsonlFiles(full, true)) {
+          results.push(sub);
+        }
+      } else if (!stat.isDirectory() && entry.endsWith('.jsonl')) {
+        results.push({ filePath: full, relDir: path.relative(rootPath, rootPath) });
+      }
+    }
+  } catch { /* path doesn't exist */ }
+  return results;
+}
+
 export function ingestAllSessions(db: Database.Database): {
   filesProcessed: number;
   rowsInserted: number;
@@ -230,65 +439,67 @@ export function ingestAllSessions(db: Database.Database): {
     VALUES (?, ?, ?, ?, ?)
   `);
 
-  const memoryPath = CLAUDE_MEMORY_PATH;
+  function processFile(
+    filePath: string,
+    ingestFn: () => number
+  ) {
+    let fileStat: fs.Stats;
+    try { fileStat = fs.statSync(filePath); } catch { return; }
+    const mtimeMs = Math.round(fileStat.mtimeMs);
+    const fileSize = fileStat.size;
+    if (shouldSkipFile(db, filePath, mtimeMs, fileSize)) { filesSkipped++; return; }
+    const inserted = ingestFn();
+    filesProcessed++;
+    rowsInserted += inserted;
+    upsertMeta.run(filePath, mtimeMs, fileSize, inserted, new Date().toISOString());
+  }
 
-  // List project directories
-  let projectDirs: string[];
+  // ── Claude: ~/.claude/projects/{project-dir}/*.jsonl ──────────────────────
   try {
-    projectDirs = fs.readdirSync(memoryPath);
-  } catch {
-    // CLAUDE_MEMORY_PATH doesn't exist or isn't readable — return empty stats
-    return { filesProcessed, rowsInserted, filesSkipped };
-  }
-
-  for (const projectDirName of projectDirs) {
-    const projectPath = path.join(memoryPath, projectDirName);
-
-    // Skip non-directories
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(projectPath);
-    } catch {
-      continue;
+    for (const projectDirName of fs.readdirSync(CLAUDE_MEMORY_PATH)) {
+      const projectPath = path.join(CLAUDE_MEMORY_PATH, projectDirName);
+      try { if (!fs.statSync(projectPath).isDirectory()) continue; } catch { continue; }
+      let files: string[];
+      try { files = fs.readdirSync(projectPath).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
+      for (const file of files) {
+        const filePath = path.join(projectPath, file);
+        processFile(filePath, () => ingestFile(db, filePath, projectDirName));
+      }
     }
-    if (!stat.isDirectory()) continue;
+  } catch { /* CLAUDE_MEMORY_PATH missing */ }
 
-    // List JSONL files in project directory
-    let files: string[];
-    try {
-      files = fs.readdirSync(projectPath).filter((f) => f.endsWith('.jsonl'));
-    } catch {
-      continue;
+  // ── Qwen: ~/.qwen/projects/{project-dir}/chats/*.jsonl ────────────────────
+  try {
+    for (const projectDirName of fs.readdirSync(QWEN_MEMORY_PATH)) {
+      const chatsPath = path.join(QWEN_MEMORY_PATH, projectDirName, 'chats');
+      try { if (!fs.statSync(chatsPath).isDirectory()) continue; } catch { continue; }
+      let files: string[];
+      try { files = fs.readdirSync(chatsPath).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
+      for (const file of files) {
+        const filePath = path.join(chatsPath, file);
+        processFile(filePath, () => ingestQwenFile(db, filePath, projectDirName));
+      }
     }
+  } catch { /* QWEN_MEMORY_PATH missing */ }
 
+  // ── Hermes: ~/.hermes/sessions/*.jsonl ────────────────────────────────────
+  try {
+    const files = fs.readdirSync(HERMES_MEMORY_PATH).filter((f) => f.endsWith('.jsonl'));
     for (const file of files) {
-      const filePath = path.join(projectPath, file);
-
-      let fileStat: fs.Stats;
-      try {
-        fileStat = fs.statSync(filePath);
-      } catch {
-        continue;
-      }
-
-      const mtimeMs = Math.round(fileStat.mtimeMs);
-      const fileSize = fileStat.size;
-
-      // Skip unchanged files
-      if (shouldSkipFile(db, filePath, mtimeMs, fileSize)) {
-        filesSkipped++;
-        continue;
-      }
-
-      // Ingest the file
-      const inserted = ingestFile(db, filePath, projectDirName);
-      filesProcessed++;
-      rowsInserted += inserted;
-
-      // Update ingest_meta
-      upsertMeta.run(filePath, mtimeMs, fileSize, inserted, new Date().toISOString());
+      const filePath = path.join(HERMES_MEMORY_PATH, file);
+      processFile(filePath, () => ingestHermesFile(db, filePath));
     }
-  }
+  } catch { /* HERMES_MEMORY_PATH missing */ }
+
+  // ── Codex: ~/.codex/sessions/YYYY/MM/DD/*.jsonl ───────────────────────────
+  try {
+    const codexFiles = scanJsonlFiles(CODEX_MEMORY_PATH, true);
+    for (const { filePath } of codexFiles) {
+      // Session ID from filename (strip date prefix path)
+      const sessionId = path.basename(filePath, '.jsonl');
+      processFile(filePath, () => ingestCodexFile(db, filePath, sessionId));
+    }
+  } catch { /* CODEX_MEMORY_PATH missing */ }
 
   // Update last_ingest_ts in meta table
   db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('last_ingest_ts', ?)").run(
