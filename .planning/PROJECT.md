@@ -1,27 +1,18 @@
 # Project: Agent Kitchen
 
-*Last updated: 2026-04-16 — v1.5 Agent Coordination + Voice started*
+*Last updated: 2026-04-20 — v1.5 Agent Coordination + Voice shipped*
 
 ---
 
-## Current Milestone: v1.5 Agent Coordination + Voice
+## Current Milestone: v1.6 TBD
 
-**Goal:** Give every agent a shared SQLite memory backbone and cross-server coordination layer, bring Paperclip into the hive as a contributing fleet node, and add a voice interface.
-
-**Target features:**
-- SQLite FTS5 conversation store (shared backbone for all agents)
-- Hive mind coordination table (cross-agent action logging + task delegation)
-- Paperclip fleet node (collapsible group in Flow; full hive mind participation)
-- Pipecat voice server (Python, Gemini Live + STT/TTS cascade)
-- Memory consolidation + decay engine (LLM-backed, 4-tier salience)
-- Security / exfiltration guard + audit log
-- Dashboard tracking (hive mind feed, fleet panel, voice log, SQLite health)
+**Goal:** TBD — run `/gsd-new-milestone` to start requirements definition
 
 ---
 
-## Previous State: v1.4 Shipped
+## Previous State: v1.5 Shipped
 
-All four milestones complete. The dashboard surfaces agent health, knowledge sync, skill analytics, flow diagrams, and a dedicated Cookbooks skills page.
+v1.5 complete — 7 phases (19-25), 15 plans, 55/55 requirements satisfied. Shared SQLite backbone, cross-agent hive mind coordination, Paperclip fleet node, Pipecat voice server, LLM consolidation engine, 4-tier salience decay, security scanner + audit log, usage analytics dashboard.
 
 ---
 
@@ -54,6 +45,21 @@ Every agent and knowledge system is visible, connected, and self-improving.
 - ✓ Skill gaps/health panel on Cookbooks page — v1.4 (COOK-02)
 - ✓ 30-day heatmap on Cookbooks page — v1.4 (COOK-03)
 - ✓ Full skills list on Cookbooks page — v1.4 (COOK-04)
+- ✓ SQLite FTS5 conversation store with recall/ingest/stats API — v1.5 (SQLDB-01/02/03)
+- ✓ SqliteHealthPanel on Library page — v1.5 (SQLDB-04, DASH-01)
+- ✓ Hive mind coordination (action log + task delegation + recovery) — v1.5 (HIVE-01/02/03)
+- ✓ HiveFeed live polling component on Kitchen Floor — v1.5 (HIVE-04, DASH-02)
+- ✓ Paperclip fleet node in Flow + fleet panel — v1.5 (PAPER-01/02/03/04, HIVE-05)
+- ✓ Pipecat voice server (Gemini Live + STT/TTS cascade) — v1.5 (VOICE-01/02/03)
+- ✓ Voice transcripts written to SQLite — v1.5 (VOICE-04)
+- ✓ VoicePanel on Flow page with scrollable transcript — v1.5 (VOICE-05, DASH-04)
+- ✓ Memory consolidation engine + LLM pattern extraction — v1.5 (MEM-01)
+- ✓ 4-tier salience decay with access-resistance — v1.5 (MEM-02)
+- ✓ MemoryIntelligencePanel on Library page — v1.5 (MEM-03)
+- ✓ AgentPeersPanel on Kitchen Floor + /api/agent-peers — v1.5 (MEM-04)
+- ✓ 18-pattern content scanner with severity blocking — v1.5 (SEC-01)
+- ✓ SQLite audit_log table + AuditLogPanel — v1.5 (SEC-02/03, DASH-03)
+- ✓ Usage analytics (6 metrics, 3 windows) on Ledger/Library/Cookbooks — v1.5 (ANA-01/02/03/04)
 
 ### Active
 
@@ -91,6 +97,13 @@ Every agent and knowledge system is visible, connected, and self-improving.
 | Group children use `parentId` + `extent:'parent'` | ✓ React Flow native pattern | v1.3 |
 | AbortController in NodeDetailPanel for cleanup | ✓ Prevents stale-fetch race | v1.3 |
 | Triple-dedup for mem0 ingestion (hash+mtime+origin) | ✓ Zero duplicates confirmed | v1.3 |
+| better-sqlite3 singleton with WAL mode | ✓ Single shared DB for all tables | v1.5 |
+| SqliteHealthPanel + MemoryIntelligencePanel on Library | ✓ User confirmed panels live on Library, not Ledger | v1.5 |
+| Voice server as standalone Python Pipecat service | ✓ Separate port (7860), Next.js proxy via /api/voice-status | v1.5 |
+| LLM consolidation on 15m schedule via instrumentation.ts | ✓ Scheduler bootstrap pattern established | v1.5 |
+| 4-tier salience decay with LOG() access-resistance | ✓ Formula: rate/(1+LOG(1+access_count)) | v1.5 |
+| 18 content scanner patterns with severity tiers | ✓ HIGH blocks, MEDIUM flags, length guard at 4096 | v1.5 |
+| TimeSeriesChart as pure presentational component | ✓ No hook calls inside, powered by useTimeSeries | v1.5 |
 
 ---
 

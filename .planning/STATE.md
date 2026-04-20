@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Agent Coordination + Voice
-status: verifying
-stopped_at: Completed 22-voice-server-02-PLAN.md (Task 3 is human checkpoint pending)
-last_updated: "2026-04-18T22:52:54.638Z"
-last_activity: 2026-04-18
+status: shipped
+stopped_at: Milestone v1.5 complete — all phases shipped 2026-04-20
+last_updated: "2026-04-20T06:55:00Z"
+last_activity: 2026-04-20
 progress:
   total_phases: 7
   completed_phases: 7
