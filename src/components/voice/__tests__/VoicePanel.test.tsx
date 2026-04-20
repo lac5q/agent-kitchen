@@ -1,137 +1,80 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-// Mock useVoiceStatus from api-client at module level
-vi.mock("@/lib/api-client", () => ({
-  useVoiceStatus: vi.fn(),
-}));
+// JSDOM doesn't implement scrollIntoView
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-// Mock useVoiceTranscript at module level
-vi.mock("@/components/voice/useVoiceTranscript", () => ({
-  useVoiceTranscript: vi.fn(),
+vi.mock("@/lib/api-client", () => ({
+  useAgents: vi.fn(),
 }));
 
 import { VoicePanel } from "@/components/voice/VoicePanel";
-import { useVoiceStatus } from "@/lib/api-client";
-import { useVoiceTranscript } from "@/components/voice/useVoiceTranscript";
+import { useAgents } from "@/lib/api-client";
 
-const mockUseVoiceStatus = vi.mocked(useVoiceStatus);
-const mockUseVoiceTranscript = vi.mocked(useVoiceTranscript);
+const mockUseAgents = vi.mocked(useAgents);
+
+const FIXTURE_AGENTS = [
+  { id: "kitchen", name: "Kitchen Floor", company: null, platform: "claude" },
+  { id: "sophia",  name: "Sophia",        company: "Epilogue", platform: "claude" },
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUseVoiceTranscript.mockReturnValue([]);
+  mockUseAgents.mockReturnValue({
+    data: { agents: FIXTURE_AGENTS },
+  } as ReturnType<typeof useAgents>);
 });
 
 describe("VoicePanel", () => {
-  it("renders Inactive status when voice is not active", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: { active: false, session_id: null, started_at: null, duration_secs: null },
-    } as ReturnType<typeof useVoiceStatus>);
-
+  it("renders header and agent selector", () => {
     render(<VoicePanel />);
-
-    expect(screen.getByText("Inactive")).toBeInTheDocument();
-    expect(screen.queryByText("Active")).not.toBeInTheDocument();
+    expect(screen.getByText("Voice & Chat")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
-  it("renders Active status with green indicator when voice is active", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: {
-        active: true,
-        session_id: "sess-1",
-        started_at: "2026-04-18T10:00:00Z",
-        duration_secs: 120,
-      },
-    } as ReturnType<typeof useVoiceStatus>);
-
+  it("shows chat and voice tab buttons", () => {
     render(<VoicePanel />);
-
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText(/Session: 02:00/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "voice" })).toBeInTheDocument();
   });
 
-  it("renders Unavailable status with error indicator when error is set", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: {
-        active: false,
-        session_id: null,
-        started_at: null,
-        duration_secs: null,
-        error: "voice server unavailable",
-      },
-    } as ReturnType<typeof useVoiceStatus>);
-
+  it("shows empty-state prompt for selected agent on chat tab", () => {
     render(<VoicePanel />);
-
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
-    expect(screen.queryByText("Inactive")).not.toBeInTheDocument();
+    // default agent is first in sorted list
+    expect(screen.getByText(/Ask .* what they're working on/)).toBeInTheDocument();
   });
 
-  it("renders empty transcript message when no entries", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: { active: false, session_id: null, started_at: null, duration_secs: null },
-    } as ReturnType<typeof useVoiceStatus>);
-    mockUseVoiceTranscript.mockReturnValue([]);
-
+  it("switches to voice tab and shows mic button", () => {
     render(<VoicePanel />);
-
-    expect(screen.getByText("No voice transcripts yet")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    expect(screen.getByRole("button", { name: "Start listening" })).toBeInTheDocument();
   });
 
-  it("renders transcript entries with correct role labels", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: {
-        active: true,
-        session_id: "sess-2",
-        started_at: "2026-04-18T10:00:00Z",
-        duration_secs: 30,
-      },
-    } as ReturnType<typeof useVoiceStatus>);
-    mockUseVoiceTranscript.mockReturnValue([
-      { role: "user", content: "Hello there", timestamp: "2026-04-18T10:00:05Z" },
-      { role: "assistant", content: "Hi, how can I help?", timestamp: "2026-04-18T10:00:06Z" },
-    ]);
-
+  it("renders textarea on chat tab with agent name in placeholder", () => {
     render(<VoicePanel />);
-
-    expect(screen.getByText("Hello there")).toBeInTheDocument();
-    expect(screen.getByText("Hi, how can I help?")).toBeInTheDocument();
-    expect(screen.getByText("You:")).toBeInTheDocument();
-    expect(screen.getByText("Assistant:")).toBeInTheDocument();
-    expect(screen.queryByText("No voice transcripts yet")).not.toBeInTheDocument();
+    const textarea = screen.getByPlaceholderText(/Message .* \(Enter to send\)/);
+    expect(textarea).toBeInTheDocument();
   });
 
-  it("shows Last session duration when inactive with a previous duration", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: {
-        active: false,
-        session_id: null,
-        started_at: null,
-        duration_secs: 65,
-      },
-    } as ReturnType<typeof useVoiceStatus>);
-
+  it("collapses and hides content when toggle clicked", () => {
     render(<VoicePanel />);
+    expect(screen.getByRole("button", { name: "chat" })).toBeInTheDocument();
 
-    expect(screen.getByText(/Last session: 01:05/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+
+    expect(screen.queryByRole("button", { name: "chat" })).not.toBeInTheDocument();
   });
 
-  it("collapses and hides content when chevron is clicked", () => {
-    mockUseVoiceStatus.mockReturnValue({
-      data: { active: false, session_id: null, started_at: null, duration_secs: null },
-    } as ReturnType<typeof useVoiceStatus>);
-
+  it("expands again after collapse", () => {
     render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    expect(screen.getByRole("button", { name: "chat" })).toBeInTheDocument();
+  });
 
-    // Initially expanded — empty state message visible
-    expect(screen.getByText("No voice transcripts yet")).toBeInTheDocument();
-
-    // Click collapse button
-    const btn = screen.getByLabelText("Collapse voice panel");
-    fireEvent.click(btn);
-
-    // Content should be hidden
-    expect(screen.queryByText("No voice transcripts yet")).not.toBeInTheDocument();
+  it("renders no agents gracefully when useAgents returns empty", () => {
+    mockUseAgents.mockReturnValue({ data: { agents: [] } } as ReturnType<typeof useAgents>);
+    render(<VoicePanel />);
+    expect(screen.getByText("Voice & Chat")).toBeInTheDocument();
   });
 });
