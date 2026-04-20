@@ -1,26 +1,72 @@
 import { NextRequest } from "next/server";
+import { readFile } from "fs/promises";
+import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 
 const client = new Anthropic();
 
-// System prompts per agent
-const AGENT_PROMPTS: Record<string, string> = {
-  kitchen: `You are the Kitchen Floor assistant — a helpful AI embedded in the Agent Kitchen dashboard.
-You have deep knowledge of the agents, skills, knowledge collections, and real-time metrics visible on the dashboard.
-Help the user understand what's happening across their agent fleet, interpret metrics, and navigate their knowledge base.
-Keep responses concise and actionable. Use markdown for code or lists when helpful.`,
+const AGENT_CONFIGS_PATH =
+  process.env.AGENT_CONFIGS_PATH ||
+  `${process.env.HOME}/github/knowledge/agent-configs`;
 
-  flow: `You are the Flow assistant — an AI specializing in agent coordination and orchestration.
-You help design agent workflows, debug coordination issues between agents, analyze the hive mind activity feed,
-and suggest improvements to how agents collaborate. You are familiar with the Pipecat, GSD, and OpenClaw ecosystems.
-Keep responses concise and technical. Use markdown for code or lists when helpful.`,
+async function tryRead(filePath: string, maxLines = 150): Promise<string | null> {
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const lines = content.split("\n");
+    return lines.length > maxLines
+      ? lines.slice(0, maxLines).join("\n") + "\n\n[...truncated]"
+      : content;
+  } catch {
+    return null;
+  }
+}
 
-  general: `You are a helpful AI assistant embedded in Agent Kitchen.
-You help with any questions about AI agents, skills, knowledge management, and dashboard analytics.
-Keep responses concise and actionable.`,
-};
+async function buildAgentContext(agentId: string): Promise<string> {
+  const dir = path.join(AGENT_CONFIGS_PATH, agentId);
+
+  const [soul, memory, lessons, heartbeatState, heartbeat] = await Promise.all([
+    tryRead(path.join(dir, "SOUL.md")),
+    tryRead(path.join(dir, "MEMORY.md"), 80),
+    tryRead(path.join(dir, "LESSONS.md"), 80),
+    tryRead(path.join(dir, "HEARTBEAT_STATE.md"), 50),
+    tryRead(path.join(dir, "HEARTBEAT.md"), 100),
+  ]);
+
+  if (!soul) {
+    return `You are a helpful AI assistant embedded in Agent Kitchen. Keep responses concise.`;
+  }
+
+  // Strip frontmatter from SOUL.md
+  const soulBody = soul.replace(/^---[\s\S]*?---\n?/, "").trim();
+
+  const sections: string[] = [soulBody];
+
+  if (heartbeatState) {
+    sections.push(`\n\n## Current Status\n${heartbeatState}`);
+  }
+
+  if (heartbeat && !heartbeatState) {
+    sections.push(`\n\n## Recent Activity\n${heartbeat}`);
+  }
+
+  if (memory) {
+    sections.push(`\n\n## Memory\n${memory}`);
+  }
+
+  if (lessons) {
+    sections.push(`\n\n## Lessons Learned\n${lessons}`);
+  }
+
+  sections.push(
+    `\n\n## Instructions\nYou are being spoken to directly by Luis Calderon, who built and runs you. ` +
+    `Answer as yourself — your actual role, your current work, your real situation. ` +
+    `Be direct and honest. Keep responses concise.`
+  );
+
+  return sections.join("");
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as {
@@ -29,17 +75,16 @@ export async function POST(req: NextRequest) {
     history?: Array<{ role: "user" | "assistant"; content: string }>;
   };
 
-  const { message, agentId = "kitchen", history = [] } = body;
+  const { message, agentId = "ceo", history = [] } = body;
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "message required" }), { status: 400 });
   }
 
-  const systemPrompt = AGENT_PROMPTS[agentId] ?? AGENT_PROMPTS.general;
+  const systemPrompt = await buildAgentContext(agentId);
 
-  // Build messages array from history + new message
   const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-    ...history.slice(-10), // keep last 10 turns for context
+    ...history.slice(-10),
     { role: "user", content: message },
   ];
 
