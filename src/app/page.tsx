@@ -5,6 +5,8 @@ import { AgentGrid } from "@/components/kitchen/agent-grid";
 import { HiveFeed } from "@/components/kitchen/hive-feed";
 import { AgentPeersPanel } from "@/components/kitchen/agent-peers-panel";
 import { AuditLogPanel } from "@/components/kitchen/audit-log-panel";
+import { VoicePanel } from "@/components/voice/VoicePanel";
+import { AgentCardsPanel } from "@/components/dispatch/agent-cards-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Agent } from "@/types";
@@ -35,6 +37,16 @@ export default function KitchenFloor() {
 
   // Show local agents immediately, remote agents populate when ready
   const allAgents = [...localAgents, ...remoteAgents];
+
+  // Separate into master agents, sub-agents, and standalone agents
+  const hermesMaster = allAgents.filter((a) => a.platform === "hermes");
+  const openclawMaster = allAgents.filter((a) => a.platform === "openclaw");
+  const hermesSubAgents = allAgents.filter((a) => a.masterId === "hermes" && !a.isRemote);
+  const openclawSubAgents = allAgents.filter((a) => a.masterId === "openclaw" && !a.isRemote);
+  const standaloneAgents = allAgents.filter(
+    (a) => !a.masterId && a.platform !== "hermes" && a.platform !== "openclaw" && !a.isRemote
+  );
+
   const active = allAgents.filter((a) => a.status === "active").length;
   const errors = allAgents.filter((a) => a.status === "error").length;
   const tasks = allAgents.filter((a) => a.currentTask && !a.isRemote).length;
@@ -55,11 +67,34 @@ export default function KitchenFloor() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
         </div>
       ) : (
-        <AgentGrid agents={allAgents} />
+        <AgentGrid
+          sections={[
+            ...(remoteAgents.length > 0 ? [{ title: "🌐 Remote Agents", agents: remoteAgents }] : []),
+            ...(hermesMaster.length > 0 || hermesSubAgents.length > 0
+              ? [{
+                  title: "🔮 Hermes",
+                  agents: [...hermesMaster, ...hermesSubAgents].sort((a, b) =>
+                    a.platform === "hermes" ? -1 : b.platform === "hermes" ? 1 : 0
+                  ),
+                }]
+              : []),
+            ...(openclawMaster.length > 0 || openclawSubAgents.length > 0
+              ? [{
+                  title: "🦷 OpenClaw",
+                  agents: [...openclawMaster, ...openclawSubAgents].sort((a, b) =>
+                    a.platform === "openclaw" ? -1 : b.platform === "openclaw" ? 1 : 0
+                  ),
+                }]
+              : []),
+            ...(standaloneAgents.length > 0 ? [{ title: "⚙️ Standalone Agents", agents: standaloneAgents }] : []),
+          ]}
+        />
       )}
       <HiveFeed />
+      <AgentCardsPanel />
       <AgentPeersPanel />
       <AuditLogPanel />
+      <VoicePanel />
     </div>
     </TooltipProvider>
   );

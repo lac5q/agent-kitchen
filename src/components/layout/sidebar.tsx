@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/library", label: "The Library", icon: "\u{1F4DA}" },
   { href: "/cookbooks", label: "The Cookbooks", icon: "📚" },
   { href: "/flow", label: "The Flow", icon: "\u{1F504}" },
+  { href: "/dispatch", label: "The Dispatch", icon: "📡" },
   { href: "/apo", label: "The Sous Vide", icon: "\u{1F372}" },
 ];
 

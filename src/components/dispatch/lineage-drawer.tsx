@@ -29,7 +29,7 @@ export function LineageDrawer({ taskId, taskSummary }: LineageDrawerProps) {
 
   return (
     <Sheet>
-      <SheetTrigger asChild>
+      <SheetTrigger>
         <button
           className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-40"
           disabled={!taskId}
