@@ -68,6 +68,49 @@
 
 ---
 
+## Milestone: v1.5 — Agent Coordination + Voice
+
+**Shipped:** 2026-04-20
+**Phases:** 7 (19–25) | **Plans:** 15 | **55/55 requirements**
+
+### What Was Built
+
+- SQLite FTS5 conversation store (Phase 19) — better-sqlite3 with WAL mode, JSONL ingestion, recall/ingest/stats API
+- Hive mind coordination (Phase 20) — cross-agent action log, task delegation with step recovery, HiveFeed polling component
+- Paperclip fleet node (Phase 21) — collapsible group in Flow, fleet panel with autonomy modes, dispatch form
+- Pipecat voice server (Phase 22) — Python service (port 7860), Gemini Live + cascade STT/TTS, SQLite transcript persistence
+- Memory intelligence (Phase 23) — LLM consolidation engine, 4-tier salience decay, peer-awareness panel
+- Security + audit (Phase 24) — 18-pattern content scanner, SQLite audit log, AuditLogPanel
+- Usage analytics (Phase 25) — TimeSeriesChart on Ledger/Library/Cookbooks with day/week/month toggle
+
+### What Worked
+
+- **UI panels on Library (not Ledger)** — user confirmed panels live on Library page, not Ledger; saved a revert
+- **Python voice server as separate process** — Pipecat on port 7860 with Next.js proxy keeps concerns cleanly separated
+- **Pure presentational chart component** — TimeSeriesChart receives data as props, no hook calls inside
+- **instrumentation.ts scheduler pattern** — consolidation and decay bootstrapped via Next.js server instrumentation
+
+### What Was Inefficient
+
+- **Verification checkboxes skipped** — REQUIREMENTS.md checkboxes never updated as phases shipped; required retroactive update at milestone close (34 checkboxes fixed)
+- **VERIFICATION.md missing for 3 phases** — Phases 20, 22, 24 had no formal verification runs; relied on test pass counts instead
+- **3 open human-gate checkpoints at close** — Phase 12 (live run), Phase 19 (UI panel), Phase 23 (UI panel) required browser verification at close time
+
+### Patterns Established
+
+- `better-sqlite3` singleton with WAL mode = standard for all local persistence (memories, audit log, recall log)
+- Scheduler bootstrap via `instrumentation.ts` with `NEXT_RUNTIME === 'nodejs'` guard
+- Fire-and-forget database writes (audit log, recall log) wrapped in try/catch — never block on non-critical side effects
+- TimeSeriesChart as pure presentational component powered by `useTimeSeries` hook
+
+### Key Lessons
+
+- **UI panel location must be confirmed before implementation** — Phase 19 originally planned for Ledger, ended up on Library; user confirmed correct location at close
+- **Human checkpoints need explicit tracking** — "Plan 03 Task 3 is checkpoint:human-verify" was noted but not acted on until milestone close audit
+- **Pre-close audit catches traceability gaps** — running `/gsd:audit-milestone` before close would have caught unchecked requirements earlier
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | LOC Added | Key Theme |
@@ -76,3 +119,4 @@
 | v1.2 | 6 | 8 | 2 | ~4,500 | Live data + sync pipelines |
 | v1.3 | 6 | 8 | 2 | +6,553 | Observability depth + canvas UX |
 | v1.4 | 1 | 1 | 1 | ~500 | Cookbooks page + model usage tracking |
+| v1.5 | 7 | 15 | 4 | ~8,000 | Agent coordination + voice |
