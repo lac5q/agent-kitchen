@@ -364,3 +364,79 @@ export function useTimeSeries(metric: TimeSeriesMetric, window: TimeSeriesWindow
     refetchInterval: POLL_INTERVALS.knowledge, // 60s -- analytics don't need real-time
   });
 }
+
+export function useDelegations(limit = 50) {
+  return useQuery({
+    queryKey: ["delegations", limit],
+    queryFn: () =>
+      fetchJSON<{
+        delegations: Array<{
+          task_id: string;
+          from_agent: string;
+          to_agent: string;
+          task_summary: string;
+          priority: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        }>;
+        timestamp: string;
+      }>(`/api/hive?type=delegation&limit=${limit}`),
+    refetchInterval: POLL_INTERVALS.hive,
+  });
+}
+
+export function useLineage(taskId: string | null) {
+  return useQuery({
+    queryKey: ["lineage", taskId],
+    queryFn: () =>
+      fetchJSON<{
+        task_id: string;
+        context_id: string | null;
+        delegation: Record<string, unknown> | null;
+        actions: Array<{
+          id: number;
+          agent_id: string;
+          action_type: string;
+          summary: string;
+          artifacts: Record<string, unknown> | null;
+          timestamp: string;
+        }>;
+        timestamp: string;
+      }>(`/api/hive?task_id=${taskId}`),
+    enabled: !!taskId,
+  });
+}
+
+export function useAgentCards() {
+  return useQuery({
+    queryKey: ["agent-cards"],
+    queryFn: () =>
+      fetchJSON<{
+        cards: Array<{
+          name: string;
+          description: string;
+          version: string;
+          url: string;
+          capabilities: Record<string, boolean>;
+          authentication: { schemes: string[] };
+          skills: Array<{
+            id: string;
+            name: string;
+            description: string;
+            tags: string[];
+          }>;
+          extensions: {
+            kitchen: {
+              id: string;
+              platform: string;
+              location: string;
+              role: string;
+            };
+          };
+        }>;
+        timestamp: string;
+      }>("/api/agents/cards"),
+    refetchInterval: POLL_INTERVALS.health,
+  });
+}
