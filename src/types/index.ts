@@ -1,10 +1,11 @@
 export type AgentStatus = "active" | "idle" | "dormant" | "error";
-export type AgentPlatform = "claude" | "codex" | "qwen" | "gemini" | "opencode";
+export type AgentPlatform = "claude" | "codex" | "qwen" | "gemini" | "opencode" | "hermes" | "openclaw";
 
 export interface Agent {
   id: string;
   name: string;
   role: string;
+  company?: string;
   platform: AgentPlatform;
   status: AgentStatus;
   lastHeartbeat: string | null;
@@ -14,6 +15,7 @@ export interface Agent {
   location?: "local" | "tailscale" | "cloudflare";
   isRemote?: boolean;
   latencyMs?: number | null;
+  masterId?: string;
 }
 
 export interface TokenStats {
@@ -77,6 +79,15 @@ export interface FlowEdge {
 
 export type AgentLocation = "local" | "tailscale" | "cloudflare";
 
+export interface AgentCardSkill {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  inputModes: ["text"];
+  outputModes: ["text"];
+}
+
 export interface RemoteAgentConfig {
   id: string;
   name: string;
@@ -87,6 +98,7 @@ export interface RemoteAgentConfig {
   port: number;
   healthEndpoint: string;
   tunnelUrl?: string;
+  skills?: AgentCardSkill[];
 }
 
 export interface ApoProposal {
