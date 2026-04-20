@@ -66,6 +66,11 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
             <Badge variant="outline" className="text-xs border-slate-700 text-slate-300">
               {platformLabel}
             </Badge>
+            {agent.masterId && (
+              <Badge variant="outline" className="text-xs border-amber-700 text-amber-400">
+                sub-agent
+              </Badge>
+            )}
             {agent.isRemote && (
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                 agent.location === "tailscale"
