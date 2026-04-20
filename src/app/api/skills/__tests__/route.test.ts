@@ -20,7 +20,7 @@ const mockReaddir = vi.mocked(readdir);
 
 // Helper: create a fake DirEntry
 function makeDirEntry(name: string, isDirectory: boolean) {
-  return { name, isDirectory: () => isDirectory, isFile: () => !isDirectory } as Awaited<ReturnType<typeof readdir>>[number];
+  return { name, isDirectory: () => isDirectory, isFile: () => !isDirectory } as unknown as Awaited<ReturnType<typeof readdir>>[number];
 }
 
 // Helper: build JSONL string from event objects

@@ -63,7 +63,7 @@ beforeEach(() => {
     },
     isLoading: false,
     isError: false,
-  } as ReturnType<typeof useSkills>);
+  } as unknown as ReturnType<typeof useSkills>);
 });
 
 describe("SkillHeatmap component", () => {
@@ -161,7 +161,7 @@ describe("SkillHeatmap component", () => {
     // Must use memo() wrapper with a named function
     expect(source).toMatch(/memo\(function HeatmapCell/);
     // Hover state must be useState inside HeatmapCell (local state, not lifted)
-    expect(source).toMatch(/useState.*isHovered|isHovered.*useState/s);
+    expect(source).toMatch(/useState[\s\S]*isHovered|isHovered[\s\S]*useState/);
     // Verify cell-local hover works: mouseEnter on one cell should not affect others
     const history = makeSampleHistory(["alpha", "beta"], [1, 2]);
     const { container } = render(<SkillHeatmap contributionHistory={history} />);
@@ -196,7 +196,7 @@ describe("SkillHeatmap component", () => {
       },
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useSkills>);
+    } as unknown as ReturnType<typeof useSkills>);
 
     render(
       <NodeDetailPanel
