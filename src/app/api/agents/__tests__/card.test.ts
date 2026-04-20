@@ -33,8 +33,7 @@ vi.mock("@/lib/agent-registry", () => ({
 describe("GET /api/agents/cards", () => {
   it("returns all agent cards with A2A shape", async () => {
     const { GET } = await import("../cards/route");
-    const req = new Request("http://localhost/api/agents/cards");
-    const res = await GET(req);
+    const res = await GET();
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -63,7 +62,7 @@ describe("GET /api/agents/[id]/card", () => {
 
   it("returns card for known agent id", async () => {
     const { GET } = await import("../[id]/card/route");
-    const req = new Request("http://localhost/api/agents/sophia/card");
+    const req = new Request("http://localhost/api/agents/sophia/card") as any;
     const res = await GET(req, { params: Promise.resolve({ id: "sophia" }) });
     const body = await res.json();
 
@@ -74,14 +73,14 @@ describe("GET /api/agents/[id]/card", () => {
 
   it("returns 404 for unknown agent id", async () => {
     const { GET } = await import("../[id]/card/route");
-    const req = new Request("http://localhost/api/agents/unknown/card");
+    const req = new Request("http://localhost/api/agents/unknown/card") as any;
     const res = await GET(req, { params: Promise.resolve({ id: "unknown" }) });
     expect(res.status).toBe(404);
   });
 
   it("card skills are derived from role", async () => {
     const { GET } = await import("../[id]/card/route");
-    const req = new Request("http://localhost/api/agents/alba/card");
+    const req = new Request("http://localhost/api/agents/alba/card") as any;
     const res = await GET(req, { params: Promise.resolve({ id: "alba" }) });
     const body = await res.json();
 
