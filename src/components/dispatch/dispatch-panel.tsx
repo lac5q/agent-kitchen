@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAgents, useDelegations } from "@/lib/api-client";
 import { LineageDrawer } from "./lineage-drawer";
+import { PLATFORM_LABELS } from "@/lib/constants";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "text-slate-400 bg-slate-800",
@@ -62,7 +63,9 @@ export function DispatchPanel() {
               <option value="">Select agent…</option>
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {a.platform
+                    ? `${PLATFORM_LABELS[a.platform as string] ?? a.platform} → ${a.name}`
+                    : a.name}
                 </option>
               ))}
             </select>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAgentCards } from "@/lib/api-client";
+import { PLATFORM_LABELS } from "@/lib/constants";
 
 export function AgentCardsPanel() {
   const { data, isLoading } = useAgentCards();
@@ -21,12 +22,15 @@ export function AgentCardsPanel() {
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-200">{card.name}</p>
+                <p className="text-sm font-semibold text-slate-200">
+                  <span className="text-slate-500 font-normal">
+                    {PLATFORM_LABELS[card.extensions.kitchen.platform] ?? card.extensions.kitchen.platform}
+                    {" → "}
+                  </span>
+                  {card.name}
+                </p>
                 <p className="text-xs text-slate-500 mt-0.5">{card.extensions.kitchen.role}</p>
               </div>
-              <span className="text-xs text-slate-600 font-mono bg-slate-800 px-2 py-0.5 rounded">
-                {card.extensions.kitchen.platform}
-              </span>
             </div>
             <p className="text-xs text-slate-400 break-all">{card.url}</p>
             {card.skills.length > 0 && (
