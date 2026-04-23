@@ -38,6 +38,8 @@ All data is fetched **live** from your filesystem and HTTP endpoints. No databas
 | ![Library](./docs/screenshots/library.png) | |
 | **Notebook Wall** (`/notebooks`) | Memory explorer — auto-memory files, daily notes, activity heatmap |
 | ![Notebooks](./docs/screenshots/notebooks.png) | |
+| **The Cookbooks** (`/cookbooks`) | Agent skill library — browse, install, and manage agent capabilities |
+| ![Cookbooks](./docs/screenshots/cookbooks.png) | |
 | **The Sous Vide** (`/apo`) | Agent Lightning APO — self-learning proposals, cron cycle stats, log viewer |
 | ![APO](./docs/screenshots/apo.png) | |
 | **The Dispatch** (`/dispatch`) | Send tasks to remote agents, view delegation status, lineage timeline |
