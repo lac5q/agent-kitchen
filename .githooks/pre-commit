@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Agent Kitchen — Pre-commit hook
+# Install: git config core.hooksPath .githooks
+#
+# Blocks commits that contain:
+#   - API keys, tokens, passwords
+#   - Internal IP addresses (Tailscale, RFC1918)
+#   - Real username paths (/Users/john/...)
+#   - Internal domains
+#   - .env.local files
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+FAILED=0
+
+echo "🔒 Running secret guard..."
+
+# 1. Block .env.local from being committed
+if git diff --cached --name-only | grep -q '^\.env\.local$'; then
+  echo "${RED}❌ .env.local is staged for commit.${NC}"
+  echo "   Move values to .env.example with placeholders and keep .env.local in .gitignore"
+  FAILED=1
+fi
+
+# 2. Scan staged files for API keys and tokens
+STAGED=$(git diff --cached --name-only | grep -E '\.(md|ts|tsx|js|json|yaml|yml|sh|py)$' || true)
+if [ -n "$STAGED" ]; then
+  # API keys
+  KEYS=$(git diff --cached -- "$STAGED" | grep -E '^\+.*(sk-[a-zA-Z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{36,}|AIza[0-9A-Za-z_-]{35,}|pat-[A-Za-z0-9]{22,}|AKIA[0-9A-Z]{16})' || true)
+  if [ -n "$KEYS" ]; then
+    echo "${RED}❌ API keys / tokens detected in staged changes:${NC}"
+    echo "$KEYS"
+    FAILED=1
+  fi
+
+  # Private keys
+  PRIV=$(git diff --cached -- "$STAGED" | grep -E '^\+.*-----BEGIN .*PRIVATE KEY-----' || true)
+  if [ -n "$PRIV" ]; then
+    echo "${RED}❌ Private key detected in staged changes:${NC}"
+    echo "$PRIV"
+    FAILED=1
+  fi
+
+  # Internal IPs
+  IPS=$(git diff --cached -- "$STAGED" | grep -E '^\+.*(100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3})' || true)
+  if [ -n "$IPS" ]; then
+    echo "${RED}❌ Internal IP addresses detected in staged changes:${NC}"
+    echo "$IPS"
+    FAILED=1
+  fi
+
+  # Real username paths (not /Users/yourname/)
+  PATHS=$(git diff --cached -- "$STAGED" | grep -E '^\+.*\/Users\/[^y][^o][^u][^r][^n][^a][^m][^e]\/' || true)
+  if [ -n "$PATHS" ]; then
+    echo "${RED}❌ Real username paths detected in staged changes:${NC}"
+    echo "$PATHS"
+    FAILED=1
+  fi
+
+  # Internal domains
+  DOMAINS=$(git diff --cached -- "$STAGED" | grep -niE '^\+.*epiloguecapital' || true)
+  if [ -n "$DOMAINS" ]; then
+    echo "${RED}❌ Internal domains detected in staged changes:${NC}"
+    echo "$DOMAINS"
+    FAILED=1
+  fi
+fi
+
+if [ $FAILED -eq 1 ]; then
+  echo ""
+  echo "${RED}⛔ Commit blocked. Fix the issues above and try again.${NC}"
+  exit 1
+fi
+
+echo "${GREEN}✅ Secret guard passed.${NC}"

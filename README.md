@@ -2,29 +2,53 @@
 
 > A beautiful, restaurant-themed observability dashboard for AI agent infrastructure.
 
-Monitor your entire agent fleet — local and remote — from one place. Track token economics, memory, knowledge bases, self-learning optimization (APO), and system flow in real time.
+Monitor your entire agent fleet — local and remote — from one place. Track agent health, memory, knowledge bases, token economics, self-learning optimization (APO), and system architecture in real time.
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black) ![Tailwind](https://img.shields.io/badge/Tailwind-4-blue) ![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-latest-slate) ![License](https://img.shields.io/badge/license-MIT-green)
+![Kitchen Floor](./docs/screenshots/kitchen-floor.png)
 
 ---
 
-## Views
+## What It Is
 
-| View | Route | What it shows |
-|------|-------|--------------|
-| 👨‍🍳 **Kitchen Floor** | `/` | Real-time agent grid — status, heartbeats, current tasks, lessons, memory counts |
-| 🧾 **The Ledger** | `/ledger` | Token economics — RTK savings, model mix, cost calculator |
-| 🧠 **Notebook Wall** | `/notebooks` | Memory explorer — Claude auto-memory, agent daily notes, activity heatmap |
-| 📚 **The Library** | `/library` | Knowledge base health — collection treemap, freshness alerts, coverage gaps |
-| 🔄 **The Flow** | `/flow` | Animated system architecture — live data, interactive demo mode |
-| 🍲 **The Sous Vide** | `/apo` | Agent Lightning APO — self-learning proposals, cron cycle stats, log viewer |
+Agent Kitchen is a **Next.js dashboard** that gives you a single pane of glass for your AI agent infrastructure. Whether you're running one agent or twenty, local or across Tailscale tunnels, Agent Kitchen shows you:
+
+- **Who's online** — live heartbeat status for every agent
+- **What they're doing** — current tasks, recent lessons, memory counts
+- **How much it costs** — token economics, model mix, savings calculator
+- **What's in their head** — memory explorer, conversation history, activity heatmap
+- **What they know** — knowledge base health, coverage gaps, freshness alerts
+- **How they talk** — animated system flow diagram with live activity feed
+- **How they improve** — APO proposal queue, cron cycle stats, log viewer
+
+All data is fetched **live** from your filesystem and HTTP endpoints. No database required (except an optional SQLite store for conversations).
+
+---
+
+## Screenshots
+
+| View | What You See |
+|------|-------------|
+| **Kitchen Floor** (`/`) | Real-time agent grid — status, heartbeats, current tasks, lessons, memory counts |
+| ![Kitchen Floor](./docs/screenshots/kitchen-floor.png) | |
+| **The Ledger** (`/ledger`) | Token economics — RTK savings, model mix, cost calculator |
+| ![Ledger](./docs/screenshots/ledger.png) | |
+| **The Flow** (`/flow`) | Animated system architecture — live data, interactive demo mode, voice & chat panel |
+| ![Flow](./docs/screenshots/flow.png) | |
+| **The Library** (`/library`) | Knowledge base health — collection treemap, freshness alerts, coverage gaps |
+| ![Library](./docs/screenshots/library.png) | |
+| **Notebook Wall** (`/notebooks`) | Memory explorer — auto-memory files, daily notes, activity heatmap |
+| ![Notebooks](./docs/screenshots/notebooks.png) | |
+| **The Sous Vide** (`/apo`) | Agent Lightning APO — self-learning proposals, cron cycle stats, log viewer |
+| ![APO](./docs/screenshots/apo.png) | |
+| **The Dispatch** (`/dispatch`) | Send tasks to remote agents, view delegation status, lineage timeline |
+| ![Dispatch](./docs/screenshots/dispatch.png) | |
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/lac5q/agent-kitchen
+git clone https://github.com/lac5q/agent-kitchen.git
 cd agent-kitchen
 npm install
 cp .env.example .env.local
@@ -33,6 +57,13 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+For production:
+
+```bash
+npm run build
+npm start
+```
 
 ---
 
@@ -45,7 +76,7 @@ Agent Kitchen is fully config-driven. No code changes needed to adapt it to your
 Copy `.env.example` and fill in your paths:
 
 ```env
-# Path to your agent config directories
+# Path to your agent config directories (each subfolder = one agent)
 AGENT_CONFIGS_PATH=/Users/yourname/github/knowledge/agent-configs
 
 # Path to your knowledge repository
@@ -54,17 +85,21 @@ KNOWLEDGE_BASE_PATH=/Users/yourname/github/knowledge
 # Claude Code auto-memory location
 CLAUDE_MEMORY_PATH=/Users/yourname/.claude/projects
 
-# mem0 semantic memory API (if you run mem0)
+# mem0 semantic memory API (optional)
 MEM0_URL=http://localhost:3201
 
-# Agent Lightning / APO (if you run OpenClaw APO)
+# Agent Lightning / APO (optional)
 APO_PROPOSALS_PATH=/Users/yourname/.openclaw/skills/proposals
 APO_CRON_LOG_PATH=/Users/yourname/.openclaw/logs/agent-lightning-cron.log
+
+# LLM for memory consolidation (optional)
+ANTHROPIC_API_KEY=your_key_here
+CONSOLIDATION_MODEL=claude-haiku-4-5-20251001
 ```
 
 ### 2. Remote Agents (`agents.config.json`)
 
-Edit `agents.config.json` to register your remote agents (Tailscale, Cloudflare tunnels, or any HTTP endpoint):
+Edit `agents.config.json` to register your remote agents:
 
 ```json
 {
@@ -104,29 +139,7 @@ Edit `collections.config.json` to list your knowledge base directories:
 
 Categories: `business` | `agents` | `marketing` | `product` | `other`
 
-### 4. Agent Roles
-
-Local agents are auto-discovered from `AGENT_CONFIGS_PATH`. Each subdirectory becomes an agent. Roles are mapped in `src/lib/parsers.ts` — edit `DEFAULT_ROLES` to match your naming conventions.
-
----
-
-## Data Sources & API Routes
-
-| Route | Source | Refresh |
-|-------|--------|---------|
-| `/api/agents` | Filesystem: agent config dirs | 5s |
-| `/api/remote-agents` | HTTP poll: all entries in `agents.config.json` | 10s |
-| `/api/tokens` | `rtk gain` CLI ([RTK](https://github.com/lac5q/rtk)) | 30s |
-| `/api/memory` | `~/.claude/projects/*/memory/` + mem0 | 15s |
-| `/api/knowledge` | Filesystem: knowledge base collections | 60s |
-| `/api/apo` | `~/.openclaw/skills/proposals/` + cron log | 30s |
-| `/api/health` | Ping all services | 10s |
-
-All data is fetched live — no database, no caching layer, read-only.
-
----
-
-## Agent Directory Structure
+### 4. Agent Directory Structure
 
 For local agents, Agent Kitchen reads these files from each agent's config directory:
 
@@ -144,16 +157,19 @@ Any directory under `AGENT_CONFIGS_PATH` becomes an agent card on the Kitchen Fl
 
 ---
 
-## APO / Agent Lightning Support
+## Data Sources & API Routes
 
-If you run [Microsoft Agent Lightning](https://github.com/microsoft/agent-lightning) or a compatible APO system, the Sous Vide view tracks:
+| Route | Source | Refresh |
+|-------|--------|---------|
+| `/api/agents` | Filesystem: agent config dirs | 5s |
+| `/api/remote-agents` | HTTP poll: all entries in `agents.config.json` | 10s |
+| `/api/tokens` | `rtk gain` CLI ([RTK](https://github.com/lac5q/rtk)) | 30s |
+| `/api/memory` | `~/.claude/projects/*/memory/` + mem0 | 15s |
+| `/api/knowledge` | Filesystem: knowledge base collections | 60s |
+| `/api/apo` | `~/.openclaw/skills/proposals/` + cron log | 30s |
+| `/api/health` | Ping all services | 10s |
 
-- **Proposal queue** — pending `.md` files awaiting human approval
-- **Archived proposals** — historical improvement attempts
-- **Cycle log** — last 50 lines of the cron log with error/success highlighting
-- **Cycle stats** — last run time, total/pending/archived proposal counts
-
-Expected proposal format: `APO_PROPOSAL_[skill]_[subsystem]_[timestamp].md`
+All data is fetched live — no caching layer, read-only.
 
 ---
 
@@ -161,17 +177,18 @@ Expected proposal format: `APO_PROPOSAL_[skill]_[subsystem]_[timestamp].md`
 
 | Layer | Tech |
 |-------|------|
-| Framework | Next.js 15 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | Styling | Tailwind CSS 4 |
 | Components | shadcn/ui (base-ui) |
 | Charts | Recharts |
 | Animation | Framer Motion |
 | Data fetching | TanStack Query |
-| Testing | Vitest + React Testing Library |
+| Database | better-sqlite3 (optional, for conversations) |
+| Testing | Vitest + React Testing Library + Playwright |
 
 ---
 
-## Compatible Agentic Systems
+## Compatible Agent Systems
 
 Agent Kitchen works with any agent system that:
 - Stores agent configs as directories with markdown files
@@ -188,10 +205,51 @@ Known compatible setups:
 ## Development
 
 ```bash
-npm run dev      # Start dev server
+npm run dev      # Start dev server (port 3000)
 npm run build    # Production build
+npm start        # Start production server (port 3002)
 npm test         # Run tests (Vitest)
 ```
+
+---
+
+## Project Structure
+
+```
+agent-kitchen/
+├── src/
+│   ├── app/              # Next.js App Router pages
+│   ├── components/       # React components (kitchen, ledger, flow, etc.)
+│   ├── lib/              # Utilities, API clients, parsers
+│   └── types/            # TypeScript types
+├── data/                 # SQLite database (gitignored)
+├── docs/
+│   ├── screenshots/      # Dashboard screenshots for README
+│   ├── handover/         # Developer handover docs
+│   └── superpowers/      # Design specs and plans
+├── voice-server/         # Optional Python voice server
+├── agents.config.json    # Remote agent registry
+├── collections.config.json # Knowledge base collections
+├── .env.example          # Environment variable template
+└── start.sh              # Production startup script (Next.js + voice servers)
+```
+
+---
+
+## Security
+
+This repository includes automated secret scanning. See [`.github/workflows/secret-guard.yml`](./.github/workflows/secret-guard.yml) for the full configuration.
+
+The following patterns are blocked from ever entering the codebase:
+- API keys (`sk-...`, `AIza...`, `ghp_...`)
+- AWS credentials (`AKIA...`)
+- Private keys (`-----BEGIN PRIVATE KEY-----`)
+- IP addresses (`100.x.x.x`, `10.x.x.x` — Tailscale/internal ranges)
+- Domains with known internal patterns
+- Email addresses and phone numbers
+- Generic password assignments
+
+If you fork this repo, the same checks will run on your PRs.
 
 ---
 
