@@ -25,7 +25,9 @@ sleep 1
 
 # ── Start agentmemory (iii-engine backend on port 3111) ──────────────────────
 echo "Starting agentmemory server (port $AGENTMEMORY_PORT)..."
-npx @agentmemory/agentmemory >/tmp/agentmemory.log 2>&1 &
+# Use minimal config (6 workers vs default 10)
+III_CONFIG="$SCRIPT_DIR/iii-config.yaml" \
+  npx @agentmemory/agentmemory >/tmp/agentmemory.log 2>&1 &
 AGENTMEMORY_PID=$!
 echo "  agentmemory PID: $AGENTMEMORY_PID"
 

@@ -27,7 +27,7 @@ Registered in `agents.config.json`:
 
 | ID | Name | Runtime | Location | Host:Port |
 |----|------|---------|----------|-----------|
-| `sophia` | Sophia | openclaw | tailscale | 100.x.x.x:18889 |
+|| `sophia` | Sophia | openclaw | tailscale | 100.x.x.x:18889 |
 | `maria` | Maria | hermes | tailscale | 100.x.x.x:8644 |
 | `lucia` | Lucia | openclaw | local VPS | localhost:3001 |
 | `alba` | Alba | hermes | local Mac | localhost:18793 |

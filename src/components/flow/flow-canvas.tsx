@@ -140,7 +140,7 @@ function buildNodes(
     {
       id: "tunnels",
       label: "CF Tunnels",
-      subtitle: "kitchen.example...",
+      subtitle: "your-tunnel.domain",
       icon: "📡",
       x: 170,
       y: 310,
