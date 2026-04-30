@@ -1,0 +1,20 @@
+vector_store:
+  provider: qdrant
+  config:
+    collection_name: agent_memory
+    url: "https://f969d77f-3cf6-4557-92cb-67f7cac0f44a.us-west-1-0.aws.cloud.qdrant.io:6333"
+    api_key_env: QDRANT_API_KEY
+    embedding_model_dims: 3072
+
+llm:
+  provider: gemini
+  config:
+    model: gemini-2.0-flash
+    api_key_env: GEMINI_API_KEY
+
+embedder:
+  provider: gemini
+  config:
+    model: models/gemini-embedding-2-preview
+    embedding_dims: 3072
+    api_key_env: GEMINI_API_KEY

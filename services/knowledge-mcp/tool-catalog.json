@@ -1,0 +1,63 @@
+{
+  "sources": [
+    {
+      "id": "official-mcp-registry",
+      "label": "Official MCP Registry",
+      "type": "external-registry",
+      "path": "https://registry.modelcontextprotocol.io/",
+      "status": "available"
+    },
+    {
+      "id": "mcp-agent",
+      "label": "lastmile-ai/mcp-agent",
+      "type": "external-framework",
+      "path": "https://github.com/lastmile-ai/mcp-agent",
+      "status": "available"
+    },
+    {
+      "id": "awesome-mcp-servers",
+      "label": "awesome-mcp-servers",
+      "type": "external-catalog",
+      "path": "https://github.com/punkpeye/awesome-mcp-servers",
+      "status": "available"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "external:official-mcp-registry",
+      "name": "Official MCP Registry",
+      "type": "registry",
+      "source": "official-mcp-registry",
+      "description": "Canonical public registry source for MCP server metadata.",
+      "status": "available",
+      "tags": ["mcp", "registry", "external"],
+      "useWhen": ["Need to discover trusted public MCP servers."],
+      "topLevel": false,
+      "loadCommand": "Review registry metadata before adding a server."
+    },
+    {
+      "id": "external:mcp-agent-router",
+      "name": "mcp-agent router/evaluator",
+      "type": "framework-pattern",
+      "source": "mcp-agent",
+      "description": "Router and evaluator-optimizer patterns for future tool-selection experiments.",
+      "status": "candidate",
+      "tags": ["mcp", "router", "evaluation"],
+      "useWhen": ["Need to benchmark or improve tool-selection quality."],
+      "topLevel": false,
+      "loadCommand": "Use as a future spike, not a v1 runtime dependency."
+    },
+    {
+      "id": "external:awesome-mcp-servers",
+      "name": "awesome-mcp-servers",
+      "type": "catalog",
+      "source": "awesome-mcp-servers",
+      "description": "Broad community catalog for candidate MCP servers and gateway ideas.",
+      "status": "candidate",
+      "tags": ["mcp", "catalog", "community"],
+      "useWhen": ["Need ideas for additional MCP servers after local catalog coverage."],
+      "topLevel": false,
+      "loadCommand": "Treat as discovery input, not as trusted execution config."
+    }
+  ]
+}

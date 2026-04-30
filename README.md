@@ -219,17 +219,18 @@ npm test         # Run tests (Vitest)
 
 ```
 agent-kitchen/
-├── src/
-│   ├── app/              # Next.js App Router pages
-│   ├── components/       # React components (kitchen, ledger, flow, etc.)
-│   ├── lib/              # Utilities, API clients, parsers
-│   └── types/            # TypeScript types
+├── apps/
+│   └── kitchen/          # Next.js dashboard app
+│       └── src/          # App Router pages, components, lib, types
+├── services/
+│   ├── memory/           # mem0 FastAPI service + MCP wrapper
+│   ├── knowledge-mcp/    # Progressive knowledge/tool-attention MCP facade
+│   └── voice-server/     # Optional Python voice service
 ├── data/                 # SQLite database (gitignored)
 ├── docs/
 │   ├── screenshots/      # Dashboard screenshots for README
 │   ├── handover/         # Developer handover docs
 │   └── superpowers/      # Design specs and plans
-├── voice-server/         # Optional Python voice server
 ├── agents.config.json    # Remote agent registry
 ├── collections.config.json # Knowledge base collections
 ├── .env.example          # Environment variable template
