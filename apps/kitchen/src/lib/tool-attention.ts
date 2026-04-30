@@ -22,13 +22,63 @@ function outcomesPath() {
   return process.env.TOOL_ATTENTION_OUTCOMES || resolveFromRepoRoot("logs/tool-attention-outcomes.jsonl");
 }
 
+function publicPath(filePath?: string): string | undefined {
+  if (!filePath) return undefined;
+  if (/^https?:\/\//.test(filePath)) return filePath;
+  if (!path.isAbsolute(filePath)) return filePath;
+
+  const resolved = path.resolve(filePath);
+  const repoRoot = resolveFromRepoRoot(".");
+  const repoRelative = path.relative(repoRoot, resolved);
+  if (repoRelative && !repoRelative.startsWith("..") && !path.isAbsolute(repoRelative)) {
+    return repoRelative;
+  }
+
+  const home = process.env.HOME ? path.resolve(process.env.HOME) : "";
+  if (home) {
+    const homeRelative = path.relative(home, resolved);
+    if (homeRelative && !homeRelative.startsWith("..") && !path.isAbsolute(homeRelative)) {
+      return `~/${homeRelative}`;
+    }
+  }
+
+  return path.basename(filePath);
+}
+
+function publicSource(source: ToolAttentionSource): ToolAttentionSource {
+  return {
+    ...source,
+    path: publicPath(source.path),
+  };
+}
+
+function publicCapability(item: ToolAttentionCapability): ToolAttentionCapability {
+  return {
+    ...item,
+    loadCommand: publicLoadCommand(item.loadCommand),
+  };
+}
+
+function publicLoadCommand(command: string | null): string | null {
+  if (!command) return command;
+  const repoRoot = resolveFromRepoRoot(".");
+  if (command.includes(repoRoot)) {
+    return command.replaceAll(repoRoot, ".");
+  }
+  const home = process.env.HOME ? path.resolve(process.env.HOME) : "";
+  if (home && command.includes(home)) {
+    return command.replaceAll(home, "~");
+  }
+  return command;
+}
+
 function readJsonFile(filePath: string): { capabilities: ToolAttentionCapability[]; sources: ToolAttentionSource[] } {
   try {
     if (!fs.existsSync(filePath)) return { capabilities: [], sources: [] };
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     return {
-      capabilities: Array.isArray(parsed.capabilities) ? parsed.capabilities : [],
-      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+      capabilities: Array.isArray(parsed.capabilities) ? parsed.capabilities.map(publicCapability) : [],
+      sources: Array.isArray(parsed.sources) ? parsed.sources.map(publicSource) : [],
     };
   } catch {
     return { capabilities: [], sources: [] };
@@ -172,7 +222,7 @@ function skillCapabilities(): { capabilities: ToolAttentionCapability[]; sources
           tags: ["skill", "agent-context"],
           useWhen: [`Need the ${entry.name} reusable agent skill.`],
           topLevel: false,
-          loadCommand: path.join(skillsPath, entry.name, "SKILL.md"),
+          loadCommand: `Read skill ${entry.name}`,
         })
       );
     return { capabilities, sources: [source] };
@@ -236,7 +286,7 @@ export function getToolAttention(query = "", limit = 25): ToolAttentionResponse 
     ...knowledgeCapabilities(),
     ...skills.capabilities,
     ...curated.capabilities,
-  ].filter((item) => matchesQuery(item, query)).slice(0, Math.max(1, Math.min(limit, 100)));
+  ].map(publicCapability).filter((item) => matchesQuery(item, query)).slice(0, Math.max(1, Math.min(limit, 100)));
   const sources = [...mcp.sources, {
     id: "knowledge-system",
     label: "Knowledge MCP",
@@ -244,10 +294,12 @@ export function getToolAttention(query = "", limit = 25): ToolAttentionResponse 
     path: resolveFromRepoRoot("services/knowledge-mcp"),
     status: "available",
   }, ...skills.sources, ...curated.sources];
-  const uniqueSources = Array.from(new Map(sources.map((source) => [source.id, source])).values());
+  const uniqueSources = Array.from(new Map(sources.map((source) => [source.id, publicSource(source)])).values());
   const healthMessages = [];
-  if (!fs.existsSync(catalogPath())) healthMessages.push("Optional curated tool catalog is missing.");
-  if (!fs.existsSync(outcomesPath())) healthMessages.push("No tool outcome log has been recorded yet.");
+  const catalogExists = fs.existsSync(catalogPath());
+  const outcomesExists = fs.existsSync(outcomesPath());
+  if (!catalogExists) healthMessages.push("Optional curated tool catalog is missing.");
+  if (!outcomesExists) healthMessages.push("No tool outcome log has been recorded yet.");
 
   return {
     summary: summarize(capabilities, uniqueSources, outcomes),
@@ -256,9 +308,9 @@ export function getToolAttention(query = "", limit = 25): ToolAttentionResponse 
     recommendations: recommendations(capabilities),
     sources: uniqueSources,
     health: {
-      status: fs.existsSync(catalogPath()) ? "ok" : "degraded",
-      catalogPath: catalogPath(),
-      outcomesPath: outcomesPath(),
+      status: catalogExists ? "ok" : "degraded",
+      catalog: catalogExists ? "available" : "missing",
+      outcomes: outcomesExists ? "available" : "missing",
       messages: healthMessages,
     },
     timestamp: now(),

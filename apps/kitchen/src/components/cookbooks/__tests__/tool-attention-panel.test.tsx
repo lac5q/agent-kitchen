@@ -50,8 +50,8 @@ function makeData() {
     sources: [],
     health: {
       status: "degraded" as const,
-      catalogPath: "/tmp/catalog.json",
-      outcomesPath: "/tmp/outcomes.jsonl",
+      catalog: "missing" as const,
+      outcomes: "missing" as const,
       messages: ["No tool outcome log has been recorded yet."],
     },
     timestamp: "2026-04-30T00:00:00.000Z",

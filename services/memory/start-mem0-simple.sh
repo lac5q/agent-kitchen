@@ -24,8 +24,8 @@ fi
 # Activate virtual environment
 if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
     source "$SCRIPT_DIR/.venv/bin/activate"
-elif [ -f "/Users/lcalderon/github/knowledge/.venv/bin/activate" ]; then
-    source "/Users/lcalderon/github/knowledge/.venv/bin/activate"
+elif [ -f "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate" ]; then
+    source "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate"
 fi
 
 # Start uvicorn (will run in foreground)

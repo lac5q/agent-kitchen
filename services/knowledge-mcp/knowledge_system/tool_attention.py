@@ -63,6 +63,52 @@ def _read_jsonl(path: Path, limit: int = 20) -> list[dict[str, Any]]:
     return list(reversed(rows))
 
 
+def _public_path(value: str | Path | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    if text.startswith(("http://", "https://")):
+        return text
+    if not Path(text).expanduser().is_absolute():
+        return text
+
+    try:
+        resolved = Path(text).expanduser().resolve()
+    except OSError:
+        resolved = Path(text).expanduser()
+
+    try:
+        return str(resolved.relative_to(repo_root()))
+    except ValueError:
+        pass
+
+    try:
+        return f"~/{resolved.relative_to(Path.home().resolve())}"
+    except ValueError:
+        return resolved.name or text
+
+
+def _public_source(source: dict[str, Any]) -> dict[str, Any]:
+    redacted = dict(source)
+    if "path" in redacted:
+        redacted["path"] = _public_path(redacted.get("path"))
+    return redacted
+
+
+def _public_load_command(command: Optional[str]) -> Optional[str]:
+    if not command:
+        return command
+    redacted = command.replace(str(repo_root()), ".")
+    home = str(Path.home().resolve())
+    return redacted.replace(home, "~")
+
+
+def _public_capability(capability: dict[str, Any]) -> dict[str, Any]:
+    redacted = dict(capability)
+    redacted["loadCommand"] = _public_load_command(redacted.get("loadCommand"))
+    return redacted
+
+
 def _capability(
     *,
     capability_id: str,
@@ -189,7 +235,7 @@ def _skill_capabilities() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
                 description=description,
                 tags=["skill", "agent-context"],
                 use_when=[f"Need the {child.name} reusable agent skill."],
-                load_command=f"Read {skill_file}",
+                load_command=f"Read skill {child.name}",
             )
         )
     return capabilities, [source]
@@ -227,14 +273,15 @@ def build_catalog() -> dict[str, Any]:
     sources.extend(external_sources)
 
     outcomes = _read_jsonl(outcomes_path())
-    unique_sources = {source["id"]: source for source in sources if "id" in source}
+    public_capabilities = [_public_capability(capability) for capability in capabilities]
+    unique_sources = {source["id"]: _public_source(source) for source in sources if "id" in source}
     return {
         "status": "ok",
-        "summary": _summary(capabilities, list(unique_sources.values()), outcomes),
-        "capabilities": capabilities,
+        "summary": _summary(public_capabilities, list(unique_sources.values()), outcomes),
+        "capabilities": public_capabilities,
         "sources": list(unique_sources.values()),
         "recentOutcomes": outcomes,
-        "recommendations": _recommendations(capabilities),
+        "recommendations": _recommendations(public_capabilities),
         "health": _health(),
         "timestamp": _now(),
     }
@@ -285,8 +332,8 @@ def _health() -> dict[str, Any]:
         messages.append("No tool outcome log has been recorded yet.")
     return {
         "status": status,
-        "catalogPath": str(catalog),
-        "outcomesPath": str(outcomes),
+        "catalog": "available" if catalog.exists() else "missing",
+        "outcomes": "available" if outcomes.exists() else "missing",
         "messages": messages,
     }
 
@@ -348,7 +395,7 @@ def record_outcome(
     }
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, sort_keys=True) + "\n")
-    return {"status": "ok", "record": record, "path": str(path)}
+    return {"status": "ok", "record": record, "path": _public_path(path)}
 
 
 def stats() -> dict[str, Any]:

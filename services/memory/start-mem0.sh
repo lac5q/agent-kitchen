@@ -5,8 +5,8 @@ cd "$SCRIPT_DIR"
 
 if [ -f .venv/bin/activate ]; then
   source .venv/bin/activate
-elif [ -f /Users/lcalderon/github/knowledge/.venv/bin/activate ]; then
-  source /Users/lcalderon/github/knowledge/.venv/bin/activate
+elif [ -f "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate" ]; then
+  source "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate"
 fi
 
 # Load API keys from .env file

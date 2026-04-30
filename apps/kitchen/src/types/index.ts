@@ -214,8 +214,8 @@ export interface ToolAttentionResponse {
   sources: ToolAttentionSource[];
   health: {
     status: "ok" | "degraded";
-    catalogPath: string;
-    outcomesPath: string;
+    catalog: "available" | "missing";
+    outcomes: "available" | "missing";
     messages: string[];
   };
   timestamp: string;
