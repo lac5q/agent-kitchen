@@ -18,6 +18,11 @@ NOW=$(date +%s)
 LOG_FILE="$KNOWLEDGE_DIR/logs/healthcheck.log"
 TAILSCALE_PEERS="${TAILSCALE_PEERS:-}"
 REMOTE_AGENT_HEALTH_URLS="${REMOTE_AGENT_HEALTH_URLS:-}"
+CLOUDFLARE_HEALTH_URL="${CLOUDFLARE_HEALTH_URL:-}"
+KILOCLAW_HEALTH_URL="${KILOCLAW_HEALTH_URL:-}"
+LUCIA_PC_TOKEN="${LUCIA_PC_TOKEN:-}"
+LUCIA_PC_AGENT_URL="${LUCIA_PC_AGENT_URL:-http://localhost:3100/api/agents/87d756ee-ece7-4dde-b1f9-6e0b6c398d28}"
+LUCIA_PC_HOST="${LUCIA_PC_HOST:-}"
 
 DISK_CRITICAL_PERCENT=95
 DISK_WARNING_PERCENT=90
@@ -270,14 +275,16 @@ CF_PID=$(pgrep -f "cloudflared tunnel" 2>/dev/null | head -1 || echo "")
 if [ -n "$CF_PID" ]; then
   log "Cloudflare tunnel: running (PID $CF_PID)"
   recover "cloudflare_process_down" "Cloudflare tunnel process running again"
-  # Spot-check a public endpoint
-  if check_http "https://gwen.epiloguecapital.com/health"; then
+  # Spot-check a configured public endpoint without storing private domains in source.
+  if [ -n "$CLOUDFLARE_HEALTH_URL" ] && check_http "$CLOUDFLARE_HEALTH_URL"; then
     log "Cloudflare tunnel: public endpoints responding"
     recover "cloudflare_endpoints_down" "Cloudflare public endpoints responding"
-  else
+  elif [ -n "$CLOUDFLARE_HEALTH_URL" ]; then
     alert "cloudflare_endpoints_down" "Cloudflare running but *public endpoints not responding*
 - Endpoints: pc, gwen, alba, nerve, msg all may be down
 - \`tail -50 ~/.cloudflared/cloudflared.err\`"
+  else
+    log "Cloudflare endpoint check skipped; set CLOUDFLARE_HEALTH_URL to enable"
   fi
 else
   alert "cloudflare_process_down" "Cloudflare tunnel *NOT RUNNING*
@@ -308,7 +315,11 @@ check_agent() {
 
 check_agent "gateway"    "http://localhost:18789/health"
 check_agent "nerve"      "http://localhost:3080/health"
-check_agent "kiloclaw"   "https://lucia.epiloguecapital.com/health"
+if [ -n "$KILOCLAW_HEALTH_URL" ]; then
+  check_agent "kiloclaw" "$KILOCLAW_HEALTH_URL"
+else
+  log "KiloClaw health check skipped; set KILOCLAW_HEALTH_URL to enable"
+fi
 
 # Paperclip local
 if check_http "http://localhost:3100/api/health" || check_http "http://localhost:3100/api/companies"; then
@@ -319,14 +330,16 @@ else
 fi
 
 # Lucia - Kilo Claw Paperclip agent status
-LUCIA_PC_TOKEN="pcp_b1d5a6eadfc4cf69487598fde4587858f707362e9771f29e"
-LUCIA_PC_STATUS=$(python3 -c "
-import urllib.request, json, sys
+if [ -n "$LUCIA_PC_TOKEN" ]; then
+  export LUCIA_PC_TOKEN LUCIA_PC_AGENT_URL LUCIA_PC_HOST
+  LUCIA_PC_STATUS=$(python3 -c "
+import os, urllib.request, json
 try:
-    req = urllib.request.Request(
-        'http://localhost:3100/api/agents/87d756ee-ece7-4dde-b1f9-6e0b6c398d28',
-        headers={'Authorization': 'Bearer $LUCIA_PC_TOKEN', 'Host': 'pc.epiloguecapital.com'}
-    )
+    headers = {'Authorization': 'Bearer ' + os.environ['LUCIA_PC_TOKEN']}
+    host = os.environ.get('LUCIA_PC_HOST', '')
+    if host:
+        headers['Host'] = host
+    req = urllib.request.Request(os.environ['LUCIA_PC_AGENT_URL'], headers=headers)
     resp = urllib.request.urlopen(req, timeout=6)
     a = json.loads(resp.read())
     status = a.get('status', '?')
@@ -335,19 +348,22 @@ try:
 except Exception as e:
     print(f'error:{e}')
 " 2>/dev/null || echo "error:unreachable")
-LUCIA_STATUS_PART="${LUCIA_PC_STATUS%%:*}"
-LUCIA_PAUSE_PART="${LUCIA_PC_STATUS#*:}"
-if [ "$LUCIA_STATUS_PART" = "active" ] || [ "$LUCIA_STATUS_PART" = "idle" ]; then
-  log "Lucia (Kilo Claw) Paperclip: $LUCIA_STATUS_PART"
-  recover "lucia_paperclip_bad" "Lucia Kilo Claw agent is active again"
-elif [ "$LUCIA_STATUS_PART" = "paused" ] || [ "$LUCIA_STATUS_PART" = "terminated" ]; then
-  alert "lucia_paperclip_bad" "Lucia (Kilo Claw) Paperclip agent is *${LUCIA_STATUS_PART}*
+  LUCIA_STATUS_PART="${LUCIA_PC_STATUS%%:*}"
+  LUCIA_PAUSE_PART="${LUCIA_PC_STATUS#*:}"
+  if [ "$LUCIA_STATUS_PART" = "active" ] || [ "$LUCIA_STATUS_PART" = "idle" ]; then
+    log "Lucia (Kilo Claw) Paperclip: $LUCIA_STATUS_PART"
+    recover "lucia_paperclip_bad" "Lucia Kilo Claw agent is active again"
+  elif [ "$LUCIA_STATUS_PART" = "paused" ] || [ "$LUCIA_STATUS_PART" = "terminated" ]; then
+    alert "lucia_paperclip_bad" "Lucia (Kilo Claw) Paperclip agent is *${LUCIA_STATUS_PART}*
 - Reason: ${LUCIA_PAUSE_PART:-none}
-- Unpause: \`curl -X PATCH http://localhost:3100/api/agents/87d756ee-ece7-4dde-b1f9-6e0b6c398d28 -H 'Authorization: Bearer $LUCIA_PC_TOKEN' -H 'Host: pc.epiloguecapital.com' -H 'Content-Type: application/json' -d '{\"status\":\"active\"}'\`"
-elif echo "$LUCIA_STATUS_PART" | grep -q "^error"; then
-  log "Lucia (Kilo Claw) Paperclip: status check failed (${LUCIA_PAUSE_PART}) — skipping alert"
+- Unpause: \`curl -X PATCH \"\$LUCIA_PC_AGENT_URL\" -H 'Authorization: Bearer $LUCIA_PC_TOKEN' -H \"Host: \$LUCIA_PC_HOST\" -H 'Content-Type: application/json' -d '{\"status\":\"active\"}'\`"
+  elif echo "$LUCIA_STATUS_PART" | grep -q "^error"; then
+    log "Lucia (Kilo Claw) Paperclip: status check failed (${LUCIA_PAUSE_PART}) — skipping alert"
+  else
+    log "Lucia (Kilo Claw) Paperclip: status=$LUCIA_PC_STATUS"
+  fi
 else
-  log "Lucia (Kilo Claw) Paperclip: status=$LUCIA_PC_STATUS"
+  log "Lucia (Kilo Claw) Paperclip check skipped; set LUCIA_PC_TOKEN to enable"
 fi
 
 # Remote agents via Tailscale
