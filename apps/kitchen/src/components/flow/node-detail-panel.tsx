@@ -1,0 +1,216 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useSkills, useToolAttention } from "@/lib/api-client";
+import { SkillHeatmap } from "@/components/skill-heatmap";
+import { matchEventsForNode, isSparseNode } from "@/lib/node-keyword-map";
+import { PaperclipFleetPanel } from "./paperclip-fleet-panel";
+import type { PaperclipFleetResponse } from "@/types";
+
+interface Event {
+  id: string;
+  timestamp: string;
+  node: string;
+  type: string;
+  message: string;
+  severity: string;
+}
+
+interface NodeDetailPanelProps {
+  nodeId: string | null;
+  nodeLabel: string;
+  nodeIcon: string;
+  nodeStats: Record<string, string | number>;
+  events: Event[];
+  onClose: () => void;
+  paperclipFleet?: PaperclipFleetResponse | null;
+  paperclipLoading?: boolean;
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  request: "#f59e0b",
+  knowledge: "#10b981",
+  memory: "#0ea5e9",
+  error: "#f43f5e",
+  apo: "#8b5cf6",
+};
+
+export function NodeDetailPanel({ nodeId, nodeLabel, nodeIcon, nodeStats, events, onClose, paperclipFleet = null, paperclipLoading = false }: NodeDetailPanelProps) {
+  const nodeEvents = matchEventsForNode(nodeId ?? "", events).slice(0, 10);
+  const { data: skillsData } = useSkills();
+  const { data: toolAttentionData } = useToolAttention();
+  const [renderNowMs] = useState(() => Date.now());
+
+  // For cookbooks node, use live skills data instead of click-time snapshot
+  const effectiveStats: Record<string, string | number> = nodeId === "cookbooks" && skillsData
+    ? {
+        "Skills": skillsData.totalSkills,
+        "Gaps": skillsData.coverageGaps?.length ?? 0,
+        ...(Object.keys(skillsData.failuresByAgent ?? {}).length > 0
+          ? { "Failures": Object.values(skillsData.failuresByAgent as Record<string, number>).reduce((a, b) => a + b, 0) }
+          : {}),
+      }
+    : nodeId === "tool-gateway" && toolAttentionData
+      ? {
+          "Capabilities": toolAttentionData.summary.totalCapabilities,
+          "Top-Level": toolAttentionData.summary.topLevelTools,
+          "Workspaces": toolAttentionData.summary.workspaces,
+          "Outcomes": toolAttentionData.summary.recentOutcomes,
+        }
+    : nodeStats;
+
+  const [heartbeatContent, setHeartbeatContent] = useState<string | null>(null);
+  const [heartbeatLoading, setHeartbeatLoading] = useState(false);
+
+  useEffect(() => {
+    if (!nodeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHeartbeatContent(null);
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    setHeartbeatLoading(true);
+    fetch(`/api/heartbeat?agent=${nodeId}`, { signal: controller.signal })
+      .then(r => {
+        if (!r.ok) throw new Error(`heartbeat ${r.status}`);
+        return r.json();
+      })
+      .then(d => {
+        if (!cancelled) setHeartbeatContent(d.content ?? null);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        if (!cancelled) setHeartbeatContent(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHeartbeatLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [nodeId]);
+
+  return (
+    <AnimatePresence>
+      {nodeId && (
+        <motion.div
+          initial={{ x: 320, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 320, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          className="absolute right-0 top-0 bottom-0 w-80 bg-slate-950 border-l border-slate-800 z-50 flex flex-col"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{nodeIcon}</span>
+              <div>
+                <p className="text-sm font-bold text-amber-500">{nodeLabel}</p>
+                <p className="text-xs text-slate-500">
+                  {heartbeatContent ? "Last State" : "Node Activity"}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-lg" aria-label="Close node detail panel">×</button>
+          </div>
+
+          {/* Stats */}
+          {Object.keys(effectiveStats).length > 0 && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Stats</p>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(effectiveStats).map(([k, v]) => (
+                  <div key={k} className="bg-slate-900 rounded p-2">
+                    <p className="text-xs text-slate-500">{k}</p>
+                    <p className="text-sm font-bold text-slate-200">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Paperclip Fleet Panel — manager node only (DASH-03) */}
+          {nodeId === "manager" && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Fleet</p>
+              <PaperclipFleetPanel fleet={paperclipFleet ?? null} isLoading={paperclipLoading ?? false} />
+            </div>
+          )}
+
+          {/* Heartbeat / Last State */}
+          {heartbeatLoading && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs text-slate-500">Loading state...</p>
+            </div>
+          )}
+          {!heartbeatLoading && heartbeatContent && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Last State</p>
+              <pre className="font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">{heartbeatContent}</pre>
+            </div>
+          )}
+
+          {/* Contribution Activity Heatmap — cookbooks node only */}
+          {nodeId === "cookbooks" && (
+            <div className="p-4 border-b border-slate-800">
+              <SkillHeatmap
+                contributionHistory={skillsData?.contributionHistory ?? []}
+                className="text-slate-200"
+              />
+            </div>
+          )}
+
+          {nodeId === "tool-gateway" && toolAttentionData && (
+            <div className="p-4 border-b border-slate-800">
+              <p className="text-xs font-medium text-slate-500 mb-2">Recommended Loads</p>
+              <div className="space-y-2">
+                {toolAttentionData.recommendations.slice(0, 3).map((item) => (
+                  <div key={item.capabilityId} className="rounded bg-slate-900 p-2">
+                    <p className="text-xs font-semibold text-amber-400">{item.title}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.reason}</p>
+                  </div>
+                ))}
+                {toolAttentionData.recommendations.length === 0 && (
+                  <p className="text-xs text-slate-600">No recommendations available</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Events */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <p className="text-xs font-medium text-slate-500 mb-3">
+              Recent Activity {nodeEvents.length > 0 ? `(${nodeEvents.length})` : "(none)"}
+            </p>
+            {nodeEvents.length === 0 ? (
+              isSparseNode(nodeId ?? "") ? (
+                <p aria-label="limited-activity-data" className="text-xs italic text-slate-600">Limited activity data for this node type</p>
+              ) : (
+                <p className="text-xs text-slate-600">No recent activity for this node</p>
+              )
+            ) : (
+              <div className="space-y-2">
+                {nodeEvents.map(event => {
+                  const minsAgo = Math.round((renderNowMs - new Date(event.timestamp).getTime()) / 60000);
+                  const timeLabel = minsAgo < 1 ? "just now" : minsAgo < 60 ? `${minsAgo}m ago` : `${Math.round(minsAgo / 60)}h ago`;
+                  const color = TYPE_COLORS[event.type] || "#64748b";
+                  return (
+                    <div key={event.id} data-testid="node-event" className="text-xs border-l-2 pl-2 py-1" style={{ borderColor: color }}>
+                      <p className="text-slate-500 mb-0.5">{timeLabel}</p>
+                      <p className={`${event.severity === "error" ? "text-rose-400" : "text-slate-300"}`}>
+                        {event.message}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "gitnexus": {
+      "command": "/opt/homebrew/bin/gitnexus",
+      "args": ["mcp"]
+    },
+    "mem0": {
+      "command": "/bin/bash",
+      "args": [
+        "/Users/lcalderon/github/agent-kitchen/services/memory/mcp-mem0-wrapper.sh"
+      ]
+    },
+    "knowledge-system": {
+      "command": "/Users/lcalderon/github/knowledge/.venv/bin/python",
+      "env": {
+        "AGENT_KITCHEN_ROOT": "/Users/lcalderon/github/agent-kitchen",
+        "KNOWLEDGE_ROOT": "/Users/lcalderon/github/knowledge"
+      },
+      "args": [
+        "/Users/lcalderon/github/agent-kitchen/services/knowledge-mcp/knowledge_system/mcp_server.py"
+      ]
+    },
+    "agentmemory": {
+      "command": "node",
+      "args": [
+        "/opt/homebrew/lib/node_modules/@agentmemory/agentmemory/dist/standalone.mjs"
+      ]
+    }
+  }
+}
