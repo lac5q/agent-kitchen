@@ -16,6 +16,8 @@ COOLDOWN_SECONDS=1800  # 30 min between repeat alerts for same issue
 LOG_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 NOW=$(date +%s)
 LOG_FILE="$KNOWLEDGE_DIR/logs/healthcheck.log"
+TAILSCALE_PEERS="${TAILSCALE_PEERS:-}"
+REMOTE_AGENT_HEALTH_URLS="${REMOTE_AGENT_HEALTH_URLS:-}"
 
 DISK_CRITICAL_PERCENT=95
 DISK_WARNING_PERCENT=90
@@ -242,17 +244,21 @@ TS_STATE=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; pr
 if [ "$TS_STATE" = "Running" ]; then
   log "Tailscale: Running"
   recover "tailscale_down" "Tailscale is back online"
-  # Check peers
-  for peer_def in "sophia:100.101.88.44" "maria:100.109.19.110"; do
-    peer_name="${peer_def%%:*}"
-    peer_ip="${peer_def##*:}"
-    if ping -c 1 -W 3 "$peer_ip" > /dev/null 2>&1; then
-      log "Tailscale peer $peer_name ($peer_ip): reachable"
-      recover "ts_peer_${peer_name}" "Tailscale peer $peer_name reachable again"
-    else
-      alert "ts_peer_${peer_name}" "Tailscale peer *$peer_name* ($peer_ip) *UNREACHABLE*"
-    fi
-  done
+  if [ -n "$TAILSCALE_PEERS" ]; then
+    # Space-separated name:host entries, e.g. "sophia:$SOPHIA_TS_HOST maria:$MARIA_TS_HOST".
+    for peer_def in $TAILSCALE_PEERS; do
+      peer_name="${peer_def%%:*}"
+      peer_host="${peer_def#*:}"
+      if ping -c 1 -W 3 "$peer_host" > /dev/null 2>&1; then
+        log "Tailscale peer $peer_name: reachable"
+        recover "ts_peer_${peer_name}" "Tailscale peer $peer_name reachable again"
+      else
+        alert "ts_peer_${peer_name}" "Tailscale peer *$peer_name* *UNREACHABLE*"
+      fi
+    done
+  else
+    log "Tailscale peer checks skipped; set TAILSCALE_PEERS to enable"
+  fi
 else
   log "Tailscale: $TS_STATE (may take time to connect)"
   # Don't alert for Tailscale - it often shows "unknown" briefly
@@ -346,8 +352,16 @@ fi
 
 # Remote agents via Tailscale
 if [ "$TS_STATE" = "Running" ]; then
-  check_agent "sophia" "http://100.101.88.44:18889/health"
-  check_agent "maria"  "http://100.109.19.110:8644/health"
+  if [ -n "$REMOTE_AGENT_HEALTH_URLS" ]; then
+    # Space-separated name:url entries. Keep private hosts in local env, not source.
+    for agent_def in $REMOTE_AGENT_HEALTH_URLS; do
+      agent_name="${agent_def%%:*}"
+      agent_url="${agent_def#*:}"
+      check_agent "$agent_name" "$agent_url"
+    done
+  else
+    log "Remote agent checks skipped; set REMOTE_AGENT_HEALTH_URLS to enable"
+  fi
 else
   log "Skipping remote agents (Tailscale not running)"
 fi
