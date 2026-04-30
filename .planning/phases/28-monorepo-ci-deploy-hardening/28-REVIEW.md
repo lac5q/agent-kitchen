@@ -49,14 +49,14 @@ Verification performed: `npm --prefix apps/kitchen run test -- --run` passed, `n
 
 **File:** `.github/workflows/secret-guard.yml:48`
 
-**Issue:** The username regex uses one negated character class per character in `yourname`, then requires the slash immediately after those eight characters. That only catches a narrow subset of eight-character usernames and misses common paths such as `/Users/alice/project` and `/Users/yourname/github`, so the PII guard can pass leaked local home paths.
+**Issue:** The username regex uses one negated character class per character in `yourname`, then requires the slash immediately after those eight characters. That only catches a narrow subset of eight-character usernames and misses common home-directory paths, so the PII guard can pass leaked local home paths.
 
 **Fix:**
 ```bash
-PATTERNS='/Users/[^/]+/|/home/[^/]+/'
+PATTERNS='<mac-home-regex>|<linux-home-regex>'
 MATCHES=$(git grep -nE "$PATTERNS" -- '*.md' '*.ts' '*.tsx' '*.js' '*.json' '*.yaml' '*.yml' '*.sh' '*.py' \
   | grep -v '^.github/workflows/secret-guard.yml:' \
-  | grep -v '/Users/yourname/' \
+  | grep -v '<allowed-placeholder-home>' \
   || true)
 ```
 
