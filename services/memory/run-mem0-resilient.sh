@@ -80,8 +80,8 @@ check_dependencies() {
     # Check virtual environment
     if [ -d "$SCRIPT_DIR/.venv" ]; then
         VENV_DIR="$SCRIPT_DIR/.venv"
-    elif [ -d "/Users/lcalderon/github/knowledge/.venv" ]; then
-        VENV_DIR="/Users/lcalderon/github/knowledge/.venv"
+    elif [ -d "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}" ]; then
+        VENV_DIR="${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}"
     else
         log_error "Virtual environment not found at .venv"
         return 1
@@ -149,8 +149,8 @@ start_server() {
     # Activate virtual environment
     if [ -d "$SCRIPT_DIR/.venv" ]; then
         source "$SCRIPT_DIR/.venv/bin/activate"
-    elif [ -d "/Users/lcalderon/github/knowledge/.venv" ]; then
-        source "/Users/lcalderon/github/knowledge/.venv/bin/activate"
+    elif [ -d "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}" ]; then
+        source "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate"
     fi
 
     # Start uvicorn in background

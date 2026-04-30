@@ -7,17 +7,15 @@
     "mem0": {
       "command": "/bin/bash",
       "args": [
-        "/Users/lcalderon/github/agent-kitchen/services/memory/mcp-mem0-wrapper.sh"
+        "-lc",
+        "exec \"${AGENT_KITCHEN_ROOT:-$HOME/github/agent-kitchen}/services/memory/mcp-mem0-wrapper.sh\""
       ]
     },
     "knowledge-system": {
-      "command": "/Users/lcalderon/github/knowledge/.venv/bin/python",
-      "env": {
-        "AGENT_KITCHEN_ROOT": "/Users/lcalderon/github/agent-kitchen",
-        "KNOWLEDGE_ROOT": "/Users/lcalderon/github/knowledge"
-      },
+      "command": "/bin/bash",
       "args": [
-        "/Users/lcalderon/github/agent-kitchen/services/knowledge-mcp/knowledge_system/mcp_server.py"
+        "-lc",
+        "export AGENT_KITCHEN_ROOT=\"${AGENT_KITCHEN_ROOT:-$HOME/github/agent-kitchen}\"; export KNOWLEDGE_ROOT=\"${KNOWLEDGE_ROOT:-$HOME/github/knowledge}\"; exec \"${KNOWLEDGE_PYTHON:-$HOME/github/knowledge/.venv/bin/python}\" \"$AGENT_KITCHEN_ROOT/services/knowledge-mcp/knowledge_system/mcp_server.py\""
       ]
     },
     "agentmemory": {

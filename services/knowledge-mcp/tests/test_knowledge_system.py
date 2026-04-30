@@ -198,10 +198,18 @@ def test_tool_attention_catalog_discovers_and_records_outcomes(monkeypatch):
         assert "mcp-server:gitnexus" in ids
         assert "knowledge-workspace:tool-attention" in ids
         assert "external:router" in ids
+        catalog_payload = json.dumps(catalog)
+        assert str(root) not in catalog_payload
+        assert "catalogPath" not in catalog["health"]
+        assert "outcomesPath" not in catalog["health"]
+        assert catalog["health"]["catalog"] == "available"
+        assert catalog["sources"][0]["path"] == ".mcp.json"
 
         discovered = tool_attention.discover("router", limit=5)
         assert discovered["capabilities"][0]["id"] == "external:router"
+        assert str(root) not in json.dumps(discovered)
 
         result = tool_attention.record_outcome("external:router", "test task", "helped")
         assert result["status"] == "ok"
+        assert str(root) not in json.dumps(result)
         assert tool_attention.stats()["summary"]["recentOutcomes"] == 1

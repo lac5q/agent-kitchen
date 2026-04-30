@@ -7,8 +7,8 @@ SCRIPT="$SCRIPT_DIR/mcp-mem0.py"
 
 if [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
   PYTHON="$SCRIPT_DIR/.venv/bin/python"
-elif [ -x "/Users/lcalderon/github/knowledge/.venv/bin/python" ]; then
-  PYTHON="/Users/lcalderon/github/knowledge/.venv/bin/python"
+elif [ -x "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/python" ]; then
+  PYTHON="${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/python"
 else
   PYTHON="python3"
 fi

@@ -9,7 +9,7 @@ vi.mock("@/lib/tool-attention", () => ({
     recentOutcomes: [],
     recommendations: [],
     sources: [],
-    health: { status: "ok", catalogPath: "/tmp/catalog.json", outcomesPath: "/tmp/outcomes.jsonl", messages: [] },
+    health: { status: "ok", catalog: "available", outcomes: "available", messages: [] },
     timestamp: "2026-04-30T00:00:00.000Z",
   })),
 }));
