@@ -1,12 +1,18 @@
 # Project: Agent Kitchen
 
-*Last updated: 2026-04-20 — v1.5 Agent Coordination + Voice shipped*
+*Last updated: 2026-04-30 — v1.6 Monorepo + Progressive MCP Tool Attention shipped*
 
 ---
 
-## Current Milestone: v1.6 TBD
+## Current Milestone: v1.6 Monorepo + Progressive MCP Tool Attention
 
-**Goal:** TBD — run `/gsd-new-milestone` to start requirements definition
+**Goal:** Make `agent-kitchen` the canonical monorepo, import the local memory and Knowledge MCP services, add progressive MCP/tool-attention discovery, and harden deployment/CI around the new layout.
+
+---
+
+## Current State: v1.6 Shipped
+
+v1.6 complete — 3 phases (26-28), 3 plans, monorepo migration shipped, progressive MCP tool attention live, production deployment verified, monorepo CI added.
 
 ---
 
@@ -30,6 +36,13 @@ Every agent and knowledge system is visible, connected, and self-improving.
 
 ### Validated
 
+- ✓ Canonical monorepo layout with Kitchen in `apps/kitchen` and services in `services/` — v1.6 (MONO-01/02)
+- ✓ Root script delegation and root-aware runtime paths — v1.6 (MONO-03/04/05)
+- ✓ Memory and Knowledge MCP configured from root `.mcp.json` — v1.6 (MCP-01/02)
+- ✓ Progressive Knowledge MCP workspace surface — v1.6 (MCP-03)
+- ✓ Tool Attention catalog/discover/load/outcome/stats actions — v1.6 (TOOL-01/02)
+- ✓ Tool Attention API, Cookbooks panel, Flow node, and node detail stats — v1.6 (UI-01/02/03/04)
+- ✓ Monorepo production build, LaunchAgent deploy, and CI hardening — v1.6 (OPS-01/02/03)
 - ✓ Knowledge base collections browsable with doc counts and freshness — v1.1
 - ✓ Live agent heartbeat visible in Flow diagram — v1.2
 - ✓ Bidirectional Obsidian ↔ mem0 knowledge sync — v1.2
@@ -80,9 +93,9 @@ Every agent and knowledge system is visible, connected, and self-improving.
 **Codebase:** ~7,700 LOC TypeScript/TSX across `src/`  
 **Production:** Port 3002, `npm start`, LaunchAgent auto-start, Cloudflare tunnel  
 **Known debt:**
-- 5 pre-existing Vitest failures (smoke.test.tsx SummaryBar + .worktrees collection-card)
 - GitNexus embeddings partial (285/473) — crash bug upstream
 - Library freshness indicator reflects file mtime, not QMD index recency
+- Turbopack NFT warning traces `/api/apo` through `next.config.ts` during production build
 
 ---
 
@@ -104,6 +117,9 @@ Every agent and knowledge system is visible, connected, and self-improving.
 | 4-tier salience decay with LOG() access-resistance | ✓ Formula: rate/(1+LOG(1+access_count)) | v1.5 |
 | 18 content scanner patterns with severity tiers | ✓ HIGH blocks, MEDIUM flags, length guard at 4096 | v1.5 |
 | TimeSeriesChart as pure presentational component | ✓ No hook calls inside, powered by useTimeSeries | v1.5 |
+| Keep private Knowledge Hub content outside the monorepo | ✓ Only service/runtime code imported | v1.6 |
+| Tool Attention as progressive discovery layer | ✓ No blanket runtime dependency on mcp-agent | v1.6 |
+| Monorepo CI validates Kitchen and Python service surfaces | ✓ Added CI workflow | v1.6 |
 
 ---
 

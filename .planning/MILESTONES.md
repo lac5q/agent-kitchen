@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.6 Monorepo + Progressive MCP Tool Attention (Shipped: 2026-04-30)
+
+**Phases:** 26–28 | **Plans:** 3 | **3/3 phases complete**
+
+**Key accomplishments:**
+
+1. **Monorepo Foundation (Phase 26)** — Kitchen moved to `apps/kitchen`, services moved/imported under `services/`, root scripts delegate to the app, and root-aware runtime paths preserve SQLite/config behavior.
+2. **Progressive MCP Tool Attention (Phase 27)** — Knowledge MCP imported with progressive workspaces, tool-attention workspace actions, curated catalog, outcome logging, Kitchen API, Cookbooks panel, and Flow Tool Gateway node.
+3. **CI + Deploy Hardening (Phase 28)** — Production build and LaunchAgent deployment verified, live health/tool-attention endpoints checked, and monorepo CI added for Kitchen and Python service validation.
+
+**Requirements satisfied:** 16/16 (all checkboxes marked [x])
+**Verification:** Kitchen tests, Knowledge MCP tests, Python compile smoke, shell syntax checks, production build, and live endpoint checks all passed.
+**Known deferred items:** Existing Library freshness work remains in project active backlog for a later milestone.
+
+---
+
 ## v1.5 Agent Coordination + Voice (Shipped: 2026-04-20)
 
 **Phases:** 19–25 | **Plans:** 15 | **7/7 phases complete**

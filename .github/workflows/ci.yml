@@ -1,0 +1,57 @@
+name: Monorepo CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  kitchen:
+    name: Kitchen tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/kitchen/package-lock.json
+
+      - name: Install Kitchen dependencies
+        run: npm ci --prefix apps/kitchen
+
+      - name: Run Kitchen tests
+        run: npm --prefix apps/kitchen run test -- --run
+
+      - name: Build Kitchen
+        run: npm run build
+
+  services:
+    name: Python service smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run Knowledge MCP tests
+        env:
+          PYTHONPATH: services/knowledge-mcp
+        run: python -m pytest services/knowledge-mcp/tests
+
+      - name: Compile Python service modules
+        run: python -m py_compile services/memory/*.py services/knowledge-mcp/knowledge_system/*.py
+
+      - name: Check shell scripts
+        run: bash -n start.sh services/memory/*.sh
