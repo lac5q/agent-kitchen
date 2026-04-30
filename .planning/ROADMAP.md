@@ -7,6 +7,7 @@
 - ✅ **v1.3 Advanced Observability + Knowledge Depth** — Phases 12-17 (shipped 2026-04-15)
 - ✅ **v1.4 Cookbooks** — Phase 18 (shipped 2026-04-15)
 - ✅ **v1.5 Agent Coordination + Voice** — Phases 19-25 (shipped 2026-04-20)
+- ✅ **v1.6 Monorepo + Progressive MCP Tool Attention** — Phases 26-28 (shipped 2026-04-30)
 
 ## Phases
 
@@ -75,6 +76,17 @@ Full archive: `.planning/milestones/v1.5-ROADMAP.md`
 
 </details>
 
+<details>
+<summary>✅ v1.6 Monorepo + Progressive MCP Tool Attention (Phases 26-28) — SHIPPED 2026-04-30</summary>
+
+- [x] Phase 26: Monorepo Foundation (1/1 plans) — completed 2026-04-30
+- [x] Phase 27: Progressive MCP Tool Attention (1/1 plans) — completed 2026-04-30
+- [x] Phase 28: Monorepo CI and Deploy Hardening (1/1 plans) — completed 2026-04-30
+
+Full archive: `.planning/milestones/v1.6-ROADMAP.md`
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -104,10 +116,12 @@ Full archive: `.planning/milestones/v1.5-ROADMAP.md`
 | 23 | v1.5 | 2/2 | Complete | 2026-04-18 |
 | 24 | v1.5 | 2/2 | Complete | 2026-04-18 |
 | 25 | v1.5 | 2/2 | Complete | 2026-04-18 |
+| 26 | v1.6 | 1/1 | Complete | 2026-04-30 |
+| 27 | v1.6 | 1/1 | Complete | 2026-04-30 |
+| 28 | v1.6 | 1/1 | Complete | 2026-04-30 |
 
 ---
 
 ## Backlog
 
-*Next milestone will be v1.6 — TBD*
-
+*Next milestone will be v1.7 — TBD*

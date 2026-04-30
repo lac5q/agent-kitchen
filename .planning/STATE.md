@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Agent Coordination + Voice
+milestone: v1.6
+milestone_name: Monorepo + Progressive MCP Tool Attention
 status: shipped
-stopped_at: Milestone v1.5 complete — all phases shipped 2026-04-20
-last_updated: "2026-04-20T06:55:00Z"
-last_activity: 2026-04-20
+stopped_at: Milestone v1.6 complete — monorepo, progressive MCP tool attention, CI, and deployment shipped 2026-04-30
+last_updated: "2026-04-30T07:00:00Z"
+last_activity: 2026-04-30
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -18,19 +18,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-16 for v1.5)
+See: .planning/PROJECT.md (updated 2026-04-30 for v1.6)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** Phase 25 — usage-analytics
+**Current focus:** v1.6 shipped — ready for next milestone definition
 
 ## Current Position
 
-Phase: 25 (usage-analytics) — COMPLETE
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-04-18
+Phase: 28 (monorepo-ci-deploy-hardening) — COMPLETE
+Plan: 1 of 1
+Status: Milestone shipped
+Last activity: 2026-04-30
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -75,6 +75,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 25-usage-analytics]: TimeSeriesChart is pure presentational — receives data as props, no hook calls inside
 - [Phase 22-voice-server]: agent_id-only recall uses direct SELECT on messages table (not FTS) to support transcript retrieval without keyword search
 - [Phase 22-voice-server]: VoicePanel scrollIntoView guarded with typeof check for jsdom compatibility
+- [v1.6 roadmap]: Keep private Knowledge Hub content outside this repo; import only service/runtime code needed for MCP.
+- [Phase 26]: Root scripts delegate to `apps/kitchen`; runtime data stays rooted under `data/`.
+- [Phase 27]: Tool Attention is a progressive discovery layer, not a blanket runtime dependency on `mcp-agent`.
+- [Phase 28]: CI validates the monorepo layout with Kitchen tests/build and Python service smoke tests.
 
 ### Pending Todos
 
@@ -82,12 +86,12 @@ None.
 
 ### Blockers/Concerns
 
-- 5 pre-existing Vitest test failures (smoke.test.tsx SummaryBar + .worktrees collection-card) — carry-forward known debt
 - Voice server is a standalone Python Pipecat service — not embedded in Next.js; requires separate process management
+- Production build has a non-blocking Turbopack NFT warning involving `/api/apo` path tracing.
 
 ## Session Continuity
 
-Last session: 2026-04-18T22:52:54.635Z
-Stopped at: Completed 22-voice-server-02-PLAN.md (Task 3 is human checkpoint pending)
+Last session: 2026-04-30T07:00:00.000Z
+Stopped at: Completed v1.6 monorepo deployment and Phase 28 CI hardening
 Resume file: None
-Next action: `/gsd-plan-phase 19`
+Next action: `/gsd-new-milestone`

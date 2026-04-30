@@ -1,36 +1,55 @@
-# Requirements: Agent Kitchen v1.6 — TBD
+# Requirements: Agent Kitchen v1.6 — Monorepo + Progressive MCP Tool Attention
 
-*Last updated: 2026-04-20*
-
----
-
-## Active Requirements
-
-*No requirements defined yet — run `/gsd-new-milestone` to start the requirements process for v1.6*
+*Last updated: 2026-04-30*
 
 ---
 
-## Future Requirements (deferred from v1.5)
+## Status
+
+All v1.6 requirements are satisfied.
+
+See `.planning/milestones/v1.6-REQUIREMENTS.md` for the archived requirement checklist.
+
+---
+
+## Future Requirements
 
 - LLM-powered relevance scoring for recall results
 - Memory export/import between agent instances
-- Cross-project recall (query sessions from other projects, not just current)
-- Voice meeting bot integration (Pika/Recall.ai video avatars) — ClaudeClaw PP7
+- Cross-project recall across multiple local projects
+- Voice meeting bot integration
+- Update flow trigger button to kick off the knowledge update pipeline from UI
+- Library freshness: show last indexed timestamp vs file mtime
 
 ---
 
 ## Out of Scope
 
-- `.bit` structured task format (zaius-labs) — interesting but adds Rust/WASM complexity with no clear advantage over SQLite FTS5 for this use case; backlog
-- Multi-user auth — single-user local tool
-- Mobile app — web-first dashboard
-- GitNexus embeddings — blocked by upstream node-llama-cpp macOS arm64 bug
+- Structured task format experiments with Rust/WASM
+- Multi-user auth
+- Mobile app
+- GitNexus embeddings until the upstream local embedding crash is fixed
 
 ---
 
 ## Traceability
 
-*Filled in by roadmapper — 2026-04-20*
-
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
+| MONO-01 | 26 | Complete |
+| MONO-02 | 26 | Complete |
+| MONO-03 | 26 | Complete |
+| MONO-04 | 26 | Complete |
+| MONO-05 | 26 | Complete |
+| MCP-01 | 27 | Complete |
+| MCP-02 | 27 | Complete |
+| MCP-03 | 27 | Complete |
+| TOOL-01 | 27 | Complete |
+| TOOL-02 | 27 | Complete |
+| UI-01 | 27 | Complete |
+| UI-02 | 27 | Complete |
+| UI-03 | 27 | Complete |
+| UI-04 | 27 | Complete |
+| OPS-01 | 28 | Complete |
+| OPS-02 | 28 | Complete |
+| OPS-03 | 28 | Complete |
