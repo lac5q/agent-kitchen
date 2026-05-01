@@ -14,7 +14,24 @@ from typing import Optional
 try:  # FastMCP is available as either fastmcp or mcp.server.fastmcp depending on install.
     from fastmcp import FastMCP  # type: ignore
 except Exception:  # pragma: no cover - environment compatibility
-    from mcp.server.fastmcp import FastMCP  # type: ignore
+    try:
+        from mcp.server.fastmcp import FastMCP  # type: ignore
+    except Exception:  # pragma: no cover - lets smoke tests import wrappers without MCP installed
+        class FastMCP:  # type: ignore[no-redef]
+            def __init__(self, _name: str):
+                pass
+
+            def tool(self):
+                return lambda fn: fn
+
+            def resource(self, _uri: str):
+                return lambda fn: fn
+
+            def prompt(self):
+                return lambda fn: fn
+
+            def run(self):
+                raise RuntimeError("FastMCP runtime is not installed")
 
 try:
     import httpx  # type: ignore
@@ -135,6 +152,51 @@ def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict] = 
         return {"status": "ok", "response": response.json()}
     except Exception as exc:
         return {"status": "unavailable", "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Progressive tool gateway
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def tool_catalog() -> dict:
+    """Return the progressive tool/capability catalog."""
+    return tool_attention.build_catalog()
+
+
+@mcp.tool()
+def tool_discover(query: str = "", limit: int = 25) -> dict:
+    """Find relevant MCP servers, workspaces, skills, and references for a task."""
+    return tool_attention.discover(query=query, limit=limit)
+
+
+@mcp.tool()
+def tool_load(capability_id: str) -> dict:
+    """Load instructions for one discovered capability by id."""
+    return tool_attention.load_capability(capability_id)
+
+
+@mcp.tool()
+def tool_record_outcome(
+    tool_id: str,
+    task: str,
+    outcome: str,
+    metadata: Optional[dict] = None,
+) -> dict:
+    """Record whether a selected tool helped so future discovery can improve."""
+    return tool_attention.record_outcome(
+        tool_id=tool_id,
+        task=task,
+        outcome=outcome,
+        metadata=metadata,
+    )
+
+
+@mcp.tool()
+def tool_stats() -> dict:
+    """Return compact progressive tool gateway health and usage stats."""
+    return tool_attention.stats()
 
 
 # ---------------------------------------------------------------------------

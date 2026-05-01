@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.7 Progressive Tool Gateway Runtime (In Progress)
+
+**Phases:** 29-32 | **Plans:** 2/5 complete
+
+**Completed so far:**
+
+1. **Top-Level Tool Gateway MCP Tools (Phase 29)** — Knowledge MCP now exposes direct `tool_catalog`, `tool_discover`, `tool_load`, `tool_record_outcome`, and `tool_stats` tools, while preserving the v1.6 workspace gateway.
+2. **Outcome-Aware Tool Selection (Phase 30 Plan 01)** — Tool Attention summarizes recent outcomes by capability and uses outcome scores to influence discovery ranking without returning private task text.
+
+**Remaining:**
+
+1. **Memory-Aware Tool Selection (Phase 30 Plan 02)** — Add similar-task memory signals on top of outcome ranking.
+2. **Kitchen Tool Gateway Operations UI (Phase 31)** — Turn the UI from catalog visibility into an operations console.
+3. **Gateway Hardening and Lint Cleanup (Phase 32)** — Make full lint enforceable and add CI coverage for the top-level gateway tools.
+
+---
+
 ## v1.6 Monorepo + Progressive MCP Tool Attention (Shipped: 2026-04-30)
 
 **Phases:** 26–28 | **Plans:** 3 | **3/3 phases complete**

@@ -1,16 +1,22 @@
 # Project: Agent Kitchen
 
-*Last updated: 2026-04-30 — v1.6 Monorepo + Progressive MCP Tool Attention shipped*
+*Last updated: 2026-05-01 — v1.7 Progressive Tool Gateway Runtime started*
 
 ---
 
-## Current Milestone: v1.6 Monorepo + Progressive MCP Tool Attention
+## Current Milestone: v1.7 Progressive Tool Gateway Runtime
 
-**Goal:** Make `agent-kitchen` the canonical monorepo, import the local memory and Knowledge MCP services, add progressive MCP/tool-attention discovery, and harden deployment/CI around the new layout.
+**Goal:** Turn Tool Attention from a visible catalog into a runtime gateway that agents can call directly, learn from outcomes, and operate from Kitchen.
 
 ---
 
-## Current State: v1.6 Shipped
+## Current State: v1.7 In Progress
+
+v1.7 in progress — Phase 29 complete with top-level Knowledge MCP gateway tools, and Phase 30 Plan 01 complete with outcome-aware discovery ranking. Remaining work: similar-task memory recommendations, Kitchen ops UI, and cleanup/hardening.
+
+---
+
+## Previous State: v1.6 Shipped
 
 v1.6 complete — 3 phases (26-28), 3 plans, monorepo migration shipped, progressive MCP tool attention live, production deployment verified, monorepo CI added.
 
@@ -43,6 +49,8 @@ Every agent and knowledge system is visible, connected, and self-improving.
 - ✓ Tool Attention catalog/discover/load/outcome/stats actions — v1.6 (TOOL-01/02)
 - ✓ Tool Attention API, Cookbooks panel, Flow node, and node detail stats — v1.6 (UI-01/02/03/04)
 - ✓ Monorepo production build, LaunchAgent deploy, and CI hardening — v1.6 (OPS-01/02/03)
+- ✓ Top-level progressive tool gateway MCP tools — v1.7 (TOOLGW-01)
+- ✓ Outcome-aware Tool Attention stats and discovery ranking — v1.7 (MEMGW-01/02)
 - ✓ Knowledge base collections browsable with doc counts and freshness — v1.1
 - ✓ Live agent heartbeat visible in Flow diagram — v1.2
 - ✓ Bidirectional Obsidian ↔ mem0 knowledge sync — v1.2
@@ -78,6 +86,8 @@ Every agent and knowledge system is visible, connected, and self-improving.
 
 - [ ] Update flow trigger button (kick off `qmd update` from UI)
 - [ ] Library freshness: force-touch or show "last indexed" timestamp vs file mtime
+- [ ] Outcome-aware tool recommendation and memory-backed selection signals
+- [ ] Kitchen Tool Gateway operations view with loaded/skipped/outcome trends
 
 ### Out of Scope
 
@@ -120,6 +130,7 @@ Every agent and knowledge system is visible, connected, and self-improving.
 | Keep private Knowledge Hub content outside the monorepo | ✓ Only service/runtime code imported | v1.6 |
 | Tool Attention as progressive discovery layer | ✓ No blanket runtime dependency on mcp-agent | v1.6 |
 | Monorepo CI validates Kitchen and Python service surfaces | ✓ Added CI workflow | v1.6 |
+| Tool gateway is callable directly from MCP clients | ✓ Top-level `tool_*` tools added | v1.7 |
 
 ---
 

@@ -1,36 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Monorepo + Progressive MCP Tool Attention
-status: shipped
-stopped_at: Milestone v1.6 complete — monorepo, progressive MCP tool attention, CI, and deployment shipped 2026-04-30
-last_updated: "2026-04-30T07:00:00Z"
-last_activity: 2026-04-30
+milestone: v1.7
+milestone_name: Progressive Tool Gateway Runtime
+status: in_progress
+stopped_at: Phase 30 Plan 01 complete — outcome-aware tool selection shipped locally
+last_updated: "2026-05-01T00:00:00Z"
+last_activity: 2026-05-01
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 2
+  percent: 40
 ---
 
 # State: Agent Kitchen
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-30 for v1.6)
+See: .planning/PROJECT.md (updated 2026-05-01 for v1.7)
 
 **Core value:** Every agent and knowledge system is visible, connected, and self-improving.
-**Current focus:** v1.6 shipped — ready for next milestone definition
+**Current focus:** v1.7 progressive tool gateway runtime
 
 ## Current Position
 
-Phase: 28 (monorepo-ci-deploy-hardening) — COMPLETE
-Plan: 1 of 1
-Status: Milestone shipped
-Last activity: 2026-04-30
+Phase: 30 (memory-aware-tool-selection) — IN PROGRESS
+Plan: 1 of 2 complete
+Status: Outcome-aware ranking complete; similar-task memory recommendations pending
+Last activity: 2026-05-01
 
-Progress: [██████████] 100%
+Progress: [████------] 40%
 
 ## Performance Metrics
 
@@ -79,6 +79,8 @@ Progress: [██████████] 100%
 - [Phase 26]: Root scripts delegate to `apps/kitchen`; runtime data stays rooted under `data/`.
 - [Phase 27]: Tool Attention is a progressive discovery layer, not a blanket runtime dependency on `mcp-agent`.
 - [Phase 28]: CI validates the monorepo layout with Kitchen tests/build and Python service smoke tests.
+- [Phase 29]: Knowledge MCP exposes top-level `tool_*` gateway tools while keeping the `tool-attention` workspace route intact.
+- [Phase 30 Plan 01]: Outcome summaries count uses/successes/failures/score by capability and do not expose private task text.
 
 ### Pending Todos
 
@@ -88,10 +90,11 @@ None.
 
 - Voice server is a standalone Python Pipecat service — not embedded in Next.js; requires separate process management
 - Production build has a non-blocking Turbopack NFT warning involving `/api/apo` path tracing.
+- Full-repo `npm run lint` still fails on pre-existing unrelated lint debt; v1.7 Phase 32 is reserved for cleanup.
 
 ## Session Continuity
 
-Last session: 2026-04-30T07:00:00.000Z
-Stopped at: Completed v1.6 monorepo deployment and Phase 28 CI hardening
+Last session: 2026-05-01T00:00:00.000Z
+Stopped at: Completed Phase 30 Plan 01 outcome-aware tool selection
 Resume file: None
-Next action: `/gsd-new-milestone`
+Next action: `/gsd-plan-phase 30 --skip-research --gaps` for similar-task memory recommendations
