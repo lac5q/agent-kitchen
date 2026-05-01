@@ -13,6 +13,9 @@ try:
 except ImportError:  # pragma: no cover
     from knowledge_system.capabilities import CORE_TOOLS, WORKSPACES
 
+SUCCESS_OUTCOMES = {"helped", "success", "successful", "useful", "pass", "passed", "worked"}
+FAILURE_OUTCOMES = {"failed", "failure", "not_helpful", "not helpful", "miss", "error", "blocked"}
+
 
 def repo_root() -> Path:
     configured = os.environ.get("AGENT_KITCHEN_ROOT")
@@ -107,6 +110,54 @@ def _public_capability(capability: dict[str, Any]) -> dict[str, Any]:
     redacted = dict(capability)
     redacted["loadCommand"] = _public_load_command(redacted.get("loadCommand"))
     return redacted
+
+
+def _outcome_summaries(outcomes: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    summaries: dict[str, dict[str, Any]] = {}
+    for outcome in outcomes:
+        tool_id = str(outcome.get("toolId") or outcome.get("tool_id") or "")
+        if not tool_id:
+            continue
+        label = str(outcome.get("outcome", "")).strip().lower()
+        summary = summaries.setdefault(
+            tool_id,
+            {
+                "toolId": tool_id,
+                "uses": 0,
+                "successes": 0,
+                "failures": 0,
+                "lastOutcome": "",
+                "lastUsedAt": "",
+                "score": 0,
+            },
+        )
+        summary["uses"] += 1
+        if label in SUCCESS_OUTCOMES:
+            summary["successes"] += 1
+            summary["score"] += 2
+        elif label in FAILURE_OUTCOMES:
+            summary["failures"] += 1
+            summary["score"] -= 2
+        else:
+            summary["score"] += 1
+        if not summary["lastUsedAt"]:
+            summary["lastUsedAt"] = str(outcome.get("timestamp", ""))
+            summary["lastOutcome"] = str(outcome.get("outcome", ""))
+    return summaries
+
+
+def _with_outcome_signal(
+    capabilities: list[dict[str, Any]],
+    outcome_summaries: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched = []
+    for capability in capabilities:
+        item = dict(capability)
+        summary = outcome_summaries.get(str(item.get("id", "")))
+        if summary:
+            item["outcomeSummary"] = summary
+        enriched.append(item)
+    return enriched
 
 
 def _capability(
@@ -273,7 +324,11 @@ def build_catalog() -> dict[str, Any]:
     sources.extend(external_sources)
 
     outcomes = _read_jsonl(outcomes_path())
-    public_capabilities = [_public_capability(capability) for capability in capabilities]
+    outcome_summaries = _outcome_summaries(outcomes)
+    public_capabilities = _with_outcome_signal(
+        [_public_capability(capability) for capability in capabilities],
+        outcome_summaries,
+    )
     unique_sources = {source["id"]: _public_source(source) for source in sources if "id" in source}
     return {
         "status": "ok",
@@ -313,11 +368,21 @@ def _recommendations(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]
         {
             "capabilityId": cap_id,
             "title": by_id[cap_id]["name"],
-            "reason": "High-leverage starting point for progressive discovery.",
+            "reason": _recommendation_reason(by_id[cap_id]),
         }
         for cap_id in preferred
         if cap_id in by_id
     ]
+
+
+def _recommendation_reason(capability: dict[str, Any]) -> str:
+    outcome = capability.get("outcomeSummary")
+    if isinstance(outcome, dict) and outcome.get("uses"):
+        return (
+            f"High-leverage starting point with {outcome['uses']} recorded "
+            f"outcome(s) and score {outcome['score']}."
+        )
+    return "High-leverage starting point for progressive discovery."
 
 
 def _health() -> dict[str, Any]:
@@ -354,10 +419,21 @@ def discover(query: str = "", limit: int = 25) -> dict[str, Any]:
                     " ".join(item.get("useWhen", [])),
                 ]
             ).lower()
-            return sum(1 for term in normalized.split() if term in haystack)
+            query_score = sum(1 for term in normalized.split() if term in haystack)
+            outcome = item.get("outcomeSummary") if isinstance(item.get("outcomeSummary"), dict) else {}
+            return query_score * 10 + int(outcome.get("score", 0))
 
         capabilities = [item for item in capabilities if score(item) > 0]
         capabilities.sort(key=score, reverse=True)
+    else:
+        capabilities.sort(
+            key=lambda item: int(
+                item.get("outcomeSummary", {}).get("score", 0)
+                if isinstance(item.get("outcomeSummary"), dict)
+                else 0
+            ),
+            reverse=True,
+        )
     catalog["capabilities"] = capabilities[: max(1, min(limit, 100))]
     catalog["summary"] = _summary(catalog["capabilities"], catalog["sources"], catalog["recentOutcomes"])
     return catalog
@@ -403,6 +479,7 @@ def stats() -> dict[str, Any]:
     return {
         "status": "ok",
         "summary": catalog["summary"],
+        "outcomesByTool": _outcome_summaries(catalog["recentOutcomes"]),
         "health": catalog["health"],
         "timestamp": catalog["timestamp"],
     }

@@ -8,6 +8,7 @@
 - ✅ **v1.4 Cookbooks** — Phase 18 (shipped 2026-04-15)
 - ✅ **v1.5 Agent Coordination + Voice** — Phases 19-25 (shipped 2026-04-20)
 - ✅ **v1.6 Monorepo + Progressive MCP Tool Attention** — Phases 26-28 (shipped 2026-04-30)
+- 🚧 **v1.7 Progressive Tool Gateway Runtime** — Phases 29-32 (in progress)
 
 ## Phases
 
@@ -87,6 +88,18 @@ Full archive: `.planning/milestones/v1.6-ROADMAP.md`
 
 </details>
 
+<details open>
+<summary>🚧 v1.7 Progressive Tool Gateway Runtime (Phases 29-32) — IN PROGRESS</summary>
+
+- [x] Phase 29: Top-Level Tool Gateway MCP Tools (1/1 plans) — completed 2026-05-01
+- [ ] Phase 30: Memory-Aware Tool Selection (1/2 plans)
+- [ ] Phase 31: Kitchen Tool Gateway Operations UI (0/1 plans)
+- [ ] Phase 32: Gateway Hardening and Lint Cleanup (0/1 plans)
+
+Full archive: `.planning/milestones/v1.7-ROADMAP.md`
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -119,9 +132,13 @@ Full archive: `.planning/milestones/v1.6-ROADMAP.md`
 | 26 | v1.6 | 1/1 | Complete | 2026-04-30 |
 | 27 | v1.6 | 1/1 | Complete | 2026-04-30 |
 | 28 | v1.6 | 1/1 | Complete | 2026-04-30 |
+| 29 | v1.7 | 1/1 | Complete | 2026-05-01 |
+| 30 | v1.7 | 1/2 | In Progress | — |
+| 31 | v1.7 | 0/1 | Planned | — |
+| 32 | v1.7 | 0/1 | Planned | — |
 
 ---
 
 ## Backlog
 
-*Next milestone will be v1.7 — TBD*
+Next milestone after v1.7 remains TBD.

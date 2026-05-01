@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from knowledge_system.capabilities import CORE_TOOLS, get_capabilities, open_workspace
 from knowledge_system.compiler import compile_wiki, discover_sources, slugify
 from knowledge_system.store import KnowledgeStore
-from knowledge_system import tool_attention
+from knowledge_system import mcp_server, tool_attention
 
 
 def test_slugify_is_public_safe_and_stable():
@@ -212,4 +212,39 @@ def test_tool_attention_catalog_discovers_and_records_outcomes(monkeypatch):
         result = tool_attention.record_outcome("external:router", "test task", "helped")
         assert result["status"] == "ok"
         assert str(root) not in json.dumps(result)
-        assert tool_attention.stats()["summary"]["recentOutcomes"] == 1
+        stats = tool_attention.stats()
+        assert stats["summary"]["recentOutcomes"] == 1
+        assert stats["outcomesByTool"]["external:router"]["successes"] == 1
+        assert "test task" not in json.dumps(stats)
+
+        rediscovered = tool_attention.discover("router", limit=5)
+        assert rediscovered["capabilities"][0]["outcomeSummary"]["score"] == 2
+
+
+def test_tool_attention_top_level_mcp_tools(monkeypatch):
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "logs").mkdir()
+        (root / ".mcp.json").write_text(json.dumps({"mcpServers": {"gitnexus": {"command": "gitnexus"}}}))
+        monkeypatch.setenv("AGENT_KITCHEN_ROOT", str(root))
+        monkeypatch.setenv("TOOL_ATTENTION_CATALOG", str(root / "missing-catalog.json"))
+        monkeypatch.setenv("TOOL_ATTENTION_OUTCOMES", str(root / "logs" / "outcomes.jsonl"))
+        monkeypatch.setenv("SKILLS_PATH", str(root / "missing-skills"))
+
+        catalog = mcp_server.tool_catalog()
+        assert catalog["status"] == "ok"
+        assert "mcp-server:gitnexus" in {item["id"] for item in catalog["capabilities"]}
+
+        discovered = mcp_server.tool_discover("gitnexus", limit=3)
+        assert discovered["capabilities"][0]["id"] == "mcp-server:gitnexus"
+
+        loaded = mcp_server.tool_load("mcp-server:gitnexus")
+        assert loaded["status"] == "ok"
+        assert loaded["capability"]["name"] == "gitnexus"
+
+        recorded = mcp_server.tool_record_outcome("mcp-server:gitnexus", "code graph task", "helped")
+        assert recorded["status"] == "ok"
+        stats = mcp_server.tool_stats()
+        assert stats["summary"]["recentOutcomes"] == 1
+        assert stats["outcomesByTool"]["mcp-server:gitnexus"]["score"] == 2
+        assert str(root) not in json.dumps(recorded)
