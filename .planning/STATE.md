@@ -6,8 +6,8 @@ status: complete
 stopped_at: milestone complete (2026-05-29)
 last_updated: "2026-05-29T07:20:00.000Z"
 progress:
-  total_phases: 67
-  completed_phases: 63
+  total_phases: 75
+  completed_phases: 75
   total_plans: 97
   completed_plans: 106
   percent: 100
@@ -55,14 +55,19 @@ Next action: none (roadmap complete!)
 | 87 | SkillForge Edit Generation — bounded diffs, textual LR, rejected-edit buffer | COMPLETE — SKILLFORGE-03 (1) |
 | 88 | SkillForge Eval Gating — train/val/held-out splits, W delta, non-regression gates | COMPLETE — SKILLFORGE-04 (1) |
 | 89 | SkillForge Operator Approval — proposal queue, diff viewer, approve/reject/rollback | COMPLETE — SKILLFORGE-05 (1) |
-|| 90 | SkillForge Integration — cross-modal eval, SkillCycle, runtime export | COMPLETE — SKILLFORGE-06 (1) |
-|| 91 | Dream Cycle — automated nightly skill optimization with risk-based auto-approval | COMPLETE — DREAM-01 (1) |
-|| 92 | Skill Marketplace — publish, rate, discover skills | COMPLETE — MARKET-01 (1) |
-|| 93 | Multi-Agent Orchestration — cross-agent skill sharing via A2A | COMPLETE — MULTIAGENT-01 (1) |
-|| 94 | Behavioral W-Lift v2 — true instruction/skill behavioral eval | COMPLETE — BEHAVIORAL-01 (1) |
-|| 95 | Self-Hosted Eval Cluster — local judge, Ollama/vLLM support | COMPLETE — LOCALJUDGE-01 (1) |
+| 90 | SkillForge Integration — cross-modal eval, SkillCycle, runtime export | COMPLETE — SKILLFORGE-06 (1) |
+| 91 | Dream Cycle — automated nightly skill optimization with risk-based auto-approval | COMPLETE — DREAM-01 (1) |
+| 92 | Skill Marketplace — publish, rate, discover skills | COMPLETE — MARKET-01 (1) |
+| 93 | Multi-Agent Orchestration — cross-agent skill sharing via A2A | COMPLETE — MULTIAGENT-01 (1) |
+| 94 | Behavioral W-Lift v2 — true instruction/skill behavioral eval | COMPLETE — BEHAVIORAL-01 (1) |
+| 95 | Self-Hosted Eval Cluster — local judge, Ollama/vLLM support | COMPLETE — LOCALJUDGE-01 (1) |
 | 96 | Agent Memory Continuity — MemRoOS-native coding-agent capture and handoff packs | COMPLETE — AGENTMEM-FOLLOWUP-01 (1) |
 | 97 | Source Routing Contracts for Meeting Capture — project routing, confidence/review state, qmd freshness proof | COMPLETE — CTX-FOLLOWUP-04 (1) |
+| 98 | Skill Distribution Core — progressive loading, auto-load standard, A2A discovery | COMPLETE — SKDIST-01..04 (4) |
+| 99 | Private Config Layer — context overlay, generic meeting recordings slot, local merge | COMPLETE — PRIVCONF-01..03 (3) |
+| 100 | Circleback Ingestion — sync CLI script, nightly LaunchAgent, qmd indexing | COMPLETE — CIRCLEBACK-01..03 (3) |
+| 101 | Memroos Troubleshooter Skill — system troubleshooting reference skill, tag updates | COMPLETE — MSKILL-01..02 (2) |
+| 102 | Public Documentation — skills and meeting integration guides, copy-paste template | COMPLETE — PUBDOC-01..03 (3) |
 | 103 | Lightweight Checkpoint/Resume/Handoff — compact structured checkpoints, async queues, performance latency | COMPLETE — AGENTMEM-FOLLOWUP-02 (1) |
 | 104 | Memory-Trace Observability — casual timelines, failure classification, debug graphs | COMPLETE — AGENTMEM-FOLLOWUP-03 (1) |
 | 105 | Agent CI/CD Release Gates — immutable versions, gating checklists, one-step rollback | COMPLETE — AGENTCICD-FOLLOWUP-01 (1) |
@@ -207,22 +212,7 @@ have plan dirs + code (lib/auth/, /api/auth/, login/register) — v3 direction.
   judge, drift guard, persistence, and SEAL audit metadata. Keep and rollback
   are both reachable without a mocked eval service.
 
-- ✅ **Honesty guardrail preserved:** memory/config proposal classes can move W
-  via the modeled fixed-harness delta. `agent_instruction_patch`,
-  ## Current Position
-
-  Phase: 96 — Agent Memory Continuity
-  Plan: 96-01
-  Status: Complete — MemRoOS-native coding-agent capture and handoff packs implemented.
-  Last activity: 2026-05-27 -- AGENTMEM-FOLLOWUP-01 shipped with schema, APIs, tests, and typecheck.
-  Next action: deploy/restart MemRoOS and optional UI polish for capture health
-
-  ## Session Continuity
-
-  Last session: 2026-05-27T07:20:00.000Z
-  Stopped at: Phase 96 complete, Agent Memory Continuity shipped
-  Resume file: None
-  Next action: deploy/restart MemRoOS and optional UI polish for capture health
+- ✅ **Honesty guardrail preserved:** memory/config proposal classes can move W via the modeled fixed-harness delta. `agent_instruction_patch`, `skill_addition`, and `noop_test` keep W unchanged with `wLiftModeled: false`. True behavioral W-lift from instruction/skill changes remains v3.
 
 ## UAT Findings (2026-05-17)
 

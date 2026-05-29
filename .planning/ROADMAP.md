@@ -22,8 +22,9 @@
 - ✅ **v5.1 Memory Inventory Clarity** — Phase 83 (shipped 2026-05-24)
 - ✅ **v5.2 Competitive Memory Target Architecture** — Phase 84 (shipped 2026-05-24)
 - ✅ **v6.0 SkillForge — Governed Skill Optimization** — Phases 85-90 (shipped 2026-05-26)
-- 🔄 **v6.2 Skill Distribution + Knowledge Gateway** — Phases 98-102 (in progress)
-- ✅ **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (completed 2026-05-29: checkpoint/resume, memory-trace debugging, agent CI/CD gates)
+- ✅ **v6.1 SkillForge Autonomy — Dream Cycle + Marketplace** — Phases 91-95 (shipped 2026-05-26)
+- ✅ **v6.2 Skill Distribution + Knowledge Gateway** — Phases 98-102 (shipped 2026-05-28)
+- ✅ **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (shipped 2026-05-29)
 
 ## Phases
 
@@ -38,19 +39,27 @@
 - [x] **Phase 96: Agent Memory Continuity** — AGENTMEM-FOLLOWUP-01; MemRoOS-native coding-agent capture, handoff packs, vaulting, redaction, duplicate suppression, and API tests
 - [x] **Phase 97: Source Routing Contracts for Meeting Capture** — CTX-FOLLOWUP-04; project-scoped meeting routing, confidence/review state, and source-to-qmd freshness proof; completed 2026-05-28
 
-### Current v6.2 Skill Distribution + Knowledge Gateway Summary
+### Current v6.1 SkillForge Autonomy Summary — COMPLETE
 
-- [ ] **Phase 98: Skill Distribution Core** — SKDIST-01..04, PRIVCONF-03; implement skill_catalog + skill_read in skill-packs workspace; private ~/.memroos/skills/ merging
-- [ ] **Phase 99: Private Config Layer** — PRIVCONF-01..02; context-sources.local.json merge logic; generic meet-recordings slot in context-sources.config.json
-- [ ] **Phase 100: Circleback Ingestion** — CIRCLEBACK-01..03; private ingest script + env wiring + nightly LaunchAgent
-- [ ] **Phase 101: Memroos Troubleshooter Skill** — MSKILL-01..02; memroos-troubleshooter in knowledge repo + deep-research-subagents tag update
-- [ ] **Phase 102: Public Documentation** — PUBDOC-01..03; docs/skills.md + docs/integrations/meet-recordings.md + example-skill template
+- [x] **Phase 91: Dream Cycle — Automated Nightly Skill Optimization** — DREAM-01..03; completed 2026-05-26
+- [x] **Phase 92: Skill Marketplace — Publish, Rate, Discover** — MARKET-01..04; completed 2026-05-26
+- [x] **Phase 93: Multi-Agent Skill Orchestration** — ORCH-SKILL-01..03; completed 2026-05-26
+- [x] **Phase 94: Behavioral W-Lift v2 — True Instruction/Skill Behavioral Eval** — BEHAVIORAL-01..04; completed 2026-05-26
+- [x] **Phase 95: Self-Hosted Eval Cluster** — LOCALJUDGE-01..04; completed 2026-05-26
 
-### Current v6.3 Agent Lifecycle + Memory Observability Summary
+### Current v6.2 Skill Distribution + Knowledge Gateway Summary — COMPLETE
 
-- [ ] **Phase 103: Lightweight Checkpoint/Resume/Handoff** — AGENTMEM-FOLLOWUP-02; compact structured checkpoints with event-triggered writes, async heavy operations, performance budgets (p95 write/resume), metrics exposure
-- [ ] **Phase 104: Memory-Trace Observability** — AGENTMEM-FOLLOWUP-03; MemTrace-style execution graphs for memory-backed runs, failure attribution categories, trace graphs in Memory/Improve surfaces, nightly canary
-- [ ] **Phase 105: Agent CI/CD Release Gates** — AGENTCICD-FOLLOWUP-01; agent version as immutable artifact, promotion gates (quality/safety/governance/performance), version identity, traces, one-step rollback
+- [x] **Phase 98: Skill Distribution Core** — SKDIST-01..04, PRIVCONF-03; completed 2026-05-28
+- [x] **Phase 99: Private Config Layer** — PRIVCONF-01..02; completed 2026-05-28
+- [x] **Phase 100: Circleback Ingestion** — CIRCLEBACK-01..03; completed 2026-05-28
+- [x] **Phase 101: Memroos Troubleshooter Skill** — MSKILL-01..02; completed 2026-05-28
+- [x] **Phase 102: Public Documentation** — PUBDOC-01..03; completed 2026-05-28
+
+### Current v6.3 Agent Lifecycle + Memory Observability Summary — COMPLETE
+
+- [x] **Phase 103: Lightweight Checkpoint/Resume/Handoff** — AGENTMEM-FOLLOWUP-02; completed 2026-05-29
+- [x] **Phase 104: Memory-Trace Observability** — AGENTMEM-FOLLOWUP-03; completed 2026-05-29
+- [x] **Phase 105: Agent CI/CD Release Gates** — AGENTCICD-FOLLOWUP-01; completed 2026-05-29
 
 Full v6.0 detail in the `## v6.0 SkillForge — Governed Skill Optimization` section below.
 
@@ -1126,6 +1135,7 @@ Plans:
 **Goal**: Fully automated SkillForge loop that runs nightly without operator intervention, auto-approving low-risk proposals and escalating high-risk ones.
 **Depends on**: Phase 90
 **Requirements**: DREAM-01..03
+**Status**: Complete (2026-05-26)
 **Prerequisite tasks**:
   - Cron-scheduled SkillForge worker (`0 2 * * *`)
   - Risk-based auto-approval: proposals with W delta > 0.15 and no residual risks → auto-approve
@@ -1137,16 +1147,14 @@ Plans:
   2. Low-risk proposals are auto-approved within safety bounds.
   3. High-risk proposals are queued for operator review.
   4. Nightly report is generated and delivered.
-**Plans**: 1 plan
-
-Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+**Plans**: 1/1 complete
 **UI hint**: no
 
 ### Phase 92: Skill Marketplace — Publish, Rate, Discover
 **Goal**: Public skill marketplace where operators can publish, rate, and discover skills across the Memroos ecosystem.
 **Depends on**: Phase 91
 **Requirements**: MARKET-01..04
+**Status**: Complete (2026-05-26)
 **Prerequisite tasks**:
   - Skill publishing API: publish skill to marketplace with metadata, tags, ratings
   - Skill discovery: search, filter, sort by rating, downloads, category
@@ -1158,16 +1166,14 @@ Plans:
   2. Skills can be discovered via search and filters.
   3. Rating system is functional and prevents abuse.
   4. Versioning works with deprecation warnings.
-**Plans**: 1 plan
-
-Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+**Plans**: 1/1 complete
 **UI hint**: yes
 
 ### Phase 93: Multi-Agent Skill Orchestration
 **Goal**: Cross-agent skill sharing where skills optimized in one agent context can be shared with other agents in the ecosystem.
 **Depends on**: Phase 92
 **Requirements**: ORCH-SKILL-01..03
+**Status**: Complete (2026-05-26)
 **Prerequisite tasks**:
   - Skill export format: standardized skill package (SKILL.md + metadata + eval receipts)
   - Skill import validation: validate imported skills against local eval harness
@@ -1178,16 +1184,14 @@ Plans:
   2. Imported skills are validated before activation.
   3. Agent-to-agent sync works via A2A.
   4. Compatibility matrix is accurate and up-to-date.
-**Plans**: 1 plan
-
-Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+**Plans**: 1/1 complete
 **UI hint**: no
 
 ### Phase 94: Behavioral W-Lift v2 — True Instruction/Skill Behavioral Eval
 **Goal**: True behavioral W-lift measurement for instruction and skill changes, not just modeled delta.
 **Depends on**: Phase 93, Phase 57 (eval engine)
 **Requirements**: WBEHAV-01..03
+**Status**: Complete (2026-05-26)
 **Prerequisite tasks**:
   - Behavioral harness: run actual agent tasks with modified instructions/skills
   - A/B testing framework: compare control vs treatment agent performance
@@ -1198,16 +1202,14 @@ Plans:
   2. A/B test framework compares control vs treatment.
   3. Statistical significance is computed and reported.
   4. Golden sets cover all major skill categories.
-**Plans**: 1 plan
-
-Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+**Plans**: 1/1 complete
 **UI hint**: no
 
 ### Phase 95: Self-Hosted Eval Cluster
 **Goal**: Support local judge models (Ollama, vLLM) for eval execution, reducing dependency on cloud LLM APIs.
 **Depends on**: Phase 94
 **Requirements**: LOCALJUDGE-01..03
+**Status**: Complete (2026-05-26)
 **Prerequisite tasks**:
   - Ollama integration: local model serving for eval judge
   - vLLM integration: high-throughput local inference for batch evals
@@ -1218,10 +1220,7 @@ Plans:
   2. vLLM handles batch evals at >10x throughput of single-request.
   3. Fallback to cloud is seamless and logged.
   4. Drift between local and cloud judges is monitored.
-**Plans**: 1 plan
-
-Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+**Plans**: 1/1 complete
 **UI hint**: no
 
 ### Phase 96: Agent Memory Continuity
@@ -1243,11 +1242,11 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|----------|---------------|--------|-----------|
-| 91 | v6.1 | 0/1 | Pending | — |
-| 92 | v6.1 | 0/1 | Pending | — |
-| 93 | v6.1 | 0/1 | Pending | — |
-| 94 | v6.1 | 0/1 | Pending | — |
-| 95 | v6.1 | 0/1 | Pending | — |
+| 91 | v6.1 | 1/1 | Complete   | 2026-05-26 |
+| 92 | v6.1 | 1/1 | Complete   | 2026-05-26 |
+| 93 | v6.1 | 1/1 | Complete   | 2026-05-26 |
+| 94 | v6.1 | 1/1 | Complete   | 2026-05-26 |
+| 95 | v6.1 | 1/1 | Complete   | 2026-05-26 |
 
 ### v6.2 Progress
 
