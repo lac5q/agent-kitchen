@@ -12,14 +12,38 @@ See `.planning/GOAL.md` for the full development goal and workflow loop.
 
 ---
 
-## Current Milestone: v5.2 Competitive Memory Target Architecture
+## Current Milestone: v6.3 Agent Lifecycle + Memory Observability — SHIPPED 2026-05-29
 
-**Goal:** Prove MemRoOS is competitive as enterprise agentic memory infrastructure with reproducible marketplace scoring, a target architecture profile, and live recall evals that pass against the local runtime.
+**Goal:** Implement compact, event-triggered checkpoint/resume with minimal execution overhead, memory-trace causal execution timelines with failure classifications, and immutable agent version release promotions with rollbacks.
 
 **Target features:**
-- Competitive marketplace benchmark — public-evidence scoring for MemRoOS current, MemRoOS target, and real agentic memory alternatives (MEMTARGET-01)
-- Live recall hardening — vector metadata identity matching, deterministic episodic FTS projection, expected-fact fan-out, and full-suite runtime verification (MEMTARGET-01)
-- Target architecture documentation — hard recommendation for governed multi-agent memory, hot-path retrieval, temporal invalidation, public benchmark proof, retrieval traces, and enterprise control boundaries (MEMTARGET-01)
+- Compact checkpoint/resume system with sub-10ms write latency utilizing async debounced queue workers.
+- Memory-trace execution timelines with root-cause attribution and classifier diagnostics.
+- Immutable agent versions with promotion evaluation gate checklists and one-step rollbacks.
+
+---
+
+## Previous Milestone: v6.2 Skill Distribution + Knowledge Gateway — SHIPPED 2026-05-28
+
+**What shipped:** progressive skill loading with merging private `~/.memroos/skills/` directories, private config local overlay (`context-sources.local.json`), generic meeting capture, Circleback ingestion sync CLI and LaunchAgent nightly scheduling, system troubleshoot reference skill, and skills guides.
+
+---
+
+## Previous Milestone: v6.1 SkillForge Autonomy — SHIPPED 2026-05-26
+
+**What shipped:** nightly Dream Cycle automated skill optimization with risk-based auto-approval, public skill marketplace, A2A multi-agent skill synchronizing, true behavioral A/B testing and statistical significance scoring, and self-hosted eval cluster local judge (Ollama/vLLM) support.
+
+---
+
+## Previous Milestone: v6.0 SkillForge — Governed Skill Optimization — SHIPPED 2026-05-26
+
+**What shipped:** SkillForge foundation worker, pattern analyzer engine, SKILL.md edit generation, validation and held-out evaluation splits, and operator UI promotion approvals.
+
+---
+
+## Previous Milestone: v5.2 Competitive Memory Target Architecture — SHIPPED 2026-05-24
+
+**What shipped:** marketplace comparison profiles, live recall vector metadata identity matching, and target architecture guidelines.
 
 ---
 
