@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v6.2
-milestone_name: Skill Distribution + Knowledge Gateway Summary
+milestone: v6.3
+milestone_name: Agent Lifecycle + Memory Observability
 status: complete
-stopped_at: milestone complete (2026-05-28)
-last_updated: "2026-05-28T08:30:00.000Z"
+stopped_at: milestone complete (2026-05-29)
+last_updated: "2026-05-29T07:20:00.000Z"
 progress:
-  total_phases: 64
-  completed_phases: 60
-  total_plans: 94
-  completed_plans: 103
+  total_phases: 67
+  completed_phases: 63
+  total_plans: 97
+  completed_plans: 106
   percent: 100
 ---
 
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v6.2 — Skill Distribution + Knowledge Gateway (phases 98-102)
+**Current focus:** v6.3 — Agent Lifecycle + Memory Observability (phases 103-105)
 
 ## Current Position
 
-Phase: 102 — Public Documentation
+Phase: 105 — Agent CI/CD Release Gates
 Plan: —
-Status: Complete — all v6.2 phases shipped
+Status: Complete — all v6.3 phases shipped
 
 ## Session Continuity
 
-Last session: 2026-05-28T08:30:00.000Z
-Stopped at: Milestone v6.2 complete — all 5 phases (98-102) shipped
+Last session: 2026-05-29T07:20:00.000Z
+Stopped at: Milestone v6.3 complete — all 3 phases (103-105) shipped
 Resume file: None
-Next action: /gsd-new-milestone for v6.3
+Next action: none (roadmap complete!)
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -63,10 +63,13 @@ Next action: /gsd-new-milestone for v6.3
 || 95 | Self-Hosted Eval Cluster — local judge, Ollama/vLLM support | COMPLETE — LOCALJUDGE-01 (1) |
 | 96 | Agent Memory Continuity — MemRoOS-native coding-agent capture and handoff packs | COMPLETE — AGENTMEM-FOLLOWUP-01 (1) |
 | 97 | Source Routing Contracts for Meeting Capture — project routing, confidence/review state, qmd freshness proof | COMPLETE — CTX-FOLLOWUP-04 (1) |
+| 103 | Lightweight Checkpoint/Resume/Handoff — compact structured checkpoints, async queues, performance latency | COMPLETE — AGENTMEM-FOLLOWUP-02 (1) |
+| 104 | Memory-Trace Observability — casual timelines, failure classification, debug graphs | COMPLETE — AGENTMEM-FOLLOWUP-03 (1) |
+| 105 | Agent CI/CD Release Gates — immutable versions, gating checklists, one-step rollback | COMPLETE — AGENTCICD-FOLLOWUP-01 (1) |
 
-**Coverage:** 49/49 v5.0-v6.0+ requirements mapped, no orphans.
+**Coverage:** 52/52 v5.0-v6.3 requirements mapped, no orphans.
 **Critical path:** 74 → 75 → 76 → 77 → 78. Phases 79, 80, 81, 82 run parallel (81 soft-depends on 74).
-**Completed so far:** Phase 34 through Phase 97 shipped.
+**Completed so far:** Phase 34 through Phase 105 shipped.
 
 ## Performance Metrics
 

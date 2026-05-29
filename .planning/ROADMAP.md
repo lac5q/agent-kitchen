@@ -23,7 +23,7 @@
 - ✅ **v5.2 Competitive Memory Target Architecture** — Phase 84 (shipped 2026-05-24)
 - ✅ **v6.0 SkillForge — Governed Skill Optimization** — Phases 85-90 (shipped 2026-05-26)
 - 🔄 **v6.2 Skill Distribution + Knowledge Gateway** — Phases 98-102 (in progress)
-- 🔄 **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (planned: checkpoint/resume, memory-trace debugging, agent CI/CD gates)
+- ✅ **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (completed 2026-05-29: checkpoint/resume, memory-trace debugging, agent CI/CD gates)
 
 ## Phases
 
@@ -1254,13 +1254,13 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|----------|---------------|--------|-----------|
 | 98 | v6.2 | 1/1 | Complete   | 2026-05-28 |
-| 99 | v6.2 | 0/1 | Pending | — |
-| 100 | v6.2 | 0/1 | Pending | — |
-| 101 | v6.2 | 0/1 | Pending | — |
-| 102 | v6.2 | 0/1 | Pending | — |
-| 103 | v6.3 | 0/1 | Pending | AGENTMEM-FOLLOWUP-02 |
-| 104 | v6.3 | 0/1 | Pending | AGENTMEM-FOLLOWUP-03 |
-| 105 | v6.3 | 0/1 | Pending | AGENTCICD-FOLLOWUP-01 |
+| 99 | v6.2 | 1/1 | Complete   | 2026-05-28 |
+| 100 | v6.2 | 1/1 | Complete   | 2026-05-28 |
+| 101 | v6.2 | 1/1 | Complete   | 2026-05-28 |
+| 102 | v6.2 | 1/1 | Complete   | 2026-05-28 |
+| 103 | v6.3 | 1/1 | Complete   | 2026-05-29 |
+| 104 | v6.3 | 1/1 | Complete   | 2026-05-29 |
+| 105 | v6.3 | 1/1 | Complete   | 2026-05-29 |
 
 ---
 
@@ -1361,14 +1361,14 @@ Plans:
 **Milestone**: v6.3
 **Depends on**: Phase 96 (Agent Memory Continuity — AGENTMEM-FOLLOWUP-01)
 **Requirements**: AGENTMEM-FOLLOWUP-02
-**Status**: Pending
+**Status**: Complete (2026-05-29)
 **Success Criteria**:
   1. Hot-path checkpoints store only compact structured state (run id, owner agent, objective, completed/remaining steps, decisions, artifact refs, verification state, next safe action, rollback notes, provenance pointers).
   2. Heavy operations (vector indexing, graph updates, qmd refreshes, git commits, summarization, evidence bundles) run asynchronously on debounced/background workers.
   3. Checkpoint writes are event-triggered: after major step completion, before/after external side effects, before human approval, before agent transfer, on failure/retry, before ending incomplete work.
   4. Metrics exposed: checkpoint write latency, checkpoint size, async queue depth, replay/resume latency, duplicate-work avoided, failure/degradation status.
   5. CI or local evals enforce explicit p95 write/resume performance budgets and prove checkpointing does not materially slow standard GSD agent runs.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
 **UI hint**: Checkpoint status and resume latency in NOC agent workload panel; handoff pack preview.
 
 ### Phase 104: Memory-Trace Observability
@@ -1376,14 +1376,14 @@ Plans:
 **Milestone**: v6.3
 **Depends on**: Phase 103 (checkpoint/resume for replay handles), Phase 84 (memory evals)
 **Requirements**: AGENTMEM-FOLLOWUP-03
-**Status**: Pending
+**Status**: Complete (2026-05-29)
 **Success Criteria**:
   1. Every memory-backed run can reconstruct the causal path: source/context pack assembly → retrieval query → retrieved candidates → filters/policy decisions → consolidation/update steps → checkpoint references → prompt inclusion/exclusion → answer citation → downstream verification result.
   2. Failure analysis distinguishes: retrieval miss, bad ranking, stale memory, corrupted/incorrect memory, policy redaction, consolidation error, benchmark/annotation error, model misuse of correct memory.
   3. Memory and Improve surfaces expose trace graphs or step timelines for failed evals, with root-cause attribution, replay handle, and proposed repair action.
   4. Verification requires seeded positive/negative memory tasks, synthetic corrupted-memory cases, omission-vs-commission cases.
   5. Nightly canary proves MemRoOS can explain whether memory helped, hurt, or was unused.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
 **UI hint**: Trace graph view in Memory page failed-eval detail; Improve surface root-cause timeline.
 
 ### Phase 105: Agent CI/CD Release Gates
@@ -1391,11 +1391,11 @@ Plans:
 **Milestone**: v6.3
 **Depends on**: Phase 81 (evidence bundles), Phase 103 (checkpoint/resume), Phase 57 (eval engine)
 **Requirements**: AGENTCICD-FOLLOWUP-01
-**Status**: Pending
+**Status**: Complete (2026-05-29)
 **Success Criteria**:
   1. Agent version is an immutable artifact bundling: model/provider route, system instructions, skill/tool contracts, runtime config, eval dataset versions, policy metadata.
   2. Promotion across local/dev/test/prod profiles requires quality, safety/grounding, governance, and performance gates: task success/accuracy, hallucination/grounding, policy/tool-use compliance, token cost, p95 latency, trace completeness, rollback handle, human approval where configured.
   3. Each promoted agent version has a distinct identity/version record, environment-specific permissions, OpenTelemetry/evidence traces, and one-step rollback to prior approved version.
   4. Complements checkpoint/resume: checkpoints protect in-flight work; CI/CD gates protect what agent versions are allowed to run.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
 **UI hint**: Agent version registry page; promotion gate status; rollback button in Agents surface.

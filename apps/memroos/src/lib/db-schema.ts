@@ -1488,7 +1488,79 @@ export function initSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS eval_receipts_skill
       ON eval_receipts(skill_id, timestamp DESC);
+
+    -- Phase 103: agent_checkpoints (AGENTMEM-FOLLOWUP-02)
+    CREATE TABLE IF NOT EXISTS agent_checkpoints (
+      id                        TEXT PRIMARY KEY,
+      tenant_id                 TEXT NOT NULL DEFAULT 'default-tenant' REFERENCES tenants(id),
+      run_id                    TEXT NOT NULL,
+      owner_agent_id            TEXT NOT NULL,
+      objective                 TEXT NOT NULL,
+      completed_steps_json      TEXT NOT NULL DEFAULT '[]',
+      remaining_steps_json      TEXT NOT NULL DEFAULT '[]',
+      decisions_json            TEXT NOT NULL DEFAULT '{}',
+      artifact_refs_json        TEXT NOT NULL DEFAULT '[]',
+      verification_state_json   TEXT NOT NULL DEFAULT '{}',
+      next_safe_action          TEXT NOT NULL,
+      rollback_notes            TEXT,
+      provenance_pointers_json  TEXT NOT NULL DEFAULT '[]',
+      checkpoint_size           INTEGER NOT NULL DEFAULT 0,
+      write_latency_ms          REAL NOT NULL DEFAULT 0,
+      created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS agent_checkpoints_run
+      ON agent_checkpoints(tenant_id, run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS agent_checkpoints_agent
+      ON agent_checkpoints(tenant_id, owner_agent_id, created_at DESC);
+
+    -- Phase 104: agent_memory_traces (AGENTMEM-FOLLOWUP-03)
+    CREATE TABLE IF NOT EXISTS agent_memory_traces (
+      id                        TEXT PRIMARY KEY,
+      tenant_id                 TEXT NOT NULL DEFAULT 'default-tenant' REFERENCES tenants(id),
+      task_id                   TEXT,
+      run_id                    TEXT NOT NULL,
+      causal_path_json          TEXT NOT NULL,
+      failure_classification    TEXT CHECK(failure_classification IN ('retrieval_miss','bad_ranking','stale_memory','corrupted_memory','policy_redaction','consolidation_error','benchmark_error','model_misuse')),
+      root_cause                TEXT,
+      replay_handle             TEXT,
+      proposed_repair           TEXT,
+      created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS agent_memory_traces_run
+      ON agent_memory_traces(tenant_id, run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS agent_memory_traces_task
+      ON agent_memory_traces(tenant_id, task_id, created_at DESC);
+
+    -- Phase 105: agent_versions (AGENTCICD-FOLLOWUP-01)
+    CREATE TABLE IF NOT EXISTS agent_versions (
+      id                        TEXT PRIMARY KEY,
+      tenant_id                 TEXT NOT NULL DEFAULT 'default-tenant' REFERENCES tenants(id),
+      agent_id                  TEXT NOT NULL,
+      version                   TEXT NOT NULL,
+      profile                   TEXT NOT NULL CHECK(profile IN ('local','dev','test','prod')),
+      model_route_json          TEXT NOT NULL DEFAULT '{}',
+      system_instructions       TEXT NOT NULL,
+      skills_contracts_json     TEXT NOT NULL DEFAULT '[]',
+      runtime_config_json       TEXT NOT NULL DEFAULT '{}',
+      eval_dataset_versions_json TEXT NOT NULL DEFAULT '{}',
+      policy_metadata_json      TEXT NOT NULL DEFAULT '{}',
+      gates_status_json         TEXT NOT NULL DEFAULT '{}',
+      status                    TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','promoted','active','rolled_back')),
+      promoted_at               TEXT,
+      promoted_by               TEXT,
+      created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, agent_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS agent_versions_lookup
+      ON agent_versions(tenant_id, agent_id, status, version DESC);
   `);
+
+  try {
+    db.exec("ALTER TABLE agent_versions ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists.
+  }
 
   // FTS projection repair is intentionally explicit. Rebuilding it here blocks
   // the Next.js event loop during cold starts and makes unrelated screens hang.
