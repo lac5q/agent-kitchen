@@ -9,7 +9,7 @@ import { organizationSchema, JsonLd } from "@/lib/schema";
 import { BASE_URL, OG_IMAGE_URL, SITE_NAME } from "@/lib/metadata";
 
 const inter = Inter({ subsets: ["latin"] });
-const PUBLIC_LANDING_HOSTS = new Set(["memroos.com", "www.memroos.com", "memroos.vercel.app"]);
+const PUBLIC_LANDING_HOSTS = new Set(["memroos.com", "www.memroos.com", "memroos.vercel.app", "memroos.localhost"]);
 
 function isPublicLandingHost(host: string): boolean {
   const normalized = host.split(":")[0]?.toLowerCase() ?? "";

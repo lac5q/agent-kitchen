@@ -3,7 +3,7 @@ import { verifyAccessToken } from "@/lib/auth/jwt";
 import { ROLE_RANK } from "@/lib/auth/middleware-roles";
 import type { UserRole } from "@/lib/auth/types";
 
-const PUBLIC_HOSTS = new Set(["memroos.com", "www.memroos.com", "memroos.vercel.app"]);
+const PUBLIC_HOSTS = new Set(["memroos.com", "www.memroos.com", "memroos.vercel.app", "memroos.localhost"]);
 const LEGACY_HOSTS = new Set(["memroos.dev", "www.memroos.dev"]);
 const DEFAULT_HTTPS_APP_HOSTS = new Set<string>();
 
@@ -19,6 +19,7 @@ function isLandingAsset(pathname: string): boolean {
   return (
     pathname === "/" ||
     pathname === "/favicon.ico" ||
+    pathname === "/icon.svg" ||
     pathname === "/sitemap.xml" ||
     pathname === "/robots.txt" ||
     pathname === "/llms.txt" ||
@@ -217,5 +218,5 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

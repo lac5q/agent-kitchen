@@ -97,6 +97,28 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("serves the SVG app icon on the marketing host", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/icon.svg", {
+        headers: { host: "memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("serves the public landing on memroos.localhost for local preview", async () => {
+    const response = await proxy(
+      new NextRequest("http://memroos.localhost:3003/", {
+        headers: { host: "memroos.localhost:3003" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("allows Google Analytics collection endpoints in the content security policy", async () => {
     const response = await proxy(
       new NextRequest("https://memroos.com/", {
