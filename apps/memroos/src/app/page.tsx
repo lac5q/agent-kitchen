@@ -31,7 +31,13 @@ export const metadata = {
   },
 };
 
-const PUBLIC_LANDING_HOSTS = new Set(["memroos.com", "www.memroos.com", "memroos.vercel.app", "memroos.localhost"]);
+const PUBLIC_LANDING_HOSTS = new Set([
+  "memroos.com",
+  "www.memroos.com",
+  "memroos.vercel.app",
+  "memroos.epiloguecapital.com",
+  "memroos.localhost",
+]);
 const RESEARCH_PAPER_HREF = "/research/memroos-governed-knowledge-architecture-paper.pdf";
 const GITHUB_REPO_HREF = "https://github.com/lac5q/memroos";
 const GOOGLE_CALENDAR_HREF =
