@@ -3,8 +3,10 @@
  * Cron/event-driven worker that consumes skill telemetry and emits SEAL proposals.
  */
 
+import { createHash } from "crypto";
 import type Database from "better-sqlite3";
 import type {
+  RejectedEdit,
   SkillForgeConfig,
   SkillForgeRunResult,
   SkillForgeProposal,
@@ -82,6 +84,7 @@ export class SkillForgeWorker {
           proposal.status = "gated";
           if (reason) {
             proposal.residualRisks.push(reason);
+            proposal.rejectedEdits.push(this.rememberRejectedEdit(proposal, reason));
           }
           gatedProposals.push(proposal);
         }
@@ -143,6 +146,35 @@ export class SkillForgeWorker {
       proposalsCreated,
       proposalsSubmitted,
       errors,
+    };
+  }
+
+  private rememberRejectedEdit(proposal: SkillForgeProposal, reason: string): RejectedEdit {
+    const rejectedAt = new Date();
+    const expiresAt = new Date(rejectedAt);
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    const editHash = createHash("sha256").update(proposal.proposedDiff).digest("hex").slice(0, 16);
+
+    try {
+      this.db.prepare(
+        `INSERT OR IGNORE INTO skillforge_rejected_edits (id, skill_id, edit_hash, reason, rejected_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        `rej-${proposal.id}-${editHash}`,
+        proposal.sourceSkillId,
+        editHash,
+        reason,
+        rejectedAt.toISOString(),
+        expiresAt.toISOString()
+      );
+    } catch {
+      // rejected_edits table may not exist yet
+    }
+
+    return {
+      editHash,
+      reason,
+      rejectedAt,
     };
   }
 

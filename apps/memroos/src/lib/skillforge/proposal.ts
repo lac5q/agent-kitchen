@@ -13,6 +13,29 @@ import type {
   ValidationResult,
 } from "./types";
 
+function ensureSkillForgeProposalTraceability(db: Database.Database): void {
+  for (const statement of [
+    "ALTER TABLE skillforge_proposals ADD COLUMN edit_hash TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN baseline_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN evaluator_receipts TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE skillforge_proposals ADD COLUMN typed_edit_ops TEXT NOT NULL DEFAULT '[]'",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists.
+    }
+  }
+}
+
+function proposalEditHash(proposal: SkillForgeProposal): string {
+  return proposal.editHash ?? createHash("sha256").update(proposal.proposedDiff).digest("hex").slice(0, 16);
+}
+
 /**
  * Generate a deterministic diff from analysis results.
  * This is a stub for Phase 87 (full edit generation).
@@ -62,7 +85,9 @@ function computeValidationResult(
 
 /**
  * Generate proposals from analysis results.
- * Returns proposals ready for SEAL submission.
+ * Test-only legacy generator retained for Phase 85 compatibility tests.
+ * Production worker/API flows use edit-generator.ts so proposal generation does
+ * not diverge across SkillForge runtime paths.
  */
 export function generateProposals(
   analyses: SkillForgeAnalysisResult[],
@@ -107,13 +132,15 @@ export function persistProposals(
   db: Database.Database,
   proposals: SkillForgeProposal[]
 ): void {
+  ensureSkillForgeProposalTraceability(db);
   const insert = db.prepare(
     `INSERT INTO skillforge_proposals (
       id, seal_proposal_id, source_skill_id, source_version,
-      proposed_diff, status, train_split_id, validation_results,
-      held_out_results, w_delta, rejected_edits, residual_risks,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      proposed_diff, status, edit_hash, train_split_id, validation_split_id,
+      held_out_split_id, baseline_w, validation_w, held_out_w,
+      validation_results, held_out_results, w_delta, evaluator_receipts,
+      typed_edit_ops, rejected_edits, residual_risks, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   for (const p of proposals) {
@@ -124,10 +151,18 @@ export function persistProposals(
       p.sourceVersion,
       p.proposedDiff,
       p.status,
+      proposalEditHash(p),
       p.trainSplitId,
+      p.validationSplitId ?? null,
+      p.heldOutSplitId ?? null,
+      p.baselineW ?? null,
+      p.validationW ?? p.validationResults?.overallScore ?? null,
+      p.heldOutW ?? p.heldOutResults?.behavioralW ?? null,
       JSON.stringify(p.validationResults),
       JSON.stringify(p.heldOutResults),
       p.wDelta,
+      JSON.stringify(p.evaluatorReceipts ?? []),
+      JSON.stringify(p.typedEditOps ?? []),
       JSON.stringify(p.rejectedEdits),
       JSON.stringify(p.residualRisks),
       p.createdAt.toISOString(),

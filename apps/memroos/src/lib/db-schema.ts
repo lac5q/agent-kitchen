@@ -44,6 +44,25 @@ function addEmbeddingProvenanceColumns(db: Database.Database): void {
   }
 }
 
+function addSkillForgeTraceabilityColumns(db: Database.Database): void {
+  for (const statement of [
+    "ALTER TABLE skillforge_proposals ADD COLUMN edit_hash TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN baseline_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN evaluator_receipts TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE skillforge_proposals ADD COLUMN typed_edit_ops TEXT NOT NULL DEFAULT '[]'",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+}
+
 export function rebuildMessageFtsProjection(db: Database.Database): void {
   db.exec(`
     INSERT INTO messages_fts(messages_fts) VALUES('delete-all');
@@ -1373,10 +1392,18 @@ export function initSchema(db: Database.Database): void {
       proposed_diff       TEXT    NOT NULL,
       status              TEXT    NOT NULL DEFAULT 'pending'
                           CHECK(status IN ('pending','analyzing','eval_running','gated','pending_approval','approved','rejected','applied','exported')),
+      edit_hash           TEXT,
       train_split_id      TEXT,
+      validation_split_id TEXT,
+      held_out_split_id   TEXT,
+      baseline_w          REAL,
+      validation_w        REAL,
+      held_out_w          REAL,
       validation_results  TEXT,
       held_out_results    TEXT,
       w_delta             REAL,
+      evaluator_receipts  TEXT    NOT NULL DEFAULT '[]',
+      typed_edit_ops      TEXT    NOT NULL DEFAULT '[]',
       rejected_edits      TEXT    NOT NULL DEFAULT '[]',
       residual_risks      TEXT    NOT NULL DEFAULT '[]',
       created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -1386,6 +1413,8 @@ export function initSchema(db: Database.Database): void {
       ON skillforge_proposals(status, created_at DESC);
     CREATE INDEX IF NOT EXISTS skillforge_proposals_skill
       ON skillforge_proposals(source_skill_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS skillforge_proposals_edit_hash
+      ON skillforge_proposals(edit_hash);
 
     CREATE TABLE IF NOT EXISTS skillforge_splits (
       id          TEXT    PRIMARY KEY,
@@ -1555,6 +1584,7 @@ export function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS agent_versions_lookup
       ON agent_versions(tenant_id, agent_id, status, version DESC);
   `);
+  addSkillForgeTraceabilityColumns(db);
 
   try {
     db.exec("ALTER TABLE agent_versions ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");

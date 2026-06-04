@@ -69,11 +69,25 @@ describe("SkillForge Proposal Generation", () => {
     persistProposals(db, proposals);
 
     const row = db
-      .prepare("SELECT * FROM skillforge_proposals WHERE source_skill_id = ?")
+      .prepare(
+        `SELECT id, status, edit_hash, validation_split_id, held_out_split_id,
+                baseline_w, validation_w, held_out_w, evaluator_receipts, typed_edit_ops
+         FROM skillforge_proposals WHERE source_skill_id = ?`
+      )
       .get("skill-1") as { id: string; status: string } | undefined;
 
     expect(row).toBeTruthy();
     expect(row?.status).toBe("pending");
+    expect(row).toMatchObject({
+      validation_split_id: null,
+      held_out_split_id: null,
+      baseline_w: null,
+      validation_w: 0.5,
+      held_out_w: null,
+      evaluator_receipts: "[]",
+      typed_edit_ops: "[]",
+    });
+    expect((row as { edit_hash?: string }).edit_hash).toMatch(/^[a-f0-9]{16}$/);
   });
 
   it("builds SEAL payload correctly", () => {

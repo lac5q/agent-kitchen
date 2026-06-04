@@ -13,6 +13,21 @@ import type {
   HeldOutResult,
 } from "./types";
 
+function stableHash(input: string): number {
+  return input.split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+}
+
+function splitSampleCounts(total: number): { trainSize: number; valSize: number } {
+  if (total <= 0) return { trainSize: 0, valSize: 0 };
+  if (total === 1) return { trainSize: 1, valSize: 0 };
+  if (total === 2) return { trainSize: 1, valSize: 1 };
+
+  const valSize = Math.max(1, Math.floor(total * 0.2));
+  const heldOutSize = Math.max(1, total - Math.floor(total * 0.8));
+  const trainSize = Math.max(1, total - valSize - heldOutSize);
+  return { trainSize, valSize };
+}
+
 /**
  * Create train/validation/held-out splits for a skill.
  * Returns split IDs and ensures disjoint task samples.
@@ -23,14 +38,9 @@ export function createSplits(
   taskSamples: string[]
 ): { train: SkillForgeSplit; validation: SkillForgeSplit; heldOut: SkillForgeSplit } {
   // Shuffle deterministically by hashing
-  const shuffled = [...taskSamples].sort((a, b) => {
-    const hashA = a.split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-    const hashB = b.split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-    return hashA - hashB;
-  });
+  const shuffled = [...taskSamples].sort((a, b) => stableHash(a) - stableHash(b));
 
-  const trainSize = Math.floor(shuffled.length * 0.6);
-  const valSize = Math.floor(shuffled.length * 0.2);
+  const { trainSize, valSize } = splitSampleCounts(shuffled.length);
 
   const trainSamples = shuffled.slice(0, trainSize);
   const valSamples = shuffled.slice(trainSize, trainSize + valSize);
@@ -119,21 +129,36 @@ export function runValidation(
  */
 export function runHeldOutEval(
   _db: Database.Database,
-  _proposal: SkillForgeProposal,
+  proposal: SkillForgeProposal,
   heldOutSplit: SkillForgeSplit
 ): HeldOutResult {
   const tasksRun = heldOutSplit.taskSamples.length;
-  // Stub: assume 80% pass rate for now
-  const passRate = tasksRun > 0 ? 0.8 : 0;
-  const tasksPassed = Math.floor(tasksRun * passRate);
+  const normalizedDiff = proposal.proposedDiff.toLowerCase();
+  const hasActionableDiff = normalizedDiff.includes("## pattern:") && normalizedDiff.includes("fix:");
+  const tasksPassed = hasActionableDiff
+    ? heldOutSplit.taskSamples.filter((sample) => isSampleCovered(sample, normalizedDiff)).length
+    : 0;
+  const passRate = tasksRun > 0 ? tasksPassed / tasksRun : 0;
 
   return {
     passRate,
     tasksRun,
     tasksPassed,
-    avgLatencyMs: 150,
-    behavioralW: 0.65,
+    avgLatencyMs: tasksRun > 0 ? 150 : 0,
+    behavioralW: passRate,
   };
+}
+
+function isSampleCovered(sample: string, normalizedDiff: string): boolean {
+  const tokens = sample
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .filter((token) => token.length >= 4);
+
+  if (tokens.length === 0) return false;
+
+  const matches = tokens.filter((token) => normalizedDiff.includes(token)).length;
+  return matches / tokens.length >= 0.6;
 }
 
 /**
@@ -151,6 +176,10 @@ export function computeWDelta(
   const compositeW = validationW * 0.6 + heldOutW * 0.4;
 
   const wDelta = compositeW - baselineW;
+
+  if (heldOut && heldOut.tasksRun === 0) {
+    return { wDelta, gated: true, reason: "No held-out tasks available; cannot validate proposal improvement" };
+  }
 
   // Non-regression gate: must not decrease W
   if (wDelta < 0) {
@@ -181,19 +210,39 @@ export function runEvalGate(
   taskSamples: string[]
 ): { approved: boolean; reason: string | null } {
   // 1. Create splits
-  const { validation, heldOut } = createSplits(db, proposal.sourceSkillId, taskSamples);
-  proposal.trainSplitId = validation.id; // Use validation split ID for tracking
+  const { train, validation, heldOut } = createSplits(db, proposal.sourceSkillId, taskSamples);
+  proposal.trainSplitId = train.id;
+  proposal.validationSplitId = validation.id;
+  proposal.heldOutSplitId = heldOut.id;
+  const baselineW = proposal.heldOutResults?.behavioralW ?? proposal.validationResults?.overallScore ?? 0.5;
+  proposal.baselineW = baselineW;
 
   // 2. Run validation
   const validationResult = runValidation(db, proposal, validation);
   proposal.validationResults = validationResult;
+  proposal.validationW = validationResult.overallScore;
 
   // 3. Run held-out eval
   const heldOutResult = runHeldOutEval(db, proposal, heldOut);
   proposal.heldOutResults = heldOutResult;
+  proposal.heldOutW = heldOutResult.behavioralW;
+  proposal.evaluatorReceipts = [
+    ...(proposal.evaluatorReceipts ?? []),
+    {
+      evaluator: "skillforge-deterministic-validation",
+      splitId: validation.id,
+      w: validationResult.overallScore,
+    },
+    {
+      evaluator: "skillforge-held-out-coverage",
+      splitId: heldOut.id,
+      tasksRun: heldOutResult.tasksRun,
+      passRate: heldOutResult.passRate,
+      behavioralW: heldOutResult.behavioralW,
+    },
+  ];
 
-  // 4. Compute W delta (baseline W = 0.5 for now)
-  const baselineW = 0.5;
+  // 4. Compute W delta against the proposal's recorded baseline.
   const { wDelta, gated, reason } = computeWDelta(validationResult, heldOutResult, baselineW);
   proposal.wDelta = wDelta;
 

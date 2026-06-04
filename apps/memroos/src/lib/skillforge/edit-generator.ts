@@ -10,6 +10,7 @@ import type {
   SkillForgeAnalysisResult,
   SkillForgeProposal,
   RejectedEdit,
+  SkillForgeEditOperation,
 } from "./types";
 
 /** Forbidden sections that cannot be modified by the edit generator */
@@ -37,8 +38,24 @@ function maxEditLines(config: SkillForgeConfig): number {
 /** Count changed lines in a unified diff */
 function countChangedLines(diff: string): number {
   return diff.split("\n").filter((line) =>
-    line.startsWith("+") || line.startsWith("-")
+    (line.startsWith("+") && !line.startsWith("+++")) ||
+    (line.startsWith("-") && !line.startsWith("---"))
   ).length;
+}
+
+function buildTypedEditOps(diff: string): SkillForgeEditOperation[] {
+  return diff
+    .split("\n")
+    .filter((line) =>
+      (line.startsWith("+") && !line.startsWith("+++")) ||
+      (line.startsWith("-") && !line.startsWith("---"))
+    )
+    .map((line, index) => {
+      const content = line.slice(1);
+      return line.startsWith("+")
+        ? { op: "add", path: `/skill-md/lines/${index}`, value: content }
+        : { op: "delete", path: `/skill-md/lines/${index}`, oldValue: content };
+    });
 }
 
 /** Generate a deterministic edit from analysis patterns */
@@ -46,6 +63,10 @@ function generateDeterministicEdit(
   analysis: SkillForgeAnalysisResult,
   config: SkillForgeConfig
 ): string | null {
+  if (analysis.patterns.length === 0 && analysis.testCases.length === 0) {
+    return null;
+  }
+
   const maxLines = maxEditLines(config);
   const lines: string[] = [];
 
@@ -121,6 +142,7 @@ export function generateEditProposal(
   }
 
   const editHash = createHash("sha256").update(diff).digest("hex").slice(0, 16);
+  const typedEditOps = buildTypedEditOps(diff);
 
   if (isRecentlyRejected(editHash, rejectedEdits)) {
     return null; // Recently rejected — don't retry
@@ -135,6 +157,7 @@ export function generateEditProposal(
     sourceVersion: "1.0.0",
     proposedDiff: diff,
     status: "pending",
+    editHash,
     trainSplitId: null,
     validationResults: {
       triggerRoutingAccuracy: 0.5,
@@ -144,6 +167,8 @@ export function generateEditProposal(
     },
     heldOutResults: null,
     wDelta: null,
+    typedEditOps,
+    evaluatorReceipts: [],
     rejectedEdits: [],
     residualRisks: [
       "Edit magnitude bounded by textual learning rate",

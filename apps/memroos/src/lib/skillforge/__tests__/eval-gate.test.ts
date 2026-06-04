@@ -77,13 +77,14 @@ describe("SkillForge Eval Gate", () => {
   });
 
   it("runs held-out eval", () => {
-    const proposal = makeProposal("skill-1", "test");
+    const proposal = makeProposal("skill-1", "## Pattern: alpha\nFix: add alpha trigger\n## Generated Test Cases\n- Input: alpha case");
     const heldOut = runHeldOutEval(db, proposal, {
-      id: "split-1", skillId: "skill-1", splitType: "held_out", taskSamples: ["a", "b", "c"], createdAt: new Date(),
+      id: "split-1", skillId: "skill-1", splitType: "held_out", taskSamples: ["alpha case", "unmatched case"], createdAt: new Date(),
     });
 
-    expect(heldOut.tasksRun).toBe(3);
-    expect(heldOut.passRate).toBe(0.8);
+    expect(heldOut.tasksRun).toBe(2);
+    expect(heldOut.tasksPassed).toBe(1);
+    expect(heldOut.passRate).toBe(0.5);
   });
 
   it("gates negative W delta", () => {
@@ -113,10 +114,33 @@ describe("SkillForge Eval Gate", () => {
     expect(result.reason).toContain("pass rate");
   });
 
+  it("gates proposals without held-out evidence", () => {
+    const validation = { triggerRoutingAccuracy: 0.9, contractCompleteness: 0.9, resolverReachability: 0.9, overallScore: 0.9 };
+    const heldOut = { passRate: 0, tasksRun: 0, tasksPassed: 0, avgLatencyMs: 0, behavioralW: 0 };
+
+    const result = computeWDelta(validation, heldOut, 0.5);
+    expect(result.gated).toBe(true);
+    expect(result.reason).toContain("No held-out");
+  });
+
   it("runs full eval gate on proposal", () => {
     const proposal = makeProposal("skill-1", "## Pattern: test\nFix: add trigger");
     const result = runEvalGate(db, proposal, config, ["sample1", "sample2", "sample3"]);
 
+    const trainSplit = db
+      .prepare("SELECT split_type FROM skillforge_splits WHERE id = ?")
+      .get(proposal.trainSplitId) as { split_type: string } | undefined;
+
+    expect(trainSplit?.split_type).toBe("train");
+    expect(proposal.validationSplitId).toMatch(/^split-skill-1-val-/);
+    expect(proposal.heldOutSplitId).toMatch(/^split-skill-1-held-/);
+    expect(proposal.baselineW).toBe(0.5);
+    expect(proposal.validationW).toBe(proposal.validationResults?.overallScore);
+    expect(proposal.heldOutW).toBe(proposal.heldOutResults?.behavioralW);
+    expect(proposal.evaluatorReceipts?.map((r) => r.evaluator)).toEqual([
+      "skillforge-deterministic-validation",
+      "skillforge-held-out-coverage",
+    ]);
     expect(proposal.validationResults).not.toBeNull();
     expect(proposal.heldOutResults).not.toBeNull();
     expect(proposal.wDelta).not.toBeNull();

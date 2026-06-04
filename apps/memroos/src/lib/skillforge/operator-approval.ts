@@ -20,51 +20,104 @@ export interface ProposalQueue {
   rejected: SkillForgeProposal[];
 }
 
-/**
- * List all proposals grouped by status.
- */
-export function listProposals(db: Database.Database): ProposalQueue {
-  const rows = db
-    .prepare(
-      `SELECT id, seal_proposal_id, source_skill_id, source_version, proposed_diff,
-              status, train_split_id, validation_results, held_out_results, w_delta,
-              rejected_edits, residual_risks, created_at, updated_at
-       FROM skillforge_proposals
-       ORDER BY created_at DESC`
-    )
-    .all() as Array<{
-    id: string;
-    seal_proposal_id: string | null;
-    source_skill_id: string;
-    source_version: string;
-    proposed_diff: string;
-    status: string;
-    train_split_id: string | null;
-    validation_results: string | null;
-    held_out_results: string | null;
-    w_delta: number | null;
-    rejected_edits: string;
-    residual_risks: string;
-    created_at: string;
-    updated_at: string;
-  }>;
+type ProposalRow = {
+  id: string;
+  seal_proposal_id: string | null;
+  source_skill_id: string;
+  source_version: string;
+  proposed_diff: string;
+  status: string;
+  edit_hash: string | null;
+  train_split_id: string | null;
+  validation_split_id: string | null;
+  held_out_split_id: string | null;
+  baseline_w: number | null;
+  validation_w: number | null;
+  held_out_w: number | null;
+  validation_results: string | null;
+  held_out_results: string | null;
+  w_delta: number | null;
+  evaluator_receipts: string | null;
+  typed_edit_ops: string | null;
+  rejected_edits: string;
+  residual_risks: string;
+  created_at: string;
+  updated_at: string;
+};
 
-  const proposals: SkillForgeProposal[] = rows.map((r) => ({
+function parseJson<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToProposal(r: ProposalRow): SkillForgeProposal {
+  return {
     id: r.id,
     sealProposalId: r.seal_proposal_id,
     sourceSkillId: r.source_skill_id,
     sourceVersion: r.source_version,
     proposedDiff: r.proposed_diff,
     status: r.status as SkillForgeProposalStatus,
+    editHash: r.edit_hash,
     trainSplitId: r.train_split_id,
-    validationResults: r.validation_results ? JSON.parse(r.validation_results) : null,
-    heldOutResults: r.held_out_results ? JSON.parse(r.held_out_results) : null,
+    validationSplitId: r.validation_split_id,
+    heldOutSplitId: r.held_out_split_id,
+    baselineW: r.baseline_w,
+    validationW: r.validation_w,
+    heldOutW: r.held_out_w,
+    validationResults: parseJson(r.validation_results, null),
+    heldOutResults: parseJson(r.held_out_results, null),
     wDelta: r.w_delta,
-    rejectedEdits: JSON.parse(r.rejected_edits),
-    residualRisks: JSON.parse(r.residual_risks),
+    evaluatorReceipts: parseJson(r.evaluator_receipts, []),
+    typedEditOps: parseJson(r.typed_edit_ops, []),
+    rejectedEdits: parseJson(r.rejected_edits, []),
+    residualRisks: parseJson(r.residual_risks, []),
     createdAt: new Date(r.created_at),
     updatedAt: new Date(r.updated_at),
-  }));
+  };
+}
+
+function ensureTraceabilityColumns(db: Database.Database): void {
+  for (const statement of [
+    "ALTER TABLE skillforge_proposals ADD COLUMN edit_hash TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_split_id TEXT",
+    "ALTER TABLE skillforge_proposals ADD COLUMN baseline_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN validation_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN held_out_w REAL",
+    "ALTER TABLE skillforge_proposals ADD COLUMN evaluator_receipts TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE skillforge_proposals ADD COLUMN typed_edit_ops TEXT NOT NULL DEFAULT '[]'",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists.
+    }
+  }
+}
+
+/**
+ * List all proposals grouped by status.
+ */
+export function listProposals(db: Database.Database): ProposalQueue {
+  ensureTraceabilityColumns(db);
+  const rows = db
+    .prepare(
+      `SELECT id, seal_proposal_id, source_skill_id, source_version, proposed_diff,
+              status, edit_hash, train_split_id, validation_split_id, held_out_split_id,
+              baseline_w, validation_w, held_out_w, validation_results, held_out_results,
+              w_delta, evaluator_receipts, typed_edit_ops, rejected_edits, residual_risks,
+              created_at, updated_at
+       FROM skillforge_proposals
+       ORDER BY created_at DESC`
+    )
+    .all() as ProposalRow[];
+
+  const proposals = rows.map(rowToProposal);
 
   return {
     pending: proposals.filter((p) => p.status === "pending" || p.status === "analyzing" || p.status === "eval_running"),
@@ -78,48 +131,20 @@ export function listProposals(db: Database.Database): ProposalQueue {
  * Get a single proposal by ID.
  */
 export function getProposal(db: Database.Database, proposalId: string): SkillForgeProposal | null {
+  ensureTraceabilityColumns(db);
   const r = db
     .prepare(
       `SELECT id, seal_proposal_id, source_skill_id, source_version, proposed_diff,
-              status, train_split_id, validation_results, held_out_results, w_delta,
-              rejected_edits, residual_risks, created_at, updated_at
+              status, edit_hash, train_split_id, validation_split_id, held_out_split_id,
+              baseline_w, validation_w, held_out_w, validation_results, held_out_results,
+              w_delta, evaluator_receipts, typed_edit_ops, rejected_edits, residual_risks,
+              created_at, updated_at
        FROM skillforge_proposals WHERE id = ?`
     )
-    .get(proposalId) as {
-    id: string;
-    seal_proposal_id: string | null;
-    source_skill_id: string;
-    source_version: string;
-    proposed_diff: string;
-    status: string;
-    train_split_id: string | null;
-    validation_results: string | null;
-    held_out_results: string | null;
-    w_delta: number | null;
-    rejected_edits: string;
-    residual_risks: string;
-    created_at: string;
-    updated_at: string;
-  } | undefined;
+    .get(proposalId) as ProposalRow | undefined;
 
   if (!r) return null;
-
-  return {
-    id: r.id,
-    sealProposalId: r.seal_proposal_id,
-    sourceSkillId: r.source_skill_id,
-    sourceVersion: r.source_version,
-    proposedDiff: r.proposed_diff,
-    status: r.status as SkillForgeProposalStatus,
-    trainSplitId: r.train_split_id,
-    validationResults: r.validation_results ? JSON.parse(r.validation_results) : null,
-    heldOutResults: r.held_out_results ? JSON.parse(r.held_out_results) : null,
-    wDelta: r.w_delta,
-    rejectedEdits: JSON.parse(r.rejected_edits),
-    residualRisks: JSON.parse(r.residual_risks),
-    createdAt: new Date(r.created_at),
-    updatedAt: new Date(r.updated_at),
-  };
+  return rowToProposal(r);
 }
 
 /**

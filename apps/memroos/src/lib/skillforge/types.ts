@@ -71,6 +71,13 @@ export interface RejectedEdit {
   rejectedAt: Date;
 }
 
+export interface SkillForgeEditOperation {
+  op: "add" | "delete" | "replace";
+  path: string;
+  value?: string;
+  oldValue?: string;
+}
+
 export interface SkillRevisionPayload {
   sourceSkillId: string;
   sourceVersion: string;
@@ -90,10 +97,18 @@ export interface SkillForgeProposal {
   sourceVersion: string;
   proposedDiff: string;
   status: SkillForgeProposalStatus;
+  editHash?: string | null;
   trainSplitId: string | null;
+  validationSplitId?: string | null;
+  heldOutSplitId?: string | null;
+  baselineW?: number | null;
+  validationW?: number | null;
+  heldOutW?: number | null;
   validationResults: ValidationResult | null;
   heldOutResults: HeldOutResult | null;
   wDelta: number | null;
+  evaluatorReceipts?: Record<string, unknown>[];
+  typedEditOps?: SkillForgeEditOperation[];
   rejectedEdits: RejectedEdit[];
   residualRisks: string[];
   createdAt: Date;

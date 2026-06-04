@@ -41,6 +41,19 @@ describe("SkillForge Edit Generator", () => {
     expect(proposal).not.toBeNull();
     expect(proposal?.sourceSkillId).toBe("skill-1");
     expect(proposal?.proposedDiff).toContain("Pattern:");
+    expect(proposal?.editHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(proposal?.typedEditOps?.length).toBeGreaterThan(0);
+    expect(proposal?.typedEditOps?.every((op) => op.op === "add" || op.op === "delete")).toBe(true);
+  });
+
+  it("skips proposals when analysis has no optimization evidence", () => {
+    const proposal = generateEditProposal(
+      { skillId: "skill-1", patterns: [], testCases: [], confidence: 0.1 },
+      config,
+      []
+    );
+
+    expect(proposal).toBeNull();
   });
 
   it("rejects edits touching forbidden sections", () => {
