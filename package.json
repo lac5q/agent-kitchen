@@ -22,6 +22,7 @@
     "eval:context-sources": "node scripts/run-context-source-evals.mjs",
     "eval:memory-degradation": "bash scripts/run-memory-degradation-checks.sh",
     "eval:marketplace-memory": "node scripts/run-marketplace-memory-evals.mjs",
+    "check:governance": "node scripts/check-governance-coverage.mjs",
     "check:knowledge-indexing": "node scripts/check-knowledge-indexing.mjs",
     "check:recall-anchors": "node scripts/check-recall-anchors.mjs --skip-mem0",
     "check:recall-anchors:live": "node scripts/check-recall-anchors.mjs --require-mem0",

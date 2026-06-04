@@ -102,3 +102,4 @@ Cloud deployment:
 - **A2A first, REST compatible:** Prefer standards where they exist, keep a pragmatic shim for frameworks still catching up.
 - **Private network first:** Multi-machine startup deployments should start on Tailscale/LAN before public exposure.
 - **Explicit registration:** Agents become canonical only after registry registration or A2A card ingestion.
+- **Native governance spine:** Agent actions, memory use, indexing, export, and audit follow the same `Actor -> Action -> Asset -> Purpose -> Label -> Decision -> AuditEvent` contract. See [governance.md](governance.md).
