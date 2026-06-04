@@ -25,8 +25,23 @@
 - ✅ **v6.1 SkillForge Autonomy — Dream Cycle + Marketplace** — Phases 91-95 (shipped 2026-05-26)
 - ✅ **v6.2 Skill Distribution + Knowledge Gateway** — Phases 98-102 (shipped 2026-05-28)
 - ✅ **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (shipped 2026-05-29)
+- 🚧 **v6.4 SkillForge Production SkillOpt Hardening** — Phase 106 (partially implemented; true sandbox scorer remains)
+- ✅ **v6.5 Agent Context Bus + Synchronous Agent Communication** — Phase 107 (completed 2026-06-04)
+- 🧭 **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (backlog; reduce local disk/RAM load by moving eligible stores and indexes to managed/cloud services)
 
 ## Phases
+
+### Current v6.5 Agent Context Bus + Synchronous Agent Communication Summary — COMPLETE
+
+- [x] **Phase 107: Agent Context Bus and Synchronous Agent Communication** — AGENTBUS-01..07; durable MemRoOS-native inbox/reply bus for agents, REST + MCP tools, bounded wait-for-reply flows, optional memory/context-sync receipts, fail-closed control-layer access guard, and agent auth/scanner/audit regression coverage.
+
+Full v6.5 detail in the `## v6.5 Agent Context Bus + Synchronous Agent Communication` section below.
+
+### Current v6.4 SkillForge Production SkillOpt Hardening Summary — IN PROGRESS
+
+- [ ] **Phase 106: SkillForge Production SkillOpt Hardening** — SKILLOPT-HARDEN-02..05 implemented; SKILLOPT-HARDEN-01 remains open for a non-simulated behavioral sandbox scorer because the existing Phase 94 behavioral A/B implementation is still randomized/simulated.
+
+Full v6.4 detail in the `## v6.4 SkillForge Production SkillOpt Hardening` section below.
 
 ### Current v6.0 SkillForge — Governed Skill Optimization Summary — IN PROGRESS
 
@@ -394,41 +409,45 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `CTX-FOLLOWUP-01..02`, `CRON-HEALTH-01..05`, and `UX-FOLLOWUP-03` in `.planning/REQUIREMENTS.md`.
    - Goal: prove sources are ingested, indexed, fresh, replayable, and degraded honestly; recurring transcript/email/context sinks become observable jobs with heartbeat, caught-up status, warning/critical state, and pause/resume/stop controls.
 
-3. **P1 — Plan corrective Operations NOC Real-Data Wiring phase.**
+3. **P0 — Plan Cloud Offload + Local Footprint Reduction.**
+   - Requirements: `CLOUDOFFLOAD-01..06` in `.planning/REQUIREMENTS.md`.
+   - Goal: reduce local disk, RAM, and background-service pressure by inventorying permanent local stores versus rebuildable caches, then moving eligible heavy storage/indexing to cloud-managed services with encryption, retention, rollback, and local-cache caps.
+
+4. **P1 — Plan corrective Operations NOC Real-Data Wiring phase.**
    - Source note: `.planning/notes/operations-noc-real-data-requirements.md`.
    - Requirements: `NOC-01..NOC-14` and `OPS-AUDIT-01..04` in `.planning/REQUIREMENTS.md`.
    - Goal: replace mock home-screen panels with live operational data, explicit missing/degraded states, functional controls, date-windowed performance views, and the telemetry streams needed for efficiency signals.
 
-4. **P1 — Plan Harness Control Plane + Evidence Governance.**
+5. **P1 — Plan Harness Control Plane + Evidence Governance.**
    - Research intake: `Code as Agent Harness` (arXiv:2605.18747, 2026-05-18) argues future agent systems need executable, inspectable, stateful, governed harnesses.
    - Requirements and candidates: Full Harness Control Plane, Universal evidence bundles, Shared harness state, Skill-contract evidence examples, Cross-harness skill auto-sync, Model gateway observability, Secret-scope health, Eval-pinned promotion commits, Agent lessons ledger, and `GSD-FOLLOWUP-01`.
    - Goal: expose task-level Plan-Execute-Verify timelines, sources/memories/tools/checks evidence, read/write sets, prompt/model routing metadata, secret-scope health, replay/rollback anchors, and governed skill imports before increasing autonomy.
 
-5. **P1 — Plan Knowledge Graph Intelligence + Work Coordination.**
+6. **P1 — Plan Knowledge Graph Intelligence + Work Coordination.**
    - Research intake: Graphify (`safishamsi/graphify`) shows a practical query-first repo/docs/PDF/image knowledge graph with confidence-tagged edges, wiki/report exports, and commit/search hooks.
    - Research intake: Graphite-style stacked review patterns suggest agent work should move as small, ordered, independently reviewable changes with stack-aware risk and merge gates.
    - Requirements and candidates: Knowledge graph intelligence, PR/workflow graph risk, Stacked agent work units, and `ARCH-01..03`.
    - Goal: make repo/docs/PDF/image/transcript graphs explainable and confidence-tagged, then use graph communities and stacked work units to reduce merge and coordination risk.
 
-6. **P1 — Plan Evaluation + Safety Expansion.**
+7. **P1 — Plan Evaluation + Safety Expansion.**
    - Requirements and candidates: Full 50+ task behavioral W-lift golden set, Third-party eval adapter, `EVAL-FOLLOWUP-01`, `EVAL-API-FOLLOWUP-01..02`, `MEMGEN-FOLLOWUP-01`, `SEAL-FOLLOWUP-01..02`, and `AGENTGEN-FOLLOWUP-01`.
    - Goal: move beyond small held-out eval samples into broader behavioral coverage, provider-backed judges, safety eval packs, non-fixture memory-autogen validation, and governed SEAL/agent trajectory workflows.
 
-7. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
+8. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
    - Research intake: GBrain's `skillify` meta-skill (11-item checklist, cross-modal eval gate, fail-improve loop, dream cycle); Microsoft SkillOpt's textual learning rate and bounded edit loop; Memroos's existing eval engine, SEAL governance, and skill registry.
    - Source notes: `.planning/notes/skillopt-skill-optimization-spike.md`, `~/github/knowledge/content/skill-optimization-v2/SKILL-OPTIMIZATION-RESEARCH.md`.
    - Requirements: `SKILLFORGE-01..06` in `.planning/REQUIREMENTS.md` (supersedes `SKILLOPT-FOLLOWUP-01`).
    - Goal: Build a Memroos-native governed skill optimization system (SkillForge) that leverages existing infrastructure. Phases 85-90: Foundation → Analysis → Proposal Generation → Evaluation → Governance → Integration. All skill changes go through SEAL proposal lifecycle with operator approval, non-regression gates, and safe runtime export.
 
-8. **P2 — Plan Meeting Ingestion Expansion.**
+9. **P2 — Plan Meeting Ingestion Expansion.**
    - Requirements and candidates: Recall.ai bridge for Zoom/Teams/Meet, multi-participant meeting bot, and voice meeting bot follow-ups.
    - Goal: extend beyond the Daily-only, listener-only v4.0 path while preserving consent, transcript attribution, source provenance, and memory-ingestion boundaries.
 
-9. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
+10. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
    - Requirements and candidates: Voyage AI `voyage-4-large` embedding upgrade and LLM-powered recall scoring upgrade.
    - Goal: improve recall quality behind provider flags while preserving Ollama local as the default path and avoiding vendor lock-in or unreviewed embedding of sensitive content.
 
-10. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
+11. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
    - Source finding: current configs already register unified `memroos` MCP, but legacy `services/memory/mcp-mem0.py` and `mcp-mem0-wrapper.sh` still exist as a standalone mem0-only adapter and one capability manifest still advertises standalone-only memory tools.
    - Source finding: `services/knowledge-mcp` runs FastMCP 2.14.7 while PyPI latest is 3.3.1; v3 migration must move HTTP/path/stateless/auth options to the v3-compatible runtime API rather than doing a blind pin bump.
    - Source finding: `services/memory` uses `mem0ai` 0.1.118 while PyPI latest is 2.0.2; this is a separate memory-backend migration from the FastMCP upgrade.
@@ -436,12 +455,12 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `INT-FOLLOWUP-01..07` in `.planning/REQUIREMENTS.md`.
    - Goal: keep one canonical MemRoOS MCP connection, remove stale memory adapters, upgrade FastMCP and mem0ai deliberately, validate A2A/ADK and Next proxy boundaries against current specs, and stage SDK/toolchain majors before they become operational debt. Pull any integration task forward if it blocks P0 memory/security work.
 
-11. **P2 — Plan Phase 70 follow-up topology closure.**
+12. **P2 — Plan Phase 70 follow-up topology closure.**
    - Source note: `.planning/phases/70-foundation-engine-core/deferred-items.md`.
    - Requirement: `ORCH-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: close deferred LangGraph multi-hop topology and rollback-compensation gaps before claiming full multi-hop orchestration depth. Pull forward only if a live workflow needs multi-hop compensation.
 
-12. **P3 — Plan commercial/product/backend expansion.**
+13. **P3 — Plan commercial/product/backend expansion.**
    - Requirements: `PRODUCT-01..02`, `VERTICAL-01`, and `L3-FOLLOWUP-01..03`.
    - Goal: decide Eval Engine packaging, pricing/commercialization, second vertical, and live Salesforce/Zendesk/NetSuite/business-outcome adapters after the memory trust and evidence substrate is credible.
 
@@ -1260,8 +1279,106 @@ Plans:
 | 103 | v6.3 | 1/1 | Complete   | 2026-05-29 |
 | 104 | v6.3 | 1/1 | Complete   | 2026-05-29 |
 | 105 | v6.3 | 1/1 | Complete   | 2026-05-29 |
+| 108 | v6.6 | 0/1 | Backlog    | TBD |
+
+### Phase 106: SkillForge Production SkillOpt Hardening
+
+**Goal:** Make SkillForge's SkillOpt loop production-grade by replacing heuristic/stub evaluation paths with real behavioral evidence, consolidating proposal generation, and storing enough structured traceability to audit every accepted or rejected skill edit.
+**Milestone**: v6.4
+**Depends on:** Phase 90, Phase 94, Phase 105
+**Requirements**: SKILLOPT-HARDEN-01, SKILLOPT-HARDEN-02, SKILLOPT-HARDEN-03, SKILLOPT-HARDEN-04, SKILLOPT-HARDEN-05
+**Status**: In Progress
+**Success Criteria**:
+  1. `runHeldOutEval` and `runEvalGate` use the real behavioral eval/sandbox scorer for instruction and skill proposals, with a true baseline W for the current skill version instead of fixed or heuristic pass-rate assumptions.
+  2. SkillForge has one authoritative proposal-generation path; legacy/stub proposal generation is removed, renamed as test-only, or explicitly deprecated so worker, API, and approval flows cannot diverge.
+  3. SkillForge persistence stores `edit_hash`, `train_split_id`, `validation_split_id`, `held_out_split_id`, and `baseline_w` as first-class fields with additive migrations and tests; JSON payloads remain only for detailed receipts.
+  4. Proposed skill changes are represented as typed bounded edit operations (`add`, `delete`, `replace`) with textual-learning-rate limits, forbidden-section checks, stable hashes, and deterministic rendering to SKILL.md diffs.
+  5. Rejected-edit buffers, non-regression gates, operator approval, runtime export, and rollback receipts are covered by regression tests and visible in the proposal/audit surfaces.
+**Plans:** 1/2 complete
+
+Plans:
+- [x] 106-01-PLAN.md - SkillForge hardening pass for production proposal path, typed edits, traceability, and fail-closed held-out evidence.
+- [ ] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
+
+### Phase 107: Agent Context Bus and Synchronous Agent Communication
+
+**Goal:** Give every registered agent a MemRoOS-backed communication surface for durable inbox delivery, explicit context sync, synchronous request/reply, and audited memory save handoff without relying on hidden chat state or UI-only workflows.
+**Milestone**: v6.5
+**Depends on:** Phase 35, Phase 37, Phase 81, Phase 103
+**Requirements**: AGENTBUS-01, AGENTBUS-02, AGENTBUS-03, AGENTBUS-04, AGENTBUS-05, AGENTBUS-06, AGENTBUS-07
+**Status**: Complete (2026-06-04)
+**Success Criteria**:
+  1. `agent_context_messages` stores durable messages with id, thread id, correlation id, parent id, sender/recipient agent ids, type, status, priority, subject/body, context refs, artifacts, visibility/policy, timestamps, and optional memory receipt.
+  2. REST endpoints let authenticated agents send, list inbox messages, fetch a message, acknowledge delivery, reply, and wait briefly for a reply with bounded server-side polling.
+  3. Knowledge MCP exposes tool wrappers for send, inbox, reply, and ack so local/remote agents can use the bus from their normal harness.
+  4. Context-sync and knowledge-save messages can request durable memory persistence while preserving provenance and avoiding direct secret/raw PII writes.
+  5. Content scanning, agent-key auth, audit rows, proxy local-auth pass-through, and focused route/MCP tests prove the bus is safe to expose to agents.
+  6. Data access is decided by deterministic control-layer policy checks, not by agent-declared message metadata, tool payloads, scans, or capability/card claims.
+  7. Self-declared user/OAuth/credential/scope/data-access claims are denied fail-closed on the context bus, so delegated access must come from a trusted control-layer authorization path and raw bearer tokens are not stored or exposed.
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 107-01-PLAN.md — Durable agent context bus, REST routes, MCP wrappers, memory-save receipts, and regression tests.
+
+### Phase 108: Cloud Offload + Local Footprint Reduction
+
+**Goal:** Move eligible MemRoOS persistence, indexing, and heavy background work to managed/cloud services so the local machine keeps only the smallest practical hot cache, private runtime secrets, and offline/degraded fallback state.
+**Milestone**: v6.6
+**Depends on:** Phase 37, Phase 69, Phase 74, Phase 80, Phase 83, Phase 84
+**Requirements**: CLOUDOFFLOAD-01, CLOUDOFFLOAD-02, CLOUDOFFLOAD-03, CLOUDOFFLOAD-04, CLOUDOFFLOAD-05, CLOUDOFFLOAD-06
+**Status**: Backlog
+**Success Criteria**:
+  1. A local-store inventory classifies every current store as permanent, rebuildable cache, replay queue, raw evidence, or runtime secret/config; records owner, source of truth, size, retention, privacy label, and cloud migration target.
+  2. SQLite-backed operational state has a staged cloud persistence path or sync bridge for registry, audit, A2A/hive/task state, evals, and memory-write ledgers, with local WAL/SQLite either minimized or explicitly retained for offline fallback.
+  3. Heavy search/index workloads have a cloud or remote-worker path for qmd-compatible knowledge search, embeddings, and source freshness checks, while local indexes are capped, rebuildable, and safe to delete.
+  4. Raw evidence vault artifacts can move to encrypted object storage with local read-through cache, retention policy, hash verification, and rollback/replay proof before local raw copies are pruned.
+  5. mem0, Qdrant, Neo4j, logs, replay queues, and orchestration checkpoints have clear managed/cloud targets or retention caps, with health checks proving queued writes and degraded remote services do not silently drop data.
+  6. The NOC/setup surfaces show local footprint, cache pressure, cloud/offline mode, last sync, prune backlog, and rollback status; verification proves lower local disk/RAM pressure without exposing secrets or weakening policy gates.
+**Plans**: 0/1 complete
+
+Plans:
+- [ ] 108-01-PLAN.md — Inventory local stores, choose managed/cloud targets, add migration/sync strategy, cache caps, retention policy, and verification.
 
 ---
+
+## v6.5 Agent Context Bus + Synchronous Agent Communication
+
+### Phase 107: Agent Context Bus and Synchronous Agent Communication
+**Goal**: Give agents a first-class MemRoOS surface for durable communication, synchronous request/reply, context sync, memory-save handoff, deterministic control-layer data-access enforcement, and delegated user/OAuth identity propagation.
+**Milestone**: v6.5
+**Depends on**: Phase 35 (A2A hub), Phase 37 (unified memory), Phase 81 (evidence bundles), Phase 103 (checkpoint/resume)
+**Requirements**: AGENTBUS-01, AGENTBUS-02, AGENTBUS-03, AGENTBUS-04, AGENTBUS-05, AGENTBUS-06, AGENTBUS-07
+**Status**: Complete (2026-06-04)
+**Success Criteria**:
+  1. Durable message store supports inbox/reply semantics and trace fields aligned with A2A-style task/message exchange and OpenTelemetry-style correlation.
+  2. REST surface supports send/list/get/ack/reply plus bounded wait-for-reply for synchronous handoffs.
+  3. Knowledge MCP provides agent-facing tools so Codex, Claude, OpenClaw, and Multica agents can communicate without needing browser UI access.
+  4. Memory-save/context-sync handoff records audited receipts and provenance, with fail-closed auth and scanner behavior.
+  5. Tests cover bus library, REST routes, MCP wrappers, proxy pass-through, and security blocking.
+  6. Regression tests prove an agent cannot expand data access by self-declaring access scope in a message, tool payload, scan result, or capability/card claim.
+  7. User/OAuth delegation is not accepted from agent-readable payloads; self-declared claims are denied and raw OAuth tokens are excluded from memory rows, audit rows, prompts, derived indexes, and bus payloads.
+**Plans**: 1/1 complete
+**UI hint**: Future NOC/Agents surfaces can show inbox depth, pending replies, stale messages, and memory-save receipts.
+
+## v6.4 SkillForge Production SkillOpt Hardening
+
+### Phase 106: SkillForge Production SkillOpt Hardening
+**Goal**: Make SkillForge's SkillOpt loop production-grade by replacing heuristic/stub evaluation paths with real behavioral evidence, consolidating proposal generation, and storing enough structured traceability to audit every accepted or rejected skill edit.
+**Milestone**: v6.4
+**Depends on**: Phase 90 (SkillForge integration), Phase 94 (Behavioral W-Lift v2), Phase 105 (Agent CI/CD release gates)
+**Requirements**: SKILLOPT-HARDEN-01, SKILLOPT-HARDEN-02, SKILLOPT-HARDEN-03, SKILLOPT-HARDEN-04, SKILLOPT-HARDEN-05
+**Status**: In Progress
+**Success Criteria**:
+  1. `runHeldOutEval` and `runEvalGate` call the behavioral eval/sandbox scorer for instruction and skill proposals, compare against the current skill version's baseline W, and fail closed when held-out evidence is missing or stale.
+  2. SkillForge exposes one proposal-generation path for worker/API/approval flows; any legacy stub generator is removed, test-scoped, or explicitly deprecated with no production caller.
+  3. SkillForge schema and migrations add first-class traceability fields for edit hash, split ids, baseline W, validation W, held-out W, and evaluator receipt references.
+  4. Skill edits are typed bounded operations before they are rendered into unified diffs, with deterministic hashes, textual-learning-rate enforcement, forbidden-section protections, and round-trip tests.
+  5. Proposal audit and UI/API surfaces show accepted/rejected status, W delta, baseline, split ids, rejected-edit reason, residual risks, operator decision, export receipt, and rollback handle.
+**Plans**: 1/2 complete
+Plans:
+- [x] 106-01-PLAN.md - SkillForge hardening pass for production proposal path, typed edits, traceability, and fail-closed held-out evidence.
+- [ ] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
+**UI hint**: Improve/Skills proposal detail should expose baseline W, held-out W, split ids, rejected-edit reason, and rollback/export receipt.
 
 ## v6.2 Skill Distribution + Knowledge Gateway
 

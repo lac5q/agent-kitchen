@@ -115,6 +115,7 @@ Existing MemoryAdapter interface (v4.0) → classification-aware writes (adapter
 |---------|-------------------|------------|
 | User lifecycle management with audit trail | Beyond basic CRUD — identity events (invite, activate, deactivate, role change) written to immutable audit log | Medium |
 | Migration of legacy audit actor fields to authenticated identity | Audit rows written before RBAC landed reference raw actor strings; linking them to real identities improves incident response | Medium |
+| Delegated user access for agent-mediated data | User responsibility follows the agent into data-element policy checks through user id, OAuth subject/scope/consent, encrypted credential reference, and agent id/version | Medium |
 
 ### Anti-Features
 

@@ -341,6 +341,63 @@ Based on deep research of GBrain's skillify meta-skill, fail-improve loop, dream
 
 ---
 
+## v6.4 — SkillForge Production SkillOpt Hardening Requirements
+
+### Production SkillOpt Hardening (SKILLOPT-HARDEN)
+
+- [ ] **SKILLOPT-HARDEN-01**: SkillForge held-out evaluation must use the real behavioral eval/sandbox scorer for instruction and skill proposals, compare against the current skill version's baseline W, and fail closed when held-out evidence is missing, stale, or below non-regression thresholds. Partial 2026-06-04: deterministic held-out evidence now fails closed and removes fixed pass-rate assumptions; non-simulated sandbox scorer remains open because Phase 94 still contains simulated/random behavioral A/B scoring.
+- [x] **SKILLOPT-HARDEN-02**: SkillForge must have one authoritative proposal-generation path for worker, API, approval, and export flows. Legacy or stub generators must be removed, test-scoped, or explicitly deprecated with no production caller.
+- [x] **SKILLOPT-HARDEN-03**: SkillForge persistence must store edit hash, train split id, validation split id, held-out split id, baseline W, validation W, held-out W, and evaluator receipt references as first-class schema fields with additive migrations and regression tests.
+- [x] **SKILLOPT-HARDEN-04**: SkillForge proposed skill changes must be represented internally as typed bounded edit operations (`add`, `delete`, `replace`) before rendering to unified diffs. Typed ops must enforce textual-learning-rate limits, forbidden-section protections, stable hashes, and round-trip tests.
+- [x] **SKILLOPT-HARDEN-05**: SkillForge proposal audit and UI/API surfaces must expose accepted/rejected status, W delta, baseline, split ids, rejected-edit reason, residual risks, operator decision, export receipt, and rollback handle.
+
+### Traceability
+
+| Phase | Requirements |
+|-------|-------------|
+| Phase 106 | SKILLOPT-HARDEN-01..05 |
+
+---
+
+## v6.5 — Agent Context Bus + Synchronous Agent Communication Requirements
+
+### Agent Context Bus (AGENTBUS)
+
+- [x] **AGENTBUS-01**: MemRoOS must provide a durable `agent_context_messages` store for agent-to-agent exchange with message id, thread id, correlation id, parent id, sender/recipient agent ids, message type, status, priority, subject/body, context refs, artifacts, visibility/policy labels, timestamps, expiry, and optional memory receipt fields.
+- [x] **AGENTBUS-02**: REST endpoints must let authenticated agents send messages, list their inbox/outbox, fetch by id, acknowledge delivery, reply in-thread, and wait synchronously for a reply with a bounded timeout so agents can perform context-sync handoffs without hidden chat state.
+- [x] **AGENTBUS-03**: The unified knowledge MCP facade must expose `agent_context_send`, `agent_context_inbox`, `agent_context_reply`, and `agent_context_ack` tools that call the MemRoOS app using the configured agent id/API key and return structured status/errors.
+- [x] **AGENTBUS-04**: Context-sync and knowledge-save messages must support optional durable memory persistence with provenance metadata, saved-memory receipt references, and no direct secret/raw PII storage beyond the existing MemRoOS policy and scanner gates.
+- [x] **AGENTBUS-05**: Agent context bus writes must enforce agent-key auth, content scanning, audit rows, proxy pass-through for route-local auth, and regression tests for unauthorized access, blocked content, reply correlation, memory-save receipts, and MCP wrapper payloads.
+- [x] **AGENTBUS-06**: Data access for agent context, memory-save, context-pack, and handoff flows must be implemented at the MemRoOS control layer, not delegated to agent-declared access claims. Agent scans, cards, prompts, capabilities, and payload metadata may guide the requested scope, but deterministic policy scripts and registry checks must decide allow, deny, redact, or review-required; ambiguity must fail closed because agents are assumed to misclassify their own access.
+- [x] **AGENTBUS-07**: Agent-mediated data access must always carry the responsible user identity alongside the agent identity. Every context-pack, memory-save, handoff, retrieval, and data-element authorization decision must record `on_behalf_of_user_id`, tenant/project, user role, agent id/version, OAuth provider subject, approved scopes/consent, and an encrypted credential reference or token handle where applicable. The policy gate must evaluate the user and agent together so user access follows the agent down to the controlled data element; raw OAuth bearer tokens must never be stored in memory rows, audit rows, prompts, derived indexes, or agent-readable payloads. Implemented for the context bus by denying self-declared user/OAuth/credential/scope/data-access claims and requiring future delegated access to come from a trusted control-layer authorization path.
+
+### Traceability
+
+| Phase | Requirements |
+|-------|-------------|
+| Phase 107 | AGENTBUS-01..07 |
+
+---
+
+## v6.6 — Cloud Offload + Local Footprint Reduction Requirements
+
+### Cloud Offload (CLOUDOFFLOAD)
+
+- [ ] **CLOUDOFFLOAD-01**: MemRoOS must maintain a source-backed local-store inventory that classifies every persistent local path and database as permanent state, rebuildable cache, replay queue, raw evidence vault, runtime secret/config, or disposable log. The inventory must include owner, source of truth, current size, retention policy, privacy/security label, cloud/offload target, restore path, and whether local deletion is safe.
+- [ ] **CLOUDOFFLOAD-02**: SQLite-backed operational state must have a staged cloud persistence or sync bridge for agent registry, A2A/hive/task state, audit/evidence rows, evals, memory-write ledgers, and auth/team tables. The plan must specify which tables remain local-only, which move to managed Postgres or equivalent, how WAL/lock contention is avoided, and how rollback/offline fallback works.
+- [ ] **CLOUDOFFLOAD-03**: Heavy local search and embedding workloads must have a cloud or remote-worker path for qmd-compatible knowledge indexing, embeddings, source freshness checks, and recall-contract verification. Local QMD/cache directories must become bounded, rebuildable caches with documented prune commands and no reliance on unbounded local disk growth.
+- [ ] **CLOUDOFFLOAD-04**: Raw evidence vault storage must support encrypted object-storage offload with hash verification, label-preserving metadata, retention rules, local read-through cache, replay proof, and a safe prune workflow. Sensitive artifacts must remain protected by existing classification, envelope encryption, and human-review gates before and after offload.
+- [ ] **CLOUDOFFLOAD-05**: Memory and orchestration backends must have explicit managed/cloud targets or local retention caps: mem0/Qdrant, Neo4j graph memory, mem0 history, replay queues, logs, LangGraph checkpoints, and health/eval artifacts. Health checks must distinguish remote outage, auth failure, queued write backlog, stale index, and local-cache pressure.
+- [ ] **CLOUDOFFLOAD-06**: Operator surfaces and verification must prove local footprint reduction without weakening privacy or reliability. NOC/setup must show local disk/RAM pressure, cloud/offline mode, last successful sync, prune backlog, store health, rollback readiness, and residual local-only data; tests/smokes must cover migration, remote degradation, local prune, restore, and no-secret-leak behavior.
+
+### Traceability
+
+| Phase | Requirements |
+|-------|--------------|
+| Phase 108 | CLOUDOFFLOAD-01..06 |
+
+---
+
 ## v4.1 / Backlog Requirements
 
 ### Cron Job Health Monitoring (new)

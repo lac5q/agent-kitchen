@@ -1,5 +1,35 @@
 # Milestones
 
+## v6.6 Cloud Offload + Local Footprint Reduction (Backlog)
+
+**Phases:** 108 | **Plans:** 1
+
+**Scope:**
+
+1. **Cloud Offload + Local Footprint Reduction (Phase 108)** — Inventory permanent local stores versus rebuildable caches, migrate eligible persistence and heavy indexing to managed/cloud services, cap local cache/log growth, and preserve privacy, encryption, rollback, and offline-degraded operation.
+
+---
+
+## v6.5 Agent Context Bus + Synchronous Agent Communication (Completed 2026-06-04)
+
+**Phases:** 107 | **Plans:** 1
+
+**Scope:**
+
+1. **Agent Context Bus and Synchronous Agent Communication (Phase 107)** — Add a durable MemRoOS-native inbox/reply bus for agents, REST and MCP access, bounded wait-for-reply support, optional memory-save/context-sync receipts, fail-closed control-layer data-access enforcement, and denial of self-declared user/OAuth claims with agent auth/scanner/audit regression coverage.
+
+---
+
+## v6.4 SkillForge Production SkillOpt Hardening (Partially Implemented)
+
+**Phases:** 106 | **Plans:** 1 complete, 1 remaining
+
+**Scope:**
+
+1. **SkillForge Production SkillOpt Hardening (Phase 106)** — Replace heuristic/stub SkillForge eval behavior with real behavioral W scoring, converge proposal generation into one production path, add schema-level split/baseline/edit traceability, represent proposed skill edits as typed bounded operations, and expose accepted/rejected proposal evidence in audit/UI surfaces.
+
+---
+
 ## v6.2 Skill Distribution + Knowledge Gateway (Next)
 
 **Phases:** 98–102 | **Plans:** TBD

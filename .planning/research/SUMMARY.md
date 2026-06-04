@@ -11,7 +11,7 @@
 
 Memroos v5.0 is a security and observability hardening milestone for a production A2A agent hub. The system already has RBAC (v3.0), an 18-pattern content scanner (v1.5), HIL orchestration (v4.0), and a three-tier memory architecture (SQLite + Qdrant + Neo4j). The research consensus is that v5.0 must close three critical gaps before expanding agent autonomy: (1) sensitive organizational memory (legal, finance, HR, credentials) has no ingestion classification gate and no retrieval authorization boundary; (2) the NOC operations console is wired to mock data in production, eroding operator trust; and (3) the auth layer is missing email delivery, password reset, and OAuth/SSO — the table-stakes floor for any multi-user or team deployment.
 
-The recommended approach is a strict build order enforced by hard dependencies: the security label schema must be designed and migrated first because every subsequent component — the retrieval gate, safe indexes, envelope encryption, evidence bundle provenance, and security regression tests — reads from it. The classification cascade uses a deterministic-first design (existing 18-pattern scanner + new NER/metadata detectors + Presidio Python service) before invoking the LLM adjudicator only on low-confidence cases. All encryption uses Node.js and Python standard-library primitives — no new crypto npm packages. Auth hardening is fully parallelizable with the security chain.
+The recommended approach is a strict build order enforced by hard dependencies: the security label schema must be designed and migrated first because every subsequent component — the retrieval gate, safe indexes, envelope encryption, evidence bundle provenance, and security regression tests — reads from it. The classification cascade uses a deterministic-first design (existing 18-pattern scanner + new NER/metadata detectors + Presidio Python service) before invoking the LLM adjudicator only on low-confidence cases. All encryption uses Node.js and Python standard-library primitives — no new crypto npm packages. Auth hardening is fully parallelizable with the security chain. As a core agent-security philosophy, user access must follow every agent-mediated data access: the control layer evaluates agent identity and responsible user identity together, with OAuth subject/scope/consent pushed into data-element authorization as normalized claims or encrypted credential references rather than raw bearer tokens.
 
 The top risks: (1) Backfill blindness — existing FTS5/Qdrant/Neo4j content bypasses the new retrieval gate unless a reclassification sweep completes and MEMSEC-08 negative tests pass before the gate is declared live. (2) Embedding before classification — the 5-minute background embedding job will vector-index restricted content unless a provisional `private` label blocks the embedding path at write time. (3) The mem0 HTTP write path is ungoverned by the TypeScript ingestion layer, requiring retrieve-time classification as a compensating control.
 
@@ -66,6 +66,7 @@ No new database, no new scheduler, no Redis, no Socket.io.
 
 - Two-gateway model: ingestion classification AND retrieval authorization
 - Redacted projections with vault provenance — not binary allow/deny
+- User-delegated agent access: every agent access carries responsible user identity, OAuth subject/scope/consent, and agent id/version into data-element authorization
 - Efficiency telemetry signals (retrieval-without-action, source re-read, operator re-ask redundancy, rediscovered-fact rate)
 - Universal evidence bundles on all A2A tasks (Plan-Execute-Verify timeline, sources, memories, tools, replay handle)
 - Schedules Console showing all recurring jobs with health and controls
@@ -88,6 +89,8 @@ No new database, no new scheduler, no Redis, no Socket.io.
 **Classification cascade:** Composes with existing `content-scanner.ts` as the first sub-stage → Presidio NER (Python FastAPI endpoint) → constrained LLM adjudicator only on low-confidence cases.
 
 **OAuth/SSO:** Acquisition-path shim terminating at existing `signAccessToken()`. JWT format, session cookies, RBAC roles unchanged. Email-as-merge-key binds OAuth provider to existing user.
+
+**Delegated user access:** Agent identity is never sufficient for data access. Every agent-mediated context-pack, retrieval, handoff, and memory-save operation carries `on_behalf_of_user_id`, tenant/project, user role, OAuth provider subject, approved scopes/consent, encrypted credential reference or token handle, and agent id/version into the policy gate. The data element is controlled by evaluating user and agent together. Raw OAuth bearer tokens are not stored in memory rows, audit rows, prompts, indexes, or agent-readable payloads.
 
 **Universal evidence bundles:** New `task_evidence_bundles` table keyed on `a2a_tasks.task_id`. SEAL-specific bundles remain a sibling.
 
@@ -147,6 +150,7 @@ Phase 82: Auth Hardening                         AUTH-FOLLOWUP-01..03  (fully pa
 - **mem0 HTTP bypass scope** — audit all A2A task types for direct mem0 writes before Phase 76 gate goes live
 - **Classification review queue SLA values** — suggested: meeting transcripts 48h, credentials 4h; not finalized
 - **Evidence bundle scope** — define whether external A2A tasks, Paperclip fleet tasks, and voice sessions are included in Phase 81
+- **OAuth delegation pushdown shape** — decide the canonical representation for data-element policy: encrypted token handle vs provider credential reference vs normalized claim set, with no raw bearer-token persistence
 
 ---
 

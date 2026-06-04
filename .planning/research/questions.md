@@ -19,3 +19,7 @@ Surfaced during `/gsd-explore` session on memory evals + eval framework + autoge
 7. **SEAL proposal types — closed list or extensible?** Memory has 6 proposal types in old phase 57 plan. Agents add `agent_instruction_patch`, `skill_addition`, `tool_routing_update`. Should the proposal type registry be a closed enum (safer, auditable) or pluggable (companies can define their own mutation surfaces — riskier, more flexible)?
 
 8. **Provider-backed reflection vs local-only.** Old phase 57 had "the loop works when vector/Gemini quota is exhausted; provider-backed reflection is optional." Does that constraint hold for agent-level reflection too, or do agent-instruction edits require a smart enough model that local-only is impractical?
+
+## v6.5 — Delegated User Access for Agent-Mediated Data (added 2026-06-04)
+
+9. **OAuth delegation pushed down to data-element authorization.** What is the canonical representation for user access following an agent: encrypted OAuth token handle, provider credential reference, normalized claim set, or a combination? The requirement is that every agent-mediated retrieval, context pack, handoff, and memory save carries responsible user identity plus OAuth subject/scope/consent into deterministic policy checks, while raw bearer tokens never land in memory rows, audit rows, prompts, derived indexes, or agent-visible payloads. What minimum fields and regression fixtures prove the data element is controlled by user-plus-agent authorization rather than agent identity alone?

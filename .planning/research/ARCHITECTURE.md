@@ -26,6 +26,7 @@ Before describing what changes, the points of attachment that v5.0 touches:
 | `seal_evidence_bundles` table | `lib/seal/behavioral-schema.ts` | Generalized into universal `task_evidence_bundles` keyed on `a2a_tasks.task_id` |
 | `orchestration.db` (Python, LangGraph) | `services/orchestration/` | Evidence bundles live in main DB; cross-DB link via `orchestration_thread_id` stored in `task_evidence_bundles` |
 | OAuth/SSO | Not yet built | Issues same JWT as current password auth; `session.ts` + cookie/Bearer flow unchanged |
+| Delegated agent access context | Policy gate + audit/evidence paths | Carries responsible user identity, OAuth delegation claims, and agent id/version down to data-element authorization |
 
 ---
 
@@ -540,6 +541,9 @@ Large blobs in SQLite create WAL pressure, resist content-addressed dedup, compl
 
 ### Do Not Build OAuth as a Separate Auth System
 OAuth is an acquisition-path shim that terminates at `signAccessToken()`. The session primitive, cookie mechanics, JWT format, `authenticateUser()`, and all RBAC role checks are unchanged. OAuth users get the same JWT, same role gates, same audit actor identity as password users.
+
+### Do Not Let Agent Identity Replace User Responsibility
+Agent identity is an execution identity, not an authorization owner. Every agent-mediated data access must carry the responsible user identity and OAuth delegation context into the same policy decision as the agent id/version. The data element should see `on_behalf_of_user_id`, tenant/project, user role, OAuth provider subject, approved scopes/consent, and an encrypted credential reference or token handle. Raw OAuth bearer tokens must not be persisted in memory, audit, prompts, indexes, or agent-visible payloads.
 
 ---
 
