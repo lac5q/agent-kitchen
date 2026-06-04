@@ -51,11 +51,35 @@ describe("proxy", () => {
     expect(await response.text()).toBe("");
   });
 
+  it("lets SkillForge routes handle their own local/operator authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/skillforge/status", {
+        method: "GET",
+        headers: { host: "localhost:3002", "x-memroos-operator-key": "operator-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets agent-memory continuity routes handle their own local/operator authorization", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/agent-memory/capture", {
         method: "POST",
         headers: { host: "localhost:3002", "x-memroos-operator-key": "operator-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
+  it("lets agent-context bus routes handle their own agent-key authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/agent-context/messages", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
       })
     );
 

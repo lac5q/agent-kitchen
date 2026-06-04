@@ -200,6 +200,97 @@ def test_agent_memory_save_requires_agent_key(monkeypatch):
     assert "MEMROOS_AGENT_API_KEY" in payload["error"]
 
 
+def test_agent_context_send_posts_to_memroos_and_waits_for_reply(monkeypatch):
+    calls = []
+
+    class PostResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "message": {"id": "acm-1", "threadId": "thread-1"}}
+
+    class GetResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "reply": {"id": "acm-2", "parentId": "acm-1"}, "timedOut": False}
+
+    def fake_post(url, **kwargs):
+        calls.append(("post", url, kwargs))
+        return PostResponse()
+
+    def fake_get(url, **kwargs):
+        calls.append(("get", url, kwargs))
+        return GetResponse()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_ID", "agent-alpha")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+    monkeypatch.setattr(mcp_server.httpx, "get", fake_get)
+
+    payload = mcp_server.agent_context_send(
+        to_agent="agent-beta",
+        body="Please sync context.",
+        message_type="request",
+        reply_required=True,
+        wait_for_reply_ms=250,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["reply"]["response"]["reply"]["id"] == "acm-2"
+    assert calls[0][0] == "post"
+    assert calls[0][1] == "http://memroos.test/api/agent-context/messages"
+    body = calls[0][2]["json"]
+    assert body["agentId"] == "agent-alpha"
+    assert body["fromAgent"] == "agent-alpha"
+    assert body["toAgent"] == "agent-beta"
+    assert body["messageType"] == "request"
+    assert body["replyRequired"] is True
+    assert calls[1][0] == "get"
+    assert calls[1][1] == "http://memroos.test/api/agent-context/messages/acm-1"
+    assert calls[1][2]["params"]["wait_for"] == "reply"
+
+
+def test_agent_context_inbox_reply_and_ack_use_agent_key(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    def fake_get(url, **kwargs):
+        calls.append(("get", url, kwargs))
+        return Response()
+
+    def fake_post(url, **kwargs):
+        calls.append(("post", url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test/")
+    monkeypatch.setenv("MEMROOS_AGENT_ID", "agent-beta")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "get", fake_get)
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    assert mcp_server.agent_context_inbox(status="pending")["status"] == "ok"
+    assert mcp_server.agent_context_reply("acm-1", "Done")["status"] == "ok"
+    assert mcp_server.agent_context_ack("acm-1")["status"] == "ok"
+
+    assert calls[0][0] == "get"
+    assert calls[0][1] == "http://memroos.test/api/agent-context/messages"
+    assert calls[0][2]["params"]["agent"] == "agent-beta"
+    assert calls[1][1] == "http://memroos.test/api/agent-context/messages/acm-1/reply"
+    assert calls[1][2]["json"]["fromAgent"] == "agent-beta"
+    assert calls[2][1] == "http://memroos.test/api/agent-context/messages/acm-1/ack"
+    assert calls[2][2]["headers"]["Authorization"] == "Bearer agent-key"
+
+
 def test_agent_tool_outcome_record_posts_to_memroos_app(monkeypatch):
     calls = []
 

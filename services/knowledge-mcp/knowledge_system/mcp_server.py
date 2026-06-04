@@ -279,6 +279,30 @@ def _post_memroos_agent_api(path: str, payload: dict, timeout: int = 10) -> dict
         return {"status": "unavailable", "error": str(exc)}
 
 
+def _get_memroos_agent_api(path: str, params: Optional[dict] = None, timeout: int = 10) -> dict:
+    if httpx is None:
+        return {"status": "unavailable", "error": "httpx is not installed"}
+
+    headers = _memroos_agent_headers()
+    if headers is None:
+        return {
+            "status": "missing_agent_key",
+            "error": "Set MEMROOS_AGENT_API_KEY for audited MemRoOS agent reads.",
+        }
+
+    try:
+        response = httpx.get(
+            f"{_memroos_app_url()}{path}",
+            params=params or {},
+            headers=headers,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return {"status": "ok", "response": response.json()}
+    except Exception as exc:
+        return {"status": "unavailable", "error": str(exc)}
+
+
 def _qmd_bin() -> str:
     return os.environ.get("QMD_BIN", "qmd")
 
@@ -635,6 +659,109 @@ def agent_memory_save(
                 default_source="multica-agent",
             ),
         },
+    )
+
+
+@_mcp_tool
+def agent_context_send(
+    to_agent: str,
+    body: str,
+    from_agent: Optional[str] = None,
+    subject: str = "",
+    message_type: str = "message",
+    thread_id: str = "",
+    correlation_id: str = "",
+    context_refs: Optional[list] = None,
+    artifacts: Optional[dict] = None,
+    priority: int = 5,
+    reply_required: bool = False,
+    save_to_memory: bool = False,
+    wait_for_reply_ms: int = 0,
+) -> dict:
+    """Send a durable MemRoOS agent-context message, optionally waiting briefly for a reply."""
+    resolved_agent_id = _memroos_agent_id(from_agent)
+    payload = {
+        "agentId": resolved_agent_id,
+        "fromAgent": resolved_agent_id,
+        "toAgent": to_agent,
+        "body": body,
+        "subject": subject,
+        "messageType": message_type,
+        "threadId": thread_id or None,
+        "correlationId": correlation_id or None,
+        "contextRefs": context_refs or [],
+        "artifacts": artifacts or {},
+        "priority": priority,
+        "replyRequired": reply_required,
+        "saveToMemory": save_to_memory,
+    }
+    result = _post_memroos_agent_api("/api/agent-context/messages", payload)
+    if result.get("status") != "ok" or wait_for_reply_ms <= 0:
+        return result
+
+    message = result.get("response", {}).get("message", {})
+    message_id = message.get("id") if isinstance(message, dict) else None
+    if not message_id:
+        return result
+
+    reply = _get_memroos_agent_api(
+        f"/api/agent-context/messages/{message_id}",
+        params={"agent": resolved_agent_id, "wait_for": "reply", "wait_ms": wait_for_reply_ms},
+        timeout=max(10, int(wait_for_reply_ms / 1000) + 2),
+    )
+    return {"status": result["status"], "response": result.get("response"), "reply": reply}
+
+
+@_mcp_tool
+def agent_context_inbox(
+    agent_id: Optional[str] = None,
+    status: str = "pending",
+    box: str = "inbox",
+    limit: int = 20,
+) -> dict:
+    """List durable MemRoOS agent-context messages for the configured agent."""
+    resolved_agent_id = _memroos_agent_id(agent_id)
+    return _get_memroos_agent_api(
+        "/api/agent-context/messages",
+        params={"agent": resolved_agent_id, "status": status, "box": box, "limit": limit},
+    )
+
+
+@_mcp_tool
+def agent_context_reply(
+    message_id: str,
+    body: str,
+    from_agent: Optional[str] = None,
+    subject: str = "",
+    context_refs: Optional[list] = None,
+    artifacts: Optional[dict] = None,
+    priority: int = 5,
+    save_to_memory: bool = False,
+) -> dict:
+    """Reply to a MemRoOS agent-context message in the original thread."""
+    resolved_agent_id = _memroos_agent_id(from_agent)
+    return _post_memroos_agent_api(
+        f"/api/agent-context/messages/{message_id}/reply",
+        {
+            "agentId": resolved_agent_id,
+            "fromAgent": resolved_agent_id,
+            "body": body,
+            "subject": subject,
+            "contextRefs": context_refs or [],
+            "artifacts": artifacts or {},
+            "priority": priority,
+            "saveToMemory": save_to_memory,
+        },
+    )
+
+
+@_mcp_tool
+def agent_context_ack(message_id: str, agent_id: Optional[str] = None) -> dict:
+    """Acknowledge delivery of a MemRoOS agent-context message addressed to this agent."""
+    resolved_agent_id = _memroos_agent_id(agent_id)
+    return _post_memroos_agent_api(
+        f"/api/agent-context/messages/{message_id}/ack",
+        {"agentId": resolved_agent_id},
     )
 
 
