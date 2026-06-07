@@ -413,6 +413,7 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 3. **P0 — Plan Cloud Offload + Local Footprint Reduction.**
    - Requirements: `CLOUDOFFLOAD-01..06` in `.planning/REQUIREMENTS.md`.
    - Goal: reduce local disk, RAM, and background-service pressure by inventorying permanent local stores versus rebuildable caches, then moving eligible heavy storage/indexing to cloud-managed services with encryption, retention, rollback, and local-cache caps.
+   - Limitation/test: evaluate compressed local vector caches such as Turbovec only as future shadow indexes. Qdrant remains canonical; no Turbovec dependency, backend swap, or implementation work starts without Luis approval first. Any future test must pass memory recall evals with no recall/precision regression and prove materially lower hot-path p95 latency.
 
 4. **P1 — Plan corrective Operations NOC Real-Data Wiring phase.**
    - Source note: `.planning/notes/operations-noc-real-data-requirements.md`.
@@ -481,6 +482,7 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - HIL timeout and escalation policies
 - Multi-hop retry compensation and rollback
 - Memory backend pluggability (beyond mem0 + Qdrant + Neo4j) — v3.0 concern
+- Turbovec compressed-vector shadow-index evaluation for local footprint/hot-path recall — future-only; requires Luis approval before implementation or dependency adoption
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
 - Multi-participant meeting bot: move beyond listener-only recording into participant-aware meeting capture and consent behavior
@@ -1523,7 +1525,7 @@ Plans:
 
 ### v7.0 Summary
 
-- [ ] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04
+- [x] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04 (completed 2026-06-07)
 - [ ] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial)
 - [ ] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06
 - [ ] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
@@ -1544,11 +1546,11 @@ Plans:
   3. An aggregate findings summary report is produced that cross-references all 4 domain reports and counts findings by severity tier
 **Plans**: 6 plans
 - [x] 109-01-PLAN.md — Toolchain bootstrap: install pip-audit/bandit/madge/knip, npm+pip CVE baseline (Wave 1)
-- [ ] 109-02-PLAN.md — Domain A: Auth & Secrets audit (Wave 2)
-- [ ] 109-03-PLAN.md — Domain B: API Surface audit (Wave 2)
-- [ ] 109-04-PLAN.md — Domain C: Data & Memory audit (Wave 2)
-- [ ] 109-05-PLAN.md — Domain D: Architecture & Code Quality audit (Wave 2)
-- [ ] 109-06-PLAN.md — Findings aggregation into FINDINGS-INDEX.md (Wave 3)
+- [x] 109-02-PLAN.md — Domain A: Auth & Secrets audit (Wave 2)
+- [x] 109-03-PLAN.md — Domain B: API Surface audit (Wave 2)
+- [x] 109-04-PLAN.md — Domain C: Data & Memory audit (Wave 2)
+- [x] 109-05-PLAN.md — Domain D: Architecture & Code Quality audit (Wave 2)
+- [x] 109-06-PLAN.md — Findings aggregation into FINDINGS-INDEX.md (Wave 3)
 
 ### Phase 110: Critical & High Security Fixes
 **Goal**: Fix all critical and high-severity security findings from Phase 109 audit, adding regression tests for each fix so no finding can be silently reintroduced.
@@ -1603,7 +1605,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 109. Parallel Domain Audit | 1/6 | In Progress|  |
+| 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
 | 110. Critical & High Security Fixes | 0/1 | Not started | - |
 | 111. Dependency CVE Sweep + Medium Security Fixes | 0/1 | Not started | - |
 | 112. Architecture Cleanup | 0/1 | Not started | - |

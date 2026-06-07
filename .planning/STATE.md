@@ -4,13 +4,13 @@ milestone: v7.0
 milestone_name: Client-Ready Security + Architecture Audit
 status: executing
 stopped_at: context exhaustion at 83% (2026-06-07)
-last_updated: "2026-06-07T16:05:38.717Z"
+last_updated: "2026-06-07T21:46:21.974Z"
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 1
-  percent: 0
+  completed_plans: 6
+  percent: 20
 ---
 
 # State: Memroos
@@ -30,7 +30,7 @@ Status: Ready to execute
 
 ## Session Continuity
 
-Last session: 2026-06-07T16:05:34.967Z
+Last session: 2026-06-07T21:46:21.969Z
 Stopped at: context exhaustion at 83% (2026-06-07)
 Resume file: None
 Next action: replace Phase 94 simulated/random behavioral A/B scorer with a deterministic sandbox-backed scorer and wire it into SkillForge held-out eval
@@ -96,6 +96,7 @@ Next action: replace Phase 94 simulated/random behavioral A/B scorer with a dete
 - Phase 106 implementation now covers a single production proposal path, additive traceability fields, typed edit ops, rejected-edit preservation, and API proposal receipt expansion. The remaining gap is true non-simulated sandbox-backed held-out scoring; the existing Phase 94 behavioral A/B helper still uses randomized simulated scores.
 - Phase 107 completed after the agent-context-sync research pass. It introduces a MemRoOS-native durable agent context bus for synchronous request/reply, inbox polling, explicit acknowledgements, MCP-accessible tools, optional memory-save receipts, scanner/audit guardrails, fail-closed control-layer data-access denial for self-declared claims, and delegated user/OAuth raw-token exclusion so agents can communicate without relying on hidden chat state or self-declared access.
 - Phase 108 added to the backlog after the local permanence/footprint review. The goal is to reduce load on Luis's local machine by inventorying permanent stores versus rebuildable caches, moving eligible SQLite/search/vault/log/checkpoint workloads to managed or cloud-backed services, and enforcing local cache/retention caps without weakening privacy, encryption, rollback, or degraded/offline behavior.
+- Turbovec was added to the Phase 108 roadmap only as a future compressed-vector shadow-index limitation/test. It is not approved for implementation; any future test or dependency adoption requires Luis approval first and must prove no recall/precision regression plus meaningful hot-path latency improvement.
 
 ### Roadmap Evolution (2026-05-27)
 
@@ -148,6 +149,7 @@ Next action: replace Phase 94 simulated/random behavioral A/B scorer with a dete
 - **Qdrant stays cloud:** Never add local Qdrant to Docker compose — configured via QDRANT_URL + QDRANT_API_KEY env vars
 - **Docker compose is for OSS users only:** Luis keeps native workflow (npm start, LaunchAgent, port 3002)
 - **Memory stack is fixed for v2.0:** mem0 + Qdrant Cloud (vector) + Neo4j (graph, new) + SQLite (episodic). No pluggability until v3.0.
+- **Future vector experiments require approval:** Turbovec or similar compressed-vector indexes may only be evaluated as optional shadow indexes, and require Luis approval before adding a dependency, implementation path, or backend swap.
 
 ### v2.0 architectural constraints
 
