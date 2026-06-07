@@ -1562,7 +1562,9 @@ Plans:
   2. Zero high-severity security findings remain open after this phase
   3. A regression test exists for each critical/high finding fixed — tests are in the main test suite and fail if the vulnerability is reintroduced
   4. No hardcoded secrets, tokens, or credentials exist in the codebase; git history is clean of accidental secret commits
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 110-01-PLAN.md — SEC-01/02 attestation + SEC-05 default key fix + regression test (Wave 1)
 
 ### Phase 111: Dependency CVE Sweep + Medium Security Fixes
 **Goal**: Patch all critical/high CVEs in npm and Python dependencies, fix medium-severity security findings from the audit, and harden CI/CD security gates so they cannot be bypassed silently.
