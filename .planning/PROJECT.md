@@ -1,6 +1,6 @@
 # Project: Memroos
 
-*Last updated: 2026-05-24 — v5.2 Competitive Memory Target Architecture shipped*
+*Last updated: 2026-06-06 — v7.0 Client-Ready Security + Architecture Audit started*
 
 ---
 
@@ -12,7 +12,26 @@ See `.planning/GOAL.md` for the full development goal and workflow loop.
 
 ---
 
-## Current Milestone: v6.3 Agent Lifecycle + Memory Observability — SHIPPED 2026-05-29
+## Current Milestone: v7.0 Client-Ready Security + Architecture Audit — IN PROGRESS 2026-06-06
+
+**Goal:** Harden memroos for client review with a full security and architecture sweep across all codebase layers — eliminating vulnerabilities, cleaning dead code, fixing bad boundaries, and ensuring tests stay green throughout.
+
+**Target features:**
+- Parallel 4-domain audit: Auth/Secrets, API surface, Data/Memory handling, Architecture/Code quality
+- Security remediation: critical → high → medium priority order
+- Architecture cleanup: dead code, bad boundaries, redundant patterns, unsafe TypeScript
+- Dependency CVE sweep: npm audit + pip-audit, patch critical/high
+- Test validation: full suite green after all changes, security regression tests added
+
+---
+
+## Previous Milestone: v6.5 Agent Context Bus + Synchronous Agent Communication — SHIPPED 2026-06-04
+
+**What shipped:** Agent context bus for cross-agent runtime state sharing, synchronous A2A communication patterns, governance review gates, and SkillForge proposal traceability hardening.
+
+---
+
+## Previous Milestone: v6.3 Agent Lifecycle + Memory Observability — SHIPPED 2026-05-29
 
 **Goal:** Implement compact, event-triggered checkpoint/resume with minimal execution overhead, memory-trace causal execution timelines with failure classifications, and immutable agent version release promotions with rollbacks.
 
