@@ -1579,9 +1579,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + Python dep pinning + accepted-risk doc (Wave 1)
-- [ ] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 1)
-- [ ] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2)
+- [ ] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + zod install + Python dep pinning + accepted-risk doc (Wave 1)
+- [ ] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 2, depends on 111-01)
+- [ ] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2, parallel with 111-02)
 
 ### Phase 112: Architecture Cleanup
 **Goal**: Remove dead code, resolve module boundary violations, consolidate redundant patterns, enforce consistent error handling across all API routes, and eliminate unsafe TypeScript so the codebase is maintainable for a client-facing review.
