@@ -1,15 +1,11 @@
 export const dynamic = "force-dynamic";
 
+// For reverse-proxy deployments, MEMROOS_CHATGPT_ACTIONS_PUBLIC_BASE_URL must be set
+// to the public-facing base URL. Without it, the literal request URL origin is used.
+// x-forwarded-host is intentionally not trusted (prevents spec URL poisoning — SEC-03/B01-003).
 function publicBaseUrl(request: Request): string {
   const configured = process.env.MEMROOS_CHATGPT_ACTIONS_PUBLIC_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
-
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (host && !host.includes("localhost") && !host.includes("127.0.0.1")) {
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    return `${proto}://${host.split(",")[0].trim()}`;
-  }
-
   return new URL(request.url).origin;
 }
 
