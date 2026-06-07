@@ -160,3 +160,106 @@ priority per RESEARCH.md, not a blocker.)
   scanner.
 - **Mapped Fix Requirement:** none — informational
 - **Confidence:** verified (tool + manual)
+
+---
+
+## Manual Checklist — Detailed Findings (Task 2)
+
+Each Domain A manual checklist item below was worked against current source. Verbatim notes; the
+condensed pass/fail mapping is in `## Coverage Attestation`.
+
+1. **MEMROOS_JWT_SECRET entropy (≥256-bit, not in source).** Secret is read from
+   `process.env.MEMROOS_JWT_SECRET` (jwt.ts:6) — **not** hardcoded in source. Presence is enforced
+   (throws if missing) but **strength is NOT enforced** → see A01-001. `.env.example` ships a `change-me`
+   placeholder with `openssl rand -base64 32` guidance. Status: FINDING A01-001 (strength), CLEAN (not in
+   source).
+
+2. **JWT algorithm (HS256 min / RS256 preferred).** `signAccessToken` pins
+   `.setProtectedHeader({ alg: 'HS256' })` (jwt.ts:19). `verifyAccessToken` calls `jose.jwtVerify` with a
+   symmetric key (jwt.ts:32); jose rejects `alg=none` and asymmetric-confusion by default when given a
+   symmetric `Uint8Array` key. No algorithm-confusion path. HS256 meets the stated minimum. CLEAN.
+
+3. **Access + refresh token TTLs.** `ACCESS_TOKEN_TTL = '12h'`; refresh `REFRESH_TOKEN_TTL_DAYS = 30`
+   (session-limits.ts). Access TTL of 12h is on the longer side but reasonable for an operator console;
+   refresh 30d is standard. Both enforced: access via JWT `exp` (jose verifies), refresh via DB
+   `expires_at` check in refresh/route.ts:44. CLEAN.
+
+4. **Cookie flags HttpOnly / SameSite / Secure-isProd.** `access_token` and `memroos_refresh` both set
+   `HttpOnly` (XSS read-protection, CR-01 fix noted at login/route.ts:88), `SameSite=Lax`, and `Secure`
+   gated on `NODE_ENV === 'production'` (login/route.ts:84-89, refresh/route.ts:77-97). HttpOnly ✓,
+   Secure-isProd logic ✓. `SameSite=Lax` flagged informationally → A01-003. CLEAN (HttpOnly + Secure
+   logic), FINDING A01-003 (SameSite Lax informational).
+
+5. **Refresh-token revocation (hashed-before-storage, revocation path).** Raw token is 32 random bytes
+   (`randomBytes(32)`); only its `sha256` hash is stored (login/route.ts:70-77). Refresh **rotates**: the
+   old token is revoked (`revoked_at` set) and a new one issued on every use (refresh/route.ts:54-68).
+   Invalid/expired/revoked tokens are rejected and cookies cleared (refresh/route.ts:44-52). Strong
+   session lifecycle. CLEAN.
+
+6. **`authorizeRegistryWrite` loopback bypass not reachable via spoofed headers.** `getRequestHostname`
+   (operator-auth.ts:14-26) explicitly **does not trust `x-forwarded-host`** (CR-08 fix, commented), using
+   only `request.url` (server-set from the socket) or the `Host` header the server controls. Loopback
+   bypass (`isLoopbackHost`) therefore cannot be reached by an external attacker spoofing forwarding
+   headers. Non-loopback requests fall through to operator-key check. Regression of the prior fix NOT
+   observed — confirmed present. CLEAN (T-109-A-03 mitigated).
+
+7. **Per-agent API key strength / storage / rotation.** `generateApiKey` →
+   `ak_${agentId}_${crypto.randomBytes(32).toString("base64url")}` (agent-registry.ts:108) = 256-bit
+   random material. Stored as `sha256` hash with a `key_prefix` (agent-registry.ts:305-308), never
+   plaintext. Rotation/revocation supported (`UPDATE agent_api_keys SET revoked_at`, agent-registry.ts:291-293;
+   lookups filter `revoked_at IS NULL`). CLEAN.
+
+8. **Hardcoded-key scan (manual complement to TruffleHog).** Manual regex sweep for
+   `(secret|password|apikey|token) = "<16+ char literal>"` across `apps/memroos/src` + `services`
+   (excluding env-var reads, tests, placeholders) returned **no real hardcoded credentials**. The only
+   embedded literals are: the dummy bcrypt timing hash (A01-004, a control) and the dev-gated
+   `memroos-internal-default-key` default (A01-002). CLEAN (no unexpected hardcoded secrets), with
+   A01-002 tracked separately as a known-default.
+
+9. **`.env.example` covers all secrets with no real values.** `.env.example` enumerates the secret
+   surface: `MEMROOS_JWT_SECRET`, `MEMROOS_OPERATOR_API_KEY`, `MEMROOS_ADMIN_PASSWORD`, `QDRANT_API_KEY`,
+   `NEO4J_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `MEMROOS_INTERNAL_API_KEY`.
+   All are placeholders (`change-me`, `your-...`, empty) **except** `MEMROOS_INTERNAL_API_KEY`, which ships
+   the working default value → A01-002. Coverage is otherwise complete with no live secrets. FINDING
+   A01-002 (one real default value), CLEAN (coverage + no other live values).
+
+---
+
+## Coverage Attestation
+
+| Checklist Item | Status |
+|----------------|--------|
+| MEMROOS_JWT_SECRET entropy (≥256-bit, not in source) | FINDING: A01-001 — secret not in source (CLEAN) but no minimum-entropy enforcement at load (jwt.ts:6-11) |
+| JWT algorithm (HS256 min / RS256 preferred) | CLEAN — verified in lib/auth/jwt.ts:19,32; alg pinned HS256, jose rejects alg=none/confusion |
+| Access + refresh token TTLs | CLEAN — verified in lib/auth/session-limits.ts (access 12h, refresh 30d) + enforced in jwt.ts/refresh route |
+| Cookie flags (HttpOnly / SameSite / Secure-isProd) | FINDING: A01-003 — HttpOnly+Secure-isProd CLEAN (login/route.ts:84-89); SameSite=Lax informational |
+| Refresh-token revocation (hash-before-storage + rotation) | CLEAN — verified in login/route.ts:70-77 + refresh/route.ts:54-68 (sha256 hash, rotate+revoke) |
+| authorizeRegistryWrite loopback bypass (no header spoof) | CLEAN — verified in operator-auth.ts:14-26 (x-forwarded-host untrusted, CR-08 fix present, no regression) |
+| Per-agent API keys (strength / storage / rotation) | CLEAN — verified in agent-registry.ts:108,305-308,291-293 (256-bit, sha256-hashed, rotatable) |
+| Hardcoded-key scan (semgrep + manual) | FINDING: A01-002 — no unexpected hardcoded secrets; dev-gated default key tracked; A01-004 false positive |
+| .env.example covers all secrets, no real values | FINDING: A01-002 — coverage complete but MEMROOS_INTERNAL_API_KEY ships a real default value |
+
+No blank rows. All 9 Domain A manual checklist items attested.
+
+---
+
+## Summary Stats
+
+| Severity | Count |
+|----------|-------|
+| critical | 0 |
+| high | 0 |
+| medium | 1 |
+| low | 3 |
+| **Total** | **4** |
+
+**Fix-requirement routing:** SEC-03 ×1 (A01-001), SEC-05 ×1 (A01-002), informational ×2 (A01-003, A01-004).
+
+**Prior-baseline regressions checked (RESEARCH "Do Not Re-Litigate"):** HttpOnly cookies (CR-01),
+x-forwarded-host spoofing fix (CR-08), refresh rotation/revocation — all confirmed **present, not
+regressed**. No closed Phase 68/69/74-78 findings were re-filed.
+
+**Overall posture:** Domain A is in good shape. No critical/high auth bypass or secret-exposure path
+found. The two real findings are hardening items: enforce JWT-secret strength (A01-001, medium) and
+remove the working default value from `.env.example` (A01-002, low, dev-gated). The two remaining rows
+are informational (intentional `SameSite=Lax`; a semgrep false positive on the timing-defense dummy hash).
