@@ -113,11 +113,18 @@ Mapped Fix Requirement: {SEC-01..06 | ARCH-01..05 | "none — informational"}
 Confidence: verified (tool + manual confirmation) | likely (single source) | possible (pattern only)
 ```
 
-**Severity taxonomy (must match phases 110–112 filter keys):**
-- `critical` → SEC-01 (fix immediately)
-- `high` → SEC-02 (fix before client review)
-- `medium` → SEC-03 (fix or accept-risk rationale required)
-- `low` → informational; no mandatory fix requirement
+**Severity rubric (all 4 agents MUST use this calibration for cross-domain comparability):**
+- `critical` — Unauthenticated remote exploit path → RCE, full data exposure, or authentication bypass with zero preconditions.
+- `high` — Auth bypass or exploit that requires one precondition (authenticated session, specific header, known endpoint), OR a CVE in a directly-invoked dependency with a known working exploit.
+- `medium` — Requires authenticated/privileged access or exploits a defense-in-depth gap (e.g., CSP bypass escalates existing XSS but is not standalone); or a hygiene gap that increases attack surface without direct exploit.
+- `low` — Informational / best-practice violation with no known exploit path; no mandatory fix requirement.
+
+**Fix-requirement routing (type-based, not severity-only):**
+- Dependency CVE (npm/pip) → `SEC-04` regardless of severity label
+- Hardcoded secret / token in source or git history → `SEC-05` regardless of severity label
+- CI gate bypass or secret-guard.yml weakness → `SEC-06` regardless of severity label
+- Architecture finding (dead code, circular dep, leaky abstraction, unsafe TS cast, inconsistent error handling) → `ARCH-01..05` per the ARCH requirement that matches
+- All other security findings → route by severity: critical→`SEC-01`, high→`SEC-02`, medium→`SEC-03`
 
 **Domain prefixes:**
 - Domain A (Auth/Secrets): `A01-NNN`
@@ -435,20 +442,45 @@ The consolidated index enables phase 110 planner to `filter(severity == critical
 
 ### Phase Requirements → Verification Map
 
-Phase 109 is a document-deliverable phase — verification is completeness-based, not behavioral-test-based.
+Phase 109 is a document-deliverable phase — verification is **coverage attestation**, not behavioral-test-based. An empty findings section is ambiguous ("checked, clean" vs "never checked") — each domain report MUST include a Coverage Attestation table where every checklist item is explicitly tagged.
 
-| Req ID | Behavior | Verification Method |
-|--------|----------|---------------------|
-| AUDIT-01 | Auth domain findings report exists, covers all checklist items | Check `109-A-FINDINGS.md` exists and has non-empty findings table |
-| AUDIT-02 | API surface findings report exists, covers all checklist items | Check `109-B-FINDINGS.md` exists and has non-empty findings table |
-| AUDIT-03 | Data/memory findings report exists, covers all checklist items | Check `109-C-FINDINGS.md` exists and has non-empty findings table |
-| AUDIT-04 | Architecture findings report exists, covers all checklist items | Check `109-D-FINDINGS.md` exists and has non-empty findings table |
+**Coverage Attestation format** (required in each `109-{DOMAIN}-FINDINGS.md`):
 
-**Phase gate:** All 4 domain reports exist + `109-FINDINGS-INDEX.md` populated with at least one finding per domain before `/gsd:verify-work`.
+```markdown
+## Coverage Attestation
+| Checklist Item | Status |
+|----------------|--------|
+| JWT algorithm verified | CLEAN — alg=HS256 with 256-bit key, verified in lib/auth/jwt.ts |
+| Cookie Secure flag | FINDING: A01-003 |
+| ... | ... |
+```
+
+Permitted statuses: `CLEAN — verified by {tool/file}` | `FINDING: {ID}` | `N/A — {reason}` | `NOT CHECKED — {blocker}`.
+
+| Req ID | Verification Method |
+|--------|---------------------|
+| AUDIT-01 | `109-A-FINDINGS.md` exists AND Coverage Attestation table covers all Domain A checklist items with no blank rows |
+| AUDIT-02 | `109-B-FINDINGS.md` exists AND Coverage Attestation table covers all Domain B checklist items with no blank rows |
+| AUDIT-03 | `109-C-FINDINGS.md` exists AND Coverage Attestation table covers all Domain C checklist items with no blank rows |
+| AUDIT-04 | `109-D-FINDINGS.md` exists AND Coverage Attestation table covers all Domain D checklist items with no blank rows |
+
+**Phase gate:** All 4 domain reports with complete Coverage Attestation tables + `109-FINDINGS-INDEX.md` populated before `/gsd:verify-work`.
 
 ### Wave 0 Gaps
-- [ ] Install audit toolchain: `pip install pip-audit bandit ruff vulture && npm install -g madge knip` — prerequisite for Domains C and D
+- [ ] Install audit toolchain (prerequisite for Domains C and D):
+  ```bash
+  # Python 3.14 on Homebrew requires --break-system-packages (or use a venv)
+  pip install pip-audit bandit ruff vulture --break-system-packages 2>/dev/null || pip install pip-audit bandit ruff vulture
+  npm install -g madge knip
+  ```
 - [ ] No new test files needed (audit is document-producing, not code-changing)
+
+### Prior Security Baseline (Do Not Re-Litigate)
+Load this context before running audit agents to avoid noise from already-closed findings:
+- Phase 68 (SECBOUND-01..08): `/api/onboarding/invite` auth fix, dispatch `from_agent` auth, scanner bypass fix, CSP headers, A2A private-network defaults — all shipped.
+- v3.1 (Phase 69): 8 critical findings fixed — HttpOnly cookies, 5 missing auth guards, TOCTOU first-user bootstrap, x-forwarded-host spoofing.
+- Phases 74–78: Memory security classification, retrieval gate, safe index projections, envelope encryption, security regression tests — all shipped.
+- Agents should verify these fixes have NOT regressed, but should not re-file closed findings as new.
 
 ---
 
