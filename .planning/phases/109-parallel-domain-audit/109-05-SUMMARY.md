@@ -28,7 +28,7 @@ requirements: [AUDIT-04]
 
 # Phase 109 Plan 05: Domain D Architecture & Code Quality Audit Summary
 
-Read-only architecture audit (AUDIT-04) producing the Phase 112 ARCH-01..05 work queue: 8 findings (1 MEDIUM, 4 LOW, 3 INFO, zero HIGH/CRITICAL) across dead code, circular deps, unsafe TS casts, and inconsistent API error handling — with three checklist domains (redundancy, cross-layer leakage, exec arg-safety) attested CLEAN.
+Read-only architecture audit (AUDIT-04) producing the Phase 112 ARCH-01..05 work queue: 9 findings (1 MEDIUM, 5 LOW, 3 INFO, zero HIGH/CRITICAL) across dead code, circular deps, unsafe TS casts, inconsistent API error handling, and one shell-mode exec site — with redundancy, cross-layer leakage, and Python cross-service imports attested CLEAN.
 
 ## What Was Built
 
@@ -42,8 +42,9 @@ Read-only architecture audit (AUDIT-04) producing the Phase 112 ARCH-01..05 work
 - **D01-004 (LOW → ARCH-02):** Type-only seal cycle (erased at compile).
 - **D01-005 (LOW → ARCH-01):** 11 dead exports/types in security paths; `auth/jwt.ts generateRefreshToken` unconsumed (possible incomplete refresh-token flow).
 - **D01-006/007/008 (INFO → ARCH-01):** 11 unused files, 120 unused exports; Python ruff (50, mostly test imports) + vulture (mostly decorator false-positives).
+- **D01-009 (LOW → ARCH-02):** `context-sources.ts:119` runs `execFileSync` with `shell:"/bin/sh"` and an interpolated `tool` arg. Provenance traced to JSON-config `requiredTools[]` (operator-controlled, not request-reachable) → disposition CLEAN/not-exploitable, logged as defense-in-depth.
 
-**CLEAN attestations:** redundant patterns (DB centralized in `lib/db.ts`, 0 raw `new Database()`), cross-layer leakage (0 UI→db imports), Python cross-service imports (0), execFile/spawn arg-safety (all static argv, no `shell:`, 0 `execSync`).
+**CLEAN attestations:** redundant patterns (DB centralized in `lib/db.ts`, 0 raw `new Database()`), cross-layer leakage (0 UI→db imports), Python cross-service imports (0). execFile/spawn arg-safety attested CLEAN with one caveat (D01-009): one shell-mode site exists but is config-controlled, not user-reachable; `execSync` 0 occurrences.
 
 ## Deviations from Plan
 
@@ -64,9 +65,13 @@ This worktree branch (`worktree-agent-a6234ee403a006ba1`) was created from a pre
 
 GitNexus MCP tools were not present in this executor's tool set, so dependency-graph analysis used madge/knip (the plan's sanctioned fallback). `gitnexus_detect_changes()` could not be run from here; orchestrator may wish to confirm index freshness separately.
 
+## Post-Write Correction (advisor review)
+
+A reviewer flagged that the initial AC-8 attestation claimed "no `shell:` option" while my own execFile/spawn scan showed `context-sources.ts:119` uses `shell:"/bin/sh"`. I traced the interpolated `tool` arg to JSON-config `requiredTools[]` (operator-controlled, not request-reachable), corrected AC-8's evidence to be accurate, and added finding **D01-009** (LOW, defense-in-depth). Disposition remains CLEAN (not user-exploitable) but the attestation is now honest. Fix committed as `a0f654f`. Also noted the as-any grep whole-line exclude caveat (12 found vs RESEARCH's 13).
+
 ## Self-Check: PASSED
 
 - FOUND: .planning/audit/domain-architecture.md
-- FOUND: commit a661af8 (feat(109-05): Domain D architecture & code-quality audit report)
-- Coverage Attestation present (8 rows, no blanks); Summary Stats present; 8 findings mapped to ARCH-01..05.
-- No source files modified (git status showed only `.planning/audit/` new).
+- FOUND: commit a661af8 (initial report), a0f654f (AC-8 correction + D01-009)
+- Coverage Attestation present (8 rows, no blanks); Summary Stats present; 9 findings mapped to ARCH-01..05.
+- No source files modified (audit dir is the only change; context-sources.ts was read, not edited).
