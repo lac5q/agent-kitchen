@@ -14,18 +14,18 @@ Harden memroos for client review with a full security and architecture sweep acr
 
 ### AUDIT — Domain Scanning
 
-- [ ] **AUDIT-01**: Security team can verify Auth & secrets domain was audited — covering hardcoded secrets, token handling, JWT security, API key exposure, session management, and cookie flags
-- [ ] **AUDIT-02**: Security team can verify API surface was audited — covering missing auth guards, input validation gaps, injection risks (SQLi, XSS, SSTI), rate limiting, and CORS configuration
-- [ ] **AUDIT-03**: Security team can verify Data & memory handling was audited — covering unsafe deserialization, data leakage paths, privacy exposure, unsafe file operations, and memory service access controls
-- [ ] **AUDIT-04**: Engineering team can verify Architecture & code quality was audited — covering dead code, circular dependencies, leaky abstractions, redundant patterns, unsafe TypeScript casts, and inconsistent error handling
+- [x] **AUDIT-01**: Security team can verify Auth & secrets domain was audited — covering hardcoded secrets, token handling, JWT security, API key exposure, session management, and cookie flags
+- [x] **AUDIT-02**: Security team can verify API surface was audited — covering missing auth guards, input validation gaps, injection risks (SQLi, XSS, SSTI), rate limiting, and CORS configuration
+- [x] **AUDIT-03**: Security team can verify Data & memory handling was audited — covering unsafe deserialization, data leakage paths, privacy exposure, unsafe file operations, and memory service access controls
+- [x] **AUDIT-04**: Engineering team can verify Architecture & code quality was audited — covering dead code, circular dependencies, leaky abstractions, redundant patterns, unsafe TypeScript casts, and inconsistent error handling
 
 ### SEC — Security Remediation
 
-- [ ] **SEC-01**: All critical-severity security findings from the audit are fixed and verified
-- [ ] **SEC-02**: All high-severity security findings from the audit are fixed and verified
+- [x] **SEC-01**: All critical-severity security findings from the audit are fixed and verified
+- [x] **SEC-02**: All high-severity security findings from the audit are fixed and verified
 - [ ] **SEC-03**: Medium-severity security findings are fixed or documented with accepted-risk rationale
 - [ ] **SEC-04**: `npm audit` and `pip-audit` report zero critical/high CVEs in dependencies; all fixable vulns patched
-- [ ] **SEC-05**: Codebase contains no hardcoded secrets, tokens, or credentials; git history clean of accidental secret commits
+- [x] **SEC-05**: Codebase contains no hardcoded secrets, tokens, or credentials; git history clean of accidental secret commits
 - [ ] **SEC-06**: CI/CD security gates (secret-guard.yml, pre-commit hooks) are hardened and cannot be bypassed silently
 
 ### ARCH — Architecture Cleanup
@@ -39,7 +39,7 @@ Harden memroos for client review with a full security and architecture sweep acr
 ### TEST — Validation
 
 - [ ] **TEST-01**: Full test suite (`npm test`, Python pytest) runs green after all security and architecture changes
-- [ ] **TEST-02**: Security regression tests added for each critical/high finding fixed — preventing reintroduction
+- [x] **TEST-02**: Security regression tests added for each critical/high finding fixed — preventing reintroduction
 - [ ] **TEST-03**: Production build (`npm run build`) and typecheck (`npm run typecheck`) pass clean with zero errors
 
 ---

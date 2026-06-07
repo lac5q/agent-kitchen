@@ -1526,7 +1526,7 @@ Plans:
 ### v7.0 Summary
 
 - [x] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04 (completed 2026-06-07)
-- [ ] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial)
+- [x] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial) (completed 2026-06-07)
 - [ ] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06
 - [ ] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
 - [ ] **Phase 113: Test Validation + Build Verification** — TEST-01, TEST-02 (complete), TEST-03
@@ -1564,7 +1564,7 @@ Plans:
   4. No hardcoded secrets, tokens, or credentials exist in the codebase; git history is clean of accidental secret commits
 **Plans**: 1 plan
 Plans:
-- [ ] 110-01-PLAN.md — SEC-01/02 attestation + SEC-05 default key fix + regression test (Wave 1)
+- [x] 110-01-PLAN.md — SEC-01/02 attestation + SEC-05 default key fix + regression test (Wave 1)
 
 ### Phase 111: Dependency CVE Sweep + Medium Security Fixes
 **Goal**: Patch all critical/high CVEs in npm and Python dependencies, fix medium-severity security findings from the audit, and harden CI/CD security gates so they cannot be bypassed silently.
@@ -1608,7 +1608,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
-| 110. Critical & High Security Fixes | 0/1 | Not started | - |
+| 110. Critical & High Security Fixes | 1/1 | Complete   | 2026-06-07 |
 | 111. Dependency CVE Sweep + Medium Security Fixes | 0/1 | Not started | - |
 | 112. Architecture Cleanup | 0/1 | Not started | - |
 | 113. Test Validation + Build Verification | 0/1 | Not started | - |
