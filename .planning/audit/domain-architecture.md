@@ -24,6 +24,7 @@ dead code → ARCH-01, circular dep / cross-layer → ARCH-02, redundant pattern
 | D01-006 | INFO | dead code → ARCH-01 | knip: 11 unused files (3 L3 CRM adapters, 5 flow components, demo/health-dot/tabs) + 120 unused exports + 125 unused types repo-wide. | see D01-006 detail |
 | D01-007 | INFO | Python dead code → ARCH-01 | vulture: ~30 "unused" Python functions in services/. Majority are MCP `@mcp.tool()` / FastAPI decorator-registered handlers (false positives, 60% confidence). 2-3 genuine unused vars. | `services/**/*.py` |
 | D01-008 | INFO | Python lint → ARCH-01 | ruff: 50 errors (29 auto-fixable), mostly unused imports in test files. | `services/**/*.py` |
+| D01-009 | LOW | exec arg-safety → ARCH-02 | `execFileSync` with `shell:"/bin/sh"` and an interpolated `tool` arg. `tool` is config-controlled (`requiredTools[]` from JSON config), not request-reachable — defense-in-depth, not exploitable. | `apps/memroos/src/lib/context-sources.ts:119` |
 
 No HIGH or CRITICAL findings. No unsafe-cast or execFile/spawn finding reaches a security trust boundary (see attestation rows AC-3, AC-8).
 
@@ -42,7 +43,7 @@ Status legend: CLEAN (checked, no issue) | FINDING (issue raised) | N-A (not app
 | AC-5 | Redundant patterns — multiple auth-check / DB-connection impls | CLEAN | DB access centralized in `lib/db.ts` (`getDb()`/`closeDb()`). **0 files** instantiate raw `new Database()` outside `db.ts`; 61 consumers all route through the shared module. No redundant DB-connection or duplicate auth-check pattern found. | — |
 | AC-6 | Cross-layer leakage — UI importing `lib/db` directly | CLEAN | `grep -rln "lib/db" apps/memroos/src/components/` → no matches. UI layer does not import the DB layer. | — |
 | AC-7 | Python cross-service-boundary imports | CLEAN | `grep` for `from services.` / cross-package relative imports across `services/{memory,orchestration,voice-server,knowledge-mcp}` → no matches. Services are import-isolated. | — |
-| AC-8 | execFile/spawn/execFileSync arg safety (T-109-D-01) | CLEAN | All call sites use static argv arrays with **no `shell:` option** and no string concatenation. chat/route.ts:210 `spawn(OPENCODE_BIN, ["run","--model",runtime.model,"--dir",cwd,prompt])` passes user `prompt` as a single argv element — injection-safe (no shell). `db.exec(...)` sites are SQLite DDL, not process exec. `execSync` (banned per STATE.md): **0 occurrences**. | — |
+| AC-8 | execFile/spawn/execFileSync arg safety (T-109-D-01) | CLEAN | Most call sites use static argv arrays with no shell. chat/route.ts:210 `spawn(OPENCODE_BIN, ["run","--model",runtime.model,"--dir",cwd,prompt])` passes user `prompt` as a single argv element — injection-safe (no shell). **One site uses a shell:** `context-sources.ts:119 execFileSync("command", ["-v", tool], { shell: "/bin/sh", … })`. Traced `tool` ← `source.requiredTools[]` ← JSON config loaded via `fs.readFileSync(resolveConfigPath(...))` (+ optional local override) — **operator/config-controlled, not request-reachable**. Disposition CLEAN (not user-exploitable) but logged as defense-in-depth finding D01-009. `db.exec(...)` sites are SQLite DDL, not process exec. `execSync` (banned per STATE.md): **0 occurrences**. | D01-009 |
 
 All 8 checklist items attested; no blank rows.
 
@@ -108,16 +109,22 @@ All 8 checklist items attested; no blank rows.
 - **Severity rationale:** INFO — test-file hygiene; auto-fixable.
 - **Fix (Phase 112, ARCH-01):** `ruff check services/ --fix`.
 
+### D01-009 — Shell-mode execFileSync with interpolated tool name (LOW → ARCH-02)
+- **File:line:** `apps/memroos/src/lib/context-sources.ts:119`
+- **Evidence:** `defaultHasTool(tool)` runs `execFileSync("command", ["-v", tool], { shell: "/bin/sh", stdio: "ignore" })`. With `shell:"/bin/sh"`, the argv is collapsed into a `sh -c` string, so `tool` is interpolated into a shell command. Provenance traced: `tool` ← `source.requiredTools[]` (line 182) ← `ContextSourcesConfig` parsed via `fs.readFileSync(resolveConfigPath(filename))` plus an optional local override (lines 140-146). The value originates from an on-disk JSON config, **not** from any HTTP request or user-supplied parameter.
+- **Severity rationale:** LOW — not user-exploitable (config-file is a trusted operator surface, same trust level as the code). Raised as defense-in-depth: a shell is unnecessary here (`command -v` could be replaced with a non-shell `which`/PATH lookup), and the shell-mode pattern is fragile if a future caller wires `requiredTools` to a less-trusted source. This is the single exception to AC-8's "static argv" pattern and is documented for honesty.
+- **Fix (Phase 112, ARCH-02):** Drop `shell:"/bin/sh"`; use `execFileSync("sh", ["-c", "command -v \"$1\"", "sh", tool])` with positional args, or a pure-Node PATH probe, so `tool` is never string-interpolated into a shell.
+
 ---
 
 ## Summary Stats
 
 | Metric | Value |
 |--------|-------|
-| Findings total | 8 (D01-001 .. D01-008) |
+| Findings total | 9 (D01-001 .. D01-009) |
 | CRITICAL / HIGH | 0 / 0 |
 | MEDIUM | 1 (D01-001) |
-| LOW | 4 (D01-002, D01-003, D01-004, D01-005) |
+| LOW | 5 (D01-002, D01-003, D01-004, D01-005, D01-009) |
 | INFO | 3 (D01-006, D01-007, D01-008) |
 | Circular deps (madge) | 3 cycles (1 runtime, 2 type-only) |
 | Unsafe TS casts | 12 (0 in security paths) |
@@ -128,13 +135,15 @@ All 8 checklist items attested; no blank rows.
 | Python ruff errors | 50 (29 auto-fixable) |
 | Python vulture flags | ~30 (mostly decorator false positives) |
 | execSync (banned) occurrences | 0 |
+| Shell-mode exec sites | 1 (`context-sources.ts:119`, config-controlled — D01-009) |
 | Cross-layer (UI→db) violations | 0 |
 | Redundant DB-connection impls | 0 (centralized in lib/db.ts) |
-| ARCH requirement mapping | ARCH-01: D01-005/006/007/008 · ARCH-02: D01-002/004 · ARCH-04: D01-001 · ARCH-05: D01-003 |
+| ARCH requirement mapping | ARCH-01: D01-005/006/007/008 · ARCH-02: D01-002/004/009 · ARCH-04: D01-001 · ARCH-05: D01-003 |
 
 ### Tool invocation notes (reproducibility)
 - madge: `madge --circular --extensions ts,tsx apps/memroos/src/` (the plan's `--ts-config ... lib/` form processed 0 files; `--extensions` flag required — Rule 3 tooling fix).
 - knip: `cd apps/memroos && knip --reporter json > /tmp/knip-domain-d.json` (valid JSON, 87 issue groups).
 - tsc: `cd apps/memroos && npx tsc --noEmit` — all reported errors are in `**/__tests__/*.test.ts` (test-only type drift, e.g. `ApplyResult.kept`), none in production paths.
 - ruff/vulture: `ruff check services/`, `vulture services/`.
+- unsafe-cast scan: `grep ... | grep -v "test\|spec\|\.d\.ts"`. **Caveat:** the exclude filter matches the whole line, not just the path, so a production line literally containing the substring "test"/"spec" (e.g. routes under `engagement/test/`, or words like "attest"/"latest") would be dropped. This likely accounts for 12 found here vs RESEARCH's 13. Count treated as a floor; a path-only filter (`grep -v "/__tests__/\|\.test\.\|\.spec\.\|\.d\.ts$"`) is recommended for the Phase 112 re-scan.
 - GitNexus MCP unavailable in executor tool set → madge/knip used as the plan's sanctioned fallback.
