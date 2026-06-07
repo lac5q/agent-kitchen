@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
 import { ROLE_RANK } from "@/lib/auth/middleware-roles";
@@ -15,10 +16,22 @@ import {
   filterAuthorizedMemoryItems,
   type MemoryUseActor,
 } from "@/lib/memory/policy-gate";
+import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 import type { DispatchTask } from "@/lib/dispatch/types";
 import type { RegisteredAgent, RemoteAgentConfig } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+const DispatchBodySchema = z.object({
+  task_summary: z.string().min(1),
+  to_agent: z.string().min(1),
+  input: z.record(z.unknown()).optional(),
+  priority: z.number().optional(),
+  skill_name: z.string().optional(),
+  task_id: z.string().optional(),
+  context_id: z.string().optional(),
+  from_agent: z.string().optional(),
+});
 
 async function deriveDispatchActor(req: NextRequest | Request): Promise<
   | { ok: true; actorId: string }
@@ -122,24 +135,23 @@ function gateDispatchMemoryInput(
 }
 
 export async function POST(req: NextRequest | Request) {
+  const bodyRaw: unknown = await req.json().catch(() => null);
+
+  const rateLimited = checkAuthRateLimit(req, "dispatch", 20);
+  if (rateLimited) return rateLimited;
+
+  const parsed = DispatchBodySchema.safeParse(bodyRaw);
+  if (!parsed.success) {
+    return Response.json(
+      { ok: false, error: parsed.error.issues.map((i) => i.message).join("; "), code: "INVALID_BODY" },
+      { status: 400 }
+    );
+  }
+
   const actor = await deriveDispatchActor(req);
   if (!actor.ok) return actor.response;
 
-  const body = await req.json();
-
-  if (!body.task_summary || typeof body.task_summary !== "string") {
-    return Response.json(
-      { ok: false, error: "task_summary is required", code: "INVALID_BODY" },
-      { status: 400 }
-    );
-  }
-  if (!body.to_agent || typeof body.to_agent !== "string") {
-    return Response.json(
-      { ok: false, error: "to_agent is required", code: "INVALID_BODY" },
-      { status: 400 }
-    );
-  }
-  const priority = body.priority != null ? Number(body.priority) : 5;
+  const priority = parsed.data.priority != null ? Number(parsed.data.priority) : 5;
   if (priority < 1 || priority > 9) {
     return Response.json(
       { ok: false, error: "priority must be 1-9", code: "INVALID_BODY" },
@@ -147,19 +159,19 @@ export async function POST(req: NextRequest | Request) {
     );
   }
 
-  const registeredAgent = listRegisteredAgents().find((a) => a.id === body.to_agent);
+  const registeredAgent = listRegisteredAgents().find((a) => a.id === parsed.data.to_agent);
   if (!registeredAgent) {
     return Response.json(
-      { ok: false, error: `Unknown agent: ${body.to_agent}`, code: "UNKNOWN_AGENT" },
+      { ok: false, error: `Unknown agent: ${parsed.data.to_agent}`, code: "UNKNOWN_AGENT" },
       { status: 404 }
     );
   }
-  const remoteAgent = getRemoteAgents().find((a) => a.id === body.to_agent);
+  const remoteAgent = getRemoteAgents().find((a) => a.id === parsed.data.to_agent);
   const agent = agentToDispatchConfig(registeredAgent, remoteAgent);
 
   const db = getDb();
   const from_agent = actor.actorId;
-  const irisScan = scanIrisPreflight(body.task_summary);
+  const irisScan = scanIrisPreflight(parsed.data.task_summary);
 
   if (irisScan.blocked) {
     writeAuditLog(db, {
@@ -175,7 +187,7 @@ export async function POST(req: NextRequest | Request) {
     );
   }
 
-  const scan = scanContent(body.task_summary);
+  const scan = scanContent(parsed.data.task_summary);
 
   if (scan.blocked) {
     writeAuditLog(db, {
@@ -223,8 +235,7 @@ export async function POST(req: NextRequest | Request) {
   // Skill governance check (SKILL-03): look up registry before per-agent instruction fallback.
   // Fail closed: incomplete, disabled, or risk-unknown contracts deny dispatch.
   // No skill_name in request → fallback (normal dispatch proceeds unchanged).
-  const skillName: string | undefined =
-    typeof body.skill_name === "string" ? body.skill_name : undefined;
+  const skillName: string | undefined = parsed.data.skill_name;
   const skillContract = lookupSkillContract(db, skillName);
   const skillEvidence = buildSkillEvidence(skillContract);
 
@@ -252,15 +263,15 @@ export async function POST(req: NextRequest | Request) {
     );
   }
 
-  const task_id: string = body.task_id ?? crypto.randomUUID();
-  const context_id: string = body.context_id ?? crypto.randomUUID();
+  const task_id: string = parsed.data.task_id ?? crypto.randomUUID();
+  const context_id: string = parsed.data.context_id ?? crypto.randomUUID();
   const dispatched_at = new Date().toISOString();
 
   db.prepare(
     `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, checkpoint, context_id, result)
      VALUES (@task_id, @from_agent, @to_agent, @task_summary, @priority, 'pending', NULL, @context_id, NULL)
      ON CONFLICT(task_id) DO NOTHING`
-  ).run({ task_id, from_agent, to_agent: body.to_agent, task_summary: scan.cleanContent, priority, context_id });
+  ).run({ task_id, from_agent, to_agent: parsed.data.to_agent, task_summary: scan.cleanContent, priority, context_id });
 
   const adapter = selectAdapter(agent);
 
@@ -270,16 +281,16 @@ export async function POST(req: NextRequest | Request) {
   ).run({
     agent_id: from_agent,
     summary: `Dispatch: ${scan.cleanContent.slice(0, 120)}`,
-    artifacts: JSON.stringify({ task_id, context_id, to_agent: body.to_agent, adapter: adapter.name, direction: "outbound" }),
+    artifacts: JSON.stringify({ task_id, context_id, to_agent: parsed.data.to_agent, adapter: adapter.name, direction: "outbound" }),
   });
 
   const task: DispatchTask = {
     task_id,
     context_id,
     from_agent,
-    to_agent: body.to_agent,
+    to_agent: parsed.data.to_agent,
     task_summary: scan.cleanContent,
-    input: gateDispatchMemoryInput(db, body.input, dispatchMemoryActor(from_agent)),
+    input: gateDispatchMemoryInput(db, parsed.data.input, dispatchMemoryActor(from_agent)),
     priority,
     dispatched_at,
     skill_name: skillName,
@@ -308,5 +319,5 @@ export async function POST(req: NextRequest | Request) {
     );
   }
 
-  return Response.json({ ok: true, task_id, context_id, to_agent: body.to_agent, adapter: adapter.name, mode: result.mode, dispatched_at, evidence: mergedEvidence });
+  return Response.json({ ok: true, task_id, context_id, to_agent: parsed.data.to_agent, adapter: adapter.name, mode: result.mode, dispatched_at, evidence: mergedEvidence });
 }

@@ -21,7 +21,7 @@ vi.mock("@/lib/security-policy", () => ({
   checkMemoryWritePolicy: vi.fn(() => ({ allowed: true })),
 }));
 vi.mock("@/lib/dispatch/adapter-factory", () => ({ selectAdapter: vi.fn() }));
-vi.mock("@/lib/auth/session", () => ({ authenticateUser: vi.fn(() => null) }));
+vi.mock("@/lib/auth/session", () => ({ authenticateUser: vi.fn(() => Promise.resolve(null)) }));
 vi.mock("@/lib/operator-auth", () => ({ authorizeRegistryWrite: vi.fn(() => false) }));
 vi.mock("@/lib/memory/tiers", () => ({
   buildTieredMemoryPayload: vi.fn((b) => b),
