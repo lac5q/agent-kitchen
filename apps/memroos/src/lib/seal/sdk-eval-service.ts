@@ -16,6 +16,7 @@
 import { loadEvalConfig } from "@/lib/evals/config";
 import { goldenSetPathForTrace, loadGoldenSet } from "@/lib/evals/golden-sets";
 import type { EvalRunResult } from "@/lib/evals/types";
+import { assertNotDefaultInternalApiKey } from "../internal-api-key";
 import {
   buildModeledPostApplyTrace,
   rescorePostApply,
@@ -89,10 +90,11 @@ export class SdkBackedEvalService implements EvalServiceLike {
       "http://localhost:3000"
     ).replace(/\/$/, "");
     const apiKey = options.apiKey ?? process.env.MEMROOS_INTERNAL_API_KEY;
-    if (!apiKey && process.env.NODE_ENV === "production") {
-      throw new Error("MEMROOS_INTERNAL_API_KEY is required for production SEAL SDK eval service");
+    assertNotDefaultInternalApiKey(apiKey);
+    if (!apiKey) {
+      throw new Error("MEMROOS_INTERNAL_API_KEY is required");
     }
-    this.apiKey = apiKey ?? "memroos-internal-default-key";
+    this.apiKey = apiKey;
   }
 
   /**

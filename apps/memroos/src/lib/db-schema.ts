@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type Database from 'better-sqlite3';
 
 import { initBehavioralJobSchema } from './seal/behavioral-schema';
+import { assertNotDefaultInternalApiKey } from './internal-api-key';
 
 const LABEL_TABLES = [
   "messages",
@@ -790,14 +791,12 @@ export function initSchema(db: Database.Database): void {
   `);
 
   const internalApiKey = process.env.MEMROOS_INTERNAL_API_KEY;
-  const shouldSeedDevInternalKey = process.env.NODE_ENV !== "production";
-  if (internalApiKey || shouldSeedDevInternalKey) {
-    const key = internalApiKey ?? "memroos-internal-default-key";
-    const keyId = internalApiKey ? "tak-internal-env" : "tak-default-internal";
-    const defaultKeyHash = createHash("sha256").update(key).digest("hex");
+  if (internalApiKey) {
+    assertNotDefaultInternalApiKey(internalApiKey);
+    const defaultKeyHash = createHash("sha256").update(internalApiKey).digest("hex");
     db.prepare(
       "INSERT OR IGNORE INTO tenant_api_keys (id, tenant_id, key_hash) VALUES (?, ?, ?)"
-    ).run(keyId, "default-tenant", defaultKeyHash);
+    ).run("tak-internal-env", "default-tenant", defaultKeyHash);
   }
 
   // Phase 62: additive tenant_id column on eval_runs and eval_run_examples only
