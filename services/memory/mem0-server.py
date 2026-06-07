@@ -1,6 +1,7 @@
 """
 Mem0 FastAPI server — agent memory backed by Qdrant vector store.
-Run with: uvicorn mem0-server:app --host 0.0.0.0 --port 3201
+Run with: uvicorn mem0-server:app --host ${MEMROOS_BIND_HOST:-127.0.0.1} --port 3201
+    (set MEMROOS_BIND_HOST=0.0.0.0 only for multi-host deployments with a firewall in place)
 """
 
 import os

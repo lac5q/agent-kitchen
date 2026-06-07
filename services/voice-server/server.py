@@ -13,6 +13,7 @@ Launch:
 import asyncio
 import json
 import os
+import pathlib
 import uuid
 from datetime import datetime, timezone
 
@@ -29,7 +30,9 @@ from pipecat.pipeline.runner import PipelineRunner
 
 load_dotenv()
 
-SESSION_STATE_FILE = "/tmp/voice-session-state.json"
+_STATE_DIR = pathlib.Path(os.environ.get("MEMROOS_DATA_DIR", str(pathlib.Path.home() / ".memroos"))) / "voice"
+_STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+SESSION_STATE_FILE = str(_STATE_DIR / "voice-session-state.json")
 
 
 def _write_state(active: bool, session_id: str | None) -> None:
