@@ -24,7 +24,7 @@ Harden memroos for client review with a full security and architecture sweep acr
 - [x] **SEC-01**: All critical-severity security findings from the audit are fixed and verified
 - [x] **SEC-02**: All high-severity security findings from the audit are fixed and verified
 - [ ] **SEC-03**: Medium-severity security findings are fixed or documented with accepted-risk rationale
-- [ ] **SEC-04**: `npm audit` and `pip-audit` report zero critical/high CVEs in dependencies; all fixable vulns patched
+- [x] **SEC-04**: `npm audit` and `pip-audit` report zero critical/high CVEs in dependencies; all fixable vulns patched
 - [x] **SEC-05**: Codebase contains no hardcoded secrets, tokens, or credentials; git history clean of accidental secret commits
 - [ ] **SEC-06**: CI/CD security gates (secret-guard.yml, pre-commit hooks) are hardened and cannot be bypassed silently
 

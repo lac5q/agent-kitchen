@@ -1579,7 +1579,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + zod install + Python dep pinning + accepted-risk doc (Wave 1)
+- [x] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + zod install + Python dep pinning + accepted-risk doc (Wave 1)
 - [ ] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 2, depends on 111-01)
 - [ ] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2, parallel with 111-02)
 
@@ -1614,6 +1614,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
 | 110. Critical & High Security Fixes | 1/1 | Complete   | 2026-06-07 |
-| 111. Dependency CVE Sweep + Medium Security Fixes | 0/3 | Not started | - |
+| 111. Dependency CVE Sweep + Medium Security Fixes | 1/3 | In Progress|  |
 | 112. Architecture Cleanup | 0/1 | Not started | - |
 | 113. Test Validation + Build Verification | 0/1 | Not started | - |
