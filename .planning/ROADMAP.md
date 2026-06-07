@@ -1543,7 +1543,7 @@ Plans:
   2. Critical and high findings are enumerated with exact file:line references so a developer can navigate directly to each issue
   3. An aggregate findings summary report is produced that cross-references all 4 domain reports and counts findings by severity tier
 **Plans**: 6 plans
-- [ ] 109-01-PLAN.md — Toolchain bootstrap: install pip-audit/bandit/madge/knip, npm+pip CVE baseline (Wave 1)
+- [x] 109-01-PLAN.md — Toolchain bootstrap: install pip-audit/bandit/madge/knip, npm+pip CVE baseline (Wave 1)
 - [ ] 109-02-PLAN.md — Domain A: Auth & Secrets audit (Wave 2)
 - [ ] 109-03-PLAN.md — Domain B: API Surface audit (Wave 2)
 - [ ] 109-04-PLAN.md — Domain C: Data & Memory audit (Wave 2)
@@ -1603,7 +1603,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 109. Parallel Domain Audit | 0/1 | Not started | - |
+| 109. Parallel Domain Audit | 1/6 | In Progress|  |
 | 110. Critical & High Security Fixes | 0/1 | Not started | - |
 | 111. Dependency CVE Sweep + Medium Security Fixes | 0/1 | Not started | - |
 | 112. Architecture Cleanup | 0/1 | Not started | - |
