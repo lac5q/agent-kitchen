@@ -28,6 +28,7 @@
 - 🚧 **v6.4 SkillForge Production SkillOpt Hardening** — Phase 106 (partially implemented; true sandbox scorer remains)
 - ✅ **v6.5 Agent Context Bus + Synchronous Agent Communication** — Phase 107 (completed 2026-06-04)
 - 🧭 **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (backlog; reduce local disk/RAM load by moving eligible stores and indexes to managed/cloud services)
+- 🚧 **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (in progress 2026-06-06)
 
 ## Phases
 
@@ -1515,3 +1516,89 @@ Plans:
   4. Complements checkpoint/resume: checkpoints protect in-flight work; CI/CD gates protect what agent versions are allowed to run.
 **Plans**: 1/1 complete
 **UI hint**: Agent version registry page; promotion gate status; rollback button in Agents surface.
+
+---
+
+## v7.0 Client-Ready Security + Architecture Audit
+
+### v7.0 Summary
+
+- [ ] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04
+- [ ] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial)
+- [ ] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06
+- [ ] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
+- [ ] **Phase 113: Test Validation + Build Verification** — TEST-01, TEST-02 (complete), TEST-03
+
+**Coverage:** 13/13 v7.0 requirements mapped, no orphans.
+
+### Phase Details
+
+### Phase 109: Parallel Domain Audit
+**Goal**: Run 4 simultaneous audit agents across Auth/Secrets, API Surface, Data/Memory, and Architecture/Code quality domains — producing ranked findings reports per domain with file:line precision.
+**Milestone**: v7.0
+**Depends on**: Nothing (first v7.0 phase)
+**Requirements**: AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04
+**Success Criteria** (what must be TRUE):
+  1. All 4 domain audit reports are written to `.planning/audit/` with findings ranked by severity (critical → high → medium → low)
+  2. Critical and high findings are enumerated with exact file:line references so a developer can navigate directly to each issue
+  3. An aggregate findings summary report is produced that cross-references all 4 domain reports and counts findings by severity tier
+**Plans**: TBD
+
+### Phase 110: Critical & High Security Fixes
+**Goal**: Fix all critical and high-severity security findings from Phase 109 audit, adding regression tests for each fix so no finding can be silently reintroduced.
+**Milestone**: v7.0
+**Depends on**: Phase 109 (audit reports must exist before remediation)
+**Requirements**: SEC-01, SEC-02, SEC-05, TEST-02 (partial — regression tests for critical/high fixes)
+**Success Criteria** (what must be TRUE):
+  1. Zero critical-severity security findings remain open after this phase
+  2. Zero high-severity security findings remain open after this phase
+  3. A regression test exists for each critical/high finding fixed — tests are in the main test suite and fail if the vulnerability is reintroduced
+  4. No hardcoded secrets, tokens, or credentials exist in the codebase; git history is clean of accidental secret commits
+**Plans**: TBD
+
+### Phase 111: Dependency CVE Sweep + Medium Security Fixes
+**Goal**: Patch all critical/high CVEs in npm and Python dependencies, fix medium-severity security findings from the audit, and harden CI/CD security gates so they cannot be bypassed silently.
+**Milestone**: v7.0
+**Depends on**: Phase 109 (audit reports), Phase 110 (critical/high fixed first)
+**Requirements**: SEC-03, SEC-04, SEC-06
+**Success Criteria** (what must be TRUE):
+  1. `npm audit` reports zero critical or high CVEs after dependency patching
+  2. `pip-audit` reports zero critical or high CVEs after dependency patching
+  3. All medium-severity findings from the Phase 109 audit are either fixed or documented with an accepted-risk rationale signed off by the owner
+  4. `secret-guard.yml` and pre-commit hooks are verified to be active and hardened — a test secret committed to a branch triggers the guard rather than passing silently
+**Plans**: TBD
+
+### Phase 112: Architecture Cleanup
+**Goal**: Remove dead code, resolve module boundary violations, consolidate redundant patterns, enforce consistent error handling across all API routes, and eliminate unsafe TypeScript so the codebase is maintainable for a client-facing review.
+**Milestone**: v7.0
+**Depends on**: Phase 110 (security fixes complete; architecture changes layered on clean security state)
+**Requirements**: ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
+**Success Criteria** (what must be TRUE):
+  1. No circular dependencies exist in core modules — verified by madge or tsc project references with zero circular-dependency warnings
+  2. Dead code and unused exports are removed from all core modules — no unreachable functions remain in production paths
+  3. TypeScript strict mode is enforced: zero `any` types or unsafe casts in production code paths
+  4. All Next.js API routes and Python service endpoints use a consistent error-handling pattern — no ad-hoc error responses that bypass the standard shape
+**Plans**: TBD
+
+### Phase 113: Test Validation + Build Verification
+**Goal**: Ensure the full test suite is green, the production build passes cleanly, and security regression tests are complete and passing after all Phase 109-112 changes — validating the codebase is client-ready.
+**Milestone**: v7.0
+**Depends on**: Phase 110 (regression tests started), Phase 111 (CVE patches), Phase 112 (architecture cleanup)
+**Requirements**: TEST-01, TEST-02 (complete), TEST-03
+**Success Criteria** (what must be TRUE):
+  1. `npm test` passes with zero failures after all Phase 109-112 changes
+  2. `pytest` passes with zero failures after all Phase 109-112 changes
+  3. `npm run build` passes with zero errors — production build is clean
+  4. `npm run typecheck` passes with zero errors — TypeScript is fully valid
+  5. Security regression tests cover all critical and high findings fixed in Phase 110 — the suite is independently runnable and documented
+**Plans**: TBD
+
+## Progress Table (v7.0)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 109. Parallel Domain Audit | 0/1 | Not started | - |
+| 110. Critical & High Security Fixes | 0/1 | Not started | - |
+| 111. Dependency CVE Sweep + Medium Security Fixes | 0/1 | Not started | - |
+| 112. Architecture Cleanup | 0/1 | Not started | - |
+| 113. Test Validation + Build Verification | 0/1 | Not started | - |
