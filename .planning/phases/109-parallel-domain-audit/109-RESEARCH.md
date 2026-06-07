@@ -444,7 +444,7 @@ The consolidated index enables phase 110 planner to `filter(severity == critical
 
 Phase 109 is a document-deliverable phase — verification is **coverage attestation**, not behavioral-test-based. An empty findings section is ambiguous ("checked, clean" vs "never checked") — each domain report MUST include a Coverage Attestation table where every checklist item is explicitly tagged.
 
-**Coverage Attestation format** (required in each `109-{DOMAIN}-FINDINGS.md`):
+**Coverage Attestation format** (required in each domain report under `.planning/audit/domain-{auth-secrets|api-surface|data-memory|architecture}.md`):
 
 ```markdown
 ## Coverage Attestation
@@ -459,12 +459,12 @@ Permitted statuses: `CLEAN — verified by {tool/file}` | `FINDING: {ID}` | `N/A
 
 | Req ID | Verification Method |
 |--------|---------------------|
-| AUDIT-01 | `109-A-FINDINGS.md` exists AND Coverage Attestation table covers all Domain A checklist items with no blank rows |
-| AUDIT-02 | `109-B-FINDINGS.md` exists AND Coverage Attestation table covers all Domain B checklist items with no blank rows |
-| AUDIT-03 | `109-C-FINDINGS.md` exists AND Coverage Attestation table covers all Domain C checklist items with no blank rows |
-| AUDIT-04 | `109-D-FINDINGS.md` exists AND Coverage Attestation table covers all Domain D checklist items with no blank rows |
+| AUDIT-01 | `.planning/audit/domain-auth-secrets.md` exists AND Coverage Attestation table covers all Domain A checklist items with no blank rows |
+| AUDIT-02 | `.planning/audit/domain-api-surface.md` exists AND Coverage Attestation table covers all Domain B checklist items with no blank rows |
+| AUDIT-03 | `.planning/audit/domain-data-memory.md` exists AND Coverage Attestation table covers all Domain C checklist items with no blank rows |
+| AUDIT-04 | `.planning/audit/domain-architecture.md` exists AND Coverage Attestation table covers all Domain D checklist items with no blank rows |
 
-**Phase gate:** All 4 domain reports with complete Coverage Attestation tables + `109-FINDINGS-INDEX.md` populated before `/gsd:verify-work`.
+**Phase gate:** All 4 domain reports (`.planning/audit/domain-*.md`) with complete Coverage Attestation tables + `.planning/audit/FINDINGS-INDEX.md` populated before `/gsd:verify-work`.
 
 ### Wave 0 Gaps
 - [ ] Install audit toolchain (prerequisite for Domains C and D):
@@ -564,22 +564,25 @@ Load this context before running audit agents to avoid noise from already-closed
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Is `unsafe-eval` in CSP required by Next.js v16 App Router?**
    - What we know: CSP in proxy.ts includes `'unsafe-eval'` in script-src
    - What's unclear: Whether React Server Components or the React compiler require it
    - Recommendation: Domain B agent should check Next.js v16 docs in `node_modules/next/dist/docs/` before flagging severity
+   - RESOLVED: Plan 109-03 (Domain B), Task 2 — agent checks Next.js v16 docs and determines severity based on RSC requirement; finding documented in `.planning/audit/domain-api-surface.md` Coverage Attestation row "CSP unsafe-eval".
 
 2. **What is the intended trust boundary for `services/memory` and `services/orchestration` FastAPI servers?**
    - What we know: No bearer auth visible at service level; Python services have no auth middleware
    - What's unclear: Whether these are loopback-only, Docker-internal, or potentially externally reachable
    - Recommendation: Domain C agent check `docker-compose.yml` port bindings and LaunchAgent service configs to determine exposure
+   - RESOLVED: Plan 109-04 (Domain C), Task 1 — agent inspects docker-compose.yml port bindings and LaunchAgent configs; per-service trust boundary documented in `.planning/audit/domain-data-memory.md` under `## Trust Boundaries` table before any severity is assigned.
 
 3. **Next.js v16.2.4 CVE exploitability in this specific proxy.ts pattern**
    - What we know: 13 CVEs exist including middleware bypass variants
    - What's unclear: Which CVEs apply given this app's specific matcher pattern and absence of i18n/pages-router
    - Recommendation: Domain B agent consult Next.js security advisories and test proxy bypass patterns against `/api/auth/*` with prefetch headers
+   - RESOLVED: Plan 109-03 (Domain B), Task 2 — agent assesses CVE applicability against this app's proxy.ts matcher pattern; applicable CVEs routed to SEC-04 and documented in `.planning/audit/domain-api-surface.md` Coverage Attestation row "Next.js CVEs".
 
 ---
 
