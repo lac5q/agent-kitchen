@@ -1576,7 +1576,12 @@ Plans:
   2. `pip-audit` reports zero critical or high CVEs after dependency patching
   3. All medium-severity findings from the Phase 109 audit are either fixed or documented with an accepted-risk rationale signed off by the owner
   4. `secret-guard.yml` and pre-commit hooks are verified to be active and hardened — a test secret committed to a branch triggers the guard rather than passing silently
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + Python dep pinning + accepted-risk doc (Wave 1)
+- [ ] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 1)
+- [ ] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2)
 
 ### Phase 112: Architecture Cleanup
 **Goal**: Remove dead code, resolve module boundary violations, consolidate redundant patterns, enforce consistent error handling across all API routes, and eliminate unsafe TypeScript so the codebase is maintainable for a client-facing review.
@@ -1609,6 +1614,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
 | 110. Critical & High Security Fixes | 1/1 | Complete   | 2026-06-07 |
-| 111. Dependency CVE Sweep + Medium Security Fixes | 0/1 | Not started | - |
+| 111. Dependency CVE Sweep + Medium Security Fixes | 0/3 | Not started | - |
 | 112. Architecture Cleanup | 0/1 | Not started | - |
 | 113. Test Validation + Build Verification | 0/1 | Not started | - |
