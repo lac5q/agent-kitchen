@@ -2,10 +2,13 @@ import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import type { UserRole, JwtPayload } from './types';
 import { ACCESS_TOKEN_TTL } from './session-limits';
 
-function getSecret(): Uint8Array {
+export function getSecret(): Uint8Array {
   const secret = process.env.MEMROOS_JWT_SECRET;
   if (!secret) {
     throw new Error('[Memroos] MEMROOS_JWT_SECRET env var is required');
+  }
+  if (secret.length < 32) {
+    throw new Error('[Memroos] MEMROOS_JWT_SECRET must be at least 32 characters (use: openssl rand -hex 32)');
   }
   return new TextEncoder().encode(secret);
 }
