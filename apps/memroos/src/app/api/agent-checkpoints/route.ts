@@ -23,9 +23,10 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ status: "ok", checkpoint });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 400 }
     );
   }
@@ -55,9 +56,10 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ status: "ok", checkpoint });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 500 }
     );
   }

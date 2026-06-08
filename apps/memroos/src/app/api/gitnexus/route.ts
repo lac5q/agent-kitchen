@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ interface GitNexusRepo {
   lastIndexed: string | null;
 }
 
-export async function GET() {
+async function buildGitNexusResponse() {
   const repos: GitNexusRepo[] = [];
 
   try {
@@ -63,4 +64,12 @@ export async function GET() {
   repos.sort((a, b) => b.symbols - a.symbols);
 
   return NextResponse.json({ repos, timestamp: new Date().toISOString() });
+}
+
+export async function GET() {
+  try {
+    return await buildGitNexusResponse();
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

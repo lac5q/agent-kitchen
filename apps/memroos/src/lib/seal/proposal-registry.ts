@@ -1,3 +1,4 @@
+import type { ProposalType } from "./proposal-types";
 import type { ProposalDraft } from "./types";
 import type Database from "better-sqlite3";
 
@@ -480,8 +481,6 @@ export const PROPOSAL_TYPES = {
 // rollback, and audit deltas. A future plugin model can replace this const with
 // signed manifest loading once proposal capability boundaries and review policy
 // are defined.
-
-export type ProposalType = keyof typeof PROPOSAL_TYPES;
 
 export function ensureProposalType(value: string): ProposalType {
   if (value in PROPOSAL_TYPES) return value as ProposalType;

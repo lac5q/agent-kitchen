@@ -1,4 +1,5 @@
 import { parseModelUsage } from "@/lib/parsers";
+import { apiError } from "@/lib/api-error";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ function positiveNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export async function GET(req: NextRequest) {
+async function buildModelUsageResponse(req: NextRequest) {
   const sinceParam = req.nextUrl.searchParams.get("since");
   const since = sinceParam ? new Date(sinceParam) : undefined;
   const cacheKey = since?.toISOString() ?? "all";
@@ -25,4 +26,12 @@ export async function GET(req: NextRequest) {
   const usage = await parseModelUsage(since);
   modelUsageCache = { key: cacheKey, checkedAt: Date.now(), usage };
   return Response.json({ usage, timestamp: new Date().toISOString() });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    return await buildModelUsageResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

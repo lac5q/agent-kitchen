@@ -7,7 +7,7 @@
  */
 
 import type { MemoryTier } from "./tiers";
-import type { MemoryTierHealth } from "./backends";
+import type { MemoryTierHealth } from "./registry-contract";
 
 /** Capability tags that describe what a backend can do.
  * Defined in CONTEXT.md Specifics — used by Phase 70.1 shadow adapter selection.

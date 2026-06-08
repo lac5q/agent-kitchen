@@ -12,8 +12,8 @@ import pytest
 MEMORY_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMORY_DIR))
 
-import mem0_queue
-from provenance import format_memory_result, normalize_metadata, provenance_label
+import mem0_queue  # noqa: E402
+from provenance import format_memory_result, normalize_metadata, provenance_label  # noqa: E402
 
 
 def queued_count(db_path: Path) -> int:

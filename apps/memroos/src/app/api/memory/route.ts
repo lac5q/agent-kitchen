@@ -1,10 +1,11 @@
 import { parseClaudeMemory } from "@/lib/parsers";
 import { MEM0_URL, CLAUDE_MEMORY_PATH } from "@/lib/constants";
 import type { NextRequest } from "next/server";
+import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+async function buildMemoryResponse(request: NextRequest) {
   const source = request.nextUrl.searchParams.get("source") || "all";
   const query = request.nextUrl.searchParams.get("q") || "";
 
@@ -33,4 +34,12 @@ export async function GET(request: NextRequest) {
   }
 
   return Response.json({ ...result, timestamp: new Date().toISOString() });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    return await buildMemoryResponse(request);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

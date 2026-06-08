@@ -19,9 +19,10 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ status: "ok", trace });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 400 }
     );
   }
@@ -53,9 +54,10 @@ export async function GET(req: Request) {
     const timeline = getMemoryTraceTimeline(trace);
 
     return NextResponse.json({ status: "ok", trace, timeline });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 500 }
     );
   }

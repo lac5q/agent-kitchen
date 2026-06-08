@@ -1,4 +1,5 @@
 import { createAgentOnboardingToken, shellQuote } from "@/lib/agent-onboarding";
+import { apiError } from "@/lib/api-error";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
@@ -36,7 +37,7 @@ function parseCapabilities(value: unknown): RegisteredAgentCapability[] | undefi
     .filter((capability) => capability.id && capability.name);
 }
 
-export async function POST(request: Request) {
+async function buildInviteResponse(request: Request) {
   const session = await authenticateUser(request);
   if (session) {
     const roleError = requireRole(session.role, "operator");
@@ -86,4 +87,12 @@ export async function POST(request: Request) {
     mcpUrl: payload.mcpUrl,
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await buildInviteResponse(request);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

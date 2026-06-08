@@ -350,9 +350,7 @@ export function VoicePanel() {
   }, [selectedAgentId, setSpeaking]);
 
   const startListening = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 
     if (!SR) { alert("Speech recognition not supported in this browser. Use Chrome."); return; }
     if (listening) { stopListening(); return; }
@@ -369,10 +367,8 @@ export function VoicePanel() {
     setListening(true);
     setInterimText("");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (event: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const results = Array.from(event.results) as any[];
+    rec.onresult = (event: SpeechRecognitionEvent) => {
+      const results = Array.from(event.results);
       const interim = results.map((r) => r[0].transcript).join("");
       setInterimText(interim);
 

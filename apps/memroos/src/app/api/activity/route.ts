@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile, readdir, stat } from "fs/promises";
 import path from "path";
+import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export interface ActivityEvent {
   severity: "info" | "warn" | "error";
 }
 
-export async function GET() {
+async function buildActivityResponse() {
   const events: ActivityEvent[] = [];
 
   // 1. Read last 50 lines of APO cron log for real events
@@ -139,4 +140,12 @@ export async function GET() {
     nodeActivity, // { nodeName: minutesAgo } for recently active nodes
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function GET() {
+  try {
+    return await buildActivityResponse();
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

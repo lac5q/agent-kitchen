@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile, readdir } from "fs/promises";
 import path from "path";
+import { apiError } from "@/lib/api-error";
 import { SKILLS_PATH, SKILL_CONTRIBUTIONS_LOG, FAILURES_LOG } from "@/lib/constants";
 import { parseFailuresLog, aggregateFailures } from "@/lib/failures-parser";
 import { readSkillBudgetReport } from "@/lib/skill-budget";
@@ -21,7 +22,7 @@ interface JournalEvent {
   metadata?: Record<string, unknown>;
 }
 
-export async function GET() {
+async function buildSkillsResponse() {
   // 1. Count skills in master dir (exclude dot-prefixed dirs and non-directories)
   let totalSkills = 0;
   let skillDirNames: string[] = [];
@@ -191,4 +192,12 @@ export async function GET() {
     skillBudget,
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function GET() {
+  try {
+    return await buildSkillsResponse();
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

@@ -35,7 +35,7 @@ export interface RecordedToolCall {
   output?: unknown;
 }
 
-export interface PromotionMetadata {
+interface PromotionMetadata {
   modelVersion?: string | null;
   promptTemplateVersion?: string | null;
   datasetSeed?: string | null;

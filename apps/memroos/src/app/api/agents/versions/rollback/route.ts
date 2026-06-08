@@ -18,9 +18,10 @@ export async function POST(req: Request) {
     const rolledBack = rollbackAgentVersion(db, tenantId, agentId, profile, operator);
 
     return NextResponse.json({ status: "ok", version: rolledBack });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 400 }
     );
   }

@@ -4,15 +4,9 @@ import type { MemoryAdapter, MemoryCapability, MemorySearchResult } from "./adap
 import { getAdapters, registerAdapter } from "./registry";
 import { getDb } from "@/lib/db";
 import { filterAuthorizedMessageRows } from "@/lib/memory/policy-gate";
+import type { MemoryTierHealth } from "./registry-contract";
 
-export interface MemoryTierHealth {
-  tier: MemoryTier;
-  backend: string;
-  status: "up" | "degraded" | "down" | "not_configured";
-  detail?: string;
-  count?: number | null;
-  lastWrite?: string | null;
-}
+export type { MemoryTierHealth } from "./registry-contract";
 
 function timeoutSignal(ms: number): AbortSignal {
   return AbortSignal.timeout(ms);

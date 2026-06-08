@@ -31,7 +31,7 @@ export interface ClassifyVaultResult extends ClassificationResult {
   hilEscalationId: string | null;
 }
 
-export type ClassificationReviewStatus = "open" | "approved" | "denied" | "redacted";
+type ClassificationReviewStatus = "open" | "approved" | "denied" | "redacted";
 export type ClassificationDecision = "approve" | "deny" | "redact";
 
 export interface ClassificationReviewRow {

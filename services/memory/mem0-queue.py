@@ -201,7 +201,7 @@ class Mem0Queue:
                 print(f"[Queue] Retryable backend failure {response.status_code}, queued request to {endpoint}")
                 return True
 
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
+        except (httpx.ConnectError, httpx.TimeoutException):
             # Server is down, queue the request
             self._add_to_queue(endpoint, method, payload)
             print(f"[Queue] Server down, queued request to {endpoint}")
@@ -294,7 +294,7 @@ def queue_memory_search(query: str, agent_id: str = "", limit: int = 5) -> dict:
         response = httpx.get(f"{MEM0_URL}/memory/search", params=params, timeout=30)
         if response.status_code == 200:
             return response.json()
-    except:
+    except Exception:
         pass
     return {"error": "Server unavailable", "results": []}
 

@@ -114,9 +114,11 @@ function resolveSourcePath(sourcePath: string): string {
   return path.isAbsolute(expanded) ? expanded : resolveFromRepoRoot(expanded);
 }
 
+// D01-009: `tool` comes from operator-controlled source.requiredTools[] config,
+// not HTTP input. Pass it as a positional arg so the shell never interpolates it.
 function defaultHasTool(tool: string): boolean {
   try {
-    execFileSync("command", ["-v", tool], { shell: "/bin/sh", stdio: "ignore" });
+    execFileSync("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", tool], { stdio: "ignore" });
     return true;
   } catch {
     return false;

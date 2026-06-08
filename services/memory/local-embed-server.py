@@ -14,7 +14,7 @@ site_packages = os.environ.get("KNOWLEDGE_VENV_SITE_PACKAGES")
 if site_packages:
     sys.path.insert(0, site_packages)
 
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer  # noqa: E402
 
 app = FastAPI()
 print("Loading clip-ViT-L-14 model on Mac GPU...")

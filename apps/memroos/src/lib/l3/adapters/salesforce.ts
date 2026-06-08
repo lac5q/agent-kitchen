@@ -5,6 +5,9 @@
  * Returns representative BusinessOutcomeEvent fixture data.  This adapter is
  * deliberately excluded from production adapter discovery.
  *
+ * INTENTIONAL_STUB: retained as a non-production L3 fixture until the live
+ * Salesforce integration is implemented.
+ *
  * PRODUCTION GUARD: throws if process.env.NODE_ENV === "production".
  */
 

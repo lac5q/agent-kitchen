@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
@@ -15,11 +16,11 @@ export const dynamic = "force-dynamic";
  *
  * Query params: status=open|resolved|sla_breached|all, tenantId, limit
  */
-export async function GET(req: NextRequest) {
+async function buildEscalationsResponse(req: NextRequest) {
   const session = await authenticateUser(req);
   const roleError = requireRole(session?.role, "reviewer");
   if (roleError) return roleError;
-  if (!session) return Response.json({ error: "authentication required" }, { status: 401 });
+  if (!session) return apiError(401, "authentication required");
 
   const url = req.nextUrl ?? new URL(req.url);
   const sp = url.searchParams;
@@ -58,4 +59,12 @@ export async function GET(req: NextRequest) {
   }));
 
   return Response.json({ escalations: withCountdown, timestamp: new Date().toISOString() });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    return await buildEscalationsResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

@@ -7,10 +7,8 @@ Usage: python3 vast-serverless-embed.py [options]
 
 import os
 import sys
-import json
-import time
 import logging
-from typing import List, Union
+from typing import List
 
 # Optional local venv override for machines that keep the Vast SDK elsewhere.
 site_packages = os.environ.get("KNOWLEDGE_VENV_SITE_PACKAGES")
@@ -24,8 +22,8 @@ except ImportError:
     os.system("pip3 install vastai")
     from vastai import Serverless
 
-import asyncio
-import httpx
+import asyncio  # noqa: E402
+import httpx  # noqa: E402
 
 log_dir = os.environ.get("SERVERLESS_EMBED_LOG_DIR", os.path.join(os.path.dirname(__file__), "logs"))
 os.makedirs(log_dir, exist_ok=True)
@@ -50,7 +48,7 @@ class VastServerlessEmbedder:
         await self.initialize()
         return self
         
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
         await self.cleanup()
         
     async def initialize(self):
@@ -111,7 +109,7 @@ class VastServerlessEmbedder:
             try:
                 await self.client.close()
                 log.info("Client closed")
-            except:
+            except Exception:
                 pass
 
 async def run_batch_embedding():

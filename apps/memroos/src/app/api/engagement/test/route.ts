@@ -5,6 +5,7 @@ import {
   resolveChatRuntimePlan,
   type ChatRuntimeCandidate,
 } from "@/app/api/chat/chat-runtime";
+import { apiError } from "@/lib/api-error";
 import { getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
 import type { RegisteredAgent, RemoteAgentConfig } from "@/types";
@@ -120,7 +121,7 @@ function dispatchCheck(agent: RegisteredAgent, remote?: RemoteAgentConfig): Agen
   };
 }
 
-export async function POST(req: NextRequest | Request) {
+async function buildEngagementTestResponse(req: NextRequest | Request) {
   const body = (await req.json().catch(() => ({}))) as { agentIds?: string[] };
   const requested = new Set((body.agentIds ?? []).filter(Boolean));
   const remotes = new Map(getRemoteAgents().map((agent) => [agent.id, agent]));
@@ -138,4 +139,12 @@ export async function POST(req: NextRequest | Request) {
     }))),
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function POST(req: NextRequest | Request) {
+  try {
+    return await buildEngagementTestResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

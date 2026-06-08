@@ -4,10 +4,9 @@ Sits in front of mem0-server and buffers requests when it's down.
 Run with: uvicorn mem0-queue-server:app --host 0.0.0.0 --port 3201
 """
 
-import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, Any
 import httpx
 
 # Import queue logic
@@ -150,7 +149,7 @@ async def health():
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{MEM0_URL}/health", timeout=5)
             backend_healthy = response.status_code == 200
-    except:
+    except Exception:
         pass
 
     queue_status = queue.get_queue_status()

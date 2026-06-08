@@ -25,7 +25,6 @@ import {
   createEvalJob as _createEvalJob,
   getEvalJob,
   getEvidenceBundle,
-  listEvalJobs,
   persistEvidenceBundle,
   transitionJobStatus,
   type EvalJob,
@@ -34,7 +33,6 @@ import {
 import { createSandboxProfile, type SandboxProfile } from "./behavioral-sandbox";
 
 export { getEvalJob as getJobStatus, getEvidenceBundle as getJobEvidence };
-export { listEvalJobs };
 
 // ---------------------------------------------------------------------------
 // Options

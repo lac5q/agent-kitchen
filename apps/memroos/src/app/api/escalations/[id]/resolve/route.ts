@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
@@ -14,18 +15,18 @@ export const dynamic = "force-dynamic";
  *
  * Body: { note?: string }
  */
-export async function POST(
+async function buildResolveEscalationResponse(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await authenticateUser(req);
   const roleError = requireRole(session?.role, "operator");
   if (roleError) return roleError;
-  if (!session) return Response.json({ error: "authentication required" }, { status: 401 });
+  if (!session) return apiError(401, "authentication required");
 
   const { id } = await params;
   if (!id) {
-    return Response.json({ error: "escalation id is required" }, { status: 400 });
+    return apiError(400, "escalation id is required");
   }
 
   let note: string | undefined;
@@ -45,7 +46,7 @@ export async function POST(
     .get(id) as EscalationRow | undefined;
 
   if (!escalation) {
-    return Response.json({ error: "escalation not found" }, { status: 404 });
+    return apiError(404, "escalation not found");
   }
 
   try {
@@ -56,7 +57,7 @@ export async function POST(
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "resolution failed";
-    return Response.json({ error: message }, { status: 409 });
+    return apiError(409, message);
   }
 
   const updated = db
@@ -64,4 +65,15 @@ export async function POST(
     .get(id) as EscalationRow;
 
   return Response.json({ escalation: updated, timestamp: new Date().toISOString() });
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    return await buildResolveEscalationResponse(req, context);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

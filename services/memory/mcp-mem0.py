@@ -152,7 +152,7 @@ def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict[str
         # Server returned an error
         try:
             error_detail = e.response.json()
-        except:
+        except Exception:
             error_detail = {"detail": str(e)}
 
         log_failure("save_failed", {
@@ -201,14 +201,14 @@ def memory_search(query: str, agent_id: str = "", limit: int = 5) -> str:
     except httpx.HTTPStatusError as e:
         try:
             error_detail = e.response.json()
-        except:
+        except Exception:
             error_detail = {"detail": str(e)}
         log_failure("search_failed", {"query": query[:50], "agent_id": agent_id, "status_code": e.response.status_code}, e)
         return f"Error searching memory (HTTP {e.response.status_code}): {error_detail.get('detail', str(e))}"
 
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         log_failure("search_server_down", {"query": query[:50], "agent_id": agent_id}, e)
-        return f"Error searching memory: Server unavailable. Check with memory_health."
+        return "Error searching memory: Server unavailable. Check with memory_health."
 
     except Exception as e:
         log_failure("search_unexpected", {"query": query[:50], "agent_id": agent_id}, e)
@@ -237,14 +237,14 @@ def memory_get_all(agent_id: str = "shared") -> str:
     except httpx.HTTPStatusError as e:
         try:
             error_detail = e.response.json()
-        except:
+        except Exception:
             error_detail = {"detail": str(e)}
         log_failure("get_all_failed", {"agent_id": agent_id, "status_code": e.response.status_code}, e)
         return f"Error retrieving memories (HTTP {e.response.status_code}): {error_detail.get('detail', str(e))}"
 
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         log_failure("get_all_server_down", {"agent_id": agent_id}, e)
-        return f"Error retrieving memories: Server unavailable. Check with memory_health."
+        return "Error retrieving memories: Server unavailable. Check with memory_health."
 
     except Exception as e:
         log_failure("get_all_unexpected", {"agent_id": agent_id}, e)
@@ -309,7 +309,7 @@ def memory_failures(limit: int = 10) -> str:
             for f in server_failures:
                 f["source"] = "server"
                 failures.append(f)
-    except:
+    except Exception:
         pass
 
     # Check MCP failures
@@ -325,9 +325,9 @@ def memory_failures(limit: int = 10) -> str:
                         record = json.loads(json_part)
                         record["source"] = "mcp"
                         failures.append(record)
-                except:
+                except Exception:
                     pass
-        except:
+        except Exception:
             pass
 
     if not failures:

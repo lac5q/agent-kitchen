@@ -25,7 +25,7 @@ export type { RecordedToolCall };
 // Types
 // ---------------------------------------------------------------------------
 
-export interface SandboxToolCallResult {
+interface SandboxToolCallResult {
   /** Always true in sandbox mode — no tool is allowed to execute */
   denied: boolean;
   /** Human-readable reason for the denial */

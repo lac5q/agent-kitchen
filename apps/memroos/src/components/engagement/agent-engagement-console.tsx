@@ -23,20 +23,6 @@ import type { RegisteredAgent } from "@/types";
 type Mode = "chat" | "room";
 type ChatMessage = { role: "user" | "assistant" | "system"; content: string; agentId?: string };
 type AgentGroup = "primary" | "directory";
-type SpeechRecognitionResultLike = ArrayLike<{ transcript?: string }>;
-type SpeechRecognitionEventLike = {
-  results: ArrayLike<SpeechRecognitionResultLike>;
-};
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
 type AgentCheck = {
   agentId: string;
   name: string;
@@ -265,7 +251,7 @@ export function AgentEngagementConsole() {
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const supportAgents = useMemo(() => agents.filter(isPaperclipAgent), [agents]);
   const rosterAgents = useMemo(() => {
@@ -573,11 +559,7 @@ export function AgentEngagementConsole() {
   }
 
   function startVoiceCapture() {
-    const speechWindow = window as typeof window & {
-      SpeechRecognition?: new () => SpeechRecognitionLike;
-      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-    };
-    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
       setHistory((current) => [
         ...current,

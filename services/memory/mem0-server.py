@@ -12,6 +12,8 @@ import logging
 import traceback
 import shutil
 import sqlite3
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 from pathlib import Path
@@ -24,9 +26,9 @@ from pydantic import BaseModel
 from provenance import normalize_metadata
 try:
     from qdrant_client import QdrantClient
-    QDRANT_AVAILABLE = True
+
+    QDRANT_AVAILABLE = QdrantClient is not None
 except ImportError:
-    QdrantClient = None
     QDRANT_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
@@ -550,15 +552,17 @@ def health():
     runtime_status = check_mem0_runtime()
     vector_status = "unknown"
     if vector_provider == "qdrant":
-        try:
-            vector_status = check_qdrant_vector_store(vector_cfg)
-        except Exception as e:
-            logger.warning(f"Qdrant health check failed: {e}")
+        if not QDRANT_AVAILABLE:
             vector_status = "disconnected"
+        else:
+            try:
+                vector_status = check_qdrant_vector_store(vector_cfg)
+            except Exception as e:
+                logger.warning(f"Qdrant health check failed: {e}")
+                vector_status = "disconnected"
     elif vector_provider == "chroma":
         # Chroma is embedded — if the server is running at all, it's healthy
         try:
-            import chromadb
             vector_status = "connected"
         except Exception as e:
             logger.warning(f"Chroma health check failed: {e}")
@@ -701,9 +705,6 @@ def clear_failures():
 # ---------------------------------------------------------------------------
 # Background health checker — auto-recover from Qdrant blips
 # ---------------------------------------------------------------------------
-
-from contextlib import asynccontextmanager
-import asyncio
 
 _health_check_task = None
 _queue_replay_task = None

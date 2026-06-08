@@ -1,10 +1,10 @@
 import type { EvalLayerBreakdown, EvalRunResult } from "@/lib/evals/types";
-import type { ProposalType } from "./proposal-registry";
+import type { ProposalType } from "./proposal-types";
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "applied" | "rolled_back";
 export type ProposalDecisionAction = "approved" | "rejected" | "applied" | "rolled_back";
 export type ProposalCommandAction = "approve" | "reject" | "apply";
-export type SealAuditEvent =
+type SealAuditEvent =
   | "proposed"
   | "approved"
   | "rejected"

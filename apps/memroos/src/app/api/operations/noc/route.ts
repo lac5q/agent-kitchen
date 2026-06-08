@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import {
   normalizeNocWindow,
@@ -33,7 +34,7 @@ function panel(status: PanelStatus, source: string, lastUpdated: string | null, 
   return { status, source, lastUpdated, warnings };
 }
 
-export async function GET(request: Request) {
+async function buildNocResponse(request: Request) {
   const url = new URL(request.url);
   const window = normalizeNocWindow(url.searchParams.get("window"));
   const workspace = normalizeNocWorkspace(url.searchParams.get("workspace"));
@@ -99,4 +100,12 @@ export async function GET(request: Request) {
       ]),
     },
   });
+}
+
+export async function GET(request: Request) {
+  try {
+    return await buildNocResponse(request);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

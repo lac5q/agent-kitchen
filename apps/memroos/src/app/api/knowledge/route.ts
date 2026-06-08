@@ -1,4 +1,5 @@
 import type { KnowledgeCollection } from "@/types";
+import { apiError } from "@/lib/api-error";
 import {
   loadCollections,
   scanConfiguredCollection,
@@ -6,7 +7,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function buildKnowledgeResponse() {
   const COLLECTIONS = loadCollections();
   const collections: KnowledgeCollection[] = [];
 
@@ -38,4 +39,12 @@ export async function GET() {
     totalCollections: collections.length,
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function GET() {
+  try {
+    return await buildKnowledgeResponse();
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

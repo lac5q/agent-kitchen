@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { apiError } from '@/lib/api-error';
 import { getDb } from '@/lib/db';
 import { readFileSync } from 'node:fs';
 import { SKILL_CONTRIBUTIONS_LOG, FAILURES_LOG } from '@/lib/constants';
@@ -104,19 +105,19 @@ function parseJsonlBuckets(filePath: string, window: Window): TimePoint[] {
 
 // ─── GET handler ──────────────────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
+async function buildTimeSeriesResponse(req: NextRequest) {
   const url = req.nextUrl ?? new URL(req.url);
   const metricParam = url.searchParams.get('metric') ?? '';
   const windowParam = url.searchParams.get('window') ?? '';
 
   // Validate metric against allowlist (T-25-01, T-25-02)
   if (!VALID_METRICS.includes(metricParam as Metric)) {
-    return Response.json({ error: 'Invalid metric' }, { status: 400 });
+    return apiError(400, 'Invalid metric');
   }
 
   // Validate window against allowlist
   if (!VALID_WINDOWS.includes(windowParam as Window)) {
-    return Response.json({ error: 'Invalid window' }, { status: 400 });
+    return apiError(400, 'Invalid window');
   }
 
   const metric = metricParam as Metric;
@@ -193,4 +194,12 @@ export async function GET(req: NextRequest) {
     window,
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    return await buildTimeSeriesResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : 'Internal server error');
+  }
 }

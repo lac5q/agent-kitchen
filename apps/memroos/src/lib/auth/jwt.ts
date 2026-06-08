@@ -45,13 +45,3 @@ export async function verifyAccessToken(token: string): Promise<JwtPayload | nul
     return null;
   }
 }
-
-/**
- * Generates an opaque random refresh token (32 bytes, hex-encoded).
- * The caller is responsible for hashing and storing the hash.
- */
-export function generateRefreshToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}

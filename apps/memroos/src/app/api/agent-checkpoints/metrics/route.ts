@@ -11,9 +11,10 @@ export async function GET(req: Request) {
     const metrics = getCheckpointMetrics(db, tenantId);
 
     return NextResponse.json({ status: "ok", metrics });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { status: "error", message: error.message || "Unknown error" },
+      { status: "error", message },
       { status: 500 }
     );
   }

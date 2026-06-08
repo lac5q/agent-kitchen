@@ -51,7 +51,7 @@ MEMORY_SERVICE_DIR = Path(__file__).resolve().parents[2] / "memory"
 if str(MEMORY_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(MEMORY_SERVICE_DIR))
 
-from provenance import extract_metadata, normalize_metadata, provenance_label
+from provenance import extract_metadata, normalize_metadata, provenance_label  # noqa: E402
 
 try:
     from .capabilities import get_capabilities, open_workspace

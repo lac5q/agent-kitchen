@@ -7,8 +7,6 @@ knowledge root without hardcoding a private machine path.
 
 from __future__ import annotations
 
-import os
-import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone

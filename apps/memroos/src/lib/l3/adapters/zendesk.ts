@@ -4,6 +4,9 @@
  *
  * Returns representative BusinessOutcomeEvent fixture data.
  *
+ * INTENTIONAL_STUB: retained as a non-production L3 fixture until the live
+ * Zendesk integration is implemented.
+ *
  * PRODUCTION GUARD: throws if process.env.NODE_ENV === "production".
  */
 

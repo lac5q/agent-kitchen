@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { recommendModels, type ModelRoutingStrategy } from "@/lib/model-routing";
 import { cacheKey, responseCache } from "@/lib/response-cache";
@@ -14,7 +15,7 @@ function limitFrom(value: string | null): number {
   return Math.min(8, Math.max(1, Number.isNaN(parsed) ? 4 : parsed));
 }
 
-export async function GET(req: NextRequest) {
+async function buildRecommendationsGetResponse(req: NextRequest) {
   const url = req.nextUrl ?? new URL(req.url);
   const taskType = (url.searchParams.get("taskType") || "engineering").trim().toLowerCase();
   const strategy = strategyFrom(url.searchParams.get("strategy"));
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
   );
 }
 
-export async function POST(req: NextRequest) {
+async function buildRecommendationsPostResponse(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     taskType?: unknown;
     strategy?: unknown;
@@ -54,4 +55,20 @@ export async function POST(req: NextRequest) {
     recommendations: recommendModels(getDb(), taskType, strategy, limit),
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    return await buildRecommendationsGetResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    return await buildRecommendationsPostResponse(req);
+  } catch (error: unknown) {
+    return apiError(500, error instanceof Error ? error.message : "Internal server error");
+  }
 }

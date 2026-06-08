@@ -4,13 +4,6 @@
 
 export type UserRole = 'admin' | 'operator' | 'reviewer';
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  displayName: string;
-  tenantId: string;
-}
-
 export interface JwtPayload {
   sub: string;
   role: UserRole;
