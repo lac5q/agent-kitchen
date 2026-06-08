@@ -1,16 +1,22 @@
 ---
 phase: 106
-status: partial-verified
-verified: "2026-06-04"
+status: verified
+verified: "2026-06-08"
 ---
 
 # Phase 106 Verification
 
 ## Status
 
-Phase 106 is partially verified. Plan 01 is complete, while Plan 02 remains open for the real sandbox-backed behavioral scorer.
+Phase 106 is verified. Plan 01 and Plan 02 are complete, including the deterministic sandbox-backed behavioral scorer required to close `SKILLOPT-HARDEN-01`.
 
 ## Commands Run
+
+```bash
+npm --prefix apps/memroos run test -- src/lib/skillforge/__tests__/eval-gate.test.ts src/lib/skillforge/__tests__/behavioral-eval.test.ts src/lib/skillforge/__tests__/local-judge.test.ts
+```
+
+Result: passed. This verifies deterministic sandbox scoring, true baseline/treatment comparison, and deterministic cloud fallback behavior.
 
 ```bash
 rtk proxy npm --prefix apps/memroos run test -- src/lib/skillforge/__tests__/edit-generator.test.ts src/lib/skillforge/__tests__/eval-gate.test.ts src/lib/skillforge/__tests__/proposal.test.ts src/lib/skillforge/__tests__/operator-approval.test.ts src/lib/skillforge/__tests__/worker.test.ts
@@ -63,8 +69,8 @@ The index was restored to an unstaged state after review. The remaining CRITICAL
 ## Coverage Notes
 
 - Proposal generation, typed edit operations, split traceability, evaluator receipts, rejected-edit handling, approval/export receipts, and rollback handles are covered by focused SkillForge tests.
-- `SKILLOPT-HARDEN-01` remains open because held-out scoring is deterministic and fail-closed now, but not yet backed by a real behavioral sandbox scorer.
+- `SKILLOPT-HARDEN-01` is closed by Plan 02. `runHeldOutEval()` now evaluates baseline and proposed skill content against the same held-out tasks and records baseline W, treatment W, scorer version, sandbox receipt, and per-task scores.
 
 ## Follow-Up Gate
 
-Do not mark Phase 106 complete until `106-02-PLAN.md` is implemented and `.planning/REQUIREMENTS.md` marks `SKILLOPT-HARDEN-01` complete.
+Production scale-out should run the same eval contract in a private cloud runner, while MemRoOS retains the control-plane approval, evidence, and audit records.

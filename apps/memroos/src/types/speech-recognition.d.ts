@@ -33,7 +33,7 @@ interface SpeechRecognition {
   abort(): void;
 }
 
-declare var SpeechRecognition: {
+declare const SpeechRecognition: {
   prototype: SpeechRecognition;
   new(): SpeechRecognition;
 };

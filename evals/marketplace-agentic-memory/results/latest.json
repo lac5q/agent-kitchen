@@ -2,7 +2,7 @@
   "benchmark": {
     "id": "marketplace-agentic-memory-2026-05-24",
     "name": "Marketplace Agentic Memory Benchmark",
-    "generatedAt": "2026-05-24T10:58:18.471Z",
+    "generatedAt": "2026-06-08T13:39:45.928Z",
     "methodology": "Public-evidence architecture benchmark. Scores are 0-5 by criterion, adjusted by source confidence. This does not claim black-box latency or accuracy for closed products without API access.",
     "criteria": [
       {

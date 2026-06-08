@@ -30,6 +30,19 @@
 - [x] **CLOUDOFFLOAD-05**: mem0, Qdrant, Neo4j, logs, replay queues, and checkpoints have cloud targets or retention/prune caps.
 - [x] **CLOUDOFFLOAD-06**: NOC/API and CLI surfaces show local footprint, pressure, cloud targets, prune safety, and remaining local-only state.
 
+## v5.0 Memory Trust + Operational Intelligence
+
+- [x] **MEMSEC-01**: Raw evidence is stored in an append-only vault with hash verification, replay metadata, and admin list/replay APIs.
+- [x] **MEMSEC-02**: Memory, audit, hive, and artifact records carry multi-dimensional security labels with fail-closed defaults.
+- [x] **MEMSEC-03**: Ingestion uses a deterministic-first classification cascade with a human-review path for uncertain material.
+- [x] **MEMSEC-04**: Recall, export, and dispatch paths enforce policy decisions before returning or transmitting memory data.
+- [x] **MEMSEC-05**: Search/index projections are classification-aware and exclude material that is not approved for indexing.
+- [x] **MEMSEC-06**: Multimodal/vector projections inherit source labels and preserve provenance back to raw artifacts.
+- [x] **MEMSEC-07**: Sensitive raw artifacts and envelopes use managed encryption metadata with rotation-ready key identifiers.
+- [x] **MEMSEC-08**: Security regression fixtures prove blocked recall/export/dispatch leak paths stay blocked.
+- [x] **CTX-FOLLOWUP-03**: Privacy classification policy is codified as a deterministic cascade before LLM adjudication.
+- [x] **NOC-08**: NOC governance strip derives live governance state from audit, orchestration, security, and escalation surfaces.
+
 ## v7.0 Client-Ready Security + Architecture Audit
 
 ### AUDIT — Domain Scanning
@@ -96,6 +109,16 @@
 | CLOUDOFFLOAD-04 | 108 | Complete |
 | CLOUDOFFLOAD-05 | 108 | Complete |
 | CLOUDOFFLOAD-06 | 108 | Complete |
+| MEMSEC-01 | 74 | Complete |
+| MEMSEC-02 | 74 | Complete |
+| MEMSEC-03 | 75 | Complete |
+| MEMSEC-04 | 76 | Complete |
+| MEMSEC-05 | 77 | Complete |
+| MEMSEC-06 | 77 | Complete |
+| MEMSEC-07 | 77 | Complete |
+| MEMSEC-08 | 78 | Complete |
+| CTX-FOLLOWUP-03 | 75 | Complete |
+| NOC-08 | 79 | Complete |
 | AUDIT-01 | 109 | Complete |
 | AUDIT-02 | 109 | Complete |
 | AUDIT-03 | 109 | Complete |
