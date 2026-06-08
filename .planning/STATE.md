@@ -97,6 +97,7 @@ Next action: Run full verification and commit the completed 106/108/roadmap clea
 - Phase 107 completed after the agent-context-sync research pass. It introduces a MemRoOS-native durable agent context bus for synchronous request/reply, inbox polling, explicit acknowledgements, MCP-accessible tools, optional memory-save receipts, scanner/audit guardrails, fail-closed control-layer data-access denial for self-declared claims, and delegated user/OAuth raw-token exclusion so agents can communicate without relying on hidden chat state or self-declared access.
 - Phase 108 is complete as an operating-profile implementation. MemRoOS now has a local-footprint inventory library, `npm run check:local-footprint`, NOC API footprint status, cloud target mapping, prune-safety classification, and guardrails for raw vault/secrets/vector backends.
 - Turbovec was added to the Phase 108 roadmap only as a future compressed-vector shadow-index limitation/test. It is not approved for implementation; any future test or dependency adoption requires Luis approval first and must prove no recall/precision regression plus meaningful hot-path latency improvement.
+- Memento-style memory was added as a future bounded save-quality spike, not an approved implementation. Any future work should compare a local-first typed/audited Memento-compatible contract against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, hosted/private trace upload, or replacement of mem0/Qdrant/Neo4j/SQLite starts without Luis approval.
 
 ### Roadmap Evolution (2026-05-27)
 
@@ -241,3 +242,4 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 |----------|------|--------|
 | context_questions | Phase 60 / 60-CONTEXT.md — trajectory authorship workflow, step count bounds, preset-change audit semantics | Deferred to v3 planning |
 | context_questions | Phase 63 / 63-CONTEXT.md — rename/auth decisions recorded as next-milestone context | Deferred to Phase 63 execution |
+| future_spike | Memento memory-save quality spike — compare local-first typed/audited Memento-style save behavior against MemRoOS candidates and evals; no dependency, backend, or hosted/private-trace adoption without Luis approval | Deferred to future GSD planning |

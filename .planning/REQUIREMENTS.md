@@ -79,6 +79,7 @@
 
 ## Future Requirements (Deferred)
 
+- **MEMGEN-FOLLOWUP-02**: Run a bounded Memento memory-save quality spike that compares local-first typed/audited Memento-style memory behavior against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, or hosted/private trace upload without Luis approval.
 - Automated DAST scanning in CI pipeline (post-audit baseline needed first)
 - Penetration test by external firm (after internal audit complete)
 - SOC 2 Type II controls mapping (separate compliance milestone)
@@ -137,3 +138,4 @@
 | TEST-01 | 113 | Complete |
 | TEST-02 | 110–112 | Complete |
 | TEST-03 | 113 | Complete |
+| MEMGEN-FOLLOWUP-02 | Future | Deferred |
