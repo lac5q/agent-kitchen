@@ -98,7 +98,7 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com",
+      `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://www.google-analytics.com https://stats.g.doubleclick.net",
       "connect-src 'self' http://localhost:* ws://localhost:* https://www.google-analytics.com https://region1.google-analytics.com",

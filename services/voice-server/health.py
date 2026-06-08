@@ -11,6 +11,7 @@ Launch:
 """
 import json
 import os
+import pathlib
 from datetime import datetime, timezone
 
 import uvicorn
@@ -18,7 +19,9 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-SESSION_STATE_FILE = "/tmp/voice-session-state.json"
+_STATE_DIR = pathlib.Path(os.environ.get("MEMROOS_DATA_DIR", str(pathlib.Path.home() / ".memroos"))) / "voice"
+_STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+SESSION_STATE_FILE = str(_STATE_DIR / "voice-session-state.json")
 
 
 @app.get("/health")

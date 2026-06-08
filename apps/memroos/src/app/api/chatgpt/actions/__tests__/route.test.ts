@@ -112,7 +112,9 @@ describe("ChatGPT Actions bridge", () => {
     delete process.env.MEMROOS_CHATGPT_ACTIONS_PUBLIC_BASE_URL;
   });
 
-  it("uses forwarded host headers for the OpenAPI schema behind a proxy", async () => {
+  it("ignores x-forwarded-host headers and uses the literal request origin (SEC-03/B01-003)", async () => {
+    // x-forwarded-host is intentionally not trusted to prevent spec URL poisoning.
+    // For reverse-proxy deployments, set MEMROOS_CHATGPT_ACTIONS_PUBLIC_BASE_URL instead.
     const { GET } = await loadOpenApiRoute();
     const response = await GET(
       new Request("https://localhost:3002/api/chatgpt/actions/openapi", {
@@ -124,7 +126,8 @@ describe("ChatGPT Actions bridge", () => {
     );
     const body = await response.json();
 
-    expect(body.servers).toEqual([{ url: "https://app.memroos.test" }]);
+    // Must use literal request URL origin, NOT the x-forwarded-host value
+    expect(body.servers).toEqual([{ url: "https://localhost:3002" }]);
   });
 
   it("searches MemRoOS on loopback without requiring a setup key", async () => {
