@@ -1,8 +1,8 @@
 # Milestones
 
-## v6.6 Cloud Offload + Local Footprint Reduction (Backlog)
+## v6.6 Cloud Offload + Local Footprint Reduction (Completed 2026-06-08)
 
-**Phases:** 108 | **Plans:** 1
+**Phases:** 108 | **Plans:** 1 complete
 
 **Scope:**
 
@@ -20,9 +20,9 @@
 
 ---
 
-## v6.4 SkillForge Production SkillOpt Hardening (Partially Implemented)
+## v6.4 SkillForge Production SkillOpt Hardening (Completed 2026-06-08)
 
-**Phases:** 106 | **Plans:** 1 complete, 1 remaining
+**Phases:** 106 | **Plans:** 2 complete
 
 **Scope:**
 
@@ -30,7 +30,7 @@
 
 ---
 
-## v6.2 Skill Distribution + Knowledge Gateway (Next)
+## v6.2 Skill Distribution + Knowledge Gateway (Completed 2026-05-28)
 
 **Phases:** 98–102 | **Plans:** TBD
 

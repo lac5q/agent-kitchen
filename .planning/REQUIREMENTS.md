@@ -1,16 +1,36 @@
-# Requirements: Memroos v7.0 — Client-Ready Security + Architecture Audit
+# Requirements: Memroos GSD Roadmap
 
-*Created: 2026-06-06 | Milestone: v7.0*
-
----
-
-## Milestone Goal
-
-Harden memroos for client review with a full security and architecture sweep across all codebase layers — eliminating vulnerabilities, cleaning dead code, fixing bad boundaries, and ensuring tests stay green throughout.
+*Updated: 2026-06-08*
 
 ---
 
-## Active Requirements
+## Current Completed Milestones
+
+- v6.4 SkillForge Production SkillOpt Hardening — complete
+- v6.5 Agent Context Bus + Synchronous Agent Communication — complete
+- v6.6 Cloud Offload + Local Footprint Reduction — complete
+- v7.0 Client-Ready Security + Architecture Audit — complete
+
+---
+
+## v6.4 SkillForge Production SkillOpt Hardening
+
+- [x] **SKILLOPT-HARDEN-01**: `runHeldOutEval` and `runEvalGate` use a deterministic sandbox-backed behavioral scorer with a true current-skill baseline W for instruction and skill proposals.
+- [x] **SKILLOPT-HARDEN-02**: SkillForge has one authoritative proposal-generation path for worker/API/approval flows.
+- [x] **SKILLOPT-HARDEN-03**: SkillForge persistence stores edit hash, split ids, baseline W, validation W, held-out W, and evaluator receipt references.
+- [x] **SKILLOPT-HARDEN-04**: Proposed skill changes use typed bounded edit operations before rendering to diffs.
+- [x] **SKILLOPT-HARDEN-05**: Proposal audit/API/UI evidence includes accepted/rejected status, W values, split ids, rejected-edit reason, operator decision, export receipt, and rollback handle.
+
+## v6.6 Cloud Offload + Local Footprint Reduction
+
+- [x] **CLOUDOFFLOAD-01**: Local-store inventory classifies each tracked store by permanence, source of truth, size, retention, privacy label, cloud target, and prune safety.
+- [x] **CLOUDOFFLOAD-02**: SQLite operational state has an explicit managed persistence/sync target and is marked non-prunable until restore is proven.
+- [x] **CLOUDOFFLOAD-03**: Heavy search/index workloads have remote qmd/search worker or managed-index targets, with local qmd cache marked rebuildable.
+- [x] **CLOUDOFFLOAD-04**: Raw vault artifacts have encrypted object-storage target, hash verification, and rollback/replay guardrails before pruning.
+- [x] **CLOUDOFFLOAD-05**: mem0, Qdrant, Neo4j, logs, replay queues, and checkpoints have cloud targets or retention/prune caps.
+- [x] **CLOUDOFFLOAD-06**: NOC/API and CLI surfaces show local footprint, pressure, cloud targets, prune safety, and remaining local-only state.
+
+## v7.0 Client-Ready Security + Architecture Audit
 
 ### AUDIT — Domain Scanning
 
@@ -23,24 +43,24 @@ Harden memroos for client review with a full security and architecture sweep acr
 
 - [x] **SEC-01**: All critical-severity security findings from the audit are fixed and verified
 - [x] **SEC-02**: All high-severity security findings from the audit are fixed and verified
-- [ ] **SEC-03**: Medium-severity security findings are fixed or documented with accepted-risk rationale
+- [x] **SEC-03**: Medium-severity security findings are fixed or documented with accepted-risk rationale
 - [x] **SEC-04**: `npm audit` and `pip-audit` report zero critical/high CVEs in dependencies; all fixable vulns patched
 - [x] **SEC-05**: Codebase contains no hardcoded secrets, tokens, or credentials; git history clean of accidental secret commits
-- [ ] **SEC-06**: CI/CD security gates (secret-guard.yml, pre-commit hooks) are hardened and cannot be bypassed silently
+- [x] **SEC-06**: CI/CD security gates (secret-guard.yml, pre-commit hooks) are hardened and cannot be bypassed silently
 
 ### ARCH — Architecture Cleanup
 
-- [ ] **ARCH-01**: Dead code and unused exports are removed; no unreachable functions remain in core modules
-- [ ] **ARCH-02**: Module boundary violations resolved — no circular dependencies, no cross-layer leakage between services
-- [ ] **ARCH-03**: Redundant patterns consolidated — duplicate API clients, repeated utilities, copy-pasted logic replaced with shared implementations
-- [ ] **ARCH-04**: Consistent error handling enforced across all Next.js API routes and Python service endpoints
-- [ ] **ARCH-05**: TypeScript `any` types and unsafe casts eliminated from production code paths; strict mode violations resolved
+- [x] **ARCH-01**: Dead code and unused exports are removed; no unreachable functions remain in core modules
+- [x] **ARCH-02**: Module boundary violations resolved — no circular dependencies, no cross-layer leakage between services
+- [x] **ARCH-03**: Redundant patterns consolidated — duplicate API clients, repeated utilities, copy-pasted logic replaced with shared implementations
+- [x] **ARCH-04**: Consistent error handling enforced across all Next.js API routes and Python service endpoints
+- [x] **ARCH-05**: TypeScript `any` types and unsafe casts eliminated from production code paths; strict mode violations resolved
 
 ### TEST — Validation
 
-- [ ] **TEST-01**: Full test suite (`npm test`, Python pytest) runs green after all security and architecture changes
+- [x] **TEST-01**: Full test suite (`npm test`, Python pytest) runs green after all security and architecture changes
 - [x] **TEST-02**: Security regression tests added for each critical/high finding fixed — preventing reintroduction
-- [ ] **TEST-03**: Production build (`npm run build`) and typecheck (`npm run typecheck`) pass clean with zero errors
+- [x] **TEST-03**: Production build (`npm run build`) and typecheck (`npm run typecheck`) pass clean with zero errors
 
 ---
 
@@ -65,16 +85,27 @@ Harden memroos for client review with a full security and architecture sweep acr
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| AUDIT-01 | 109 | Planned |
-| AUDIT-02 | 109 | Planned |
-| AUDIT-03 | 109 | Planned |
-| AUDIT-04 | 109 | Planned |
-| SEC-01 | 110 | Planned |
-| SEC-02 | 110 | Planned |
-| SEC-03 | 111 | Planned |
-| SEC-04 | 111 | Planned |
-| SEC-05 | 110 | Planned |
-| SEC-06 | 111 | Planned |
+| SKILLOPT-HARDEN-01 | 106 | Complete |
+| SKILLOPT-HARDEN-02 | 106 | Complete |
+| SKILLOPT-HARDEN-03 | 106 | Complete |
+| SKILLOPT-HARDEN-04 | 106 | Complete |
+| SKILLOPT-HARDEN-05 | 106 | Complete |
+| CLOUDOFFLOAD-01 | 108 | Complete |
+| CLOUDOFFLOAD-02 | 108 | Complete |
+| CLOUDOFFLOAD-03 | 108 | Complete |
+| CLOUDOFFLOAD-04 | 108 | Complete |
+| CLOUDOFFLOAD-05 | 108 | Complete |
+| CLOUDOFFLOAD-06 | 108 | Complete |
+| AUDIT-01 | 109 | Complete |
+| AUDIT-02 | 109 | Complete |
+| AUDIT-03 | 109 | Complete |
+| AUDIT-04 | 109 | Complete |
+| SEC-01 | 110 | Complete |
+| SEC-02 | 110 | Complete |
+| SEC-03 | 111 | Complete |
+| SEC-04 | 111 | Complete |
+| SEC-05 | 110 | Complete |
+| SEC-06 | 111 | Complete |
 | ARCH-01 | 112 | Complete |
 | ARCH-02 | 112 | Complete |
 | ARCH-03 | 112 | Complete |

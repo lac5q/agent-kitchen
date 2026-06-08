@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v7.0
-milestone_name: Client-Ready Security + Architecture Audit
+milestone: v6.6
+milestone_name: Cloud Offload + Local Footprint Reduction
 status: complete
-stopped_at: Completed Phase 113 — full tests, Python tests, typecheck, and production build verified
-last_updated: "2026-06-08T20:55:00.000Z"
+stopped_at: Completed Phase 106, Phase 108, and roadmap cleanup
+last_updated: "2026-06-08T21:20:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 17
+  completed_plans: 17
   percent: 100
 ---
 
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v7.0 — Client-Ready Security + Architecture Audit complete
+**Current focus:** v6.4/v6.6/v7.0 cleanup complete
 
 ## Current Position
 
-Phase: 113 — Test Validation + Build Verification
+Phase: 108 — Cloud Offload + Local Footprint Reduction
 Plan: 01 complete
 Status: Complete
 
 ## Session Continuity
 
-Last session: 2026-06-08T20:55:00.000Z
-Stopped at: Completed Phase 113 — npm test, pytest, typecheck, production build, ruff, vulture, and knowledge-save contract eval verified
+Last session: 2026-06-08T21:20:00.000Z
+Stopped at: Completed Phase 106 real sandbox scorer, Phase 108 local-footprint inventory/NOC surface, and roadmap cleanup
 Resume file: None
-Next action: Review and merge the completed v7.0 changes; clean completed Claude worktrees after preserving any unmerged commits.
+Next action: Run full verification and commit the completed 106/108/roadmap cleanup slices.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -71,13 +71,13 @@ Next action: Review and merge the completed v7.0 changes; clean completed Claude
 | 103 | Lightweight Checkpoint/Resume/Handoff — compact structured checkpoints, async queues, performance latency | COMPLETE — AGENTMEM-FOLLOWUP-02 (1) |
 | 104 | Memory-Trace Observability — casual timelines, failure classification, debug graphs | COMPLETE — AGENTMEM-FOLLOWUP-03 (1) |
 | 105 | Agent CI/CD Release Gates — immutable versions, gating checklists, one-step rollback | COMPLETE — AGENTCICD-FOLLOWUP-01 (1) |
-| 106 | SkillForge Production SkillOpt Hardening — real behavioral eval, one proposal path, schema traceability, typed edit ops, audit/UI receipts | IN PROGRESS — SKILLOPT-HARDEN-02..05 complete; SKILLOPT-HARDEN-01 open |
+| 106 | SkillForge Production SkillOpt Hardening — real behavioral eval, one proposal path, schema traceability, typed edit ops, audit/UI receipts | COMPLETE — SKILLOPT-HARDEN-01..05 (5) |
 | 107 | Agent Context Bus and Synchronous Agent Communication — durable inbox/reply bus, MCP wrappers, memory-save receipts, control-layer access enforcement, delegated user/OAuth identity, audit/security tests | COMPLETE — AGENTBUS-01..07 (7) |
-| 108 | Cloud Offload + Local Footprint Reduction — inventory local permanence, migrate eligible stores/indexes to managed cloud, cap caches/logs, preserve encryption/rollback/offline fallback | BACKLOG — CLOUDOFFLOAD-01..06 (6) |
+| 108 | Cloud Offload + Local Footprint Reduction — inventory local permanence, migrate eligible stores/indexes to managed cloud, cap caches/logs, preserve encryption/rollback/offline fallback | COMPLETE — CLOUDOFFLOAD-01..06 (6) |
 
 **Coverage:** 64/64 v5.0-v6.5 requirements mapped, no orphans.
 **Critical path:** 74 → 75 → 76 → 77 → 78. Phases 79, 80, 81, 82 run parallel (81 soft-depends on 74).
-**Completed so far:** Phase 34 through Phase 105 shipped; Phase 107 complete; Phase 106 partially implemented with SKILLOPT-HARDEN-01 remaining.
+**Completed so far:** Phase 34 through Phase 108 shipped; Phase 109 through Phase 113 v7.0 audit complete.
 
 ## Performance Metrics
 
@@ -93,9 +93,9 @@ Next action: Review and merge the completed v7.0 changes; clean completed Claude
 ### Roadmap Evolution (2026-06-04)
 
 - Phase 106 added after the SkillForge/SkillOpt architecture review. It hardens the existing SkillForge loop by replacing heuristic/stub eval behavior with real behavioral scoring, converging proposal generation, adding schema-level traceability for split/baseline/edit receipts, introducing typed bounded edit operations, and exposing accepted/rejected proposal evidence in audit/UI surfaces.
-- Phase 106 implementation now covers a single production proposal path, additive traceability fields, typed edit ops, rejected-edit preservation, and API proposal receipt expansion. The remaining gap is true non-simulated sandbox-backed held-out scoring; the existing Phase 94 behavioral A/B helper still uses randomized simulated scores.
+- Phase 106 is complete. SkillForge now uses a deterministic no-side-effect sandbox scorer for held-out proposal evaluation, records baseline/treatment W receipts, and no longer relies on randomized Phase 94 behavioral A/B scores.
 - Phase 107 completed after the agent-context-sync research pass. It introduces a MemRoOS-native durable agent context bus for synchronous request/reply, inbox polling, explicit acknowledgements, MCP-accessible tools, optional memory-save receipts, scanner/audit guardrails, fail-closed control-layer data-access denial for self-declared claims, and delegated user/OAuth raw-token exclusion so agents can communicate without relying on hidden chat state or self-declared access.
-- Phase 108 added to the backlog after the local permanence/footprint review. The goal is to reduce load on Luis's local machine by inventorying permanent stores versus rebuildable caches, moving eligible SQLite/search/vault/log/checkpoint workloads to managed or cloud-backed services, and enforcing local cache/retention caps without weakening privacy, encryption, rollback, or degraded/offline behavior.
+- Phase 108 is complete as an operating-profile implementation. MemRoOS now has a local-footprint inventory library, `npm run check:local-footprint`, NOC API footprint status, cloud target mapping, prune-safety classification, and guardrails for raw vault/secrets/vector backends.
 - Turbovec was added to the Phase 108 roadmap only as a future compressed-vector shadow-index limitation/test. It is not approved for implementation; any future test or dependency adoption requires Luis approval first and must prove no recall/precision regression plus meaningful hot-path latency improvement.
 
 ### Roadmap Evolution (2026-05-27)

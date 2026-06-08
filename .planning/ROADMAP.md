@@ -25,10 +25,10 @@
 - ✅ **v6.1 SkillForge Autonomy — Dream Cycle + Marketplace** — Phases 91-95 (shipped 2026-05-26)
 - ✅ **v6.2 Skill Distribution + Knowledge Gateway** — Phases 98-102 (shipped 2026-05-28)
 - ✅ **v6.3 Agent Lifecycle + Memory Observability** — Phases 103-105 (shipped 2026-05-29)
-- 🚧 **v6.4 SkillForge Production SkillOpt Hardening** — Phase 106 (partially implemented; true sandbox scorer remains)
+- ✅ **v6.4 SkillForge Production SkillOpt Hardening** — Phase 106 (completed 2026-06-08)
 - ✅ **v6.5 Agent Context Bus + Synchronous Agent Communication** — Phase 107 (completed 2026-06-04)
-- 🧭 **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (backlog; reduce local disk/RAM load by moving eligible stores and indexes to managed/cloud services)
-- 🚧 **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (in progress 2026-06-06)
+- ✅ **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (completed 2026-06-08)
+- ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
 
 ## Phases
 
@@ -38,9 +38,9 @@
 
 Full v6.5 detail in the `## v6.5 Agent Context Bus + Synchronous Agent Communication` section below.
 
-### Current v6.4 SkillForge Production SkillOpt Hardening Summary — IN PROGRESS
+### Current v6.4 SkillForge Production SkillOpt Hardening Summary — COMPLETE
 
-- [ ] **Phase 106: SkillForge Production SkillOpt Hardening** — SKILLOPT-HARDEN-02..05 implemented; SKILLOPT-HARDEN-01 remains open for a non-simulated behavioral sandbox scorer because the existing Phase 94 behavioral A/B implementation is still randomized/simulated.
+- [x] **Phase 106: SkillForge Production SkillOpt Hardening** — SKILLOPT-HARDEN-01..05 complete; held-out SkillForge eval now uses a deterministic sandbox-backed scorer with true baseline/treatment receipts.
 
 Full v6.4 detail in the `## v6.4 SkillForge Production SkillOpt Hardening` section below.
 
@@ -1282,7 +1282,7 @@ Plans:
 | 103 | v6.3 | 1/1 | Complete   | 2026-05-29 |
 | 104 | v6.3 | 1/1 | Complete   | 2026-05-29 |
 | 105 | v6.3 | 1/1 | Complete   | 2026-05-29 |
-| 108 | v6.6 | 0/1 | Backlog    | TBD |
+| 108 | v6.6 | 1/1 | Complete   | 2026-06-08 |
 
 ### Phase 106: SkillForge Production SkillOpt Hardening
 
@@ -1290,18 +1290,18 @@ Plans:
 **Milestone**: v6.4
 **Depends on:** Phase 90, Phase 94, Phase 105
 **Requirements**: SKILLOPT-HARDEN-01, SKILLOPT-HARDEN-02, SKILLOPT-HARDEN-03, SKILLOPT-HARDEN-04, SKILLOPT-HARDEN-05
-**Status**: In Progress
+**Status**: Complete (2026-06-08)
 **Success Criteria**:
   1. `runHeldOutEval` and `runEvalGate` use the real behavioral eval/sandbox scorer for instruction and skill proposals, with a true baseline W for the current skill version instead of fixed or heuristic pass-rate assumptions.
   2. SkillForge has one authoritative proposal-generation path; legacy/stub proposal generation is removed, renamed as test-only, or explicitly deprecated so worker, API, and approval flows cannot diverge.
   3. SkillForge persistence stores `edit_hash`, `train_split_id`, `validation_split_id`, `held_out_split_id`, and `baseline_w` as first-class fields with additive migrations and tests; JSON payloads remain only for detailed receipts.
   4. Proposed skill changes are represented as typed bounded edit operations (`add`, `delete`, `replace`) with textual-learning-rate limits, forbidden-section checks, stable hashes, and deterministic rendering to SKILL.md diffs.
   5. Rejected-edit buffers, non-regression gates, operator approval, runtime export, and rollback receipts are covered by regression tests and visible in the proposal/audit surfaces.
-**Plans:** 1/2 complete
+**Plans:** 2/2 complete
 
 Plans:
 - [x] 106-01-PLAN.md - SkillForge hardening pass for production proposal path, typed edits, traceability, and fail-closed held-out evidence.
-- [ ] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
+- [x] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
 
 ### Phase 107: Agent Context Bus and Synchronous Agent Communication
 
@@ -1329,7 +1329,7 @@ Plans:
 **Milestone**: v6.6
 **Depends on:** Phase 37, Phase 69, Phase 74, Phase 80, Phase 83, Phase 84
 **Requirements**: CLOUDOFFLOAD-01, CLOUDOFFLOAD-02, CLOUDOFFLOAD-03, CLOUDOFFLOAD-04, CLOUDOFFLOAD-05, CLOUDOFFLOAD-06
-**Status**: Backlog
+**Status**: Complete (2026-06-08)
 **Success Criteria**:
   1. A local-store inventory classifies every current store as permanent, rebuildable cache, replay queue, raw evidence, or runtime secret/config; records owner, source of truth, size, retention, privacy label, and cloud migration target.
   2. SQLite-backed operational state has a staged cloud persistence path or sync bridge for registry, audit, A2A/hive/task state, evals, and memory-write ledgers, with local WAL/SQLite either minimized or explicitly retained for offline fallback.
@@ -1337,10 +1337,10 @@ Plans:
   4. Raw evidence vault artifacts can move to encrypted object storage with local read-through cache, retention policy, hash verification, and rollback/replay proof before local raw copies are pruned.
   5. mem0, Qdrant, Neo4j, logs, replay queues, and orchestration checkpoints have clear managed/cloud targets or retention caps, with health checks proving queued writes and degraded remote services do not silently drop data.
   6. The NOC/setup surfaces show local footprint, cache pressure, cloud/offline mode, last sync, prune backlog, and rollback status; verification proves lower local disk/RAM pressure without exposing secrets or weakening policy gates.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 108-01-PLAN.md — Inventory local stores, choose managed/cloud targets, add migration/sync strategy, cache caps, retention policy, and verification.
+- [x] 108-01-PLAN.md — Inventory local stores, choose managed/cloud targets, add migration/sync strategy, cache caps, retention policy, and verification.
 
 ---
 
@@ -1370,17 +1370,17 @@ Plans:
 **Milestone**: v6.4
 **Depends on**: Phase 90 (SkillForge integration), Phase 94 (Behavioral W-Lift v2), Phase 105 (Agent CI/CD release gates)
 **Requirements**: SKILLOPT-HARDEN-01, SKILLOPT-HARDEN-02, SKILLOPT-HARDEN-03, SKILLOPT-HARDEN-04, SKILLOPT-HARDEN-05
-**Status**: In Progress
+**Status**: Complete (2026-06-08)
 **Success Criteria**:
   1. `runHeldOutEval` and `runEvalGate` call the behavioral eval/sandbox scorer for instruction and skill proposals, compare against the current skill version's baseline W, and fail closed when held-out evidence is missing or stale.
   2. SkillForge exposes one proposal-generation path for worker/API/approval flows; any legacy stub generator is removed, test-scoped, or explicitly deprecated with no production caller.
   3. SkillForge schema and migrations add first-class traceability fields for edit hash, split ids, baseline W, validation W, held-out W, and evaluator receipt references.
   4. Skill edits are typed bounded operations before they are rendered into unified diffs, with deterministic hashes, textual-learning-rate enforcement, forbidden-section protections, and round-trip tests.
   5. Proposal audit and UI/API surfaces show accepted/rejected status, W delta, baseline, split ids, rejected-edit reason, residual risks, operator decision, export receipt, and rollback handle.
-**Plans**: 1/2 complete
+**Plans**: 2/2 complete
 Plans:
 - [x] 106-01-PLAN.md - SkillForge hardening pass for production proposal path, typed edits, traceability, and fail-closed held-out evidence.
-- [ ] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
+- [x] 106-02-PLAN.md - Real behavioral sandbox scorer for `SKILLOPT-HARDEN-01`.
 **UI hint**: Improve/Skills proposal detail should expose baseline W, held-out W, split ids, rejected-edit reason, and rollback/export receipt.
 
 ## v6.2 Skill Distribution + Knowledge Gateway
