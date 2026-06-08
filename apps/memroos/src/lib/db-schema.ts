@@ -1408,6 +1408,10 @@ export function initSchema(db: Database.Database): void {
       created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
       updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
     );
+  `);
+  addSkillForgeTraceabilityColumns(db);
+
+  db.exec(`
     CREATE INDEX IF NOT EXISTS skillforge_proposals_status
       ON skillforge_proposals(status, created_at DESC);
     CREATE INDEX IF NOT EXISTS skillforge_proposals_skill
@@ -1583,7 +1587,6 @@ export function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS agent_versions_lookup
       ON agent_versions(tenant_id, agent_id, status, version DESC);
   `);
-  addSkillForgeTraceabilityColumns(db);
 
   try {
     db.exec("ALTER TABLE agent_versions ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");

@@ -1528,8 +1528,8 @@ Plans:
 - [x] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04 (completed 2026-06-07)
 - [x] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial) (completed 2026-06-07)
 - [x] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06 (completed 2026-06-08)
-- [ ] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
-- [ ] **Phase 113: Test Validation + Build Verification** — TEST-01, TEST-02 (complete), TEST-03
+- [x] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05 (completed 2026-06-08)
+- [x] **Phase 113: Test Validation + Build Verification** — TEST-01, TEST-02 (complete), TEST-03 (completed 2026-06-08)
 
 **Coverage:** 13/13 v7.0 requirements mapped, no orphans.
 
@@ -1596,10 +1596,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 112-01-PLAN.md — Dead code removal: D01-005/006/007/008 — security-path exports, unused files, Python ruff/vulture (Wave 1)
-- [ ] 112-02-PLAN.md — Circular dep resolution: memory subsystem registry-contract split, seal type hoist, context-sources shell fix (Wave 1)
-- [ ] 112-03-PLAN.md — TypeScript unsafe casts: catch unknown narrowing + SpeechRecognition ambient types (Wave 1)
-- [ ] 112-04-PLAN.md — Error handling: apiError() helper + 20 route migrations + ARCH-03 redundancy verification (Wave 2)
+- [x] 112-01-PLAN.md — Dead code removal: D01-005/006/007/008 — security-path exports, unused files, Python ruff/vulture (Wave 1)
+- [x] 112-02-PLAN.md — Circular dep resolution: memory subsystem registry-contract split, seal type hoist, context-sources shell fix (Wave 1)
+- [x] 112-03-PLAN.md — TypeScript unsafe casts: catch unknown narrowing + SpeechRecognition ambient types (Wave 1)
+- [x] 112-04-PLAN.md — Error handling: apiError() helper + 20 route migrations + ARCH-03 redundancy verification (Wave 2)
 
 ### Phase 113: Test Validation + Build Verification
 **Goal**: Ensure the full test suite is green, the production build passes cleanly, and security regression tests are complete and passing after all Phase 109-112 changes — validating the codebase is client-ready.
@@ -1621,5 +1621,5 @@ Plans:
 | 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
 | 110. Critical & High Security Fixes | 1/1 | Complete   | 2026-06-07 |
 | 111. Dependency CVE Sweep + Medium Security Fixes | 3/3 | Complete   | 2026-06-08 |
-| 112. Architecture Cleanup | 0/4 | Not started | - |
-| 113. Test Validation + Build Verification | 0/1 | Not started | - |
+| 112. Architecture Cleanup | 4/4 | Complete | 2026-06-08 |
+| 113. Test Validation + Build Verification | 1/1 | Complete | 2026-06-08 |
