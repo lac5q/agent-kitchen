@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MemroOS Installer — one command, progressive setup
 # Usage: curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash
-# Or:    curl -fsSL https://memroos.dev/install.sh | bash
+# Docs:   https://memroos.com
 #
 # This script:
 # 1. Detects OS and prerequisites
@@ -283,7 +283,8 @@ show_next_steps() {
   echo "║  Next Steps                                          ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "  📖 Documentation:  https://memroos.dev/docs"
+  echo "  📖 Documentation:  https://github.com/lac5q/memroos#docs"
+  echo "  🌐 Website:        https://memroos.com"
   echo "  💬 Community:      https://discord.gg/memroos"
   echo "  ⭐ Star the repo:   https://github.com/lac5q/memroos"
   echo ""
@@ -301,7 +302,7 @@ show_next_steps() {
 main() {
   banner
 
-  log "MemroOS Installer v1.0.0-beta.3"
+  log "MemroOS Installer v1.0.0-beta.2"
   echo "  OS: $OS"
   echo "  Install dir: $MEMROOS_DIR"
   echo ""

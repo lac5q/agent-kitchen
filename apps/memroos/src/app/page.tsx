@@ -35,7 +35,6 @@ const PUBLIC_LANDING_HOSTS = new Set([
   "memroos.com",
   "www.memroos.com",
   "memroos.vercel.app",
-  "memroos.epiloguecapital.com",
   "memroos.localhost",
 ]);
 const RESEARCH_PAPER_HREF = "/research/memroos-governed-knowledge-architecture-paper.pdf";
@@ -55,7 +54,7 @@ const topFeatures = [
     icon: Brain,
     summary:
       "Keep decisions, files, calls, incidents, customer context, and prior outcomes in one durable layer before the next agent starts.",
-    bullets: ["Semantic, episodic, graph, and source-backed memory", "Context packs assembled before dispatch", "Outcome capture after the work ships"],
+    bullets: ["Semantic, episodic, graph, and source-backed memory", "Context packs assembled before dispatch", "Durable agent inbox and memory-save receipts"],
   },
   {
     number: "02",
@@ -63,7 +62,7 @@ const topFeatures = [
     icon: GitBranch,
     summary:
       "Run long agent workflows with visible state, human review, retry paths, and audit trails instead of opaque one-shot automation.",
-    bullets: ["Operator NOC for live work", "Human-in-the-loop approval surfaces", "Lineage for memory, tools, checks, and residual risk"],
+    bullets: ["Operator NOC for live work", "Human-in-the-loop approval surfaces", "Security audit, lineage, and residual-risk proof"],
   },
   {
     number: "03",
@@ -71,25 +70,25 @@ const topFeatures = [
     icon: MessageSquareText,
     summary:
       "Connect local agents, REST workers, MCP-facing context, and A2A-style cards while preserving proof of what each agent consumed.",
-    bullets: ["Claude Code, Codex, ADK, LangGraph, CrewAI, and custom workers", "Agent registry with capabilities", "Source proof, evals, and public benchmark notes"],
+    bullets: ["Claude Code, Codex, ADK, LangGraph, CrewAI, and custom workers", "Agent registry with capabilities", "Local-footprint and cloud-target guardrails"],
   },
 ];
 
 const proofStats = [
   {
+    value: "1079",
+    label: "tests passing",
+    detail: "Latest v7 validation passed the full MemroOS app suite with zero failures.",
+  },
+  {
+    value: "4.47 GB",
+    label: "footprint mapped",
+    detail: "Phase 108 classifies local stores by permanence, cloud target, and prune safety.",
+  },
+  {
     value: "84.06",
-    label: "live beta score",
+    label: "benchmark score",
     detail: "Ranked first in the public-evidence agentic-memory benchmark.",
-  },
-  {
-    value: "8/8",
-    label: "recall gate",
-    detail: "Local suite passed across vector, graph, episodic, and qmd tiers.",
-  },
-  {
-    value: "469 ms",
-    label: "p95 recall",
-    detail: "Latest authenticated eval run completed without tier failures.",
   },
 ];
 
@@ -98,19 +97,19 @@ const productShots = [
     title: "Operator NOC",
     image: "/screenshots/memroos-floor.png",
     alt: "MemroOS operator NOC showing memory consumption, workload, model utility, governance, and agent activity panels.",
-    detail: "See memory health, agent workload, model utility, and trust signals in one place.",
+    detail: "See memory health, workload, model utility, governance, and local-footprint pressure in one place.",
   },
   {
-    title: "Memory",
+    title: "Memory Inventory",
     image: "/screenshots/readme-memory.png",
-    alt: "MemroOS memory page with retained context search and memory activity surfaces.",
-    detail: "Search retained context, then trace what each agent consumed before acting.",
+    alt: "MemroOS memory inventory with category counts, multi-memory search, provenance rows, and degraded-state inspection.",
+    detail: "Search retained context across vector, graph, episodic, and knowledge-backed tiers.",
   },
   {
-    title: "Dispatch",
-    image: "/screenshots/readme-dispatch.png",
-    alt: "MemroOS dispatch page with agent cards, live delegations, and task state.",
-    detail: "Send work to local, REST, and A2A-style agents from one governed registry.",
+    title: "Governed Skills",
+    image: "/screenshots/readme-skills.png",
+    alt: "MemroOS governed skill registry with completeness, dispatch status, source harness, and risk tier.",
+    detail: "Promote repeatable work into governed skills with readiness and risk gates.",
   },
 ];
 

@@ -132,15 +132,24 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("serves the public landing on the Epilogue Capital MemRoOS alias", async () => {
-    const response = await proxy(
-      new NextRequest("https://memroos.epiloguecapital.com/", {
+  it("treats the Epilogue Capital MemRoOS alias as an app host", async () => {
+    const loginResponse = await proxy(
+      new NextRequest("https://memroos.epiloguecapital.com/login", {
         headers: { host: "memroos.epiloguecapital.com" },
       })
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("location")).toBeNull();
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers.get("location")).toBeNull();
+
+    const appResponse = await proxy(
+      new NextRequest("https://memroos.epiloguecapital.com/dispatch", {
+        headers: { host: "memroos.epiloguecapital.com" },
+      })
+    );
+
+    expect(appResponse.status).toBe(307);
+    expect(appResponse.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
   });
 
   it("serves the public landing on memroos.localhost for local preview", async () => {

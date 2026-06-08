@@ -1,33 +1,52 @@
 # Project: Memroos
 
-*Last updated: 2026-06-06 — v7.0 Client-Ready Security + Architecture Audit started*
+*Last updated: 2026-06-08 — v7.0 complete; public docs and screenshot refresh underway*
 
 ---
 
 ## Current Product Goal
 
-`memroos.dev` is the control plane where AI-native teams retain what agents learn, retrieve the right context at runtime, dispatch work to the right agent, and turn repeated work into reusable skills.
+`memroos.com` is the public front door for MemroOS: the control plane where AI-native teams retain what agents learn, retrieve the right context at runtime, dispatch work to the right agent, and turn repeated work into reusable skills.
 
 See `.planning/GOAL.md` for the full development goal and workflow loop.
 
 ---
 
-## Current Milestone: v7.0 Client-Ready Security + Architecture Audit — IN PROGRESS 2026-06-06
+## Current Position: Post-v7.0 Public Evidence Refresh — IN PROGRESS 2026-06-08
+
+**Goal:** Keep memroos.com, the GitHub README, public metadata, and screenshot assets aligned with the now-complete v6.4/v6.5/v6.6/v7.0 product state.
+
+**Target features:**
+- Refresh README and public-site screenshots from current app surfaces.
+- Align release labels across package metadata, README, installer output, and LLM-readable docs.
+- Regenerate public/OG screenshots from current product surfaces.
+- Keep roadmap language focused on current evidence: SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready security audit.
+
+---
+
+## Previous Milestone: v7.0 Client-Ready Security + Architecture Audit — SHIPPED 2026-06-08
 
 **Goal:** Harden memroos for client review with a full security and architecture sweep across all codebase layers — eliminating vulnerabilities, cleaning dead code, fixing bad boundaries, and ensuring tests stay green throughout.
 
-**Target features:**
-- Parallel 4-domain audit: Auth/Secrets, API surface, Data/Memory handling, Architecture/Code quality
-- Security remediation: critical → high → medium priority order
-- Architecture cleanup: dead code, bad boundaries, redundant patterns, unsafe TypeScript
-- Dependency CVE sweep: npm audit + pip-audit, patch critical/high
-- Test validation: full suite green after all changes, security regression tests added
+**What shipped:** Four-domain audit, critical/high remediation, accepted-risk medium dependency notes, architecture cleanup, production build, typecheck, 1079 app tests, and Python service/SDK/voice validation.
+
+---
+
+## Previous Milestone: v6.6 Cloud Offload + Local Footprint Reduction — SHIPPED 2026-06-08
+
+**What shipped:** Local-footprint inventory, cloud-target mapping, prune-safety classification, cache/log guardrails, and `/api/operations/noc` local-footprint status.
 
 ---
 
 ## Previous Milestone: v6.5 Agent Context Bus + Synchronous Agent Communication — SHIPPED 2026-06-04
 
 **What shipped:** Agent context bus for cross-agent runtime state sharing, synchronous A2A communication patterns, governance review gates, and SkillForge proposal traceability hardening.
+
+---
+
+## Previous Milestone: v6.4 SkillForge Production SkillOpt Hardening — SHIPPED 2026-06-08
+
+**What shipped:** Deterministic sandbox-backed held-out SkillForge scoring, one authoritative proposal path, schema-level split/baseline/edit traceability, typed bounded edit operations, and audit-ready proposal receipts.
 
 ---
 
@@ -185,17 +204,21 @@ Any agent framework plugs into Memroos — and every agent, knowledge system, an
 - ✓ SQLite audit_log table + AuditLogPanel — v1.5 (SEC-02/03, DASH-03)
 - ✓ Usage analytics (6 metrics, 3 windows) on Ledger/Library/Cookbooks — v1.5 (ANA-01/02/03/04)
 
-### Active (v5.2)
+### Current Completed Milestones
 
-- [x] Competitive memory target architecture — reproducible marketplace benchmark, target profile, live recall hardening, and documented recommendation (MEMTARGET-01)
+- [x] **v7.0 Client-Ready Security + Architecture Audit** — AUDIT/SEC/ARCH/TEST requirements complete.
+- [x] **v6.6 Cloud Offload + Local Footprint Reduction** — CLOUDOFFLOAD-01..06 complete.
+- [x] **v6.5 Agent Context Bus + Synchronous Agent Communication** — AGENTBUS-01..07 complete.
+- [x] **v6.4 SkillForge Production SkillOpt Hardening** — SKILLOPT-HARDEN-01..05 complete.
+- [x] **v5.2 Competitive Memory Target Architecture** — reproducible marketplace benchmark, target profile, live recall hardening, and documented recommendation (MEMTARGET-01).
 
 ### Recent Milestones
 
-- [x] **v2.5 Eval Engine + Self-Improvement Platform (Phases 57-62)** — Composite W, SEAL substrate, memory/agent autogen proposal families, L3 outcome layer, public eval API + SDK; Tier 1 modeled W-lift shipped, behavioral W-lift deferred to v3.
-- [x] **v2.1 Security + Trust Layer (Phases 42-45)** — Agent Shield + Iris pre-flight foundation, tool permission guard, security operations UI, and progressive capability exposure
-- [x] **v2.2 LLM Optimization + Evaluation (Phases 46-49)** — Model-routing telemetry, recommendation API, eval rigs, quality scoring, optimization dashboard and reports
-- [x] **v2.3 Agent Runtime Enhancements (Phases 50-52)** — Agent-side middleware, memory client v2, local observability dashboard
-- [x] **v2.4 Performance + Caching (Phases 53-54)** — Response caching, query performance, cold-start elimination, regression budgets
+- [x] **v6.3 Agent Lifecycle + Memory Observability** — checkpoint/resume, memory-trace timelines, and agent CI/CD gates.
+- [x] **v6.2 Skill Distribution + Knowledge Gateway** — skill packs, private config, Circleback ingestion, troubleshooter skill, and public documentation.
+- [x] **v6.1 SkillForge Autonomy** — Dream Cycle, marketplace, multi-agent skill orchestration, behavioral W-lift v2, and self-hosted eval cluster.
+- [x] **v6.0 SkillForge — Governed Skill Optimization** — worker, analyzer, proposal generation, eval gate, governance, and integration.
+- [x] **v2.5 Eval Engine + Self-Improvement Platform** — Composite W, SEAL substrate, memory/agent autogen proposal families, L3 outcome layer, public eval API + SDK; Tier 1 modeled W-lift shipped.
 
 ### Deferred (v5.1+ candidates)
 

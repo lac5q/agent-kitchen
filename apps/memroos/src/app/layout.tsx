@@ -13,7 +13,6 @@ const PUBLIC_LANDING_HOSTS = new Set([
   "memroos.com",
   "www.memroos.com",
   "memroos.vercel.app",
-  "memroos.epiloguecapital.com",
   "memroos.localhost",
 ]);
 

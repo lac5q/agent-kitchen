@@ -23,7 +23,7 @@
 
 <p align="center">
   <a href="https://github.com/lac5q/memroos/blob/main/LICENSE"><img alt="License: PolyForm Small Business 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Small%20Business-a8392c.svg"></a>
-  <img alt="Release: v1.0.0-beta.1" src="https://img.shields.io/badge/release-v1.0.0--beta.1-a8392c.svg">
+  <img alt="Release: v1.0.0-beta.2" src="https://img.shields.io/badge/release-v1.0.0--beta.2-a8392c.svg">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black.svg">
   <img alt="A2A ready" src="https://img.shields.io/badge/A2A-ready-7a2a1e.svg">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-4a4a45.svg">
@@ -56,7 +56,7 @@ npm install
 
 Then open `http://localhost:3000`, search retained memory, inspect Knowledge source health, register or dispatch an agent, and review the runtime context pack that gets assembled before work starts.
 
-If you are evaluating the launch build, start with the v1.0.0-beta.1 release, watch the demo, then open a workflow feedback issue with the first place your agents lose context. Maintainers can process launch feedback with the [workflow feedback intake guide](docs/workflow-feedback-intake.md).
+If you are evaluating the launch build, start with the v1.0.0-beta.2 release, watch the demo, then open a workflow feedback issue with the first place your agents lose context. Maintainers can process launch feedback with the [workflow feedback intake guide](docs/workflow-feedback-intake.md).
 
 ## What MemroOS Is
 
@@ -78,7 +78,7 @@ The repository began as `memroos.dev`; some internal package names, paths, and e
 
 MemroOS now has a public-evidence benchmark for enterprise agentic memory and a passing live recall gate for the local beta architecture.
 
-Latest local results from May 24, 2026:
+Latest generated benchmark results as of June 8, 2026, using the May 24 public-evidence methodology:
 
 | Rank | Provider | Score | Note |
 | ---: | --- | ---: | --- |
@@ -110,11 +110,11 @@ Live recall gate after beta hardening:
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/readme-landing.png" alt="MemroOS landing page showing the runtime context pack for product, sales, and engineering agents" width="900">
+  <img src="docs/screenshots/readme-landing.png" alt="MemroOS public landing page with shared agent memory, governed dispatch, and source-backed proof" width="900">
 </p>
 
 <p align="center">
-  <em>The public landing page leads with retained agent knowledge, runtime context packs, and the new operator console that turns memory into daily agent operations.</em>
+  <em>The public landing page now leads with the shorter MemroOS story: shared agent memory, governed dispatch, and proof that shows what context moved the work forward.</em>
 </p>
 
 <table>
@@ -190,37 +190,44 @@ After setup, you can:
 
 ## Release 1.0 Beta
 
-`v1.0.0-beta.1` is the public beta release for MemroOS's memory-plus-governance positioning.
+`v1.0.0-beta.2` is the current public beta release for MemroOS's memory-plus-governance positioning.
 
 The current release includes:
 
-- A new NOC-style operator console with grouped navigation, dense operational metrics, and a consistent public-to-product visual system.
+- A NOC-style operator console with grouped navigation, dense operational metrics, and a consistent public-to-product visual system.
 - A Next.js workspace with Memory, Knowledge, Skills, Agents, Workflow Map, Engage, Improvements, Usage, and Governance surfaces.
 - A Skills workflow for reviewing, editing, approving, and promoting procedures from agent-local playbooks into enterprise-ready workflows.
 - A task-first Dispatch room with direct chat, group-room standups, voice prompt controls, and inspectable participant context.
 - A canonical SQLite-backed agent registry for REST, UI, and A2A-visible agents.
 - A2A card ingestion, task routes, streaming subscription endpoints, and Google ADK compatibility fixtures.
+- Agent Context Bus routes and MCP tools for durable inbox/reply flows, acknowledgements, bounded waits, and memory-save receipts.
+- Local-footprint inventory for permanent state, rebuildable caches, cloud targets, prune safety, and NOC/API visibility.
+- SkillForge production hardening with deterministic sandbox-backed held-out scoring, typed bounded edits, and audit-ready baseline/treatment receipts.
 - REST reporting endpoints for heartbeats, memory writes, skill reports, and tool outcomes.
 - Memory and knowledge visibility across configured file collections, mem0/Qdrant, graph memory, and local SQLite.
+- Client-ready security and architecture audit closeout with full-suite Node/Python validation and documented accepted-risk dependency notes.
 - Human-gated Agent Lightning/APO approvals so self-learning proposals queue before mutating agent instructions.
 
 ## Completed Roadmap
 
-- **Phase 41: Public Polish** - public README, contribution guide, security policy, issue templates, and GitHub Actions checks for public collaboration.
-- **Phases 42-45: v2.1 Security + Trust Layer** - Iris dispatch preflight, prompt-injection checks, tool-permission governance, security reporting, and progressive capability exposure.
-- **Phases 46-49: v2.2 LLM Optimization + Evaluation** - model-routing telemetry, recommendation surfaces, evaluation fixtures, optimization dashboards, and quality reports.
-- **Phases 50-52: v2.3 Agent Runtime Enhancements** - runtime middleware, memory client v2 paths, richer engagement state, and observability surfaces for live agents.
-- **Phases 53-54: v2.4 Performance + Caching** - response caching, query-path tuning, and faster memory/knowledge retrieval for operator workflows.
-- **UI migration: Memory OS operator surface** - NOC-style home, 8-group navigation, Workflow Map, full authenticated page reskin, task-first Dispatch, and a first-class Skills workflow.
+- **v2.0-v2.4: A2A hub, security, LLM optimization, agent runtime, and performance** - universal REST/A2A registration, LangGraph orchestration, trust layer, model-routing telemetry, and cache/performance work.
+- **v2.5-v4.0: Eval engine, compliance, context reliability, and orchestration depth** - composite W, SEAL substrate, RBAC/auth hardening, HIL edit-and-continue, rollback, semantic recall, evidence bundles, and governed skill contracts.
+- **v5.0-v5.2: Memory Trust + Operational Intelligence** - raw vault, security labels, classification cascade, retrieval authorization, NOC telemetry, cron health, evidence bundles, auth hardening, memory inventory clarity, and public benchmark architecture.
+- **v6.0-v6.3: SkillForge + Agent Lifecycle** - governed skill optimization, Dream Cycle, marketplace, multi-agent skill orchestration, agent memory continuity, skill distribution, private config, Circleback ingestion, checkpoint/resume, memory-trace observability, and agent CI/CD gates.
+- **v6.4: SkillForge Production SkillOpt Hardening** - deterministic sandbox-backed held-out eval, one proposal path, traceability fields, typed edit operations, and accepted/rejected evidence.
+- **v6.5: Agent Context Bus + Synchronous Agent Communication** - durable agent inbox/reply bus, REST/MCP access, acknowledgements, bounded replies, memory-save receipts, and fail-closed denial of self-declared OAuth/data-access claims.
+- **v6.6: Cloud Offload + Local Footprint Reduction** - local store inventory, cloud target mapping, prune-safety classification, cache/log caps, and NOC/API local-footprint status.
+- **v7.0: Client-Ready Security + Architecture Audit** - four-domain audit, critical/high remediation, accepted-risk medium CVE notes, architecture cleanup, production build, typecheck, and full-suite validation.
 
 ## Current Roadmap Focus
 
-The active GSD milestone is `v5.2: Competitive Memory Target Architecture`. It keeps the product focused on measurable memory advantage instead of generic agent breadth:
+The active product focus after v7.0 is to keep the public beta evidence current and make the newly shipped control-plane work visible:
 
-- **Phase 84: Competitive memory beta architecture** - live locally. The marketplace benchmark ranks the beta architecture first, and the live recall suite passes 8/8 after vector write hardening.
-- **Next focus: hot-path retrieval** - make the benchmark advantage visible in day-to-day runtime latency, cache prewarm, and context-pack assembly.
-- **Next focus: temporal invalidation** - close the remaining Zep-style temporal memory gap without weakening MemRoOS governance, audit, or source proof.
-- **Next focus: public benchmark proof** - keep the methodology, fixtures, and results reproducible so public claims stay defensible.
+- **Public proof refresh** - keep memroos.com, README screenshots, launch assets, and LLM-readable docs aligned with the current product surfaces.
+- **Agent Context Bus operator visibility** - expose inbox depth, stale messages, pending replies, and memory-save receipts in the operator UI.
+- **Local-footprint visibility** - keep `npm run check:local-footprint`, `/api/operations/noc`, and NOC surfaces honest about permanent state, rebuildable caches, cloud targets, and prune safety.
+- **Client-ready security follow-through** - add DAST scanning, prepare external penetration-test handoff, and map SOC 2 controls after the internal v7.0 audit baseline.
+- **Memory-save quality spike** - evaluate the deferred Memento-style typed/audited save contract without adopting a backend, hosted trace upload, or dependency swap without Luis approval.
 
 ## What MemroOS Does
 
@@ -237,6 +244,8 @@ The active GSD milestone is `v5.2: Competitive Memory Target Architecture`. It k
 - **Task-first dispatch:** Run direct chat, group-room standups, live delegations, and spoken prompts with inspectable context.
 - **Workflow map:** Visualize agents, memory, skills, dispatch paths, and infrastructure.
 - **Governance:** Gate registry writes, memory reads, destructive actions, and self-learning approvals.
+- **Agent Context Bus:** Give registered agents a durable inbox/reply surface with acknowledgements, bounded waits, context-sync receipts, and fail-closed delegated-access policy.
+- **Local footprint control:** Classify local stores by permanence, cloud target, size, retention, privacy label, and prune safety.
 
 ## What MemroOS Is Not
 
@@ -637,14 +646,13 @@ memroos/
 
 ## Roadmap
 
-Near-term focus:
+Near-term focus after v7.0:
 
-- Finish Phase 70: multi-hop retry/rollback and auth-guarded HIL edit-and-continue UI.
-- Add semantic/hybrid recall and HIL SLA countdown/escalation without replacing qmd BM25 or mem0/Qdrant memory.
-- Treat voice as a memory-ingestion surface with consent and token-safety controls.
-- Add cross-project recall with explicit allowed project IDs.
-- Make evidence bundles visible: memories consumed, tools/commands run, checks passed, unverified assumptions, residual risks, and replay/rollback artifacts.
-- Normalize cross-harness skills into governed contracts with preconditions, allowed tools, risk tier, verification checks, owner, rollback behavior, and dispatch status.
+- Keep public docs, screenshots, metadata, and launch assets synchronized with the current beta.
+- Add an operator UI for Agent Context Bus inbox depth, pending replies, stale messages, and memory-save receipts.
+- Continue local-footprint reduction through managed persistence targets, qmd/search worker offload, cache caps, and encrypted raw-vault object-storage proof.
+- Add DAST scanning, external penetration-test preparation, and SOC 2 control mapping on top of the internal v7.0 audit baseline.
+- Run the deferred Memento-style memory-save quality spike as a bounded comparison only; no dependency adoption, backend swap, hosted/private trace upload, or replacement of mem0/Qdrant/Neo4j/SQLite without Luis approval.
 
 ## Contributing
 

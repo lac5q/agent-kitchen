@@ -7,7 +7,6 @@ const PUBLIC_HOSTS = new Set([
   "memroos.com",
   "www.memroos.com",
   "memroos.vercel.app",
-  "memroos.epiloguecapital.com",
   "memroos.localhost",
 ]);
 const LEGACY_HOSTS = new Set(["memroos.dev", "www.memroos.dev"]);
