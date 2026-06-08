@@ -1527,7 +1527,7 @@ Plans:
 
 - [x] **Phase 109: Parallel Domain Audit** — AUDIT-01, AUDIT-02, AUDIT-03, AUDIT-04 (completed 2026-06-07)
 - [x] **Phase 110: Critical & High Security Fixes** — SEC-01, SEC-02, SEC-05, TEST-02 (partial) (completed 2026-06-07)
-- [ ] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06
+- [x] **Phase 111: Dependency CVE Sweep + Medium Security Fixes** — SEC-03, SEC-04, SEC-06 (completed 2026-06-08)
 - [ ] **Phase 112: Architecture Cleanup** — ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
 - [ ] **Phase 113: Test Validation + Build Verification** — TEST-01, TEST-02 (complete), TEST-03
 
@@ -1580,8 +1580,8 @@ Plans:
 
 Plans:
 - [x] 111-01-PLAN.md — Dependency CVEs: Next.js upgrade + zod install + Python dep pinning + accepted-risk doc (Wave 1)
-- [ ] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 2, depends on 111-01)
-- [ ] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2, parallel with 111-02)
+- [x] 111-02-PLAN.md — Auth hardening: JWT entropy check + zod dispatch validation + rate limiting (Wave 2, depends on 111-01)
+- [x] 111-03-PLAN.md — Remaining SEC-03 + SEC-06: CSP fix, OpenAPI host, FastAPI bind, voice temp file, CI attestation (Wave 2, parallel with 111-02)
 
 ### Phase 112: Architecture Cleanup
 **Goal**: Remove dead code, resolve module boundary violations, consolidate redundant patterns, enforce consistent error handling across all API routes, and eliminate unsafe TypeScript so the codebase is maintainable for a client-facing review.
@@ -1593,7 +1593,13 @@ Plans:
   2. Dead code and unused exports are removed from all core modules — no unreachable functions remain in production paths
   3. TypeScript strict mode is enforced: zero `any` types or unsafe casts in production code paths
   4. All Next.js API routes and Python service endpoints use a consistent error-handling pattern — no ad-hoc error responses that bypass the standard shape
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 112-01-PLAN.md — Dead code removal: D01-005/006/007/008 — security-path exports, unused files, Python ruff/vulture (Wave 1)
+- [ ] 112-02-PLAN.md — Circular dep resolution: memory subsystem registry-contract split, seal type hoist, context-sources shell fix (Wave 1)
+- [ ] 112-03-PLAN.md — TypeScript unsafe casts: catch unknown narrowing + SpeechRecognition ambient types (Wave 1)
+- [ ] 112-04-PLAN.md — Error handling: apiError() helper + 20 route migrations + ARCH-03 redundancy verification (Wave 2)
 
 ### Phase 113: Test Validation + Build Verification
 **Goal**: Ensure the full test suite is green, the production build passes cleanly, and security regression tests are complete and passing after all Phase 109-112 changes — validating the codebase is client-ready.
@@ -1614,6 +1620,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 109. Parallel Domain Audit | 6/6 | Complete   | 2026-06-07 |
 | 110. Critical & High Security Fixes | 1/1 | Complete   | 2026-06-07 |
-| 111. Dependency CVE Sweep + Medium Security Fixes | 1/3 | In Progress|  |
-| 112. Architecture Cleanup | 0/1 | Not started | - |
+| 111. Dependency CVE Sweep + Medium Security Fixes | 3/3 | Complete   | 2026-06-08 |
+| 112. Architecture Cleanup | 0/4 | Not started | - |
 | 113. Test Validation + Build Verification | 0/1 | Not started | - |
