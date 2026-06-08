@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { createSplits, runValidation, runHeldOutEval, computeWDelta, runEvalGate } from "../eval-gate";
+import { SKILLFORGE_SANDBOX_SCORER_VERSION } from "../behavioral-sandbox-scorer";
 import type { SkillForgeProposal, SkillForgeConfig } from "../types";
 
 const config: SkillForgeConfig = {
@@ -85,6 +86,25 @@ describe("SkillForge Eval Gate", () => {
     expect(heldOut.tasksRun).toBe(2);
     expect(heldOut.tasksPassed).toBe(1);
     expect(heldOut.passRate).toBe(0.5);
+    expect(heldOut.baselineW).toBeLessThan(heldOut.treatmentW ?? 0);
+    expect(heldOut.scorerVersion).toBe(SKILLFORGE_SANDBOX_SCORER_VERSION);
+    expect(heldOut.sandboxReceipt).toMatchObject({
+      scorerVersion: SKILLFORGE_SANDBOX_SCORER_VERSION,
+      sandboxMode: "no_side_effects",
+      sideEffectsDenied: true,
+    });
+  });
+
+  it("scores held-out eval deterministically", () => {
+    const proposal = makeProposal("skill-1", "## Pattern: alpha\nFix: add alpha trigger\n## Generated Test Cases\n- Input: alpha case");
+    const split = {
+      id: "split-1", skillId: "skill-1", splitType: "held_out" as const, taskSamples: ["alpha case", "unmatched case"], createdAt: new Date(),
+    };
+
+    const first = runHeldOutEval(db, proposal, split);
+    const second = runHeldOutEval(db, proposal, split);
+
+    expect(second).toEqual(first);
   });
 
   it("gates negative W delta", () => {
@@ -134,12 +154,12 @@ describe("SkillForge Eval Gate", () => {
     expect(trainSplit?.split_type).toBe("train");
     expect(proposal.validationSplitId).toMatch(/^split-skill-1-val-/);
     expect(proposal.heldOutSplitId).toMatch(/^split-skill-1-held-/);
-    expect(proposal.baselineW).toBe(0.5);
+    expect(proposal.baselineW).toBe(proposal.heldOutResults?.baselineW);
     expect(proposal.validationW).toBe(proposal.validationResults?.overallScore);
     expect(proposal.heldOutW).toBe(proposal.heldOutResults?.behavioralW);
     expect(proposal.evaluatorReceipts?.map((r) => r.evaluator)).toEqual([
       "skillforge-deterministic-validation",
-      "skillforge-held-out-coverage",
+      SKILLFORGE_SANDBOX_SCORER_VERSION,
     ]);
     expect(proposal.validationResults).not.toBeNull();
     expect(proposal.heldOutResults).not.toBeNull();

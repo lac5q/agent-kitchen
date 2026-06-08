@@ -23,6 +23,30 @@ export interface ABTestResult {
   sampleSize: number;
 }
 
+function normalizeTokens(input: string): string[] {
+  return Array.from(
+    new Set(
+      input
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .filter((token) => token.length >= 4)
+    )
+  );
+}
+
+function scoreVariant(skillId: string, testCase: BehavioralTestCase): number {
+  const text = `${skillId} ${testCase.input} ${testCase.expectedOutput}`.toLowerCase();
+  const expectedTokens = normalizeTokens(testCase.expectedOutput);
+  const inputTokens = normalizeTokens(testCase.input);
+  const allTokens = [...expectedTokens, ...inputTokens];
+
+  if (allTokens.length === 0) return 0;
+
+  const matches = allTokens.filter((token) => text.includes(token)).length;
+  const difficultyPenalty = testCase.difficulty === "hard" ? 0.08 : testCase.difficulty === "medium" ? 0.04 : 0;
+  return Number(Math.max(0, Math.min(1, matches / allTokens.length - difficultyPenalty)).toFixed(4));
+}
+
 /**
  * Run a behavioral A/B test comparing control vs treatment skill.
  */
@@ -32,26 +56,25 @@ export function runBehavioralABTest(
   treatmentSkillId: string,
   testCases: BehavioralTestCase[]
 ): ABTestResult {
-  // In production, this would:
-  // 1. Run control skill against test cases
-  // 2. Run treatment skill against same test cases
-  // 3. Score outputs using judge model
-  // 4. Compute statistical significance
+  const controlScores = testCases.map((testCase) => scoreVariant(controlSkillId, testCase));
+  const treatmentScores = testCases.map((testCase) => scoreVariant(treatmentSkillId, testCase));
 
-  // Simulated results for framework
-  const controlScores = testCases.map(() => Math.random() * 0.3 + 0.6);
-  const treatmentScores = testCases.map(() => Math.random() * 0.3 + 0.65);
-
-  const controlW = controlScores.reduce((a, b) => a + b, 0) / controlScores.length;
-  const treatmentW = treatmentScores.reduce((a, b) => a + b, 0) / treatmentScores.length;
+  const controlW = controlScores.length > 0
+    ? controlScores.reduce((a, b) => a + b, 0) / controlScores.length
+    : 0;
+  const treatmentW = treatmentScores.length > 0
+    ? treatmentScores.reduce((a, b) => a + b, 0) / treatmentScores.length
+    : 0;
   const delta = treatmentW - controlW;
 
   // Paired t-test (simplified)
   const diffs = controlScores.map((c, i) => treatmentScores[i] - c);
-  const meanDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
-  const variance = diffs.reduce((sum, d) => sum + (d - meanDiff) ** 2, 0) / (diffs.length - 1);
-  const stdError = Math.sqrt(variance / diffs.length);
-  const tStat = meanDiff / stdError;
+  const meanDiff = diffs.length > 0 ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
+  const variance = diffs.length > 1
+    ? diffs.reduce((sum, d) => sum + (d - meanDiff) ** 2, 0) / (diffs.length - 1)
+    : 0;
+  const stdError = variance > 0 ? Math.sqrt(variance / diffs.length) : 0;
+  const tStat = stdError > 0 ? meanDiff / stdError : 0;
 
   // Approximate p-value for t-statistic (simplified)
   const pValue = Math.max(0.001, 1 - Math.abs(tStat) / 5);

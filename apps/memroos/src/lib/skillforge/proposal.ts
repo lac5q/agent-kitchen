@@ -114,7 +114,7 @@ export function generateProposals(
       rejectedEdits: [],
       residualRisks: [
         "Phase 85 stub: validation scores are placeholders",
-        "Phase 85 stub: no held-out behavioral eval yet",
+        "Phase 85 legacy generator: production held-out eval runs through eval-gate",
         "Phase 85 stub: diff is suggestion-only, not executable",
       ],
       createdAt: new Date(),

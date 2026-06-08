@@ -37,6 +37,20 @@ describe("local-judge", () => {
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("scores cloud fallback deterministically for the same inputs", async () => {
+    const config = {
+      provider: "cloud" as const,
+      endpoint: "",
+      model: "gpt-4",
+      fallbackToCloud: true,
+    };
+    const first = await scoreWithJudge(db, "skill content", "test input", config);
+    const second = await scoreWithJudge(db, "skill content", "test input", config);
+
+    expect(second.score).toBe(first.score);
+    expect(second.dimensions).toEqual(first.dimensions);
+  });
+
   it("falls back to cloud on ollama failure", async () => {
     const result = await scoreWithJudge(db, "skill", "input", {
       provider: "ollama",

@@ -12,6 +12,10 @@ import type {
   ValidationResult,
   HeldOutResult,
 } from "./types";
+import {
+  SKILLFORGE_SANDBOX_SCORER_VERSION,
+  scoreProposalInBehavioralSandbox,
+} from "./behavioral-sandbox-scorer";
 
 function stableHash(input: string): number {
   return input.split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
@@ -123,42 +127,25 @@ export function runValidation(
   };
 }
 
-/**
- * Run held-out behavioral eval (stub for Phase 88 — full implementation
- * would use EvalService.rescoreForProposal with sandboxed agent).
- */
 export function runHeldOutEval(
-  _db: Database.Database,
+  db: Database.Database,
   proposal: SkillForgeProposal,
   heldOutSplit: SkillForgeSplit
 ): HeldOutResult {
-  const tasksRun = heldOutSplit.taskSamples.length;
-  const normalizedDiff = proposal.proposedDiff.toLowerCase();
-  const hasActionableDiff = normalizedDiff.includes("## pattern:") && normalizedDiff.includes("fix:");
-  const tasksPassed = hasActionableDiff
-    ? heldOutSplit.taskSamples.filter((sample) => isSampleCovered(sample, normalizedDiff)).length
-    : 0;
-  const passRate = tasksRun > 0 ? tasksPassed / tasksRun : 0;
+  const result = scoreProposalInBehavioralSandbox(db, proposal, heldOutSplit);
 
   return {
-    passRate,
-    tasksRun,
-    tasksPassed,
-    avgLatencyMs: tasksRun > 0 ? 150 : 0,
-    behavioralW: passRate,
+    passRate: result.passRate,
+    tasksRun: result.tasksRun,
+    tasksPassed: result.tasksPassed,
+    avgLatencyMs: result.avgLatencyMs,
+    behavioralW: result.treatmentW,
+    baselineW: result.baselineW,
+    treatmentW: result.treatmentW,
+    scorerVersion: result.receipt.scorerVersion,
+    sandboxReceipt: result.receipt,
+    taskScores: result.taskScores,
   };
-}
-
-function isSampleCovered(sample: string, normalizedDiff: string): boolean {
-  const tokens = sample
-    .toLowerCase()
-    .split(/[^a-z0-9]+/g)
-    .filter((token) => token.length >= 4);
-
-  if (tokens.length === 0) return false;
-
-  const matches = tokens.filter((token) => normalizedDiff.includes(token)).length;
-  return matches / tokens.length >= 0.6;
 }
 
 /**
@@ -214,9 +201,6 @@ export function runEvalGate(
   proposal.trainSplitId = train.id;
   proposal.validationSplitId = validation.id;
   proposal.heldOutSplitId = heldOut.id;
-  const baselineW = proposal.heldOutResults?.behavioralW ?? proposal.validationResults?.overallScore ?? 0.5;
-  proposal.baselineW = baselineW;
-
   // 2. Run validation
   const validationResult = runValidation(db, proposal, validation);
   proposal.validationResults = validationResult;
@@ -224,6 +208,8 @@ export function runEvalGate(
 
   // 3. Run held-out eval
   const heldOutResult = runHeldOutEval(db, proposal, heldOut);
+  const baselineW = heldOutResult.baselineW ?? proposal.heldOutResults?.behavioralW ?? proposal.validationResults?.overallScore ?? 0.5;
+  proposal.baselineW = baselineW;
   proposal.heldOutResults = heldOutResult;
   proposal.heldOutW = heldOutResult.behavioralW;
   proposal.evaluatorReceipts = [
@@ -234,11 +220,14 @@ export function runEvalGate(
       w: validationResult.overallScore,
     },
     {
-      evaluator: "skillforge-held-out-coverage",
+      evaluator: SKILLFORGE_SANDBOX_SCORER_VERSION,
       splitId: heldOut.id,
       tasksRun: heldOutResult.tasksRun,
       passRate: heldOutResult.passRate,
+      baselineW,
       behavioralW: heldOutResult.behavioralW,
+      scorerVersion: heldOutResult.scorerVersion,
+      sandboxReceipt: heldOutResult.sandboxReceipt,
     },
   ];
 

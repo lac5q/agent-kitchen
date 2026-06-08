@@ -22,6 +22,15 @@ describe("behavioral-eval", () => {
     expect(typeof result.significant).toBe("boolean");
   });
 
+  it("returns deterministic A/B scores for the same inputs", () => {
+    const db = setupDb();
+    const testCases = generateGoldenSet(db, "skill-1", "testing", 10);
+    const first = runBehavioralABTest(db, "control", "treatment", testCases);
+    const second = runBehavioralABTest(db, "control", "treatment", testCases);
+
+    expect(second).toEqual(first);
+  });
+
   it("generates golden set with correct structure", () => {
     const db = setupDb();
     const cases = generateGoldenSet(db, "skill-1", "testing", 9);

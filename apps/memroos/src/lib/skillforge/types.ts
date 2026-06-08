@@ -63,6 +63,11 @@ export interface HeldOutResult {
   tasksPassed: number;
   avgLatencyMs: number;
   behavioralW: number;
+  baselineW?: number;
+  treatmentW?: number;
+  scorerVersion?: string;
+  sandboxReceipt?: Record<string, unknown>;
+  taskScores?: Array<Record<string, unknown>>;
 }
 
 export interface RejectedEdit {
