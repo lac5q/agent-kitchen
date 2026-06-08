@@ -20,6 +20,7 @@
     "install:memory-resilience": "node scripts/install-memory-resilience.mjs install",
     "test": "npm --prefix apps/memroos run test --",
     "eval:context-sources": "node scripts/run-context-source-evals.mjs",
+    "eval:knowledge-save-contract": "node scripts/check-knowledge-save-contract.mjs --fixture evals/knowledge-save-contract/cases.json",
     "eval:memory-degradation": "bash scripts/run-memory-degradation-checks.sh",
     "eval:marketplace-memory": "node scripts/run-marketplace-memory-evals.mjs",
     "check:governance": "node scripts/check-governance-coverage.mjs",

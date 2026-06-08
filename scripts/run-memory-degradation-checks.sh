@@ -25,6 +25,8 @@ echo "[memory-degradation] checking shell and launchd configs"
 bash -n services/memory/healthcheck.sh
 node scripts/install-memory-resilience.mjs check
 node --test scripts/check-knowledge-indexing.test.mjs
+node --test scripts/check-knowledge-save-contract.test.mjs
+node scripts/check-knowledge-save-contract.mjs --fixture evals/knowledge-save-contract/cases.json
 node --test scripts/check-recall-anchors.test.mjs
 
 echo "[memory-degradation] checking mem0 queue and health degradation"

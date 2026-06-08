@@ -1,0 +1,84 @@
+{
+  "policy": {
+    "drive": {
+      "intendedAccountEmail": "luis@cordant.ai",
+      "requiredPermission": {
+        "type": "anyone",
+        "role": "reader",
+        "allowFileDiscovery": false
+      }
+    },
+    "qmd": {
+      "maxPendingEmbeddings": 1000
+    }
+  },
+  "cases": [
+    {
+      "id": "google-drive-backed-canonical-knowledge",
+      "input": {
+        "path": "content/cordant/account-rules.md",
+        "content": "---\ntitle: Cordant Account Rules\nsummary: Canonical operating rules for Cordant account identity, sharing, and outbound signatures.\nproject: cordant\nowner: luis@cordant.ai\nsource_type: google_drive\nsensitivity: internal\ncanonical_status: canonical\nlast_verified_at: 2026-06-08T12:00:00Z\n---\n\n# Cordant Account Rules\n\nCordant workspace artifacts should be owned and verified from luis@cordant.ai. Outbound drafts keep the co-generated AI disclosure unless Luis explicitly opts out. The Drive source remains attached as provenance, but this Markdown file is the canonical operating copy for agent retrieval, review, and QMD indexing.",
+        "sourceKind": "google_drive",
+        "drive": {
+          "fileId": "1abcDEF",
+          "url": "https://docs.google.com/document/d/1abcDEF/edit",
+          "accountEmail": "luis@cordant.ai",
+          "ownerEmail": "luis@cordant.ai",
+          "modifiedTime": "2026-06-08T11:55:00Z",
+          "version": "42",
+          "lastVerifiedAt": "2026-06-08T12:00:00Z",
+          "capabilities": {
+            "canDownload": true
+          },
+          "permissions": [
+            {
+              "type": "user",
+              "role": "owner",
+              "emailAddress": "luis@cordant.ai"
+            },
+            {
+              "type": "anyone",
+              "role": "reader",
+              "allowFileDiscovery": false
+            }
+          ]
+        },
+        "git": {
+          "committed": true,
+          "pushed": true,
+          "porcelain": ""
+        },
+        "qmd": {
+          "collection": "knowledge",
+          "listed": true,
+          "getOk": true,
+          "pendingEmbeddings": 0,
+          "retrievalProbes": [
+            {
+              "query": "Cordant account identity",
+              "hit": true
+            }
+          ]
+        },
+        "contextSources": [
+          {
+            "id": "qmd",
+            "status": "ok"
+          },
+          {
+            "id": "mem0",
+            "status": "disabled"
+          }
+        ],
+        "memoryConflicts": [
+          {
+            "memoryValue": "use default personal account",
+            "knowledgeValue": "use luis@cordant.ai",
+            "knowledgeFresh": true,
+            "resolvedSource": "knowledge"
+          }
+        ]
+      }
+    }
+  ]
+}
