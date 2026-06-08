@@ -5,6 +5,7 @@ import { buildTieredMemoryPayload, resolveMemoryTier } from "@/lib/memory/tiers"
 import { checkMemoryWritePolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { responseCache } from "@/lib/response-cache";
+import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function POST(request: Request) {
+  const rateLimited = checkAuthRateLimit(request, "memory-add", 30);
+  if (rateLimited) return rateLimited;
+
   const body = (await request.json().catch(() => null)) as unknown;
   const agentIdHint = isRecord(body) && typeof body.agentId === "string" ? body.agentId : undefined;
   const agent = authenticateAgentHeaders(request.headers, agentIdHint);
