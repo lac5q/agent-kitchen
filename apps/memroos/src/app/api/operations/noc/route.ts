@@ -1,4 +1,5 @@
 import { apiError } from "@/lib/api-error";
+import { collectLocalFootprintInventory } from "@/lib/cloud-offload/footprint";
 import { getDb } from "@/lib/db";
 import {
   normalizeNocWindow,
@@ -68,6 +69,7 @@ async function buildNocResponse(request: Request) {
     db,
     "SELECT COUNT(*) AS value FROM cron_health_jobs WHERE status = 'active' AND (warning IS NOT NULL OR last_failure_at IS NOT NULL)"
   );
+  const localFootprint = collectLocalFootprintInventory(process.cwd());
 
   const lastMessage = db
     .prepare(`SELECT MAX(timestamp) AS value FROM messages m WHERE m.timestamp >= ? ${ws}`)
@@ -84,6 +86,7 @@ async function buildNocResponse(request: Request) {
       governanceEvents,
       enabledSkills,
       cronWarnings,
+      localFootprintBytes: localFootprint.totalBytes,
     },
     panels: {
       pulse: panel(memoryRows > 0 || activeDispatches > 0 ? "live" : "empty", "SQLite messages + hive_delegations", lastMessage.value),
@@ -92,6 +95,12 @@ async function buildNocResponse(request: Request) {
       governance: panel(governanceEvents > 0 ? "live" : "empty", "audit_entries", null),
       skills: panel(enabledSkills > 0 ? "live" : "empty", "skill_registry", null),
       cron: panel(cronWarnings > 0 ? "degraded" : "live", "cron_health_jobs", null),
+      localFootprint: panel(
+        localFootprint.pressure === "critical" ? "degraded" : "live",
+        "local footprint inventory",
+        localFootprint.generatedAt,
+        localFootprint.warnings
+      ),
       efficiency: panel("missing", "retrieval efficiency telemetry", null, [
         "Retrieval calls before useful work",
         "Same-source re-read count",
@@ -99,6 +108,7 @@ async function buildNocResponse(request: Request) {
         "Rediscovered-fact rate",
       ]),
     },
+    localFootprint,
   });
 }
 

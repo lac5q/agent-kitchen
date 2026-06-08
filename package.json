@@ -25,6 +25,7 @@
     "eval:marketplace-memory": "node scripts/run-marketplace-memory-evals.mjs",
     "check:governance": "node scripts/check-governance-coverage.mjs",
     "check:knowledge-indexing": "node scripts/check-knowledge-indexing.mjs",
+    "check:local-footprint": "node scripts/check-local-footprint.mjs",
     "check:recall-anchors": "node scripts/check-recall-anchors.mjs --skip-mem0",
     "check:recall-anchors:live": "node scripts/check-recall-anchors.mjs --require-mem0",
     "install:runtime-services": "node scripts/install-runtime-services.mjs install",
