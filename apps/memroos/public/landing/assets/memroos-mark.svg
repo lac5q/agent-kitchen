@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64" role="img" aria-labelledby="mtitle mdesc">
+  <title id="mtitle">MemroOS mark</title>
+  <desc id="mdesc">A restrained editorial kangaroo mark on an oxblood tile.</desc>
+  <rect width="64" height="64" rx="0" fill="#A8392C"></rect>
+  <path d="M25.5 42.8C17 43.9 10.1 47.6 5.7 53.7" fill="none" stroke="#FAFAF7" stroke-width="5" stroke-linecap="round"></path>
+  <path d="M30.2 45.7c-6.7-2.6-10.1-9.6-7.9-16.2 2.6-7.8 11.3-11.5 18.8-7.8 6.8 3.3 9.1 12.3 5.3 19.5-3.5 6.5-10.3 7.6-16.2 4.5Z" fill="none" stroke="#FAFAF7" stroke-width="4.4" stroke-linejoin="round"></path>
+  <path d="M40.3 23.1c2.6-6 7.8-10.5 15.5-13.4 2.3-.9 4.2 1.8 2.6 3.7L49.6 24c3.1 8.6.7 18.2-5.9 23.4" fill="none" stroke="#FAFAF7" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M47.8 15.5 47.1 7.5M51.2 15.3l7.1-5.9" fill="none" stroke="#FAFAF7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M30.7 45.8 20.3 57.1c-1 1.1.2 2.8 1.6 2.2l15.7-6.5M40.1 45.6l9.7 11.5M43.5 34.9l11.1 8" fill="none" stroke="#FAFAF7" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M27 38c3.4-4.1 9.5-4.9 13.9-1.7" fill="none" stroke="#ECD3C8" stroke-width="3.8" stroke-linecap="round"></path>
+  <circle cx="43.2" cy="22.6" r="1.9" fill="#FAFAF7"></circle>
+</svg>

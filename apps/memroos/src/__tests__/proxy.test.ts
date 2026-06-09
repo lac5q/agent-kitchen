@@ -121,6 +121,17 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("serves extracted landing assets on the marketing host", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/landing/assets/shots/operator-floor.png", {
+        headers: { host: "memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("serves the SVG app icon on the marketing host", async () => {
     const response = await proxy(
       new NextRequest("https://memroos.com/icon.svg", {
@@ -161,9 +172,12 @@ describe("proxy", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "http://memroos.localhost:3003/landing/index.html"
+    );
   });
 
-  it("allows Google Analytics collection endpoints in the content security policy", async () => {
+  it("allows analytics and Google Fonts endpoints in the content security policy", async () => {
     const response = await proxy(
       new NextRequest("https://memroos.com/", {
         headers: { host: "memroos.com" },
@@ -174,5 +188,7 @@ describe("proxy", () => {
     expect(csp).toContain("https://www.googletagmanager.com");
     expect(csp).toContain("https://www.google-analytics.com");
     expect(csp).toContain("https://region1.google-analytics.com");
+    expect(csp).toContain("https://fonts.googleapis.com");
+    expect(csp).toContain("https://fonts.gstatic.com");
   });
 });

@@ -37,6 +37,7 @@ function isLandingAsset(pathname: string): boolean {
     pathname.startsWith("/assets/") ||
     pathname.startsWith("/diagrams/") ||
     pathname.startsWith("/demo/") ||
+    pathname.startsWith("/landing/") ||
     pathname.startsWith("/research/") ||
     pathname.startsWith("/screenshots/")
   );
@@ -99,7 +100,8 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
     [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com`,
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://www.google-analytics.com https://stats.g.doubleclick.net",
       "connect-src 'self' http://localhost:* ws://localhost:* https://www.google-analytics.com https://region1.google-analytics.com",
       "frame-ancestors 'none'",
@@ -217,6 +219,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // Public marketing host: serve landing assets, redirect everything else to "/"
   if (isPublicLandingHost(host)) {
+    if (pathname === "/") {
+      const landingUrl = request.nextUrl.clone();
+      landingUrl.pathname = "/landing/index.html";
+      return withSecurityHeaders(NextResponse.rewrite(landingUrl));
+    }
     if (isLandingAsset(pathname)) {
       return withSecurityHeaders(NextResponse.next());
     }
