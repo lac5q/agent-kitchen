@@ -29,8 +29,15 @@
 - ✅ **v6.5 Agent Context Bus + Synchronous Agent Communication** — Phase 107 (completed 2026-06-04)
 - ✅ **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (completed 2026-06-08)
 - ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
+- ⏳ **v7.1 Competitive Retrieval Proof** — Phase 114 (planned 2026-06-09)
 
 ## Phases
+
+### Current v7.1 Competitive Retrieval Proof Summary — PLANNED
+
+- [ ] **Phase 114: Midbrain Comparison + Comparative Benchmark Plan** — COMPETE-01..02, SITE-BENCH-01, BENCH-01..03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01; add Midbrain to public comparison surfaces, keep architecture scores separate from SmartSearch metrics, and define the next benchmark/retrieval proof lane.
+
+Full v7.1 detail in the `## v7.1 Competitive Retrieval Proof` section below.
 
 ### Current v6.5 Agent Context Bus + Synchronous Agent Communication Summary — COMPLETE
 
@@ -1630,3 +1637,20 @@ Plans:
 | 111. Dependency CVE Sweep + Medium Security Fixes | 3/3 | Complete   | 2026-06-08 |
 | 112. Architecture Cleanup | 4/4 | Complete | 2026-06-08 |
 | 113. Test Validation + Build Verification | 1/1 | Complete | 2026-06-08 |
+
+## v7.1 Competitive Retrieval Proof
+
+### Phase 114: Midbrain Comparison + Comparative Benchmark Plan
+**Goal**: Turn the Midbrain comparison into durable public positioning and a concrete benchmark roadmap that proves MemRoOS on both retrieval quality and governed operational continuity.
+**Milestone**: v7.1
+**Depends on**: Phase 84 public-evidence benchmark, Phase 104 memory-trace observability, Phase 107 Agent Context Bus
+**Requirements**: COMPETE-01, COMPETE-02, SITE-BENCH-01, BENCH-01, BENCH-02, BENCH-03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01
+**Success Criteria** (what must be TRUE):
+  1. Midbrain appears in `providers.json`, generated marketplace results, `/vs/midbrain`, sitemap, LLM-readable docs, README, and the benchmark methodology page.
+  2. Public copy explicitly says MemRoOS's `84.06` architecture/governance score and Midbrain's SmartSearch paper metrics are different benchmarks.
+  3. The public site has a benchmark block ready to publish from the generated marketplace result, with Midbrain `65.21` and caveats.
+  4. The comparative benchmark plan names datasets, metrics, adapters, outputs, caveats, and first implementation steps for LoCoMo, LongMemEval, and LongMemEval-V2-style tasks.
+  5. The highest-benefit roadmap additions are captured as GSD requirements: SmartSearch-inspired retrieval, retrieval receipts, and comparative external benchmark lanes.
+  6. Crawler-visible proof metrics render actual values before JavaScript runs.
+**Plans**: 1 plan
+- [x] 114-01-PLAN.md — Midbrain surfaces, public benchmark caveats, SmartSearch-inspired retrieval roadmap, retrieval receipts, and comparative benchmark plan

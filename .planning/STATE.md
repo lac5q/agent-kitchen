@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v6.6
-milestone_name: Cloud Offload + Local Footprint Reduction
-status: complete
-stopped_at: Completed Phase 106, Phase 108, and roadmap cleanup
-last_updated: "2026-06-08T21:20:00.000Z"
+milestone_name: Competitive Retrieval Proof Summary — PLANNED
+status: executing
+stopped_at: context exhaustion at 75% (2026-06-09)
+last_updated: "2026-06-10T02:54:15.266Z"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_phases: 60
+  completed_phases: 34
+  total_plans: 66
+  completed_plans: 78
+  percent: 57
 ---
 
 # State: Memroos
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v6.4/v6.6/v7.0 cleanup complete
+**Current focus:** Phase 114 — Midbrain Comparison + Comparative Benchmark Proof
 
 ## Current Position
 
-Phase: 108 — Cloud Offload + Local Footprint Reduction
-Plan: 01 complete
-Status: Complete
+Phase: 114 (Midbrain Comparison + Comparative Benchmark Proof) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 114
 
 ## Session Continuity
 
-Last session: 2026-06-08T21:20:00.000Z
-Stopped at: Completed Phase 106 real sandbox scorer, Phase 108 local-footprint inventory/NOC surface, and roadmap cleanup
+Last session: 2026-06-09T21:53:08.547Z
+Stopped at: context exhaustion at 75% (2026-06-09)
 Resume file: None
-Next action: Run full verification and commit the completed 106/108/roadmap cleanup slices.
+Next action: Verify and commit the Midbrain competitor surfaces, generated marketplace benchmark, public proof counter fallback, and Phase 114 comparative benchmark plan.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -92,6 +92,8 @@ Next action: Run full verification and commit the completed 106/108/roadmap clea
 
 ### Roadmap Evolution (2026-06-04)
 
+- Phase 114 was added after the Midbrain.ai competitive deep dive. Midbrain is now treated as a direct research-led retrieval and continual-learning competitor, not as a proven governed operations-plane competitor. The durable roadmap response is v7.1 Competitive Retrieval Proof: add Midbrain to public comparison surfaces, keep MemRoOS public-evidence architecture scoring separate from SmartSearch retrieval metrics, and build the next proof lane around external retrieval benchmarks, SmartSearch-inspired retrieval, and retrieval receipts.
+- Highest-benefit GSD additions from the Midbrain comparison: (1) a site-facing generated benchmark block with Midbrain `65.21` and caveats; (2) comparative benchmark lanes for public-evidence architecture, external retrieval tasks, and operational workflow continuity; (3) deterministic entity extraction / expansion / reranking / score-adaptive context packing; (4) public-facing retrieval receipts showing retrieved, injected, ignored, score, tier, source, authorization result, and reason; (5) a concrete LoCoMo / LongMemEval / LongMemEval-V2 implementation path.
 - Phase 106 added after the SkillForge/SkillOpt architecture review. It hardens the existing SkillForge loop by replacing heuristic/stub eval behavior with real behavioral scoring, converging proposal generation, adding schema-level traceability for split/baseline/edit receipts, introducing typed bounded edit operations, and exposing accepted/rejected proposal evidence in audit/UI surfaces.
 - Phase 106 is complete. SkillForge now uses a deterministic no-side-effect sandbox scorer for held-out proposal evaluation, records baseline/treatment W receipts, and no longer relies on randomized Phase 94 behavioral A/B scores.
 - Phase 107 completed after the agent-context-sync research pass. It introduces a MemRoOS-native durable agent context bus for synchronous request/reply, inbox polling, explicit acknowledgements, MCP-accessible tools, optional memory-save receipts, scanner/audit guardrails, fail-closed control-layer data-access denial for self-declared claims, and delegated user/OAuth raw-token exclusion so agents can communicate without relying on hidden chat state or self-declared access.
