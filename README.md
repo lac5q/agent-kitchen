@@ -87,8 +87,9 @@ Latest generated benchmark results as of June 8, 2026, using the May 24 public-e
 | 3 | Letta | 70.58 | Strong stateful-agent memory platform. |
 | 4 | Mem0 Platform | 70.44 | Strong memory engine baseline. |
 | 5 | Zep | 68.64 | Strong temporal knowledge-graph memory. |
+| 6 | Midbrain | 65.21 | Strongest retrieval-substrate competitor. SmartSearch multi-step entity expansion and continual-learning architecture. Score reflects public-evidence architecture scoring; Midbrain's SmartSearch retrieval metrics are third-party paper results (arXiv 2504.00553), not independently rerun here. |
 
-The benchmark compares public architecture evidence, governance depth, multi-agent workflow fit, retrieval design, interop, and proof surfaces. It does not claim private latency or accuracy for closed products without API access. See [the benchmark methodology and results](docs/marketplace/agentic-memory-benchmark-2026-05-24.md).
+The benchmark compares public architecture evidence, governance depth, multi-agent workflow fit, retrieval design, interop, and proof surfaces. It does not claim private latency or accuracy for closed products without API access. Midbrain's SmartSearch retrieval metrics are cited as external paper results pending a direct rerun — see the [comparative benchmark plan](evals/comparative-retrieval/README.md) for the retrieval lane methodology. See [the benchmark methodology and results](docs/marketplace/agentic-memory-benchmark-2026-05-24.md).
 
 Live recall gate after beta hardening:
 

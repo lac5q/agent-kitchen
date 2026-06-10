@@ -29,7 +29,9 @@ All memory writes are gated by operator auth. Each agent has defined read/write 
 
 Public benchmark: Marketplace Agentic Memory Benchmark (May 2026)
 MemroOS beta live score: 84.06/100 (rank #1)
-Competing platforms: Letta (70.58), Mem0 (70.44), Zep (68.64)
+Competing platforms: Letta (70.58), Mem0 (70.44), Zep (68.64), Midbrain (65.21)
+
+Note: Midbrain's SmartSearch retrieval metrics are cited from third-party paper results (arXiv 2504.00553). These are public-evidence architecture scores, not independently rerun retrieval benchmarks. MemroOS leads on governed memory, audit lineage, orchestration, and operator-controlled self-improvement. Midbrain leads on retrieval substrate depth within the SmartSearch lane.
 
 ## Key Differentiators
 
@@ -59,6 +61,7 @@ Competing platforms: Letta (70.58), Mem0 (70.44), Zep (68.64)
 - https://memroos.com/blog — All articles
 - https://memroos.com/vs/letta — MemroOS vs Letta
 - https://memroos.com/vs/zep — MemroOS vs Zep
+- https://memroos.com/vs/midbrain — MemroOS vs Midbrain
 - https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf — Architecture paper
 
 ## Repository
