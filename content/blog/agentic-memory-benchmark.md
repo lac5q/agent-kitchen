@@ -1,6 +1,6 @@
 ---
-title: "Agentic Memory Benchmark: How We Evaluated 8 Platforms"
-description: "We evaluated 8 agentic memory platforms across recall quality, governance, orchestration, deployment, and more. Here's the methodology and what we found."
+title: "Agentic Memory Benchmark: How We Evaluate Memory Platforms"
+description: "We evaluate agentic memory platforms across recall quality, governance, orchestration, deployment, and proof surfaces. Here's the methodology and what we found."
 publishedAt: "2026-05-11"
 tags: ["benchmark", "evaluation", "research"]
 keywords: ["agentic memory benchmark", "AI agent memory comparison", "agent memory evaluation", "best agentic memory platform", "agent memory platform comparison"]
@@ -75,21 +75,25 @@ The weighting reflects what enterprise and developer teams consistently tell us 
 
 Scores are based on publicly available information and hands-on evaluation as of the benchmark date. They reflect our interpretation and may differ from vendor self-assessments.
 
-## The 8 Platforms Evaluated
+## The Platforms Evaluated
 
-We evaluated platforms that either specifically target agentic memory or are commonly used as memory layers for agent workflows: MemroOS, Letta, Zep, gBrain, EverMemos, AXME, AgenticMemory, and WorldFlow.
+We evaluated platforms that either specifically target agentic memory or are commonly used as memory layers for agent workflows: MemroOS, Letta, Mem0, Zep, Midbrain, gBrain, EverMemos, AXME, AgenticMemory, Tytan, and WorldFlow.
 
-Mem0 was excluded because MemroOS uses Mem0 as a component of its memory stack — evaluating it would be a conflict of interest, not a fair comparison.
+Mem0 is included as a memory-engine baseline, with the conflict called out explicitly because MemroOS can use Mem0 as one component of its stack. Midbrain is included as a research-led retrieval and continual-learning competitor; its SmartSearch paper metrics are not treated as the same thing as MemroOS's architecture/governance score.
 
 ## Key Findings
 
-**MemroOS scored 84/100** — the highest among evaluated platforms. Strongest on governed write paths (5/5), audit trail (5/5), and orchestration integration (4.5/5). Improvement areas: framework breadth is growing but not yet universal.
+**MemroOS scored 84.06/100** — the highest among evaluated platforms. Strongest on governed write paths, audit trail, orchestration integration, observability, and operator proof surfaces. Improvement areas: external retrieval benchmarks and comparative recall harnesses should be added alongside the existing operational evals.
 
-**Letta scored 62/100.** Strong on stateful agent persistence (its MemGPT heritage). Weaker on governance and multi-agent memory isolation.
+**Letta scored 70.58/100.** Strong on stateful agent persistence and memory-first agent architecture. Weaker on governed enterprise memory as an operator control plane.
 
-**Zep scored 58/100.** Strong on NLP-based memory extraction from dialog. Weaker on memory tier depth and governance for enterprise.
+**Mem0 scored 70.44/100.** Strong managed memory baseline and relevant to the ecosystem; less differentiated on orchestration and governance as a complete operator control plane.
 
-**Remaining platforms** scored between 38–54/100, primarily limited by flat memory architectures, cloud-only deployment, or absent governance features.
+**Zep scored 68.64/100.** Strong on temporal knowledge graph memory and fact invalidation. Weaker on orchestration and enterprise governance as the central product surface.
+
+**Midbrain scored 65.21/100.** Strongest on retrieval research and continual-learning direction through SmartSearch. Weaker on visible deployment controls, audit lineage, dispatch, and operator governance.
+
+**Remaining platforms** scored below Midbrain, primarily limited by narrow memory scope, cloud-only deployment, absent governance features, or limited public proof.
 
 The pattern across all evaluated platforms: recall quality and basic storage are table stakes. The differentiators are governance, orchestration integration, and deployment flexibility — exactly the capabilities that matter most when moving from prototype to production.
 

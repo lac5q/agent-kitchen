@@ -1,5 +1,5 @@
 {
-  "runDate": "2026-06-10T03:08:11.574Z",
+  "runDate": "2026-06-10T10:45:35.194Z",
   "dataset": "memroos_public_synthetic",
   "adapter": "lexical",
   "taskCount": 25,
@@ -21,14 +21,21 @@
       "recallAtK": 1,
       "mrr": 1,
       "falsePositiveRate": 0,
-      "latencyMs": 1,
+      "latencyMs": 2,
       "injectedCount": 1,
       "evidenceSpanCount": 1,
       "answerSupportedByRetrievedSource": true,
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-001"
+          {
+            "id": "mem-001",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          }
         ],
         "injected": [
           "mem-001"
@@ -51,8 +58,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-002",
-          "mem-003"
+          {
+            "id": "mem-002",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          },
+          {
+            "id": "mem-003",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          }
         ],
         "injected": [
           "mem-002",
@@ -76,8 +97,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-004",
-          "mem-005"
+          {
+            "id": "mem-004",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          },
+          {
+            "id": "mem-005",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          }
         ],
         "injected": [
           "mem-004",
@@ -101,7 +136,14 @@
       "abstentionCorrect": false,
       "receipt": {
         "retrieved": [
-          "mem-006"
+          {
+            "id": "mem-006",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          }
         ],
         "injected": [
           "mem-006"
@@ -124,8 +166,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-007",
-          "mem-008"
+          {
+            "id": "mem-007",
+            "score": 6,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 6"
+          },
+          {
+            "id": "mem-008",
+            "score": 3,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 3"
+          }
         ],
         "injected": [
           "mem-007",
@@ -149,7 +205,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-009"
+          {
+            "id": "mem-009",
+            "score": 3,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 3"
+          }
         ],
         "injected": [
           "mem-009"
@@ -172,7 +235,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-010"
+          {
+            "id": "mem-010",
+            "score": 7,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 7"
+          }
         ],
         "injected": [
           "mem-010"
@@ -195,8 +265,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-012",
-          "mem-011"
+          {
+            "id": "mem-012",
+            "score": 8,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 8"
+          },
+          {
+            "id": "mem-011",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-012",
@@ -220,8 +304,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-013",
-          "mem-014"
+          {
+            "id": "mem-013",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          },
+          {
+            "id": "mem-014",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-013",
@@ -245,7 +343,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-015"
+          {
+            "id": "mem-015",
+            "score": 3,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 3"
+          }
         ],
         "injected": [
           "mem-015"
@@ -268,7 +373,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-016"
+          {
+            "id": "mem-016",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-016"
@@ -291,7 +403,14 @@
       "abstentionCorrect": false,
       "receipt": {
         "retrieved": [
-          "mem-017"
+          {
+            "id": "mem-017",
+            "score": 5,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 5"
+          }
         ],
         "injected": [
           "mem-017"
@@ -314,8 +433,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-019",
-          "mem-018"
+          {
+            "id": "mem-019",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          },
+          {
+            "id": "mem-018",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-019",
@@ -339,7 +472,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-020"
+          {
+            "id": "mem-020",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          }
         ],
         "injected": [
           "mem-020"
@@ -362,7 +502,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-021"
+          {
+            "id": "mem-021",
+            "score": 5,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 5"
+          }
         ],
         "injected": [
           "mem-021"
@@ -385,8 +532,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-022",
-          "mem-023"
+          {
+            "id": "mem-022",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          },
+          {
+            "id": "mem-023",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-022",
@@ -410,7 +571,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-024"
+          {
+            "id": "mem-024",
+            "score": 7,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 7"
+          }
         ],
         "injected": [
           "mem-024"
@@ -433,7 +601,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-025"
+          {
+            "id": "mem-025",
+            "score": 5,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 5"
+          }
         ],
         "injected": [
           "mem-025"
@@ -456,8 +631,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-026",
-          "mem-027"
+          {
+            "id": "mem-026",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          },
+          {
+            "id": "mem-027",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          }
         ],
         "injected": [
           "mem-026",
@@ -481,7 +670,14 @@
       "abstentionCorrect": false,
       "receipt": {
         "retrieved": [
-          "mem-028"
+          {
+            "id": "mem-028",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-028"
@@ -504,7 +700,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-029"
+          {
+            "id": "mem-029",
+            "score": 3,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 3"
+          }
         ],
         "injected": [
           "mem-029"
@@ -527,8 +730,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-031",
-          "mem-030"
+          {
+            "id": "mem-031",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          },
+          {
+            "id": "mem-030",
+            "score": 1,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 1"
+          }
         ],
         "injected": [
           "mem-031",
@@ -552,7 +769,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-032"
+          {
+            "id": "mem-032",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-032"
@@ -575,8 +799,22 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-034",
-          "mem-033"
+          {
+            "id": "mem-034",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          },
+          {
+            "id": "mem-033",
+            "score": 2,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 2"
+          }
         ],
         "injected": [
           "mem-034",
@@ -600,7 +838,14 @@
       "abstentionCorrect": null,
       "receipt": {
         "retrieved": [
-          "mem-035"
+          {
+            "id": "mem-035",
+            "score": 4,
+            "tier": "lexical",
+            "source": "corpus",
+            "authorizationResult": "allowed",
+            "whyEntered": "term overlap score 4"
+          }
         ],
         "injected": [
           "mem-035"

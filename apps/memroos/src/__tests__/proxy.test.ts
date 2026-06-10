@@ -143,6 +143,66 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("serves the unlinked Understand graph page on the marketing host with noindex headers", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/understand?token=graph-token", {
+        headers: { host: "memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+  });
+
+  it("serves Understand dashboard static assets with same-origin frame protection", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/understand-static/index.html?token=graph-token", {
+        headers: { host: "memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(response.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'self'");
+  });
+
+  it("lets the Understand graph JSON route handle token authorization on the marketing host", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/knowledge-graph.json?token=graph-token", {
+        headers: { host: "memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+  });
+
+  it("requires app-host session auth for the Understand page", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.epiloguecapital.com/understand?token=graph-token", {
+        headers: { host: "memroos.epiloguecapital.com" },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
+  });
+
+  it("requires app-host session auth before Understand JSON token authorization", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.epiloguecapital.com/knowledge-graph.json?token=graph-token", {
+        headers: { host: "memroos.epiloguecapital.com" },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
+  });
+
   it("treats the Epilogue Capital MemRoOS alias as an app host", async () => {
     const loginResponse = await proxy(
       new NextRequest("https://memroos.epiloguecapital.com/login", {

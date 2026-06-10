@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 import { ROLE_RANK } from "@/lib/auth/middleware-roles";
 import type { UserRole } from "@/lib/auth/types";
+import { isUnderstandRoutePath, UNDERSTAND_NOINDEX_HEADERS } from "@/lib/understand-policy";
 
 const PUBLIC_HOSTS = new Set([
   "memroos.com",
@@ -116,6 +117,13 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+function withUnderstandHeaders(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(UNDERSTAND_NOINDEX_HEADERS)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
 function getTokenFromRequest(req: NextRequest): string | null {
   const auth = req.headers.get("authorization");
   if (auth?.startsWith("Bearer ")) return auth.slice(7).trim();
@@ -190,12 +198,14 @@ async function enforceAuth(req: NextRequest): Promise<NextResponse> {
     if (!accessCookie?.value) {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
+      loginUrl.search = "";
       return NextResponse.redirect(loginUrl);
     }
     const payload = await verifyAccessToken(accessCookie.value);
     if (!payload) {
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
+      loginUrl.search = "";
       return NextResponse.redirect(loginUrl);
     }
   }
@@ -206,6 +216,7 @@ async function enforceAuth(req: NextRequest): Promise<NextResponse> {
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const host = normalizeHost(request.headers.get("host") ?? "");
   const { pathname } = request.nextUrl;
+  const isUnderstandRoute = isUnderstandRoutePath(pathname);
 
   if (shouldRedirectToHttps(request, host)) {
     const httpsUrl = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, `https://${host}`);
@@ -219,6 +230,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // Public marketing host: serve landing assets, redirect everything else to "/"
   if (isPublicLandingHost(host)) {
+    if (isUnderstandRoute) {
+      return withUnderstandHeaders(NextResponse.next());
+    }
     if (pathname === "/") {
       const landingUrl = request.nextUrl.clone();
       landingUrl.pathname = "/landing/index.html";
@@ -231,7 +245,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
 
   // App host: enforce RBAC auth (formerly middleware.ts)
-  return withSecurityHeaders(await enforceAuth(request));
+  const appResponse = await enforceAuth(request);
+  return isUnderstandRoute ? withUnderstandHeaders(appResponse) : withSecurityHeaders(appResponse);
 }
 
 export const config = {

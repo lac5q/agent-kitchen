@@ -176,10 +176,10 @@ function LandingPage() {
                 MemroOS
               </h1>
               <p className="hero-tagline mt-6 max-w-[56ch] text-[clamp(22px,3vw,34px)] leading-tight text-[#1f1f1c]">
-                Shared memory for agents that do real work.
+                The control plane around agent memory.
               </p>
               <p className="mt-5 max-w-[64ch] text-[18px] leading-8 text-[#4a4a45]">
-                MemroOS gives AI-native teams a retained context plane, governed agent dispatch, and proof surfaces that show what memory was used before work moved forward.
+                MemroOS helps AI-native teams prove what agents remembered, received, did, and improved across retained context, governed dispatch, and source-backed proof surfaces.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link

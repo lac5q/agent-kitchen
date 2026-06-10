@@ -46,7 +46,7 @@ const ROUTE_TABS: Array<{ match: string[]; tabs: SectionTab[] }> = [
   },
 ];
 
-const SHELLLESS_ROUTES = ["/login", "/register", "/invite"];
+const SHELLLESS_ROUTES = ["/login", "/register", "/invite", "/understand"];
 
 function isShelllessRoute(pathname: string): boolean {
   return SHELLLESS_ROUTES.some((route) =>

@@ -48,8 +48,10 @@ __pycache__/
 
 # Local tool caches & worktrees
 .claude/
+.code-review/
 .playwright-mcp/
 .worktrees/
+.understand-anything/
 
 # Screenshots / debug output (root only)
 /*.png
