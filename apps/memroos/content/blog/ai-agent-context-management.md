@@ -1,0 +1,100 @@
+---
+title: "AI Agent Context Management: Beyond the Context Window"
+description: "The context window is not memory. This guide explains the difference and how proper context management — retrieval, compression, and assembly — makes agents reliable."
+publishedAt: "2026-05-12"
+tags: ["context management", "engineering", "AI agents"]
+keywords: ["AI agent context management", "agent context window", "agent context assembly", "AI agent context retrieval", "context pack agent"]
+author: "MemroOS"
+---
+
+When engineers say their AI agent "has memory," they often mean one of two things: the conversation history is long enough to include past messages, or they've added a RAG pipeline that retrieves documents. Both are partial solutions. Neither is context management.
+
+Context management is the set of decisions about what information an agent has access to before it acts — what gets retrieved, how much, in what order, and whether the agent is authorized to use it. Done well, it's the difference between an agent that produces reliable outputs and one that's unpredictable.
+
+## The Fundamental Confusion: Context Window vs Memory
+
+The context window is a technical constraint — how much text the model can process in a single forward pass. Larger models have larger windows; the latest frontier models can process hundreds of thousands of tokens.
+
+Memory is a product capability — the ability to retain information across session boundaries and retrieve it when relevant.
+
+Conflating the two is the source of most context management problems:
+
+- **Stuffing the context window with documents** is not memory. It's retrieval. The documents aren't retained between sessions; they're fetched fresh each time.
+- **Long conversation histories** are not memory. They're transcripts. As sessions grow, the relevant signal gets buried in noise, and eventually the window runs out.
+- **Vector search** is a retrieval mechanism. It finds relevant chunks based on embedding similarity. That's a component of memory, not memory itself.
+
+True memory is a system: structured storage, governed writes, retrieval that considers authorization and relevance, and assembly into a context pack that's ready for agent consumption.
+
+## What a Context Pack Is
+
+A context pack is the assembled set of context the agent receives before starting work. It's built from several sources:
+
+**Retrieved memories.** Observations, decisions, corrections, and patterns that are semantically relevant to the current task, filtered by the agent's access permissions.
+
+**Active knowledge.** Facts and rules that are always relevant — organizational policies, stable architectural constraints, user-stated preferences that don't expire.
+
+**Recent episodic context.** What happened recently that's directly relevant — the last interaction with this user, the most recent outcome of a related workflow.
+
+**Task instructions.** The current request, formatted for this agent's role and capabilities.
+
+The key property of a context pack is that it's selective. The agent doesn't get everything — it gets what it needs, filtered by what it's authorized to access, compressed to fit the working context.
+
+## Retrieval: More Than Semantic Similarity
+
+Most implementations use semantic similarity as the sole retrieval signal: find chunks whose embedding is close to the query embedding, return the top K. This works for simple cases and fails in several important ways:
+
+**Recency bias.** A semantically similar memory from three years ago may be less relevant than a slightly less similar memory from last week. Good retrieval weights recency alongside similarity.
+
+**Authority.** Not all memories are equally reliable. A memory extracted from a formal architectural decision record is more authoritative than one inferred from an informal Slack message. Retrieval should score by source quality.
+
+**Permission scope.** In multi-agent systems, different agents are authorized to access different memory. A retrieval query should return only what the requesting agent is permitted to see — not everything that's semantically relevant.
+
+**Diversity.** Top-K by similarity often returns near-duplicate memories. A diverse retrieval strategy ensures the context pack covers multiple angles of the topic, not just the same point expressed seven different ways.
+
+## Compression and Summarization
+
+Context windows are finite. When retrieved memories are too verbose to fit, summarization compresses them while preserving the key signal.
+
+The traps here:
+- **Over-summarization** removes detail that would have been useful. A memory summarized as "auth was discussed" is less useful than "JWT expiry was set to 30 minutes due to compliance requirement X."
+- **Lossy compression** is hard to reverse. Once a memory is summarized, the original detail may not be recoverable. Summarize copies; preserve originals.
+- **Model-based summarization** introduces its own error modes. Summaries generated by models can hallucinate or distort. Verify summarization quality in your specific domain.
+
+A practical approach: store memories at multiple granularities. Full-detail records for direct retrieval when space allows; compressed summaries when context is constrained. The context pack assembly logic selects the appropriate granularity based on available budget.
+
+## Permission-Aware Context Assembly
+
+In a team environment, agents have different roles and different access levels. A customer-facing agent should not receive internal architectural memos. An agent working on a security-sensitive feature should have access to security policies that other agents don't see by default.
+
+Permission-aware context assembly means the retrieval step filters on agent identity and role before returning results. The agent only sees memories it's authorized to use.
+
+This matters for two reasons:
+
+**Privacy.** Memories can contain sensitive information. Permission controls prevent that information from surfacing to unauthorized agents or being included in prompts that might be logged externally.
+
+**Focus.** Agents that receive only relevant, authorized context make better decisions. Irrelevant context is noise that degrades output quality.
+
+## Assembly Order Matters
+
+How context is ordered in the prompt affects model attention. Research consistently shows that LLMs attend more strongly to information at the beginning and end of their context.
+
+A context pack ordering that works well:
+1. Agent role and standing instructions (beginning — always attended)
+2. Active knowledge (business rules, stable facts — high priority)
+3. Retrieved memories (sorted by relevance score)
+4. Recent episodic context (recency signal)
+5. Task instruction (end — attended, and the actual query)
+
+The reasoning: the model has strong attention to the task instruction at the end. The most stable, highest-priority context goes at the beginning. Episodic context goes last among the memory components because it's most relevant to the specific task.
+
+## Practical Implementation
+
+Building a production context management system requires:
+
+- **Memory store** with typed tiers and per-agent access control
+- **Retrieval pipeline** with recency weighting, authority scoring, and diversity enforcement
+- **Compression layer** for large memories that need to fit constrained budgets
+- **Assembly logic** that orders context by priority and respects window limits
+- **Observability** so you can see what context each agent received and debug poor decisions
+
+MemroOS handles this as an integrated system — the retrieval, compression, and assembly all happen before the context pack is delivered to the agent. Operators get visibility into context health through the NOC console.

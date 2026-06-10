@@ -18,18 +18,28 @@ export interface Post {
   content: string;
 }
 
-const CONTENT_DIR = path.join(process.cwd(), "content/blog");
+const CONTENT_DIR_CANDIDATES = [
+  path.join(process.cwd(), "content/blog"),
+  path.resolve(process.cwd(), "../../content/blog"),
+];
+
+function getContentDir(): string | null {
+  return CONTENT_DIR_CANDIDATES.find((dir) => fs.existsSync(dir)) ?? null;
+}
 
 export function getAllPostSlugs(): string[] {
-  if (!fs.existsSync(CONTENT_DIR)) return [];
+  const contentDir = getContentDir();
+  if (!contentDir) return [];
   return fs
-    .readdirSync(CONTENT_DIR)
+    .readdirSync(contentDir)
     .filter((f) => f.endsWith(".md"))
     .map((f) => f.replace(/\.md$/, ""));
 }
 
 export function getPostBySlug(slug: string): Post | null {
-  const filePath = path.join(CONTENT_DIR, `${slug}.md`);
+  const contentDir = getContentDir();
+  if (!contentDir) return null;
+  const filePath = path.join(contentDir, `${slug}.md`);
   if (!fs.existsSync(filePath)) return null;
   const raw = fs.readFileSync(filePath, "utf-8");
   const { data, content } = matter(raw);
