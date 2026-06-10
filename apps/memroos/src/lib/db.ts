@@ -23,10 +23,7 @@ export function getDb(): Database.Database {
     db.pragma('synchronous = NORMAL');
     db.pragma('busy_timeout = 5000');
     initSchema(db);
-    // Fire-and-forget: seed default admin on first startup (async bcrypt hash)
-    seedDefaultAdmin(db).catch((err: unknown) =>
-      console.error('[Memroos] seedDefaultAdmin error:', err)
-    );
+    seedDefaultAdmin(db);
     _db = db;
   }
   return _db;

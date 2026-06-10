@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 114
-Plan: Not started
-Status: Milestone complete
+Phase: 115
+Plan: 115-01 complete
+Status: Architecture review hardening in progress
 
 ## Session Continuity
 
 Last session: 2026-06-10T03:28:41.845Z
 Stopped at: context exhaustion at 75% (2026-06-10)
 Resume file: None
-Next action: Verify and commit the Midbrain competitor surfaces, generated marketplace benchmark, public proof counter fallback, and Phase 114 comparative benchmark plan.
+Next action: Continue Phase 115 follow-on slices for ARCHREV-01/02/04/05/06/07/08/09 after the ARCHREV-03 SQLite migration runner slice is committed and deployed.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,11 @@ Next action: Verify and commit the Midbrain competitor surfaces, generated marke
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-06-10)
+
+- Phase 115 was added from `.code-review/ARCHITECTURE-REVIEW.md` to convert the nine system-level architecture findings into executable GSD requirements. The first shipped slice is ARCHREV-03: SQLite schema initialization now has an ordered `PRAGMA user_version` migration runner, legacy unstamped DB upgrade coverage, future-version fail-closed behavior, and synchronous default-admin seeding before `getDb()` returns.
+- Remaining Phase 115 work should stay split by blast radius: route-level auth wrappers and marketing split decision (ARCHREV-01), architecture identity/module map (ARCHREV-02), topology manifest (ARCHREV-04), typed env validation (ARCHREV-05), API/SDK contracts (ARCHREV-06), recall canary CI (ARCHREV-07), planning history pruning/private split (ARCHREV-08), and Next trust-boundary upgrade gates (ARCHREV-09).
 
 ### Roadmap Evolution (2026-06-04)
 

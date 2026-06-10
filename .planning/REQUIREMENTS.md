@@ -11,6 +11,7 @@
 - v6.6 Cloud Offload + Local Footprint Reduction — complete
 - v7.0 Client-Ready Security + Architecture Audit — complete
 - v7.1 Competitive Retrieval Proof — planned
+- v7.2 Architecture Review Hardening — in progress
 
 ---
 
@@ -88,6 +89,18 @@
 - [x] **RECEIPTS-01**: Retrieval receipts become public-facing product proof: retrieved, injected, ignored, score, tier, source, authorization result, and why the memory entered or missed the context pack.
 - [x] **SEO-PROOF-01**: Public proof metrics render meaningful fallback text for crawlers and LLM fetchers without waiting for client-side counter animation.
 
+## v7.2 Architecture Review Hardening
+
+- [ ] **ARCHREV-01**: Route-level operator/agent auth wrappers protect privileged route groups inside handlers or factories so `proxy.ts` is not the only security boundary; marketing-app split remains a follow-on deployment decision.
+- [ ] **ARCHREV-02**: Architecture docs describe MemRoOS as an agent OS with a broker kernel, include a module map for shipped domains, and define placement rules for Next app vs. Python service vs. script.
+- [x] **ARCHREV-03**: SQLite schema initialization runs through an ordered migration runner stamped with `PRAGMA user_version`; unstamped legacy DBs upgrade to the current version, future-version DBs fail closed, and default admin seeding completes synchronously before `getDb()` returns.
+- [ ] **ARCHREV-04**: A single runtime topology manifest names required services, ports, health checks, and supervision mode; `start.sh`, launchd installers, and Docker compose derive from or validate against that source.
+- [ ] **ARCHREV-05**: App configuration is validated through one typed env module at startup, with `process.env` reads centralized and legacy root config status reconciled.
+- [ ] **ARCHREV-06**: API, A2A, REST shim, MCP, and SDK contracts have one generated or shared schema source plus an SDK smoke test against a running app.
+- [ ] **ARCHREV-07**: Recall canary evaluation runs in CI or a scheduled workflow, using existing golden sets and recall thresholds as a regression gate.
+- [ ] **ARCHREV-08**: Planning history retention is decided before wider release: prune to current-milestone public docs or move archival GSD screenshots/history to a private sibling repo.
+- [ ] **ARCHREV-09**: Next.js trust-boundary changes carry explicit proxy/auth regression coverage and a migration checklist before framework upgrades touch `proxy.ts`.
+
 ---
 
 ## Future Requirements (Deferred)
@@ -160,4 +173,13 @@
 | RETRIEVAL-01 | 114 | Planned |
 | RECEIPTS-01 | 114 | Planned |
 | SEO-PROOF-01 | 114 | Planned |
+| ARCHREV-01 | 115 | Planned |
+| ARCHREV-02 | 115 | Planned |
+| ARCHREV-03 | 115 | Complete |
+| ARCHREV-04 | 115 | Planned |
+| ARCHREV-05 | 115 | Planned |
+| ARCHREV-06 | 115 | Planned |
+| ARCHREV-07 | 115 | Planned |
+| ARCHREV-08 | 115 | Planned |
+| ARCHREV-09 | 115 | Planned |
 | MEMGEN-FOLLOWUP-02 | Future | Deferred |

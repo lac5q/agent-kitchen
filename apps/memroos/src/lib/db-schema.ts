@@ -64,6 +64,52 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
+type SchemaMigration = {
+  version: number;
+  name: string;
+  up: (db: Database.Database) => void;
+};
+
+export function getSchemaVersion(db: Database.Database): number {
+  const version = db.pragma('user_version', { simple: true });
+  return typeof version === 'number' ? version : Number(version);
+}
+
+function setSchemaVersion(db: Database.Database, version: number): void {
+  if (!Number.isInteger(version) || version < 0) {
+    throw new Error(`Invalid SQLite schema version: ${version}`);
+  }
+  db.pragma(`user_version = ${version}`);
+}
+
+const SCHEMA_MIGRATIONS: SchemaMigration[] = [
+  {
+    version: CURRENT_SCHEMA_VERSION,
+    name: 'baseline-additive-schema',
+    up: applyCurrentSchema,
+  },
+];
+
+function runSchemaMigrations(db: Database.Database): void {
+  const currentVersion = getSchemaVersion(db);
+  if (currentVersion > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `SQLite schema version ${currentVersion} is newer than this code supports (${CURRENT_SCHEMA_VERSION})`
+    );
+  }
+
+  const migrations = [...SCHEMA_MIGRATIONS].sort((a, b) => a.version - b.version);
+  for (const migration of migrations) {
+    if (migration.version <= currentVersion) continue;
+    db.transaction(() => {
+      migration.up(db);
+      setSchemaVersion(db, migration.version);
+    })();
+  }
+}
+
 export function rebuildMessageFtsProjection(db: Database.Database): void {
   db.exec(`
     INSERT INTO messages_fts(messages_fts) VALUES('delete-all');
@@ -77,9 +123,13 @@ export function rebuildMessageFtsProjection(db: Database.Database): void {
 
 /**
  * Initializes the SQLite schema for the conversation store.
- * All DDL uses CREATE IF NOT EXISTS — safe to call on every startup.
+ * Schema changes are ordered and stamped through PRAGMA user_version.
  */
 export function initSchema(db: Database.Database): void {
+  runSchemaMigrations(db);
+}
+
+function applyCurrentSchema(db: Database.Database): void {
   // messages: primary conversation store
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (

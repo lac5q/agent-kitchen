@@ -79,6 +79,62 @@ describe('SQLite DB layer', () => {
     expect(allNames).toContain('messages_fts');
   });
 
+  it('Test 4b: initSchema stamps the current schema version in PRAGMA user_version', () => {
+    const db = getDb();
+    const version = db.pragma('user_version', { simple: true }) as number;
+    expect(version).toBeGreaterThan(0);
+  });
+
+  it('Test 4c: initSchema upgrades an unstamped legacy database to the current schema version', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const legacyDb = new Database(':memory:');
+    expect(legacyDb.pragma('user_version', { simple: true })).toBe(0);
+
+    initSchema(legacyDb);
+
+    const version = legacyDb.pragma('user_version', { simple: true }) as number;
+    const tables = legacyDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
+      .all();
+    expect(version).toBeGreaterThan(0);
+    expect(tables).toHaveLength(1);
+    legacyDb.close();
+  });
+
+  it('Test 4c.1: initSchema rejects a database stamped with a future schema version', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const futureDb = new Database(':memory:');
+    futureDb.pragma('user_version = 999');
+
+    expect(() => initSchema(futureDb)).toThrow(/newer than this code supports/);
+    futureDb.close();
+  });
+
+  it('Test 4d: getDb returns only after default admin seeding has completed', () => {
+    if (closeDb) closeDb();
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+
+    const previousEmail = process.env.MEMROOS_ADMIN_EMAIL;
+    const previousPassword = process.env.MEMROOS_ADMIN_PASSWORD;
+    process.env.MEMROOS_ADMIN_EMAIL = `admin-${crypto.randomUUID()}@example.com`;
+    process.env.MEMROOS_ADMIN_PASSWORD = `password-${crypto.randomUUID()}`;
+
+    try {
+      const db = getDb();
+      const row = db
+        .prepare('SELECT email FROM users WHERE email = ?')
+        .get(process.env.MEMROOS_ADMIN_EMAIL) as { email: string } | undefined;
+
+      expect(row?.email).toBe(process.env.MEMROOS_ADMIN_EMAIL);
+    } finally {
+      if (previousEmail === undefined) delete process.env.MEMROOS_ADMIN_EMAIL;
+      else process.env.MEMROOS_ADMIN_EMAIL = previousEmail;
+      if (previousPassword === undefined) delete process.env.MEMROOS_ADMIN_PASSWORD;
+      else process.env.MEMROOS_ADMIN_PASSWORD = previousPassword;
+    }
+  });
+
   it('Test 5: messages table has expected columns', () => {
     const db = getDb();
     const cols = db.pragma('table_info(messages)') as { name: string }[];

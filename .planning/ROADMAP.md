@@ -30,6 +30,7 @@
 - ✅ **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (completed 2026-06-08)
 - ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
 - ⏳ **v7.1 Competitive Retrieval Proof** — Phase 114 (planned 2026-06-09)
+- ⏳ **v7.2 Architecture Review Hardening** — Phase 115 (in progress 2026-06-10)
 
 ## Phases
 
@@ -38,6 +39,13 @@
 - [ ] **Phase 114: Midbrain Comparison + Comparative Benchmark Plan** — COMPETE-01..02, SITE-BENCH-01, BENCH-01..03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01; add Midbrain to public comparison surfaces, keep architecture scores separate from SmartSearch metrics, and define the next benchmark/retrieval proof lane.
 
 Full v7.1 detail in the `## v7.1 Competitive Retrieval Proof` section below.
+
+### Current v7.2 Architecture Review Hardening Summary — IN PROGRESS
+
+- [x] **Phase 115: Architecture Review Hardening** — ARCHREV-03 executed as the first contained code slice: SQLite schema changes now run through a versioned `PRAGMA user_version` migration runner and default admin seeding completes before `getDb()` returns.
+- [ ] Follow-on slices remain for A1/A2/A4/A5/A6/A7/A8/A9 from `.code-review/ARCHITECTURE-REVIEW.md`: route-level auth wrappers, architecture identity/module map, topology manifest, env validation, API/SDK contract generation, recall canary CI, planning history pruning, and Next trust-boundary upgrade gates.
+
+Full v7.2 detail in the `## v7.2 Architecture Review Hardening` section below.
 
 ### Current v6.5 Agent Context Bus + Synchronous Agent Communication Summary — COMPLETE
 
@@ -1532,6 +1540,23 @@ Plans:
   4. Complements checkpoint/resume: checkpoints protect in-flight work; CI/CD gates protect what agent versions are allowed to run.
 **Plans**: 1/1 complete
 **UI hint**: Agent version registry page; promotion gate status; rollback button in Agents surface.
+
+### Phase 115: Architecture Review Hardening
+
+**Goal:** Convert `.code-review/ARCHITECTURE-REVIEW.md` from system-level review prose into executable hardening requirements, then ship the first contained code slice against A3.
+**Requirements**: ARCHREV-01, ARCHREV-02, ARCHREV-03, ARCHREV-04, ARCHREV-05, ARCHREV-06, ARCHREV-07, ARCHREV-08, ARCHREV-09
+**Depends on:** Phase 114
+**Success Criteria** (what must be TRUE):
+  1. Each architecture review finding A1-A9 has a mapped GSD requirement with a bounded implementation or explicit deferral path.
+  2. The SQLite schema layer has a versioned migration runner stamped via `PRAGMA user_version`; legacy unstamped DBs upgrade to the current schema version, and future-version DBs fail closed.
+  3. Default admin seeding is not fire-and-forget; `getDb()` returns only after the seed path has completed or failed synchronously.
+  4. DB regression tests prove version stamping, legacy upgrade, and synchronous seed behavior.
+  5. Follow-on architecture hardening slices are separable so route auth, topology, env, contract, CI, and repo-structure work can be shipped without one broad unsafe refactor.
+**Plans:** 1 plan
+- [x] 115-01-PLAN.md — A3 SQLite migration runner, synchronous admin seed, and architecture review roadmap
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 115 to break down)
 
 ---
 
