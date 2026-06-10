@@ -10,6 +10,7 @@
 - v6.5 Agent Context Bus + Synchronous Agent Communication — complete
 - v6.6 Cloud Offload + Local Footprint Reduction — complete
 - v7.0 Client-Ready Security + Architecture Audit — complete
+- v7.1 Competitive Retrieval Proof — planned
 
 ---
 
@@ -75,6 +76,18 @@
 - [x] **TEST-02**: Security regression tests added for each critical/high finding fixed — preventing reintroduction
 - [x] **TEST-03**: Production build (`npm run build`) and typecheck (`npm run typecheck`) pass clean with zero errors
 
+## v7.1 Competitive Retrieval Proof
+
+- [x] **COMPETE-01**: Midbrain is represented in the marketplace benchmark inputs, generated results, `/vs` comparison pages, sitemap, LLM-readable docs, README, and benchmark methodology notes.
+- [x] **COMPETE-02**: Public copy distinguishes MemRoOS's public-evidence architecture score from Midbrain SmartSearch retrieval metrics; no page compares those numbers as if they are the same benchmark.
+- [x] **SITE-BENCH-01**: The public site has an include-ready benchmark block showing the generated marketplace ranking, Midbrain's `65.21` score, and a clear caveat that SmartSearch retrieval metrics are third-party paper results until rerun.
+- [x] **BENCH-01**: Comparative benchmark plan defines three lanes: public-evidence architecture scoring, external retrieval-task scoring, and MemRoOS operational workflow scoring.
+- [x] **BENCH-02**: External retrieval lane specifies LoCoMo / LongMemEval-style datasets or adapters, answer normalization, precision@k, recall@k, MRR, false-positive rate, p95 latency, token spend, and caveat reporting.
+- [x] **BENCH-03**: Comparative retrieval harness has a concrete implementation path for LoCoMo, LongMemEval, and LongMemEval-V2-style tasks, including fixture ingestion, adapter contracts, scorer normalization, and report rendering.
+- [x] **RETRIEVAL-01**: SmartSearch-inspired retrieval backlog covers deterministic entity extraction, entity expansion, tier fan-out, reranking, dedupe, score-adaptive context packing, and temporal caveat handling.
+- [x] **RECEIPTS-01**: Retrieval receipts become public-facing product proof: retrieved, injected, ignored, score, tier, source, authorization result, and why the memory entered or missed the context pack.
+- [x] **SEO-PROOF-01**: Public proof metrics render meaningful fallback text for crawlers and LLM fetchers without waiting for client-side counter animation.
+
 ---
 
 ## Future Requirements (Deferred)
@@ -138,4 +151,13 @@
 | TEST-01 | 113 | Complete |
 | TEST-02 | 110–112 | Complete |
 | TEST-03 | 113 | Complete |
+| COMPETE-01 | 114 | Planned |
+| COMPETE-02 | 114 | Planned |
+| SITE-BENCH-01 | 114 | Planned |
+| BENCH-01 | 114 | Planned |
+| BENCH-02 | 114 | Planned |
+| BENCH-03 | 114 | Planned |
+| RETRIEVAL-01 | 114 | Planned |
+| RECEIPTS-01 | 114 | Planned |
+| SEO-PROOF-01 | 114 | Planned |
 | MEMGEN-FOLLOWUP-02 | Future | Deferred |
