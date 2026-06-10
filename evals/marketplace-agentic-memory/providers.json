@@ -613,6 +613,58 @@
           "rationale": "Open-source, OpenClaw/Hermes oriented setup gives strong portability."
         }
       }
+    },
+    {
+      "id": "midbrain",
+      "name": "Midbrain",
+      "category": "continual-learning memory substrate with SmartSearch retrieval",
+      "shortAssessment": "Strongest public retrieval-substrate competitor; SmartSearch multi-step entity expansion and continual-learning architecture are technically credible, but governance, audit, and orchestration depth are not the primary product surface.",
+      "sources": [
+        "https://midbrain.ai/",
+        "https://arxiv.org/abs/2504.00553"
+      ],
+      "scores": {
+        "recall_quality_evals": {
+          "score": 4.8,
+          "confidence": 0.75,
+          "rationale": "SmartSearch paper claims strong retrieval quality on conversational memory tasks via deterministic entity extraction, multi-hop expansion, tier fan-out, and score-adaptive context packing. Cited as third-party paper results — not independently rerun here."
+        },
+        "governed_memory_audit_permissions": {
+          "score": 2.8,
+          "confidence": 0.55,
+          "rationale": "Limited public evidence of operator-gated audit trails, per-agent write paths, or governed retention controls beyond API access scoping."
+        },
+        "memory_model_depth_typed_multitier": {
+          "score": 4.3,
+          "confidence": 0.7,
+          "rationale": "Continual-learning substrate, entity extraction, SmartSearch multi-step retrieval, and temporal memory handling represent a technically deep memory model."
+        },
+        "agent_workflow_integration_orchestration": {
+          "score": 3.5,
+          "confidence": 0.65,
+          "rationale": "API-first integration; multi-agent governance, HIL, and dispatch orchestration are not primary public claims."
+        },
+        "enterprise_deployment_data_control": {
+          "score": 3.0,
+          "confidence": 0.504,
+          "rationale": "Cloud-hosted primary; self-host and enterprise data-control posture need deeper public verification."
+        },
+        "performance_latency_cost_path": {
+          "score": 4.5,
+          "confidence": 0.7,
+          "rationale": "SmartSearch architecture claims strong retrieval performance with score-adaptive context packing reducing token spend; p95 latency not independently measured."
+        },
+        "observability_self_improvement": {
+          "score": 3.5,
+          "confidence": 0.55,
+          "rationale": "Continual-learning substrate implies self-updating behavior, but operator eval/approval and self-improvement governance loop are not central claims."
+        },
+        "portability_open_exits": {
+          "score": 3.2,
+          "confidence": 0.55,
+          "rationale": "Research-backed architecture; open-exit posture depends on whether the substrate is accessible beyond the hosted API."
+        }
+      }
     }
   ]
 }

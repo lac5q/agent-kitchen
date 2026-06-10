@@ -1,0 +1,535 @@
+[
+  {
+    "id": "memroos-pub-0001",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-001",
+        "text": "On 2026-03-15, the team decided to use Qdrant Cloud for all vector search. Local Qdrant is not added to Docker compose.",
+        "source": "decisions/2026-03-15-architecture.md",
+        "timestamp_iso": "2026-03-15T14:00:00Z"
+      }
+    ],
+    "question": "Which vector store did the team decide to use?",
+    "expected_answer": "Qdrant Cloud",
+    "evidence_spans": ["mem-001"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0002",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "temporal_reasoning",
+    "corpus": [
+      {
+        "id": "mem-002",
+        "text": "Sprint 14 goal: ship the A2A hub with agent registration and task delegation by May 11, 2026.",
+        "source": "sprints/sprint-14-goal.md",
+        "timestamp_iso": "2026-05-01T09:00:00Z"
+      },
+      {
+        "id": "mem-003",
+        "text": "Sprint 14 shipped on May 11, 2026. A2A hub is live with agent cards, registration, and task APIs.",
+        "source": "sprints/sprint-14-retro.md",
+        "timestamp_iso": "2026-05-11T17:00:00Z"
+      }
+    ],
+    "question": "Was the A2A hub shipped by the Sprint 14 deadline?",
+    "expected_answer": "Yes, the A2A hub shipped on May 11, 2026, meeting the Sprint 14 deadline.",
+    "evidence_spans": ["mem-002", "mem-003"],
+    "temporal_metadata": {
+      "reference_time_iso": "2026-05-11T23:59:00Z",
+      "temporal_direction": "before"
+    },
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0003",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "multi_hop",
+    "corpus": [
+      {
+        "id": "mem-004",
+        "text": "Gwen is the MemroOS self-improvement agent. She runs the skill pruning and curation loop.",
+        "source": "agents/gwen-role.md",
+        "timestamp_iso": "2026-04-10T10:00:00Z"
+      },
+      {
+        "id": "mem-005",
+        "text": "Skill pruning removes skills that have not been invoked in 30 days and have a failure rate above 0.3.",
+        "source": "skills/pruning-policy.md",
+        "timestamp_iso": "2026-04-10T10:05:00Z"
+      }
+    ],
+    "question": "What criteria does Gwen use to prune skills?",
+    "expected_answer": "Gwen removes skills that have not been invoked in 30 days and have a failure rate above 0.3.",
+    "evidence_spans": ["mem-004", "mem-005"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0004",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "abstention",
+    "corpus": [
+      {
+        "id": "mem-006",
+        "text": "The production server runs on port 3002 via npm start.",
+        "source": "ops/production-setup.md",
+        "timestamp_iso": "2026-05-20T08:00:00Z"
+      }
+    ],
+    "question": "What is the MemroOS database password?",
+    "expected_answer": "The database password is not stored in any accessible memory.",
+    "evidence_spans": [],
+    "abstention_correct": true,
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0005",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "entity_state",
+    "corpus": [
+      {
+        "id": "mem-007",
+        "text": "On 2026-04-01, the Cordant account was moved from the general pipeline to the enterprise track after the Juan Spark call.",
+        "source": "accounts/cordant-status.md",
+        "timestamp_iso": "2026-04-01T15:00:00Z"
+      },
+      {
+        "id": "mem-008",
+        "text": "Cordant account status as of May 5: enterprise trial started, POC contract under review.",
+        "source": "accounts/cordant-may-update.md",
+        "timestamp_iso": "2026-05-05T11:00:00Z"
+      }
+    ],
+    "question": "What is the current status of the Cordant account?",
+    "expected_answer": "Enterprise trial started, POC contract under review.",
+    "evidence_spans": ["mem-008"],
+    "temporal_metadata": {
+      "reference_time_iso": "2026-05-05T23:59:00Z",
+      "temporal_direction": "latest"
+    },
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0006",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "event_summary",
+    "corpus": [
+      {
+        "id": "mem-009",
+        "text": "May 27 call with Juan Spark (Cordant): Discussed AI-ops use case, data governance requirements, and timeline for a 3-month POC. Next step: send architecture overview.",
+        "source": "calls/2026-05-27-cordant-juan-spark.md",
+        "timestamp_iso": "2026-05-27T16:00:00Z"
+      }
+    ],
+    "question": "What were the key outcomes of the May 27 Cordant call?",
+    "expected_answer": "Discussed AI-ops use case, data governance requirements, and 3-month POC timeline. Next step: send architecture overview.",
+    "evidence_spans": ["mem-009"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0007",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-010",
+        "text": "SkillForge evaluation uses a deterministic sandbox scorer. The sandbox denies all tool calls by default and records them in an evidence bundle.",
+        "source": "docs/skillforge-eval.md",
+        "timestamp_iso": "2026-06-01T09:00:00Z"
+      }
+    ],
+    "question": "How does the SkillForge sandbox handle tool calls during evaluation?",
+    "expected_answer": "The sandbox denies all tool calls by default and records them in an evidence bundle.",
+    "evidence_spans": ["mem-010"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0008",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "multi_hop",
+    "corpus": [
+      {
+        "id": "mem-011",
+        "text": "HIL escalation triggers when an agent task has a risk score above 0.7 or when the task type requires human approval.",
+        "source": "docs/hil-policy.md",
+        "timestamp_iso": "2026-05-15T10:00:00Z"
+      },
+      {
+        "id": "mem-012",
+        "text": "The SLA for HIL review is 4 hours. After the SLA expires, the task is auto-escalated to the operator.",
+        "source": "docs/hil-sla.md",
+        "timestamp_iso": "2026-05-15T10:05:00Z"
+      }
+    ],
+    "question": "What happens if a HIL review is not completed within the SLA?",
+    "expected_answer": "After 4 hours, the task is auto-escalated to the operator.",
+    "evidence_spans": ["mem-011", "mem-012"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0009",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "temporal_reasoning",
+    "corpus": [
+      {
+        "id": "mem-013",
+        "text": "On 2026-04-15, the team decided to use better-sqlite3 in WAL mode as the single shared SQLite DB.",
+        "source": "decisions/2026-04-15-sqlite.md",
+        "timestamp_iso": "2026-04-15T14:00:00Z"
+      },
+      {
+        "id": "mem-014",
+        "text": "On 2026-05-10, a review confirmed that the WAL mode decision still holds and no migration is planned.",
+        "source": "decisions/2026-05-10-sqlite-review.md",
+        "timestamp_iso": "2026-05-10T14:00:00Z"
+      }
+    ],
+    "question": "What is the current SQLite mode used by MemroOS?",
+    "expected_answer": "WAL mode, using better-sqlite3 as the single shared DB.",
+    "evidence_spans": ["mem-014"],
+    "temporal_metadata": {
+      "reference_time_iso": "2026-05-10T23:59:00Z",
+      "temporal_direction": "latest"
+    },
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0010",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-015",
+        "text": "The 4-tier salience decay formula is: decay_rate / (1 + LOG(1 + access_count)). High-access memories decay more slowly.",
+        "source": "docs/salience-decay.md",
+        "timestamp_iso": "2026-05-01T09:00:00Z"
+      }
+    ],
+    "question": "How does access count affect memory salience decay in MemroOS?",
+    "expected_answer": "High-access memories decay more slowly because the decay rate is divided by (1 + LOG(1 + access_count)).",
+    "evidence_spans": ["mem-015"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0011",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "entity_state",
+    "corpus": [
+      {
+        "id": "mem-016",
+        "text": "v6.4 shipped on June 8, 2026. It includes deterministic sandbox-backed SkillForge scoring and typed bounded edit operations.",
+        "source": "changelog/v6.4.md",
+        "timestamp_iso": "2026-06-08T17:00:00Z"
+      }
+    ],
+    "question": "What shipped in v6.4?",
+    "expected_answer": "Deterministic sandbox-backed SkillForge scoring and typed bounded edit operations.",
+    "evidence_spans": ["mem-016"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0012",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "abstention",
+    "corpus": [
+      {
+        "id": "mem-017",
+        "text": "The operator API key is stored in the environment variable MEMROOS_OPERATOR_API_KEY.",
+        "source": "docs/config.md",
+        "timestamp_iso": "2026-05-01T09:00:00Z"
+      }
+    ],
+    "question": "What is the current value of the operator API key?",
+    "expected_answer": "The API key value is not stored in accessible memory — only its environment variable name is known.",
+    "evidence_spans": [],
+    "abstention_correct": true,
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0013",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "multi_hop",
+    "corpus": [
+      {
+        "id": "mem-018",
+        "text": "The Dream Cycle runs nightly and identifies skills for optimization based on failure rate and recency.",
+        "source": "docs/dream-cycle.md",
+        "timestamp_iso": "2026-05-26T09:00:00Z"
+      },
+      {
+        "id": "mem-019",
+        "text": "Auto-approval in the Dream Cycle applies to low-risk proposals (risk score below 0.3). High-risk proposals require operator approval.",
+        "source": "docs/dream-cycle-approval.md",
+        "timestamp_iso": "2026-05-26T09:05:00Z"
+      }
+    ],
+    "question": "Which Dream Cycle proposals are automatically approved?",
+    "expected_answer": "Low-risk proposals with a risk score below 0.3 are automatically approved.",
+    "evidence_spans": ["mem-018", "mem-019"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0014",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "event_summary",
+    "corpus": [
+      {
+        "id": "mem-020",
+        "text": "Incident 2026-04-03: Production server on port 3002 went down due to a memory leak in the consolidation engine. Fixed by restarting and patching the async consolidation job.",
+        "source": "incidents/2026-04-03-port3002.md",
+        "timestamp_iso": "2026-04-03T22:00:00Z"
+      }
+    ],
+    "question": "What caused the April 3 production incident?",
+    "expected_answer": "A memory leak in the consolidation engine. Fixed by restarting and patching the async consolidation job.",
+    "evidence_spans": ["mem-020"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0015",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-021",
+        "text": "The Circleback ingestion runs nightly via a LaunchAgent and syncs meeting notes to the QMD index under the projects/ collection.",
+        "source": "docs/circleback.md",
+        "timestamp_iso": "2026-05-28T10:00:00Z"
+      }
+    ],
+    "question": "How often does the Circleback ingestion run?",
+    "expected_answer": "Nightly via a LaunchAgent.",
+    "evidence_spans": ["mem-021"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0016",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "temporal_reasoning",
+    "corpus": [
+      {
+        "id": "mem-022",
+        "text": "2026-03-01: The product roadmap target was to ship v2.0 by May 11.",
+        "source": "roadmap/march-plan.md",
+        "timestamp_iso": "2026-03-01T09:00:00Z"
+      },
+      {
+        "id": "mem-023",
+        "text": "2026-05-11: v2.0 A2A Hub shipped as planned.",
+        "source": "changelog/v2.0.md",
+        "timestamp_iso": "2026-05-11T17:00:00Z"
+      }
+    ],
+    "question": "Was v2.0 shipped on time?",
+    "expected_answer": "Yes, v2.0 shipped on May 11, matching the March roadmap target.",
+    "evidence_spans": ["mem-022", "mem-023"],
+    "temporal_metadata": {
+      "reference_time_iso": "2026-05-11T23:59:00Z",
+      "temporal_direction": "before"
+    },
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0017",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-024",
+        "text": "The agent context bus provides a durable inbox and reply bus for synchronous agent communication. Agents can poll the inbox and acknowledge messages.",
+        "source": "docs/agent-context-bus.md",
+        "timestamp_iso": "2026-06-04T10:00:00Z"
+      }
+    ],
+    "question": "What is the agent context bus?",
+    "expected_answer": "A durable inbox and reply bus for synchronous agent communication with inbox polling and message acknowledgement.",
+    "evidence_spans": ["mem-024"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0018",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "entity_state",
+    "corpus": [
+      {
+        "id": "mem-025",
+        "text": "Mem0 OSS v3 removed explicit graph store support in favor of entity linking. The managed platform retains graph memory.",
+        "source": "competitor-notes/mem0-v3.md",
+        "timestamp_iso": "2026-05-20T09:00:00Z"
+      }
+    ],
+    "question": "What changed in Mem0 OSS v3 regarding graph memory?",
+    "expected_answer": "Mem0 OSS v3 removed explicit graph store support in favor of entity linking. The managed platform retains graph memory.",
+    "evidence_spans": ["mem-025"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0019",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "multi_hop",
+    "corpus": [
+      {
+        "id": "mem-026",
+        "text": "The SkillForge skill_registry table has a UNIQUE constraint on (name, source_harness). Re-importing an existing skill uses ON CONFLICT DO UPDATE.",
+        "source": "docs/skillforge-schema.md",
+        "timestamp_iso": "2026-05-26T10:00:00Z"
+      },
+      {
+        "id": "mem-027",
+        "text": "The skill dispatch status is set to 'enabled' only when completeness_pct = 100 and all required contract fields are present. Otherwise it is 'incomplete'.",
+        "source": "docs/skillforge-dispatch.md",
+        "timestamp_iso": "2026-05-26T10:05:00Z"
+      }
+    ],
+    "question": "What conditions must be met for a skill to be dispatchable?",
+    "expected_answer": "The skill must have completeness_pct = 100 and all required contract fields present. Only then is dispatch_status set to 'enabled'.",
+    "evidence_spans": ["mem-026", "mem-027"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0020",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "abstention",
+    "corpus": [
+      {
+        "id": "mem-028",
+        "text": "The MemroOS production build is run with npm run build followed by npm start on port 3002.",
+        "source": "ops/deploy.md",
+        "timestamp_iso": "2026-04-01T09:00:00Z"
+      }
+    ],
+    "question": "What is the SSH private key for the production server?",
+    "expected_answer": "SSH private keys are not stored in accessible memory.",
+    "evidence_spans": [],
+    "abstention_correct": true,
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0021",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "event_summary",
+    "corpus": [
+      {
+        "id": "mem-029",
+        "text": "2026-06-08 v7.0 security audit: 4 domains audited, critical and high findings remediated, 1079 app tests passing. Architecture cleanup completed.",
+        "source": "changelog/v7.0.md",
+        "timestamp_iso": "2026-06-08T17:00:00Z"
+      }
+    ],
+    "question": "What was the scope of the v7.0 security audit?",
+    "expected_answer": "4 domains audited, critical and high findings remediated, 1079 app tests passing, and architecture cleanup completed.",
+    "evidence_spans": ["mem-029"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0022",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "temporal_reasoning",
+    "corpus": [
+      {
+        "id": "mem-030",
+        "text": "2026-05-15: Gateway hardening decision — lint enforced in CI, test file ESLint override added.",
+        "source": "decisions/2026-05-15-lint.md",
+        "timestamp_iso": "2026-05-15T12:00:00Z"
+      },
+      {
+        "id": "mem-031",
+        "text": "2026-05-16: CI confirmed passing with lint enforced after the gateway hardening changes.",
+        "source": "ci/2026-05-16-green.md",
+        "timestamp_iso": "2026-05-16T09:00:00Z"
+      }
+    ],
+    "question": "When was lint enforcement confirmed in CI?",
+    "expected_answer": "May 16, 2026.",
+    "evidence_spans": ["mem-031"],
+    "temporal_metadata": {
+      "reference_time_iso": "2026-05-16T23:59:00Z",
+      "temporal_direction": "before"
+    },
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0023",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "single_hop",
+    "corpus": [
+      {
+        "id": "mem-032",
+        "text": "The contextMatchSignal algorithm uses multipliers: task_type x2, repo x2, agent_id x1, tags x1. The task field is never read.",
+        "source": "docs/context-match-signal.md",
+        "timestamp_iso": "2026-05-04T09:00:00Z"
+      }
+    ],
+    "question": "What multipliers does contextMatchSignal use?",
+    "expected_answer": "task_type x2, repo x2, agent_id x1, tags x1. The task field is never read.",
+    "evidence_spans": ["mem-032"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0024",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "multi_hop",
+    "corpus": [
+      {
+        "id": "mem-033",
+        "text": "The LangGraph orchestration service is a Python process running separately from Next.js. Its checkpoint DB is data/orchestration.db.",
+        "source": "docs/langgraph-service.md",
+        "timestamp_iso": "2026-05-11T09:00:00Z"
+      },
+      {
+        "id": "mem-034",
+        "text": "Cross-process lock contention is avoided by keeping data/orchestration.db separate from the main MemroOS SQLite DB.",
+        "source": "docs/db-isolation.md",
+        "timestamp_iso": "2026-05-11T09:05:00Z"
+      }
+    ],
+    "question": "Why does LangGraph use a separate SQLite DB from MemroOS?",
+    "expected_answer": "To avoid cross-process lock contention. The LangGraph checkpoint DB (data/orchestration.db) is kept separate from the main MemroOS SQLite DB.",
+    "evidence_spans": ["mem-033", "mem-034"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  },
+  {
+    "id": "memroos-pub-0025",
+    "dataset": "memroos_public_synthetic",
+    "task_type": "entity_state",
+    "corpus": [
+      {
+        "id": "mem-035",
+        "text": "Midbrain SmartSearch score: 65.21/100 on the Marketplace Agentic Memory Benchmark. This reflects public-evidence architecture scoring. SmartSearch retrieval metrics are third-party paper results (arXiv 2504.00553) — not independently rerun.",
+        "source": "evals/marketplace-agentic-memory/results/latest.json",
+        "timestamp_iso": "2026-06-09T03:00:00Z"
+      }
+    ],
+    "question": "What is Midbrain's score on the MemroOS public-evidence benchmark and what does it represent?",
+    "expected_answer": "65.21/100. It reflects public-evidence architecture scoring. Midbrain's SmartSearch retrieval metrics are third-party paper results (arXiv 2504.00553) and have not been independently rerun.",
+    "evidence_spans": ["mem-035"],
+    "license": "MIT",
+    "citation": "MemroOS internal synthetic benchmark"
+  }
+]

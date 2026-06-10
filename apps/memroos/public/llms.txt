@@ -52,5 +52,6 @@ GitHub: https://github.com/lac5q/memroos
 
 - MemroOS vs Letta: https://memroos.com/vs/letta
 - MemroOS vs Zep: https://memroos.com/vs/zep
+- MemroOS vs Midbrain: https://memroos.com/vs/midbrain
 - MemroOS vs GBrain: https://memroos.com/vs/gbrain
 - MemroOS vs EverMind: https://memroos.com/vs/evermemos

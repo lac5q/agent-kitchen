@@ -23,6 +23,7 @@
     "eval:knowledge-save-contract": "node scripts/check-knowledge-save-contract.mjs --fixture evals/knowledge-save-contract/cases.json",
     "eval:memory-degradation": "bash scripts/run-memory-degradation-checks.sh",
     "eval:marketplace-memory": "node scripts/run-marketplace-memory-evals.mjs",
+    "eval:comparative-retrieval": "node scripts/run-comparative-retrieval-evals.mjs",
     "check:governance": "node scripts/check-governance-coverage.mjs",
     "check:knowledge-indexing": "node scripts/check-knowledge-indexing.mjs",
     "check:local-footprint": "node scripts/check-local-footprint.mjs",

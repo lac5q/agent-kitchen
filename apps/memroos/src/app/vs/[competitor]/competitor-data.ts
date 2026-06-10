@@ -68,6 +68,24 @@ export const COMPETITORS: Record<string, CompetitorData> = {
       portability_open_exits: { score: 3.2, rationale: "Open core; graph lock-in risk." },
     },
   },
+  midbrain: {
+    slug: "midbrain",
+    name: "Midbrain",
+    category: "Continual-learning memory substrate with SmartSearch retrieval",
+    shortAssessment:
+      "Strongest public retrieval-substrate competitor. SmartSearch multi-step entity expansion and continual-learning architecture score 65.21/100 on the public-evidence benchmark. Midbrain's retrieval metrics are cited from third-party paper results (arXiv 2504.00553) — not independently rerun here. MemroOS leads on governance, orchestration, audit lineage, and operator-controlled memory promotion.",
+    totalScore: 65.21,
+    scores: {
+      recall_quality_evals: { score: 4.8, rationale: "SmartSearch paper claims strong retrieval quality via deterministic entity extraction, multi-hop expansion, and score-adaptive context packing. Third-party paper results, not independently rerun." },
+      governed_memory_audit_permissions: { score: 2.8, rationale: "Limited public evidence of operator-gated audit trails or per-agent write-path governance." },
+      memory_model_depth_typed_multitier: { score: 4.3, rationale: "Continual-learning substrate, SmartSearch entity extraction, multi-step retrieval, and temporal memory handling." },
+      agent_workflow_integration_orchestration: { score: 3.5, rationale: "API-first integration; multi-agent workflow governance is not a primary public claim." },
+      enterprise_deployment_data_control: { score: 3.0, rationale: "Cloud-hosted primary; self-host and enterprise data-control posture need deeper verification." },
+      performance_latency_cost_path: { score: 4.5, rationale: "SmartSearch score-adaptive context packing targets lower token spend; p95 latency not independently measured." },
+      observability_self_improvement: { score: 3.5, rationale: "Continual-learning implies self-updating behavior; operator eval/approval loop is not a central public claim." },
+      portability_open_exits: { score: 3.2, rationale: "Research-backed architecture; open-exit posture depends on hosted API vs. self-hosted path." },
+    },
+  },
   gbrain: {
     slug: "gbrain",
     name: "GBrain",

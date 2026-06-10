@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://memroos.com/evals/comparative-retrieval/schema",
+  "title": "MemroOS Comparative Retrieval Task",
+  "description": "Normalized memory task format for LoCoMo-style, LongMemEval-style, and MemroOS synthetic benchmarks.",
+  "type": "object",
+  "required": ["id", "task_type", "corpus", "question", "expected_answer"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique task identifier, e.g. locomo-0042 or memroos-pub-0007"
+    },
+    "dataset": {
+      "type": "string",
+      "enum": ["locomo", "longmemeval", "longmemeval_v2", "memroos_public_synthetic"],
+      "description": "Source dataset or benchmark family"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "single_hop",
+        "multi_hop",
+        "temporal_reasoning",
+        "event_summary",
+        "entity_state",
+        "open_domain_qa",
+        "abstention"
+      ],
+      "description": "Type of memory retrieval required"
+    },
+    "corpus": {
+      "type": "array",
+      "description": "Memory units available to the retrieval system",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "source": { "type": "string" },
+          "timestamp_iso": { "type": "string", "format": "date-time" },
+          "session_id": { "type": "string" },
+          "speaker": { "type": "string" },
+          "entity_refs": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "description": "Optional ordered session structure for multi-session tasks",
+      "items": {
+        "type": "object",
+        "properties": {
+          "session_id": { "type": "string" },
+          "turns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+                "text": { "type": "string" },
+                "timestamp_iso": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "question": {
+      "type": "string",
+      "description": "The question the retrieval system must answer"
+    },
+    "expected_answer": {
+      "type": "string",
+      "description": "Reference answer for exact-match or judge-assisted scoring"
+    },
+    "evidence_spans": {
+      "type": "array",
+      "description": "Corpus IDs that contain supporting evidence for the answer",
+      "items": { "type": "string" }
+    },
+    "temporal_metadata": {
+      "type": "object",
+      "description": "Optional temporal constraints for reasoning tasks",
+      "properties": {
+        "reference_time_iso": { "type": "string", "format": "date-time" },
+        "fact_valid_until_iso": { "type": "string", "format": "date-time" },
+        "temporal_direction": { "type": "string", "enum": ["before", "after", "between", "latest"] }
+      }
+    },
+    "abstention_correct": {
+      "type": "boolean",
+      "description": "True if the correct answer is to abstain (no supporting memory found)"
+    },
+    "license": {
+      "type": "string",
+      "description": "License of the source dataset, e.g. CC BY 4.0"
+    },
+    "citation": {
+      "type": "string",
+      "description": "Citation for the source dataset"
+    }
+  }
+}

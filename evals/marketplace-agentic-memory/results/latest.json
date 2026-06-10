@@ -2,7 +2,7 @@
   "benchmark": {
     "id": "marketplace-agentic-memory-2026-05-24",
     "name": "Marketplace Agentic Memory Benchmark",
-    "generatedAt": "2026-06-08T13:39:45.928Z",
+    "generatedAt": "2026-06-10T03:08:10.803Z",
     "methodology": "Public-evidence architecture benchmark. Scores are 0-5 by criterion, adjusted by source confidence. This does not claim black-box latency or accuracy for closed products without API access.",
     "criteria": [
       {
@@ -692,6 +692,130 @@
       "rank": 5
     },
     {
+      "id": "midbrain",
+      "name": "Midbrain",
+      "category": "continual-learning memory substrate with SmartSearch retrieval",
+      "shortAssessment": "Strongest public retrieval-substrate competitor; SmartSearch multi-step entity expansion and continual-learning architecture are technically credible, but governance, audit, and orchestration depth are not the primary product surface.",
+      "sources": [
+        "https://midbrain.ai/",
+        "https://arxiv.org/abs/2504.00553"
+      ],
+      "scores": {
+        "recall_quality_evals": {
+          "score": 4.8,
+          "confidence": 0.75,
+          "rationale": "SmartSearch paper claims strong retrieval quality on conversational memory tasks via deterministic entity extraction, multi-hop expansion, tier fan-out, and score-adaptive context packing. Cited as third-party paper results — not independently rerun here."
+        },
+        "governed_memory_audit_permissions": {
+          "score": 2.8,
+          "confidence": 0.55,
+          "rationale": "Limited public evidence of operator-gated audit trails, per-agent write paths, or governed retention controls beyond API access scoping."
+        },
+        "memory_model_depth_typed_multitier": {
+          "score": 4.3,
+          "confidence": 0.7,
+          "rationale": "Continual-learning substrate, entity extraction, SmartSearch multi-step retrieval, and temporal memory handling represent a technically deep memory model."
+        },
+        "agent_workflow_integration_orchestration": {
+          "score": 3.5,
+          "confidence": 0.65,
+          "rationale": "API-first integration; multi-agent governance, HIL, and dispatch orchestration are not primary public claims."
+        },
+        "enterprise_deployment_data_control": {
+          "score": 3,
+          "confidence": 0.504,
+          "rationale": "Cloud-hosted primary; self-host and enterprise data-control posture need deeper public verification."
+        },
+        "performance_latency_cost_path": {
+          "score": 4.5,
+          "confidence": 0.7,
+          "rationale": "SmartSearch architecture claims strong retrieval performance with score-adaptive context packing reducing token spend; p95 latency not independently measured."
+        },
+        "observability_self_improvement": {
+          "score": 3.5,
+          "confidence": 0.55,
+          "rationale": "Continual-learning substrate implies self-updating behavior, but operator eval/approval and self-improvement governance loop are not central claims."
+        },
+        "portability_open_exits": {
+          "score": 3.2,
+          "confidence": 0.55,
+          "rationale": "Research-backed architecture; open-exit posture depends on whether the substrate is accessible beyond the hosted API."
+        }
+      },
+      "evaluation": {
+        "weightedScore": 65.2115,
+        "scoreOutOf5": 3.2606,
+        "coverage": 1,
+        "details": [
+          {
+            "criterionId": "recall_quality_evals",
+            "rawScore": 4.8,
+            "confidence": 0.75,
+            "adjustedScore": 4.32,
+            "contribution": 17.28,
+            "rationale": "SmartSearch paper claims strong retrieval quality on conversational memory tasks via deterministic entity extraction, multi-hop expansion, tier fan-out, and score-adaptive context packing. Cited as third-party paper results — not independently rerun here."
+          },
+          {
+            "criterionId": "governed_memory_audit_permissions",
+            "rawScore": 2.8,
+            "confidence": 0.55,
+            "adjustedScore": 2.296,
+            "contribution": 8.2656,
+            "rationale": "Limited public evidence of operator-gated audit trails, per-agent write paths, or governed retention controls beyond API access scoping."
+          },
+          {
+            "criterionId": "memory_model_depth_typed_multitier",
+            "rawScore": 4.3,
+            "confidence": 0.7,
+            "adjustedScore": 3.784,
+            "contribution": 11.352,
+            "rationale": "Continual-learning substrate, entity extraction, SmartSearch multi-step retrieval, and temporal memory handling represent a technically deep memory model."
+          },
+          {
+            "criterionId": "agent_workflow_integration_orchestration",
+            "rawScore": 3.5,
+            "confidence": 0.65,
+            "adjustedScore": 3.01,
+            "contribution": 9.03,
+            "rationale": "API-first integration; multi-agent governance, HIL, and dispatch orchestration are not primary public claims."
+          },
+          {
+            "criterionId": "enterprise_deployment_data_control",
+            "rawScore": 3,
+            "confidence": 0.5,
+            "adjustedScore": 2.4048,
+            "contribution": 5.7715,
+            "rationale": "Cloud-hosted primary; self-host and enterprise data-control posture need deeper public verification."
+          },
+          {
+            "criterionId": "performance_latency_cost_path",
+            "rawScore": 4.5,
+            "confidence": 0.7,
+            "adjustedScore": 3.96,
+            "contribution": 7.92,
+            "rationale": "SmartSearch architecture claims strong retrieval performance with score-adaptive context packing reducing token spend; p95 latency not independently measured."
+          },
+          {
+            "criterionId": "observability_self_improvement",
+            "rawScore": 3.5,
+            "confidence": 0.55,
+            "adjustedScore": 2.87,
+            "contribution": 4.018,
+            "rationale": "Continual-learning substrate implies self-updating behavior, but operator eval/approval and self-improvement governance loop are not central claims."
+          },
+          {
+            "criterionId": "portability_open_exits",
+            "rawScore": 3.2,
+            "confidence": 0.55,
+            "adjustedScore": 2.624,
+            "contribution": 1.5744,
+            "rationale": "Research-backed architecture; open-exit posture depends on whether the substrate is accessible beyond the hosted API."
+          }
+        ]
+      },
+      "rank": 6
+    },
+    {
       "id": "axme",
       "name": "AXME",
       "category": "agent orchestration plus coding memory",
@@ -812,7 +936,7 @@
           }
         ]
       },
-      "rank": 6
+      "rank": 7
     },
     {
       "id": "evermind-evermemos",
@@ -935,7 +1059,7 @@
           }
         ]
       },
-      "rank": 7
+      "rank": 8
     },
     {
       "id": "tytan-tao",
@@ -1058,7 +1182,7 @@
           }
         ]
       },
-      "rank": 8
+      "rank": 9
     },
     {
       "id": "agenticmemory-ai",
@@ -1181,7 +1305,7 @@
           }
         ]
       },
-      "rank": 9
+      "rank": 10
     },
     {
       "id": "gbrain",
@@ -1305,7 +1429,7 @@
           }
         ]
       },
-      "rank": 10
+      "rank": 11
     },
     {
       "id": "worldflow-ai",
@@ -1428,7 +1552,7 @@
           }
         ]
       },
-      "rank": 11
+      "rank": 12
     }
   ]
 }

@@ -13,6 +13,7 @@ const staticRoutes: MetadataRoute.Sitemap = [
   { url: `${BASE_URL}/blog`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7 },
   { url: `${BASE_URL}/vs/letta`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
   { url: `${BASE_URL}/vs/zep`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
+  { url: `${BASE_URL}/vs/midbrain`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
   { url: `${BASE_URL}/vs/gbrain`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
   { url: `${BASE_URL}/vs/evermemos`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
   { url: `${BASE_URL}/vs/axme`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
