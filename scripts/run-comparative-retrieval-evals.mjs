@@ -197,9 +197,19 @@ function scoreTask(task, retrieval) {
     answerSupportedByRetrievedSource: answerSupported,
     abstentionCorrect,
     receipt: {
-      retrieved: retrieval.retrieved.map((r) => r.id),
+      retrieved: retrieval.retrieved.map((r) => ({
+        id: r.id,
+        score: r.score,
+        tier: r.tier ?? "lexical",
+        source: r.source ?? task.source ?? "corpus",
+        authorizationResult: r.authorizationResult ?? "allowed",
+        whyEntered: r.score > 0 ? `term overlap score ${r.score}` : "explicit include",
+      })),
       injected: retrieval.injected,
-      ignored: retrieval.ignored,
+      ignored: retrieval.ignored.map((id) => ({
+        id,
+        whyMissed: "below relevance threshold or zero term overlap",
+      })),
       adapterName: retrieval.adapterName,
     },
   };
