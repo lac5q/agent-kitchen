@@ -1,0 +1,613 @@
+{
+  "runDate": "2026-06-10T03:08:11.574Z",
+  "dataset": "memroos_public_synthetic",
+  "adapter": "lexical",
+  "taskCount": 25,
+  "aggregate": {
+    "n": 25,
+    "precisionAtK": 0.82,
+    "recallAtK": 0.88,
+    "mrr": 0.84,
+    "falsePositiveRate": 0.18,
+    "answerSupportedRate": 0.4,
+    "p95LatencyMs": 0,
+    "abstentionAccuracy": 0
+  },
+  "tasks": [
+    {
+      "taskId": "memroos-pub-0001",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 1,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-001"
+        ],
+        "injected": [
+          "mem-001"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0002",
+      "taskType": "temporal_reasoning",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-002",
+          "mem-003"
+        ],
+        "injected": [
+          "mem-002",
+          "mem-003"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0003",
+      "taskType": "multi_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-004",
+          "mem-005"
+        ],
+        "injected": [
+          "mem-004",
+          "mem-005"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0004",
+      "taskType": "abstention",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "mrr": 0,
+      "falsePositiveRate": 1,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 0,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": false,
+      "receipt": {
+        "retrieved": [
+          "mem-006"
+        ],
+        "injected": [
+          "mem-006"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0005",
+      "taskType": "entity_state",
+      "precisionAtK": 0.5,
+      "recallAtK": 1,
+      "mrr": 0.5,
+      "falsePositiveRate": 0.5,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-007",
+          "mem-008"
+        ],
+        "injected": [
+          "mem-007",
+          "mem-008"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0006",
+      "taskType": "event_summary",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-009"
+        ],
+        "injected": [
+          "mem-009"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0007",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-010"
+        ],
+        "injected": [
+          "mem-010"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0008",
+      "taskType": "multi_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-012",
+          "mem-011"
+        ],
+        "injected": [
+          "mem-012",
+          "mem-011"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0009",
+      "taskType": "temporal_reasoning",
+      "precisionAtK": 0.5,
+      "recallAtK": 1,
+      "mrr": 0.5,
+      "falsePositiveRate": 0.5,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-013",
+          "mem-014"
+        ],
+        "injected": [
+          "mem-013",
+          "mem-014"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0010",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-015"
+        ],
+        "injected": [
+          "mem-015"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0011",
+      "taskType": "entity_state",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-016"
+        ],
+        "injected": [
+          "mem-016"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0012",
+      "taskType": "abstention",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "mrr": 0,
+      "falsePositiveRate": 1,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 0,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": false,
+      "receipt": {
+        "retrieved": [
+          "mem-017"
+        ],
+        "injected": [
+          "mem-017"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0013",
+      "taskType": "multi_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-019",
+          "mem-018"
+        ],
+        "injected": [
+          "mem-019",
+          "mem-018"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0014",
+      "taskType": "event_summary",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-020"
+        ],
+        "injected": [
+          "mem-020"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0015",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-021"
+        ],
+        "injected": [
+          "mem-021"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0016",
+      "taskType": "temporal_reasoning",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-022",
+          "mem-023"
+        ],
+        "injected": [
+          "mem-022",
+          "mem-023"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0017",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-024"
+        ],
+        "injected": [
+          "mem-024"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0018",
+      "taskType": "entity_state",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-025"
+        ],
+        "injected": [
+          "mem-025"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0019",
+      "taskType": "multi_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-026",
+          "mem-027"
+        ],
+        "injected": [
+          "mem-026",
+          "mem-027"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0020",
+      "taskType": "abstention",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "mrr": 0,
+      "falsePositiveRate": 1,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 0,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": false,
+      "receipt": {
+        "retrieved": [
+          "mem-028"
+        ],
+        "injected": [
+          "mem-028"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0021",
+      "taskType": "event_summary",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-029"
+        ],
+        "injected": [
+          "mem-029"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0022",
+      "taskType": "temporal_reasoning",
+      "precisionAtK": 0.5,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0.5,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-031",
+          "mem-030"
+        ],
+        "injected": [
+          "mem-031",
+          "mem-030"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0023",
+      "taskType": "single_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": true,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-032"
+        ],
+        "injected": [
+          "mem-032"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0024",
+      "taskType": "multi_hop",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 2,
+      "evidenceSpanCount": 2,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-034",
+          "mem-033"
+        ],
+        "injected": [
+          "mem-034",
+          "mem-033"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    },
+    {
+      "taskId": "memroos-pub-0025",
+      "taskType": "entity_state",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "mrr": 1,
+      "falsePositiveRate": 0,
+      "latencyMs": 0,
+      "injectedCount": 1,
+      "evidenceSpanCount": 1,
+      "answerSupportedByRetrievedSource": false,
+      "abstentionCorrect": null,
+      "receipt": {
+        "retrieved": [
+          "mem-035"
+        ],
+        "injected": [
+          "mem-035"
+        ],
+        "ignored": [],
+        "adapterName": "lexical"
+      }
+    }
+  ]
+}
