@@ -31,8 +31,15 @@
 - ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
 - ⏳ **v7.1 Competitive Retrieval Proof** — Phase 114 (planned 2026-06-09)
 - ⏳ **v7.2 Architecture Review Hardening** — Phase 115 (in progress 2026-06-10)
+- ✅ **v7.3 Agent Context Bus Operational Bootstrap** — Phase 116 (completed 2026-06-14)
 
 ## Phases
+
+### Current v7.3 Agent Context Bus Operational Bootstrap Summary — COMPLETE
+
+- [x] **Phase 116: Agent Context Bus Operational Bootstrap** — AGENTBUS-BOOT-01..05; provisioning scripts, startup automation, MCP env wiring, agent communication skill, and smoke tests operationalize the Phase 107 bus for end-to-end agent-to-agent communication.
+
+Full v7.3 detail in the `## v7.3 Agent Context Bus Operational Bootstrap` section below.
 
 ### Current v7.1 Competitive Retrieval Proof Summary — PLANNED
 
@@ -1558,6 +1565,23 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 115 to break down)
 
+## v7.3 Agent Context Bus Operational Bootstrap
+
+### Phase 116: Agent Context Bus Operational Bootstrap
+
+**Goal**: Operationalize the agent-context bus with provisioning scripts, startup automation, MCP env wiring, agent-side skill, and smoke tests so agent-to-agent communication works end-to-end.
+**Milestone**: v7.3
+**Depends on**: Phase 107 (Agent Context Bus code)
+**Requirements**: AGENTBUS-BOOT-01 (provisioning script), AGENTBUS-BOOT-02 (startup automation), AGENTBUS-BOOT-03 (MCP env wiring), AGENTBUS-BOOT-04 (agent communication skill), AGENTBUS-BOOT-05 (smoke test)
+**Status**: Complete (2026-06-14)
+**Success Criteria** (what must be TRUE):
+  1. `scripts/provision-agent-keys.sh` registers agents and generates API keys.
+  2. `scripts/start-memroos-agent-bus.sh` starts the app and verifies DB tables.
+  3. MCP facade authenticates with `MEMROOS_AGENT_API_KEY`.
+  4. Agent communication skill is installed and discoverable.
+  5. Smoke test proves round-trip: send → inbox → ack → reply.
+**Plans**: 1/1 complete
+
 ---
 
 ## v7.0 Client-Ready Security + Architecture Audit
@@ -1662,6 +1686,7 @@ Plans:
 | 111. Dependency CVE Sweep + Medium Security Fixes | 3/3 | Complete   | 2026-06-08 |
 | 112. Architecture Cleanup | 4/4 | Complete | 2026-06-08 |
 | 113. Test Validation + Build Verification | 1/1 | Complete | 2026-06-08 |
+| 116. Agent Context Bus Operational Bootstrap | 1/1 | Complete | 2026-06-14 |
 
 ## v7.1 Competitive Retrieval Proof
 
