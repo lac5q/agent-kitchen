@@ -19,14 +19,14 @@ import { softwareApplicationSchema, speakableSchema, JsonLd } from "@/lib/schema
 import { makeTitle, makeCanonical } from "@/lib/metadata";
 
 export const metadata = {
-  title: makeTitle("Agentic Memory & Orchestration Platform"),
+  title: makeTitle("Company-Owned Memory & Governance for Agent Harnesses"),
   description:
-    "MemroOS gives AI agents shared memory, governed orchestration, and an operator console for source-backed agent workflows.",
+    "MemroOS gives teams company-owned memory, governance, dispatch, evals, and proof for agent harnesses across models and frameworks.",
   alternates: { canonical: makeCanonical("/") },
   openGraph: {
-    title: "MemroOS - Agentic Memory & Orchestration Platform",
+    title: "MemroOS - Company-Owned Memory & Governance for Agent Harnesses",
     description:
-      "Shared memory, governed orchestration, and proof surfaces for real agent workflows.",
+      "Keep your agent context, permissions, evals, dispatch, and proof layer outside any single model vendor or framework.",
     url: "https://memroos.com",
   },
 };
@@ -50,27 +50,27 @@ function isPublicLandingHost(host: string): boolean {
 const topFeatures = [
   {
     number: "01",
-    title: "Memory every agent can use",
+    title: "Control your memory",
     icon: Brain,
     summary:
-      "Keep decisions, files, calls, incidents, customer context, and prior outcomes in one durable layer before the next agent starts.",
-    bullets: ["Semantic, episodic, graph, and source-backed memory", "Context packs assembled before dispatch", "Durable agent inbox and memory-save receipts"],
+      "Keep decisions, files, calls, incidents, customer context, and prior outcomes in a company-owned layer before the next agent starts.",
+    bullets: ["Semantic, episodic, graph, and source-backed memory", "Permission-aware context packs before dispatch", "Durable agent inbox and memory-save receipts"],
   },
   {
     number: "02",
-    title: "Governed orchestration",
+    title: "Control the harness",
     icon: GitBranch,
     summary:
-      "Run long agent workflows with visible state, human review, retry paths, and audit trails instead of opaque one-shot automation.",
-    bullets: ["Operator NOC for live work", "Human-in-the-loop approval surfaces", "Security audit, lineage, and residual-risk proof"],
+      "Run long agent workflows with visible state, scoped permissions, human review, retry paths, and audit trails instead of opaque one-shot automation.",
+    bullets: ["Operator NOC for live work", "Human-in-the-loop approval surfaces", "Model, tool, and transport guardrails"],
   },
   {
     number: "03",
-    title: "Interop plus evidence",
+    title: "Control your moat",
     icon: MessageSquareText,
     summary:
-      "Connect local agents, REST workers, MCP-facing context, and A2A-style cards while preserving proof of what each agent consumed.",
-    bullets: ["Claude Code, Codex, ADK, LangGraph, CrewAI, and custom workers", "Agent registry with capabilities", "Local-footprint and cloud-target guardrails"],
+      "Turn repeated successful work into governed skills, eval receipts, and proof trails that compound outside any single vendor harness.",
+    bullets: ["Claude Code, Codex, ADK, LangGraph, CrewAI, and custom workers", "Agent registry with capabilities", "Skill promotion, evals, and source-backed proof"],
   },
 ];
 
@@ -114,10 +114,10 @@ const productShots = [
 ];
 
 const memoryLoop = [
-  { label: "Capture", icon: Database, detail: "Files, calls, chats, commits, and outcomes enter the governed memory plane." },
-  { label: "Retrieve", icon: FileSearch, detail: "Agents receive the smallest useful context pack before the next action." },
-  { label: "Act", icon: GitBranch, detail: "Work runs through visible state, dispatch, approvals, and audit lineage." },
-  { label: "Prove", icon: ShieldCheck, detail: "Every run can show the memory used, tools touched, checks passed, and gaps left." },
+  { label: "Capture", icon: Database, detail: "Files, calls, chats, commits, and outcomes enter your company-owned memory plane." },
+  { label: "Retrieve", icon: FileSearch, detail: "Agents receive the smallest useful, permission-aware context pack before the next action." },
+  { label: "Act", icon: GitBranch, detail: "Work runs through visible state, dispatch, approvals, tool scope, and audit lineage." },
+  { label: "Prove", icon: ShieldCheck, detail: "Every run can show the memory used, tools touched, checks passed, and reusable skills left behind." },
 ];
 
 function LandingPage() {
@@ -133,7 +133,7 @@ function LandingPage() {
               <div className="min-w-0">
                 <p className="text-[18px] font-semibold leading-none text-[#0f0f0e]">MemroOS</p>
                 <p className="mt-1 hidden text-[12px] uppercase tracking-[0.12em] text-[#4a4a45] sm:block">
-                  Memory OS for agent workflows
+                  Memory and governance for agent harnesses
                 </p>
               </div>
             </Link>
@@ -176,10 +176,10 @@ function LandingPage() {
                 MemroOS
               </h1>
               <p className="hero-tagline mt-6 max-w-[56ch] text-[clamp(22px,3vw,34px)] leading-tight text-[#1f1f1c]">
-                The control plane around agent memory.
+                Company-owned memory and governance for agent harnesses.
               </p>
               <p className="mt-5 max-w-[64ch] text-[18px] leading-8 text-[#4a4a45]">
-                MemroOS helps AI-native teams prove what agents remembered, received, did, and improved across retained context, governed dispatch, and source-backed proof surfaces.
+                MemroOS helps AI-native teams keep context, permissions, evals, dispatch, and proof outside any single model vendor or agent framework.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
@@ -202,7 +202,7 @@ function LandingPage() {
                 </Link>
               </div>
               <div className="mt-9 grid gap-px bg-[#cccccc] sm:grid-cols-3">
-                {["shared memory", "governed dispatch", "source-backed proof"].map((signal) => (
+                {["owned memory", "governed harness", "source-backed proof"].map((signal) => (
                   <div key={signal} className="bg-[#fafafa] p-4">
                     <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#a8392c]">Built for</p>
                     <p className="mt-2 text-[19px] font-semibold text-[#0f0f0e]">{signal}</p>
@@ -245,14 +245,14 @@ function LandingPage() {
             <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8392c]">
-                  The top three MemroOS features
+                  The control layer MemroOS gives back to your team
                 </p>
                 <h2 className="mt-3 text-[clamp(38px,5vw,64px)] font-semibold leading-tight tracking-normal text-[#0f0f0e]">
-                  Less surface area. More retained context.
+                  Own the layer that makes agents useful.
                 </h2>
               </div>
               <p className="text-[18px] leading-8 text-[#4a4a45]">
-                The product priority is simple: help agents remember the company, govern the run, and prove what happened. Everything else supports those three jobs.
+                The product priority is simple: help teams control the memory, harness, and proof loop that turns raw model intelligence into repeatable company work.
               </p>
             </div>
 
@@ -289,11 +289,11 @@ function LandingPage() {
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#e7b6a8]">Proof without the wall of text</p>
                 <h2 className="mt-3 text-[clamp(38px,5vw,64px)] font-semibold leading-tight tracking-normal text-white">
-                  Public evidence, live product surfaces, and a readable paper trail.
+                  Models become suppliers. Your context stays yours.
                 </h2>
               </div>
               <p className="text-[18px] leading-8 text-[#d8d4cb]">
-                The governed knowledge architecture paper explains progressive disclosure, governed writes, dual-index retrieval, and the retain-retrieve-prove loop behind the benchmark.
+                The governed knowledge architecture paper explains progressive disclosure, governed writes, dual-index retrieval, and the retain-retrieve-prove loop behind a portable agent memory layer.
               </p>
             </div>
 
@@ -384,10 +384,10 @@ function LandingPage() {
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8392c]">Schedule</p>
               </div>
               <h2 className="mt-6 max-w-[17ch] text-[clamp(38px,5vw,62px)] font-semibold leading-tight tracking-normal text-[#0f0f0e]">
-                Talk through your agent memory stack.
+                Talk through your agent harness.
               </h2>
               <p className="mt-5 max-w-[58ch] text-[18px] leading-8 text-[#4a4a45]">
-                Bring one workflow where agents keep rediscovering the same context. The first call should leave with a practical memory, governance, and proof map.
+                Bring one workflow where agents keep rediscovering the same context. The first call should leave with a practical harness, memory, governance, and proof map.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link

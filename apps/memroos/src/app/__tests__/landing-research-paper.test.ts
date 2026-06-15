@@ -30,10 +30,10 @@ const iconSvgPath = path.resolve(__dirname, "../icon.svg");
 
 describe("public landing research proof", () => {
   it("keeps the public landing focused on the top three feature priorities", () => {
-    expect(pageSource).toContain("The top three MemroOS features");
-    expect(pageSource).toContain("Memory every agent can use");
-    expect(pageSource).toContain("Governed orchestration");
-    expect(pageSource).toContain("Interop plus evidence");
+    expect(pageSource).toContain("The control layer MemroOS gives back to your team");
+    expect(pageSource).toContain("Control your memory");
+    expect(pageSource).toContain("Control the harness");
+    expect(pageSource).toContain("Control your moat");
     expect(pageSource).not.toContain("Top 5 value features");
     expect(pageSource).not.toContain("Full feature map");
   });

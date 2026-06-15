@@ -1,11 +1,11 @@
 # MemroOS
 
 <p align="center">
-  <strong>Shared memory and governed orchestration for agent workflows.</strong>
+  <strong>Company-owned memory and governance for agent harnesses.</strong>
 </p>
 
 <p align="center">
-  MemroOS retains what product, sales, and engineering agents learn, retrieves the right context at runtime, and gives operators one NOC-style surface for memory, orchestration, skills, dispatch, evals, and trust.
+  MemroOS keeps company context, permissions, evals, dispatch, and proof outside any single model vendor or agent framework. Use Claude Code, Codex, ADK, LangGraph, CrewAI, A2A, REST, or local workers without renting away the memory layer that makes them useful.
 </p>
 
 <p align="center">
@@ -62,7 +62,7 @@ If you are evaluating the launch build, start with the v1.0.0-beta.2 release, wa
 
 Most agent systems remember too little, too late. Product decisions live in docs. Sales context lives in calls and CRM notes. Engineering knowledge lives in commits, incidents, and terminal history. Every new agent starts by rediscovering the same context.
 
-MemroOS is the operating layer that gives agents a memory and governance plane:
+MemroOS is the company-owned memory and governance layer that makes agent harnesses useful:
 
 - **Retain:** capture decisions, files, conversations, outcomes, and workflow history.
 - **Retrieve:** assemble permission-aware context packs before an agent starts work.
@@ -115,7 +115,7 @@ Live recall gate after beta hardening:
 </p>
 
 <p align="center">
-  <em>The public landing page now leads with the shorter MemroOS story: shared agent memory, governed dispatch, and proof that shows what context moved the work forward.</em>
+  <em>The public landing page now leads with the evolved MemroOS story: company-owned memory and governance for agent harnesses, backed by governed dispatch and proof that shows what context moved the work forward.</em>
 </p>
 
 <table>
@@ -153,6 +153,12 @@ Native AI companies are moving from one-off prompt demos to agent workflows that
 
 MemroOS is built for that layer.
 
+## Why Own the Harness Layer
+
+Tokens are getting cheaper. Agent frameworks are getting stronger. The durable advantage is the company-specific layer around them: context, permissions, workflow rules, evals, memory, and proof.
+
+MemroOS exists so teams can use the best agents without renting away the layer that makes those agents useful. Models become suppliers. Your memory, governance, and proof loop stay company-owned.
+
 ## Who This Is For
 
 - **AI-native founders and operators** who run agents across product, sales, engineering, support, and internal operations.
@@ -160,7 +166,7 @@ MemroOS is built for that layer.
 - **Product and engineering leaders** who want source-backed runtime context packs before dispatch and proof trails after execution.
 - **Self-hosted and local-first builders** who want memory, knowledge, orchestration, skills, agents, usage, and governance in one inspectable repo.
 
-MemroOS is not another agent framework. It is the context plane before dispatch and the proof trail after execution.
+MemroOS is not another agent framework. It is the company-owned memory and governance layer around the frameworks you already use.
 
 ## Primary Use Cases
 
@@ -191,7 +197,7 @@ After setup, you can:
 
 ## Release 1.0 Beta
 
-`v1.0.0-beta.2` is the current public beta release for MemroOS's memory-plus-governance positioning.
+`v1.0.0-beta.2` is the current public beta release for MemroOS's company-owned memory and governance positioning.
 
 The current release includes:
 

@@ -7,7 +7,7 @@ This file tracks the current high-level product milestone state. Detailed requir
 **Scope:**
 
 1. Refresh memroos.com, README, screenshots, public metadata, and LLM-readable docs so they match the completed v6.4/v6.5/v6.6/v7.0 product state.
-2. Keep the public story centered on shared agent memory, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
+2. Keep the public story centered on company-owned memory and governance for agent harnesses, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
 
 ---
 

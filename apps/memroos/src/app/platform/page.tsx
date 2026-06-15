@@ -5,21 +5,23 @@ import { makeTitle, makeCanonical, BASE_URL } from "@/lib/metadata";
 import { Brain, GitBranch, ShieldCheck, Database, Gauge, RefreshCw } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: makeTitle("Agentic Memory & Orchestration Platform"),
+  title: makeTitle("Company-Owned Memory & Governance for Agent Harnesses"),
   description:
-    "MemroOS is the agentic memory and orchestration platform for AI agent workflows. Multi-tier typed memory, governed orchestration, and a NOC-style operator console.",
+    "MemroOS is company-owned memory and governance for agent harnesses: context, permissions, dispatch, evals, and proof across models and frameworks.",
   keywords: [
     "agentic memory platform",
     "AI agent memory layer",
+    "agent harness control plane",
+    "AI harness governance",
     "governed agent orchestration",
     "MCP memory platform",
     "enterprise AI agent platform",
   ],
   alternates: { canonical: makeCanonical("/platform") },
   openGraph: {
-    title: "MemroOS — Agentic Memory & Orchestration Platform",
+    title: "MemroOS - Company-Owned Memory & Governance for Agent Harnesses",
     description:
-      "Multi-tier typed memory, governed orchestration, and a NOC console for AI agent workflows. Local-first and self-hosted.",
+      "Own the context, permissions, evals, dispatch, and proof layer around the agent frameworks you use.",
     url: `${BASE_URL}/platform`,
   },
 };
@@ -27,21 +29,21 @@ export const metadata: Metadata = {
 const capabilities = [
   {
     icon: Database,
-    title: "Multi-Tier Typed Memory",
+    title: "Company-Owned Context Layer",
     description:
-      "Vector, graph, episodic, knowledge, and skill memory surfaces. Every tier serves a different retrieval pattern.",
+      "Vector, graph, episodic, knowledge, and skill memory surfaces that stay in your infrastructure.",
   },
   {
     icon: ShieldCheck,
-    title: "Governed Memory & Audit Trail",
+    title: "Governed Harness & Audit Trail",
     description:
-      "Operator-gated write paths, per-agent permissions, and audit lineage on every memory mutation.",
+      "Operator-gated write paths, per-agent permissions, and audit lineage across memory, tools, and dispatch.",
   },
   {
     icon: GitBranch,
-    title: "Orchestration with Memory Context",
+    title: "Framework-Portable Dispatch",
     description:
-      "Pause, inspect, edit, resume, retry, and roll back long-running agent work with HIL checkpoints.",
+      "Run Claude Code, Codex, LangGraph, ADK, CrewAI, A2A, REST, and local workers through one visible control layer.",
   },
   {
     icon: Brain,
@@ -51,15 +53,15 @@ const capabilities = [
   },
   {
     icon: Gauge,
-    title: "NOC Operator Console",
+    title: "Harness Operator Console",
     description:
       "Live visibility into memory health, model usage, agent activity, governance, savings, and waste.",
   },
   {
     icon: RefreshCw,
-    title: "Self-Improvement Loop (SEAL)",
+    title: "Self-Improving Moat",
     description:
-      "Review, edit, approve, and promote workflows into durable governed skills and playbooks.",
+      "Review, edit, approve, and promote repeated workflows into durable governed skills and playbooks.",
   },
 ];
 
@@ -67,7 +69,12 @@ const faqs = [
   {
     question: "What is agentic memory?",
     answer:
-      "Agentic memory is the capability for AI agents to retain information across sessions, tasks, and handoffs. Unlike chat history, agentic memory is structured, typed, permission-aware, and retrievable by any authorized agent.",
+      "Agentic memory is the capability for AI agents to retain information across sessions, tasks, and handoffs. In MemroOS, that memory is structured, typed, permission-aware, and governed by the company rather than trapped in one vendor harness.",
+  },
+  {
+    question: "What is an agent harness?",
+    answer:
+      "An agent harness is the work layer around a model: tools, files, permissions, memory, evals, routing, dispatch, and the workflow rules that define what done means.",
   },
   {
     question: "How is MemroOS different from a vector database?",
@@ -82,7 +89,7 @@ const faqs = [
   {
     question: "What AI agent frameworks does MemroOS integrate with?",
     answer:
-      "MemroOS integrates with Claude Code (via MCP), LangGraph, CrewAI, AutoGen, Google ADK, and any REST-capable agent. It also supports the A2A protocol.",
+      "MemroOS integrates with Claude Code and Codex-style workflows through MCP and REST surfaces, plus LangGraph, CrewAI, AutoGen, Google ADK, A2A, and custom REST-capable agents.",
   },
 ];
 
@@ -96,11 +103,12 @@ export default function PlatformPage() {
       <main className="mx-auto max-w-5xl px-4 py-16">
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold mb-6">
-            The Agentic Memory &amp; Orchestration Platform
+            Company-Owned Memory &amp; Governance for Agent Harnesses
           </h1>
           <p className="platform-description text-xl text-slate-600 max-w-2xl mx-auto">
-            MemroOS gives AI agents shared memory, governed orchestration, and a NOC-style operator
-            console. Build agents that retain context, respect permissions, and improve over time.
+            MemroOS keeps your context, permissions, evals, dispatch, and proof layer outside any
+            single model vendor or framework. Use the best agents without renting away the memory
+            layer that makes them useful.
           </p>
           <div className="mt-8 flex gap-4 justify-center">
             <a
@@ -118,7 +126,7 @@ export default function PlatformPage() {
           </div>
         </div>
 
-        <h2 className="text-3xl font-bold text-center mb-10">Platform Capabilities</h2>
+        <h2 className="text-3xl font-bold text-center mb-10">Harness Control Capabilities</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
           {capabilities.map((cap) => (
             <div key={cap.title} className="rounded-xl border border-slate-200 p-6">

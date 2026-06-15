@@ -28,12 +28,14 @@ export const metadata: Metadata = {
     template: `%s | ${SITE_NAME}`,
   },
   description:
-    "Shared memory and governed orchestration for agentic product, sales, and engineering workflows. The operating layer that gives AI agents a memory and governance plane.",
+    "Company-owned memory and governance for agent harnesses. Keep context, permissions, evals, dispatch, and proof outside any single model vendor or framework.",
   keywords: [
     "agent memory",
     "agentic memory",
     "agentic memory platform",
     "AI agent memory layer",
+    "agent harness control plane",
+    "AI harness governance",
     "governed agent orchestration",
     "MCP memory",
   ],
@@ -46,18 +48,18 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: BASE_URL,
     siteName: SITE_NAME,
-    title: "MemroOS — Agentic Memory & Orchestration Platform",
+    title: "MemroOS - Company-Owned Memory & Governance for Agent Harnesses",
     description:
-      "Shared memory and governed orchestration for agentic product, sales, and engineering workflows.",
+      "Own the memory, permissions, evals, dispatch, and proof layer around the agent frameworks you use.",
     images: [
-      { url: OG_IMAGE_URL, width: 1200, height: 630, alt: "MemroOS — Agentic Memory Platform" },
+      { url: OG_IMAGE_URL, width: 1200, height: 630, alt: "MemroOS - Company-Owned Agent Harness Memory" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "MemroOS — Agentic Memory & Orchestration Platform",
+    title: "MemroOS - Company-Owned Memory & Governance for Agent Harnesses",
     description:
-      "Shared memory and governed orchestration for agentic product, sales, and engineering workflows.",
+      "Own the memory, permissions, evals, dispatch, and proof layer around the agent frameworks you use.",
     images: [OG_IMAGE_URL],
   },
   alternates: { canonical: BASE_URL },

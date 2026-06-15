@@ -4,7 +4,7 @@
 
 ## Product Summary
 
-MemroOS is a source-available agentic memory and orchestration platform. Unlike simple chat history stores or vector databases, MemroOS provides a complete operating layer for AI agent workflows: multi-tier typed memory, governed orchestration with audit lineage, permission-aware context assembly, and an operator console for observing and controlling live agents.
+MemroOS is source-available, company-owned memory and governance for agent harnesses. Unlike simple chat history stores, vector databases, or single-framework agent tools, MemroOS provides the operating layer around AI agent workflows: multi-tier typed memory, governed orchestration with audit lineage, permission-aware context assembly, eval/proof surfaces, and an operator console for observing and controlling live agents.
 
 ## Memory Architecture
 
@@ -35,12 +35,13 @@ Note: Midbrain's SmartSearch retrieval metrics are cited from third-party paper 
 
 ## Key Differentiators
 
-1. Governed memory with per-agent write paths and full audit lineage
-2. Multi-tier typed memory (not just vector search)
-3. Orchestration integrated with memory (context-aware dispatch)
-4. Operator console: NOC-style visibility into agent activity
-5. Self-improvement loop: SEAL — review, approve, promote to skills
-6. Local-first, self-hosted, source-available
+1. Company-owned context layer across models and agent frameworks
+2. Governed memory with per-agent write paths and full audit lineage
+3. Multi-tier typed memory (not just vector search)
+4. Orchestration integrated with memory (context-aware dispatch)
+5. Operator console: NOC-style visibility into agent activity
+6. Self-improvement loop: SEAL — review, approve, promote to skills
+7. Local-first, self-hosted, source-available
 
 ## Integration Points
 

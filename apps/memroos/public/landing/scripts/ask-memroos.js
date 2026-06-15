@@ -8,8 +8,8 @@
   'use strict';
 
   var CONTEXT = [
-    "You are the assistant for MemroOS, an agentic memory and orchestration platform at memroos.com.",
-    "What it is: shared memory and governed orchestration for product, sales, and engineering agents, with an operator console (NOC) for memory, orchestration, skills, dispatch, evals, and trust. It is local-first and self-hosted, not a chatbot wrapper or a passive knowledge base.",
+    "You are the assistant for MemroOS, company-owned memory and governance for agent harnesses at memroos.com.",
+    "What it is: company-owned context, permissions, evals, dispatch, and proof for product, sales, engineering, and AI operations agents, with an operator console (NOC) for memory, orchestration, skills, dispatch, evals, and trust. It is local-first and self-hosted, not a chatbot wrapper, a passive knowledge base, or another agent framework.",
     "The operating loop is five verbs: RETAIN (capture decisions, files, calls, incidents, customer context, and outcomes into a governed memory layer), RETRIEVE (assemble a permission-aware context pack before an agent starts), DISPATCH (send work to local, REST, MCP, or A2A agents with source-backed context), GOVERN (pause, inspect, edit, resume, retry, and roll back long-running work with audit lineage, security, and residual-risk proof), and IMPROVE (promote repeated successful workflows into durable governed skills).",
     "Memory model is multi-tier: vector, graph, episodic, knowledge, and skill surfaces, each with provenance.",
     "Who it serves: product teams (discovery, launch, roadmap, customer context), sales teams (account history, objections, competitive context, follow-up), engineering teams (architecture decisions, incidents, repo patterns, fixes, tests, runbooks), and AI operations teams (agent registry, capability policy, auth posture, security findings, local footprint, eval history).",
@@ -41,7 +41,7 @@
   }
 
   function FALLBACK() {
-    return "MemroOS gives agents **shared memory** and **governed orchestration**: it retains what your team learns, retrieves the right **context pack** before an agent starts, dispatches work with source-backed context, governs the run with audit lineage, and promotes repeated work into durable **skills**.\n\nThe live answer engine isn't reachable in this view \u2014 but this is exactly the kind of question worth a short **working session**, where we map one workflow where your agents keep rediscovering the same context.";
+    return "MemroOS gives teams **company-owned memory** and **governed harness control**: it retains what your team learns, retrieves the right **context pack** before an agent starts, dispatches work with source-backed context, governs the run with audit lineage, and promotes repeated work into durable **skills**.\n\nThe live answer engine isn't reachable in this view \u2014 but this is exactly the kind of question worth a short **working session**, where we map one workflow where your agents keep rediscovering the same context.";
   }
 
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }

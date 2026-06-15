@@ -1,8 +1,8 @@
 # MemroOS
 
-> Shared memory and governed orchestration for agentic product, sales, and engineering workflows.
+> Company-owned memory and governance for agent harnesses across product, sales, engineering, and AI operations workflows.
 
-MemroOS is an agentic memory and orchestration platform. It retains what product, sales, and engineering agents learn, retrieves the right context at runtime, and gives operators a NOC-style console for memory, orchestration, skills, dispatch, evals, and trust.
+MemroOS keeps company context, permissions, evals, dispatch, and proof outside any single model vendor or agent framework. It gives operators a NOC-style console for memory, orchestration, skills, dispatch, evals, and trust across Claude Code, Codex, ADK, LangGraph, CrewAI, A2A, REST, and local workers.
 
 ## What It Does
 

@@ -6,7 +6,7 @@
 
 ## Current Product Goal
 
-`memroos.com` is the public front door for MemroOS: the control plane where AI-native teams retain what agents learn, retrieve the right context at runtime, dispatch work to the right agent, and turn repeated work into reusable skills.
+`memroos.com` is the public front door for MemroOS: company-owned memory and governance for agent harnesses, where AI-native teams retain what agents learn, retrieve the right context at runtime, dispatch work to the right agent, govern outcomes, and turn repeated work into reusable skills.
 
 See `.planning/GOAL.md` for the full development goal and workflow loop.
 
