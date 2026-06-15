@@ -16,23 +16,23 @@ interface TopoNode {
 }
 
 const NODES: Record<string, TopoNode> = {
-  telegram: { x: 90,  y: 80,  w: 130, h: 56,  t: "src",   label: "Telegram",               sub: "inbound · 24/d" },
-  email:    { x: 90,  y: 160, w: 130, h: 56,  t: "src",   label: "Email",                  sub: "inbound · 81/d" },
-  slack:    { x: 90,  y: 240, w: 130, h: 56,  t: "src",   label: "Slack",                  sub: "inbound · 312/d" },
-  gong:     { x: 90,  y: 320, w: 130, h: 56,  t: "src",   label: "Calls (Gong)",           sub: "inbound · 14/d" },
-  repo:     { x: 90,  y: 400, w: 130, h: 56,  t: "src",   label: "Repos · CI",             sub: "events · 247/d" },
-  gateway:  { x: 300, y: 240, w: 140, h: 72,  t: "gate",  label: "Gateway",                sub: "Iris preflight · 0 blocks" },
+  telegram: { x: 90,  y: 80,  w: 130, h: 56,  t: "src",   label: "Telegram",               sub: "inbound" },
+  email:    { x: 90,  y: 160, w: 130, h: 56,  t: "src",   label: "Email",                  sub: "inbound" },
+  slack:    { x: 90,  y: 240, w: 130, h: 56,  t: "src",   label: "Slack",                  sub: "inbound" },
+  gong:     { x: 90,  y: 320, w: 130, h: 56,  t: "src",   label: "Calls (Gong)",           sub: "inbound" },
+  repo:     { x: 90,  y: 400, w: 130, h: 56,  t: "src",   label: "Repos · CI",             sub: "events" },
+  gateway:  { x: 300, y: 240, w: 140, h: 72,  t: "gate",  label: "Gateway",                sub: "Iris preflight" },
   memroos:  { x: 510, y: 200, w: 200, h: 150, t: "core",  label: "MemroOS",                sub: "memory · skills · context packs" },
-  memory:   { x: 770, y: 140, w: 140, h: 56,  t: "store", label: "Memory",                 sub: "live inventory · no hit-rate source" },
-  skills:   { x: 770, y: 220, w: 140, h: 56,  t: "store", label: "Skills",                 sub: "96 live · 3 drifting" },
-  knowledge:{ x: 770, y: 300, w: 140, h: 56,  t: "store", label: "Knowledge",              sub: "5,854 files" },
-  sophia:   { x: 980, y: 80,  w: 130, h: 50,  t: "agent", label: "Sophia",                 sub: "marketing · busy" },
-  maria:    { x: 980, y: 140, w: 130, h: 50,  t: "agent", label: "Maria",                  sub: "content · busy" },
-  alba:     { x: 980, y: 200, w: 130, h: 50,  t: "agent", label: "Alba",                   sub: "engineering · idle" },
-  lucia:    { x: 980, y: 260, w: 130, h: 50,  t: "agent", label: "Lucia",                  sub: "ops · busy" },
-  gwen:     { x: 980, y: 320, w: 130, h: 50,  t: "agent", label: "Gwen",                   sub: "social · idle" },
-  cto:      { x: 980, y: 380, w: 130, h: 50,  t: "agent", label: "Cto",                    sub: "eng · drift ⚠" },
-  outcomes: { x: 510, y: 410, w: 200, h: 56,  t: "sink",  label: "Outcomes → Memory loop", sub: "184 captured · 8 promoted" },
+  memory:   { x: 770, y: 140, w: 140, h: 56,  t: "store", label: "Memory",                 sub: "live inventory" },
+  skills:   { x: 770, y: 220, w: 140, h: 56,  t: "store", label: "Skills",                 sub: "registry" },
+  knowledge:{ x: 770, y: 300, w: 140, h: 56,  t: "store", label: "Knowledge",              sub: "corpus" },
+  sophia:   { x: 980, y: 80,  w: 130, h: 50,  t: "agent", label: "Sophia",                 sub: "marketing" },
+  maria:    { x: 980, y: 140, w: 130, h: 50,  t: "agent", label: "Maria",                  sub: "content" },
+  alba:     { x: 980, y: 200, w: 130, h: 50,  t: "agent", label: "Alba",                   sub: "engineering" },
+
+  gwen:     { x: 980, y: 320, w: 130, h: 50,  t: "agent", label: "Gwen",                   sub: "social" },
+  cto:      { x: 980, y: 380, w: 130, h: 50,  t: "agent", label: "Cto",                    sub: "eng" },
+  outcomes: { x: 510, y: 410, w: 200, h: 56,  t: "sink",  label: "Outcomes → Memory loop", sub: "feedback" },
 };
 
 const EDGES: [string, string, number, EdgeKind][] = [
@@ -48,17 +48,17 @@ const EDGES: [string, string, number, EdgeKind][] = [
   ["memory",   "sophia",   0.5,  "pack"],
   ["memory",   "maria",    0.45, "pack"],
   ["memory",   "alba",     0.3,  "pack"],
-  ["memory",   "lucia",    0.55, "pack"],
+
   ["skills",   "sophia",   0.4,  "pack"],
   ["skills",   "alba",     0.6,  "pack"],
-  ["skills",   "lucia",    0.5,  "pack"],
+
   ["skills",   "cto",      0.2,  "pack"],
   ["knowledge","maria",    0.5,  "pack"],
   ["knowledge","gwen",     0.3,  "pack"],
   ["sophia",   "outcomes", 0.4,  "fb"],
   ["maria",    "outcomes", 0.3,  "fb"],
   ["alba",     "outcomes", 0.5,  "fb"],
-  ["lucia",    "outcomes", 0.5,  "fb"],
+
   ["gwen",     "outcomes", 0.2,  "fb"],
   ["outcomes", "memroos",  0.7,  "loop"],
 ];
@@ -78,13 +78,7 @@ const COLUMN_HEADERS: [number, string][] = [
   [1045, "AGENTS"],
 ];
 
-const KPI_STRIP: [string, string][] = [
-  ["Inbound · 1h",           "142"],
-  ["Packs assembled · 1h",   "46"],
-  ["Avg time to context",    "420ms"],
-  ["Outcomes captured · 1h", "38"],
-  ["Loop close · avg",       "1.8s"],
-];
+const KPI_STRIP: [string, string][] = [];
 
 const LEGEND_ITEMS: [string, string][] = [
   [NOC.cold,    "Source feeds"],
@@ -226,13 +220,13 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
                 {n.sub}
               </text>
 
-              {/* Agent status dot */}
+              {/* Agent status dot — wired to real agent state when available */}
               {n.t === "agent" && (
                 <circle
                   cx={n.x + n.w - 12}
                   cy={n.y + 12}
                   r={3.5}
-                  fill={n.sub.includes("busy") ? NOC.terra : n.sub.includes("drift") ? NOC.warn : NOC.cold}
+                  fill={NOC.cold}
                 />
               )}
 
@@ -244,9 +238,6 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
                   </text>
                   <text x={n.x + n.w / 2} y={n.y + 90} fontSize={10} fontFamily={NOC_FONT_MONO} fill={NOC.terraDeep} textAnchor="middle">
                     retrieve → act → improve
-                  </text>
-                  <text x={n.x + n.w / 2} y={n.y + 120} fontSize={10.5} fontFamily={NOC_FONT_MONO} fill={NOC.muted} textAnchor="middle">
-                    46 packs/hr · 420ms
                   </text>
                 </>
               )}

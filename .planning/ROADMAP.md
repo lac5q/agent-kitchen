@@ -31,8 +31,22 @@
 - ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
 - ⏳ **v7.1 Competitive Retrieval Proof** — Phase 114 (planned 2026-06-09)
 - ⏳ **v7.2 Architecture Review Hardening** — Phase 115 (in progress 2026-06-10)
+- ✅ **v7.3 Agent Context Bus Operational Bootstrap** — Phase 116 (completed 2026-06-14)
+- ⏳ **v7.4 NOC Efficiency Telemetry** — Phase 117 (planned 2026-06-15)
 
 ## Phases
+
+### Current v7.3 Agent Context Bus Operational Bootstrap Summary — COMPLETE
+
+- [x] **Phase 116: Agent Context Bus Operational Bootstrap** — AGENTBUS-BOOT-01..05; provisioning scripts, startup automation, MCP env wiring, agent communication skill, and smoke tests operationalize the Phase 107 bus for end-to-end agent-to-agent communication.
+
+Full v7.3 detail in the `## v7.3 Agent Context Bus Operational Bootstrap` section below.
+
+### Current v7.4 NOC Efficiency Telemetry Summary — PLANNED
+
+- [ ] **Phase 117: NOC Efficiency Telemetry Instrumentation** — EFFTEL-01..05; add trace-level data sources for the 5 blocked NOC efficiency metrics (retrieval-before-work, same-source re-reads, raw-context token share, operator re-ask redundancy, rediscovered-fact rate) so the NOC dashboard can show real values instead of honest-state placeholders.
+
+Full v7.4 detail in the `## v7.4 NOC Efficiency Telemetry` section below.
 
 ### Current v7.1 Competitive Retrieval Proof Summary — PLANNED
 
@@ -1558,6 +1572,46 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 115 to break down)
 
+## v7.3 Agent Context Bus Operational Bootstrap
+
+### Phase 116: Agent Context Bus Operational Bootstrap
+
+**Goal**: Operationalize the agent-context bus with provisioning scripts, startup automation, MCP env wiring, agent-side skill, and smoke tests so agent-to-agent communication works end-to-end.
+**Milestone**: v7.3
+**Depends on**: Phase 107 (Agent Context Bus code)
+**Requirements**: AGENTBUS-BOOT-01 (provisioning script), AGENTBUS-BOOT-02 (startup automation), AGENTBUS-BOOT-03 (MCP env wiring), AGENTBUS-BOOT-04 (agent communication skill), AGENTBUS-BOOT-05 (smoke test)
+**Status**: Complete (2026-06-14)
+**Success Criteria** (what must be TRUE):
+  1. `scripts/provision-agent-keys.sh` registers agents and generates API keys.
+  2. `scripts/start-memroos-agent-bus.sh` starts the app and verifies DB tables.
+  3. MCP facade authenticates with `MEMROOS_AGENT_API_KEY`.
+  4. Agent communication skill is installed and discoverable.
+  5. Smoke test proves round-trip: send → inbox → ack → reply.
+**Plans**: 1/1 complete
+
+---
+
+## v7.4 NOC Efficiency Telemetry
+
+### Phase 117: NOC Efficiency Telemetry Instrumentation
+
+**Goal**: Add trace-level data sources for the 5 NOC efficiency metrics currently showing "missing telemetry" honest-state placeholders, so the dashboard can display real production values instead of admitting it can't measure yet.
+**Milestone**: v7.4
+**Depends on**: Phase 79 (NOC Telemetry + Real-Data Wiring), Phase 104 (Memory-Trace Observability), Phase 107 (Agent Context Bus)
+**Requirements**: EFFTEL-01, EFFTEL-02, EFFTEL-03, EFFTEL-04, EFFTEL-05
+**Status**: Planned
+**Success Criteria** (what must be TRUE):
+  1. **EFFTEL-01 — Retrieval-before-work trace**: Dispatch and context-pack assembly emit structured trace events (timestamp, agent id, retrieval query, source, tokens, whether result was used in first response). NOC can compute "retrieval calls before useful work" from these traces.
+  2. **EFFTEL-02 — Same-source re-read detection**: Tool-call transcript captures per-tool read events with source identifier and hash. NOC can count repeated reads of the same source within a task window.
+  3. **EFFTEL-03 — Raw-context token ledger**: Model-routing layer emits token-level events distinguishing raw-context ingest tokens from processed/cached tokens. NOC can compute raw-context token share as a percentage of total.
+  4. **EFFTEL-04 — Operator re-ask redundancy**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits. NOC can detect when an operator re-asks something that was already answered from memory.
+  5. **EFFTEL-05 — Rediscovered-fact provenance**: Memory write events include provenance (source, first-seen timestamp, dedup hash). NOC can detect when a fact is "rediscovered" (written to memory again after already existing).
+**UI hint**: The 5 blocked NOC efficiency metrics transition from honest-state placeholders to real values; NOC-10 satisfied with production signal.
+**Plans**: 0/1 complete
+
+Plans:
+- [ ] 117-01-PLAN.md — Trace instrumentation for 5 efficiency telemetry sources (depends on /gsd-plan-phase 117 to break down)
+
 ---
 
 ## v7.0 Client-Ready Security + Architecture Audit
@@ -1662,6 +1716,7 @@ Plans:
 | 111. Dependency CVE Sweep + Medium Security Fixes | 3/3 | Complete   | 2026-06-08 |
 | 112. Architecture Cleanup | 4/4 | Complete | 2026-06-08 |
 | 113. Test Validation + Build Verification | 1/1 | Complete | 2026-06-08 |
+| 116. Agent Context Bus Operational Bootstrap | 1/1 | Complete | 2026-06-14 |
 
 ## v7.1 Competitive Retrieval Proof
 

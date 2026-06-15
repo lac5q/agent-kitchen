@@ -71,10 +71,6 @@ export const NODE_KEYWORD_MAP: Record<string, NodeKeywordEntry> = {
     aliases: ["maria"],
     keywords: [/\bmaria\b/i],
   },
-  "agent-lucia": {
-    aliases: ["lucia"],
-    keywords: [/\blucia\b/i],
-  },
 
   // Row 3: infra
   tunnels: {

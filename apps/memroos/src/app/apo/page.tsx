@@ -41,7 +41,6 @@ function ApoPageContent() {
   const [tab, setTab] = useState<TabFilter>(() => parseTabFilter(searchParams.get("tab")));
   const [selected, setSelected] = useState<ApoProposal | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const showFlowContext = searchParams.get("source") === "flow";
 
   const allProposals = data?.proposals ?? [];
   const stats = data?.stats ?? EMPTY_STATS;
@@ -77,11 +76,7 @@ function ApoPageContent() {
       {/* Cycle Stats */}
       <CycleStatus stats={stats} />
 
-      {showFlowContext && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Flow sent you here to review the pre-summarizer recommendation. APO can approve changes that exist as pending proposal files; if this tab is empty, that Flow recommendation has not been generated into the APO queue yet.
-        </div>
-      )}
+      {/* Flow context banner removed — Flow does not generate real APO proposals */}
 
       {!isLoading && !error && stats.pendingProposals === 0 && stats.totalProposals > 0 && (
         <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">

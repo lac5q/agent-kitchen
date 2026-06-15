@@ -101,6 +101,14 @@
 - [ ] **ARCHREV-08**: Planning history retention is decided before wider release: prune to current-milestone public docs or move archival GSD screenshots/history to a private sibling repo.
 - [ ] **ARCHREV-09**: Next.js trust-boundary changes carry explicit proxy/auth regression coverage and a migration checklist before framework upgrades touch `proxy.ts`.
 
+## v7.4 NOC Efficiency Telemetry
+
+- [ ] **EFFTEL-01**: Dispatch and context-pack assembly emit structured trace events (timestamp, agent id, retrieval query, source, tokens, whether result was used in first response) so NOC can compute "retrieval calls before useful work."
+- [ ] **EFFTEL-02**: Tool-call transcript captures per-tool read events with source identifier and hash so NOC can count repeated reads of the same source within a task window ("same-source re-read count").
+- [ ] **EFFTEL-03**: Model-routing layer emits token-level events distinguishing raw-context ingest tokens from processed/cached tokens so NOC can compute "raw-context ingest token share" as a percentage of total.
+- [ ] **EFFTEL-04**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits so NOC can detect "operator re-ask redundancy" (re-asking something already answered from memory).
+- [ ] **EFFTEL-05**: Memory write events include provenance (source, first-seen timestamp, dedup hash) so NOC can detect "rediscovered-fact rate" (facts written to memory again after already existing).
+
 ---
 
 ## Future Requirements (Deferred)
@@ -183,3 +191,8 @@
 | ARCHREV-08 | 115 | Planned |
 | ARCHREV-09 | 115 | Planned |
 | MEMGEN-FOLLOWUP-02 | Future | Deferred |
+| EFFTEL-01 | 117 | Planned |
+| EFFTEL-02 | 117 | Planned |
+| EFFTEL-03 | 117 | Planned |
+| EFFTEL-04 | 117 | Planned |
+| EFFTEL-05 | 117 | Planned |
