@@ -29,7 +29,7 @@ const NODES: Record<string, TopoNode> = {
   sophia:   { x: 980, y: 80,  w: 130, h: 50,  t: "agent", label: "Sophia",                 sub: "marketing · busy" },
   maria:    { x: 980, y: 140, w: 130, h: 50,  t: "agent", label: "Maria",                  sub: "content · busy" },
   alba:     { x: 980, y: 200, w: 130, h: 50,  t: "agent", label: "Alba",                   sub: "engineering · idle" },
-  lucia:    { x: 980, y: 260, w: 130, h: 50,  t: "agent", label: "Lucia",                  sub: "ops · busy" },
+
   gwen:     { x: 980, y: 320, w: 130, h: 50,  t: "agent", label: "Gwen",                   sub: "social · idle" },
   cto:      { x: 980, y: 380, w: 130, h: 50,  t: "agent", label: "Cto",                    sub: "eng · drift ⚠" },
   outcomes: { x: 510, y: 410, w: 200, h: 56,  t: "sink",  label: "Outcomes → Memory loop", sub: "184 captured · 8 promoted" },
@@ -48,17 +48,17 @@ const EDGES: [string, string, number, EdgeKind][] = [
   ["memory",   "sophia",   0.5,  "pack"],
   ["memory",   "maria",    0.45, "pack"],
   ["memory",   "alba",     0.3,  "pack"],
-  ["memory",   "lucia",    0.55, "pack"],
+
   ["skills",   "sophia",   0.4,  "pack"],
   ["skills",   "alba",     0.6,  "pack"],
-  ["skills",   "lucia",    0.5,  "pack"],
+
   ["skills",   "cto",      0.2,  "pack"],
   ["knowledge","maria",    0.5,  "pack"],
   ["knowledge","gwen",     0.3,  "pack"],
   ["sophia",   "outcomes", 0.4,  "fb"],
   ["maria",    "outcomes", 0.3,  "fb"],
   ["alba",     "outcomes", 0.5,  "fb"],
-  ["lucia",    "outcomes", 0.5,  "fb"],
+
   ["gwen",     "outcomes", 0.2,  "fb"],
   ["outcomes", "memroos",  0.7,  "loop"],
 ];

@@ -51,7 +51,7 @@ const NODE_DETAILS: Record<string, NodeDetail> = {
   sophia:   { title: "Sophia · marketing", sub: "OpenClaw · v1.4 skills",    stats: [["Tasks 24h", "38"], ["Success", "92%"], ["Spend", "$0.92"]], notes: "On: Investor update draft. Top earner: +$58 saved by skill reuse." },
   maria:    { title: "Maria · content",    sub: "Hermes runtime",             stats: [["Tasks 24h", "24"], ["Success", "88%"], ["Spend", "$0.41"]], notes: "On: Launch blog tone selection. 2 drafts ready." },
   alba:     { title: "Alba · engineering", sub: "Hermes runtime",             stats: [["Tasks 24h", "47"], ["Success", "96%"], ["Spend", "$0.61"]], notes: "Idle. Last task INC-204 rollback @ 07:52." },
-  lucia:    { title: "Lucia · ops/sales",  sub: "OpenClaw runtime",           stats: [["Tasks 24h", "32"], ["Success", "83%"], ["Spend", "$0.71"]], notes: "On: Vinta replies. Procurement objection memory not surfaced 8× — flagged." },
+
   gwen:     { title: "Gwen · social",      sub: "OpenClaw runtime",           stats: [["Tasks 24h", "18"], ["Success", "79%"], ["Spend", "$0.22"]], notes: "Idle. Next scheduled thread tomorrow 09:00." },
   cto:      { title: "Cto · eng",          sub: "Claude runtime",             stats: [["Tasks 24h", "6"],  ["Success", "67%"], ["Spend", "$0.34"]], notes: "⚠ Re-creating press-release skill (cos sim 0.91 to existing). Merge proposal queued." },
   telegram: { title: "Telegram inbound",   sub: "Webhook · group + DM",       stats: [["Msgs/d", "24"],   ["Latency", "180ms"], ["Errors", "0"]], notes: "" },
@@ -78,7 +78,7 @@ const NODE_ROUTES: Record<string, string> = {
   sophia: "/dispatch",
   maria: "/dispatch",
   alba: "/dispatch",
-  lucia: "/dispatch",
+
   gwen: "/dispatch",
   cto: "/dispatch",
   telegram: "/flow",
@@ -168,25 +168,7 @@ export function NodeDetailRail({ nodeId }: NodeDetailRailProps) {
         </div>
       </div>
 
-      {/* Suggested change */}
-      <div style={{ background: NOC.peach, border: `1px solid ${NOC.peachWarm}`, padding: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: NOC.terraDeep }}>Suggested change</div>
-        <div style={{ fontSize: 12, color: NOC.terraDeep, marginTop: 4, lineHeight: 1.5 }}>
-          Add a pre-summarizer between <strong>Memory</strong> and chatty routes (Sophia, Lucia). Projected: ingest token share{" "}
-          <strong>62% → 44%</strong>.
-        </div>
-        <Link
-          href="/apo?tab=pending&source=flow"
-          style={{
-            ...pillBtn(NOC.terraDeep, NOC.cream, NOC.terraDeep, "4px 10px", 11),
-            display: "inline-flex",
-            marginTop: 8,
-            textDecoration: "none",
-          }}
-        >
-          Apply via APO
-        </Link>
-      </div>
+
     </div>
   );
 }

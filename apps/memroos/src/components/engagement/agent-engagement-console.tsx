@@ -76,7 +76,6 @@ const COMMON_AGENT_IDS = [
   "alba",
   "sophia",
   "maria",
-  "lucia",
   "gwen",
   "claude-sonnet-engineer",
   "codex-cli-agent",
