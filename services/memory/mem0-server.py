@@ -24,6 +24,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from provenance import normalize_metadata
+from pii_guard import protect_memory_payload
 try:
     from qdrant_client import QdrantClient
 
@@ -177,23 +178,28 @@ def get_memory(force_reset: bool = False):
             logger.error(f"Failed to initialize Mem0: {e}")
             raise
 
-    # Verify we can actually reach Qdrant before returning the client
-    try:
-        _memory.search("__health_check__", user_id="__internal__", limit=1)
-    except Exception as qe:
-        logger.warning(f"Qdrant unreachable, attempting reset: {qe}")
-        reset_memory()
+    # Verify Qdrant reachability before returning the client. Demo mode uses
+    # embedded Chroma; running this probe there forces an Ollama embedding call
+    # on every API request and can hang the memory API even when Chroma is fine.
+    cfg = load_config()
+    vector_provider = cfg.get("vector_store", {}).get("provider", "unknown")
+    if vector_provider == "qdrant":
         try:
-            from mem0 import Memory
-            cfg = load_config()
-            mem0_cfg = build_mem0_config(cfg)
-            _memory = Memory.from_config(mem0_cfg)
-            _init_error = None
-            logger.info("Mem0 Memory re-initialized after Qdrant reset")
-        except Exception as reinit_err:
-            _init_error = reinit_err
-            _last_init_attempt = time.time()
-            raise
+            _memory.search("__health_check__", user_id="__internal__", limit=1)
+        except Exception as qe:
+            logger.warning(f"Qdrant unreachable, attempting reset: {qe}")
+            reset_memory()
+            try:
+                from mem0 import Memory
+                cfg = load_config()
+                mem0_cfg = build_mem0_config(cfg)
+                _memory = Memory.from_config(mem0_cfg)
+                _init_error = None
+                logger.info("Mem0 Memory re-initialized after Qdrant reset")
+            except Exception as reinit_err:
+                _init_error = reinit_err
+                _last_init_attempt = time.time()
+                raise
 
     return _memory
 
@@ -226,12 +232,15 @@ def _queue_failed_memory_add(req: "AddMemoryRequest") -> bool:
         agent_id=req.agent_id,
         default_source="mem0-server",
     )
-    payload = json.dumps(
+    payload = protect_memory_payload(
         {
             "text": req.text,
             "agent_id": req.agent_id,
             "metadata": metadata,
-        },
+        }
+    )
+    payload_json = json.dumps(
+        payload,
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -250,32 +259,41 @@ def _queue_failed_memory_add(req: "AddMemoryRequest") -> bool:
             """SELECT id FROM queued_requests
                WHERE endpoint = ? AND method = ? AND payload = ?
                LIMIT 1""",
-            ("/memory/add", "POST", payload),
+            ("/memory/add", "POST", payload_json),
         ).fetchone()
         if existing:
             return False
         conn.execute(
             """INSERT INTO queued_requests (endpoint, method, payload)
                VALUES (?, ?, ?)""",
-            ("/memory/add", "POST", payload),
+            ("/memory/add", "POST", payload_json),
         )
         conn.commit()
     return True
 
 
 def check_disk_space(path: str = "~") -> dict:
-    """Check disk space and return status."""
+    """Check disk space and return status.
+
+    Defaults are sized for local Docker Desktop volumes. The old absolute
+    thresholds (critical <10GB, warning <20GB) made a 23.5GB Docker disk look
+    unhealthy even when it was less than half full.
+    """
     try:
         usage = shutil.disk_usage(os.path.expanduser(path))
         percent_used = (usage.used / usage.total) * 100
         gb_free = usage.free / (1024**3)
+        critical_free_gb = float(os.environ.get("MEM0_DISK_CRITICAL_FREE_GB", "2"))
+        warning_free_gb = float(os.environ.get("MEM0_DISK_WARNING_FREE_GB", "8"))
+        critical_percent = float(os.environ.get("MEM0_DISK_CRITICAL_PERCENT", "95"))
+        warning_percent = float(os.environ.get("MEM0_DISK_WARNING_PERCENT", "85"))
         return {
             "total_gb": round(usage.total / (1024**3), 1),
             "used_gb": round(usage.used / (1024**3), 1),
             "free_gb": round(gb_free, 1),
             "percent_used": round(percent_used, 1),
-            "critical": percent_used > 95 or gb_free < 10,
-            "warning": percent_used > 90 or gb_free < 20,
+            "critical": percent_used > critical_percent or gb_free < critical_free_gb,
+            "warning": percent_used > warning_percent or gb_free < warning_free_gb,
         }
     except Exception as e:
         return {"error": str(e), "critical": True}
@@ -443,12 +461,17 @@ def add_memory(req: AddMemoryRequest, request: Request):
             agent_id=req.agent_id,
             default_source="mem0-server",
         )
+        protected_payload = protect_memory_payload({
+            "text": req.text,
+            "agent_id": req.agent_id,
+            "metadata": metadata,
+        })
         result = mem.add(
-            req.text,
+            protected_payload["text"],
             user_id=req.agent_id,
-            metadata=metadata,
+            metadata=protected_payload.get("metadata", {}),
         )
-        logger.info(f"Memory added for agent {req.agent_id}: {req.text[:50]}...")
+        logger.info(f"Memory added for agent {req.agent_id}: {protected_payload['text'][:50]}...")
         return AddMemoryResponse(status="ok", result=result)
     except Exception as exc:
         log_failure(

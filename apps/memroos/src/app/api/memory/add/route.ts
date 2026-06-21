@@ -6,6 +6,7 @@ import { checkMemoryWritePolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { responseCache } from "@/lib/response-cache";
 import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
+import { protectMemoryPayloadForStorage } from "@/lib/privacy/pii-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,8 @@ export async function POST(request: Request) {
     agent_id: agent.id,
     text: rawContent,
   });
-  const tier = resolveMemoryTier(tieredBody);
+  const storageBody = protectMemoryPayloadForStorage(tieredBody);
+  const tier = resolveMemoryTier(storageBody);
   const policy = checkMemoryWritePolicy(agent, tier);
   if (!policy.allowed) {
     writeAuditLog(getDb(), {
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
     mem0Response = await fetch(`${MEM0_URL}/memory/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tieredBody),
+      body: JSON.stringify(storageBody),
       signal: AbortSignal.timeout(memoryWriteTimeoutMs()),
     });
     result = (await mem0Response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -81,8 +83,8 @@ export async function POST(request: Request) {
     agent.id,
     {
       type: tier,
-      content: typeof body.content === "string" ? body.content : undefined,
-      metadata: isRecord(tieredBody.metadata) ? tieredBody.metadata : {},
+      content: typeof storageBody.content === "string" ? storageBody.content : undefined,
+      metadata: isRecord(storageBody.metadata) ? storageBody.metadata : {},
     },
     result
   );

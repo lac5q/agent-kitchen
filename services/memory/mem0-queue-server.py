@@ -11,6 +11,7 @@ import httpx
 
 # Import queue logic
 from mem0_queue import Mem0Queue, is_retryable_response  # Note: file is mem0-queue.py, module is mem0_queue
+from pii_guard import protect_memory_payload
 from provenance import normalize_metadata
 
 app = FastAPI(title="Mem0 Queue Server", version="1.0.0")
@@ -46,7 +47,7 @@ class QueueStatus(BaseModel):
 @app.post("/memory/add")
 async def memory_add(req: MemorySaveRequest):
     """Save memory (queued if backend is down)."""
-    payload = {
+    payload = protect_memory_payload({
         "text": req.text,
         "agent_id": req.agent_id,
         "metadata": normalize_metadata(
@@ -54,7 +55,7 @@ async def memory_add(req: MemorySaveRequest):
             agent_id=req.agent_id,
             default_source="mem0-queue-server",
         ),
-    }
+    })
     try:
         # Try direct call first
         async with httpx.AsyncClient() as client:

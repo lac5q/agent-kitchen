@@ -11,6 +11,7 @@ import {
 } from "@/lib/memory/policy-gate";
 import { buildTieredMemoryPayload, resolveMemoryTier } from "@/lib/memory/tiers";
 import { parseClaudeMemory } from "@/lib/parsers";
+import { protectMemoryPayloadForStorage } from "@/lib/privacy/pii-storage";
 import { responseCache } from "@/lib/response-cache";
 import { checkMemoryWritePolicy } from "@/lib/security-policy";
 import { recordMemoryWrite, registerAgent } from "@/lib/agent-registry";
@@ -353,7 +354,8 @@ export async function saveMemroosFromChatGpt(input: {
       ...(input.metadata ?? {}),
     },
   });
-  const tier = resolveMemoryTier(payload);
+  const storagePayload = protectMemoryPayloadForStorage(payload);
+  const tier = resolveMemoryTier(storagePayload);
   const policy = checkMemoryWritePolicy(agent, tier);
   if (!policy.allowed) {
     writeAuditLog(getDb(), {
@@ -369,7 +371,7 @@ export async function saveMemroosFromChatGpt(input: {
   const response = await fetch(`${MEM0_URL}/memory/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(storagePayload),
     signal: AbortSignal.timeout(30_000),
   });
   const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -379,8 +381,8 @@ export async function saveMemroosFromChatGpt(input: {
     agent.id,
     {
       type: tier,
-      content: input.text,
-      metadata: isRecord(payload.metadata) ? payload.metadata : {},
+      content: typeof storagePayload.content === "string" ? storagePayload.content : undefined,
+      metadata: isRecord(storagePayload.metadata) ? storagePayload.metadata : {},
     },
     result
   );

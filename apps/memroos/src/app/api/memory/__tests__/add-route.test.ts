@@ -99,6 +99,42 @@ describe("POST /api/memory/add", () => {
     expect(rows).toEqual([{ agent_id: "memory-agent", memory_type: "episodic" }]);
   });
 
+  it("redacts detected PII before forwarding memory writes to storage", async () => {
+    const { POST, registerAgent } = await loadRoute();
+    const { apiKey } = registerAgent({
+      id: "privacy-agent",
+      name: "Privacy Agent",
+      role: "Writes privacy-screened memory",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/memory/add", {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          content: "Follow up with Ada at ada@example.com about SSN 123-45-6789.",
+          type: "episodic",
+          metadata: { source: "test" },
+        }),
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const forwarded = JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string);
+    expect(forwarded.text).toBe("Follow up with Ada at [REDACTED:EMAIL_ADDRESS] about SSN [REDACTED:SSN_US].");
+    expect(forwarded.text).not.toContain("ada@example.com");
+    expect(forwarded.text).not.toContain("123-45-6789");
+    expect(forwarded.metadata.pii).toMatchObject({
+      protected: true,
+      provider: "presidio-compatible-local",
+      entityTypes: ["EMAIL_ADDRESS", "SSN_US"],
+      findingCount: 2,
+    });
+  });
+
   it("allows the memory write timeout to be tuned for slow local embedders", async () => {
     process.env.MEMROOS_MEMORY_WRITE_TIMEOUT_MS = "45000";
     const { memoryWriteTimeoutMs } = await loadRoute();

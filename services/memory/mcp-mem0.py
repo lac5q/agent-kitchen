@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mem0_queue import Mem0Queue, is_retryable_response
+from pii_guard import protect_memory_payload
 from provenance import format_memory_result, normalize_metadata
 
 MEM0_URL = "http://localhost:3201"
@@ -101,7 +102,7 @@ def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict[str
         agent_id=agent_id,
         default_source="mcp-mem0",
     )
-    payload = {"text": text, "agent_id": agent_id, "metadata": save_metadata}
+    payload = protect_memory_payload({"text": text, "agent_id": agent_id, "metadata": save_metadata})
 
     # Pre-check server health
     health = check_server_health()

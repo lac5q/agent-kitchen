@@ -239,7 +239,7 @@ describe("ChatGPT Actions bridge", () => {
           "content-type": "application/json",
           "x-api-key": "test-action-key",
         },
-        body: JSON.stringify({ text: "Remember this from mobile", type: "episodic" }),
+        body: JSON.stringify({ text: "Remember this from ada@example.com with SSN 123-45-6789", type: "episodic" }),
       })
     );
     const body = await response.json();
@@ -250,9 +250,20 @@ describe("ChatGPT Actions bridge", () => {
       "http://mem0.test/memory/add",
       expect.objectContaining({ method: "POST" })
     );
+    const forwarded = JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string);
+    expect(forwarded.text).toBe("Remember this from [REDACTED:EMAIL_ADDRESS] with SSN [REDACTED:SSN_US]");
+    expect(forwarded.metadata.pii).toMatchObject({
+      protected: true,
+      provider: "presidio-compatible-local",
+      entityTypes: ["EMAIL_ADDRESS", "SSN_US"],
+      findingCount: 2,
+    });
     expect(registry.recordMemoryWrite).toHaveBeenCalledWith(
       "chatgpt-mobile",
-      expect.objectContaining({ type: "episodic", content: "Remember this from mobile" }),
+      expect.objectContaining({
+        type: "episodic",
+        content: "Remember this from [REDACTED:EMAIL_ADDRESS] with SSN [REDACTED:SSN_US]",
+      }),
       { ok: true, id: "mem-1" }
     );
   });
