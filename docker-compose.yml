@@ -18,8 +18,8 @@ services:
       NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      SQLITE_DB_PATH: /tmp/memroos/conversations.db
-      CLAUDE_MEMORY_PATH: /tmp/memroos/claude-memory
+      SQLITE_DB_PATH: /data/conversations.db
+      CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
       MEMROOS_DATA_RESIDENCY: ${MEMROOS_DATA_RESIDENCY:-0}
       LOCAL_JUDGE_PROVIDER: ${LOCAL_JUDGE_PROVIDER:-ollama}
@@ -27,11 +27,10 @@ services:
       LOCAL_JUDGE_MODEL: ${LOCAL_JUDGE_MODEL:-hermes3}
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
     volumes:
+      - memroos-data:/data
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
     depends_on:
       mem0:
-        condition: service_healthy
-      neo4j:
         condition: service_healthy
       orchestration:
         condition: service_healthy
@@ -51,37 +50,15 @@ services:
       QDRANT_URL: ${QDRANT_URL:-}
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      NEO4J_HTTP_URL: http://neo4j:7474
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
-      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-me}
     volumes:
       - mem0-logs:/app/services/memory/logs
+      - mem0-history:/root/.mem0
       - ./services/memory/mem0-config.demo.yaml:/app/services/memory/mem0-config.yaml:ro
-    depends_on:
-      neo4j:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:3201/health', timeout=3)\nPY"]
       interval: 30s
       timeout: 5s
       retries: 5
-
-  neo4j:
-    image: neo4j:5-community
-    ports:
-      - "${NEO4J_HTTP_PORT:-7474}:7474"
-      - "${NEO4J_BOLT_PORT:-7687}:7687"
-    environment:
-      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-change-me}
-    volumes:
-      - neo4j-data:/data
-      - neo4j-logs:/logs
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7474 || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
 
   orchestration:
     build:
@@ -100,41 +77,8 @@ services:
       timeout: 5s
       retries: 5
 
-  voice:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.voice
-    ports:
-      - "${VOICE_WS_PORT:-7860}:7860"
-      - "${VOICE_HEALTH_PORT:-7861}:7861"
-    environment:
-      MEMROOS_DATA_DIR: /data
-      VOICE_MODE: ${VOICE_MODE:-gemini}
-      VOICE_WS_PORT: 7860
-      VOICE_HEALTH_PORT: 7861
-    volumes:
-      - voice-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:7861/health', timeout=3)\nPY"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-
-  knowledge-mcp:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.knowledge
-    environment:
-      KNOWLEDGE_BASE_PATH: /knowledge
-      MEMROOS_MCP_TRANSPORT: stdio
-      MEMROOS_MCP_HOST: 0.0.0.0
-      MEMROOS_MCP_PORT: ${MEMROOS_MCP_PORT:-8765}
-    volumes:
-      - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
-
 volumes:
+  memroos-data:
   mem0-logs:
-  neo4j-data:
-  neo4j-logs:
+  mem0-history:
   orchestration-data:
-  voice-data:

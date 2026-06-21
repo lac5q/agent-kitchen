@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "profile": "local-dev",
+  "services": [
+    {
+      "id": "memroos-app",
+      "displayName": "MemRoOS Next.js app",
+      "required": true,
+      "ports": [
+        {
+          "id": "docker-public-http",
+          "env": "MEMROOS_PORT",
+          "defaultPort": 3000,
+          "containerPort": 3000,
+          "requiredIn": ["docker-compose"]
+        },
+        {
+          "id": "local-next-http",
+          "env": "NEXTJS_PORT",
+          "defaultPort": 3002,
+          "requiredIn": ["manual-script"]
+        },
+        {
+          "id": "launchd-next-http",
+          "env": "PORT",
+          "defaultPort": 3002,
+          "requiredIn": ["launchd"]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/api/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": ["docker-compose", "launchd", "manual-script"],
+      "env": ["MEMROOS_PUBLIC_BASE_URL", "MEMROOS_OPERATOR_API_KEY", "SQLITE_DB_PATH"]
+    },
+    {
+      "id": "mem0-memory",
+      "displayName": "Local mem0 memory service",
+      "required": true,
+      "ports": [
+        {
+          "id": "mem0-http",
+          "defaultPort": 3201,
+          "containerPort": 3201,
+          "requiredIn": ["docker-compose"]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": ["docker-compose", "external"],
+      "env": ["MEM0_URL"]
+    },
+    {
+      "id": "orchestration-service",
+      "displayName": "Agent orchestration service",
+      "required": false,
+      "ports": [
+        {
+          "id": "orchestration-http",
+          "defaultPort": 3210,
+          "containerPort": 3210,
+          "requiredIn": ["docker-compose"]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": ["docker-compose", "external"],
+      "env": ["ORCHESTRATION_SERVICE_URL"]
+    },
+    {
+      "id": "voice-server",
+      "displayName": "Pipecat voice server",
+      "required": false,
+      "ports": [
+        {
+          "id": "pipecat-http",
+          "env": "PIPECAT_PORT",
+          "defaultPort": 7860,
+          "requiredIn": ["manual-script"]
+        },
+        {
+          "id": "pipecat-health",
+          "env": "HEALTH_PORT",
+          "defaultPort": 7861,
+          "requiredIn": ["manual-script"]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": ["manual-script"]
+    },
+    {
+      "id": "agentmemory-engine",
+      "displayName": "AgentMemory iii-engine backend",
+      "required": false,
+      "ports": [
+        {
+          "id": "agentmemory-http",
+          "env": "AGENTMEMORY_PORT",
+          "defaultPort": 3111,
+          "requiredIn": ["manual-script"]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": ["manual-script"]
+    }
+  ]
+}

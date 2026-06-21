@@ -6,7 +6,7 @@ vector_store:
   provider: chroma  # embedded, no external service
   config:
     collection_name: agent_memory_demo
-    embedding_model_dims: 768
+    path: /root/.mem0/chroma
 
 llm:
   provider: ollama

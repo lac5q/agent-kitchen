@@ -9,10 +9,11 @@ cd "$SCRIPT_DIR"
 
 MEMROOS_DIR="$SCRIPT_DIR/apps/memroos"
 VOICE_DIR="$SCRIPT_DIR/services/voice-server"
-NEXTJS_PORT=3002
-PIPECAT_PORT=7860
-HEALTH_PORT=7861
-AGENTMEMORY_PORT=3111
+TOPOLOGY_CHECK="$SCRIPT_DIR/scripts/check-runtime-topology.mjs"
+NEXTJS_PORT="${NEXTJS_PORT:-$(node "$TOPOLOGY_CHECK" port memroos-app local-next-http)}"
+PIPECAT_PORT="${PIPECAT_PORT:-$(node "$TOPOLOGY_CHECK" port voice-server pipecat-http)}"
+HEALTH_PORT="${HEALTH_PORT:-$(node "$TOPOLOGY_CHECK" port voice-server pipecat-health)}"
+AGENTMEMORY_PORT="${AGENTMEMORY_PORT:-$(node "$TOPOLOGY_CHECK" port agentmemory-engine agentmemory-http)}"
 VENV="$VOICE_DIR/.venv/bin/python3.12"
 
 # ── Kill existing processes on our ports ─────────────────────────────────────

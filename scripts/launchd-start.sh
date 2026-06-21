@@ -5,7 +5,6 @@
 # still healthy while nothing is listening on :3002.
 
 set -u
-PORT="${PORT:-3002}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$REPO_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -27,6 +26,13 @@ if [ -z "$NODE_BIN" ]; then
     NODE_BIN=/opt/homebrew/bin/node
   fi
 fi
+
+runtime_topology_port() {
+  "$NODE_BIN" "$REPO_DIR/scripts/check-runtime-topology.mjs" port "$1" "$2" 2>/dev/null
+}
+
+DEFAULT_PORT="${MEMROOS_LAUNCHD_DEFAULT_PORT:-$(runtime_topology_port memroos-app launchd-next-http || printf '3002')}"
+PORT="${PORT:-$DEFAULT_PORT}"
 
 # Next.js patches incomplete optional SWC lockfile entries during local starts.
 # This repo is npm-workspace/package-lock based, but if no package-lock exists in
