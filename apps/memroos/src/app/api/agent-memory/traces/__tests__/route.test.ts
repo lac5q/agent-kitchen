@@ -4,6 +4,36 @@ import { describe, expect, it } from "vitest";
 const tracesRoute = await import("../route");
 
 describe("/api/agent-memory/traces", () => {
+  it("blocks direct non-local memory trace writes without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agent-memory/traces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        runId: "run-bypass",
+        taskId: "task-bypass",
+        causalPath: { retrievalQuery: "private query" },
+      }),
+    });
+
+    const res = await tracesRoute.POST(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local memory trace reads without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agent-memory/traces?runId=run-bypass");
+
+    const res = await tracesRoute.GET(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("accepts a POST capture of a memory run trace and returns it, then retrieves the timeline", async () => {
     const runId = `run-${Date.now()}`;
     const payload = {

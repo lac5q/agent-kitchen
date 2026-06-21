@@ -6,6 +6,73 @@ const promoteRoute = await import("../promote/route");
 const rollbackRoute = await import("../rollback/route");
 
 describe("/api/agents/versions", () => {
+  it("blocks direct non-local version creation without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agents/versions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent-bypass",
+        version: "1.0.0",
+        profile: "prod",
+      }),
+    });
+
+    const res = await versionsRoute.POST(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local version listing without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agents/versions?agentId=agent-bypass");
+
+    const res = await versionsRoute.GET(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local version promotion without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agents/versions/promote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent-bypass",
+        version: "1.0.0",
+        profile: "prod",
+      }),
+    });
+
+    const res = await promoteRoute.POST(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local version rollback without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agents/versions/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent-bypass",
+        profile: "prod",
+      }),
+    });
+
+    const res = await rollbackRoute.POST(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("creates, promotes, and rolls back agent versions via REST endpoints", async () => {
     const agentId = `agent-${Date.now()}`;
 

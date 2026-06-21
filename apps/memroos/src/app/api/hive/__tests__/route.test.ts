@@ -39,6 +39,25 @@ afterAll(() => {
 });
 
 describe("POST /api/hive — actions", () => {
+  it("blocks direct non-local action writes without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/hive", {
+      method: "POST",
+      body: JSON.stringify({
+        agent_id: "bypass-agent",
+        action_type: "checkpoint",
+        summary: "Bypass proxy",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req as any);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("Test 1 (HIVE-01): POST with valid action body returns 200 with {ok:true, id}", async () => {
     const req = makePostRequest({
       agent_id: "claude-code",

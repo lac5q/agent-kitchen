@@ -28,6 +28,22 @@ describe("model routing APIs", () => {
     testDb.exec("DROP TABLE IF EXISTS model_routing_events");
   });
 
+  it("blocks direct non-local telemetry writes without operator authorization", async () => {
+    const res = await telemetryRoute.POST(
+      postRequest("https://memroos.example.com/api/model-routing/telemetry", {
+        taskType: "engineering",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+      }) as any
+    );
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("records telemetry without storing raw prompts", async () => {
     const res = await telemetryRoute.POST(
       postRequest("http://localhost/api/model-routing/telemetry", {

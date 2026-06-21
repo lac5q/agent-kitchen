@@ -5,6 +5,47 @@ const checkpointsRoute = await import("../route");
 const metricsRoute = await import("../metrics/route");
 
 describe("/api/agent-checkpoints", () => {
+  it("blocks direct non-local checkpoint writes without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agent-checkpoints", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        runId: `run-${Date.now()}`,
+        ownerAgentId: "opencode",
+        objective: "Bypass proxy",
+      }),
+    });
+
+    const res = await checkpointsRoute.POST(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local checkpoint reads without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agent-checkpoints?runId=run-missing");
+
+    const res = await checkpointsRoute.GET(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
+  it("blocks direct non-local checkpoint metrics without operator authorization", async () => {
+    const req = new Request("https://memroos.example.com/api/agent-checkpoints/metrics");
+
+    const res = await metricsRoute.GET(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("accepts a POST capture and returns a checkpoint, then resumes it", async () => {
     const runId = `run-${Date.now()}`;
     const payload = {

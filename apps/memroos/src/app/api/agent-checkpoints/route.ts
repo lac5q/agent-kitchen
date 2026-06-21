@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { createAgentCheckpoint, resumeFromCheckpoint } from "@/lib/agent-checkpoints";
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function POST(req: Request) {
+  if (!authorizeRegistryWrite(req)) return registryWriteUnauthorizedResponse();
+
   try {
     const body = await req.json();
     const db = getDb();
@@ -33,6 +36,8 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  if (!authorizeRegistryWrite(req)) return registryWriteUnauthorizedResponse();
+
   try {
     const { searchParams } = new URL(req.url);
     const runId = searchParams.get("runId");

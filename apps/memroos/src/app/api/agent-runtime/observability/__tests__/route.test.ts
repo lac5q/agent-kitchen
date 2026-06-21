@@ -14,6 +14,16 @@ afterEach(() => {
 });
 
 describe("agent runtime observability API", () => {
+  it("blocks direct non-local dashboard reads without operator authorization", async () => {
+    const res = await GET(new Request("https://memroos.example.com/api/agent-runtime/observability") as any);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Registry write authorization required",
+    });
+  });
+
   it("returns an offline HTML dashboard from Hermes logs", async () => {
     tempRoot = mkdtempSync(path.join(tmpdir(), "hermes-observability-"));
     mkdirSync(path.join(tempRoot, "logs"), { recursive: true });

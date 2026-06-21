@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { promoteAgentVersion } from "@/lib/agent-cicd-gates";
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function POST(req: Request) {
+  if (!authorizeRegistryWrite(req)) return registryWriteUnauthorizedResponse();
+
   try {
     const body = await req.json();
     const { tenantId = "default-tenant", agentId, version, profile, operator = "system" } = body;

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { scanContent } from '@/lib/content-scanner';
 import { writeAuditLog } from '@/lib/audit';
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,6 +162,8 @@ export async function GET(req: NextRequest) {
  * Delegation body: { type: 'delegation', task_id, from_agent, to_agent, task_summary, priority?, status?, checkpoint? }
  */
 export async function POST(req: NextRequest) {
+  if (!authorizeRegistryWrite(req)) return registryWriteUnauthorizedResponse();
+
   const body = await req.json();
   const db = getDb();
 

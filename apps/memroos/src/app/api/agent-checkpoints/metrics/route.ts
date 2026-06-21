@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCheckpointMetrics } from "@/lib/agent-checkpoints";
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function GET(req: Request) {
+  if (!authorizeRegistryWrite(req)) return registryWriteUnauthorizedResponse();
+
   try {
     const { searchParams } = new URL(req.url);
     const tenantId = searchParams.get("tenantId") || "default-tenant";
