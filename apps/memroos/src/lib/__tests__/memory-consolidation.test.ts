@@ -9,24 +9,18 @@ vi.mock('@/lib/db', () => ({
   closeDb: () => {},
 }));
 
-// Mock @anthropic-ai/sdk -- must use a proper class constructor since memory-consolidation uses `new Anthropic()`
-const mockCreate = vi.fn().mockResolvedValue({
-  content: [
-    {
-      type: 'text',
-      text: JSON.stringify([
-        { insight_type: 'pattern', content: 'Test pattern insight' },
-      ]),
-    },
-  ],
-});
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('@anthropic-ai/sdk', () => {
-  class MockAnthropic {
-    messages = { create: mockCreate };
-  }
-  return { default: MockAnthropic };
-});
+function mockOllamaResponse(content: string, init?: ResponseInit) {
+  return Promise.resolve(
+    new Response(JSON.stringify({ message: { content } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    })
+  );
+}
 
 const { initSchema } = await import('@/lib/db-schema');
 initSchema(testDb);
@@ -45,25 +39,20 @@ function seedMessage(sessionSuffix: string) {
 describe('runConsolidation', () => {
   beforeEach(() => {
     vi.resetModules();
-    mockCreate.mockClear();
-    mockCreate.mockResolvedValue({
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify([
-            { insight_type: 'pattern', content: 'Test pattern insight' },
-          ]),
-        },
-      ],
-    });
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(
+      mockOllamaResponse(JSON.stringify([{ insight_type: 'pattern', content: 'Test pattern insight' }]))
+    );
     testDb.exec('DELETE FROM memory_meta_insights');
     testDb.exec('DELETE FROM memory_consolidation_runs');
-    testDb.exec('UPDATE messages SET consolidated = 0');
+    testDb.exec('DELETE FROM memory_salience');
+    testDb.exec('DELETE FROM messages');
+    delete process.env.OLLAMA_BASE_URL;
+    delete process.env.CONSOLIDATION_MODEL;
   });
 
   it('marks messages as consolidated=1 after successful run', async () => {
     seedMessage('c1');
-    process.env.ANTHROPIC_API_KEY = 'test-key';
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
@@ -76,7 +65,6 @@ describe('runConsolidation', () => {
 
   it('creates a row in memory_consolidation_runs with status=completed', async () => {
     seedMessage('c2');
-    process.env.ANTHROPIC_API_KEY = 'test-key';
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
@@ -90,7 +78,6 @@ describe('runConsolidation', () => {
   it('writes parsed meta-insights to memory_meta_insights', async () => {
     seedMessage('c3');
     testDb.exec('UPDATE messages SET consolidated = 0');
-    process.env.ANTHROPIC_API_KEY = 'test-key';
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
@@ -117,12 +104,9 @@ describe('runConsolidation', () => {
   });
 
   it('handles LLM JSON parse failure gracefully (returns empty insights)', async () => {
-    mockCreate.mockResolvedValueOnce({
-      content: [{ type: 'text', text: 'not valid json at all' }],
-    });
+    mockFetch.mockResolvedValueOnce(mockOllamaResponse('not valid json at all'));
     seedMessage('c4');
     testDb.exec('UPDATE messages SET consolidated = 0');
-    process.env.ANTHROPIC_API_KEY = 'test-key';
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
@@ -134,20 +118,24 @@ describe('runConsolidation', () => {
     expect(result).toMatchObject({ status: 'completed', insightsWritten: 0 });
   });
 
-  it('logs warning and exits when ANTHROPIC_API_KEY is missing', async () => {
-    const savedKey = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('uses configured Ollama endpoint and model without requiring Anthropic credentials', async () => {
+    process.env.OLLAMA_BASE_URL = 'http://ollama.test:11434';
+    process.env.CONSOLIDATION_MODEL = 'qwen-local:test';
+    seedMessage('ollama1');
 
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('ANTHROPIC_API_KEY')
+    expect(result).toMatchObject({ status: 'completed' });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://ollama.test:11434/api/chat',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(String),
+      })
     );
-    expect(result).toMatchObject({ status: 'disabled' });
-    warnSpy.mockRestore();
-    if (savedKey) process.env.ANTHROPIC_API_KEY = savedKey;
+    const body = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(body.model).toBe('qwen-local:test');
   });
 
   it('skips provider calls during rate-limit backoff', async () => {
@@ -155,20 +143,18 @@ describe('runConsolidation', () => {
     testDb.prepare(
       "INSERT INTO memory_consolidation_runs(started_at, status, error_message) VALUES(strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'failed', ?)"
     ).run('429 usage limit exceeded');
-    process.env.ANTHROPIC_API_KEY = 'test-key';
 
     const { runConsolidation } = await import('@/lib/memory-consolidation');
     const result = await runConsolidation();
 
     expect(result.status).toBe('skipped');
     expect(result.reason).toBe('provider_rate_limited');
-    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
 describe('startConsolidationScheduler', () => {
   it('double-start guard prevents duplicate intervals', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
     const { startConsolidationScheduler } = await import('@/lib/memory-consolidation');
     expect(() => {
       startConsolidationScheduler();

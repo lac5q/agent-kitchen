@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { SQLITE_DB_PATH } from './constants';
+import { loadMemroosEnv } from './env';
 import { initSchema } from './db-schema';
 import { resolveFromRepoRoot } from './paths';
 import { seedDefaultAdmin } from './auth/seed';
@@ -14,6 +14,7 @@ let _db: Database.Database | null = null;
  */
 export function getDb(): Database.Database {
   if (!_db) {
+    const { SQLITE_DB_PATH } = loadMemroosEnv();
     const resolved = path.isAbsolute(SQLITE_DB_PATH)
       ? SQLITE_DB_PATH
       : resolveFromRepoRoot(SQLITE_DB_PATH);

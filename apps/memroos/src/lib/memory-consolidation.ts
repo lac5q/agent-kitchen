@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { getDb } from './db';
 
 // Use globalThis to survive Next.js hot-reload module re-evaluation.
@@ -31,17 +30,13 @@ Messages:
 /**
  * Runs a single consolidation cycle:
  * - Selects up to 50 unconsolidated messages
- * - Sends them to Claude for insight extraction
+ * - Sends them to Ollama for insight extraction
  * - Writes insights to memory_meta_insights
  * - Marks messages as consolidated
- *
- * Security: T-23-03, T-23-05, T-23-06
  */
 export async function runConsolidation(): Promise<ConsolidationRunResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[consolidation] ANTHROPIC_API_KEY not set -- consolidation disabled');
-    return { status: 'disabled', reason: 'ANTHROPIC_API_KEY not set' };
-  }
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
+  const consolidationModel = process.env.CONSOLIDATION_MODEL ?? 'qwen2.5:3b';
 
   const db = getDb();
   const backoff = currentProviderBackoff(db);
@@ -77,19 +72,24 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
       .map((m, i) => `[${i + 1}] ${m.content.slice(0, 500)}`)
       .join('\n');
 
-    // Call Anthropic — model configurable via CONSOLIDATION_MODEL env var
-    const consolidationModel = process.env.CONSOLIDATION_MODEL ?? 'claude-haiku-4-5-20251001';
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: consolidationModel,
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: CONSOLIDATION_PROMPT + batchText }],
+    // Call Ollama via native API
+    const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: consolidationModel,
+        messages: [{ role: 'user', content: CONSOLIDATION_PROMPT + batchText }],
+        stream: false,
+        options: { num_predict: 1024 },
+      }),
     });
 
-    const rawText = response.content
-      .filter((c) => c.type === 'text')
-      .map((c) => (c as { type: 'text'; text: string }).text)
-      .join('');
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as { message?: { content?: string } };
+    const rawText = data.message?.content ?? '';
 
     // Strip markdown code fences
     const cleanedText = rawText.replace(/```(?:json)?\n?/gi, '').trim();
