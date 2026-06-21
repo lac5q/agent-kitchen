@@ -470,21 +470,33 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Goal: run a bounded, approval-gated adapter/eval spike comparing current MemRoOS `agent_memory_candidates` save quality against a local-first Memento-compatible typed/audited memory contract, without replacing mem0, Qdrant, Neo4j, SQLite, or the MemRoOS policy gate.
    - Gate: no dependency adoption, backend swap, or hosted Memento upload of private traces without Luis approval. Success requires `eval:memory`, `eval:knowledge-save-contract`, or equivalent focused fixtures to improve or hold recall@5, precision@5, MRR, false-positive rate, conflict surfacing, and handoff candidate usefulness.
 
-9. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
+9. **P1 — Plan CocoIndex source-freshness spike.**
+- Source signal: June 16 review of CocoIndex as a possible incremental indexing and lineage engine for MemRoOS context-source lanes.
+- Requirement candidate: `COCOINDEX-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
+- Goal: run a bounded future-only spike that wires one non-sensitive declared context lane through CocoIndex as an optional derived-index adapter, then compare freshness, lineage receipts, rebuild cost, recall quality, and policy-label preservation against current qmd/context-source checks.
+- Gate: no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or mem0/Qdrant/Neo4j/SQLite replacement without Luis approval. Success requires source-health proof, recall/precision/MRR non-regression, audit receipts for derived projections, and a clear rollback path.
+
+10. **P1 — Plan FastContext repo-scout spike.**
+- Source signal: June 16 review of Microsoft FastContext as a possible read-only repository explorer for pre-dispatch code context.
+- Requirement candidate: `FASTCONTEXT-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
+- Goal: run a bounded future-only spike comparing FastContext-style repo exploration against GitNexus and baseline grep on 20-50 MemRoOS code-navigation tasks, measuring correct file/function hit rate, line-citation quality, token spend, latency, and whether the scout improves first-pass agent work without duplicating GitNexus as the code graph source of truth.
+- Gate: no runtime dependency, hosted/private repo upload, replacement of GitNexus, or automatic code edits from FastContext output without Luis approval. Success requires evidence receipts, GitNexus compatibility notes, and a reject decision if it is only overlapping semantic search.
+
+11. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
    - Research intake: GBrain's `skillify` meta-skill (11-item checklist, cross-modal eval gate, fail-improve loop, dream cycle); Microsoft SkillOpt's textual learning rate and bounded edit loop; Memroos's existing eval engine, SEAL governance, and skill registry.
    - Source notes: `.planning/notes/skillopt-skill-optimization-spike.md`, `~/github/knowledge/content/skill-optimization-v2/SKILL-OPTIMIZATION-RESEARCH.md`.
    - Requirements: `SKILLFORGE-01..06` in `.planning/REQUIREMENTS.md` (supersedes `SKILLOPT-FOLLOWUP-01`).
    - Goal: Build a Memroos-native governed skill optimization system (SkillForge) that leverages existing infrastructure. Phases 85-90: Foundation → Analysis → Proposal Generation → Evaluation → Governance → Integration. All skill changes go through SEAL proposal lifecycle with operator approval, non-regression gates, and safe runtime export.
 
-10. **P2 — Plan Meeting Ingestion Expansion.**
+12. **P2 — Plan Meeting Ingestion Expansion.**
    - Requirements and candidates: Recall.ai bridge for Zoom/Teams/Meet, multi-participant meeting bot, and voice meeting bot follow-ups.
    - Goal: extend beyond the Daily-only, listener-only v4.0 path while preserving consent, transcript attribution, source provenance, and memory-ingestion boundaries.
 
-11. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
+13. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
    - Requirements and candidates: Voyage AI `voyage-4-large` embedding upgrade and LLM-powered recall scoring upgrade.
    - Goal: improve recall quality behind provider flags while preserving Ollama local as the default path and avoiding vendor lock-in or unreviewed embedding of sensitive content.
 
-12. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
+14. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
    - Source finding: current configs already register unified `memroos` MCP, but legacy `services/memory/mcp-mem0.py` and `mcp-mem0-wrapper.sh` still exist as a standalone mem0-only adapter and one capability manifest still advertises standalone-only memory tools.
    - Source finding: `services/knowledge-mcp` runs FastMCP 2.14.7 while PyPI latest is 3.3.1; v3 migration must move HTTP/path/stateless/auth options to the v3-compatible runtime API rather than doing a blind pin bump.
    - Source finding: `services/memory` uses `mem0ai` 0.1.118 while PyPI latest is 2.0.2; this is a separate memory-backend migration from the FastMCP upgrade.
@@ -492,21 +504,21 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `INT-FOLLOWUP-01..07` in `.planning/REQUIREMENTS.md`.
    - Goal: keep one canonical MemRoOS MCP connection, remove stale memory adapters, upgrade FastMCP and mem0ai deliberately, validate A2A/ADK and Next proxy boundaries against current specs, and stage SDK/toolchain majors before they become operational debt. Pull any integration task forward if it blocks P0 memory/security work.
 
-13. **P2 — Plan Phase 70 follow-up topology closure.**
+15. **P2 — Plan Phase 70 follow-up topology closure.**
    - Source note: `.planning/phases/70-foundation-engine-core/deferred-items.md`.
    - Requirement: `ORCH-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: close deferred LangGraph multi-hop topology and rollback-compensation gaps before claiming full multi-hop orchestration depth. Pull forward only if a live workflow needs multi-hop compensation.
 
-14. **P3 — Plan commercial/product/backend expansion.**
+16. **P3 — Plan commercial/product/backend expansion.**
    - Requirements: `PRODUCT-01..02`, `VERTICAL-01`, and `L3-FOLLOWUP-01..03`.
    - Goal: decide Eval Engine packaging, pricing/commercialization, second vertical, and live Salesforce/Zendesk/NetSuite/business-outcome adapters after the memory trust and evidence substrate is credible.
 
-15. **P3 — Plan recent-deferred hardening sweep.**
+17. **P3 — Plan recent-deferred hardening sweep.**
    - Source notes: Phase 57-64 context/summary deferred sections plus `.planning/PROJECT.md` v5 candidates.
    - Requirements: remaining `AUTH-FOLLOWUP-01..03`, `AUDIT-FOLLOWUP-01..03`, `UX-FOLLOWUP-01..07`, and any deferred items not already pulled into P0-P2.
    - Goal: prevent recent deferred notes from living only in phase-local context by turning them into plan-ready backlog requirements.
 
-16. **P1 — Plan service navigation and optional install profiles.**
+18. **P1 — Plan service navigation and optional install profiles.**
    - Source request: 2026-05-26 operator feedback asked for a Services page/dropdown and for Docker to remain available as an installation mechanism for public users, while keeping Luis's own setup cloud-first and slim.
    - Requirements: `UX-FOLLOWUP-07` and `INSTALL-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: make service health and ownership visible from the UI, then preserve Docker as an explicit optional test/demo path instead of letting local containers, images, or demo volumes become the default operator footprint.
@@ -519,6 +531,8 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - Memory backend pluggability (beyond mem0 + Qdrant + Neo4j) — v3.0 concern
 - Turbovec compressed-vector shadow-index evaluation for local footprint/hot-path recall — future-only; requires Luis approval before implementation or dependency adoption
 - Memento memory-save quality spike — future-only local-first adapter/eval comparison; requires Luis approval before dependency adoption, backend swap, or hosted/private trace upload
+- CocoIndex source-freshness spike — future-only optional derived-index adapter for one non-sensitive context lane; requires Luis approval before dependency adoption, production indexing, policy bypass, or memory backend changes
+- FastContext repo-scout spike — future-only read-only code-navigation comparison against GitNexus and grep; requires Luis approval before runtime dependency, hosted/private repo upload, GitNexus replacement, or automated edits
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
 - Multi-participant meeting bot: move beyond listener-only recording into participant-aware meeting capture and consent behavior

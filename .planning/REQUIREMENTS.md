@@ -91,15 +91,24 @@
 
 ## v7.2 Architecture Review Hardening
 
+2026-06-19 progress:
+- `ARCHREV-01`: handler-local operator guards now protect `/api/agent-checkpoints`, `/api/agent-checkpoints/metrics`, `/api/agents/versions`, `/api/agents/versions/promote`, `/api/agents/versions/rollback`, `/api/agent-memory/traces`, `/api/agent-runtime/observability`, `/api/hive` POST, and `/api/model-routing/telemetry` POST with direct non-local regression coverage.
+- `ARCHREV-09`: route-handler regression coverage now proves selected privileged routes reject direct non-local calls before validation or DB access.
+
 - [ ] **ARCHREV-01**: Route-level operator/agent auth wrappers protect privileged route groups inside handlers or factories so `proxy.ts` is not the only security boundary; marketing-app split remains a follow-on deployment decision.
 - [ ] **ARCHREV-02**: Architecture docs describe MemRoOS as an agent OS with a broker kernel, include a module map for shipped domains, and define placement rules for Next app vs. Python service vs. script.
 - [x] **ARCHREV-03**: SQLite schema initialization runs through an ordered migration runner stamped with `PRAGMA user_version`; unstamped legacy DBs upgrade to the current version, future-version DBs fail closed, and default admin seeding completes synchronously before `getDb()` returns.
 - [ ] **ARCHREV-04**: A single runtime topology manifest names required services, ports, health checks, and supervision mode; `start.sh`, launchd installers, and Docker compose derive from or validate against that source.
+  - 2026-06-19 progress: added shared JSON `runtime-topology` manifest plus standalone `check:runtime-topology` validation covering app, mem0, orchestration, voice, and agentmemory service ports, health checks, and supervision modes against current Docker/startup text.
+  - 2026-06-19 progress: `start.sh` now derives its manual-script port defaults from `scripts/check-runtime-topology.mjs port ...`; environment overrides still win.
+ - 2026-06-19 progress: `scripts/launchd-start.sh` now derives launchd app port defaults from the same checker after runtime env and Node path resolution; `PORT` and `MEMROOS_LAUNCHD_DEFAULT_PORT` overrides still win. Docker compose remains validated against the manifest, not generated from it yet.
 - [ ] **ARCHREV-05**: App configuration is validated through one typed env module at startup, with `process.env` reads centralized and legacy root config status reconciled.
 - [ ] **ARCHREV-06**: API, A2A, REST shim, MCP, and SDK contracts have one generated or shared schema source plus an SDK smoke test against a running app.
 - [ ] **ARCHREV-07**: Recall canary evaluation runs in CI or a scheduled workflow, using existing golden sets and recall thresholds as a regression gate.
 - [ ] **ARCHREV-08**: Planning history retention is decided before wider release: prune to current-milestone public docs or move archival GSD screenshots/history to a private sibling repo.
 - [ ] **ARCHREV-09**: Next.js trust-boundary changes carry explicit proxy/auth regression coverage and a migration checklist before framework upgrades touch `proxy.ts`.
+
+- [x] **ARCHREV-10**: Storage ingress applies PII detection and anonymization before memory payloads leave MemRoOS for mem0/vector storage; forwarded payloads carry non-sensitive metadata receipts with provider, entity types, count, redaction mode, and original content hash.
 
 ## v7.4 NOC Efficiency Telemetry
 
@@ -114,6 +123,8 @@
 ## Future Requirements (Deferred)
 
 - **MEMGEN-FOLLOWUP-02**: Run a bounded Memento memory-save quality spike that compares local-first typed/audited Memento-style memory behavior against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, or hosted/private trace upload without Luis approval.
+- **COCOINDEX-FOLLOWUP-01**: Run a bounded CocoIndex source-freshness spike against one non-sensitive declared context lane, comparing incremental freshness, lineage receipts, rebuild cost, recall quality, and policy-label preservation against current qmd/context-source checks; no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or mem0/Qdrant/Neo4j/SQLite replacement without Luis approval.
+- **FASTCONTEXT-FOLLOWUP-01**: Run a bounded FastContext repo-scout spike against 20-50 MemRoOS code-navigation tasks, comparing correct file/function hit rate, line-citation quality, token spend, latency, and first-pass work improvement against GitNexus and baseline grep; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic code edits from FastContext output without Luis approval.
 - Automated DAST scanning in CI pipeline (post-audit baseline needed first)
 - Penetration test by external firm (after internal audit complete)
 - SOC 2 Type II controls mapping (separate compliance milestone)
@@ -190,7 +201,10 @@
 | ARCHREV-07 | 115 | Planned |
 | ARCHREV-08 | 115 | Planned |
 | ARCHREV-09 | 115 | Planned |
+| ARCHREV-10 | 115 | Complete |
 | MEMGEN-FOLLOWUP-02 | Future | Deferred |
+| COCOINDEX-FOLLOWUP-01 | Future | Deferred |
+| FASTCONTEXT-FOLLOWUP-01 | Future | Deferred |
 | EFFTEL-01 | 117 | Planned |
 | EFFTEL-02 | 117 | Planned |
 | EFFTEL-03 | 117 | Planned |

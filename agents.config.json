@@ -51,6 +51,26 @@
       "port": 18792,
       "healthEndpoint": "/health",
       "tunnelUrl": "https://gwen.example.com"
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "role": "Coding Agent",
+      "platform": "opencode",
+      "location": "local",
+      "host": "localhost",
+      "port": 3000,
+      "healthEndpoint": "/health"
+    },
+    {
+      "id": "cortex",
+      "name": "Cortex",
+      "role": "Coding Agent",
+      "platform": "cortex",
+      "location": "local",
+      "host": "localhost",
+      "port": 3000,
+      "healthEndpoint": "/health"
     }
   ]
 }

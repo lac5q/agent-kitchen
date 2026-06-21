@@ -90,9 +90,14 @@ Next action: Continue Phase 115 follow-on architecture hardening slices or start
 
 ## Accumulated Context
 
+### Roadmap Evolution (2026-06-19)
+
+- Phase 115 trust-boundary hardening advanced: handler-local operator guards and direct non-local regression tests now cover agent checkpoints, checkpoint metrics, agent version create/list/promote/rollback, memory trace POST/GET, runtime observability dashboard reads, hive POST writes, and model-routing telemetry POST writes. `ARCHREV-01` and `ARCHREV-09` remain open for the broader privileged route inventory and future proxy/Next.js migration checklist.
+- Phase 115 runtime topology hardening advanced: `apps/memroos/src/lib/runtime-topology.json` now serves shared manifest source service ports, health checks, supervision modes app, mem0, orchestration, voice, agentmemory. `npm run check:runtime-topology` runs standalone Node checker against current Docker/startup text; `start.sh` derives manual-script port defaults checker and `scripts/launchd-start.sh` derives launchd app port defaults after runtime env and Node path resolution. `ARCHREV-04` remains open until Docker compose generated from or otherwise directly derived from manifest.
+
 ### Roadmap Evolution (2026-06-14)
 
-- Phase 116 is complete as the v7.3 Agent Context Bus Operational Bootstrap. It operationalizes the Phase 107 agent-context bus with provisioning/startup expectations, MCP `MEMROOS_AGENT_API_KEY` wiring, agent-side communication skill coverage, and a unit/integration smoke test proving register → key → send → inbox → ack → reply with schema, threading, and audit receipts.
+- Phase 116 is complete v7.3 Agent Context Bus Operational Bootstrap. It operationalizes Phase 107 agent-context bus provisioning/startup expectations, MCP `MEMROOS_AGENT_API_KEY` wiring, agent-side communication skill coverage, unit/integration smoke test proving register → key → send → inbox → ack → reply schema, threading, audit receipts.
 
 ### Roadmap Evolution (2026-06-10)
 
@@ -109,6 +114,7 @@ Next action: Continue Phase 115 follow-on architecture hardening slices or start
 - Phase 108 is complete as an operating-profile implementation. MemRoOS now has a local-footprint inventory library, `npm run check:local-footprint`, NOC API footprint status, cloud target mapping, prune-safety classification, and guardrails for raw vault/secrets/vector backends.
 - Turbovec was added to the Phase 108 roadmap only as a future compressed-vector shadow-index limitation/test. It is not approved for implementation; any future test or dependency adoption requires Luis approval first and must prove no recall/precision regression plus meaningful hot-path latency improvement.
 - Memento-style memory was added as a future bounded save-quality spike, not an approved implementation. Any future work should compare a local-first typed/audited Memento-compatible contract against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, hosted/private trace upload, or replacement of mem0/Qdrant/Neo4j/SQLite starts without Luis approval.
+- CocoIndex and FastContext were added as future bounded comparison spikes, not approved implementations. CocoIndex should be tested only as an optional derived-index adapter for one non-sensitive context lane; FastContext should be tested only as a read-only repo-scout baseline against GitNexus and grep. Neither can become a dependency, production path, hosted/private upload, policy bypass, backend replacement, GitNexus replacement, or automatic-edit path without Luis approval.
 
 ### Roadmap Evolution (2026-05-27)
 
@@ -254,3 +260,5 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 | context_questions | Phase 60 / 60-CONTEXT.md — trajectory authorship workflow, step count bounds, preset-change audit semantics | Deferred to v3 planning |
 | context_questions | Phase 63 / 63-CONTEXT.md — rename/auth decisions recorded as next-milestone context | Deferred to Phase 63 execution |
 | future_spike | Memento memory-save quality spike — compare local-first typed/audited Memento-style save behavior against MemRoOS candidates and evals; no dependency, backend, or hosted/private-trace adoption without Luis approval | Deferred to future GSD planning |
+| future_spike | CocoIndex source-freshness spike — compare optional derived-index behavior for one non-sensitive context lane against qmd/source-health checks; no dependency, production path, policy bypass, sensitive indexing, or backend replacement without Luis approval | Deferred to future GSD planning |
+| future_spike | FastContext repo-scout spike — compare read-only repo exploration against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private upload, GitNexus replacement, or automatic edits without Luis approval | Deferred to future GSD planning |
