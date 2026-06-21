@@ -1,0 +1,12 @@
+# Local/generated artifacts should never be uploaded to Vercel.
+node_modules
+**/node_modules
+.next
+**/.next
+.qdrant_storage
+.qwen
+.planning
+apps/memroos/data/*.db
+apps/memroos/data/*.db-*
+*.log
+.DS_Store
