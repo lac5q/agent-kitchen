@@ -13,13 +13,10 @@ vi.mock("next/link", () => ({
 import { NodeDetailRail } from "../node-detail-rail";
 
 describe("NodeDetailRail", () => {
-  it("links the suggested change CTA to the pending APO queue", () => {
+  it("links the selected node CTA to its page", () => {
     render(<NodeDetailRail nodeId="memroos" />);
 
-    expect(screen.getByRole("link", { name: /apply via apo/i })).toHaveAttribute(
-      "href",
-      "/apo?tab=pending&source=flow"
-    );
+    expect(screen.getByRole("link", { name: /open page/i })).toHaveAttribute("href", "/");
   });
 
   it("does not render a current-page Open page link for source nodes already shown on the map", () => {

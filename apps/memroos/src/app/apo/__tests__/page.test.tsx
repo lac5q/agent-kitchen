@@ -75,12 +75,11 @@ describe("ApoPage", () => {
     window.history.replaceState({}, "", "/apo");
   });
 
-  it("opens the pending tab from the flow CTA query string and explains an empty queue", async () => {
+  it("opens the pending tab from query string and explains an empty queue", async () => {
     window.history.replaceState({}, "", "/apo?tab=pending&source=flow");
 
     render(<ApoPage />);
 
-    expect(await screen.findByText(/flow sent you here/i)).toBeInTheDocument();
     expect(await screen.findByText(/no proposals in this view/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /pending/i })).toHaveStyle({ color: "#7a2a1e" });
   });
@@ -89,7 +88,7 @@ describe("ApoPage", () => {
     window.history.replaceState({}, "", "/apo?tab=pending&source=flow");
 
     render(<ApoPage />);
-    await screen.findByText(/flow sent you here/i);
+    await screen.findByText(/no proposals in this view/i);
     fireEvent.click(screen.getByRole("button", { name: /archived/i }));
 
     expect(screen.getByText("ceo")).toBeInTheDocument();

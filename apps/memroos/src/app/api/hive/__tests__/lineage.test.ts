@@ -27,7 +27,11 @@ function makeGetRequest(params: Record<string, string>) {
 }
 
 function makePostRequest(body: object) {
-  return { json: async () => body } as any;
+  return new Request("http://localhost/api/hive", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }) as any;
 }
 
 describe("GET /api/hive lineage", () => {
