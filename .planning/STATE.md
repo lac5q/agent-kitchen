@@ -100,6 +100,10 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 - Phase 118 was added after the proactive recollection research pass. The product answer is a deterministic recollection decision layer: detect task/project/recency/handoff/source/rediscovery triggers before plan/tool/final gates, generate bounded tier-aware memory queries, rank candidates by relevance plus recency plus salience/importance plus source freshness plus prior usefulness plus policy risk, inject only threshold-cleared context, and emit receipts for both search and skipped-search decisions.
 - The requirement deliberately builds on existing MemRoOS pieces: `/api/recall`, `/api/memory/search`, `memory_salience`, Phase 96 handoff packs, Phase 104 memory traces, Phase 114 retrieval receipts, and Phase 117 efficiency telemetry. It does not approve a new memory backend or cross-project recall without explicit scope and policy proof.
 
+### Roadmap Evolution (2026-06-24)
+
+- `ADKA2A-FOLLOWUP-01` was added after reviewing Google's cross-language contract-compliance pipeline shared from the Shubham Saboo X post. The useful pattern is Python/ADK orchestration delegating to a Go deterministic validator through A2A/JSON-RPC, with timeout, retry, fail-closed, and audit behavior visible. This belongs as a bounded integration/demo fixture for MemRoOS's A2A registry, dispatch, evidence, and NOC surfaces, not as an ADK/Gemini dependency or a compliance-vertical product claim.
+
 ### Roadmap Evolution (2026-06-14)
 
 - Phase 116 is complete v7.3 Agent Context Bus Operational Bootstrap. It operationalizes Phase 107 agent-context bus provisioning/startup expectations, MCP `MEMROOS_AGENT_API_KEY` wiring, agent-side communication skill coverage, unit/integration smoke test proving register → key → send → inbox → ack → reply schema, threading, audit receipts.
@@ -267,3 +271,4 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 | future_spike | Memento memory-save quality spike — compare local-first typed/audited Memento-style save behavior against MemRoOS candidates and evals; no dependency, backend, or hosted/private-trace adoption without Luis approval | Deferred to future GSD planning |
 | future_spike | CocoIndex source-freshness spike — compare optional derived-index behavior for one non-sensitive context lane against qmd/source-health checks; no dependency, production path, policy bypass, sensitive indexing, or backend replacement without Luis approval | Deferred to future GSD planning |
 | future_spike | FastContext repo-scout spike — compare read-only repo exploration against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private upload, GitNexus replacement, or automatic edits without Luis approval | Deferred to future GSD planning |
+| future_spike | ADK/A2A cross-language contract-compliance demo — compare Google's Python ADK plus Go deterministic-validator A2A fixture against MemRoOS registry/dispatch/evidence/NOC surfaces; no core ADK/Gemini dependency, app copy, runtime replacement, or compliance-vertical claim without Luis approval | Deferred to future GSD planning |

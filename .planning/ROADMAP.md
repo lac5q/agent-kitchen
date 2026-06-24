@@ -540,6 +540,7 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - Memento memory-save quality spike — future-only local-first adapter/eval comparison; requires Luis approval before dependency adoption, backend swap, or hosted/private trace upload
 - CocoIndex source-freshness spike — future-only optional derived-index adapter for one non-sensitive context lane; requires Luis approval before dependency adoption, production indexing, policy bypass, or memory backend changes
 - FastContext repo-scout spike — future-only read-only code-navigation comparison against GitNexus and grep; requires Luis approval before runtime dependency, hosted/private repo upload, GitNexus replacement, or automated edits
+- ADK/A2A cross-language contract-compliance demo — future-only reference fixture using Google's Python ADK orchestrator plus Go deterministic validator over A2A/JSON-RPC; prove registry/card ingestion, dispatch handoff, timeout/retry/fail-closed behavior, evidence receipts, and NOC visibility without adopting ADK/Gemini as a MemRoOS core dependency
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
 - Multi-participant meeting bot: move beyond listener-only recording into participant-aware meeting capture and consent behavior

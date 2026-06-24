@@ -149,6 +149,7 @@ This file tracks the current high-level product milestone state. Detailed requir
 - Memento-style memory-save quality spike: bounded comparison only; no dependency adoption, backend swap, hosted/private trace upload, or replacement of mem0/Qdrant/Neo4j/SQLite without Luis approval.
 - CocoIndex source-freshness spike: bounded future comparison only against one non-sensitive declared context lane; no dependency adoption, production indexing path, policy bypass, sensitive raw-corpus indexing, or memory backend replacement without Luis approval.
 - FastContext repo-scout spike: bounded future comparison only against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic edits without Luis approval.
+- ADK/A2A cross-language contract-compliance demo spike: bounded future fixture only; use Google's Python ADK plus Go deterministic-validator pattern to prove A2A handoff, failure receipts, and NOC visibility, with no ADK/Gemini core dependency or compliance-vertical claim without Luis approval.
 - DAST scanning in CI after the v7.0 audit baseline.
 - External penetration test.
 - SOC 2 Type II controls mapping.

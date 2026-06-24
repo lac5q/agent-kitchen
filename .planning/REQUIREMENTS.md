@@ -136,6 +136,7 @@
 - **MEMGEN-FOLLOWUP-02**: Run a bounded Memento memory-save quality spike that compares local-first typed/audited Memento-style memory behavior against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, or hosted/private trace upload without Luis approval.
 - **COCOINDEX-FOLLOWUP-01**: Run a bounded CocoIndex source-freshness spike against one non-sensitive declared context lane, comparing incremental freshness, lineage receipts, rebuild cost, recall quality, and policy-label preservation against current qmd/context-source checks; no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or mem0/Qdrant/Neo4j/SQLite replacement without Luis approval.
 - **FASTCONTEXT-FOLLOWUP-01**: Run a bounded FastContext repo-scout spike against 20-50 MemRoOS code-navigation tasks, comparing correct file/function hit rate, line-citation quality, token spend, latency, and first-pass work improvement against GitNexus and baseline grep; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic code edits from FastContext output without Luis approval.
+- **ADKA2A-FOLLOWUP-01**: Run a bounded cross-language ADK/A2A contract-compliance demo spike using Google's contract-compliance pipeline as a reference fixture, comparing Python/ADK orchestration, Go deterministic validation, A2A/JSON-RPC handoff, timeout/retry/fail-closed behavior, and evidence/NOC receipts against MemRoOS's existing A2A registry and dispatch surfaces; no ADK/Gemini core dependency, wholesale app copy, compliance-vertical claim, or runtime replacement without Luis approval.
 - Automated DAST scanning in CI pipeline (post-audit baseline needed first)
 - Penetration test by external firm (after internal audit complete)
 - SOC 2 Type II controls mapping (separate compliance milestone)
@@ -216,6 +217,7 @@
 | MEMGEN-FOLLOWUP-02 | Future | Deferred |
 | COCOINDEX-FOLLOWUP-01 | Future | Deferred |
 | FASTCONTEXT-FOLLOWUP-01 | Future | Deferred |
+| ADKA2A-FOLLOWUP-01 | Future | Deferred |
 | EFFTEL-01 | 117 | Planned |
 | EFFTEL-02 | 117 | Planned |
 | EFFTEL-03 | 117 | Planned |
