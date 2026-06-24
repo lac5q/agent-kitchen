@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 const DispatchBodySchema = z.object({
   task_summary: z.string().min(1),
   to_agent: z.string().min(1),
-  input: z.record(z.unknown()).optional(),
+  input: z.record(z.string(), z.unknown()).optional(),
   priority: z.number().optional(),
   skill_name: z.string().optional(),
   task_id: z.string().optional(),

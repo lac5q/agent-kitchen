@@ -35,15 +35,15 @@
 
 ## Launch Quickstart
 
-**One command to get started:**
+**Docker install (recommended):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
 ```
 
-This detects your OS, checks prerequisites, clones MemroOS, and offers demo mode (no config needed) or full setup with guided wizard.
+This requires only Git, Docker, and Docker Compose. It clones MemroOS, builds the app container, starts the local demo stack, and keeps app data in Docker volumes.
 
-**Manual install:**
+**Native development install:**
 
 ```bash
 git clone https://github.com/lac5q/memroos.git
@@ -53,6 +53,19 @@ npm install
 ./setup.sh --wizard      # guided config for Qdrant Cloud + full setup
 ./setup.sh --status      # check running services
 ```
+
+**Manual Docker install:**
+
+```bash
+git clone https://github.com/lac5q/memroos.git
+cd memroos
+docker compose -f docker-compose.demo.yml up -d --build
+docker compose -f docker-compose.demo.yml ps
+```
+
+The demo profile is self-contained: it starts MemRoOS, mem0, orchestration, and
+an Ollama container that pulls `qwen2.5:3b` plus `nomic-embed-text` on first
+start. First boot can take several minutes while images and models download.
 
 Then open `http://localhost:3000`, search retained memory, inspect Knowledge source health, register or dispatch an agent, and review the runtime context pack that gets assembled before work starts.
 
@@ -360,6 +373,14 @@ sequenceDiagram
 - Docker with Docker Compose
 - Optional: Qdrant Cloud URL and API key for vector memory
 - Optional: Tailscale for multi-machine private networking
+
+For a Docker-first install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
+```
+
+For native development:
 
 ```bash
 git clone https://github.com/lac5q/memroos.git

@@ -67,9 +67,15 @@ Put Memroos behind a reverse proxy or tunnel that terminates HTTPS. Do not expos
 - Optional voice service
 - Optional knowledge MCP service
 
-For cloud-first operators, run MemroOS natively and point it at managed services. Docker is not required for that path.
+For cloud-first operators, run MemroOS natively or in Compose and point it at managed services. Docker is the recommended public installation path, but it is not required for operators who already supervise Node/Python services directly.
 
-For public repo users who want a local test harness, `docker-compose.yml` provides the slim MemroOS app container only. Demo infrastructure lives in `docker-compose.demo.yml` and should be selected explicitly when someone wants the fuller local demo stack. Qdrant remains cloud-only in both profiles and is configured through environment variables.
+For public repo users who want a local container install, use the Docker installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
+```
+
+That path starts `docker-compose.demo.yml`, which builds the MemroOS app container plus local demo memory/orchestration services and a local Ollama container without host Node or Python. The first demo boot pulls `qwen2.5:3b` and `nomic-embed-text`, so allow a few minutes for image/model downloads. For production-style Compose, use `MEMROOS_COMPOSE_FILE=docker-compose.yml` and provide the required environment values before running the installer. Qdrant remains configured through environment variables.
 
 ## Environment Validation
 

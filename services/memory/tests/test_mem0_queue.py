@@ -252,6 +252,26 @@ def test_build_mem0_config_resolves_provider_env_values(monkeypatch):
     assert config["custom_fact_extraction_prompt"] == "Return JSON with facts as flat strings only."
 
 
+def test_vector_store_metadata_serializes_nested_values(monkeypatch):
+    module = load_mem0_server(monkeypatch, "mem0_server_metadata_under_test")
+
+    metadata = module.vector_store_metadata(
+        {
+            "source": "unit",
+            "pii": {
+                "protected": True,
+                "provider": "microsoft-presidio",
+                "entity_types": ["PERSON"],
+            },
+        }
+    )
+
+    assert metadata["source"] == "unit"
+    assert metadata["pii"] == (
+        '{"entity_types":["PERSON"],"protected":true,"provider":"microsoft-presidio"}'
+    )
+
+
 def test_health_degrades_when_memory_queue_has_pending_saves(monkeypatch, tmp_path):
     module = load_mem0_server(monkeypatch, "mem0_server_health_under_test")
 
@@ -278,6 +298,21 @@ def test_health_degrades_when_memory_queue_has_pending_saves(monkeypatch, tmp_pa
 
     assert health.status == "degraded"
     assert health.queue["queued"] == 1
+
+
+def test_sqlite_health_defaults_to_queue_db(monkeypatch, tmp_path):
+    module = load_mem0_server(monkeypatch, "mem0_server_sqlite_default_under_test")
+    queue_db = tmp_path / "queue.db"
+    monkeypatch.setattr(module, "QUEUE_DB_PATH", queue_db)
+
+    module._queue_failed_memory_add(
+        module.AddMemoryRequest(text="queued for sqlite health", agent_id="shared")
+    )
+
+    assert module.check_sqlite_db() == {
+        "path": str(queue_db),
+        "status": "healthy",
+    }
 
 
 def test_health_degrades_when_mem0_runtime_is_unavailable(monkeypatch, tmp_path):

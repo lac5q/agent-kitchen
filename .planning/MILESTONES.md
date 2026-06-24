@@ -2,12 +2,25 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: Public Evidence Refresh (In Progress 2026-06-08)
+## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection Planning (In Progress 2026-06-23)
 
 **Scope:**
 
 1. Refresh memroos.com, README, screenshots, public metadata, and LLM-readable docs so they match the completed v6.4/v6.5/v6.6/v7.0 product state.
 2. Keep the public story centered on company-owned memory and governance for agent harnesses, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
+3. Plan the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
+
+---
+
+## v7.5 Proactive Recollection Triggering (Planned 2026-06-23)
+
+**Phases:** 118
+
+**Scope:**
+
+1. **Proactive Recollection Triggering (Phase 118)** — Add deterministic search-required/search-skipped decisions before plan/tool/final gates, bounded query planning, relevance/recency/importance/freshness ranking, context-pack receipts, proactive recall evals, and operator/NOC visibility.
+
+**Verification targets:** focused recollection-policy tests, integration at the selected dispatch/runtime seam, memory recall canary, typecheck, build, and NOC receipt visibility.
 
 ---
 

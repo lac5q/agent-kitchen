@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v7.3
-milestone_name: Agent Context Bus Operational Bootstrap
-status: completed
-stopped_at: Phase 116 complete (2026-06-14)
-last_updated: "2026-06-14T01:49:31.000Z"
+milestone: v7.5
+milestone_name: Proactive Recollection Triggering
+status: planned
+stopped_at: Phase 118 planned (2026-06-23)
+last_updated: "2026-06-23T00:00:00.000Z"
 progress:
   total_phases: 61
   completed_phases: 39
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** Phase 116 complete — agent context bus operational bootstrap shipped.
+**Current focus:** Phase 118 planned — proactive recollection trigger/ranking/receipt layer.
 
 ## Current Position
 
-Phase: 116
-Plan: 116-01 complete
-Status: Agent context bus operational bootstrap complete (v7.3)
+Phase: 118
+Plan: 118-01 planned
+Status: Proactive recollection triggering planned (v7.5)
 
 ## Session Continuity
 
-Last session: 2026-06-14T01:49:31.000Z
-Stopped at: Phase 116 complete (2026-06-14)
+Last session: 2026-06-23T00:00:00.000Z
+Stopped at: Phase 118 planned (2026-06-23)
 Resume file: None
-Next action: Continue Phase 115 follow-on architecture hardening slices or start the next planned v7.x roadmap item.
+Next action: Continue Phase 115/117 implementation work or implement Phase 118 as the next memory-quality lane after the telemetry seam is ready.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -94,6 +94,11 @@ Next action: Continue Phase 115 follow-on architecture hardening slices or start
 
 - Phase 115 trust-boundary hardening advanced: handler-local operator guards and direct non-local regression tests now cover agent checkpoints, checkpoint metrics, agent version create/list/promote/rollback, memory trace POST/GET, runtime observability dashboard reads, hive POST writes, and model-routing telemetry POST writes. `ARCHREV-01` and `ARCHREV-09` remain open for the broader privileged route inventory and future proxy/Next.js migration checklist.
 - Phase 115 runtime topology hardening advanced: `apps/memroos/src/lib/runtime-topology.json` now serves shared manifest source service ports, health checks, supervision modes app, mem0, orchestration, voice, agentmemory. `npm run check:runtime-topology` runs standalone Node checker against current Docker/startup text; `start.sh` derives manual-script port defaults checker and `scripts/launchd-start.sh` derives launchd app port defaults after runtime env and Node path resolution. `ARCHREV-04` remains open until Docker compose generated from or otherwise directly derived from manifest.
+
+### Roadmap Evolution (2026-06-23)
+
+- Phase 118 was added after the proactive recollection research pass. The product answer is a deterministic recollection decision layer: detect task/project/recency/handoff/source/rediscovery triggers before plan/tool/final gates, generate bounded tier-aware memory queries, rank candidates by relevance plus recency plus salience/importance plus source freshness plus prior usefulness plus policy risk, inject only threshold-cleared context, and emit receipts for both search and skipped-search decisions.
+- The requirement deliberately builds on existing MemRoOS pieces: `/api/recall`, `/api/memory/search`, `memory_salience`, Phase 96 handoff packs, Phase 104 memory traces, Phase 114 retrieval receipts, and Phase 117 efficiency telemetry. It does not approve a new memory backend or cross-project recall without explicit scope and policy proof.
 
 ### Roadmap Evolution (2026-06-14)
 

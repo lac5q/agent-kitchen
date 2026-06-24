@@ -23,6 +23,8 @@ NC='\033[0m' # No Color
 MEMROOS_REPO="https://github.com/lac5q/memroos.git"
 MEMROOS_DIR="${MEMROOS_INSTALL_DIR:-$HOME/memroos}"
 MEMROOS_BRANCH="${MEMROOS_BRANCH:-main}"
+INSTALL_MODE="${MEMROOS_INSTALL_MODE:-}"
+DOCKER_COMPOSE_FILE="${MEMROOS_COMPOSE_FILE:-docker-compose.demo.yml}"
 
 log() { echo -e "${BLUE}➜ $1${NC}"; }
 ok() { echo -e "${GREEN}✓ $1${NC}"; }
@@ -49,6 +51,59 @@ detect_os() {
 OS=$(detect_os)
 
 has() { command -v "$1" &>/dev/null; }
+
+usage() {
+  cat <<'EOF'
+MemroOS Installer
+
+Usage:
+  install.sh                 Interactive install
+  install.sh --docker        Docker-only install (requires Git, Docker, Compose)
+  install.sh --demo          Native demo setup
+  install.sh --full          Native full setup wizard
+
+Environment:
+  MEMROOS_INSTALL_DIR        Install directory (default: $HOME/memroos)
+  MEMROOS_BRANCH             Git branch to clone (default: main)
+  MEMROOS_COMPOSE_FILE       Compose file for --docker (default: docker-compose.demo.yml)
+  MEMROOS_UPDATE=1           Pull latest if already cloned
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --docker|--container)
+        INSTALL_MODE="docker"
+        ;;
+      --demo)
+        INSTALL_MODE="demo"
+        ;;
+      --full)
+        INSTALL_MODE="full"
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        err "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+needs_git() {
+  if has git; then
+    ok "Git $(git --version | awk '{print $3}') — OK"
+    return 0
+  fi
+  warn "Git required"
+  return 1
+}
 
 needs_node() {
   if has node; then
@@ -158,11 +213,15 @@ check_dependencies() {
   echo ""
 
   local missing=()
-  needs_node || missing+=("node")
-  needs_python || missing+=("python3")
+  needs_git || missing+=("git")
   needs_docker || missing+=("docker")
   needs_compose || missing+=("docker-compose")
-  needs_ollama || true  # optional
+
+  if [[ "$INSTALL_MODE" != "docker" ]]; then
+    needs_node || missing+=("node")
+    needs_python || missing+=("python3")
+    needs_ollama || true  # optional
+  fi
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo ""
@@ -173,6 +232,9 @@ check_dependencies() {
       log "Auto-installing missing dependencies..."
       for dep in "${missing[@]}"; do
         case "$dep" in
+          git)
+            if [[ "$OS" == "darwin" ]]; then brew install git; else sudo apt-get install -y git; fi
+            ;;
           node)
             if [[ "$OS" == "darwin" ]]; then install_node_darwin; else install_node_linux; fi
             ;;
@@ -193,6 +255,9 @@ check_dependencies() {
       if [[ "$answer" != "n" && "$answer" != "N" ]]; then
         for dep in "${missing[@]}"; do
           case "$dep" in
+            git)
+              if [[ "$OS" == "darwin" ]]; then brew install git; else sudo apt-get install -y git; fi
+              ;;
             node)
               if [[ "$OS" == "darwin" ]]; then install_node_darwin; else install_node_linux; fi
               ;;
@@ -232,7 +297,48 @@ clone_repo() {
   fi
 }
 
+run_docker_install() {
+  echo ""
+  ok "Docker container install selected"
+  echo ""
+
+  cd "$MEMROOS_DIR"
+  if [[ ! -f ".env" && -f ".env.example" ]]; then
+    cp .env.example .env
+    ok "Created .env from .env.example"
+  fi
+
+  if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
+    err "Compose file not found: $DOCKER_COMPOSE_FILE"
+    exit 1
+  fi
+
+  log "Building and starting MemroOS containers..."
+  echo "  Compose file: $DOCKER_COMPOSE_FILE"
+  docker compose -f "$DOCKER_COMPOSE_FILE" up -d --build
+}
+
 select_mode() {
+  case "$INSTALL_MODE" in
+    docker)
+      run_docker_install
+      return
+      ;;
+    demo)
+      echo ""
+      ok "Demo mode selected — no configuration needed"
+      "$MEMROOS_DIR/setup.sh" --demo
+      return
+      ;;
+    full)
+      echo ""
+      log "Starting interactive setup..."
+      "$MEMROOS_DIR/setup.sh" --wizard
+      "$MEMROOS_DIR/setup.sh"
+      return
+      ;;
+  esac
+
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
   echo "║  How do you want to run MemroOS?                     ║"
@@ -290,16 +396,23 @@ show_next_steps() {
   echo ""
   echo "  Useful commands:"
   echo "    cd $MEMROOS_DIR"
-  echo "    ./setup.sh --status     # Check service health"
-  echo "    ./setup.sh --demo       # Restart in demo mode"
-  echo "    ./setup.sh --wizard     # Re-configure API keys"
-  echo "    docker compose logs -f  # View logs"
+  if [[ "$INSTALL_MODE" == "docker" ]]; then
+    echo "    docker compose -f $DOCKER_COMPOSE_FILE ps       # Check containers"
+    echo "    docker compose -f $DOCKER_COMPOSE_FILE logs -f  # View logs"
+    echo "    docker compose -f $DOCKER_COMPOSE_FILE down     # Stop containers"
+  else
+    echo "    ./setup.sh --status     # Check service health"
+    echo "    ./setup.sh --demo       # Restart in demo mode"
+    echo "    ./setup.sh --wizard     # Re-configure API keys"
+    echo "    docker compose logs -f  # View logs"
+  fi
   echo ""
   echo "  Open http://localhost:3000 in your browser to get started."
   echo ""
 }
 
 main() {
+  parse_args "$@"
   banner
 
   log "MemroOS Installer v1.0.0-beta.2"

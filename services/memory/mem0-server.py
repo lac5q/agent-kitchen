@@ -272,6 +272,17 @@ def _queue_failed_memory_add(req: "AddMemoryRequest") -> bool:
     return True
 
 
+def vector_store_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Coerce metadata into the scalar-only shape accepted by vector stores."""
+    flattened: dict[str, Any] = {}
+    for key, value in (metadata or {}).items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            flattened[key] = value
+        else:
+            flattened[key] = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return flattened
+
+
 def check_disk_space(path: str = "~") -> dict:
     """Check disk space and return status.
 
@@ -299,15 +310,16 @@ def check_disk_space(path: str = "~") -> dict:
         return {"error": str(e), "critical": True}
 
 
-def check_sqlite_db(db_path: str = "~/.mem0/history.db") -> dict:
+def check_sqlite_db(db_path: str | None = None) -> dict:
     """Check SQLite database health."""
     import sqlite3
+    db_path = str(db_path or QUEUE_DB_PATH)
     result = {"path": db_path, "status": "unknown"}
 
     try:
         full_path = os.path.expanduser(db_path)
         if not os.path.exists(full_path):
-            return {"status": "not_found", "error": "Database file does not exist"}
+            return {**result, "status": "not_found", "error": "Database file does not exist"}
 
         # Check if writable
         if not os.access(full_path, os.W_OK):
@@ -469,7 +481,7 @@ def add_memory(req: AddMemoryRequest, request: Request):
         result = mem.add(
             protected_payload["text"],
             user_id=req.agent_id,
-            metadata=protected_payload.get("metadata", {}),
+            metadata=vector_store_metadata(protected_payload.get("metadata", {})),
         )
         logger.info(f"Memory added for agent {req.agent_id}: {protected_payload['text'][:50]}...")
         return AddMemoryResponse(status="ok", result=result)

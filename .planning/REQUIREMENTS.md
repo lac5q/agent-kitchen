@@ -1,6 +1,6 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-06-08*
+*Updated: 2026-06-23*
 
 ---
 
@@ -12,6 +12,8 @@
 - v7.0 Client-Ready Security + Architecture Audit — complete
 - v7.1 Competitive Retrieval Proof — planned
 - v7.2 Architecture Review Hardening — in progress
+- v7.4 NOC Efficiency Telemetry — planned
+- v7.5 Proactive Recollection Triggering — planned
 
 ---
 
@@ -118,6 +120,15 @@
 - [ ] **EFFTEL-04**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits so NOC can detect "operator re-ask redundancy" (re-asking something already answered from memory).
 - [ ] **EFFTEL-05**: Memory write events include provenance (source, first-seen timestamp, dedup hash) so NOC can detect "rediscovered-fact rate" (facts written to memory again after already existing).
 
+## v7.5 Proactive Recollection Triggering
+
+- [ ] **RECOLLECT-01**: Runtime recollection policy decides, before `before_plan`, `before_tool_use`, and `before_final` gates, whether memory search is required or intentionally skipped; every decision emits a typed reason receipt.
+- [ ] **RECOLLECT-02**: Query planner derives bounded tier-aware recall queries from task text, entities, project/source refs, recency language, handoff state, and rediscovery risk, with explicit scope and limits.
+- [ ] **RECOLLECT-03**: Candidate ranking combines relevance, recency, importance/salience, source freshness, prior usefulness, and policy-risk penalties so recent context can surface without overriding older critical context.
+- [ ] **RECOLLECT-04**: Context-pack assembly injects only threshold-cleared memories and records retrieved, injected, ignored, skipped, score components, authorization result, and why each candidate entered or missed the pack.
+- [ ] **RECOLLECT-05**: Memory traces and recall evals cover proactive timing, old-critical vs recent-low-value conflicts, stale-source demotion, policy-denied candidates, operator re-ask reduction, and rediscovered-fact prevention.
+- [ ] **RECOLLECT-06**: Operator/NOC surfaces expose recent recollection decisions, skipped-search reasons, false-positive rate, and the downstream answer/tool step that used or ignored injected memory.
+
 ---
 
 ## Future Requirements (Deferred)
@@ -210,3 +221,9 @@
 | EFFTEL-03 | 117 | Planned |
 | EFFTEL-04 | 117 | Planned |
 | EFFTEL-05 | 117 | Planned |
+| RECOLLECT-01 | 118 | Planned |
+| RECOLLECT-02 | 118 | Planned |
+| RECOLLECT-03 | 118 | Planned |
+| RECOLLECT-04 | 118 | Planned |
+| RECOLLECT-05 | 118 | Planned |
+| RECOLLECT-06 | 118 | Planned |

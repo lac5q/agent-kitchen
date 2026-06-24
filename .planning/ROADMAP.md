@@ -33,6 +33,7 @@
 - ⏳ **v7.2 Architecture Review Hardening** — Phase 115 (in progress 2026-06-10)
 - ✅ **v7.3 Agent Context Bus Operational Bootstrap** — Phase 116 (completed 2026-06-14)
 - ⏳ **v7.4 NOC Efficiency Telemetry** — Phase 117 (planned 2026-06-15)
+- ⏳ **v7.5 Proactive Recollection Triggering** — Phase 118 (planned 2026-06-23)
 
 ## Phases
 
@@ -47,6 +48,12 @@ Full v7.3 detail in the `## v7.3 Agent Context Bus Operational Bootstrap` sectio
 - [ ] **Phase 117: NOC Efficiency Telemetry Instrumentation** — EFFTEL-01..05; add trace-level data sources for the 5 blocked NOC efficiency metrics (retrieval-before-work, same-source re-reads, raw-context token share, operator re-ask redundancy, rediscovered-fact rate) so the NOC dashboard can show real values instead of honest-state placeholders.
 
 Full v7.4 detail in the `## v7.4 NOC Efficiency Telemetry` section below.
+
+### Current v7.5 Proactive Recollection Triggering Summary — PLANNED
+
+- [ ] **Phase 118: Proactive Recollection Triggering** — RECOLLECT-01..06; add a deterministic trigger/query/ranking/context-pack policy so agents search memory automatically when task signals require it, skip with receipts when they do not, and expose why recent or important context entered or missed the run.
+
+Full v7.5 detail in the `## v7.5 Proactive Recollection Triggering` section below.
 
 ### Current v7.1 Competitive Retrieval Proof Summary — PLANNED
 
@@ -1625,6 +1632,30 @@ Plans:
 
 Plans:
 - [ ] 117-01-PLAN.md — Trace instrumentation for 5 efficiency telemetry sources (depends on /gsd-plan-phase 117 to break down)
+
+---
+
+## v7.5 Proactive Recollection Triggering
+
+### Phase 118: Proactive Recollection Triggering
+
+**Goal**: Make recollection a first-class runtime decision so agents search memory automatically when task, project, recency, handoff, source, or rediscovery signals require it, and emit receipts when search is skipped.
+**Milestone**: v7.5
+**Depends on**: Phase 72 (cross-project recall), Phase 76 (retrieval authorization), Phase 96 (agent memory continuity), Phase 104 (memory-trace observability), Phase 114 (retrieval receipts), Phase 117 (efficiency telemetry)
+**Requirements**: RECOLLECT-01, RECOLLECT-02, RECOLLECT-03, RECOLLECT-04, RECOLLECT-05, RECOLLECT-06
+**Status**: Planned
+**Success Criteria** (what must be TRUE):
+  1. Recollection policy returns a typed `search_required` or `search_skipped` decision before plan/tool/final timing gates, with reason codes and scope.
+  2. Query planner emits bounded tier-aware queries from task text, entities, project/source refs, recency language, handoff state, and rediscovery risk.
+  3. Ranking exposes score components for relevance, recency, importance/salience, source freshness, prior usefulness, and policy risk.
+  4. Context-pack assembly records retrieved, injected, ignored, skipped, authorization result, and why each memory entered or missed the pack.
+  5. Recall evals prove old-critical context can beat recent noise, stale sources are demoted or fail closed, and required recollection happens by `before_plan`, `before_tool_use`, or `before_final` as configured.
+  6. NOC/operator surfaces can inspect recent recollection decisions, skipped-search reasons, false positives, and downstream memory use.
+**UI hint**: Memory/NOC surfaces show "why this memory surfaced" and "why no memory search ran" as receipts, not hidden model intuition.
+**Plans**: 0/1 complete
+
+Plans:
+- [ ] 118-01-PLAN.md — Trigger policy, query planner, ranking, receipts, evals, and NOC read model for proactive recollection.
 
 ---
 
