@@ -2,8 +2,9 @@
 # Knowledge stack health monitor — comprehensive
 # Checks: disk, SQLite, Mem0, Qdrant cloud, QMD, embeddings,
 #         Tailscale peers, Cloudflare tunnel, all agent gateways,
-#         Agent-Lightning venv/cron/proposals, GitHub sync
-# Alerts via Telegram + Discord on failure
+#         Agent-Lightning venv/cron/proposals, GitHub sync,
+#         mem0-server CPU runaway
+# Alerts via Email (SendGrid) + Telegram + Discord on failure
 
 set -uo pipefail
 
@@ -40,6 +41,10 @@ DISK_WARNING_PERCENT=90
 TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
 DISCORD_WEBHOOK_URL="${DISCORD_KNOWLEDGE_WEBHOOK:-}"
+SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
+ALERT_EMAIL_FROM="${ALERT_EMAIL_FROM:-alerts@memroos.ai}"
+ALERT_EMAIL_TO="${ALERT_EMAIL_TO:-${ALERT_EMAIL:-luis@epiloguecapital.com}}"
+MEM0_CPU_ALERT_THRESHOLD="${MEM0_CPU_ALERT_THRESHOLD:-200}"  # % — triggers at 2+ cores
 
 mkdir -p "$ALERT_STATE_DIR"
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -66,6 +71,62 @@ send_discord() {
     > /dev/null 2>&1
 }
 
+send_email() {
+  if [ -z "$SENDGRID_API_KEY" ]; then return 1; fi
+  local subject="$1"
+  local body="$2"
+  # Rate limit: max 5 emails per hour using a rolling counter file
+  local rate_file="$ALERT_STATE_DIR/email_rate.json"
+  local allowed
+  allowed=$(python3 - "$rate_file" <<'PY'
+import sys, json, time, os
+path = sys.argv[1]
+now = time.time()
+window = 3600  # 1 hour
+limit = 5
+try:
+    data = json.loads(open(path).read())
+except Exception:
+    data = {"sends": []}
+# Drop timestamps outside the rolling window
+data["sends"] = [t for t in data["sends"] if now - t < window]
+if len(data["sends"]) >= limit:
+    print("blocked")
+    sys.exit(0)
+data["sends"].append(now)
+os.makedirs(os.path.dirname(path), exist_ok=True)
+open(path, "w").write(json.dumps(data))
+print("ok")
+PY
+)
+  if [ "$allowed" != "ok" ]; then
+    log "Email rate limit hit (max 5/hr) — suppressing: $subject"
+    return 1
+  fi
+  python3 - "$SENDGRID_API_KEY" "$ALERT_EMAIL_FROM" "$ALERT_EMAIL_TO" "$subject" "$body" <<'PY' >/dev/null 2>&1
+import sys, json, urllib.request, urllib.error
+api_key, from_email, to_email, subject, body = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+plain = body.replace('*', '').replace('`', '')
+payload = json.dumps({
+    "personalizations": [{"to": [{"email": to_email}]}],
+    "from": {"email": from_email, "name": "Memroos Alerts"},
+    "subject": subject,
+    "content": [{"type": "text/plain", "value": plain}],
+}).encode()
+req = urllib.request.Request(
+    "https://api.sendgrid.com/v3/mail/send",
+    data=payload,
+    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req, timeout=10)
+    sys.exit(0)
+except urllib.error.HTTPError:
+    sys.exit(1)
+PY
+}
+
 send_macos_notification() {
   local title="$1"
   local message="$2"
@@ -80,6 +141,7 @@ notify() {
   local title="$1"
   local message="$2"
   local sent=0
+  if send_email "$title" "$message"; then sent=1; fi
   if send_telegram "$message"; then sent=1; fi
   if send_discord "$message"; then sent=1; fi
   if [ "$sent" -eq 0 ]; then
@@ -388,6 +450,29 @@ else
 - Result: ${EMBED_OK}
 - Timeout: ${MEM0_WRITE_TIMEOUT_SECONDS}s
 - Check \`tail -50 $MEM0_LOG_DIR/mem0-server.log\`"
+fi
+
+# ── Check 1.9: mem0-server CPU runaway ──────────────────────────────────────
+log "Checking mem0-server CPU usage..."
+MEM0_PID=$(pgrep -f "uvicorn mem0-server" | head -1 || echo "")
+if [ -z "$MEM0_PID" ]; then
+  alert "mem0_process_missing" "mem0-server process *NOT FOUND*
+- It may have crashed or was never started
+- Restart: \`launchctl kickstart -k gui/\$(id -u)/com.mem0.server\`"
+else
+  recover "mem0_process_missing" "mem0-server process is running again (PID $MEM0_PID)"
+  MEM0_CPU=$(ps -p "$MEM0_PID" -o %cpu= 2>/dev/null | tr -d ' ' | cut -d. -f1)
+  MEM0_CPU="${MEM0_CPU:-0}"
+  if [ "${MEM0_CPU:-0}" -ge "${MEM0_CPU_ALERT_THRESHOLD:-200}" ] 2>/dev/null; then
+    alert "mem0_cpu_runaway" "mem0-server *CPU RUNAWAY: ${MEM0_CPU}%* (PID $MEM0_PID)
+- Qdrant reconnect + Ollama model-pull loop burning CPU
+- Check: \`tail -50 $MEM0_LOG_DIR/mem0-server.log\`
+- Safe to kill and restart: \`kill $MEM0_PID\`
+- Then: \`launchctl kickstart -k gui/\$(id -u)/com.mem0.server\`"
+  else
+    log "mem0-server CPU: ${MEM0_CPU}% (PID $MEM0_PID, OK)"
+    recover "mem0_cpu_runaway" "mem0-server CPU normalized: ${MEM0_CPU}%"
+  fi
 fi
 
 if [ "${MEMORY_HEALTHCHECK_ONLY:-0}" = "1" ]; then

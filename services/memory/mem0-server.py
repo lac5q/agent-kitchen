@@ -137,6 +137,13 @@ _init_error = None
 _last_init_attempt = 0
 _INIT_COOLDOWN = 15  # seconds before retrying init after failure
 
+# Cached Qdrant probe: don't run a live search on every API request.
+# When Qdrant is down, an uncached probe causes a reset→Ollama-pull loop
+# that burns 500%+ CPU indefinitely. Check at most once per interval.
+_qdrant_probe_ok: Optional[bool] = None
+_qdrant_probe_last: float = 0
+_QDRANT_PROBE_INTERVAL = 60  # seconds between live probes
+
 
 def reset_memory():
     """Force-recreate the Memory instance. Use after Qdrant comes back."""
@@ -178,28 +185,40 @@ def get_memory(force_reset: bool = False):
             logger.error(f"Failed to initialize Mem0: {e}")
             raise
 
-    # Verify Qdrant reachability before returning the client. Demo mode uses
-    # embedded Chroma; running this probe there forces an Ollama embedding call
-    # on every API request and can hang the memory API even when Chroma is fine.
+    # Verify Qdrant reachability, but only once per _QDRANT_PROBE_INTERVAL seconds.
+    # Without this cache, every API request triggers a live search probe; when
+    # Qdrant is unreachable (SSL timeout) the reset→Ollama-pull loop burns 500%+
+    # CPU indefinitely. Demo mode uses embedded Chroma — skip probe there too.
+    global _qdrant_probe_ok, _qdrant_probe_last
     cfg = load_config()
     vector_provider = cfg.get("vector_store", {}).get("provider", "unknown")
     if vector_provider == "qdrant":
-        try:
-            _memory.search("__health_check__", user_id="__internal__", limit=1)
-        except Exception as qe:
-            logger.warning(f"Qdrant unreachable, attempting reset: {qe}")
-            reset_memory()
+        now = time.time()
+        if (now - _qdrant_probe_last) >= _QDRANT_PROBE_INTERVAL:
+            _qdrant_probe_last = now
             try:
-                from mem0 import Memory
-                cfg = load_config()
-                mem0_cfg = build_mem0_config(cfg)
-                _memory = Memory.from_config(mem0_cfg)
-                _init_error = None
-                logger.info("Mem0 Memory re-initialized after Qdrant reset")
-            except Exception as reinit_err:
-                _init_error = reinit_err
-                _last_init_attempt = time.time()
-                raise
+                _memory.search("__health_check__", user_id="__internal__", limit=1)
+                if not _qdrant_probe_ok:
+                    logger.info("Qdrant reachable again (probe passed)")
+                _qdrant_probe_ok = True
+            except Exception as qe:
+                logger.warning(f"Qdrant unreachable, attempting reset: {qe}")
+                _qdrant_probe_ok = False
+                reset_memory()
+                try:
+                    from mem0 import Memory
+                    cfg = load_config()
+                    mem0_cfg = build_mem0_config(cfg)
+                    _memory = Memory.from_config(mem0_cfg)
+                    _init_error = None
+                    logger.info("Mem0 Memory re-initialized after Qdrant reset")
+                except Exception as reinit_err:
+                    _init_error = reinit_err
+                    _last_init_attempt = time.time()
+                    raise
+        elif not _qdrant_probe_ok:
+            # Last known probe failed — fail fast without touching Ollama
+            raise RuntimeError("Qdrant unreachable (cached from last probe); retry in progress")
 
     return _memory
 
