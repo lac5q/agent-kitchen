@@ -150,6 +150,7 @@ This file tracks the current high-level product milestone state. Detailed requir
 - CocoIndex source-freshness spike: bounded future comparison only against one non-sensitive declared context lane; no dependency adoption, production indexing path, policy bypass, sensitive raw-corpus indexing, or memory backend replacement without Luis approval.
 - FastContext repo-scout spike: bounded future comparison only against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic edits without Luis approval.
 - ADK/A2A cross-language contract-compliance demo spike: bounded future fixture only; use Google's Python ADK plus Go deterministic-validator pattern to prove A2A handoff, failure receipts, and NOC visibility, with no ADK/Gemini core dependency or compliance-vertical claim without Luis approval.
+- Qdrant 1.18.x Cloud upgrade-readiness spike: bounded operational upgrade plan only; no local Qdrant, backend swap, vector rewrite, TurboQuant enablement, named-vector migration, or production cluster upgrade without Luis approval and recall/latency/audit/rollback proof.
 - DAST scanning in CI after the v7.0 audit baseline.
 - External penetration test.
 - SOC 2 Type II controls mapping.

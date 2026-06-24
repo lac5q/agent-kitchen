@@ -103,6 +103,7 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 ### Roadmap Evolution (2026-06-24)
 
 - `ADKA2A-FOLLOWUP-01` was added after reviewing Google's cross-language contract-compliance pipeline shared from the Shubham Saboo X post. The useful pattern is Python/ADK orchestration delegating to a Go deterministic validator through A2A/JSON-RPC, with timeout, retry, fail-closed, and audit behavior visible. This belongs as a bounded integration/demo fixture for MemRoOS's A2A registry, dispatch, evidence, and NOC surfaces, not as an ADK/Gemini dependency or a compliance-vertical product claim.
+- `QDRANT-FOLLOWUP-01` was added after reviewing Qdrant's 1.18.x release line. The useful MemRoOS path is an operational Qdrant Cloud upgrade-readiness pass: latest 1.18.x patch target, mem0 compatibility, schema inventory, backup/rollback, canary write/search checks, recall/latency non-regression, memory monitoring, audit tracing, per-collection metrics, and strict-mode review. This does not approve local Qdrant, a backend swap, TurboQuant enablement, named-vector migration, or a production cluster upgrade without Luis approval.
 
 ### Roadmap Evolution (2026-06-14)
 
@@ -174,6 +175,7 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 - **mem0 writes:** Only via `POST http://localhost:3201/memory/add` — never touch `agent_memory` Qdrant directly
 - **Group children:** Use `parentId` + `extent:'parent'` pattern (Phase 17 — already in codebase)
 - **Qdrant stays cloud:** Never add local Qdrant to Docker compose — configured via QDRANT_URL + QDRANT_API_KEY env vars
+- **Qdrant upgrades are gated:** Version upgrades target Qdrant Cloud only and require mem0 compatibility, snapshot/rollback, canary write/search, and memory recall/latency/audit proof before production promotion.
 - **Docker compose is for OSS users only:** Luis keeps native workflow (npm start, LaunchAgent, port 3002)
 - **Memory stack is fixed for v2.0:** mem0 + Qdrant Cloud (vector) + Neo4j (graph, new) + SQLite (episodic). No pluggability until v3.0.
 - **Future vector experiments require approval:** Turbovec or similar compressed-vector indexes may only be evaluated as optional shadow indexes, and require Luis approval before adding a dependency, implementation path, or backend swap.
@@ -272,3 +274,4 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 | future_spike | CocoIndex source-freshness spike — compare optional derived-index behavior for one non-sensitive context lane against qmd/source-health checks; no dependency, production path, policy bypass, sensitive indexing, or backend replacement without Luis approval | Deferred to future GSD planning |
 | future_spike | FastContext repo-scout spike — compare read-only repo exploration against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private upload, GitNexus replacement, or automatic edits without Luis approval | Deferred to future GSD planning |
 | future_spike | ADK/A2A cross-language contract-compliance demo — compare Google's Python ADK plus Go deterministic-validator A2A fixture against MemRoOS registry/dispatch/evidence/NOC surfaces; no core ADK/Gemini dependency, app copy, runtime replacement, or compliance-vertical claim without Luis approval | Deferred to future GSD planning |
+| future_spike | Qdrant 1.18.x Cloud upgrade readiness — verify latest patch, mem0 compatibility, collection schemas, snapshot/rollback, canary write/search, recall/latency non-regression, audit tracing, metrics, and strict-mode guardrails; no local Qdrant, backend swap, TurboQuant/named-vector adoption, or production upgrade without Luis approval | Deferred to future GSD planning |

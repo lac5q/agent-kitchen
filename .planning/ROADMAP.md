@@ -489,7 +489,13 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - Goal: run a bounded future-only spike comparing FastContext-style repo exploration against GitNexus and baseline grep on 20-50 MemRoOS code-navigation tasks, measuring correct file/function hit rate, line-citation quality, token spend, latency, and whether the scout improves first-pass agent work without duplicating GitNexus as the code graph source of truth.
 - Gate: no runtime dependency, hosted/private repo upload, replacement of GitNexus, or automatic code edits from FastContext output without Luis approval. Success requires evidence receipts, GitNexus compatibility notes, and a reject decision if it is only overlapping semantic search.
 
-11. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
+11. **P1 — Plan Qdrant 1.18.x upgrade-readiness spike.**
+   - Source signal: Qdrant's May 11, 2026 Qdrant 1.18 / TurboQuant release and the current 1.18.x patch line. Relevant features include TurboQuant, collection memory monitoring, adding/removing named vectors, queryable audit logs, request tracing IDs, per-collection API metrics, and strict-mode guardrails.
+   - Requirement candidate: `QDRANT-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
+   - Goal: run a bounded operational readiness pass before moving MemRoOS's canonical Qdrant Cloud vector tier to the latest 1.18.x patch: verify mem0 client compatibility, inventory collection schemas and vector dimensions, prove snapshot/rollback, run write/search canaries, and compare memory recall plus latency against the current baseline.
+   - Gate: no local Qdrant container, backend swap, vector-store rewrite, TurboQuant enablement, named-vector migration, or production cluster upgrade without Luis approval. Success requires recall@5, precision@5, MRR, false-positive rate, p95 latency, audit-correlation, and per-collection metrics to hold or improve, with rollback tested before promotion.
+
+12. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
    - Research intake: GBrain's `skillify` meta-skill (11-item checklist, cross-modal eval gate, fail-improve loop, dream cycle); Microsoft SkillOpt's textual learning rate and bounded edit loop; Memroos's existing eval engine, SEAL governance, and skill registry.
    - Source notes: `.planning/notes/skillopt-skill-optimization-spike.md`, `~/github/knowledge/content/skill-optimization-v2/SKILL-OPTIMIZATION-RESEARCH.md`.
    - Requirements: `SKILLFORGE-01..06` in `.planning/REQUIREMENTS.md` (supersedes `SKILLOPT-FOLLOWUP-01`).
@@ -540,6 +546,7 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - Memento memory-save quality spike — future-only local-first adapter/eval comparison; requires Luis approval before dependency adoption, backend swap, or hosted/private trace upload
 - CocoIndex source-freshness spike — future-only optional derived-index adapter for one non-sensitive context lane; requires Luis approval before dependency adoption, production indexing, policy bypass, or memory backend changes
 - FastContext repo-scout spike — future-only read-only code-navigation comparison against GitNexus and grep; requires Luis approval before runtime dependency, hosted/private repo upload, GitNexus replacement, or automated edits
+- Qdrant 1.18.x Cloud upgrade-readiness spike — future-only operational upgrade plan; requires Luis approval, mem0 compatibility proof, snapshot/rollback, canary search/write checks, and recall/latency/audit non-regression before production cluster version changes or TurboQuant/named-vector adoption
 - ADK/A2A cross-language contract-compliance demo — future-only reference fixture using Google's Python ADK orchestrator plus Go deterministic validator over A2A/JSON-RPC; prove registry/card ingestion, dispatch handoff, timeout/retry/fail-closed behavior, evidence receipts, and NOC visibility without adopting ADK/Gemini as a MemRoOS core dependency
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
