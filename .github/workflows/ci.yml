@@ -22,10 +22,10 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci
 
       - name: Install linux native bindings
-        run: npm install @rolldown/binding-linux-x64-gnu --no-save --ignore-scripts
+        run: npm install @rolldown/binding-linux-x64-gnu --no-save
 
       - name: Typecheck
         run: npm run typecheck
