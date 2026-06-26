@@ -25,7 +25,7 @@ jobs:
         run: npm ci
 
       - name: Install linux native bindings
-        run: npm install @rolldown/binding-linux-x64-gnu --no-save
+        run: npm install @rolldown/binding-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu @unrs/resolver-binding-linux-x64-gnu --no-save
 
       - name: Typecheck
         run: npm run typecheck
