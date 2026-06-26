@@ -16,7 +16,7 @@ describe("OKF memory bundle support", () => {
     agent: "claude",
     date: "2026-06-13T18:00:00.000Z",
     type: "project",
-    source: "/Users/luis/.claude/projects/foo/memory/foo.md",
+    source: "/Users/USERNAME/.claude/projects/foo/memory/foo.md",
   };
 
   it("maps a memory entry into a conformant OKF concept with MemRoOS extension fields", () => {
