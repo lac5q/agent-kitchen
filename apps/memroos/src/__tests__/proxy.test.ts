@@ -183,30 +183,30 @@ describe("proxy", () => {
 
   it("requires app-host session auth for the Understand page", async () => {
     const response = await proxy(
-      new NextRequest("https://memroos.epiloguecapital.com/understand?token=graph-token", {
-        headers: { host: "memroos.epiloguecapital.com" },
+      new NextRequest("https://memroos.example.com/understand?token=graph-token", {
+        headers: { host: "memroos.example.com" },
       })
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
+    expect(response.headers.get("location")).toBe("https://memroos.example.com/login");
   });
 
   it("requires app-host session auth before Understand JSON token authorization", async () => {
     const response = await proxy(
-      new NextRequest("https://memroos.epiloguecapital.com/knowledge-graph.json?token=graph-token", {
-        headers: { host: "memroos.epiloguecapital.com" },
+      new NextRequest("https://memroos.example.com/knowledge-graph.json?token=graph-token", {
+        headers: { host: "memroos.example.com" },
       })
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
+    expect(response.headers.get("location")).toBe("https://memroos.example.com/login");
   });
 
-  it("treats the Epilogue Capital MemRoOS alias as an app host", async () => {
+  it("treats a custom domain as an app host", async () => {
     const loginResponse = await proxy(
-      new NextRequest("https://memroos.epiloguecapital.com/login", {
-        headers: { host: "memroos.epiloguecapital.com" },
+      new NextRequest("https://memroos.example.com/login", {
+        headers: { host: "memroos.example.com" },
       })
     );
 
@@ -214,13 +214,13 @@ describe("proxy", () => {
     expect(loginResponse.headers.get("location")).toBeNull();
 
     const appResponse = await proxy(
-      new NextRequest("https://memroos.epiloguecapital.com/dispatch", {
-        headers: { host: "memroos.epiloguecapital.com" },
+      new NextRequest("https://memroos.example.com/dispatch", {
+        headers: { host: "memroos.example.com" },
       })
     );
 
     expect(appResponse.status).toBe(307);
-    expect(appResponse.headers.get("location")).toBe("https://memroos.epiloguecapital.com/login");
+    expect(appResponse.headers.get("location")).toBe("https://memroos.example.com/login");
   });
 
   it("serves the public landing on memroos.localhost for local preview", async () => {
