@@ -35,7 +35,7 @@ const { POST: memoryPost } = await import("@/app/api/memory/add/route");
 function makeDispatchRequest(body: object) {
   return new Request("http://localhost/api/dispatch", {
     method: "POST",
-    headers: { "content-type": "application/json", "x-forwarded-for": "10.0.0.1" },
+    headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.1" },
     body: JSON.stringify(body),
   });
 }
@@ -43,7 +43,7 @@ function makeDispatchRequest(body: object) {
 function makeMemoryRequest(body: object) {
   return new Request("http://localhost/api/memory/add", {
     method: "POST",
-    headers: { "content-type": "application/json", "x-forwarded-for": "10.0.0.2" },
+    headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.2" },
     body: JSON.stringify(body),
   });
 }
