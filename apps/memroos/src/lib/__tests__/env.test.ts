@@ -3,15 +3,15 @@ import { loadMemroosEnv, reconcileRootConfigStatus, validateMemroosEnvAtStartup 
 
 describe("loadMemroosEnv", () => {
   it("applies local development defaults", () => {
-    const env = loadMemroosEnv({ HOME: "/Users/tester" });
+    const env = loadMemroosEnv({ HOME: "/Users/USERNAME" });
 
     expect(env.MEM0_URL).toBe("http://localhost:3201");
     expect(env.MEM0_PORT).toBe(3201);
     expect(env.SQLITE_DB_PATH).toBe("data/conversations.db");
-    expect(env.AGENT_CONFIGS_PATH).toBe("/Users/tester/github/knowledge/agent-configs");
-    expect(env.CLAUDE_MEMORY_PATH).toBe("/Users/tester/.claude/projects");
-    expect(env.CODEX_MEMORY_PATH).toBe("/Users/tester/.codex/sessions");
-    expect(env.KNOWLEDGE_BASE_PATH).toBe("/Users/tester/github/knowledge");
+    expect(env.AGENT_CONFIGS_PATH).toBe("/Users/USERNAME/github/knowledge/agent-configs");
+    expect(env.CLAUDE_MEMORY_PATH).toBe("/Users/USERNAME/.claude/projects");
+    expect(env.CODEX_MEMORY_PATH).toBe("/Users/USERNAME/.codex/sessions");
+    expect(env.KNOWLEDGE_BASE_PATH).toBe("/Users/USERNAME/github/knowledge");
     expect(env.COLLECTIONS_CONFIG_PATH).toBe("collections.config.json");
     expect(env.CONTEXT_SOURCES_CONFIG).toBe("context-sources.config.json");
     expect(env.MEMROOS_A2A_PROFILE).toBe("local-dev");
@@ -22,7 +22,7 @@ describe("loadMemroosEnv", () => {
 
   it("preserves explicit configured values", () => {
     const env = loadMemroosEnv({
-      HOME: "/Users/tester",
+      HOME: "/Users/USERNAME",
       MEM0_URL: "http://127.0.0.1:3201",
       MEM0_PORT: "3211",
       SQLITE_DB_PATH: "/tmp/memroos.db",
@@ -50,22 +50,22 @@ describe("loadMemroosEnv", () => {
   });
 
   it("fails closed on malformed configured values", () => {
-    expect(() => loadMemroosEnv({ HOME: "/Users/tester", MEM0_URL: "localhost:3201" })).toThrow(
+    expect(() => loadMemroosEnv({ HOME: "/Users/USERNAME", MEM0_URL: "localhost:3201" })).toThrow(
       /Invalid environment configuration/
     );
-    expect(() => loadMemroosEnv({ HOME: "/Users/tester", SQLITE_DB_PATH: "" })).toThrow(
+    expect(() => loadMemroosEnv({ HOME: "/Users/USERNAME", SQLITE_DB_PATH: "" })).toThrow(
       /Invalid environment configuration/
     );
-    expect(() => loadMemroosEnv({ HOME: "/Users/tester", MEMROOS_A2A_PROFILE: "internet" })).toThrow(
+    expect(() => loadMemroosEnv({ HOME: "/Users/USERNAME", MEMROOS_A2A_PROFILE: "internet" })).toThrow(
       /Invalid environment configuration/
     );
-    expect(() => loadMemroosEnv({ HOME: "/Users/tester", MEMROOS_A2A_REMOTE_CARD_TIMEOUT_MS: "0" })).toThrow(
+    expect(() => loadMemroosEnv({ HOME: "/Users/USERNAME", MEMROOS_A2A_REMOTE_CARD_TIMEOUT_MS: "0" })).toThrow(
       /Invalid environment configuration/
     );
     expect(() =>
-      loadMemroosEnv({ HOME: "/Users/tester", MEMROOS_A2A_ALLOW_PRIVATE_NETWORK_CARDS: "sometimes" })
+      loadMemroosEnv({ HOME: "/Users/USERNAME", MEMROOS_A2A_ALLOW_PRIVATE_NETWORK_CARDS: "sometimes" })
     ).toThrow(/Invalid environment configuration/);
-    expect(() => loadMemroosEnv({ HOME: "/Users/tester", MEMROOS_EMBEDDING_PROVIDER: "qdrant" })).toThrow(
+    expect(() => loadMemroosEnv({ HOME: "/Users/USERNAME", MEMROOS_EMBEDDING_PROVIDER: "qdrant" })).toThrow(
       /Invalid environment configuration/
     );
   });
@@ -95,7 +95,7 @@ describe("loadMemroosEnv", () => {
   });
 
   it("validates startup configuration and returns root config status", () => {
-    const result = validateMemroosEnvAtStartup({ HOME: "/Users/tester", MEM0_URL: "http://mem0.test" });
+    const result = validateMemroosEnvAtStartup({ HOME: "/Users/USERNAME", MEM0_URL: "http://mem0.test" });
 
     expect(result.env.MEM0_URL).toBe("http://mem0.test");
     expect(result.rootConfigStatus.map((entry) => entry.file)).toEqual([
