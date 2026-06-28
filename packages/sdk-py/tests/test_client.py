@@ -7,7 +7,7 @@ import pytest
 import httpx
 import respx
 
-from memroos_eval_sdk import MemroosClient, MemroosApiError
+from memroos_eval_sdk import MemroosClient, MemroosApiError, MemroosContractError
 
 BASE_URL = "http://localhost:3000"
 API_KEY = "test-api-key-abc123"
@@ -116,6 +116,32 @@ async def test_submit_trace_raises_on_429():
     with pytest.raises(MemroosApiError) as exc_info:
         await client.submit_trace(SAMPLE_TRACE)
     assert exc_info.value.status == 429
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_submit_trace_rejects_malformed_success_response():
+    respx.post(f"{BASE_URL}/api/public/v1/traces").mock(
+        return_value=httpx.Response(200, json={"runId": "run-py-001", "w": "0.76"})
+    )
+    client = MemroosClient(base_url=BASE_URL, api_key=API_KEY)
+    with pytest.raises(MemroosContractError):
+        await client.submit_trace(SAMPLE_TRACE)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_submit_trace_rejects_boolean_numeric_fields():
+    malformed_result = {
+        **SAMPLE_SUBMIT_RESULT,
+        "w": True,
+    }
+    respx.post(f"{BASE_URL}/api/public/v1/traces").mock(
+        return_value=httpx.Response(200, json=malformed_result)
+    )
+    client = MemroosClient(base_url=BASE_URL, api_key=API_KEY)
+    with pytest.raises(MemroosContractError):
+        await client.submit_trace(SAMPLE_TRACE)
 
 
 # ── get_run_result ────────────────────────────────────────────────────────────

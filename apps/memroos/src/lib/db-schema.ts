@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 type SchemaMigration = {
   version: number;
@@ -86,9 +86,14 @@ function setSchemaVersion(db: Database.Database, version: number): void {
 
 const SCHEMA_MIGRATIONS: SchemaMigration[] = [
   {
-    version: CURRENT_SCHEMA_VERSION,
+    version: 1,
     name: 'baseline-additive-schema',
     up: applyCurrentSchema,
+  },
+  {
+    version: 2,
+    name: 'efficiency-telemetry-events',
+    up: applyEfficiencyTelemetrySchema,
   },
 ];
 
@@ -127,6 +132,38 @@ export function rebuildMessageFtsProjection(db: Database.Database): void {
  */
 export function initSchema(db: Database.Database): void {
   runSchemaMigrations(db);
+}
+
+function applyEfficiencyTelemetrySchema(db: Database.Database): void {
+  try {
+    db.exec("ALTER TABLE agent_memory_traces ADD COLUMN agent_id TEXT");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+
+  db.exec(`
+    -- Phase 117: NOC efficiency telemetry event foundation (EFFTEL-01..05)
+    CREATE TABLE IF NOT EXISTS efficiency_events (
+      id          INTEGER PRIMARY KEY,
+      tenant_id   TEXT    NOT NULL DEFAULT 'default-tenant'
+                           REFERENCES tenants(id),
+      event_type  TEXT    NOT NULL CHECK(event_type IN (
+        'retrieval_trace',
+        'source_read',
+        'token_ledger',
+        'operator_question',
+        'memory_write'
+      )),
+      task_id     TEXT,
+      agent_id    TEXT,
+      payload     TEXT    NOT NULL DEFAULT '{}',
+      created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS efficiency_events_type_ts
+      ON efficiency_events(tenant_id, event_type, created_at DESC);
+    CREATE INDEX IF NOT EXISTS efficiency_events_task
+      ON efficiency_events(tenant_id, task_id, created_at DESC);
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {

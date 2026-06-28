@@ -38,6 +38,8 @@ export interface MemoryRecallEvalCase {
   taskPrompt: string;
   fixtures?: MemoryRecallFixture[];
   expectedMemoryIds?: string[];
+  avoidMemoryIds?: string[];
+  avoidFacts?: string[];
   expectedFacts: string[];
   expectedTiers: MemoryRecallTier[];
   requiredTiming: MemoryRecallTiming;
@@ -158,6 +160,17 @@ function matchedExpectationCount(results: NormalizedRecallResult[], testCase: Me
   return matched.size;
 }
 
+function resultContainsAvoidedFact(result: NormalizedRecallResult, avoidFacts: string[]): boolean {
+  if (avoidFacts.length === 0) return false;
+  const normalized = normalizeText(`${result.content} ${metadataSearchText(result.metadata)}`);
+  return avoidFacts.some((fact) => normalized.includes(normalizeText(fact)));
+}
+
+function resultContainsAvoidedId(result: NormalizedRecallResult, avoidMemoryIds: string[]): boolean {
+  if (avoidMemoryIds.length === 0) return false;
+  return avoidMemoryIds.some((id) => resultContainsIdentifier(result, id));
+}
+
 // Security-label fields stamped by Phase 75 cascade — excluded from identifier search
 // to prevent domain/policy tokens ('engineering', 'indexable', 'sealed') from false-matching.
 const LABEL_FIELD_KEYS = new Set(["visibility", "domain", "sensitivity", "policy", "label_version", "labeled_at"]);
@@ -205,6 +218,8 @@ export function scoreMemoryRecallCase(
 ): Omit<MemoryRecallEvalResult, "caseId" | "agentId" | "layer" | "scenario" | "taskPrompt" | "tiers" | "retrieved" | "trace"> {
   const topK = retrieved.slice(0, k);
   const expectedIds = testCase.expectedMemoryIds ?? [];
+  const avoidMemoryIds = testCase.avoidMemoryIds ?? [];
+  const avoidFacts = testCase.avoidFacts ?? [];
   const expectedCount = Math.max(expectedIds.length || testCase.expectedFacts.length, 1);
   const relevant = topK.filter((result) => resultMatchesExpected(result, testCase));
   const matchedCount = matchedExpectationCount(topK, testCase);
@@ -231,6 +246,8 @@ export function scoreMemoryRecallCase(
   if (metrics.tierCoverage < 1) failures.push("missing expected tier coverage");
   if (!hasRequiredRecallTiming(trace, testCase.requiredTiming)) failures.push("memory recall happened too late or not at all");
   if (relevant.length === 0) failures.push("no expected memory found in top k");
+  if (topK.some((result) => resultContainsAvoidedId(result, avoidMemoryIds))) failures.push("avoided memory found in top k");
+  if (topK.some((result) => resultContainsAvoidedFact(result, avoidFacts))) failures.push("avoided fact found in top k");
 
   return { passed: failures.length === 0, failures, metrics };
 }

@@ -3,6 +3,7 @@ import { readdir, stat } from "fs/promises";
 import path from "path";
 import type { KnowledgeCollection } from "@/types";
 import { findConfigFile } from "@/lib/paths";
+import { loadMemroosEnv } from "@/lib/env";
 
 export type CollectionConfig = {
   name: string;
@@ -16,9 +17,8 @@ export type CollectionConfig = {
 export const KNOWLEDGE_FILE_EXTENSIONS = new Set([".md", ".mdx", ".txt"]);
 
 export function loadCollections(): CollectionConfig[] {
-  const configPath =
-    process.env.COLLECTIONS_CONFIG_PATH ||
-    findConfigFile("collections.config.json");
+  const configuredPath = loadMemroosEnv().COLLECTIONS_CONFIG_PATH;
+  const configPath = path.isAbsolute(configuredPath) ? configuredPath : findConfigFile(configuredPath);
   try {
     const raw = readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw) as { collections?: CollectionConfig[] };
@@ -29,11 +29,7 @@ export function loadCollections(): CollectionConfig[] {
 }
 
 export function getKnowledgeBasePath() {
-  return (
-    process.env.KNOWLEDGE_BASE_PATH ||
-    process.env.KNOWLEDGE_HOME ||
-    `${process.env.HOME}/github/knowledge`
-  );
+  return loadMemroosEnv().KNOWLEDGE_BASE_PATH;
 }
 
 function resolveBasePath(basePath: string) {

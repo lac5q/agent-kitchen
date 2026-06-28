@@ -13,6 +13,7 @@ import type {
   RemoteAgentConfig,
 } from "@/types";
 import { getDb } from "@/lib/db";
+import { recordEfficiencyEvent, type MemoryWritePayload } from "@/lib/efficiency-telemetry";
 
 interface RegisteredAgentRow {
   id: string;
@@ -112,6 +113,65 @@ function generateApiKey(agentId: string): string {
 function contentHash(content: string | undefined): string | null {
   if (!content) return null;
   return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+function normalizeIsoSeconds(value: string): string {
+  return value.replace(/\.\d{3}Z$/, "Z");
+}
+
+function metadataString(metadata: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function sourceReadHash(metadata: Record<string, unknown>): string | null {
+  const explicitHash = metadataString(metadata, ["sourceHash", "source_hash"]);
+  if (explicitHash) return explicitHash;
+
+  const sourceText = metadataString(metadata, ["sourceContent", "sourceText", "rawContent"]);
+  const hash = contentHash(sourceText ?? undefined);
+  return hash ? `sha256:${hash}` : null;
+}
+
+function memoryWriteDedupHash(payload: MemoryWriteInput): string {
+  const contentDigest = contentHash(payload.content);
+  if (contentDigest) return `sha256:${contentDigest}`;
+
+  const fallback = JSON.stringify({
+    type: payload.type ?? null,
+    metadata: payload.metadata ?? {},
+  });
+  return `sha256:${crypto.createHash("sha256").update(fallback).digest("hex")}`;
+}
+
+function priorMemoryWritePayload(
+  dedupHash: string
+): { payload: MemoryWritePayload; createdAt: string } | null {
+  const rows = getDb()
+    .prepare(
+      `SELECT payload, created_at
+       FROM efficiency_events
+       WHERE tenant_id = 'default-tenant'
+         AND event_type = 'memory_write'
+       ORDER BY created_at ASC, id ASC`
+    )
+    .all() as { payload: string; created_at: string }[];
+
+  for (const row of rows) {
+    try {
+      const payload = JSON.parse(row.payload) as MemoryWritePayload;
+      if (payload.dedupHash === dedupHash) {
+        return { payload, createdAt: row.created_at };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 function capabilitiesForAgent(agentId: string): RegisteredAgentCapability[] {
@@ -393,7 +453,13 @@ export function recordMemoryWrite(
   payload: MemoryWriteInput,
   result: Record<string, unknown> = {}
 ): void {
-  getDb()
+  const db = getDb();
+  const metadata = payload.metadata ?? {};
+  const dedupHash = memoryWriteDedupHash(payload);
+  const priorWrite = priorMemoryWritePayload(dedupHash);
+  const createdAt = normalizeIsoSeconds(nowIso());
+
+  db
     .prepare(
       `INSERT INTO agent_memory_writes (agent_id, memory_type, content_hash, metadata, result)
        VALUES (?, ?, ?, ?, ?)`
@@ -405,15 +471,46 @@ export function recordMemoryWrite(
       stringifyJson(payload.metadata ?? {}),
       stringifyJson(result)
     );
+
+  recordEfficiencyEvent(db, {
+    eventType: "memory_write",
+    taskId: metadataString(metadata, ["taskId", "task_id"]) ?? null,
+    agentId,
+    createdAt,
+    payload: {
+      source: metadataString(metadata, ["source", "sourceId", "source_id"]) ?? payload.type ?? "agent_memory",
+      firstSeenAt: priorWrite?.payload.firstSeenAt ?? priorWrite?.createdAt ?? createdAt,
+      dedupHash,
+      isRediscovery: priorWrite !== null,
+    },
+  });
 }
 
 export function recordToolOutcome(agentId: string, payload: ToolOutcomeInput): void {
-  getDb()
+  const db = getDb();
+  const metadata = payload.metadata ?? {};
+
+  db
     .prepare(
       `INSERT INTO agent_tool_outcomes (agent_id, tool_id, outcome, metadata)
        VALUES (?, ?, ?, ?)`
     )
-    .run(agentId, payload.toolId, payload.outcome, stringifyJson(payload.metadata ?? {}));
+    .run(agentId, payload.toolId, payload.outcome, stringifyJson(metadata));
+
+  const sourceId = metadataString(metadata, ["sourceId", "source_id"]);
+  const sourceHash = sourceReadHash(metadata);
+  if (!sourceId || !sourceHash) return;
+
+  recordEfficiencyEvent(db, {
+    eventType: "source_read",
+    taskId: metadataString(metadata, ["taskId", "task_id"]),
+    agentId,
+    payload: {
+      sourceId,
+      sourceHash,
+      toolId: payload.toolId,
+    },
+  });
 }
 
 function toRemoteAgentConfig(agent: RegisteredAgent): RemoteAgentConfig | null {

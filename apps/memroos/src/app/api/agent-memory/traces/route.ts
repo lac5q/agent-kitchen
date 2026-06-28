@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     const trace = recordMemoryTrace(db, {
       tenantId: body.tenantId,
       taskId: body.taskId,
+      agentId: body.agentId,
       runId: body.runId,
       causalPath: body.causalPath,
       failureClassification: body.failureClassification,

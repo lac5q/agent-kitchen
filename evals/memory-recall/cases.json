@@ -150,5 +150,92 @@
     "expectedMemoryIds": ["gold-quota-failure-mode"],
     "expectedTiers": ["episodic"],
     "requiredTiming": "before_plan"
+  },
+  {
+    "id": "scenario-proactive-before-plan-handoff",
+    "layer": "scenario",
+    "scenario": "Agent proactively recalls active handoff context before planning",
+    "agentId": "codex",
+    "taskPrompt": "Continue the recent Cordant follow-up work and prepare the next plan.",
+    "fixtures": [
+      {
+        "id": "phase118-cordant-handoff",
+        "tier": "episodic",
+        "content": "Cordant handoff: verify Google Docs owner and share-state before claiming a client-facing proposal is ready.",
+        "metadata": {
+          "topic": "cordant-handoff",
+          "source": "phase118-proactive-recollection",
+          "beliefStage": "gold_operational_truth",
+          "handoffState": "active"
+        }
+      }
+    ],
+    "expectedFacts": ["verify Google Docs owner", "share-state"],
+    "expectedMemoryIds": ["phase118-cordant-handoff"],
+    "expectedTiers": ["episodic"],
+    "requiredTiming": "before_plan"
+  },
+  {
+    "id": "scenario-proactive-before-tool-source-ref",
+    "layer": "scenario",
+    "scenario": "Agent recalls source-specific safety rule before tool use",
+    "agentId": "codex",
+    "taskPrompt": "Edit the MemRoOS runtime helper after checking the project rules.",
+    "fixtures": [
+      {
+        "id": "phase118-source-ref-gitnexus",
+        "tier": "episodic",
+        "content": "Project source rule: run GitNexus impact before editing any existing function, class, or method in MemRoOS.",
+        "metadata": {
+          "topic": "gitnexus-source-rule",
+          "source": "AGENTS.md",
+          "beliefStage": "gold_operational_truth"
+        }
+      }
+    ],
+    "expectedFacts": ["GitNexus impact", "before editing"],
+    "expectedMemoryIds": ["phase118-source-ref-gitnexus"],
+    "expectedTiers": ["episodic"],
+    "requiredTiming": "before_tool_use"
+  },
+  {
+    "id": "scenario-negative-noisy-recency",
+    "layer": "scenario",
+    "scenario": "Recent low-value memory must not outrank older critical operating rule",
+    "agentId": "memory-eval",
+    "taskPrompt": "Decide whether to deploy the operations dashboard now.",
+    "fixtures": [
+      {
+        "id": "phase118-critical-deploy-rule",
+        "tier": "episodic",
+        "content": "Critical deployment rule: do not claim deployment readiness until live route behavior and backend health are verified.",
+        "metadata": {
+          "topic": "deployment-readiness",
+          "source": "phase118-proactive-recollection",
+          "beliefStage": "gold_operational_truth",
+          "capturedAt": "2026-01-15T00:00:00Z"
+        }
+      },
+      {
+        "id": "phase118-recent-noisy-deploy-note",
+        "tier": "episodic",
+        "content": "Recent casual note: deploy readiness can be assumed from a green build badge alone.",
+        "metadata": {
+          "topic": "deployment-readiness-noise",
+          "source": "phase118-negative-fixture",
+          "beliefStage": "bronze_raw_source",
+          "capturedAt": "2026-06-27T00:00:00Z"
+        }
+      }
+    ],
+    "expectedFacts": ["live route behavior", "backend health"],
+    "expectedMemoryIds": ["phase118-critical-deploy-rule"],
+    "avoidMemoryIds": ["phase118-recent-noisy-deploy-note"],
+    "avoidFacts": ["green build badge alone"],
+    "expectedTiers": ["episodic"],
+    "requiredTiming": "before_plan",
+    "thresholds": {
+      "precisionAtK": 0.5
+    }
   }
 ]

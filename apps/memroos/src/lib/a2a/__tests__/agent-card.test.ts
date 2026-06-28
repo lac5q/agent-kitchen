@@ -7,6 +7,7 @@ import {
 } from "../types";
 import { getA2aConfig } from "../config";
 import { buildMemroosAgentCard } from "../agent-card";
+import { A2A_CONTRACT_HEADER, A2A_CONTRACT_ID } from "../contract";
 
 const A2A_ENV_KEYS = [
   "MEMROOS_A2A_PROFILE",
@@ -112,6 +113,7 @@ describe("well-known A2A agent card routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get(A2A_CONTRACT_HEADER)).toBe(A2A_CONTRACT_ID);
     expect(body.name).toBe("MemroOS");
     expect(body.extensions.memroos.cardPaths.canonical).toBe(A2A_CANONICAL_AGENT_CARD_PATH);
     expect(body.extensions.memroos.compatibilityAlias).toBeUndefined();
@@ -123,6 +125,7 @@ describe("well-known A2A agent card routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get(A2A_CONTRACT_HEADER)).toBe(A2A_CONTRACT_ID);
     expect(body.name).toBe("MemroOS");
     expect(body.extensions.memroos.cardPaths.compatibility).toBe(A2A_COMPAT_AGENT_CARD_PATH);
     expect(body.extensions.memroos.compatibilityAlias).toBe(true);

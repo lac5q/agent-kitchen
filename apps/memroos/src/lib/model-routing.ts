@@ -1,10 +1,12 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
+import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
 
 export type ModelRoutingStrategy = "balanced" | "cost" | "quality" | "latency";
 
 export interface ModelRoutingEventInput {
   taskType: string;
+  taskId?: string;
   agentId?: string;
   provider: string;
   model: string;
@@ -12,6 +14,9 @@ export interface ModelRoutingEventInput {
   latencyMs?: number;
   inputTokens?: number;
   outputTokens?: number;
+  rawContextTokens?: number;
+  cachedTokens?: number;
+  totalTokens?: number;
   estimatedCostUsd?: number;
   success?: boolean;
   qualityScore?: number;
@@ -178,6 +183,44 @@ function promptHash(prompt: string | undefined): string | null {
   return crypto.createHash("sha256").update(prompt).digest("hex");
 }
 
+function hasTokenLedgerFields(input: ModelRoutingEventInput): boolean {
+  return [
+    "inputTokens",
+    "outputTokens",
+    "rawContextTokens",
+    "cachedTokens",
+    "totalTokens",
+  ].some((key) => Object.prototype.hasOwnProperty.call(input, key));
+}
+
+function tokenCount(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
+}
+
+function recordTokenLedgerEvent(db: Database.Database, input: ModelRoutingEventInput): void {
+  if (!hasTokenLedgerFields(input)) return;
+
+  const rawContextTokens = tokenCount(input.rawContextTokens);
+  const cachedTokens = tokenCount(input.cachedTokens);
+  const totalTokens = typeof input.totalTokens === "number" && Number.isFinite(input.totalTokens)
+    ? tokenCount(input.totalTokens)
+    : tokenCount(input.inputTokens) + tokenCount(input.outputTokens) + cachedTokens;
+
+  recordEfficiencyEvent(db, {
+    eventType: "token_ledger",
+    taskId: input.taskId ?? null,
+    agentId: input.agentId ?? null,
+    payload: {
+      rawContextTokens,
+      cachedTokens,
+      totalTokens,
+      modelId: `${input.provider}/${input.model}`,
+    },
+  });
+}
+
 export function recordModelRoutingEvent(
   db: Database.Database,
   input: ModelRoutingEventInput
@@ -216,6 +259,7 @@ export function recordModelRoutingEvent(
   const row = db
     .prepare("SELECT * FROM model_routing_events WHERE id = ?")
     .get(result.lastInsertRowid) as ModelRoutingEventRow;
+  recordTokenLedgerEvent(db, input);
   return rowToEvent(row);
 }
 

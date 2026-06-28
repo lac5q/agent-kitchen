@@ -1,37 +1,160 @@
 "use client";
 
+import { useOperationsNoc, type OperationsNocEfficiencyMetrics } from "@/lib/api-client";
+import type { NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { Eyebrow, PillBtn } from "./noc-primitives";
 
-const MISSING_TELEMETRY = [
-  {
-    name: "Retrieval calls before useful work",
-    source: "dispatch + context-pack trace",
-    reason: "Needed before retrieval efficiency can be reported as live.",
+const EMPTY_RECOLLECTION_METRICS: OperationsNocEfficiencyMetrics["recollection"] = {
+  totalDecisions: 0,
+  searchRequired: 0,
+  searchSkipped: 0,
+  injectedMemories: 0,
+  ignoredCandidates: 0,
+  policyDeniedCandidates: 0,
+  belowThresholdCandidates: 0,
+  skipReasons: {},
+  beliefStageCounts: {
+    bronze_raw_source: 0,
+    silver_candidate_claim: 0,
+    gold_operational_truth: 0,
   },
-  {
-    name: "Same-source re-read count",
-    source: "tool-call transcript",
-    reason: "Needed before source usage can distinguish waste from intentional review.",
+  relianceCounts: {
+    direct_truth: 0,
+    caveated_claim: 0,
+    source_evidence_only: 0,
   },
-  {
-    name: "Raw-context ingest token share",
-    source: "model-routing token ledger",
-    reason: "Needed before token-budget ingest share can be trusted.",
-  },
-  {
-    name: "Operator re-ask redundancy",
-    source: "chat + memory-hit correlation",
-    reason: "Needed before user redundancy can be shown as a count.",
-  },
-  {
-    name: "Rediscovered-fact rate",
-    source: "memory write provenance",
-    reason: "Needed before rediscovery can be shown as a percentage.",
-  },
-];
+  latestDecisions: [],
+};
 
-export function EfficiencySignals() {
+const EMPTY_METRICS: OperationsNocEfficiencyMetrics = {
+  totalEvents: 0,
+  retrievalEvents: 0,
+  retrievalUsedInFirstResponse: 0,
+  retrievalBeforeWorkRate: null,
+  sourceReadEvents: 0,
+  repeatedSourceReads: 0,
+  tokenLedgerEvents: 0,
+  rawContextTokens: 0,
+  cachedTokens: 0,
+  totalTokens: 0,
+  rawContextTokenShare: null,
+  operatorQuestions: 0,
+  operatorReasks: 0,
+  operatorReaskRate: null,
+  memoryWrites: 0,
+  rediscoveredWrites: 0,
+  rediscoveredFactRate: null,
+  recollection: EMPTY_RECOLLECTION_METRICS,
+  streams: {
+    retrieval_trace: 0,
+    source_read: 0,
+    token_ledger: 0,
+    operator_question: 0,
+    memory_write: 0,
+  },
+  lastUpdated: null,
+};
+
+function formatPercent(value: number | null) {
+  if (value === null) return "No events";
+  return `${Math.round(value * 100)}%`;
+}
+
+function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralLabel}`;
+}
+
+function badgeColors(status: string) {
+  if (status === "live") {
+    return { background: NOC.successBg, color: NOC.success };
+  }
+  if (status === "degraded" || status === "loading") {
+    return { background: NOC.warnBg, color: NOC.warn };
+  }
+  return { background: NOC.peach, color: NOC.terra };
+}
+
+function normalizeMetrics(metrics: OperationsNocEfficiencyMetrics): OperationsNocEfficiencyMetrics {
+  return {
+    ...metrics,
+    recollection: metrics.recollection ?? EMPTY_RECOLLECTION_METRICS,
+  };
+}
+
+function buildCards(metrics: OperationsNocEfficiencyMetrics) {
+  return [
+    {
+      name: "Retrieval calls before useful work",
+      value: formatPercent(metrics.retrievalBeforeWorkRate),
+      detail:
+        metrics.retrievalEvents > 0
+          ? `${metrics.retrievalUsedInFirstResponse} of ${metrics.retrievalEvents} retrievals used in first response`
+          : "No retrieval trace events",
+      state: metrics.streams.retrieval_trace > 0 ? "live" : "gap",
+    },
+    {
+      name: "Same-source re-read count",
+      value: plural(metrics.repeatedSourceReads, "reread"),
+      detail:
+        metrics.sourceReadEvents > 0
+          ? `${metrics.sourceReadEvents} source reads in selected window`
+          : "No source-read events",
+      state: metrics.streams.source_read > 0 ? "live" : "gap",
+    },
+    {
+      name: "Raw-context ingest token share",
+      value: formatPercent(metrics.rawContextTokenShare),
+      detail:
+        metrics.tokenLedgerEvents > 0
+          ? `${metrics.rawContextTokens} raw of ${metrics.totalTokens} total tokens`
+          : "No token ledger events",
+      state: metrics.streams.token_ledger > 0 ? "live" : "gap",
+    },
+    {
+      name: "Operator re-ask redundancy",
+      value: plural(metrics.operatorReasks, "re-ask"),
+      detail:
+        metrics.operatorQuestions > 0
+          ? `${formatPercent(metrics.operatorReaskRate)} of ${metrics.operatorQuestions} questions repeat prior answers`
+          : "No operator-question events",
+      state: metrics.streams.operator_question > 0 ? "live" : "gap",
+    },
+    {
+      name: "Rediscovered-fact rate",
+      value: plural(metrics.rediscoveredWrites, "rediscovery", "rediscoveries"),
+      detail:
+        metrics.memoryWrites > 0
+          ? `${formatPercent(metrics.rediscoveredFactRate)} of ${metrics.memoryWrites} memory writes rediscovered existing facts`
+          : "No memory-write events",
+      state: metrics.streams.memory_write > 0 ? "live" : "gap",
+    },
+    {
+      name: "Recollection decisions",
+      value:
+        metrics.recollection.totalDecisions > 0
+          ? `${metrics.recollection.searchRequired} required / ${metrics.recollection.searchSkipped} skipped`
+          : "No decisions",
+      detail:
+        metrics.recollection.totalDecisions > 0
+          ? `${metrics.recollection.beliefStageCounts.gold_operational_truth} gold · ${metrics.recollection.beliefStageCounts.silver_candidate_claim} silver · ${metrics.recollection.policyDeniedCandidates} denied`
+          : "No recollection receipts",
+      state: metrics.recollection.totalDecisions > 0 ? "live" : "gap",
+    },
+  ];
+}
+
+export function EfficiencySignals({ filters }: { filters?: NocFilters }) {
+  const noc = useOperationsNoc(filters);
+  const metrics = normalizeMetrics(noc.data?.metrics.efficiency ?? EMPTY_METRICS);
+  const panel = noc.data?.panels.efficiency;
+  const status = noc.isLoading ? "loading" : noc.isError ? "degraded" : (panel?.status ?? "empty");
+  const statusColors = badgeColors(status);
+  const warnings = noc.isError
+    ? ["Unable to load efficiency telemetry"]
+    : panel?.warnings ?? ["No efficiency telemetry events in the selected window"];
+  const cards = buildCards(metrics);
+
   return (
     <div style={{ padding: "0 28px 14px" }}>
       <div
@@ -59,17 +182,19 @@ export function EfficiencySignals() {
               fontWeight: 700,
               letterSpacing: "0.1em",
               padding: "2px 6px",
-              background: NOC.warnBg,
-              color: NOC.warn,
-              border: `1px solid ${NOC.warnBg}`,
+              background: statusColors.background,
+              color: statusColors.color,
+              border: `1px solid ${statusColors.background}`,
               textTransform: "uppercase",
               fontFamily: NOC_FONT_MONO,
             }}
           >
-            missing telemetry
+            {status}
           </span>
           <span style={{ fontSize: 11.5, color: NOC.soft }}>
-            These metrics are blocked until trace-level instrumentation exists. No sample values are shown as live.
+            {metrics.totalEvents > 0
+              ? `${metrics.totalEvents} efficiency events from ${panel?.source ?? "efficiency_events"}`
+              : warnings[0]}
           </span>
           <div style={{ marginLeft: "auto" }}>
             <PillBtn href="/evals">Open telemetry plan</PillBtn>
@@ -82,15 +207,15 @@ export function EfficiencySignals() {
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           }}
         >
-          {MISSING_TELEMETRY.map((item, i) => (
+          {cards.map((item, i) => (
             <div
               key={item.name}
               style={{
-                padding: 14,
-                borderRight: i < MISSING_TELEMETRY.length - 1 ? `1px solid ${NOC.rule}` : "none",
+                padding: "14px 14px 13px",
+                borderRight: i < cards.length - 1 ? `1px solid ${NOC.rule}` : "none",
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
+                gap: 9,
                 minWidth: 0,
               }}
             >
@@ -108,21 +233,29 @@ export function EfficiencySignals() {
                     fontFamily: NOC_FONT_MONO,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: NOC.terra,
-                    background: NOC.peach,
+                    color: item.state === "live" ? NOC.success : NOC.terra,
+                    background: item.state === "live" ? NOC.successBg : NOC.peach,
                     padding: "2px 6px",
                     flexShrink: 0,
                     textTransform: "uppercase",
                   }}
                 >
-                  blocked
+                  {item.state}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: NOC.muted, lineHeight: 1.45 }}>
-                <strong style={{ color: NOC.ink }}>Required source:</strong> {item.source}
+              <div
+                style={{
+                  fontFamily: NOC_FONT_MONO,
+                  fontSize: 24,
+                  color: NOC.ink,
+                  lineHeight: 1,
+                  fontWeight: 700,
+                }}
+              >
+                {item.value}
               </div>
               <div style={{ fontSize: 11.5, color: NOC.soft, lineHeight: 1.45 }}>
-                {item.reason}
+                {item.detail}
               </div>
             </div>
           ))}
@@ -147,10 +280,12 @@ export function EfficiencySignals() {
               letterSpacing: "0.08em",
             }}
           >
-            HONEST STATE
+            {warnings.length > 0 ? "HONEST STATE" : "LIVE READ MODEL"}
           </span>
           <span style={{ fontSize: 12, color: NOC.muted }}>
-            Efficiency telemetry is intentionally withheld until these streams are instrumented. This satisfies NOC-10 without pretending sample data is production signal.
+            {warnings.length > 0
+              ? warnings.join(" · ")
+              : "All five Phase 117 efficiency streams are present in the selected window."}
           </span>
         </div>
       </div>

@@ -5,7 +5,9 @@
     {
       "id": "memroos-app",
       "displayName": "MemRoOS Next.js app",
+      "dockerComposeService": "memroos",
       "required": true,
+      "dependsOn": ["mem0-memory", "orchestration-service"],
       "ports": [
         {
           "id": "docker-public-http",
@@ -38,10 +40,12 @@
     {
       "id": "mem0-memory",
       "displayName": "Local mem0 memory service",
+      "dockerComposeService": "mem0",
       "required": true,
       "ports": [
         {
           "id": "mem0-http",
+          "env": "MEM0_PORT",
           "defaultPort": 3201,
           "containerPort": 3201,
           "requiredIn": ["docker-compose"]
@@ -58,10 +62,12 @@
     {
       "id": "orchestration-service",
       "displayName": "Agent orchestration service",
+      "dockerComposeService": "orchestration",
       "required": false,
       "ports": [
         {
           "id": "orchestration-http",
+          "env": "ORCHESTRATION_PORT",
           "defaultPort": 3210,
           "containerPort": 3210,
           "requiredIn": ["docker-compose"]

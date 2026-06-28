@@ -8,7 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { PLATFORM_LABELS } from "@/lib/constants";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 import type { RegisteredAgent } from "@/types";
 
 interface AgentRegistryDrawerProps {

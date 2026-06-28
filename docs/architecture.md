@@ -1,17 +1,21 @@
-# MemroOS Architecture
+# MemRoOS Architecture
 
-MemroOS is a thin, durable broker and observability layer for agent systems. It does not try to become every framework's runtime. Instead, it standardizes registration, authentication, task transport, memory reporting, and operator visibility.
+MemRoOS is an agent operating system with a broker kernel at its center. The kernel registers and authenticates agents, routes work across protocol boundaries, records memory and tool-use receipts, and gives the operator a durable control surface. It does not try to replace every agent framework's runtime; it standardizes identity, transport, memory, governance, and observability around them.
 
-## System Shape
+## Broker Kernel
+
+The kernel is the Next.js app in `apps/memroos`. It owns the request boundary, UI, registry, governance checks, and durable SQLite state.
 
 ```mermaid
 flowchart TB
-  Operator["Operator"] --> UI["Memroos UI"]
+  Operator["Operator"] --> UI["MemRoOS UI"]
   UI --> API["Next.js API Routes"]
   API --> Registry["Canonical Registry SQLite"]
   API --> A2A["A2A Broker"]
   API --> RestShim["REST Shim"]
   API --> Memory["Memory Router"]
+  API --> AgentBus["Agent Context Bus"]
+  API --> NOC["Operations / NOC"]
   API --> OrchestrationProxy["Orchestration Proxy"]
 
   A2A --> TaskStore["A2A Task Store SQLite"]
@@ -20,61 +24,72 @@ flowchart TB
   Memory --> Mem0["mem0"]
   Mem0 --> Qdrant["Qdrant Cloud"]
   Mem0 --> Neo4j["Neo4j"]
-  Memory --> Episodic["Memroos SQLite"]
+  Memory --> Episodic["MemRoOS SQLite"]
+  AgentBus --> Inbox["Agent Inbox / Reply SQLite"]
   OrchestrationProxy --> LangGraph["LangGraph Service"]
   LangGraph --> Checkpoints["SqliteSaver Checkpoints"]
   LangGraph --> HIL["Human-in-the-loop Queue"]
 ```
 
-## Core Components
+## Shipped Module Map
 
-### Memroos UI
+| Domain | Primary routes | Primary modules | Responsibility |
+| --- | --- | --- | --- |
+| Agent registry | `/api/agents`, `/api/remote-agents`, `/api/heartbeat` | `lib/agent-registry.ts`, `lib/db-schema.ts` | Canonical agent identity, API keys, heartbeats, capabilities, and remote polling config |
+| A2A broker | `/api/a2a`, `/.well-known/agent-card.json`, `/tasks` | `lib/a2a`, `lib/agent-registry.ts` | A2A task lifecycle, agent cards, durable task state, SSE task updates |
+| REST shim | `/api/agent-memory`, `/api/tool-attention`, `/api/model-routing` | `lib/tool-attention.ts`, `lib/model-routing.ts` | Bearer-key write paths for non-A2A agents and runtime telemetry |
+| Memory | `/api/memory`, `/api/recall`, `/api/memory-inventory` | `lib/memory`, `lib/memory-recall-evals.ts`, `lib/recollection-policy.ts` | Vector, graph, episodic memory, recall evaluation, and proactive recollection policy |
+| Agent context bus | `/api/agent-context`, `/api/agent-peers` | `lib/agent-context-bus.ts`, `lib/agent-context-policy.ts` | Durable inbox, reply, acknowledgement, and peer communication flows |
+| Orchestration | `/api/orchestration`, `/api/chat`, `/api/dispatch` | `lib/orchestration`, `lib/hil`, `lib/dispatch` | Thin proxy to routed execution, chat dispatch, and human approval state |
+| SkillForge | `/api/skillforge`, `/api/skills`, `/api/seal` | `lib/skillforge`, `lib/skills`, `lib/seal` | Skill lifecycle, proposal generation, evaluation, approval, and rollback |
+| Governance and audit | `/api/audit`, `/api/classification`, `/api/evidence` | `lib/audit`, `lib/classification`, `lib/compliance`, `lib/evidence` | Classification, audit events, evidence bundles, and policy receipts |
+| Operations and observability | `/api/operations`, `/api/agent-runtime/observability`, `/api/model-usage` | `lib/efficiency-telemetry.ts`, `lib/memory-trace-observability.ts`, `lib/api-client.ts` | NOC panels, efficiency events, memory traces, usage metrics, and operator read models |
+| Knowledge and library | `/api/knowledge`, `/api/library`, `/api/meeting` | `lib/library`, `lib/knowledge-collections.ts`, `lib/context-sources.ts` | Curated knowledge, source contracts, cookbooks, notebooks, and meeting-derived artifacts |
 
-The UI is the operator surface: registry, Flow, memory intelligence, dispatch, ledger, library, notebooks, cookbooks, and APO. It should stay useful even when optional services are degraded.
+## Service Boundaries
 
-### Canonical Registry
+Long-running or compute-heavy work runs outside the Next.js kernel as a service. These services are peers of the broker kernel, not hidden modules inside it.
 
-The registry is the source of truth for connected agents. It stores identity, protocol, platform, network coordinates, capabilities, heartbeats, generated API keys, memory writes, and skill reports.
+| Service | Path | Owner role |
+| --- | --- | --- |
+| Orchestration service | `services/orchestration` | LangGraph graphs, checkpoints, retry metadata, and HIL execution state |
+| Memory service | `services/memory` | mem0 integration, embedding queue, Qdrant and Neo4j bridge behavior |
+| Knowledge MCP service | `services/knowledge-mcp` | MCP-accessible knowledge search and indexed source lookup |
+| Voice service | `services/voice-server` | STT/TTS relay and meeting/voice runtime support |
 
-Legacy `agents.config.json` entries are not automatically canonical registry entries. They are older remote polling config and should be migrated by registering agents into the DB-backed registry.
+## Script Boundaries
 
-### A2A Broker
+`scripts/` is operator tooling. Scripts provision, validate, install, migrate, run evals, or perform one-shot maintenance. They should run to completion and exit unless their filename and docs explicitly describe a daemon launcher.
 
-The A2A broker exposes:
+Examples:
 
-- `/.well-known/agent-card.json`
-- `/.well-known/agent.json`
-- `/a2a`
-- `/message:send`
-- `/message:stream`
-- `/tasks`
-- `/tasks/{id}`
-- `/tasks/{id}:cancel`
-- `/tasks/{id}:subscribe`
+- Provisioning: `scripts/provision-agent-keys.sh`
+- Runtime validation: `scripts/check-runtime-topology.mjs`, `scripts/check-local-footprint.mjs`
+- Evals: `scripts/run-marketplace-memory-evals.mjs`, `scripts/run-comparative-retrieval-evals.mjs`
+- Installers and launchers: `scripts/install-runtime-services.mjs`, `scripts/launchd-start.sh`
 
-Memroos keeps the broker durable and boring: authenticate, validate, store task state, expose SSE updates, and delegate outward when needed. More intelligent routing belongs in the orchestration service.
+## Placement Rules
 
-### REST Shim
+| Put it in | Use when | Do not use for |
+| --- | --- | --- |
+| `apps/memroos/src/app` | HTTP routes, App Router pages, UI route boundaries, and request-time handlers | Long-running worker loops or batch jobs |
+| `apps/memroos/src/lib` | Shared TypeScript domain logic used by routes, UI, tests, and scripts | Browser-only component state or Python service logic |
+| `services` | Persistent Python processes, LangGraph runtimes, embedding queues, MCP servers, voice services, and other off-process loops | Thin CRUD routes or UI rendering |
+| `scripts` | One-shot checks, provisioning, eval runners, migration helpers, launchd installers, and operational maintenance | Request/response behavior or business logic that must be imported by routes |
+| `docs` and `.planning` | Architecture contracts, operator-facing decisions, GSD requirements, phase plans, verification notes | Runtime source of truth for behavior |
 
-The REST shim lets non-A2A frameworks integrate quickly. Agents can report heartbeats, memory writes, and skill usage with a bearer key issued by Memroos.
+Rule of thumb:
 
-### Memory Router
-
-Memory has three tiers:
-
-- Vector: semantic recall through mem0 backed by Qdrant Cloud.
-- Graph: relationship queries through mem0 backed by Neo4j.
-- Episodic: operational memory and audit rows in Memroos SQLite.
-
-### LangGraph Orchestration Service
-
-Memroos delegates multi-step routed tasks to the Python orchestration service. The service owns LangGraph graphs, checkpointing, retry metadata, and human approval state. Memroos remains the UI/proxy boundary.
+- If it serves an HTTP request or renders UI, start in the Next.js app.
+- If it needs a persistent event loop, Python ecosystem runtime, embedding queue, or MCP process, put it under `services`.
+- If it runs once, validates state, installs config, or produces a report, put it under `scripts`.
+- If multiple runtimes need the same contract, define the schema or manifest once and generate or validate consumers from it.
 
 ## Deployment Boundaries
 
 Recommended startup deployment:
 
-- Memroos runs on one host.
+- MemRoOS runs on one host.
 - Agents run on one or more machines.
 - Machines communicate over Tailscale or a trusted LAN.
 - `MEMROOS_OPERATOR_API_KEY` protects operator writes.
@@ -82,23 +97,24 @@ Recommended startup deployment:
 
 Cloud deployment:
 
-- Put Memroos behind HTTPS.
+- Put MemRoOS behind HTTPS.
 - Require operator key.
-- Use real secrets management.
+- Use managed secrets.
 - Restrict A2A card ingestion to approved card URLs and networks.
 
 ## Data Stores
 
 | Store | Owner | Purpose |
 | --- | --- | --- |
-| SQLite `data/conversations.db` | Memroos | Registry, A2A tasks, reports, audit, episodic memory |
+| SQLite `data/conversations.db` | MemRoOS kernel | Registry, A2A tasks, reports, audit, episodic memory, agent bus, and operational telemetry |
 | Qdrant Cloud | mem0 | Vector memory |
-| Neo4j | mem0 / Memroos graph routes | Graph memory |
+| Neo4j | mem0 / MemRoOS graph routes | Graph memory |
 | Orchestration SQLite | LangGraph service | Checkpoints and HIL state |
 
 ## Design Choices
 
-- **Thin broker over smart monolith:** Memroos coordinates and observes; it does not replace agent frameworks.
+- **Agent OS over app dashboard:** MemRoOS provides identity, memory, governance, routing, and observability as operating-system services for agents.
+- **Thin broker over smart monolith:** The kernel coordinates and observes; specialized runtimes keep their own execution loops.
 - **A2A first, REST compatible:** Prefer standards where they exist, keep a pragmatic shim for frameworks still catching up.
 - **Private network first:** Multi-machine startup deployments should start on Tailscale/LAN before public exposure.
 - **Explicit registration:** Agents become canonical only after registry registration or A2A card ingestion.

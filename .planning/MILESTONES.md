@@ -2,25 +2,25 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection Planning (In Progress 2026-06-23)
+## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection (Completed 2026-06-27)
 
 **Scope:**
 
 1. Refresh memroos.com, README, screenshots, public metadata, and LLM-readable docs so they match the completed v6.4/v6.5/v6.6/v7.0 product state.
 2. Keep the public story centered on company-owned memory and governance for agent harnesses, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
-3. Plan the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
+3. Ship the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
 
 ---
 
-## v7.5 Proactive Recollection Triggering (Planned 2026-06-23)
+## v7.5 Proactive Recollection Triggering (Completed 2026-06-27)
 
 **Phases:** 118
 
 **Scope:**
 
-1. **Proactive Recollection Triggering (Phase 118)** — Add deterministic search-required/search-skipped decisions before plan/tool/final gates, bounded query planning, relevance/recency/importance/freshness ranking, context-pack receipts, proactive recall evals, and operator/NOC visibility.
+1. **Proactive Recollection Triggering (Phase 118)** — Add deterministic search-required/search-skipped decisions before plan/tool/final gates, bounded query planning, relevance/recency/importance/freshness ranking, context-pack receipts, bronze/silver/gold memory belief-stage gates, proactive recall evals, and operator/NOC visibility.
 
-**Verification targets:** focused recollection-policy tests, integration at the selected dispatch/runtime seam, memory recall canary, typecheck, build, and NOC receipt visibility.
+**Verification highlights:** focused recollection-policy, memory-client, memory-trace, memory-recall-eval, and NOC tests passed; full app Vitest passed at 1211 tests; typecheck, build, and lint passed with the existing 32 warnings.
 
 ---
 
@@ -150,6 +150,7 @@ This file tracks the current high-level product milestone state. Detailed requir
 - CocoIndex source-freshness spike: bounded future comparison only against one non-sensitive declared context lane; no dependency adoption, production indexing path, policy bypass, sensitive raw-corpus indexing, or memory backend replacement without Luis approval.
 - FastContext repo-scout spike: bounded future comparison only against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic edits without Luis approval.
 - ADK/A2A cross-language contract-compliance demo spike: bounded future fixture only; use Google's Python ADK plus Go deterministic-validator pattern to prove A2A handoff, failure receipts, and NOC visibility, with no ADK/Gemini core dependency or compliance-vertical claim without Luis approval.
+- Qdrant 1.18.x Cloud upgrade-readiness spike: bounded operational upgrade plan only; no local Qdrant, backend swap, vector rewrite, TurboQuant enablement, named-vector migration, or production cluster upgrade without Luis approval and recall/latency/audit/rollback proof.
 - DAST scanning in CI after the v7.0 audit baseline.
 - External penetration test.
 - SOC 2 Type II controls mapping.

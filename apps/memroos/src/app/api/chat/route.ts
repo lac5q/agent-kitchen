@@ -13,6 +13,8 @@ import {
   type AgentContext,
 } from "./chat-runtime";
 import { getRegisteredAgent } from "@/lib/agent-registry";
+import { getDb } from "@/lib/db";
+import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,6 +38,14 @@ const OPENCODE_KILL_GRACE_MS = parsePositiveInteger(
   3_000
 );
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatRequestBody = {
+  message: string;
+  agentId?: string;
+  taskId?: string;
+  history?: ChatMessage[];
+  memoryHits?: unknown;
+  memory_hits?: unknown;
+};
 type OpenCodeReservation =
   | { ok: true; release: () => void }
   | { ok: false; error: string };
@@ -44,6 +54,57 @@ let activeOpenCodeRuns = 0;
 
 function latestUserMessage(messages: ChatMessage[]): string {
   return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
+}
+
+function normalizeQuestionText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isQuestionLike(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  if (text.includes("?")) return true;
+  return /^(who|what|when|where|why|how|which|did|do|does|can|could|should|would|is|are|was|were|has|have|had)\b/i.test(text);
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item.slice(0, 512))
+    .slice(0, 20);
+}
+
+function priorUserQuestionMatch(message: string, history: ChatMessage[]): boolean {
+  const normalized = normalizeQuestionText(message);
+  if (!normalized) return false;
+  return history.some((entry) =>
+    entry.role === "user" && normalizeQuestionText(entry.content) === normalized
+  );
+}
+
+function recordOperatorQuestionTelemetry(params: {
+  body: ChatRequestBody;
+  agentId: string;
+  message: string;
+  history: ChatMessage[];
+}) {
+  const { body, agentId, message, history } = params;
+  const memoryHits = stringList(body.memoryHits ?? body.memory_hits);
+  if (!isQuestionLike(message) && memoryHits.length === 0) return;
+
+  recordEfficiencyEvent(getDb(), {
+    eventType: "operator_question",
+    taskId: body.taskId ?? null,
+    agentId,
+    payload: {
+      questionText: message.trim().slice(0, 2_000),
+      memoryHits,
+      priorAnswerMatch: priorUserQuestionMatch(message, history),
+    },
+  });
 }
 
 function humanizeAgentId(agentId: string): string {
@@ -278,11 +339,7 @@ function streamOpenCodeResponse(params: {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as {
-    message: string;
-    agentId?: string;
-    history?: Array<{ role: "user" | "assistant"; content: string }>;
-  };
+  const body = await req.json() as ChatRequestBody;
 
   const { message, agentId = "ceo", history = [] } = body;
 
@@ -294,6 +351,12 @@ export async function POST(req: NextRequest) {
     ...history.slice(-10),
     { role: "user", content: message },
   ];
+
+  try {
+    recordOperatorQuestionTelemetry({ body, agentId, message, history });
+  } catch {
+    // Chat delivery should not depend on telemetry storage.
+  }
 
   const encoder = new TextEncoder();
 

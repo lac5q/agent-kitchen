@@ -1,6 +1,6 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-06-23*
+*Updated: 2026-06-27*
 
 ---
 
@@ -10,10 +10,11 @@
 - v6.5 Agent Context Bus + Synchronous Agent Communication — complete
 - v6.6 Cloud Offload + Local Footprint Reduction — complete
 - v7.0 Client-Ready Security + Architecture Audit — complete
-- v7.1 Competitive Retrieval Proof — planned
-- v7.2 Architecture Review Hardening — in progress
-- v7.4 NOC Efficiency Telemetry — planned
-- v7.5 Proactive Recollection Triggering — planned
+- v7.1 Competitive Retrieval Proof — complete
+- v7.2 Architecture Review Hardening — complete
+- v7.4 NOC Efficiency Telemetry — complete
+- v7.5 Proactive Recollection Triggering — complete
+- v7.6 Future Spike Queue — complete
 
 ---
 
@@ -95,48 +96,63 @@
 
 2026-06-19 progress:
 - `ARCHREV-01`: handler-local operator guards now protect `/api/agent-checkpoints`, `/api/agent-checkpoints/metrics`, `/api/agents/versions`, `/api/agents/versions/promote`, `/api/agents/versions/rollback`, `/api/agent-memory/traces`, `/api/agent-runtime/observability`, `/api/hive` POST, and `/api/model-routing/telemetry` POST with direct non-local regression coverage.
-- `ARCHREV-09`: route-handler regression coverage now proves selected privileged routes reject direct non-local calls before validation or DB access.
+- `ARCHREV-02`: `docs/architecture.md` now frames MemRoOS as an agent operating system with a broker kernel, shipped-domain module map, service/script boundaries, and placement rules for Next.js app, shared library, Python service, script, docs, and planning code.
+- `ARCHREV-04`: runtime topology manifest now owns Docker service names, Docker port envs, Docker dependencies, health paths, manual-script port defaults, and launchd port defaults; `npm run check:runtime-topology` validates Docker compose, `start.sh`, and launchd artifacts against that manifest.
+- `ARCHREV-05`: typed env validation now runs at Next instrumentation startup; `lib/env.ts` owns core app URLs, ports, paths, A2A settings, root config paths, embedding settings, and credential shape validation; server constants, A2A config, root config loaders, and embedding provider settings consume the typed module; root config status records `agents.config.json` as legacy compatibility state.
+- `ARCHREV-06`: public eval contract slices complete for the route, TypeScript SDK, Python SDK, REST/OpenAPI discovery, MCP tool-schema export, A2A discovery, and shared contract-manifest drift gate: `/api/public/v1/traces` now uses a contract helper for `AgentEvalTrace` and `EvalSubmitResult`, emits `X-Memroos-Contract: public-eval-api.v1`, both SDKs have runtime response validation plus verified live smoke tests against a running app, `/api/public/v1/openapi` serves an OpenAPI 3.1 document from the shared route contract, the MCP facade exports `memroos-mcp-tools.v1` through `mcp_tool_contract` / `mcp://tools/contract`, `/api/a2a/openapi` serves `memroos-a2a.v1` for agent-card discovery plus JSON-RPC dispatch, and `npm run check:contracts` verifies app/SDK/MCP contract IDs plus shared response fields/task states against `contracts/memroos-contracts.json`.
+- `ARCHREV-07`: `.github/workflows/ci.yml` now has `workflow_dispatch` and a daily schedule plus a dedicated `recall-canary` job. `npm run check:recall-canary` runs the memory recall scorer tests and executes the committed gold recall suite through `runMemoryRecallEvalSuite({ mode: "gold" })` against a temp SQLite DB, using the existing `evals/memory-recall/cases.json` thresholds as the regression gate.
+- `ARCHREV-08`: `.planning/planning-history-retention.md` now decides the retention path before wider release: current docs stay, historical phase internals move to tracked archive when pruned, and screenshots/operational evidence require private-sibling relocation or explicit approval before public release.
+- `ARCHREV-09`: `docs/next-trust-boundary-upgrade.md`, `npm run check:next-trust-boundary`, and CI now require reviewed Next/proxy markers plus proxy/auth regression coverage before framework upgrades or `proxy.ts` edits change the request trust boundary.
+- `ARCHREV-01`: `npm run check:route-auth-boundary` now verifies every proxy route-local auth bypass pattern and proxy operator/admin route has handler-local auth evidence, plus focused non-local denial regression tests, before CI can pass. Marketing-app split remains a follow-on deployment decision rather than a blocker for the shared-app defense-in-depth gate.
 
-- [ ] **ARCHREV-01**: Route-level operator/agent auth wrappers protect privileged route groups inside handlers or factories so `proxy.ts` is not the only security boundary; marketing-app split remains a follow-on deployment decision.
-- [ ] **ARCHREV-02**: Architecture docs describe MemRoOS as an agent OS with a broker kernel, include a module map for shipped domains, and define placement rules for Next app vs. Python service vs. script.
+- [x] **ARCHREV-01**: Route-level operator/agent auth wrappers protect privileged route groups inside handlers or factories so `proxy.ts` is not the only security boundary; marketing-app split remains a follow-on deployment decision.
+  - 2026-06-27 progress: Added `scripts/check-route-auth-boundary.mjs`, checker tests, `npm run check:route-auth-boundary`, and a CI gate after lint. The gate validates proxy bypass coverage, proxy operator/admin route handler-auth markers, and the focused direct non-local denial regression suite.
+- [x] **ARCHREV-02**: Architecture docs describe MemRoOS as an agent OS with a broker kernel, include a module map for shipped domains, and define placement rules for Next app vs. Python service vs. script.
 - [x] **ARCHREV-03**: SQLite schema initialization runs through an ordered migration runner stamped with `PRAGMA user_version`; unstamped legacy DBs upgrade to the current version, future-version DBs fail closed, and default admin seeding completes synchronously before `getDb()` returns.
-- [ ] **ARCHREV-04**: A single runtime topology manifest names required services, ports, health checks, and supervision mode; `start.sh`, launchd installers, and Docker compose derive from or validate against that source.
+- [x] **ARCHREV-04**: A single runtime topology manifest names required services, ports, health checks, and supervision mode; `start.sh`, launchd installers, and Docker compose derive from or validate against that source.
   - 2026-06-19 progress: added shared JSON `runtime-topology` manifest plus standalone `check:runtime-topology` validation covering app, mem0, orchestration, voice, and agentmemory service ports, health checks, and supervision modes against current Docker/startup text.
   - 2026-06-19 progress: `start.sh` now derives its manual-script port defaults from `scripts/check-runtime-topology.mjs port ...`; environment overrides still win.
  - 2026-06-19 progress: `scripts/launchd-start.sh` now derives launchd app port defaults from the same checker after runtime env and Node path resolution; `PORT` and `MEMROOS_LAUNCHD_DEFAULT_PORT` overrides still win. Docker compose remains validated against the manifest, not generated from it yet.
-- [ ] **ARCHREV-05**: App configuration is validated through one typed env module at startup, with `process.env` reads centralized and legacy root config status reconciled.
-- [ ] **ARCHREV-06**: API, A2A, REST shim, MCP, and SDK contracts have one generated or shared schema source plus an SDK smoke test against a running app.
-- [ ] **ARCHREV-07**: Recall canary evaluation runs in CI or a scheduled workflow, using existing golden sets and recall thresholds as a regression gate.
-- [ ] **ARCHREV-08**: Planning history retention is decided before wider release: prune to current-milestone public docs or move archival GSD screenshots/history to a private sibling repo.
-- [ ] **ARCHREV-09**: Next.js trust-boundary changes carry explicit proxy/auth regression coverage and a migration checklist before framework upgrades touch `proxy.ts`.
+- [x] **ARCHREV-05**: App configuration is validated through one typed env module at startup, with `process.env` reads centralized and legacy root config status reconciled.
+  - 2026-06-27 progress: `validateMemroosEnvAtStartup()` runs from Next instrumentation before schedulers start. High-blast-radius config paths now read through `loadMemroosEnv()`: server constants, A2A config, knowledge collections, context sources, and embedding provider settings. Route-specific feature toggles, adapter credentials, subprocess env spreads, and tests remain explicit follow-up surface rather than hidden completion claims.
+- [x] **ARCHREV-06**: API, A2A, REST shim, MCP, and SDK contracts have one generated or shared schema source plus an SDK smoke test against a running app.
+  - 2026-06-27 progress: public eval v1, TypeScript SDK, Python SDK, REST/OpenAPI discovery, MCP tool-schema export, A2A OpenAPI discovery, and shared contract-manifest consolidation now have stable contract IDs, app-side runtime contract validation, SDK response validation, verified live SDK smokes against local running apps, tested OpenAPI 3.1 discovery routes, a tested `memroos-mcp-tools.v1` contract, a tested `memroos-a2a.v1` contract, and `contracts/memroos-contracts.json` with `npm run check:contracts` preventing app/SDK/MCP ID and core schema-field drift.
+- [x] **ARCHREV-07**: Recall canary evaluation runs in CI or a scheduled workflow, using existing golden sets and recall thresholds as a regression gate.
+  - 2026-06-27 progress: Added `npm run check:recall-canary`, a deterministic CI test that runs the committed gold recall eval suite against a temp SQLite DB and fails on existing recall/precision/MRR/latency thresholds; `.github/workflows/ci.yml` now exposes manual and daily scheduled runs plus a dedicated `recall-canary` job.
+- [x] **ARCHREV-08**: Planning history retention is decided before wider release: prune to current-milestone public docs or move archival GSD screenshots/history to a private sibling repo.
+- [x] **ARCHREV-09**: Next.js trust-boundary changes carry explicit proxy/auth regression coverage and a migration checklist before framework upgrades touch `proxy.ts`.
+  - 2026-06-27 progress: Added `docs/next-trust-boundary-upgrade.md`, `scripts/check-next-trust-boundary.mjs`, checker tests, focused proxy adversarial coverage, `npm run check:next-trust-boundary`, and a CI gate after lint.
 
 - [x] **ARCHREV-10**: Storage ingress applies PII detection and anonymization before memory payloads leave MemRoOS for mem0/vector storage; forwarded payloads carry non-sensitive metadata receipts with provider, entity types, count, redaction mode, and original content hash.
 
 ## v7.4 NOC Efficiency Telemetry
 
-- [ ] **EFFTEL-01**: Dispatch and context-pack assembly emit structured trace events (timestamp, agent id, retrieval query, source, tokens, whether result was used in first response) so NOC can compute "retrieval calls before useful work."
-- [ ] **EFFTEL-02**: Tool-call transcript captures per-tool read events with source identifier and hash so NOC can count repeated reads of the same source within a task window ("same-source re-read count").
-- [ ] **EFFTEL-03**: Model-routing layer emits token-level events distinguishing raw-context ingest tokens from processed/cached tokens so NOC can compute "raw-context ingest token share" as a percentage of total.
-- [ ] **EFFTEL-04**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits so NOC can detect "operator re-ask redundancy" (re-asking something already answered from memory).
-- [ ] **EFFTEL-05**: Memory write events include provenance (source, first-seen timestamp, dedup hash) so NOC can detect "rediscovered-fact rate" (facts written to memory again after already existing).
+- [x] **EFFTEL-01**: Dispatch and context-pack assembly emit structured trace events (timestamp, agent id, retrieval query, source, tokens, whether result was used in first response) so NOC can compute "retrieval calls before useful work."
+- [x] **EFFTEL-02**: Tool-call transcript captures per-tool read events with source identifier and hash so NOC can count repeated reads of the same source within a task window ("same-source re-read count").
+- [x] **EFFTEL-03**: Model-routing layer emits token-level events distinguishing raw-context ingest tokens from processed/cached tokens so NOC can compute "raw-context ingest token share" as a percentage of total.
+- [x] **EFFTEL-04**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits so NOC can detect "operator re-ask redundancy" (re-asking something already answered from memory).
+- [x] **EFFTEL-05**: Memory write events include provenance (source, first-seen timestamp, dedup hash) so NOC can detect "rediscovered-fact rate" (facts written to memory again after already existing).
 
 ## v7.5 Proactive Recollection Triggering
 
-- [ ] **RECOLLECT-01**: Runtime recollection policy decides, before `before_plan`, `before_tool_use`, and `before_final` gates, whether memory search is required or intentionally skipped; every decision emits a typed reason receipt.
-- [ ] **RECOLLECT-02**: Query planner derives bounded tier-aware recall queries from task text, entities, project/source refs, recency language, handoff state, and rediscovery risk, with explicit scope and limits.
-- [ ] **RECOLLECT-03**: Candidate ranking combines relevance, recency, importance/salience, source freshness, prior usefulness, and policy-risk penalties so recent context can surface without overriding older critical context.
-- [ ] **RECOLLECT-04**: Context-pack assembly injects only threshold-cleared memories and records retrieved, injected, ignored, skipped, score components, authorization result, and why each candidate entered or missed the pack.
-- [ ] **RECOLLECT-05**: Memory traces and recall evals cover proactive timing, old-critical vs recent-low-value conflicts, stale-source demotion, policy-denied candidates, operator re-ask reduction, and rediscovered-fact prevention.
-- [ ] **RECOLLECT-06**: Operator/NOC surfaces expose recent recollection decisions, skipped-search reasons, false-positive rate, and the downstream answer/tool step that used or ignored injected memory.
+- [x] **RECOLLECT-01**: Runtime recollection policy decides, before `before_plan`, `before_tool_use`, and `before_final` gates, whether memory search is required or intentionally skipped; every decision emits a typed reason receipt.
+- [x] **RECOLLECT-02**: Query planner derives bounded tier-aware recall queries from task text, entities, project/source refs, recency language, handoff state, and rediscovery risk, with explicit scope and limits.
+- [x] **RECOLLECT-03**: Candidate ranking combines relevance, recency, importance/salience, source freshness, prior usefulness, and policy-risk penalties so recent context can surface without overriding older critical context.
+- [x] **RECOLLECT-04**: Context-pack assembly injects only threshold-cleared memories and records retrieved, injected, ignored, skipped, score components, authorization result, and why each candidate entered or missed the pack.
+- [x] **RECOLLECT-05**: Memory traces and recall evals cover proactive timing, old-critical vs recent-low-value conflicts, stale-source demotion, policy-denied candidates, operator re-ask reduction, and rediscovered-fact prevention.
+- [x] **RECOLLECT-06**: Operator/NOC surfaces expose recent recollection decisions, skipped-search reasons, false-positive rate, and the downstream answer/tool step that used or ignored injected memory.
+- [x] **RECOLLECT-07**: Recollection and context-pack receipts label each memory item by belief stage: bronze raw source snapshot, silver candidate claim, or gold admitted operational truth; agents may rely on gold directly, must caveat silver, and may use bronze only as source evidence unless promotion policy admits it.
 
 ---
 
-## Future Requirements (Deferred)
+## Future Requirements (Bounded Spikes Complete; Adoption Deferred)
 
-- **MEMGEN-FOLLOWUP-02**: Run a bounded Memento memory-save quality spike that compares local-first typed/audited Memento-style memory behavior against MemRoOS `agent_memory_candidates`, capture/handoff packs, and recall evals; no dependency adoption, backend swap, or hosted/private trace upload without Luis approval.
-- **COCOINDEX-FOLLOWUP-01**: Run a bounded CocoIndex source-freshness spike against one non-sensitive declared context lane, comparing incremental freshness, lineage receipts, rebuild cost, recall quality, and policy-label preservation against current qmd/context-source checks; no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or mem0/Qdrant/Neo4j/SQLite replacement without Luis approval.
-- **FASTCONTEXT-FOLLOWUP-01**: Run a bounded FastContext repo-scout spike against 20-50 MemRoOS code-navigation tasks, comparing correct file/function hit rate, line-citation quality, token spend, latency, and first-pass work improvement against GitNexus and baseline grep; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic code edits from FastContext output without Luis approval.
-- **ADKA2A-FOLLOWUP-01**: Run a bounded cross-language ADK/A2A contract-compliance demo spike using Google's contract-compliance pipeline as a reference fixture, comparing Python/ADK orchestration, Go deterministic validation, A2A/JSON-RPC handoff, timeout/retry/fail-closed behavior, and evidence/NOC receipts against MemRoOS's existing A2A registry and dispatch surfaces; no ADK/Gemini core dependency, wholesale app copy, compliance-vertical claim, or runtime replacement without Luis approval.
+- [x] **MEMGEN-FOLLOWUP-02**: Bounded Memento memory-save quality spike completed in `.planning/spikes/2026-06-27-memento-memory-save-quality.md`; no dependency adoption, backend swap, or hosted/private trace upload approved.
+- [x] **COCOINDEX-FOLLOWUP-01**: Bounded CocoIndex source-freshness spike completed in `.planning/spikes/2026-06-27-cocoindex-source-freshness.md`; no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or memory-backend replacement approved.
+- [x] **FASTCONTEXT-FOLLOWUP-01**: Bounded FastContext repo-scout spike completed in `.planning/spikes/2026-06-27-fastcontext-repo-scout.md`; no runtime dependency, hosted/private repo upload, GitNexus replacement, or automatic code-edit path approved.
+- [x] **ADKA2A-FOLLOWUP-01**: Bounded ADK/A2A contract-compliance spike completed in `.planning/spikes/2026-06-27-adk-a2a-contract-compliance.md`; no ADK/Gemini core dependency, app copy, compliance-vertical claim, or runtime replacement approved.
+- [x] **QDRANT-FOLLOWUP-01**: Bounded Qdrant Cloud upgrade-readiness spike completed in `.planning/spikes/2026-06-27-qdrant-cloud-upgrade-readiness.md`; no local Qdrant, backend swap, vector rewrite, TurboQuant/named-vector migration, or production cluster upgrade approved.
+- [x] **HYPEREXTRACT-FOLLOWUP-01**: Bounded Hyper-Extract structured-memory spike completed in `.planning/spikes/2026-06-27-hyperextract-structured-memory.md`; no dependency adoption, production ingestion path, private-document upload, storage-layer replacement, or default extraction pipeline approved.
 - Automated DAST scanning in CI pipeline (post-audit baseline needed first)
 - Penetration test by external firm (after internal audit complete)
 - SOC 2 Type II controls mapping (separate compliance milestone)
@@ -195,37 +211,40 @@
 | TEST-01 | 113 | Complete |
 | TEST-02 | 110–112 | Complete |
 | TEST-03 | 113 | Complete |
-| COMPETE-01 | 114 | Planned |
-| COMPETE-02 | 114 | Planned |
-| SITE-BENCH-01 | 114 | Planned |
-| BENCH-01 | 114 | Planned |
-| BENCH-02 | 114 | Planned |
-| BENCH-03 | 114 | Planned |
-| RETRIEVAL-01 | 114 | Planned |
-| RECEIPTS-01 | 114 | Planned |
-| SEO-PROOF-01 | 114 | Planned |
-| ARCHREV-01 | 115 | Planned |
-| ARCHREV-02 | 115 | Planned |
+| COMPETE-01 | 114 | Done |
+| COMPETE-02 | 114 | Done |
+| SITE-BENCH-01 | 114 | Done |
+| BENCH-01 | 114 | Done |
+| BENCH-02 | 114 | Done |
+| BENCH-03 | 114 | Done |
+| RETRIEVAL-01 | 114 | Done |
+| RECEIPTS-01 | 114 | Done |
+| SEO-PROOF-01 | 114 | Done |
+| ARCHREV-01 | 115 | Complete |
+| ARCHREV-02 | 115 | Complete |
 | ARCHREV-03 | 115 | Complete |
-| ARCHREV-04 | 115 | Planned |
-| ARCHREV-05 | 115 | Planned |
-| ARCHREV-06 | 115 | Planned |
-| ARCHREV-07 | 115 | Planned |
-| ARCHREV-08 | 115 | Planned |
-| ARCHREV-09 | 115 | Planned |
+| ARCHREV-04 | 115 | Complete |
+| ARCHREV-05 | 115 | Complete |
+| ARCHREV-06 | 115 | Complete |
+| ARCHREV-07 | 115 | Complete |
+| ARCHREV-08 | 115 | Complete |
+| ARCHREV-09 | 115 | Complete |
 | ARCHREV-10 | 115 | Complete |
-| MEMGEN-FOLLOWUP-02 | Future | Deferred |
-| COCOINDEX-FOLLOWUP-01 | Future | Deferred |
-| FASTCONTEXT-FOLLOWUP-01 | Future | Deferred |
-| ADKA2A-FOLLOWUP-01 | Future | Deferred |
-| EFFTEL-01 | 117 | Planned |
-| EFFTEL-02 | 117 | Planned |
-| EFFTEL-03 | 117 | Planned |
-| EFFTEL-04 | 117 | Planned |
-| EFFTEL-05 | 117 | Planned |
-| RECOLLECT-01 | 118 | Planned |
-| RECOLLECT-02 | 118 | Planned |
-| RECOLLECT-03 | 118 | Planned |
-| RECOLLECT-04 | 118 | Planned |
-| RECOLLECT-05 | 118 | Planned |
-| RECOLLECT-06 | 118 | Planned |
+| MEMGEN-FOLLOWUP-02 | 119 | Complete bounded spike; adoption deferred |
+| COCOINDEX-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| FASTCONTEXT-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| ADKA2A-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| QDRANT-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| HYPEREXTRACT-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| EFFTEL-01 | 117 | Done |
+| EFFTEL-02 | 117 | Done |
+| EFFTEL-03 | 117 | Done |
+| EFFTEL-04 | 117 | Done |
+| EFFTEL-05 | 117 | Done |
+| RECOLLECT-01 | 118 | Done |
+| RECOLLECT-02 | 118 | Done |
+| RECOLLECT-03 | 118 | Done |
+| RECOLLECT-04 | 118 | Done |
+| RECOLLECT-05 | 118 | Done |
+| RECOLLECT-06 | 118 | Done |
+| RECOLLECT-07 | 118 | Done |

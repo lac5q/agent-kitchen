@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAgents, useDelegations } from "@/lib/api-client";
 import { LineageDrawer } from "./lineage-drawer";
-import { PLATFORM_LABELS } from "@/lib/constants";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "text-stone-500 bg-stone-100",

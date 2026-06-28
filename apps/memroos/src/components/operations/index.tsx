@@ -107,7 +107,7 @@ export function OperationsNoc() {
       <PulseStrip filters={filters} />
 
       {/* Row 1.5 — Efficiency signals */}
-      <EfficiencySignals />
+      <EfficiencySignals filters={filters} />
 
       {/* Row 2 — Memory consumption + Memory not digested */}
       <div

@@ -18,20 +18,15 @@ import {
   isOpenInferenceTrace,
   mapOpenInferenceToAgentEvalTrace,
 } from "@/lib/evals/openinference-mapper";
+import {
+  isAgentEvalTrace,
+  parseAgentEvalTrace,
+  parseEvalSubmitResult,
+  publicEvalContractHeaders,
+} from "@/lib/public-api/eval-contract";
 import type { AgentEvalTrace } from "@/lib/evals/types";
 
 export const dynamic = "force-dynamic";
-
-function isAgentEvalTrace(value: unknown): value is AgentEvalTrace {
-  if (!value || typeof value !== "object") return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.traceId === "string" &&
-    typeof v.agentId === "string" &&
-    typeof v.input === "string" &&
-    typeof v.output === "string"
-  );
-}
 
 function rateLimitHeaders(
   limit: number,
@@ -64,6 +59,7 @@ export async function POST(req: NextRequest) {
     rl.remaining,
     rl.resetAt
   );
+  const responseHeaders = publicEvalContractHeaders(rlHeaders);
 
   if (!rl.allowed) {
     return Response.json(
@@ -71,7 +67,7 @@ export async function POST(req: NextRequest) {
       {
         status: 429,
         headers: {
-          ...rlHeaders,
+          ...responseHeaders,
           "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 1000) / 1000)),
         },
       }
@@ -83,7 +79,7 @@ export async function POST(req: NextRequest) {
   if (!body) {
     return Response.json(
       { error: "Request body is required" },
-      { status: 400, headers: rlHeaders }
+      { status: 400, headers: responseHeaders }
     );
   }
 
@@ -92,14 +88,14 @@ export async function POST(req: NextRequest) {
   if (isOpenInferenceTrace(body)) {
     trace = mapOpenInferenceToAgentEvalTrace(body);
   } else if (isAgentEvalTrace(body)) {
-    trace = body;
+    trace = parseAgentEvalTrace(body);
   } else {
     return Response.json(
       {
         error:
           "Payload must be an AgentEvalTrace (MemroOS JSON) or an OpenInference span (requires openinference.span.kind)",
       },
-      { status: 400, headers: rlHeaders }
+      { status: 400, headers: responseHeaders }
     );
   }
 
@@ -112,21 +108,22 @@ export async function POST(req: NextRequest) {
   // --- Score and persist ---
   try {
     const result = scoreAndMaybePersistEvalTrace(trace, { persist: true });
+    const responseBody = parseEvalSubmitResult({
+      runId: result.id,
+      w: result.compositeW,
+      layers: result.layers,
+      proposalIds: [],
+      tenantId: tenant.tenantId,
+    });
 
     return Response.json(
-      {
-        runId: result.id,
-        w: result.compositeW,
-        layers: result.layers,
-        proposalIds: [],
-        tenantId: tenant.tenantId,
-      },
-      { status: 200, headers: rlHeaders }
+      responseBody,
+      { status: 200, headers: responseHeaders }
     );
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Eval scoring failed" },
-      { status: 500, headers: rlHeaders }
+      { status: 500, headers: responseHeaders }
     );
   }
 }

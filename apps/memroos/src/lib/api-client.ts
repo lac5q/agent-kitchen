@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { POLL_INTERVALS } from "./constants";
-import type { NocWorkspace } from "./noc-filters";
+import { POLL_INTERVALS } from "./ui-constants";
+import type { NocFilters, NocWorkspace } from "./noc-filters";
 import type {
   HealthStatus,
   KnowledgeCollection,
@@ -101,6 +101,93 @@ export function useContextSourceHealth() {
     queryFn: () => fetchJSON<ContextHealthResponse>("/api/context/health"),
     refetchInterval: 60_000,
   });
+}
+
+export type NocPanelStatus = "live" | "empty" | "degraded" | "missing";
+
+export interface OperationsNocPanel {
+  status: NocPanelStatus;
+  source: string;
+  lastUpdated: string | null;
+  warnings: string[];
+}
+
+export interface OperationsNocEfficiencyMetrics {
+  totalEvents: number;
+  retrievalEvents: number;
+  retrievalUsedInFirstResponse: number;
+  retrievalBeforeWorkRate: number | null;
+  sourceReadEvents: number;
+  repeatedSourceReads: number;
+  tokenLedgerEvents: number;
+  rawContextTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  rawContextTokenShare: number | null;
+  operatorQuestions: number;
+  operatorReasks: number;
+  operatorReaskRate: number | null;
+  memoryWrites: number;
+  rediscoveredWrites: number;
+  rediscoveredFactRate: number | null;
+  recollection: {
+    totalDecisions: number;
+    searchRequired: number;
+    searchSkipped: number;
+    injectedMemories: number;
+    ignoredCandidates: number;
+    policyDeniedCandidates: number;
+    belowThresholdCandidates: number;
+    skipReasons: Record<string, number>;
+    beliefStageCounts: {
+      bronze_raw_source: number;
+      silver_candidate_claim: number;
+      gold_operational_truth: number;
+    };
+    relianceCounts: {
+      direct_truth: number;
+      caveated_claim: number;
+      source_evidence_only: number;
+    };
+    latestDecisions: Array<{
+      id: number;
+      taskId: string | null;
+      agentId: string | null;
+      decision: "search_required" | "search_skipped";
+      timing: string | null;
+      reasons: string[];
+      skipReason: string | null;
+      createdAt: string;
+    }>;
+  };
+  streams: {
+    retrieval_trace: number;
+    source_read: number;
+    token_ledger: number;
+    operator_question: number;
+    memory_write: number;
+  };
+  lastUpdated: string | null;
+}
+
+export interface OperationsNocResponse {
+  ok: boolean;
+  filters: NocFilters & { since: string };
+  generatedAt: string;
+  metrics: {
+    memoryRows: number;
+    activeDispatches: number;
+    failedWork: number;
+    governanceEvents: number;
+    enabledSkills: number;
+    cronWarnings: number;
+    localFootprintBytes: number;
+    efficiency: OperationsNocEfficiencyMetrics;
+  };
+  panels: Record<string, OperationsNocPanel> & {
+    efficiency: OperationsNocPanel;
+  };
+  localFootprint?: unknown;
 }
 
 export interface MultiMemorySearchResult {
@@ -482,6 +569,17 @@ async function mutateJSON<T>(url: string, init: RequestInit): Promise<T> {
     throw new Error(`${url}: ${detail}`);
   }
   return res.json();
+}
+
+export function useOperationsNoc(filters: NocFilters = { window: "24h", workspace: "all" }) {
+  const params = new URLSearchParams();
+  params.set("window", filters.window);
+  params.set("workspace", filters.workspace);
+  return useQuery({
+    queryKey: ["operations", "noc", filters.window, filters.workspace],
+    queryFn: () => fetchJSON<OperationsNocResponse>(`/api/operations/noc?${params}`),
+    refetchInterval: POLL_INTERVALS.health,
+  });
 }
 
 export function useAgents() {

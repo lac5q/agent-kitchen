@@ -15,7 +15,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { useAgents, useDelegations } from "@/lib/api-client";
-import { PLATFORM_LABELS } from "@/lib/constants";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 import { InfoTip } from "@/components/ui/info-tip";
 import { LineageDrawer } from "@/components/dispatch/lineage-drawer";
 import type { RegisteredAgent } from "@/types";

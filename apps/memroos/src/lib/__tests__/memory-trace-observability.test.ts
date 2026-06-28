@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory-trace-observability";
 import { initSchema } from "@/lib/db-schema";
+import { listEfficiencyEvents } from "@/lib/efficiency-telemetry";
 
 let db: Database.Database;
 
@@ -22,6 +23,7 @@ describe("memory-trace observability", () => {
     const trace = recordMemoryTrace(db, {
       runId,
       taskId: "task-trace-1",
+      agentId: "codex",
       causalPath: {
         contextAssembly: "Assembled project wiki & vector memories.",
         retrievalQuery: "How does A2A routing work?",
@@ -35,6 +37,8 @@ describe("memory-trace observability", () => {
         ],
         consolidationSteps: ["Insights merged into episodic layer."],
         checkpointRefs: ["checkpoint-10023"],
+        retrievalTokensUsed: 128,
+        timingGate: "before_plan",
         promptInclusion: true,
         answerCitation: "A2A routing uses registration details.",
         verificationResult: "Verification successful: accurate A2A citation.",
@@ -51,6 +55,7 @@ describe("memory-trace observability", () => {
     const retrieved = getMemoryTrace(db, "default-tenant", runId);
     expect(retrieved).not.toBeNull();
     expect(retrieved?.taskId).toBe("task-trace-1");
+    expect(retrieved?.agentId).toBe("codex");
     expect(retrieved?.failureClassification).toBe("policy_redaction");
     expect(retrieved?.causalPath.retrievedCandidates).toHaveLength(2);
 
@@ -65,5 +70,198 @@ describe("memory-trace observability", () => {
     expect(timeline).toContain("[Prompt Inclusion] Context was successfully inlined in prompt.");
     expect(timeline).toContain('[Answer Citation] Inlined citation: "A2A routing uses registration details."');
     expect(timeline).toContain("[Verification] Verification successful: accurate A2A citation.");
+
+    const efficiencyEvents = listEfficiencyEvents(db, {
+      eventType: "retrieval_trace",
+      taskId: "task-trace-1",
+    });
+    expect(efficiencyEvents).toHaveLength(1);
+    expect(efficiencyEvents[0]).toMatchObject({
+      tenantId: "default-tenant",
+      taskId: "task-trace-1",
+      agentId: "codex",
+      createdAt: trace.createdAt,
+      eventType: "retrieval_trace",
+      payload: {
+        query: "How does A2A routing work?",
+        sources: ["cand-1", "cand-2"],
+        tokensUsed: 128,
+        usedInFirstResponse: true,
+        timingGate: "before_plan",
+      },
+    });
+  });
+
+  it("records a retrieval trace event as unused when no candidates enter the prompt", () => {
+    recordMemoryTrace(db, {
+      runId: "run-trace-empty",
+      taskId: "task-trace-empty",
+      causalPath: {
+        contextAssembly: "No memory context assembled.",
+        retrievalQuery: "unknown topic",
+        retrievedCandidates: [],
+        policyFilters: [],
+        promptInclusion: false,
+      },
+    });
+
+    const efficiencyEvents = listEfficiencyEvents(db, {
+      eventType: "retrieval_trace",
+      taskId: "task-trace-empty",
+    });
+
+    expect(efficiencyEvents).toHaveLength(1);
+    expect(efficiencyEvents[0].payload).toMatchObject({
+      query: "unknown topic",
+      sources: [],
+      tokensUsed: 0,
+      usedInFirstResponse: false,
+      timingGate: "before_plan",
+    });
+  });
+
+  it("persists recollection skip receipts into trace and efficiency telemetry", () => {
+    recordMemoryTrace(db, {
+      runId: "run-recollect-skip",
+      taskId: "task-recollect-skip",
+      agentId: "codex",
+      causalPath: {
+        contextAssembly: "Recollection skipped before runtime context assembly.",
+        retrievalQuery: "format this list",
+        retrievedCandidates: [],
+        policyFilters: [],
+        retrievalTokensUsed: 0,
+        timingGate: "before_plan",
+        promptInclusion: false,
+        recollection: {
+          decision: "search_skipped",
+          timing: "before_plan",
+          reasons: ["low_memory_need", "no_stable_entities"],
+          skipReason: "Task is local or mechanical with no stable recall dependency.",
+          injected: [],
+          ignored: [],
+        },
+      },
+    });
+
+    const trace = getMemoryTrace(db, "default-tenant", "run-recollect-skip");
+    expect(trace?.causalPath.recollection).toMatchObject({
+      decision: "search_skipped",
+      skipReason: "Task is local or mechanical with no stable recall dependency.",
+    });
+
+    const timeline = getMemoryTraceTimeline(trace!);
+    expect(timeline).toContain("[Recollection Decision] SEARCH_SKIPPED before_plan (low_memory_need, no_stable_entities)");
+    expect(timeline).toContain("[Recollection Skip] Task is local or mechanical with no stable recall dependency.");
+
+    const efficiencyEvents = listEfficiencyEvents(db, {
+      eventType: "retrieval_trace",
+      taskId: "task-recollect-skip",
+    });
+    expect(efficiencyEvents[0].payload).toMatchObject({
+      recollectionDecision: "search_skipped",
+      recollectionReasons: ["low_memory_need", "no_stable_entities"],
+      recollectionSkipReason: "Task is local or mechanical with no stable recall dependency.",
+      recollectionInjected: [],
+      recollectionIgnored: [],
+      beliefStageCounts: {
+        bronze_raw_source: 0,
+        silver_candidate_claim: 0,
+        gold_operational_truth: 0,
+      },
+    });
+  });
+
+  it("emits recollection belief-stage counts without copying memory content into efficiency payloads", () => {
+    recordMemoryTrace(db, {
+      runId: "run-recollect-required",
+      taskId: "task-recollect-required",
+      agentId: "codex",
+      causalPath: {
+        contextAssembly: "Recollection context pack assembled.",
+        retrievalQuery: "Cordant follow-up owner check",
+        retrievedCandidates: [
+          { id: "cand-gold", content: "Gold operational memory", score: 0.91 },
+          { id: "cand-silver", content: "Silver candidate memory", score: 0.82 },
+        ],
+        policyFilters: [
+          { id: "cand-gold", decision: "allow", reason: "gold operational truth" },
+          { id: "cand-silver", decision: "allow", reason: "silver caveated claim" },
+        ],
+        retrievalTokensUsed: 96,
+        timingGate: "before_plan",
+        promptInclusion: true,
+        recollection: {
+          decision: "search_required",
+          timing: "before_plan",
+          reasons: ["task_has_project_ref", "task_has_stable_entities"],
+          skipReason: null,
+          injected: [
+            {
+              id: "cand-gold",
+              tier: "episodic",
+              beliefStage: "gold_operational_truth",
+              reliance: "direct_truth",
+              score: 0.91,
+            },
+            {
+              id: "cand-silver",
+              tier: "vector",
+              beliefStage: "silver_candidate_claim",
+              reliance: "caveated_claim",
+              score: 0.82,
+            },
+          ],
+          ignored: [
+            {
+              id: "cand-denied",
+              reason: "policy_denied",
+              score: 0.7,
+            },
+          ],
+        },
+      },
+    });
+
+    const efficiencyEvents = listEfficiencyEvents(db, {
+      eventType: "retrieval_trace",
+      taskId: "task-recollect-required",
+    });
+    const payload = efficiencyEvents[0].payload;
+
+    expect(payload).toMatchObject({
+      recollectionDecision: "search_required",
+      recollectionReasons: ["task_has_project_ref", "task_has_stable_entities"],
+      recollectionInjected: [
+        {
+          id: "cand-gold",
+          tier: "episodic",
+          beliefStage: "gold_operational_truth",
+          reliance: "direct_truth",
+          score: 0.91,
+        },
+        {
+          id: "cand-silver",
+          tier: "vector",
+          beliefStage: "silver_candidate_claim",
+          reliance: "caveated_claim",
+          score: 0.82,
+        },
+      ],
+      recollectionIgnored: [
+        {
+          id: "cand-denied",
+          reason: "policy_denied",
+          score: 0.7,
+        },
+      ],
+      beliefStageCounts: {
+        bronze_raw_source: 0,
+        silver_candidate_claim: 1,
+        gold_operational_truth: 1,
+      },
+    });
+    expect(JSON.stringify(payload)).not.toContain("Gold operational memory");
+    expect(JSON.stringify(payload)).not.toContain("Silver candidate memory");
   });
 });

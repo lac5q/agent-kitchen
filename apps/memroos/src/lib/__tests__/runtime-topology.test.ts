@@ -45,8 +45,8 @@ describe("runtime topology manifest", () => {
     expect(result.checked).toEqual(
       expect.arrayContaining([
         "docker:memroos-app:MEMROOS_PORT:3000->3000",
-        "docker:mem0-memory:3201",
-        "docker:orchestration-service:3210",
+        "docker:mem0-memory:MEM0_PORT:3201->3201",
+        "docker:orchestration-service:ORCHESTRATION_PORT:3210->3210",
         "script:memroos-app:NEXTJS_PORT=3002",
         "launchd:memroos-app:PORT=3002",
       ])

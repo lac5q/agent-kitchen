@@ -1,7 +1,7 @@
 "use client";
 
 import { useAgentCards, useAgents } from "@/lib/api-client";
-import { PLATFORM_LABELS } from "@/lib/constants";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 
 export function AgentCardsPanel() {
   const { data, isLoading } = useAgentCards();

@@ -8,11 +8,12 @@ do not start every session with a giant tool menu.
 from __future__ import annotations
 
 import os
+import inspect
 import secrets
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, get_args, get_origin, get_type_hints
 from urllib.parse import quote
 
 try:
@@ -135,11 +136,103 @@ def _build_mcp() -> FastMCP:
 
 
 mcp = _build_mcp()
+MCP_TOOL_CONTRACT_ID = "memroos-mcp-tools.v1"
+_MCP_TOOL_REGISTRY: list = []
 
 
 def _mcp_tool(fn):
     mcp.tool()(fn)
+    _MCP_TOOL_REGISTRY.append(fn)
     return fn
+
+
+def _annotation_schema(annotation: Any) -> dict:
+    if annotation in {inspect.Signature.empty, Any}:
+        return {}
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin is not None and type(None) in args:
+        non_null = [arg for arg in args if arg is not type(None)]
+        schema = _annotation_schema(non_null[0]) if non_null else {}
+        schema["nullable"] = True
+        return schema
+
+    if annotation is str:
+        return {"type": "string"}
+    if annotation is int:
+        return {"type": "integer"}
+    if annotation is float:
+        return {"type": "number"}
+    if annotation is bool:
+        return {"type": "boolean"}
+    if annotation is dict or origin is dict:
+        return {"type": "object", "additionalProperties": True}
+    if annotation is list or origin is list:
+        item_schema = _annotation_schema(args[0]) if args else {}
+        return {"type": "array", "items": item_schema}
+
+    return {"type": "string", "description": str(annotation)}
+
+
+def _json_safe_default(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_json_safe_default(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe_default(item) for key, item in value.items()}
+    return str(value)
+
+
+def _tool_input_schema(fn) -> dict:
+    signature = inspect.signature(fn)
+    type_hints = get_type_hints(fn)
+    properties = {}
+    required = []
+    for name, parameter in signature.parameters.items():
+        if parameter.kind in {parameter.VAR_KEYWORD, parameter.VAR_POSITIONAL}:
+            continue
+        schema = _annotation_schema(type_hints.get(name, parameter.annotation))
+        if parameter.default is inspect.Signature.empty:
+            required.append(name)
+        else:
+            schema = dict(schema)
+            schema["default"] = _json_safe_default(parameter.default)
+        properties[name] = schema
+
+    input_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+    }
+    if required:
+        input_schema["required"] = required
+    return input_schema
+
+
+def _tool_contract_entry(fn) -> dict:
+    doc = inspect.getdoc(fn) or ""
+    type_hints = get_type_hints(fn)
+    return {
+        "name": fn.__name__,
+        "description": doc.splitlines()[0] if doc else "",
+        "inputSchema": _tool_input_schema(fn),
+        "outputSchema": _annotation_schema(type_hints.get("return", inspect.Signature.empty)),
+    }
+
+
+def build_mcp_tool_contract() -> dict:
+    """Return the stable machine-readable contract for registered MemRoOS MCP tools."""
+    return {
+        "id": MCP_TOOL_CONTRACT_ID,
+        "server": "knowledge-system",
+        "tools": [_tool_contract_entry(fn) for fn in _MCP_TOOL_REGISTRY],
+    }
+
+
+def _mcp_tool_contract_resource_payload() -> dict:
+    return build_mcp_tool_contract()
 
 
 def _root() -> Path:
@@ -860,6 +953,12 @@ def tool_stats() -> dict:
     return tool_attention.stats()
 
 
+@_mcp_tool
+def mcp_tool_contract() -> dict:
+    """Return the MemRoOS MCP tool schema/export contract."""
+    return build_mcp_tool_contract()
+
+
 # ---------------------------------------------------------------------------
 # Progressive disclosure meta-tools
 # ---------------------------------------------------------------------------
@@ -1149,6 +1248,12 @@ def wiki_index_resource() -> str:
 def recipes_catalog_resource() -> str:
     """Open Brain / OB1 recipe catalog and implementation backlog."""
     return _recipes_catalog_text()
+
+
+@mcp.resource("mcp://tools/contract")
+def mcp_tool_contract_resource() -> dict:
+    """Machine-readable MemRoOS MCP tool contract."""
+    return _mcp_tool_contract_resource_payload()
 
 
 @mcp.prompt()

@@ -122,6 +122,144 @@ describe("agent registry service", () => {
     expect(agent.metadata).toMatchObject({ pid: 1234 });
   });
 
+  it("emits memory write efficiency events and flags rediscovered content", async () => {
+    const { getDb, recordMemoryWrite, registerAgent } = await loadRegistry();
+    const { listEfficiencyEvents } = await import("../efficiency-telemetry");
+
+    registerAgent({
+      id: "memory-agent",
+      name: "Memory Agent",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+    });
+
+    recordMemoryWrite("memory-agent", {
+      type: "episodic",
+      content: "Luis uses MemRoOS for governed memory.",
+      metadata: { source: "agent-context", taskId: "memory-task-1" },
+    });
+    recordMemoryWrite("memory-agent", {
+      type: "episodic",
+      content: "Luis uses MemRoOS for governed memory.",
+      metadata: { source: "agent-context", taskId: "memory-task-1" },
+    });
+
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "memory_write",
+      taskId: "memory-task-1",
+      limit: 10,
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      eventType: "memory_write",
+      agentId: "memory-agent",
+      payload: {
+        source: "agent-context",
+        isRediscovery: false,
+      },
+    });
+    expect(events[1].payload.dedupHash).toMatch(/^sha256:/);
+    expect(events[1].payload.firstSeenAt).toBe(events[1].createdAt);
+    expect(events[0]).toMatchObject({
+      eventType: "memory_write",
+      agentId: "memory-agent",
+      payload: {
+        source: "agent-context",
+        dedupHash: events[1].payload.dedupHash,
+        firstSeenAt: events[1].payload.firstSeenAt,
+        isRediscovery: true,
+      },
+    });
+  });
+
+  it("keeps distinct memory write dedup hashes as unique discoveries", async () => {
+    const { getDb, recordMemoryWrite, registerAgent } = await loadRegistry();
+    const { listEfficiencyEvents } = await import("../efficiency-telemetry");
+
+    registerAgent({
+      id: "memory-agent",
+      name: "Memory Agent",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+    });
+
+    recordMemoryWrite("memory-agent", {
+      type: "episodic",
+      content: "First unique fact.",
+      metadata: { source: "agent-context", taskId: "memory-task-2" },
+    });
+    recordMemoryWrite("memory-agent", {
+      type: "episodic",
+      content: "Second unique fact.",
+      metadata: { source: "agent-context", taskId: "memory-task-2" },
+    });
+
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "memory_write",
+      taskId: "memory-task-2",
+      limit: 10,
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[0].payload.isRediscovery).toBe(false);
+    expect(events[1].payload.isRediscovery).toBe(false);
+    expect(events[0].payload.dedupHash).not.toBe(events[1].payload.dedupHash);
+  });
+
+  it("flags rediscovered memory writes across agents in the tenant stream", async () => {
+    const { getDb, recordMemoryWrite, registerAgent } = await loadRegistry();
+    const { listEfficiencyEvents } = await import("../efficiency-telemetry");
+
+    registerAgent({
+      id: "memory-agent-a",
+      name: "Memory Agent A",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+    });
+    registerAgent({
+      id: "memory-agent-b",
+      name: "Memory Agent B",
+      role: "Writes memory",
+      platform: "qwen",
+      protocol: "rest",
+    });
+
+    recordMemoryWrite("memory-agent-a", {
+      type: "episodic",
+      content: "Shared rediscovered fact.",
+      metadata: { source: "agent-context", taskId: "memory-task-3" },
+    });
+    recordMemoryWrite("memory-agent-b", {
+      type: "episodic",
+      content: "Shared rediscovered fact.",
+      metadata: { source: "agent-context", taskId: "memory-task-3" },
+    });
+
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "memory_write",
+      taskId: "memory-task-3",
+      limit: 10,
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      agentId: "memory-agent-a",
+      payload: { isRediscovery: false },
+    });
+    expect(events[0]).toMatchObject({
+      agentId: "memory-agent-b",
+      payload: {
+        dedupHash: events[1].payload.dedupHash,
+        firstSeenAt: events[1].payload.firstSeenAt,
+        isRediscovery: true,
+      },
+    });
+  });
+
   it("deregisters agents by soft delete and revokes keys", async () => {
     const { authenticateAgentKey, deregisterAgent, listRegisteredAgents, registerAgent } =
       await loadRegistry();

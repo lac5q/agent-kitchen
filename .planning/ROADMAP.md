@@ -29,11 +29,12 @@
 - ✅ **v6.5 Agent Context Bus + Synchronous Agent Communication** — Phase 107 (completed 2026-06-04)
 - ✅ **v6.6 Cloud Offload + Local Footprint Reduction** — Phase 108 (completed 2026-06-08)
 - ✅ **v7.0 Client-Ready Security + Architecture Audit** — Phases 109-113 (completed 2026-06-08)
-- ⏳ **v7.1 Competitive Retrieval Proof** — Phase 114 (planned 2026-06-09)
-- ⏳ **v7.2 Architecture Review Hardening** — Phase 115 (in progress 2026-06-10)
+- ✅ **v7.1 Competitive Retrieval Proof** — Phase 114 (repo-verified 2026-06-27; public deploy approval separate)
+- ✅ **v7.2 Architecture Review Hardening** — Phase 115 (completed 2026-06-27)
 - ✅ **v7.3 Agent Context Bus Operational Bootstrap** — Phase 116 (completed 2026-06-14)
-- ⏳ **v7.4 NOC Efficiency Telemetry** — Phase 117 (planned 2026-06-15)
-- ⏳ **v7.5 Proactive Recollection Triggering** — Phase 118 (planned 2026-06-23)
+- ✅ **v7.4 NOC Efficiency Telemetry** — Phase 117 (completed 2026-06-27)
+- ✅ **v7.5 Proactive Recollection Triggering** — Phase 118 (completed 2026-06-27)
+- ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
 
 ## Phases
 
@@ -43,28 +44,42 @@
 
 Full v7.3 detail in the `## v7.3 Agent Context Bus Operational Bootstrap` section below.
 
-### Current v7.4 NOC Efficiency Telemetry Summary — PLANNED
+### Current v7.4 NOC Efficiency Telemetry Summary — COMPLETE
 
-- [ ] **Phase 117: NOC Efficiency Telemetry Instrumentation** — EFFTEL-01..05; add trace-level data sources for the 5 blocked NOC efficiency metrics (retrieval-before-work, same-source re-reads, raw-context token share, operator re-ask redundancy, rediscovered-fact rate) so the NOC dashboard can show real values instead of honest-state placeholders.
+- [x] **Phase 117: NOC Efficiency Telemetry Instrumentation** — EFFTEL-01..05; add trace-level data sources for the 5 blocked NOC efficiency metrics (retrieval-before-work, same-source re-reads, raw-context token share, operator re-ask redundancy, rediscovered-fact rate) so the NOC dashboard can show real values instead of honest-state placeholders.
 
 Full v7.4 detail in the `## v7.4 NOC Efficiency Telemetry` section below.
 
-### Current v7.5 Proactive Recollection Triggering Summary — PLANNED
+### Current v7.5 Proactive Recollection Triggering Summary — COMPLETE
 
-- [ ] **Phase 118: Proactive Recollection Triggering** — RECOLLECT-01..06; add a deterministic trigger/query/ranking/context-pack policy so agents search memory automatically when task signals require it, skip with receipts when they do not, and expose why recent or important context entered or missed the run.
+- [x] **Phase 118: Proactive Recollection Triggering** — RECOLLECT-01..07; add a deterministic trigger/query/ranking/context-pack policy so agents search memory automatically when task signals require it, skip with receipts when they do not, expose why recent or important context entered or missed the run, and label whether each memory is bronze raw evidence, silver candidate claim, or gold admitted operational truth.
 
 Full v7.5 detail in the `## v7.5 Proactive Recollection Triggering` section below.
 
-### Current v7.1 Competitive Retrieval Proof Summary — PLANNED
+### Current v7.6 Future Spike Queue Summary — COMPLETE
 
-- [ ] **Phase 114: Midbrain Comparison + Comparative Benchmark Plan** — COMPETE-01..02, SITE-BENCH-01, BENCH-01..03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01; add Midbrain to public comparison surfaces, keep architecture scores separate from SmartSearch metrics, and define the next benchmark/retrieval proof lane.
+- [x] **Phase 119: Future Spike Queue Closeout** — MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, and HYPEREXTRACT-FOLLOWUP-01 completed as bounded spike reports under `.planning/spikes/`, with `npm run check:future-spikes` enforcing required report sections and guardrails. No dependency adoption, backend swap, hosted/private upload, production indexing, Qdrant upgrade, runtime replacement, or default extraction behavior is approved.
+
+Full v7.6 detail in the `## v7.6 Future Spike Queue` section below.
+
+### Current v7.1 Competitive Retrieval Proof Summary — COMPLETE
+
+- [x] **Phase 114: Midbrain Comparison + Comparative Benchmark Plan** — COMPETE-01..02, SITE-BENCH-01, BENCH-01..03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01; add Midbrain to comparison surfaces, keep architecture scores separate from SmartSearch metrics, and define the next benchmark/retrieval proof lane. Repo artifacts are verified; public deploy still requires Luis approval.
 
 Full v7.1 detail in the `## v7.1 Competitive Retrieval Proof` section below.
 
-### Current v7.2 Architecture Review Hardening Summary — IN PROGRESS
+### Current v7.2 Architecture Review Hardening Summary — COMPLETE
 
 - [x] **Phase 115: Architecture Review Hardening** — ARCHREV-03 executed as the first contained code slice: SQLite schema changes now run through a versioned `PRAGMA user_version` migration runner and default admin seeding completes before `getDb()` returns.
-- [ ] Follow-on slices remain for A1/A2/A4/A5/A6/A7/A8/A9 from `.code-review/ARCHITECTURE-REVIEW.md`: route-level auth wrappers, architecture identity/module map, topology manifest, env validation, API/SDK contract generation, recall canary CI, planning history pruning, and Next trust-boundary upgrade gates.
+- [x] **Phase 115: Route Auth Boundary Gate** — ARCHREV-01 completed: privileged proxy bypass and operator/admin route groups now have handler-local auth evidence plus a CI drift gate; marketing split remains a deployment decision.
+- [x] **Phase 115: Architecture Identity and Module Map** — ARCHREV-02 completed: `docs/architecture.md` now describes MemRoOS as an agent OS with broker kernel, shipped-domain module map, service/script boundaries, and placement rules.
+- [x] **Phase 115: Planning History Retention** — ARCHREV-08 completed: `.planning/planning-history-retention.md` defines the current-docs, tracked-archive, private-screenshot/evidence, and pre-public-release gate policy.
+- [x] **Phase 115: Runtime Topology Manifest Enforcement** — ARCHREV-04 completed: the manifest owns Docker service names, dependencies, env-backed ports, and health paths, with `npm run check:runtime-topology` validating Docker compose, `start.sh`, and launchd.
+- [x] **Phase 115: Typed Env Startup Validation** — ARCHREV-05 completed: `lib/env.ts` validates core app config at Next startup, centralizes high-blast-radius server constants/A2A/root-config/embedding settings, and reconciles legacy root config status.
+- [x] **Phase 115: Public API/SDK Contract Unification** — ARCHREV-06 completed: public eval v1 plus TypeScript/Python SDK, REST/OpenAPI, MCP tool-schema, A2A OpenAPI, and shared contract-manifest drift gates are verified.
+- [x] **Phase 115: Recall Canary CI Gate** — ARCHREV-07 completed: scheduled/manual CI now runs a deterministic gold recall canary against committed memory-recall cases and thresholds.
+- [x] **Phase 115: Next Trust-Boundary Upgrade Gate** — ARCHREV-09 completed: Next/proxy baseline markers, proxy/auth adversarial regressions, and `npm run check:next-trust-boundary` now gate framework or `proxy.ts` trust-boundary changes in CI.
+- [x] Phase 115 closeout: all ARCHREV requirements are repo-verified complete; marketing split remains a future deployment decision, not an open Phase 115 blocker.
 
 Full v7.2 detail in the `## v7.2 Architecture Review Hardening` section below.
 
@@ -80,7 +95,7 @@ Full v6.5 detail in the `## v6.5 Agent Context Bus + Synchronous Agent Communica
 
 Full v6.4 detail in the `## v6.4 SkillForge Production SkillOpt Hardening` section below.
 
-### Current v6.0 SkillForge — Governed Skill Optimization Summary — IN PROGRESS
+### Current v6.0 SkillForge — Governed Skill Optimization Summary — COMPLETE
 
 - [x] **Phase 85: SkillForge Foundation** — SKILLFORGE-01; worker, intake pipeline, SEAL skill_revision proposal type
 - [x] **Phase 86: SkillForge Analysis** — SKILLFORGE-02; pattern detection, SkillFailImproveLoop
@@ -471,39 +486,32 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements and candidates: Full 50+ task behavioral W-lift golden set, Third-party eval adapter, `EVAL-FOLLOWUP-01`, `EVAL-API-FOLLOWUP-01..02`, `MEMGEN-FOLLOWUP-01`, `SEAL-FOLLOWUP-01..02`, and `AGENTGEN-FOLLOWUP-01`.
    - Goal: move beyond small held-out eval samples into broader behavioral coverage, provider-backed judges, safety eval packs, non-fixture memory-autogen validation, and governed SEAL/agent trajectory workflows.
 
-8. **P1 — Plan Memento memory-save quality spike.**
-   - Source signal: June 8 review of Memento-style agent memory products and the question of whether they improve what gets saved for agents.
-   - Requirement candidate: `MEMGEN-FOLLOWUP-02` in `.planning/REQUIREMENTS.md`.
-   - Goal: run a bounded, approval-gated adapter/eval spike comparing current MemRoOS `agent_memory_candidates` save quality against a local-first Memento-compatible typed/audited memory contract, without replacing mem0, Qdrant, Neo4j, SQLite, or the MemRoOS policy gate.
-   - Gate: no dependency adoption, backend swap, or hosted Memento upload of private traces without Luis approval. Success requires `eval:memory`, `eval:knowledge-save-contract`, or equivalent focused fixtures to improve or hold recall@5, precision@5, MRR, false-positive rate, conflict surfacing, and handoff candidate usefulness.
+8. **P1 — Future spike queue closeout completed.**
+   - Requirements completed in Phase 119: `MEMGEN-FOLLOWUP-02`, `COCOINDEX-FOLLOWUP-01`, `FASTCONTEXT-FOLLOWUP-01`, `ADKA2A-FOLLOWUP-01`, `QDRANT-FOLLOWUP-01`, and `HYPEREXTRACT-FOLLOWUP-01`.
+   - Result: bounded reports live under `.planning/spikes/` and are enforced by `npm run check:future-spikes`.
+   - Gate: no dependency adoption, backend swap, hosted/private upload, production index path, Qdrant upgrade, runtime replacement, or default extraction behavior is approved. Any implementation is a new approval-gated phase.
 
-9. **P1 — Plan CocoIndex source-freshness spike.**
-- Source signal: June 16 review of CocoIndex as a possible incremental indexing and lineage engine for MemRoOS context-source lanes.
-- Requirement candidate: `COCOINDEX-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
-- Goal: run a bounded future-only spike that wires one non-sensitive declared context lane through CocoIndex as an optional derived-index adapter, then compare freshness, lineage receipts, rebuild cost, recall quality, and policy-label preservation against current qmd/context-source checks.
-- Gate: no dependency adoption, production index path, policy bypass, raw sensitive corpus indexing, or mem0/Qdrant/Neo4j/SQLite replacement without Luis approval. Success requires source-health proof, recall/precision/MRR non-regression, audit receipts for derived projections, and a clear rollback path.
+9. **P1 — Add bronze/silver/gold memory belief stages to proactive recollection.**
+   - Source signal: June 25 X post by Danial Hasan arguing that agent memory should separate raw source snapshots, candidate claims, and admitted operational truth so long-running agents know what they are allowed to believe.
+   - Requirement: `RECOLLECT-07` in `.planning/REQUIREMENTS.md`.
+   - Goal: make belief stage an explicit context-pack and receipt field: bronze = raw source evidence, silver = candidate claim, gold = admitted operational truth. Agents may rely on gold directly, must caveat silver, and may use bronze only as evidence unless promotion policy admits it.
+   - Gate: no hidden LLM-only promotion, no silver-to-gold admission without provenance, policy, freshness, conflict, and dedupe checks, and no raw sensitive payload exposure in receipts. Success requires Phase 118 evals to prove unsupported candidate claims are not treated as operational truth.
 
-10. **P1 — Plan FastContext repo-scout spike.**
-- Source signal: June 16 review of Microsoft FastContext as a possible read-only repository explorer for pre-dispatch code context.
-- Requirement candidate: `FASTCONTEXT-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
-- Goal: run a bounded future-only spike comparing FastContext-style repo exploration against GitNexus and baseline grep on 20-50 MemRoOS code-navigation tasks, measuring correct file/function hit rate, line-citation quality, token spend, latency, and whether the scout improves first-pass agent work without duplicating GitNexus as the code graph source of truth.
-- Gate: no runtime dependency, hosted/private repo upload, replacement of GitNexus, or automatic code edits from FastContext output without Luis approval. Success requires evidence receipts, GitNexus compatibility notes, and a reject decision if it is only overlapping semantic search.
-
-11. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
+10. **P1 — SkillForge: Governed Skill Optimization (v6.0).**
    - Research intake: GBrain's `skillify` meta-skill (11-item checklist, cross-modal eval gate, fail-improve loop, dream cycle); Microsoft SkillOpt's textual learning rate and bounded edit loop; Memroos's existing eval engine, SEAL governance, and skill registry.
    - Source notes: `.planning/notes/skillopt-skill-optimization-spike.md`, `~/github/knowledge/content/skill-optimization-v2/SKILL-OPTIMIZATION-RESEARCH.md`.
    - Requirements: `SKILLFORGE-01..06` in `.planning/REQUIREMENTS.md` (supersedes `SKILLOPT-FOLLOWUP-01`).
    - Goal: Build a Memroos-native governed skill optimization system (SkillForge) that leverages existing infrastructure. Phases 85-90: Foundation → Analysis → Proposal Generation → Evaluation → Governance → Integration. All skill changes go through SEAL proposal lifecycle with operator approval, non-regression gates, and safe runtime export.
 
-12. **P2 — Plan Meeting Ingestion Expansion.**
+11. **P2 — Plan Meeting Ingestion Expansion.**
    - Requirements and candidates: Recall.ai bridge for Zoom/Teams/Meet, multi-participant meeting bot, and voice meeting bot follow-ups.
    - Goal: extend beyond the Daily-only, listener-only v4.0 path while preserving consent, transcript attribution, source provenance, and memory-ingestion boundaries.
 
-13. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
+12. **P2 — Plan Semantic Recall + Embedding Quality Upgrade.**
    - Requirements and candidates: Voyage AI `voyage-4-large` embedding upgrade and LLM-powered recall scoring upgrade.
    - Goal: improve recall quality behind provider flags while preserving Ollama local as the default path and avoiding vendor lock-in or unreviewed embedding of sensitive content.
 
-14. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
+13. **P2 — Plan integration modernization: unified MCP + FastMCP v3.x + dependency drift.**
    - Source finding: current configs already register unified `memroos` MCP, but legacy `services/memory/mcp-mem0.py` and `mcp-mem0-wrapper.sh` still exist as a standalone mem0-only adapter and one capability manifest still advertises standalone-only memory tools.
    - Source finding: `services/knowledge-mcp` runs FastMCP 2.14.7 while PyPI latest is 3.3.1; v3 migration must move HTTP/path/stateless/auth options to the v3-compatible runtime API rather than doing a blind pin bump.
    - Source finding: `services/memory` uses `mem0ai` 0.1.118 while PyPI latest is 2.0.2; this is a separate memory-backend migration from the FastMCP upgrade.
@@ -511,21 +519,21 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `INT-FOLLOWUP-01..07` in `.planning/REQUIREMENTS.md`.
    - Goal: keep one canonical MemRoOS MCP connection, remove stale memory adapters, upgrade FastMCP and mem0ai deliberately, validate A2A/ADK and Next proxy boundaries against current specs, and stage SDK/toolchain majors before they become operational debt. Pull any integration task forward if it blocks P0 memory/security work.
 
-15. **P2 — Plan Phase 70 follow-up topology closure.**
+14. **P2 — Plan Phase 70 follow-up topology closure.**
    - Source note: `.planning/phases/70-foundation-engine-core/deferred-items.md`.
    - Requirement: `ORCH-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: close deferred LangGraph multi-hop topology and rollback-compensation gaps before claiming full multi-hop orchestration depth. Pull forward only if a live workflow needs multi-hop compensation.
 
-16. **P3 — Plan commercial/product/backend expansion.**
+15. **P3 — Plan commercial/product/backend expansion.**
    - Requirements: `PRODUCT-01..02`, `VERTICAL-01`, and `L3-FOLLOWUP-01..03`.
    - Goal: decide Eval Engine packaging, pricing/commercialization, second vertical, and live Salesforce/Zendesk/NetSuite/business-outcome adapters after the memory trust and evidence substrate is credible.
 
-17. **P3 — Plan recent-deferred hardening sweep.**
+16. **P3 — Plan recent-deferred hardening sweep.**
    - Source notes: Phase 57-64 context/summary deferred sections plus `.planning/PROJECT.md` v5 candidates.
    - Requirements: remaining `AUTH-FOLLOWUP-01..03`, `AUDIT-FOLLOWUP-01..03`, `UX-FOLLOWUP-01..07`, and any deferred items not already pulled into P0-P2.
    - Goal: prevent recent deferred notes from living only in phase-local context by turning them into plan-ready backlog requirements.
 
-18. **P1 — Plan service navigation and optional install profiles.**
+17. **P1 — Plan service navigation and optional install profiles.**
    - Source request: 2026-05-26 operator feedback asked for a Services page/dropdown and for Docker to remain available as an installation mechanism for public users, while keeping Luis's own setup cloud-first and slim.
    - Requirements: `UX-FOLLOWUP-07` and `INSTALL-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: make service health and ownership visible from the UI, then preserve Docker as an explicit optional test/demo path instead of letting local containers, images, or demo volumes become the default operator footprint.
@@ -537,10 +545,8 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 - Multi-hop retry compensation and rollback
 - Memory backend pluggability (beyond mem0 + Qdrant + Neo4j) — v3.0 concern
 - Turbovec compressed-vector shadow-index evaluation for local footprint/hot-path recall — future-only; requires Luis approval before implementation or dependency adoption
-- Memento memory-save quality spike — future-only local-first adapter/eval comparison; requires Luis approval before dependency adoption, backend swap, or hosted/private trace upload
-- CocoIndex source-freshness spike — future-only optional derived-index adapter for one non-sensitive context lane; requires Luis approval before dependency adoption, production indexing, policy bypass, or memory backend changes
-- FastContext repo-scout spike — future-only read-only code-navigation comparison against GitNexus and grep; requires Luis approval before runtime dependency, hosted/private repo upload, GitNexus replacement, or automated edits
-- ADK/A2A cross-language contract-compliance demo — future-only reference fixture using Google's Python ADK orchestrator plus Go deterministic validator over A2A/JSON-RPC; prove registry/card ingestion, dispatch handoff, timeout/retry/fail-closed behavior, evidence receipts, and NOC visibility without adopting ADK/Gemini as a MemRoOS core dependency
+- Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, and Hyper-Extract bounded spikes were conducted in Phase 119. Adoption and production changes remain deferred until Luis explicitly approves a follow-on implementation.
+- Bronze/silver/gold memory belief-stage gates — Phase 118 requirement; raw source snapshots, candidate claims, and admitted operational truth must remain distinct in recollection receipts so agents know what they are allowed to believe
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
 - Multi-participant meeting bot: move beyond listener-only recording into participant-aware meeting capture and consent behavior
@@ -1056,10 +1062,10 @@ Plans:
   2. `skill_revision` proposals are created as SEAL proposals with correct metadata and audit trail.
   3. Intake pipeline redacts sensitive traces before analysis (negative fixture: restricted memory never reaches optimizer).
   4. Worker appears in cron health registry with last-run, success/failure, and items-processed.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 85 implementation record — SkillForge foundation completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: no (backend-only)
 
 ### Phase 86: SkillForge Analysis
@@ -1079,10 +1085,10 @@ Plans:
   2. Deterministic trigger matching improves by ≥10% after applying generated rules.
   3. Failure logs are structured, queryable, and include replay handles.
   4. No LLM fallback is invoked when deterministic rules match (fail-closed for performance).
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 86 implementation record — SkillForge analysis completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: no (backend-only)
 
 ### Phase 87: SkillForge Proposal Generation
@@ -1101,10 +1107,10 @@ Plans:
   2. No edit mutates security/governance/owner-protection content (negative fixture).
   3. Rejected edits are tracked and not re-proposed within 30 days.
   4. Textual LR controls edit magnitude: conservative edits change ≤3 lines, aggressive ≤20 lines.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 87 implementation record — SkillForge proposal generation completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: no (backend-only)
 
 ### Phase 88: SkillForge Evaluation
@@ -1123,10 +1129,10 @@ Plans:
   2. Validation scorer runs deterministically (no LLM calls, sub-100ms per skill).
   3. Held-out behavioral eval completes in <5 minutes for 20 tasks.
   4. W delta is computed for every proposal; negative W proposals are auto-rejected.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 88 implementation record — SkillForge evaluation completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: no (backend-only)
 
 ### Phase 89: SkillForge Governance
@@ -1145,10 +1151,10 @@ Plans:
   2. Rollback restores previous skill version in <30 seconds.
   3. No skill revision is applied without explicit operator approval (negative fixture).
   4. UI shows clear status through SEAL lifecycle stages.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 89 implementation record — SkillForge governance completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: yes
 
 ### Phase 90: SkillForge Integration
@@ -1167,10 +1173,10 @@ Plans:
   2. SkillCycle runs end-to-end without errors on a test skill.
   3. Exported skills are functional in target runtime (Codex/Claude/OpenClaw).
   4. Revision history is queryable and includes all eval results and approval events.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] Legacy Phase 90 implementation record — SkillForge integration completed 2026-05-26; no separate phase plan file retained in this roadmap snapshot.
 **UI hint**: yes
 
 ### v6.0 Progress
@@ -1448,7 +1454,7 @@ Plans:
 **Milestone**: v6.2
 **Depends on**: Phase 27 (progressive MCP tool attention)
 **Requirements**: SKDIST-01, SKDIST-02, SKDIST-03, SKDIST-04, PRIVCONF-03
-**Status**: Pending
+**Status**: Complete (2026-05-28)
 **Success Criteria**:
   1. `knowledge_workspace_call("skill-packs", "catalog")` returns all skills from `knowledge/skills/` with name, description, category, tags, and auto-load flag.
   2. `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})` returns only auto-load-tagged skills.
@@ -1456,7 +1462,9 @@ Plans:
   4. Private skills in `~/.memroos/skills/` are merged into catalog results (if dir exists).
   5. Skill without `auto-load` in frontmatter defaults to `false` (backward-compatible).
   6. `skill-packs` workspace no longer returns `not_implemented` — all three actions (catalog, read, install) are handled.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
+Plans:
+- [x] PLAN.md — Skill-packs workspace catalog/read/install, private skill merge, frontmatter parsing, and bootstrap convention.
 **UI hint**: None — MCP-only change.
 
 ### Phase 99: Private Config Layer
@@ -1464,17 +1472,17 @@ Plans:
 **Milestone**: v6.2
 **Depends on**: Phase 98
 **Requirements**: PRIVCONF-01, PRIVCONF-02
-**Status**: Pending
+**Status**: Complete (2026-05-28)
 **Success Criteria**:
   1. `mcp_server.py` loads `~/.memroos/context-sources.local.json` on startup if it exists and deep-merges over repo's `context-sources.config.json`.
   2. `context-sources.config.json` contains a disabled `meet-recordings` entry with `ingestCommand: "${MEETINGS_INGEST_COMMAND}"` and a comment explaining the provider-agnostic pattern.
   3. `context-sources.local.json` is added to `.gitignore`.
   4. A `context-sources.local.json.example` documents the override pattern with circleback as example.
   5. `knowledge_health()` reflects the merged source list, not just the repo config.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
 **UI hint**: None.
 
 ### Phase 100: Circleback Ingestion
@@ -1482,17 +1490,17 @@ Plans:
 **Milestone**: v6.2
 **Depends on**: Phase 99
 **Requirements**: CIRCLEBACK-01, CIRCLEBACK-02, CIRCLEBACK-03
-**Status**: Pending
+**Status**: Complete (2026-05-28)
 **Success Criteria**:
   1. `~/.memroos/integrations/circleback-ingest.sh` exports meetings via circleback CLI, transforms to dated Markdown files in `data/context/meet-recordings/`.
   2. `MEETINGS_INGEST_COMMAND` is set in `~/.memroos/memroos-runtime.env`.
   3. `com.memroos.circleback-sync.plist` LaunchAgent runs the ingest script nightly and triggers `qmd index meet-recordings`.
   4. `knowledge_search("meeting about X")` returns circleback transcript results after first ingest run.
   5. `knowledge_health()` shows `meet-recordings` source as connected.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] SUMMARY.md — Circleback private ingestion script, runtime env wiring, LaunchAgent schedule, and meet-recordings activation guide.
 **UI hint**: None; LaunchAgent handles scheduling outside memroos UI.
 
 ### Phase 101: Memroos Troubleshooter Skill
@@ -1500,17 +1508,17 @@ Plans:
 **Milestone**: v6.2
 **Depends on**: Phase 98
 **Requirements**: MSKILL-01, MSKILL-02
-**Status**: Pending
+**Status**: Complete (2026-05-28)
 **Success Criteria**:
   1. `knowledge/skills/memroos-troubleshooter/SKILL.md` exists with: architecture overview, full workspace list with use-cases, common error messages with fixes, collection health commands, skill distribution flow, escalation paths.
   2. `memroos-troubleshooter` frontmatter: `auto-load: true`, `category: system`.
   3. `knowledge/skills/deep-research-subagents/SKILL.md` frontmatter updated: `auto-load: false`, `tags: [research, on-demand]`.
   4. `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})` returns `memroos-troubleshooter` and not `deep-research-subagents`.
   5. An agent loading only the catalog (not full content) sees both skills with descriptions sufficient to know when to call `skill_read`.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] SUMMARY.md — Memroos troubleshooter skill and deep-research-subagents catalog frontmatter update.
 **UI hint**: None.
 
 ### Phase 102: Public Documentation
@@ -1518,17 +1526,17 @@ Plans:
 **Milestone**: v6.2
 **Depends on**: Phase 99, Phase 101
 **Requirements**: PUBDOC-01, PUBDOC-02, PUBDOC-03
-**Status**: Pending
+**Status**: Complete (2026-05-28)
 **Success Criteria**:
   1. `docs/integrations/meet-recordings.md` covers: how the provider-agnostic slot works, circleback as reference impl (install CLI, create ingest script, set env var), and a "Other Providers" section showing the pattern generalizes.
   2. `docs/skills.md` covers: SKILL.md frontmatter schema, public vs private skill directories, how agents discover skills (catalog-first), `auto-load` guidance (≤3 per deployment), and a worked example.
   3. `knowledge/skills/example-skill/SKILL.md` is a complete copy-paste template with all frontmatter fields and section stubs.
   4. `context-sources.local.json.example` in the repo root documents the private override pattern.
   5. All new docs are cross-referenced from the main `README.md` or `docs/` index.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 99-01-PLAN.md — Private config overlay (merge logic + meet-recordings stub + gitignore + example)
+- [x] PUBDOC-SUMMARY.md — Meet-recordings integration guide, skills reference doc, and example skill template.
 **UI hint**: None.
 
 ## v6.3 Agent Lifecycle + Memory Observability
@@ -1580,19 +1588,30 @@ Plans:
 ### Phase 115: Architecture Review Hardening
 
 **Goal:** Convert `.code-review/ARCHITECTURE-REVIEW.md` from system-level review prose into executable hardening requirements, then ship the first contained code slice against A3.
-**Requirements**: ARCHREV-01, ARCHREV-02, ARCHREV-03, ARCHREV-04, ARCHREV-05, ARCHREV-06, ARCHREV-07, ARCHREV-08, ARCHREV-09
+**Requirements**: ARCHREV-01, ARCHREV-02, ARCHREV-03, ARCHREV-04, ARCHREV-05, ARCHREV-06, ARCHREV-07, ARCHREV-08, ARCHREV-09, ARCHREV-10
 **Depends on:** Phase 114
 **Success Criteria** (what must be TRUE):
   1. Each architecture review finding A1-A9 has a mapped GSD requirement with a bounded implementation or explicit deferral path.
-  2. The SQLite schema layer has a versioned migration runner stamped via `PRAGMA user_version`; legacy unstamped DBs upgrade to the current schema version, and future-version DBs fail closed.
-  3. Default admin seeding is not fire-and-forget; `getDb()` returns only after the seed path has completed or failed synchronously.
-  4. DB regression tests prove version stamping, legacy upgrade, and synchronous seed behavior.
-  5. Follow-on architecture hardening slices are separable so route auth, topology, env, contract, CI, and repo-structure work can be shipped without one broad unsafe refactor.
-**Plans:** 1 plan
+  2. Architecture docs describe MemRoOS as an agent OS with a broker kernel, shipped-domain module map, service/script boundaries, and placement rules.
+  3. The SQLite schema layer has a versioned migration runner stamped via `PRAGMA user_version`; legacy unstamped DBs upgrade to the current schema version, and future-version DBs fail closed.
+  4. Default admin seeding is not fire-and-forget; `getDb()` returns only after the seed path has completed or failed synchronously.
+  5. DB regression tests prove version stamping, legacy upgrade, and synchronous seed behavior.
+  6. Follow-on architecture hardening slices are separable so route auth, topology, env, contract, CI, and repo-structure work can be shipped without one broad unsafe refactor.
+**Plans:** 14 plans
 - [x] 115-01-PLAN.md — A3 SQLite migration runner, synchronous admin seed, and architecture review roadmap
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 115 to break down)
+- [x] 115-02-PLAN.md — Agent OS architecture identity, shipped-domain module map, service/script boundaries, and placement rules
+- [x] 115-03-PLAN.md — Planning history retention policy and pre-public-release gate
+- [x] 115-04-PLAN.md — Runtime topology manifest enforcement for Docker compose, `start.sh`, and launchd
+- [x] 115-05-PLAN.md — Typed env startup validation and high-blast-radius config consolidation
+- [x] 115-06-PLAN.md — Public eval route and TypeScript SDK contract alignment
+- [x] 115-07-PLAN.md — Python SDK public eval contract alignment
+- [x] 115-08-PLAN.md — Public eval REST OpenAPI contract
+- [x] 115-09-PLAN.md — MCP tool schema export contract
+- [x] 115-10-PLAN.md — A2A OpenAPI schema contract
+- [x] 115-11-PLAN.md — Shared contract manifest and schema drift gate
+- [x] 115-12-PLAN.md — Recall canary CI and scheduled gate
+- [x] 115-13-PLAN.md — Next trust-boundary upgrade gate
+- [x] 115-14-PLAN.md — Route auth boundary gate and proxy-bypass drift check
 
 ## v7.3 Agent Context Bus Operational Bootstrap
 
@@ -1621,7 +1640,7 @@ Plans:
 **Milestone**: v7.4
 **Depends on**: Phase 79 (NOC Telemetry + Real-Data Wiring), Phase 104 (Memory-Trace Observability), Phase 107 (Agent Context Bus)
 **Requirements**: EFFTEL-01, EFFTEL-02, EFFTEL-03, EFFTEL-04, EFFTEL-05
-**Status**: Planned
+**Status**: Completed
 **Success Criteria** (what must be TRUE):
   1. **EFFTEL-01 — Retrieval-before-work trace**: Dispatch and context-pack assembly emit structured trace events (timestamp, agent id, retrieval query, source, tokens, whether result was used in first response). NOC can compute "retrieval calls before useful work" from these traces.
   2. **EFFTEL-02 — Same-source re-read detection**: Tool-call transcript captures per-tool read events with source identifier and hash. NOC can count repeated reads of the same source within a task window.
@@ -1629,10 +1648,10 @@ Plans:
   4. **EFFTEL-04 — Operator re-ask redundancy**: Chat transcript and memory-hit correlation events link operator questions to prior memory hits. NOC can detect when an operator re-asks something that was already answered from memory.
   5. **EFFTEL-05 — Rediscovered-fact provenance**: Memory write events include provenance (source, first-seen timestamp, dedup hash). NOC can detect when a fact is "rediscovered" (written to memory again after already existing).
 **UI hint**: The 5 blocked NOC efficiency metrics transition from honest-state placeholders to real values; NOC-10 satisfied with production signal.
-**Plans**: 0/1 complete
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 117-01-PLAN.md — Trace instrumentation for 5 efficiency telemetry sources (depends on /gsd-plan-phase 117 to break down)
+- [x] 117-01-PLAN.md — Trace instrumentation for 5 efficiency telemetry sources with event store, emitters, NOC read model, and honest empty/degraded states.
 
 ---
 
@@ -1643,8 +1662,8 @@ Plans:
 **Goal**: Make recollection a first-class runtime decision so agents search memory automatically when task, project, recency, handoff, source, or rediscovery signals require it, and emit receipts when search is skipped.
 **Milestone**: v7.5
 **Depends on**: Phase 72 (cross-project recall), Phase 76 (retrieval authorization), Phase 96 (agent memory continuity), Phase 104 (memory-trace observability), Phase 114 (retrieval receipts), Phase 117 (efficiency telemetry)
-**Requirements**: RECOLLECT-01, RECOLLECT-02, RECOLLECT-03, RECOLLECT-04, RECOLLECT-05, RECOLLECT-06
-**Status**: Planned
+**Requirements**: RECOLLECT-01, RECOLLECT-02, RECOLLECT-03, RECOLLECT-04, RECOLLECT-05, RECOLLECT-06, RECOLLECT-07
+**Status**: Completed
 **Success Criteria** (what must be TRUE):
   1. Recollection policy returns a typed `search_required` or `search_skipped` decision before plan/tool/final timing gates, with reason codes and scope.
   2. Query planner emits bounded tier-aware queries from task text, entities, project/source refs, recency language, handoff state, and rediscovery risk.
@@ -1652,11 +1671,34 @@ Plans:
   4. Context-pack assembly records retrieved, injected, ignored, skipped, authorization result, and why each memory entered or missed the pack.
   5. Recall evals prove old-critical context can beat recent noise, stale sources are demoted or fail closed, and required recollection happens by `before_plan`, `before_tool_use`, or `before_final` as configured.
   6. NOC/operator surfaces can inspect recent recollection decisions, skipped-search reasons, false positives, and downstream memory use.
-**UI hint**: Memory/NOC surfaces show "why this memory surfaced" and "why no memory search ran" as receipts, not hidden model intuition.
-**Plans**: 0/1 complete
+  7. Context packs and receipts distinguish bronze raw source snapshots, silver candidate claims, and gold admitted operational truth, with policy gates preventing agents from treating unadmitted claims as facts.
+**UI hint**: Memory/NOC surfaces show "why this memory surfaced", "why no memory search ran", and "what belief stage this memory has" as receipts, not hidden model intuition.
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 118-01-PLAN.md — Trigger policy, query planner, ranking, receipts, evals, and NOC read model for proactive recollection.
+- [x] 118-01-PLAN.md — Trigger policy, query planner, ranking, receipts, evals, and NOC read model for proactive recollection.
+
+---
+
+## v7.6 Future Spike Queue
+
+### Phase 119: Future Spike Queue Closeout
+
+**Goal**: Conduct the six deferred future-only spikes as bounded repo artifacts without adopting dependencies, changing production paths, uploading private data, replacing backends, or approving runtime migrations.
+**Milestone**: v7.6
+**Depends on**: Phase 114 (competitive retrieval proof), Phase 115 (architecture review hardening), Phase 118 (proactive recollection)
+**Requirements**: MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, HYPEREXTRACT-FOLLOWUP-01
+**Status**: Completed
+**Success Criteria** (what must be TRUE):
+  1. Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, and Hyper-Extract each have a dated spike report under `.planning/spikes/`.
+  2. Each report states the external signal, repo baseline, comparison result, decision, guardrails, and verification path.
+  3. Reports explicitly preserve no-adoption guardrails for dependencies, backends, hosted/private uploads, production paths, Qdrant upgrades, runtime replacement, and default extraction behavior.
+  4. `npm run check:future-spikes` gates the spike report contract and is wired into CI.
+**UI hint**: No UI surface changes; this is planning closeout and guardrail enforcement only.
+**Plans**: 1/1 complete
+
+Plans:
+- [x] 119-01-PLAN.md — Future spike reports and `check:future-spikes`.
 
 ---
 
@@ -1751,7 +1793,9 @@ Plans:
   3. `npm run build` passes with zero errors — production build is clean
   4. `npm run typecheck` passes with zero errors — TypeScript is fully valid
   5. Security regression tests cover all critical and high findings fixed in Phase 110 — the suite is independently runnable and documented
-**Plans**: TBD
+**Plans**: 1/1 complete
+Plans:
+- [x] 113-01-SUMMARY.md — Full test, build, typecheck, Python, static/service, and dependency-audit validation closeout.
 
 ## Progress Table (v7.0)
 
@@ -1771,6 +1815,7 @@ Plans:
 **Milestone**: v7.1
 **Depends on**: Phase 84 public-evidence benchmark, Phase 104 memory-trace observability, Phase 107 Agent Context Bus
 **Requirements**: COMPETE-01, COMPETE-02, SITE-BENCH-01, BENCH-01, BENCH-02, BENCH-03, RETRIEVAL-01, RECEIPTS-01, SEO-PROOF-01
+**Status**: Repo-verified complete (2026-06-27); public deploy approval separate
 **Success Criteria** (what must be TRUE):
   1. Midbrain appears in `providers.json`, generated marketplace results, `/vs/midbrain`, sitemap, LLM-readable docs, README, and the benchmark methodology page.
   2. Public copy explicitly says MemRoOS's `84.06` architecture/governance score and Midbrain's SmartSearch paper metrics are different benchmarks.
@@ -1778,5 +1823,5 @@ Plans:
   4. The comparative benchmark plan names datasets, metrics, adapters, outputs, caveats, and first implementation steps for LoCoMo, LongMemEval, and LongMemEval-V2-style tasks.
   5. The highest-benefit roadmap additions are captured as GSD requirements: SmartSearch-inspired retrieval, retrieval receipts, and comparative external benchmark lanes.
   6. Crawler-visible proof metrics render actual values before JavaScript runs.
-**Plans**: 1 plan
+**Plans**: 1/1 complete
 - [x] 114-01-PLAN.md — Midbrain surfaces, public benchmark caveats, SmartSearch-inspired retrieval roadmap, retrieval receipts, and comparative benchmark plan

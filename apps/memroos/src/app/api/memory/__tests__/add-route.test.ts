@@ -65,6 +65,7 @@ describe("POST /api/memory/add", () => {
 
   it("forwards valid memory writes to mem0 and audits the write", async () => {
     const { POST, getDb, memoryWriteTimeoutMs, registerAgent } = await loadRoute();
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
     const { apiKey } = registerAgent({
       id: "memory-agent",
       name: "Memory Agent",
@@ -97,6 +98,18 @@ describe("POST /api/memory/add", () => {
     expect(memoryWriteTimeoutMs()).toBe(30_000);
     const rows = getDb().prepare("SELECT agent_id, memory_type FROM agent_memory_writes").all();
     expect(rows).toEqual([{ agent_id: "memory-agent", memory_type: "episodic" }]);
+    const events = listEfficiencyEvents(getDb(), { eventType: "memory_write" });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      eventType: "memory_write",
+      agentId: "memory-agent",
+      payload: {
+        source: "test",
+        isRediscovery: false,
+      },
+    });
+    expect(events[0].payload.dedupHash).toMatch(/^sha256:/);
+    expect(events[0].payload.firstSeenAt).toBe(events[0].createdAt);
   });
 
   it("redacts detected PII before forwarding memory writes to storage", async () => {

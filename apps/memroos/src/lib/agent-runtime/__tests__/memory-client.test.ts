@@ -48,6 +48,70 @@ describe("Hermes memory client v2", () => {
     const injection = buildContextInjection(hermesRoot, "A/B tests", { maxChars: 1500 });
     expect(injection.text.length).toBeLessThanOrEqual(1500);
     expect(injection.memories.every((memory) => memory.score >= 0.5)).toBe(true);
+    expect(injection.recollection.decision).toBe("search_required");
+    expect(injection.contextPack.injected.length).toBeGreaterThan(0);
+  });
+
+  it("records skipped recollection when callers mark a mechanical task as entity-free", () => {
+    const hermesRoot = root();
+    addMemory(hermesRoot, { content: "Formatting requests should not force memory retrieval." });
+
+    const injection = buildContextInjection(hermesRoot, "format this list", {
+      entities: [],
+    });
+
+    expect(injection.text).toBe("");
+    expect(injection.memories).toHaveLength(0);
+    expect(injection.recollection.decision).toBe("search_skipped");
+    expect(injection.recollection.skipReason).toContain("local or mechanical");
+    expect(injection.contextPack.injected).toHaveLength(0);
+  });
+
+  it("excludes policy-denied memories from recollection context packs", () => {
+    const hermesRoot = root();
+    const allowed = addMemory(hermesRoot, {
+      content: "A/B tests keep launch decisions in the experiment tracker.",
+      authorization: "allowed",
+    });
+    const denied = addMemory(hermesRoot, {
+      content: "A/B tests contain private payment escalation notes.",
+      authorization: "denied",
+      policyRisk: "high",
+    });
+
+    const injection = buildContextInjection(hermesRoot, "A/B tests", {
+      maxChars: 1500,
+    });
+
+    expect(injection.text).toContain(allowed.content);
+    expect(injection.text).not.toContain(denied.content);
+    expect(injection.memories.map((memory) => memory.id)).toContain(allowed.id);
+    expect(injection.memories.map((memory) => memory.id)).not.toContain(denied.id);
+    expect(injection.contextPack.ignored).toContainEqual(
+      expect.objectContaining({ id: denied.id, reason: "policy_denied" })
+    );
+  });
+
+  it("preserves belief-stage caveats for silver memories", () => {
+    const hermesRoot = root();
+    const silver = addMemory(hermesRoot, {
+      content: "Cordant follow-up requires a Google Docs owner check before sharing.",
+      beliefStage: "silver_candidate_claim",
+      tags: ["cordant"],
+    });
+
+    const injection = buildContextInjection(hermesRoot, "Cordant follow-up owner check", {
+      project: "cordant",
+    });
+
+    expect(injection.text).toContain(silver.content);
+    expect(injection.contextPack.injected).toContainEqual(
+      expect.objectContaining({
+        id: silver.id,
+        reliance: "caveated_claim",
+        caveatReason: expect.stringContaining("Silver candidate claim"),
+      })
+    );
   });
 
   it("archives expired memories and keeps backward-compatible memory tool calls", () => {

@@ -76,6 +76,21 @@ mcp_servers:
 
 Replace `<memroos-tailscale-host-or-ip>` with the Memroos machine's Tailscale DNS name or 100.x Tailscale IP.
 
+## Tool schema contract
+
+The MCP facade exposes its machine-readable tool contract through both:
+
+- `mcp_tool_contract` tool
+- `mcp://tools/contract` resource
+
+The contract id is `memroos-mcp-tools.v1`. It lists every registered MCP tool with a description, JSON-schema-shaped `inputSchema`, and `outputSchema`. The same registry backs FastMCP registration and the export contract, so new top-level tools should be added through `_mcp_tool`.
+
+Verify the exported contract with:
+
+```bash
+npm run check:mcp-schema
+```
+
 ## ChatGPT connector server
 
 ChatGPT custom connectors and Deep Research-compatible MCP servers need read-only `search` and `fetch` tools. The MemroOS MCP facade includes those tools alongside the richer knowledge, memory, and tool-attention tools.

@@ -170,6 +170,169 @@ describe("A2A HTTP+JSON routes", () => {
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     expect(text).toContain("event: task.update");
   });
+
+  it("GET /tasks returns 401 without bearer auth", async () => {
+    const { tasksRoute } = await loadRoutes();
+
+    const response = await tasksRoute.GET(
+      new Request("http://localhost/tasks")
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("GET /tasks returns task list with valid auth", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.tasksRoute.GET(
+      new Request("http://localhost/tasks", {
+        headers: { authorization: `Bearer ${apiKey}` },
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(body.tasks)).toBe(true);
+    expect(body.timestamp).toBeTruthy();
+  });
+
+  it("GET /tasks/{id} returns 401 without bearer auth", async () => {
+    const { taskRoute } = await loadRoutes();
+
+    const response = await taskRoute.GET(
+      new Request("http://localhost/tasks/some-id"),
+      { params: Promise.resolve({ id: "some-id" }) }
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 400 when POST /message:send receives invalid JSON (body null)", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.messageSendRoute.POST(
+      new Request("http://localhost/message:send", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: "not valid json {{{",
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("INVALID_REQUEST");
+  });
+
+  it("returns 400 when POST /message:stream receives invalid JSON (body null)", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.messageStreamRoute.POST(
+      new Request("http://localhost/message:stream", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: "not valid json {{{",
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("INVALID_REQUEST");
+  });
+
+  it("maps non-object metadata to {} on POST /message:send", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.messageSendRoute.POST(
+      postRequest(
+        "http://localhost/message:send",
+        { message: message("array metadata"), metadata: [1, 2, 3] },
+        apiKey
+      )
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.id).toBeTruthy();
+  });
+
+  it("maps non-object metadata to {} on POST /message:stream", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.messageStreamRoute.POST(
+      postRequest(
+        "http://localhost/message:stream",
+        { message: message("array metadata"), metadata: "string-meta" },
+        apiKey
+      )
+    );
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(text).toContain("event: task.update");
+  });
+
+  it("decodes URL-encoded task id from URL segment ending :cancel", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+    const sendResponse = await routes.messageSendRoute.POST(
+      postRequest("http://localhost/message:send", { message: message("cancel url decode") }, apiKey)
+    );
+    const sent = await sendResponse.json();
+    routes.transitionA2aTask(sent.id, "working");
+
+    const encodedId = encodeURIComponent(sent.id);
+    const response = await routes.cancelRoute.POST(
+      new Request(`http://localhost/tasks/${encodedId}:cancel`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({}),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status.state).toBe("canceled");
+  });
+
+  it("decodes URL-encoded task id and includes task + events in SSE from POST /tasks/{id}:subscribe", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+    const sendResponse = await routes.messageSendRoute.POST(
+      postRequest("http://localhost/message:send", { message: message("subscribe url decode") }, apiKey)
+    );
+    const sent = await sendResponse.json();
+
+    const encodedId = encodeURIComponent(sent.id);
+    const response = await routes.subscribeRoute.POST(
+      new Request(`http://localhost/tasks/${encodedId}:subscribe`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({}),
+      })
+    );
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const dataLines = text
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(dataLines.length).toBeGreaterThanOrEqual(1);
+    expect(dataLines[0].id).toBe(sent.id);
+  });
 });
 
 describe("A2A JSON-RPC compatibility route", () => {
@@ -243,5 +406,39 @@ describe("A2A JSON-RPC compatibility route", () => {
       code: -32000,
       message: "Streaming methods use /message:stream or /tasks/{id}:subscribe",
     });
+  });
+
+  it("handles invalid JSON body gracefully (null body)", async () => {
+    const { routes, apiKey } = await createAgentAndKey();
+
+    const response = await routes.a2aRoute.POST(
+      new Request("http://localhost/a2a", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: "not valid json",
+      })
+    );
+    const body = await response.json();
+
+    // dispatchA2aJsonRpc receives null body and returns an error response
+    expect(body.error).toBeTruthy();
+    expect(body.ok).toBe(false);
+  });
+
+  it("returns 401 for JSON-RPC request without auth", async () => {
+    const { a2aRoute } = await loadRoutes();
+
+    const response = await a2aRoute.POST(
+      new Request("http://localhost/a2a", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "1", method: "message/send", params: {} }),
+      })
+    );
+
+    expect(response.status).toBe(401);
   });
 });

@@ -1,9 +1,9 @@
 {
   "traceId": "sdk-smoke-test-001",
   "agentId": "smoke-test-agent",
-  "agentModel": "claude-haiku-4-5-20251001",
-  "agentModelProvider": "anthropic",
-  "agentModelFamily": "anthropic",
+  "agentModel": "gpt-5-mini",
+  "agentModelProvider": "openai",
+  "agentModelFamily": "openai",
   "role": "ops",
   "input": "Resolve the pending support ticket for account #12345",
   "output": "Reviewed account #12345. Applied standard resolution workflow. Issue closed.",

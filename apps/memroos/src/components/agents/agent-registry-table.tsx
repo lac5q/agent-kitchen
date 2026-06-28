@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PLATFORM_LABELS, STATUS_COLORS } from "@/lib/constants";
+import { PLATFORM_LABELS, STATUS_COLORS } from "@/lib/ui-constants";
 import type { RegisteredAgent } from "@/types";
 
 interface AgentRegistryTableProps {

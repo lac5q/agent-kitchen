@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .contract import assert_eval_submit_result
 from .types import (
     AgentEvalTrace,
     EvalRunResult,
@@ -107,7 +108,7 @@ class MemroosClient:
         Returns an EvalSubmitResult with the run ID and composite W score.
         """
         result = await self._request("POST", "/api/public/v1/traces", json=trace)
-        return result  # type: ignore[return-value]
+        return assert_eval_submit_result(result)
 
     async def get_run_result(self, run_id: str) -> EvalRunResult:
         """

@@ -387,6 +387,36 @@ def test_mcp_auth_provider_accepts_only_configured_bearer_token(monkeypatch):
     assert not provider.validate("wrong-token")
 
 
+def test_mcp_tool_contract_exports_registered_tool_schemas():
+    contract = mcp_server.mcp_tool_contract()
+    tools = contract["tools"]
+    by_name = {tool["name"]: tool for tool in tools}
+
+    assert contract["id"] == mcp_server.MCP_TOOL_CONTRACT_ID
+    assert contract["server"] == "knowledge-system"
+    assert set(by_name) == {tool.__name__ for tool in mcp_server._MCP_TOOL_REGISTRY}
+    json.dumps(contract)
+
+    for tool in tools:
+        assert tool["description"]
+        assert tool["inputSchema"]["type"] == "object"
+        assert "properties" in tool["inputSchema"]
+        assert "outputSchema" in tool
+
+    search_schema = by_name["knowledge_search"]["inputSchema"]
+    assert search_schema["required"] == ["query"]
+    assert search_schema["properties"]["query"]["type"] == "string"
+    assert search_schema["properties"]["limit"]["type"] == "integer"
+    assert search_schema["properties"]["limit"]["default"] == 20
+
+    context_schema = by_name["agent_context_send"]["inputSchema"]
+    assert context_schema["required"] == ["to_agent", "body"]
+    assert context_schema["properties"]["reply_required"]["type"] == "boolean"
+    assert context_schema["properties"]["context_refs"]["nullable"] is True
+
+    assert mcp_server._mcp_tool_contract_resource_payload() == contract
+
+
 def test_capability_registry_hides_deep_tools_until_requested():
     core = get_capabilities()
     assert core["mode"] == "core"

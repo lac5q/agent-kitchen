@@ -1,0 +1,95 @@
+{
+  "manifestId": "memroos-contract-manifest.v1",
+  "version": 1,
+  "contracts": [
+    {
+      "id": "public-eval-api.v1",
+      "domain": "public-eval",
+      "header": "X-Memroos-Contract",
+      "schemaSource": "apps/memroos/src/lib/public-api/eval-contract.ts",
+      "discovery": [
+        {
+          "kind": "openapi",
+          "path": "/api/public/v1/openapi",
+          "routeFile": "apps/memroos/src/app/api/public/v1/openapi/route.ts"
+        }
+      ],
+      "schemas": {
+        "EvalSubmitResult": {
+          "required": ["runId", "w", "layers", "proposalIds", "tenantId"]
+        },
+        "EvalLayerBreakdown": {
+          "required": ["score", "weight", "scorers"]
+        }
+      },
+      "artifacts": [
+        {
+          "label": "apps/memroos:public-eval-api.v1",
+          "path": "apps/memroos/src/lib/public-api/eval-contract.ts",
+          "contractIdConstant": "PUBLIC_EVAL_API_V1_CONTRACT_ID",
+          "headerConstant": "PUBLIC_EVAL_CONTRACT_HEADER"
+        },
+        {
+          "label": "packages/sdk-ts:public-eval-api.v1",
+          "path": "packages/sdk-ts/src/contract.ts",
+          "contractIdConstant": "PUBLIC_EVAL_API_V1_CONTRACT_ID",
+          "headerConstant": "PUBLIC_EVAL_CONTRACT_HEADER"
+        },
+        {
+          "label": "packages/sdk-py:public-eval-api.v1",
+          "path": "packages/sdk-py/memroos_eval_sdk/contract.py",
+          "contractIdConstant": "PUBLIC_EVAL_API_V1_CONTRACT_ID",
+          "headerConstant": "PUBLIC_EVAL_CONTRACT_HEADER"
+        }
+      ]
+    },
+    {
+      "id": "memroos-a2a.v1",
+      "domain": "a2a",
+      "header": "X-Memroos-Contract",
+      "schemaSource": "apps/memroos/src/lib/a2a/contract.ts",
+      "discovery": [
+        {
+          "kind": "openapi",
+          "path": "/api/a2a/openapi",
+          "routeFile": "apps/memroos/src/app/api/a2a/openapi/route.ts"
+        }
+      ],
+      "schemas": {
+        "A2aTask": {
+          "taskStates": ["submitted", "working", "input-required", "completed", "failed", "canceled"]
+        }
+      },
+      "artifacts": [
+        {
+          "label": "apps/memroos:memroos-a2a.v1",
+          "path": "apps/memroos/src/lib/a2a/contract.ts",
+          "contractIdConstant": "A2A_CONTRACT_ID",
+          "headerConstant": "A2A_CONTRACT_HEADER"
+        }
+      ]
+    },
+    {
+      "id": "memroos-mcp-tools.v1",
+      "domain": "mcp",
+      "schemaSource": "services/knowledge-mcp/knowledge_system/mcp_server.py",
+      "discovery": [
+        {
+          "kind": "mcp-tool",
+          "name": "mcp_tool_contract"
+        },
+        {
+          "kind": "mcp-resource",
+          "uri": "mcp://tools/contract"
+        }
+      ],
+      "artifacts": [
+        {
+          "label": "services/knowledge-mcp:memroos-mcp-tools.v1",
+          "path": "services/knowledge-mcp/knowledge_system/mcp_server.py",
+          "contractIdConstant": "MCP_TOOL_CONTRACT_ID"
+        }
+      ]
+    }
+  ]
+}
