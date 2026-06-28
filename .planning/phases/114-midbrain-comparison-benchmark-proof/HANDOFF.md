@@ -2,7 +2,9 @@
 
 **Date:** 2026-06-10  
 **Handed off by:** Claude Sonnet 4.6 (context exhaustion)  
-**Status:** Phase INCOMPLETE — gaps_found (1 gap), code review has 2 criticals, deploy hold active
+**Status:** Superseded for repo-local completion — verification and follow-up fixes passed; deploy hold remains active
+
+> 2026-06-27 update: the original handoff status is superseded for repo-local completion. `114-VERIFICATION.md` now records 9/9 must-haves verified with no remaining gaps. CR-01 is covered by the documented confidence-weighted marketplace scoring path, and CR-02 was fixed in `scripts/run-comparative-retrieval-evals.mjs` with `scripts/run-comparative-retrieval-evals.test.mjs` coverage. The public deploy hold below remains separate and still requires Luis approval.
 
 ---
 
@@ -37,9 +39,9 @@ Numbers for Luis to review before approving deploy:
 
 ---
 
-## What Still Needs Doing (Before Phase Can Close)
+## Superseded Repo-Local Closure Items
 
-### 1. Code Review Criticals (must address before deploy)
+### 1. Code Review Criticals
 
 **CR-01 — totalScore inconsistency in competitor-data.ts** (CRITICAL)
 - File: `apps/memroos/src/app/vs/[competitor]/competitor-data.ts`
@@ -47,10 +49,14 @@ Numbers for Luis to review before approving deploy:
 - Any journalist checking the math will catch this inconsistency
 - Fix: derive `totalScore` programmatically from criterion scores, or document the weighting formula
 
+**Current status:** resolved by documenting the confidence-weighted scoring formula path in `competitor-data.ts`; `node scripts/run-marketplace-memory-evals.mjs --json --no-write` confirms Midbrain rank 6 with weighted score `65.2115`.
+
 **CR-02 — answerLower.slice(0, 40) truncation in harness** (CRITICAL)
 - File: `scripts/run-comparative-retrieval-evals.mjs`
 - Short expected answers match irrelevant passages → inflates `answerSupportedRate`
 - Fix: use full string or exact match for short answers
+
+**Current status:** resolved by full normalized expected-answer containment and focused regression coverage in `scripts/run-comparative-retrieval-evals.test.mjs`.
 
 Full review: `.planning/phases/114-midbrain-comparison-benchmark-proof/114-REVIEW.md`
 
@@ -61,6 +67,8 @@ Full review: `.planning/phases/114-midbrain-comparison-benchmark-proof/114-REVIE
 - Missing: `score`, `tier`, `source`, `authorization_result`, `why_entered`, `why_missed`
 - No app component renders receipts as product proof
 - Gap closure plan: run `/gsd:plan-phase 114 --gaps` to create a gap closure plan
+
+**Current status:** superseded by `114-VERIFICATION.md`, which records 9/9 must-haves verified and no remaining gaps after receipt fields were added to the benchmark evidence.
 
 ### 3. Minor Code Review Issues
 

@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 11 * * *"
 
 jobs:
   memroos:
@@ -29,6 +32,15 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Check route auth boundary
+        run: npm run check:route-auth-boundary
+
+      - name: Check Next trust boundary
+        run: npm run check:next-trust-boundary
+
+      - name: Check future spikes
+        run: npm run check:future-spikes
 
       - name: Run Memroos tests
         run: npm test -- --run
@@ -74,3 +86,23 @@ jobs:
 
       - name: Check shell scripts
         run: bash -n start.sh services/memory/*.sh
+
+  recall-canary:
+    name: Memory recall canary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run recall canary gate
+        run: npm run check:recall-canary

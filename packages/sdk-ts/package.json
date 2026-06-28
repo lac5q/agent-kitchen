@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "test:smoke:live": "MEMROOS_SDK_SMOKE=1 vitest run src/__tests__/live-smoke.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

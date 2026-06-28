@@ -1,0 +1,17 @@
+# Example project-scoped Codex config for MemRoOS development.
+# Copy this into ~/.codex/config.toml or let scripts/setup-codex-cloud.sh
+# create the equivalent config inside the Codex Cloud environment.
+
+[mcp_servers.memroos]
+command = "/bin/bash"
+args = ["-lc", 'exec "${MEMROOS_ROOT:-$PWD}/scripts/memroos-mcp.sh"']
+startup_timeout_sec = 120.0
+env_vars = [
+  "MEMROOS_ROOT",
+  "KNOWLEDGE_ROOT",
+  "MEM0_URL",
+  "MEMROOS_APP_URL",
+  "MEMROOS_BASE_URL",
+  "MEMROOS_AGENT_ID",
+  "MEMROOS_AGENT_API_KEY"
+]

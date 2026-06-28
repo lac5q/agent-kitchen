@@ -64,7 +64,9 @@ services/**/logs/
 .planning/.next-call-count
 
 # Local agent/tool state — never committed
-.codex/
+.codex/*
+!.codex/
+!.codex/config.example.toml
 .agents/
 .gemini/
 

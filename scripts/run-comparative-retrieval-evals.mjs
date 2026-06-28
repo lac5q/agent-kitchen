@@ -143,6 +143,16 @@ function selectAdapter(adapterName) {
   throw new Error(`Unknown adapter: '${adapterName}'`);
 }
 
+function normalizeAnswerSupportText(value) {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isExpectedAnswerSupported(expectedAnswer, retrievedText) {
+  const expected = normalizeAnswerSupportText(expectedAnswer);
+  if (!expected) return false;
+  return normalizeAnswerSupportText(retrievedText).includes(expected);
+}
+
 /**
  * Score a single task result.
  * Uses exact string containment for expected_answer in retrieved text.
@@ -178,10 +188,9 @@ function scoreTask(task, retrieval) {
     abstentionCorrect = retrieval.injected.length === 0;
   }
 
-  // answer support: does any retrieved text contain the expected answer (exact match heuristic)?
-  const answerLower = (task.expected_answer ?? "").toLowerCase();
+  // answer support: does any retrieved text contain the full expected answer?
   const answerSupported = retrieval.retrieved.some((r) =>
-    r.text.toLowerCase().includes(answerLower.slice(0, 40))
+    isExpectedAnswerSupported(task.expected_answer, r.text)
   );
 
   return {
@@ -324,4 +333,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   run();
 }
 
-export { loadFixtures, lexicalAdapter, noMemoryAdapter, scoreTask, aggregateScores };
+export {
+  aggregateScores,
+  isExpectedAnswerSupported,
+  lexicalAdapter,
+  loadFixtures,
+  noMemoryAdapter,
+  scoreTask,
+};

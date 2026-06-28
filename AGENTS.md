@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **memroos** (15362 symbols, 29099 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **memroos** (15389 symbols, 29122 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -68,3 +68,25 @@ available on demand via the `catalog` and `read` actions.
 
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
+
+## Codex Cloud Development
+
+For Codex Cloud environments on `lac5q/memroos`, use `bash scripts/setup-codex-cloud.sh`
+as the environment setup script and `bash scripts/setup-codex-cloud.sh --maintenance`
+as the maintenance script. This wires the MemRoOS MCP "main brain" without running
+the Docker-oriented local installer. It also installs the GSD Codex skills with
+the `standard` profile unless `CODEX_CLOUD_INSTALL_GSD=0` is set, and installs
+the Qwen executor lane plus `$qwen-cloud` / `$beastmode-qwen-cloud` skills unless
+`CODEX_CLOUD_INSTALL_QWEN=0` is set.
+
+Do not use `./setup.sh` as the default cloud setup path. It is intended for local
+or server installs and may require Docker, Qdrant validation, launchd jobs, or
+service startup that cloud code tasks do not need.
+
+If MCP tools are unavailable, continue with repo-local files and state clearly
+that the main brain is not connected for that run. When MCP is available, load
+auto-loading skills through `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})`.
+Use `/skills`, `$gsd-help`, `$qwen-cloud`, or `$beastmode-qwen-cloud` to access
+cloud workflows in Codex. Qwen is an external executor in cloud; do not claim it
+is operational until `~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"`
+returns `QWEN OK`.

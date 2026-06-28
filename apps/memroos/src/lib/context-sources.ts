@@ -1,9 +1,9 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 
 import { resolveFromRepoRoot } from "@/lib/paths";
+import { getMemroosEnvValue, loadMemroosEnv } from "@/lib/env";
 
 export type ContextSourceType = "qmd" | "gmail" | "spark" | "mem0" | "local-folder";
 export type ContextSourceStatus = "ok" | "stale" | "missing" | "degraded" | "disabled";
@@ -72,16 +72,13 @@ const CONFIG_PATH = "context-sources.config.json";
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".txt", ".json", ".jsonl"]);
 
 function resolveConfigPath(filename?: string): string {
-  const configured = filename ?? process.env.CONTEXT_SOURCES_CONFIG ?? CONFIG_PATH;
+  const configured = filename ?? loadMemroosEnv().CONTEXT_SOURCES_CONFIG ?? CONFIG_PATH;
   return path.isAbsolute(configured) ? configured : resolveFromRepoRoot(configured);
 }
 
 function resolveLocalConfigPath(): string {
-  const configured = process.env.CONTEXT_SOURCES_LOCAL_CONFIG;
-  if (configured) {
-    return path.isAbsolute(configured) ? configured : resolveFromRepoRoot(configured);
-  }
-  return path.join(os.homedir(), ".memroos", "context-sources.local.json");
+  const configured = loadMemroosEnv().CONTEXT_SOURCES_LOCAL_CONFIG;
+  return path.isAbsolute(configured) ? configured : resolveFromRepoRoot(configured);
 }
 
 export function deepMergeConfigs(base: ContextSourcesConfig, local: ContextSourcesConfig): ContextSourcesConfig {
@@ -105,7 +102,7 @@ export function deepMergeConfigs(base: ContextSourcesConfig, local: ContextSourc
 
 function expandPath(input: string): string {
   return input.replace(/\$\{([A-Z0-9_]+)(?::-(.*?))?\}/g, (_match, key: string, fallback: string) => {
-    return process.env[key] ?? fallback ?? "";
+    return getMemroosEnvValue(key) ?? fallback ?? "";
   });
 }
 
@@ -182,7 +179,7 @@ export function evaluateContextSources(
     }
 
     const missingTools = source.requiredTools.filter((tool) => !hasTool(tool));
-    const missingEnv = source.envVars.filter((name) => !process.env[name] && !source.sourcePath.includes(`${name}:-`));
+    const missingEnv = source.envVars.filter((name) => !getMemroosEnvValue(name) && !source.sourcePath.includes(`${name}:-`));
     if (missingTools.length || missingEnv.length) {
       return {
         id: source.id,

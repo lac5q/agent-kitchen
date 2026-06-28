@@ -100,6 +100,49 @@ vi.mock("@/lib/api-client", () => ({
     data: { events: [{ success: false }], timestamp: "2026-05-21T12:00:00Z" },
     isError: false,
   }),
+  useOperationsNoc: () => ({
+    data: {
+      panels: {
+        efficiency: {
+          status: "empty",
+          source: "efficiency_events",
+          lastUpdated: null,
+          warnings: ["No efficiency telemetry events in the selected window"],
+        },
+      },
+      metrics: {
+        efficiency: {
+          totalEvents: 0,
+          retrievalEvents: 0,
+          retrievalUsedInFirstResponse: 0,
+          retrievalBeforeWorkRate: null,
+          sourceReadEvents: 0,
+          repeatedSourceReads: 0,
+          tokenLedgerEvents: 0,
+          rawContextTokens: 0,
+          cachedTokens: 0,
+          totalTokens: 0,
+          rawContextTokenShare: null,
+          operatorQuestions: 0,
+          operatorReasks: 0,
+          operatorReaskRate: null,
+          memoryWrites: 0,
+          rediscoveredWrites: 0,
+          rediscoveredFactRate: null,
+          streams: {
+            retrieval_trace: 0,
+            source_read: 0,
+            token_ledger: 0,
+            operator_question: 0,
+            memory_write: 0,
+          },
+          lastUpdated: null,
+        },
+      },
+    },
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 describe("NOC actions", () => {

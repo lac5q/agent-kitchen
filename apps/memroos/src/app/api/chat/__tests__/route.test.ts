@@ -346,4 +346,76 @@ describe("chat route model resolution", () => {
     expect(res.status).toBe(200);
     expect(text).toContain("Qwen fallback response");
   });
+
+  it("records operator question telemetry with deterministic memory hit correlation", async () => {
+    await registerTestAgent({
+      id: "claude-sonnet-engineer",
+      name: "Claude Sonnet Engineer",
+      role: "CLI engineer",
+      platform: "claude",
+    });
+    const { POST } = await loadPostRouteWithAnthropicFailure("usage limit exceeded (2056)");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "claude-sonnet-engineer",
+        taskId: "operator-reask-1",
+        message: "Did we already check memory for the roadmap?",
+        memoryHits: ["memory-117", "memory-114"],
+        history: [
+          { role: "user", content: "Did we already check memory for the roadmap?" },
+          { role: "assistant", content: "Yes, Phase 117 follows the roadmap order." },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    await readStream(res);
+
+    const { getDb } = await import("@/lib/db");
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "operator_question",
+      taskId: "operator-reask-1",
+    });
+
+    expect(res.status).toBe(200);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      eventType: "operator_question",
+      taskId: "operator-reask-1",
+      agentId: "claude-sonnet-engineer",
+      payload: {
+        questionText: "Did we already check memory for the roadmap?",
+        memoryHits: ["memory-117", "memory-114"],
+        priorAnswerMatch: true,
+      },
+    });
+  });
+
+  it("does not record operator question telemetry for non-question chat turns without memory hits", async () => {
+    const { POST } = await loadPostRouteWithAnthropicFailure("usage limit exceeded (2056)");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "ceo",
+        taskId: "operator-statement-1",
+        message: "Please continue the current implementation slice.",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    await readStream(res);
+
+    const { getDb } = await import("@/lib/db");
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "operator_question",
+      taskId: "operator-statement-1",
+    });
+
+    expect(res.status).toBe(200);
+    expect(events).toHaveLength(0);
+  });
 });

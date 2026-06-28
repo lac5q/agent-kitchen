@@ -13,6 +13,7 @@ import type {
   SealProposal,
   ProposalFilter,
 } from "./types";
+import { assertEvalSubmitResult } from "./contract";
 
 export class MemroosApiError extends Error {
   constructor(
@@ -82,7 +83,9 @@ export class MemroosClient {
   async submitTrace(
     trace: AgentEvalTrace | OpenInferenceTrace
   ): Promise<EvalSubmitResult> {
-    return this.request<EvalSubmitResult>("POST", "/api/public/v1/traces", trace);
+    const result = await this.request<unknown>("POST", "/api/public/v1/traces", trace);
+    assertEvalSubmitResult(result);
+    return result;
   }
 
   /**

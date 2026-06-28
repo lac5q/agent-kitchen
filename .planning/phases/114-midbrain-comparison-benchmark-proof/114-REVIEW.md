@@ -27,6 +27,8 @@ status: issues_found
 **Files Reviewed:** 8
 **Status:** issues_found
 
+> 2026-06-27 follow-up: the two critical findings below are now resolved for repo-local Phase 114 closure. CR-01 is addressed by the documented confidence-weighted scoring path in `competitor-data.ts` pointing to `evals/marketplace-agentic-memory/providers.json` and `scripts/run-marketplace-memory-evals.mjs`; a no-write scorer run confirms Midbrain rank 6 at `65.2115`. CR-02 is fixed in `scripts/run-comparative-retrieval-evals.mjs` by requiring full normalized expected-answer containment, with regression coverage in `scripts/run-comparative-retrieval-evals.test.mjs`.
+
 ## Summary
 
 This phase ships the Midbrain comparison benchmark proof: a retrieval harness schema, eval runner script, competitor data for the VS pages, sitemap updates, and public LLM-readable docs. The harness shape and schema are sound. However, the `totalScore` values in `competitor-data.ts` do not derive from the per-criterion scores in any consistent mathematical formula — every competitor except MemroOS shows a mismatch between stated `totalScore` and the simple average-of-scores × 20 formula, with Midbrain's gap being the most damaging (74.00 computed vs. 65.21 stated). The harness also has a truncation heuristic in answer-support scoring that produces false positives for short expected answers matched inside long but irrelevant passages, and a CLI argument parsing issue that silently passes `NaN` for `--limit` when invoked without a value. Four competitors in `competitor-data.ts` are absent from both the sitemap and `llms.txt`.

@@ -2,25 +2,25 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection Planning (In Progress 2026-06-23)
+## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection (Completed 2026-06-27)
 
 **Scope:**
 
 1. Refresh memroos.com, README, screenshots, public metadata, and LLM-readable docs so they match the completed v6.4/v6.5/v6.6/v7.0 product state.
 2. Keep the public story centered on company-owned memory and governance for agent harnesses, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
-3. Plan the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
+3. Ship the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
 
 ---
 
-## v7.5 Proactive Recollection Triggering (Planned 2026-06-23)
+## v7.5 Proactive Recollection Triggering (Completed 2026-06-27)
 
 **Phases:** 118
 
 **Scope:**
 
-1. **Proactive Recollection Triggering (Phase 118)** — Add deterministic search-required/search-skipped decisions before plan/tool/final gates, bounded query planning, relevance/recency/importance/freshness ranking, context-pack receipts, proactive recall evals, and operator/NOC visibility.
+1. **Proactive Recollection Triggering (Phase 118)** — Add deterministic search-required/search-skipped decisions before plan/tool/final gates, bounded query planning, relevance/recency/importance/freshness ranking, context-pack receipts, bronze/silver/gold memory belief-stage gates, proactive recall evals, and operator/NOC visibility.
 
-**Verification targets:** focused recollection-policy tests, integration at the selected dispatch/runtime seam, memory recall canary, typecheck, build, and NOC receipt visibility.
+**Verification highlights:** focused recollection-policy, memory-client, memory-trace, memory-recall-eval, and NOC tests passed; full app Vitest passed at 1211 tests; typecheck, build, and lint passed with the existing 32 warnings.
 
 ---
 

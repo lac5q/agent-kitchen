@@ -1,5 +1,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { validateMemroosEnvAtStartup } = await import('./lib/env');
+    validateMemroosEnvAtStartup();
+
     const { tryAcquireSchedulerLock } = await import('./lib/scheduler-singleton');
     if (!tryAcquireSchedulerLock()) {
       // Another memroos process owns the schedulers; serve HTTP only.

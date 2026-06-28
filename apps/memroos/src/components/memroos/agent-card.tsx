@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { STATUS_COLORS, PLATFORM_LABELS } from "@/lib/constants";
+import { STATUS_COLORS, PLATFORM_LABELS } from "@/lib/ui-constants";
 import type { Agent } from "@/types";
 
 export function formatTimeAgo(dateStr: string | null): string {

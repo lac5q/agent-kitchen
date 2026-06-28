@@ -23,6 +23,49 @@ const api = vi.hoisted(() => ({
     isLoading: false,
     isError: false,
   })),
+  useOperationsNoc: vi.fn(() => ({
+    data: {
+      panels: {
+        efficiency: {
+          status: "empty",
+          source: "efficiency_events",
+          lastUpdated: null,
+          warnings: ["No efficiency telemetry events in the selected window"],
+        },
+      },
+      metrics: {
+        efficiency: {
+          totalEvents: 0,
+          retrievalEvents: 0,
+          retrievalUsedInFirstResponse: 0,
+          retrievalBeforeWorkRate: null,
+          sourceReadEvents: 0,
+          repeatedSourceReads: 0,
+          tokenLedgerEvents: 0,
+          rawContextTokens: 0,
+          cachedTokens: 0,
+          totalTokens: 0,
+          rawContextTokenShare: null,
+          operatorQuestions: 0,
+          operatorReasks: 0,
+          operatorReaskRate: null,
+          memoryWrites: 0,
+          rediscoveredWrites: 0,
+          rediscoveredFactRate: null,
+          streams: {
+            retrieval_trace: 0,
+            source_read: 0,
+            token_ledger: 0,
+            operator_question: 0,
+            memory_write: 0,
+          },
+          lastUpdated: null,
+        },
+      },
+    },
+    isLoading: false,
+    isError: false,
+  })),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -31,6 +74,7 @@ vi.mock("@/lib/api-client", () => ({
   useMemoryStats: api.useMemoryStats,
   useMemoryTierHealth: () => ({ data: { tiers: [], timestamp: "2026-05-21T12:00:00Z" }, isError: false }),
   useModelUsage: api.useModelUsage,
+  useOperationsNoc: api.useOperationsNoc,
   useTimeSeries: api.useTimeSeries,
   useAgentPeers: () => ({ data: { peers: [], window_minutes: 1440, timestamp: "2026-05-21T12:00:00Z" }, isError: false }),
   useAgents: () => ({ data: { agents: [] }, isError: false }),
@@ -56,6 +100,7 @@ describe("OperationsNoc", () => {
     api.useMemoryStats.mockClear();
     api.useTimeSeries.mockClear();
     api.useModelUsage.mockClear();
+    api.useOperationsNoc.mockClear();
   });
 
   it("labels live telemetry honestly without sample-backed claims", () => {
@@ -86,6 +131,7 @@ describe("OperationsNoc", () => {
     expect(api.useTimeSeries).toHaveBeenCalledWith("recall_queries", "month");
     expect(api.useMemoryStats).toHaveBeenCalledWith({ window: "month", workspace: "all" });
     expect(api.useModelUsage).toHaveBeenCalledWith(expect.stringMatching(/T.*Z$/));
+    expect(api.useOperationsNoc).toHaveBeenCalledWith({ window: "30d", workspace: "all" });
   });
 
   it("applies the workspace filter to memory-backed NOC panels", () => {
@@ -94,5 +140,6 @@ describe("OperationsNoc", () => {
     fireEvent.change(screen.getByLabelText(/noc workspace/i), { target: { value: "local" } });
 
     expect(api.useMemoryStats).toHaveBeenCalledWith({ window: "day", workspace: "local" });
+    expect(api.useOperationsNoc).toHaveBeenCalledWith({ window: "24h", workspace: "local" });
   });
 });

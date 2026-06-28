@@ -6,7 +6,7 @@ export interface CompetitorData {
   // Confidence-weighted benchmark score (raw score × confidence per criterion, summed with
   // criterion weights). Does NOT equal a simple average of scores × 20. See
   // evals/marketplace-agentic-memory/providers.json for confidence values and
-  // scripts/run-eval.mjs for the weighting formula.
+  // scripts/run-marketplace-memory-evals.mjs for the weighting formula.
   totalScore: number;
   scores: Record<string, { score: number; rationale: string }>;
 }

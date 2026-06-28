@@ -24,6 +24,7 @@ export function validateRuntimeTopologyManifest(manifest) {
   const errors = [];
   const warnings = [];
   const services = Array.isArray(manifest?.services) ? manifest.services : [];
+  const serviceIds = new Set(services.map((service) => service.id));
   const duplicateService = hasDuplicate(services.map((service) => service.id));
 
   if (manifest?.version !== 1) errors.push(`Unsupported runtime topology version: ${manifest?.version}`);
@@ -41,6 +42,14 @@ export function validateRuntimeTopologyManifest(manifest) {
     }
     if (!Array.isArray(service.supervisionModes) || service.supervisionModes.length === 0) {
       errors.push(`Runtime service ${service.id ?? "<unknown>"} must declare supervision modes`);
+    }
+    if (service.supervisionModes?.includes("docker-compose") && !service.dockerComposeService) {
+      errors.push(`Runtime service ${service.id ?? "<unknown>"} must declare dockerComposeService`);
+    }
+    for (const dependencyId of service.dependsOn ?? []) {
+      if (!serviceIds.has(dependencyId)) {
+        errors.push(`Runtime service ${service.id} depends on unknown service: ${dependencyId}`);
+      }
     }
 
     const duplicatePort = hasDuplicate(service.ports.map((port) => port.id));
@@ -91,13 +100,50 @@ function expectText(text, needle, errors, checked, label) {
   }
 }
 
+function expectedDockerHealthNeedle(port, path) {
+  if (!Number.isInteger(port?.containerPort)) return null;
+  if (!path || typeof path !== "string") return null;
+  return `http://127.0.0.1:${port.containerPort}${path}`;
+}
+
 export function validateRuntimeTopologyArtifacts(manifest, artifacts) {
   const base = validateRuntimeTopologyManifest(manifest);
   const errors = [...base.errors];
   const warnings = [...base.warnings];
   const checked = [];
 
+  const dockerServiceNames = new Map(
+    (manifest.services ?? [])
+      .filter((service) => service.dockerComposeService)
+      .map((service) => [service.id, service.dockerComposeService])
+  );
+
   for (const service of manifest.services ?? []) {
+    if (artifacts.dockerComposeText && service.supervisionModes?.includes("docker-compose")) {
+      expectText(
+        artifacts.dockerComposeText,
+        `\n  ${service.dockerComposeService}:`,
+        errors,
+        checked,
+        `docker-service:${service.id}:${service.dockerComposeService}`
+      );
+
+      for (const dependencyId of service.dependsOn ?? []) {
+        const dependencyName = dockerServiceNames.get(dependencyId);
+        if (!dependencyName) {
+          errors.push(`Runtime service ${service.id} depends on ${dependencyId} without dockerComposeService`);
+          continue;
+        }
+        expectText(
+          artifacts.dockerComposeText,
+          `\n      ${dependencyName}:`,
+          errors,
+          checked,
+          `docker-depends-on:${service.id}:${dependencyId}:${dependencyName}`
+        );
+      }
+    }
+
     for (const port of service.ports ?? []) {
       if (artifacts.dockerComposeText && portRequiredIn(port, "docker-compose")) {
         if (port.env && port.containerPort) {
@@ -117,12 +163,23 @@ export function validateRuntimeTopologyArtifacts(manifest, artifacts) {
             `docker:${service.id}:${port.defaultPort}`
           );
         }
+
+        const healthNeedle = expectedDockerHealthNeedle(port, service.health?.path);
+        if (healthNeedle) {
+          expectText(
+            artifacts.dockerComposeText,
+            healthNeedle,
+            errors,
+            checked,
+            `docker-health:${service.id}:${healthNeedle}`
+          );
+        }
       }
 
       if (artifacts.startScriptText && port.env && portRequiredIn(port, "manual-script")) {
         expectText(
           artifacts.startScriptText,
-          `port ${service.id} ${port.id}`,
+          `"$TOPOLOGY_CHECK" port ${service.id} ${port.id}`,
           errors,
           checked,
           `script:${service.id}:${port.env}=${port.defaultPort}`
@@ -132,7 +189,7 @@ export function validateRuntimeTopologyArtifacts(manifest, artifacts) {
       if (artifacts.launchdStartText && port.env && portRequiredIn(port, "launchd")) {
         expectText(
           artifacts.launchdStartText,
-          `port ${service.id} ${port.id}`,
+          `runtime_topology_port ${service.id} ${port.id}`,
           errors,
           checked,
           `launchd:${service.id}:${port.env}=${port.defaultPort}`

@@ -33,6 +33,9 @@ let recallByKeyword: (
   limit?: number
 ) => unknown[];
 let rebuildMessageFtsProjection: (db: import('better-sqlite3').Database) => void;
+let ingestHermesFile: (db: import('better-sqlite3').Database, filePath: string) => number;
+let ingestQwenFile: (db: import('better-sqlite3').Database, filePath: string, projectDirName: string) => number;
+let ingestCodexFile: (db: import('better-sqlite3').Database, filePath: string, sessionId: string) => number;
 
 /** Helper: write a JSONL file with given entries */
 function writeJsonl(filePath: string, entries: unknown[]): void {
@@ -299,5 +302,170 @@ describe('db-ingest: recallByKeyword error handling', () => {
     expect(Array.isArray(results)).toBe(true);
     // We can't easily verify the cap without inspecting implementation,
     // but no crash is the key assertion
+  });
+});
+
+describe('db-ingest: direct provider file ingestion', () => {
+  let db: import('better-sqlite3').Database;
+
+  beforeEach(async () => {
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+    const dbModule = await import('../db');
+    if (dbModule.closeDb) dbModule.closeDb();
+    getDb = dbModule.getDb;
+    closeDb = dbModule.closeDb;
+    db = getDb();
+
+    const m = await import('../db-ingest');
+    ingestHermesFile = m.ingestHermesFile;
+    ingestQwenFile = m.ingestQwenFile;
+    ingestCodexFile = m.ingestCodexFile;
+  });
+
+  it('ingestHermesFile inserts user and assistant rows with project=hermes', () => {
+    const filePath = path.join(TEST_DB_DIR, 'hermes-sessions', 'sess-h1.jsonl');
+    writeJsonl(filePath, [
+      { role: 'user', content: 'hello hermes', timestamp: '2025-01-01T00:00:00Z' },
+      { role: 'assistant', content: 'hi there', timestamp: '2025-01-01T00:00:01Z' },
+    ]);
+
+    const inserted = ingestHermesFile(db, filePath);
+    expect(inserted).toBe(2);
+
+    const rows = db
+      .prepare('SELECT role, content, project, agent_id, session_id FROM messages WHERE session_id = ?')
+      .all('sess-h1') as Array<{ role: string; content: string; project: string; agent_id: string; session_id: string }>;
+
+    expect(rows.length).toBe(2);
+    expect(rows.every((row) => row.project === 'hermes')).toBe(true);
+    expect(rows.every((row) => row.agent_id === 'hermes')).toBe(true);
+    expect(rows.map((row) => row.role).sort()).toEqual(['assistant', 'user']);
+  });
+
+  it('ingestHermesFile skips unsupported role, non-string content, and empty content', () => {
+    const filePath = path.join(TEST_DB_DIR, 'hermes-sessions', 'sess-h2.jsonl');
+    writeJsonl(filePath, [
+      'primitive json string',
+      { role: 'system', content: 'ignored system msg' },
+      { role: 'user', content: 12345 },
+      { role: 'user', content: '' },
+      { role: 'assistant', content: null },
+      { role: 'user', content: 'valid message' },
+    ]);
+
+    const inserted = ingestHermesFile(db, filePath);
+    expect(inserted).toBe(1);
+
+    const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-h2') as Array<{ content: string }>;
+    expect(rows).toEqual([{ content: 'valid message' }]);
+  });
+
+  it('ingestHermesFile truncates content to 8000 characters', () => {
+    const longContent = 'x'.repeat(9500);
+    const filePath = path.join(TEST_DB_DIR, 'hermes-sessions', 'sess-h3.jsonl');
+    writeJsonl(filePath, [{ role: 'user', content: longContent }]);
+
+    ingestHermesFile(db, filePath);
+
+    const row = db.prepare('SELECT content FROM messages WHERE session_id = ?').get('sess-h3') as { content: string };
+    expect(row.content.length).toBe(8000);
+  });
+
+  it('ingestQwenFile inserts rows with project=qwen:<agentId> and preserves metadata', () => {
+    const filePath = path.join(TEST_DB_DIR, 'qwen-projects', 'sess-q1.jsonl');
+    writeJsonl(filePath, [
+      {
+        type: 'user',
+        timestamp: '2025-03-01T10:00:00Z',
+        cwd: '/home/user/project',
+        gitBranch: 'feature-x',
+        message: { role: 'user', parts: [{ text: 'qwen hello' }] },
+      },
+      {
+        type: 'assistant',
+        timestamp: '2025-03-01T10:00:01Z',
+        cwd: '/home/user/project',
+        gitBranch: 'feature-x',
+        message: { role: 'assistant', parts: [{ text: 'qwen reply' }] },
+      },
+    ]);
+
+    const inserted = ingestQwenFile(db, filePath, '-Users-jdoe-github-memroos');
+    expect(inserted).toBe(2);
+
+    const rows = db
+      .prepare('SELECT role, content, project, agent_id, cwd, git_branch, timestamp FROM messages WHERE session_id = ?')
+      .all('sess-q1') as Array<{ role: string; content: string; project: string; agent_id: string; cwd: string; git_branch: string; timestamp: string }>;
+
+    expect(rows.length).toBe(2);
+    expect(rows.every((row) => row.project === 'qwen:memroos')).toBe(true);
+    expect(rows.every((row) => row.agent_id === 'memroos')).toBe(true);
+    expect(rows.every((row) => row.cwd === '/home/user/project')).toBe(true);
+    expect(rows.every((row) => row.git_branch === 'feature-x')).toBe(true);
+    expect(rows[0].timestamp).toBe('2025-03-01T10:00:00Z');
+  });
+
+  it('ingestQwenFile skips unsupported types, primitive entries, and empty parts', () => {
+    const filePath = path.join(TEST_DB_DIR, 'qwen-projects', 'sess-q2.jsonl');
+    writeJsonl(filePath, [
+      'primitive json string',
+      { type: 'system', message: { parts: [{ text: 'ignored' }] } },
+      { type: 'user', message: { parts: [] } },
+      { type: 'assistant', message: { parts: [{ text: '' }] } },
+      { type: 'user', message: { parts: [{ text: 'keep me' }] } },
+    ]);
+
+    const inserted = ingestQwenFile(db, filePath, '-Users-jdoe-github-memroos');
+    expect(inserted).toBe(1);
+
+    const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-q2') as Array<{ content: string }>;
+    expect(rows).toEqual([{ content: 'keep me' }]);
+  });
+
+  it('ingestCodexFile inserts response_item rows with project=codex', () => {
+    const filePath = path.join(TEST_DB_DIR, 'codex-sessions', 'sess-c1.jsonl');
+    writeJsonl(filePath, [
+      {
+        type: 'response_item',
+        timestamp: '2025-04-01T12:00:00Z',
+        payload: { role: 'user', content: [{ type: 'input_text', text: 'codex question' }] },
+      },
+      {
+        type: 'response_item',
+        timestamp: '2025-04-01T12:00:01Z',
+        payload: { role: 'assistant', content: [{ type: 'output_text', text: 'codex answer' }] },
+      },
+    ]);
+
+    const inserted = ingestCodexFile(db, filePath, 'sess-c1');
+    expect(inserted).toBe(2);
+
+    const rows = db
+      .prepare('SELECT role, content, project, agent_id, session_id FROM messages WHERE session_id = ?')
+      .all('sess-c1') as Array<{ role: string; content: string; project: string; agent_id: string; session_id: string }>;
+
+    expect(rows.length).toBe(2);
+    expect(rows.every((row) => row.project === 'codex')).toBe(true);
+    expect(rows.every((row) => row.agent_id === 'codex')).toBe(true);
+    expect(rows.every((row) => row.session_id === 'sess-c1')).toBe(true);
+    expect(rows.map((row) => row.role).sort()).toEqual(['assistant', 'user']);
+  });
+
+  it('ingestCodexFile skips non-response_item, missing payload, unsupported role, and unsupported content', () => {
+    const filePath = path.join(TEST_DB_DIR, 'codex-sessions', 'sess-c2.jsonl');
+    writeJsonl(filePath, [
+      'primitive json string',
+      { type: 'other_event', payload: { role: 'user', content: [{ type: 'input_text', text: 'nope' }] } },
+      { type: 'response_item' },
+      { type: 'response_item', payload: { role: 'system', content: [{ type: 'input_text', text: 'nope' }] } },
+      { type: 'response_item', payload: { role: 'user', content: [{ type: 'image', text: 'nope' }] } },
+      { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'yes' }] } },
+    ]);
+
+    const inserted = ingestCodexFile(db, filePath, 'sess-c2');
+    expect(inserted).toBe(1);
+
+    const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-c2') as Array<{ content: string }>;
+    expect(rows).toEqual([{ content: 'yes' }]);
   });
 });

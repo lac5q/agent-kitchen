@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v7.5
-milestone_name: Proactive Recollection Triggering
-status: planned
-stopped_at: Phase 118 planned (2026-06-23)
-last_updated: "2026-06-23T00:00:00.000Z"
+milestone: v7.6
+milestone_name: Future Spike Queue
+status: completed
+stopped_at: Phase 119 completed (2026-06-27)
+last_updated: "2026-06-28T06:31:00.000Z"
 progress:
-  total_phases: 61
-  completed_phases: 39
-  total_plans: 73
-  completed_plans: 82
-  percent: 64
+  total_phases: 62
+  completed_phases: 40
+  total_plans: 74
+  completed_plans: 83
+  percent: 65
 ---
 
 # State: Memroos
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** Phase 118 planned — proactive recollection trigger/ranking/receipt layer.
+**Current focus:** Phase 119 completed — future spike queue closed as bounded research with adoption deferred.
 
 ## Current Position
 
-Phase: 118
-Plan: 118-01 planned
-Status: Proactive recollection triggering planned (v7.5)
+Phase: 119
+Plan: 119-01 completed
+Status: Future spike queue completed as bounded reports (v7.6)
 
 ## Session Continuity
 
-Last session: 2026-06-23T00:00:00.000Z
-Stopped at: Phase 118 planned (2026-06-23)
+Last session: 2026-06-28T06:31:00.000Z
+Stopped at: Phase 119 completed (2026-06-27)
 Resume file: None
-Next action: Continue Phase 115/117 implementation work or implement Phase 118 as the next memory-quality lane after the telemetry seam is ready.
+Next action: Choose any follow-on adoption implementation explicitly; Phase 119 only completed bounded spikes and does not approve dependency adoption, backend swaps, hosted/private uploads, production indexing, Qdrant upgrades, or runtime replacements.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -92,7 +92,7 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 
 ### Roadmap Evolution (2026-06-19)
 
-- Phase 115 trust-boundary hardening advanced: handler-local operator guards and direct non-local regression tests now cover agent checkpoints, checkpoint metrics, agent version create/list/promote/rollback, memory trace POST/GET, runtime observability dashboard reads, hive POST writes, and model-routing telemetry POST writes. `ARCHREV-01` and `ARCHREV-09` remain open for the broader privileged route inventory and future proxy/Next.js migration checklist.
+- Phase 115 trust-boundary hardening advanced: handler-local operator guards and direct non-local regression tests now cover agent checkpoints, checkpoint metrics, agent version create/list/promote/rollback, memory trace POST/GET, runtime observability dashboard reads, hive POST writes, and model-routing telemetry POST writes. At the time, `ARCHREV-01` and `ARCHREV-09` remained open for the broader privileged route inventory and future proxy/Next.js migration checklist; later 2026-06-27 entries supersede the `ARCHREV-09` status.
 - Phase 115 runtime topology hardening advanced: `apps/memroos/src/lib/runtime-topology.json` now serves shared manifest source service ports, health checks, supervision modes app, mem0, orchestration, voice, agentmemory. `npm run check:runtime-topology` runs standalone Node checker against current Docker/startup text; `start.sh` derives manual-script port defaults checker and `scripts/launchd-start.sh` derives launchd app port defaults after runtime env and Node path resolution. `ARCHREV-04` remains open until Docker compose generated from or otherwise directly derived from manifest.
 
 ### Roadmap Evolution (2026-06-23)
@@ -100,10 +100,29 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 - Phase 118 was added after the proactive recollection research pass. The product answer is a deterministic recollection decision layer: detect task/project/recency/handoff/source/rediscovery triggers before plan/tool/final gates, generate bounded tier-aware memory queries, rank candidates by relevance plus recency plus salience/importance plus source freshness plus prior usefulness plus policy risk, inject only threshold-cleared context, and emit receipts for both search and skipped-search decisions.
 - The requirement deliberately builds on existing MemRoOS pieces: `/api/recall`, `/api/memory/search`, `memory_salience`, Phase 96 handoff packs, Phase 104 memory traces, Phase 114 retrieval receipts, and Phase 117 efficiency telemetry. It does not approve a new memory backend or cross-project recall without explicit scope and policy proof.
 
+### Roadmap Evolution (2026-06-27)
+
+- Phase 115 `ARCHREV-04` was completed as a runtime-topology enforcement slice. `apps/memroos/src/lib/runtime-topology.json` now names Docker compose service mappings, dependencies, env-backed ports, and health paths; Docker compose probes `/api/health`; and `scripts/check-runtime-topology.mjs` validates Docker compose, `start.sh`, and launchd artifacts against the shared manifest.
+- Phase 115 `ARCHREV-08` was completed as a planning-retention policy slice. `.planning/planning-history-retention.md` keeps current docs in place, uses tracked archives for old phase internals, treats screenshots and operational evidence as private-release material, and defines the pre-public-release review gate without deleting history or moving private artifacts from this run.
+- Phase 115 `ARCHREV-05` was completed as a typed env startup-validation slice. `apps/memroos/src/lib/env.ts` now validates core app URLs, ports, root config paths, A2A settings, embedding settings, and datastore credential shapes; `apps/memroos/src/instrumentation.ts` calls startup validation before schedulers start; server constants/A2A/root-config/embedding readers consume the typed module; and root config status marks `agents.config.json` legacy while keeping collections/context-sources active. Broad route-specific env reads remain visible follow-up surface, not a hidden claim of complete env elimination.
+- Phase 115 `ARCHREV-06` is complete. The verified public eval slices now cover the route, TypeScript SDK, Python SDK, REST/OpenAPI discovery, MCP tool-schema export, A2A discovery, and shared contract-manifest consolidation: `apps/memroos/src/lib/public-api/eval-contract.ts` validates public trace request/response shape and builds the OpenAPI 3.1 document, `/api/public/v1/traces` emits `X-Memroos-Contract: public-eval-api.v1`, `/api/public/v1/openapi` serves the public eval REST contract, `packages/sdk-ts/src/contract.ts` validates successful SDK responses, `packages/sdk-py/memroos_eval_sdk/contract.py` validates successful Python SDK responses, both SDK live smokes passed against local running apps with temp SQLite DBs, the MCP facade exports `memroos-mcp-tools.v1` through `mcp_tool_contract` / `mcp://tools/contract`, `/api/a2a/openapi` serves `memroos-a2a.v1` for well-known agent cards plus JSON-RPC dispatch, and `contracts/memroos-contracts.json` plus `npm run check:contracts` prevents app/SDK/MCP ID and core schema-field drift.
+- Phase 115 `ARCHREV-07` is complete. `.github/workflows/ci.yml` now has `workflow_dispatch`, a daily scheduled run, and a dedicated `recall-canary` job. `npm run check:recall-canary` runs memory recall scorer coverage plus `memory-recall-canary-ci.test.ts`, which executes the committed gold recall cases from `evals/memory-recall/cases.json` through `runMemoryRecallEvalSuite({ mode: "gold" })` against a temp SQLite DB and fails on the existing recall/precision/MRR/latency thresholds.
+- Phase 115 `ARCHREV-09` is complete. `docs/next-trust-boundary-upgrade.md` records the reviewed Next dependency and `proxy.ts` hash, `scripts/check-next-trust-boundary.mjs` fails if those markers drift or the proxy/matcher shape regresses, `proxy.test.ts` now covers matcher inclusion/exclusion plus expired/malformed JWTs, reviewer escalation, route-local auth traversal, and Bearer-vs-cookie precedence, and CI runs `npm run check:next-trust-boundary` after lint.
+- Phase 115 `ARCHREV-01` is complete. `scripts/check-route-auth-boundary.mjs` validates every `ROUTE_LOCAL_AUTH_API_ROUTES` proxy bypass pattern and proxy operator/admin route against handler-local auth markers, requires the focused non-local denial regression tests, and CI runs `npm run check:route-auth-boundary` after lint. The marketing split remains a future deployment decision, not an open Phase 115 blocker.
+- Phase 115 `ARCHREV-02` was completed as a docs-only architecture identity slice. `docs/architecture.md` now frames MemRoOS as an agent operating system with a broker kernel, maps shipped domains to routes/modules, documents Python service and script boundaries, and defines placement rules for Next.js app code, shared libraries, services, scripts, docs, and planning artifacts.
+- Phase 114 was reconciled as repo-verified complete after rechecking the Phase 114 verification report, confirming Midbrain still ranks 6 at `65.2115` through `scripts/run-marketplace-memory-evals.mjs`, and closing the remaining comparative retrieval harness answer-support truncation issue with regression coverage. Public deploy approval remains separate per the Phase 114 handoff.
+- Phase 117 was completed and reconciled in the planning registry. The NOC efficiency telemetry layer now has the `efficiency_events` store, all five EFFTEL emitters, `/api/operations/noc` aggregation, and Operations UI visibility for retrieval-before-work, same-source re-read, raw-context token share, operator re-ask, and rediscovered-fact metrics.
+- Phase 118 was implemented in five slices: pure recollection policy, agent-runtime context injection wiring, memory-trace and efficiency-event recollection receipts, proactive/negative recall eval fixtures, and NOC/operator read-model visibility. Full Vitest, typecheck, lint, and build passed at completion; lint retained the existing 32 warnings.
+- Phase 119 completed the bounded future spike queue for Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, and Hyper-Extract. The reports live under `.planning/spikes/`, `npm run check:future-spikes` validates the report contract, and CI now runs that gate. All adoption, backend, hosted/private upload, production-path, Qdrant-upgrade, runtime-replacement, and default-extraction decisions remain deferred until explicitly approved.
+
 ### Roadmap Evolution (2026-06-24)
 
 - `ADKA2A-FOLLOWUP-01` was added after reviewing Google's cross-language contract-compliance pipeline shared from the Shubham Saboo X post. The useful pattern is Python/ADK orchestration delegating to a Go deterministic validator through A2A/JSON-RPC, with timeout, retry, fail-closed, and audit behavior visible. This belongs as a bounded integration/demo fixture for MemRoOS's A2A registry, dispatch, evidence, and NOC surfaces, not as an ADK/Gemini dependency or a compliance-vertical product claim.
 - `QDRANT-FOLLOWUP-01` was added after reviewing Qdrant's 1.18.x release line. The useful MemRoOS path is an operational Qdrant Cloud upgrade-readiness pass: latest 1.18.x patch target, mem0 compatibility, schema inventory, backup/rollback, canary write/search checks, recall/latency non-regression, memory monitoring, audit tracing, per-collection metrics, and strict-mode review. This does not approve local Qdrant, a backend swap, TurboQuant enablement, named-vector migration, or a production cluster upgrade without Luis approval.
+
+### Roadmap Evolution (2026-06-25)
+
+- `HYPEREXTRACT-FOLLOWUP-01` was added after reviewing Hyper-Extract as a possible document-to-structured-memory extraction tool. The useful MemRoOS path is a bounded test on non-sensitive or sanitized documents that compares typed graph/hypergraph/temporal/spatial extraction and source-span-backed candidate memories against the current Markdown/QMD/mem0 ingestion path. This does not approve dependency adoption, private-document upload, production ingestion, storage-layer replacement, or default extraction behavior without Luis approval.
 
 ### Roadmap Evolution (2026-06-14)
 
@@ -112,7 +131,7 @@ Next action: Continue Phase 115/117 implementation work or implement Phase 118 a
 ### Roadmap Evolution (2026-06-10)
 
 - Phase 115 was added from `.code-review/ARCHITECTURE-REVIEW.md` to convert the nine system-level architecture findings into executable GSD requirements. The first shipped slice is ARCHREV-03: SQLite schema initialization now has an ordered `PRAGMA user_version` migration runner, legacy unstamped DB upgrade coverage, future-version fail-closed behavior, and synchronous default-admin seeding before `getDb()` returns.
-- Remaining Phase 115 work should stay split by blast radius: route-level auth wrappers and marketing split decision (ARCHREV-01), architecture identity/module map (ARCHREV-02), topology manifest (ARCHREV-04), typed env validation (ARCHREV-05), API/SDK contracts (ARCHREV-06), recall canary CI (ARCHREV-07), planning history pruning/private split (ARCHREV-08), and Next trust-boundary upgrade gates (ARCHREV-09).
+- Phase 115 is repo-verified complete as of 2026-06-27. Any marketing/app split work should be planned as a future deployment decision rather than reopened under Phase 115.
 
 ### Roadmap Evolution (2026-06-04)
 
@@ -270,8 +289,9 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 |----------|------|--------|
 | context_questions | Phase 60 / 60-CONTEXT.md — trajectory authorship workflow, step count bounds, preset-change audit semantics | Deferred to v3 planning |
 | context_questions | Phase 63 / 63-CONTEXT.md — rename/auth decisions recorded as next-milestone context | Deferred to Phase 63 execution |
-| future_spike | Memento memory-save quality spike — compare local-first typed/audited Memento-style save behavior against MemRoOS candidates and evals; no dependency, backend, or hosted/private-trace adoption without Luis approval | Deferred to future GSD planning |
-| future_spike | CocoIndex source-freshness spike — compare optional derived-index behavior for one non-sensitive context lane against qmd/source-health checks; no dependency, production path, policy bypass, sensitive indexing, or backend replacement without Luis approval | Deferred to future GSD planning |
-| future_spike | FastContext repo-scout spike — compare read-only repo exploration against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private upload, GitNexus replacement, or automatic edits without Luis approval | Deferred to future GSD planning |
-| future_spike | ADK/A2A cross-language contract-compliance demo — compare Google's Python ADK plus Go deterministic-validator A2A fixture against MemRoOS registry/dispatch/evidence/NOC surfaces; no core ADK/Gemini dependency, app copy, runtime replacement, or compliance-vertical claim without Luis approval | Deferred to future GSD planning |
-| future_spike | Qdrant 1.18.x Cloud upgrade readiness — verify latest patch, mem0 compatibility, collection schemas, snapshot/rollback, canary write/search, recall/latency non-regression, audit tracing, metrics, and strict-mode guardrails; no local Qdrant, backend swap, TurboQuant/named-vector adoption, or production upgrade without Luis approval | Deferred to future GSD planning |
+| future_spike | Memento memory-save quality spike — compare local-first typed/audited Memento-style save behavior against MemRoOS candidates and evals; no dependency, backend, or hosted/private-trace adoption without Luis approval | Completed in Phase 119; adoption deferred |
+| future_spike | CocoIndex source-freshness spike — compare optional derived-index behavior for one non-sensitive context lane against qmd/source-health checks; no dependency, production path, policy bypass, sensitive indexing, or backend replacement without Luis approval | Completed in Phase 119; adoption deferred |
+| future_spike | FastContext repo-scout spike — compare read-only repo exploration against GitNexus and grep on MemRoOS code-navigation tasks; no runtime dependency, hosted/private upload, GitNexus replacement, or automatic edits without Luis approval | Completed in Phase 119; adoption deferred |
+| future_spike | ADK/A2A cross-language contract-compliance demo — compare Google's Python ADK plus Go deterministic-validator A2A fixture against MemRoOS registry/dispatch/evidence/NOC surfaces; no core ADK/Gemini dependency, app copy, runtime replacement, or compliance-vertical claim without Luis approval | Completed in Phase 119; adoption deferred |
+| future_spike | Qdrant 1.18.x Cloud upgrade readiness — verify latest patch, mem0 compatibility, collection schemas, snapshot/rollback, canary write/search, recall/latency non-regression, audit tracing, metrics, and strict-mode guardrails; no local Qdrant, backend swap, TurboQuant/named-vector adoption, or production upgrade without Luis approval | Completed in Phase 119; adoption deferred |
+| future_spike | Hyper-Extract structured-memory extraction spike — compare typed graph/hypergraph/temporal/spatial extraction on non-sensitive or sanitized documents against Markdown/QMD/mem0 ingestion; no dependency, private-doc upload, production ingestion, default extraction, or storage-layer change without Luis approval | Completed in Phase 119; adoption deferred |

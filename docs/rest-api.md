@@ -24,6 +24,58 @@ Authorization: Bearer <agent-api-key>
 
 Agent API keys are minted by `/api/agents/register` or `/api/a2a/agents/register` when `issueApiKey` is true or omitted.
 
+## Public Eval API v1
+
+The public eval API has a machine-readable OpenAPI 3.1 contract at:
+
+```text
+GET /api/public/v1/openapi
+```
+
+For reverse-proxy deployments, set `MEMROOS_PUBLIC_EVAL_OPENAPI_BASE_URL` to the public origin that should appear in the OpenAPI `servers` block. Forwarded host headers are not trusted when generating the spec.
+
+Tenant-scoped eval calls use:
+
+```text
+Authorization: Bearer <tenant-api-key>
+```
+
+### `POST /api/public/v1/traces`
+
+Submits an agent trace for scoring. The endpoint accepts either MemRoOS `AgentEvalTrace` JSON or an OpenInference flat attribute bag. Successful responses include:
+
+```text
+X-Memroos-Contract: public-eval-api.v1
+```
+
+Response:
+
+```json
+{
+  "runId": "run_123",
+  "w": 0.82,
+  "layers": {
+    "l1": { "score": 0.9, "weight": 0.25, "scorers": [] },
+    "l2": { "score": 0.8, "weight": 0.5, "scorers": [] },
+    "l3": { "score": 0.7, "weight": 0.25, "scorers": [] }
+  },
+  "proposalIds": [],
+  "tenantId": "tenant-alpha"
+}
+```
+
+### `GET /api/public/v1/runs/{runId}`
+
+Returns one scored eval run owned by the authenticated tenant. Returns `403` if the run exists but belongs to another tenant.
+
+### `GET /api/public/v1/proposals`
+
+Lists SEAL proposal summaries for the authenticated tenant. Optional query parameter:
+
+```text
+traceId=<trace-id>
+```
+
 ## One-command Onboarding
 
 ### `POST /api/onboarding/invite`

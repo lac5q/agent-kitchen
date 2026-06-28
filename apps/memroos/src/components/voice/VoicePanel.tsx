@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useAgents } from "@/lib/api-client";
-import { PLATFORM_LABELS } from "@/lib/constants";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

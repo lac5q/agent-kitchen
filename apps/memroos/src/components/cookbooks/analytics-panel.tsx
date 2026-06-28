@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTimeSeries, type TimeSeriesWindow } from "@/lib/api-client";
 import { TimeSeriesChart } from "@/components/shared/time-series-chart";
-import { COLORS } from "@/lib/constants";
+import { COLORS } from "@/lib/ui-constants";
 
 export function CookbooksAnalyticsPanel() {
   const [window, setWindow] = useState<TimeSeriesWindow>("week");

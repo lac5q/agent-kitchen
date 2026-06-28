@@ -26,6 +26,7 @@ function postRequest(url: string, body: Record<string, unknown>): Request {
 describe("model routing APIs", () => {
   beforeEach(() => {
     testDb.exec("DROP TABLE IF EXISTS model_routing_events");
+    testDb.exec("DELETE FROM efficiency_events");
   });
 
   it("blocks direct non-local telemetry writes without operator authorization", async () => {
@@ -65,7 +66,75 @@ describe("model routing APIs", () => {
     expect(JSON.stringify(data)).not.toContain("sensitive task context");
   });
 
+  it("emits token_ledger telemetry from model-routing token accounting", async () => {
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
+    const res = await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        taskId: "task-token-ledger",
+        agentId: "codex",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        inputTokens: 1000,
+        outputTokens: 250,
+        rawContextTokens: 300,
+        cachedTokens: 50,
+        success: true,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const rows = listEfficiencyEvents(testDb, {
+      eventType: "token_ledger",
+      taskId: "task-token-ledger",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      agentId: "codex",
+      eventType: "token_ledger",
+      payload: {
+        rawContextTokens: 300,
+        cachedTokens: 50,
+        totalTokens: 1300,
+        modelId: "openai/gpt-5.4-mini",
+      },
+    });
+  });
+
+  it("records an explicit zero-token ledger without dividing by zero", async () => {
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
+    const res = await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        taskId: "task-zero-token-ledger",
+        agentId: "codex",
+        provider: "local",
+        model: "qwen-coder-local",
+        inputTokens: 0,
+        outputTokens: 0,
+        rawContextTokens: 0,
+        cachedTokens: 0,
+        totalTokens: 0,
+        success: true,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const rows = listEfficiencyEvents(testDb, {
+      eventType: "token_ledger",
+      taskId: "task-zero-token-ledger",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].payload).toEqual({
+      rawContextTokens: 0,
+      cachedTokens: 0,
+      totalTokens: 0,
+      modelId: "local/qwen-coder-local",
+    });
+  });
+
   it("uses observed telemetry in recommendations and exposes eval summaries", async () => {
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
     await telemetryRoute.POST(
       postRequest("http://localhost/api/model-routing/telemetry", {
         taskType: "product",
@@ -90,5 +159,6 @@ describe("model routing APIs", () => {
     const evalData = await evalRes.json();
     expect(evalData.dimensions.map((d: any) => d.id)).toContain("task_fit");
     expect(evalData.summary.totalRuns).toBeGreaterThan(0);
+    expect(listEfficiencyEvents(testDb, { eventType: "token_ledger" })).toHaveLength(0);
   });
 });

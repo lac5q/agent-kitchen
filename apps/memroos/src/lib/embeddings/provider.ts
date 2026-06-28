@@ -10,6 +10,8 @@
  * to BM25 without a 5xx (D-05).
  */
 
+import { loadMemroosEnv } from "@/lib/env";
+
 /**
  * Discriminated union returned by embedText().
  *   degraded: false — successful embedding; embedding is a number[]
@@ -24,10 +26,10 @@ const DEGRADED: EmbedResult = { embedding: null, degraded: true };
 
 /**
  * Returns true when MEMROOS_EMBEDDING_PROVIDER is exactly "ollama".
- * Reads the env var dynamically so tests can override process.env per-test.
+ * Reads through the typed env module so tests can override process.env per-test.
  */
 export function embeddingProviderEnabled(): boolean {
-  return process.env.MEMROOS_EMBEDDING_PROVIDER === "ollama";
+  return loadMemroosEnv().MEMROOS_EMBEDDING_PROVIDER === "ollama";
 }
 
 /**
@@ -43,7 +45,7 @@ export async function embedText(text: string): Promise<EmbedResult> {
     return DEGRADED;
   }
 
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+  const ollamaUrl = loadMemroosEnv().OLLAMA_URL;
 
   try {
     const response = await fetch(`${ollamaUrl}/api/embeddings`, {

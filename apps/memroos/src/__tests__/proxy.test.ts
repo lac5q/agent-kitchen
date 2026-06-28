@@ -1,8 +1,47 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment node
+import { SignJWT } from "jose";
+import { afterEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { proxy } from "../proxy";
+import * as nextServerTesting from "next/experimental/testing/server";
+import { signAccessToken } from "@/lib/auth/jwt";
+import { config, proxy } from "../proxy";
+
+const doesProxyMatch =
+  (
+    nextServerTesting as typeof nextServerTesting & {
+      unstable_doesProxyMatch?: typeof nextServerTesting.unstable_doesMiddlewareMatch;
+    }
+  ).unstable_doesProxyMatch ?? nextServerTesting.unstable_doesMiddlewareMatch;
 
 describe("proxy", () => {
+  afterEach(() => {
+    delete process.env.MEMROOS_JWT_SECRET;
+    delete process.env.MEMROOS_HTTPS_APP_HOSTS;
+  });
+
+  function setJwtSecret() {
+    process.env.MEMROOS_JWT_SECRET = "test-secret-for-proxy-trust-boundary";
+  }
+
+  async function expiredAccessToken(userId: string, role: string): Promise<string> {
+    setJwtSecret();
+    return new SignJWT({ role })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject(userId)
+      .setIssuedAt(Math.floor(Date.now() / 1000) - 7200)
+      .setExpirationTime(Math.floor(Date.now() / 1000) - 3600)
+      .sign(new TextEncoder().encode(process.env.MEMROOS_JWT_SECRET));
+  }
+
+  it("keeps matcher coverage on API and app routes while excluding static assets", () => {
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/api/memory/add" })).toBe(true);
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/dispatch" })).toBe(true);
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/_next/static/chunk.js" })).toBe(false);
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/_next/image" })).toBe(false);
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/favicon.ico" })).toBe(false);
+    expect(doesProxyMatch({ config, nextConfig: {}, url: "/icon.svg" })).toBe(false);
+  });
+
   it("does not hard-code private hosts for HTTPS redirects", async () => {
     const response = await proxy(
       new NextRequest("http://app.memroos.test/login", {
@@ -25,6 +64,85 @@ describe("proxy", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://app.memroos.test/login");
     delete process.env.MEMROOS_HTTPS_APP_HOSTS;
+  });
+
+  it("requires authentication for protected API routes without a token", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "authentication required" });
+  });
+
+  it("rejects expired or malformed JWT credentials on protected API routes", async () => {
+    const expired = await expiredAccessToken("reviewer-expired", "reviewer");
+    const expiredResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: `Bearer ${expired}` },
+      })
+    );
+
+    const malformedResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: "Bearer not.a.jwt" },
+      })
+    );
+
+    expect(expiredResponse.status).toBe(401);
+    expect(await expiredResponse.json()).toEqual({ error: "authentication required" });
+    expect(malformedResponse.status).toBe(401);
+    expect(await malformedResponse.json()).toEqual({ error: "authentication required" });
+  });
+
+  it("rejects reviewer role escalation on operator API routes", async () => {
+    setJwtSecret();
+    const token = await signAccessToken("reviewer-user", "reviewer");
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: `Bearer ${token}` },
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "insufficient permissions" });
+  });
+
+  it("does not let route-local auth path traversal bypass protected API auth", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/memory/add/%2e%2e/%2e%2e/onboarding/invite", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "authentication required" });
+  });
+
+  it("Bearer token takes precedence over access_token cookies for API authorization", async () => {
+    setJwtSecret();
+    const reviewerToken = await signAccessToken("reviewer-user", "reviewer");
+    const operatorToken = await signAccessToken("operator-user", "operator");
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          host: "localhost:3002",
+          authorization: `Bearer ${reviewerToken}`,
+          cookie: `access_token=${operatorToken}`,
+        },
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "insufficient permissions" });
   });
 
   it("lets agent-authenticated API routes handle their own authorization", async () => {

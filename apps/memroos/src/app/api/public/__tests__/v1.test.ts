@@ -116,6 +116,7 @@ describe("POST /api/public/v1/traces", () => {
     });
     const res = await tracesRoute.POST(req as Parameters<typeof tracesRoute.POST>[0]);
     expect(res.status).toBe(200);
+    expect(res.headers.get("X-Memroos-Contract")).toBe("public-eval-api.v1");
     const data = await res.json() as {
       runId: string;
       w: number;
@@ -198,6 +199,7 @@ describe("POST /api/public/v1/traces", () => {
     expect(res.headers.get("X-RateLimit-Limit")).toBeTruthy();
     expect(res.headers.get("X-RateLimit-Remaining")).toBeTruthy();
     expect(res.headers.get("X-RateLimit-Reset")).toBeTruthy();
+    expect(res.headers.get("X-Memroos-Contract")).toBe("public-eval-api.v1");
   });
 });
 

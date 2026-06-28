@@ -46,23 +46,70 @@ describe("runtime topology checker", () => {
     assert.ok(result.errors.some((error) => error.includes("docker:memroos-app")));
   });
 
+  it("requires Docker health checks to match manifest health paths", () => {
+    const manifest = loadRuntimeTopologyManifest();
+    const result = validateRuntimeTopologyArtifacts(manifest, {
+      dockerComposeText:
+        "\n  memroos:\n" +
+        "    depends_on:\n" +
+        "      mem0:\n" +
+        "      orchestration:\n" +
+        "\n  mem0:\n" +
+        "\n  orchestration:\n" +
+        "${MEMROOS_PORT:-3000}:3000\n" +
+        "${MEM0_PORT:-3201}:3201\n" +
+        "${ORCHESTRATION_PORT:-3210}:3210\n" +
+        "http://127.0.0.1:3000/login\n" +
+        "http://127.0.0.1:3201/health\n" +
+        "http://127.0.0.1:3210/health\n",
+      startScriptText:
+        '"$TOPOLOGY_CHECK" port memroos-app local-next-http\n' +
+        '"$TOPOLOGY_CHECK" port voice-server pipecat-http\n' +
+        '"$TOPOLOGY_CHECK" port voice-server pipecat-health\n' +
+        '"$TOPOLOGY_CHECK" port agentmemory-engine agentmemory-http\n',
+      launchdStartText: "runtime_topology_port memroos-app launchd-next-http\n",
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => error.includes("docker-health:memroos-app")));
+    assert.ok(result.errors.some((error) => error.includes("http://127.0.0.1:3000/api/health")));
+  });
+
   it("validates copied current runtime artifact text", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memroos-runtime-topology-"));
     try {
       const manifest = loadRuntimeTopologyManifest();
       const result = validateRuntimeTopologyArtifacts(manifest, {
-        dockerComposeText: '${MEMROOS_PORT:-3000}:3000\n3201\n3210\n',
+        dockerComposeText:
+          "\n  memroos:\n" +
+          "    depends_on:\n" +
+          "      mem0:\n" +
+          "      orchestration:\n" +
+          "\n  mem0:\n" +
+          "\n  orchestration:\n" +
+          "${MEMROOS_PORT:-3000}:3000\n" +
+          "${MEM0_PORT:-3201}:3201\n" +
+          "${ORCHESTRATION_PORT:-3210}:3210\n" +
+          "http://127.0.0.1:3000/api/health\n" +
+          "http://127.0.0.1:3201/health\n" +
+          "http://127.0.0.1:3210/health\n",
         startScriptText:
-          "node scripts/check-runtime-topology.mjs port memroos-app local-next-http\n" +
-          "node scripts/check-runtime-topology.mjs port voice-server pipecat-http\n" +
-          "node scripts/check-runtime-topology.mjs port voice-server pipecat-health\n" +
-          "node scripts/check-runtime-topology.mjs port agentmemory-engine agentmemory-http\n",
+          '"$TOPOLOGY_CHECK" port memroos-app local-next-http\n' +
+          '"$TOPOLOGY_CHECK" port voice-server pipecat-http\n' +
+          '"$TOPOLOGY_CHECK" port voice-server pipecat-health\n' +
+          '"$TOPOLOGY_CHECK" port agentmemory-engine agentmemory-http\n',
         launchdStartText: "runtime_topology_port memroos-app launchd-next-http\n",
       });
 
       assert.equal(result.ok, true);
       assert.equal(result.errors.length, 0);
       assert.ok(result.checked.includes("docker:memroos-app:MEMROOS_PORT:3000->3000"));
+      assert.ok(result.checked.includes("docker:mem0-memory:MEM0_PORT:3201->3201"));
+      assert.ok(result.checked.includes("docker:orchestration-service:ORCHESTRATION_PORT:3210->3210"));
+      assert.ok(result.checked.some((item) => item.startsWith("docker-health:memroos-app:")));
+      assert.ok(result.checked.includes("docker-service:memroos-app:memroos"));
+      assert.ok(result.checked.includes("docker-depends-on:memroos-app:mem0-memory:mem0"));
+      assert.ok(result.checked.includes("docker-depends-on:memroos-app:orchestration-service:orchestration"));
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

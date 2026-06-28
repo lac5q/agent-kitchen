@@ -1,5 +1,14 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
+import { recordEfficiencyEvent, type RetrievalTracePayload } from "@/lib/efficiency-telemetry";
+import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory-recall-evals";
+import type {
+  BeliefStage,
+  IgnoredRecollectionCandidate,
+  RecollectionDecisionKind,
+  RecollectionReason,
+  RecollectionReliance,
+} from "@/lib/recollection-policy";
 
 export type FailureClassification =
   | "retrieval_miss"
@@ -11,9 +20,29 @@ export type FailureClassification =
   | "benchmark_error"
   | "model_misuse";
 
+export interface RecollectionTraceReceipt {
+  decision: RecollectionDecisionKind;
+  timing: MemoryRecallTiming;
+  reasons: RecollectionReason[];
+  skipReason: string | null;
+  injected: Array<{
+    id: string;
+    tier: MemoryRecallTier;
+    beliefStage: BeliefStage;
+    reliance: RecollectionReliance;
+    score: number;
+  }>;
+  ignored: Array<{
+    id: string;
+    reason: IgnoredRecollectionCandidate["reason"];
+    score: number;
+  }>;
+}
+
 export interface MemoryTraceInput {
   tenantId?: string;
   taskId?: string | null;
+  agentId?: string | null;
   runId: string;
   causalPath: {
     contextAssembly: string;
@@ -22,9 +51,12 @@ export interface MemoryTraceInput {
     policyFilters: Array<{ id: string; decision: "allow" | "deny" | "redact"; reason: string }>;
     consolidationSteps?: string[];
     checkpointRefs?: string[];
+    retrievalTokensUsed?: number;
+    timingGate?: "before_plan" | "before_tool" | "before_final";
     promptInclusion: boolean;
     answerCitation?: string;
     verificationResult?: string;
+    recollection?: RecollectionTraceReceipt;
   };
   failureClassification?: FailureClassification | null;
   rootCause?: string | null;
@@ -36,6 +68,7 @@ export interface MemoryTrace {
   id: string;
   tenantId: string;
   taskId: string | null;
+  agentId: string | null;
   runId: string;
   causalPath: MemoryTraceInput["causalPath"];
   failureClassification: FailureClassification | null;
@@ -50,7 +83,47 @@ function stableJson(value: unknown): string {
 }
 
 function nowIso(): string {
-  return new Date().toISOString();
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function emptyBeliefStageCounts(): Record<BeliefStage, number> {
+  return {
+    bronze_raw_source: 0,
+    silver_candidate_claim: 0,
+    gold_operational_truth: 0,
+  };
+}
+
+function beliefStageCounts(receipt: RecollectionTraceReceipt | undefined): Record<BeliefStage, number> {
+  const counts = emptyBeliefStageCounts();
+  for (const item of receipt?.injected ?? []) {
+    counts[item.beliefStage] += 1;
+  }
+  return counts;
+}
+
+function recollectionPayload(receipt: RecollectionTraceReceipt | undefined): Partial<RetrievalTracePayload> {
+  if (!receipt) return {};
+
+  return {
+    recollectionDecision: receipt.decision,
+    recollectionReasons: receipt.reasons,
+    recollectionSkipReason: receipt.skipReason,
+    recollectionInjected: receipt.injected.map((item) => ({
+      id: item.id,
+      tier: item.tier,
+      beliefStage: item.beliefStage,
+      reliance: item.reliance,
+      score: item.score,
+    })),
+    recollectionIgnored: receipt.ignored.map((item) => ({
+      id: item.id,
+      reason: item.reason,
+      score: item.score,
+    })),
+    beliefStageCounts: beliefStageCounts(receipt),
+    recollectionTiming: receipt.timing,
+  };
 }
 
 export function recordMemoryTrace(
@@ -63,6 +136,7 @@ export function recordMemoryTrace(
   const id = crypto.randomUUID();
   const tenantId = input.tenantId ?? "default-tenant";
   const taskId = input.taskId ?? null;
+  const agentId = input.agentId ?? null;
   const causalPathJson = stableJson(input.causalPath);
   const failureClassification = input.failureClassification ?? null;
   const rootCause = input.rootCause ?? null;
@@ -72,16 +146,17 @@ export function recordMemoryTrace(
 
   db.prepare(
     `INSERT INTO agent_memory_traces (
-       id, tenant_id, task_id, run_id, causal_path_json,
+       id, tenant_id, task_id, agent_id, run_id, causal_path_json,
        failure_classification, root_cause, replay_handle, proposed_repair, created_at
      ) VALUES (
-       ?, ?, ?, ?, ?,
+       ?, ?, ?, ?, ?, ?,
        ?, ?, ?, ?, ?
      )`
   ).run(
     id,
     tenantId,
     taskId,
+    agentId,
     input.runId,
     causalPathJson,
     failureClassification,
@@ -91,10 +166,29 @@ export function recordMemoryTrace(
     createdAt
   );
 
+  const retrievalTracePayload: RetrievalTracePayload = {
+    query: input.causalPath.retrievalQuery,
+    sources: input.causalPath.retrievedCandidates.map((candidate) => candidate.id),
+    tokensUsed: input.causalPath.retrievalTokensUsed ?? 0,
+    usedInFirstResponse: input.causalPath.promptInclusion && input.causalPath.retrievedCandidates.length > 0,
+    timingGate: input.causalPath.timingGate ?? "before_plan",
+    ...recollectionPayload(input.causalPath.recollection),
+  };
+
+  recordEfficiencyEvent(db, {
+    tenantId,
+    taskId,
+    agentId,
+    eventType: "retrieval_trace",
+    payload: retrievalTracePayload,
+    createdAt,
+  });
+
   return {
     id,
     tenantId,
     taskId,
+    agentId,
     runId: input.runId,
     causalPath: input.causalPath,
     failureClassification,
@@ -124,6 +218,7 @@ export function getMemoryTrace(
     id: String(row.id),
     tenantId: String(row.tenant_id),
     taskId: row.task_id ? String(row.task_id) : null,
+    agentId: row.agent_id ? String(row.agent_id) : null,
     runId: String(row.run_id),
     causalPath: JSON.parse(String(row.causal_path_json)),
     failureClassification: row.failure_classification ? (String(row.failure_classification) as FailureClassification) : null,
@@ -139,6 +234,13 @@ export function getMemoryTraceTimeline(trace: MemoryTrace): string[] {
   const timeline: string[] = [];
 
   timeline.push(`[Context Assembly] ${path.contextAssembly}`);
+  if (path.recollection) {
+    const reasons = path.recollection.reasons.length > 0 ? path.recollection.reasons.join(", ") : "no_reasons";
+    timeline.push(`[Recollection Decision] ${path.recollection.decision.toUpperCase()} ${path.recollection.timing} (${reasons})`);
+    if (path.recollection.skipReason) {
+      timeline.push(`[Recollection Skip] ${path.recollection.skipReason}`);
+    }
+  }
   timeline.push(`[Retrieval Query] "${path.retrievalQuery}"`);
   timeline.push(`[Retrieved Candidates] Fetched ${path.retrievedCandidates.length} potential memories.`);
   

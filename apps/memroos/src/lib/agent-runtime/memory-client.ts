@@ -1,12 +1,33 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import type { MemoryRecallTier, MemoryRecallTiming } from "../memory-recall-evals";
+import {
+  assembleRecollectionContextPack,
+  decideRecollection,
+  type BeliefStage,
+  type RecollectionAuthorization,
+  type RecollectionCandidate,
+  type RecollectionContextPack,
+  type RecollectionDecision,
+  type RecollectionPolicyRisk,
+  type RecollectionSourceHealth,
+  type RecollectionTriggerInput,
+} from "../recollection-policy";
 
 export interface RuntimeMemoryInput {
   content: string;
   tags?: string[];
   ttlDays?: number;
   createdAt?: string;
+  tier?: MemoryRecallTier;
+  beliefStage?: BeliefStage;
+  sourceHealth?: RecollectionSourceHealth;
+  importance?: number;
+  priorUsefulness?: number;
+  authorization?: RecollectionAuthorization;
+  policyRisk?: RecollectionPolicyRisk;
+  provenance?: string;
 }
 
 export interface RuntimeMemory {
@@ -18,6 +39,14 @@ export interface RuntimeMemory {
   createdAt: string;
   updatedAt: string;
   score?: number;
+  tier?: MemoryRecallTier;
+  beliefStage?: BeliefStage;
+  sourceHealth?: RecollectionSourceHealth;
+  importance?: number;
+  priorUsefulness?: number;
+  authorization?: RecollectionAuthorization;
+  policyRisk?: RecollectionPolicyRisk;
+  provenance?: string;
 }
 
 export interface MemoryToolInput {
@@ -25,6 +54,26 @@ export interface MemoryToolInput {
   target?: string;
   content?: string;
   id?: string;
+}
+
+export interface ContextInjectionOptions {
+  maxChars?: number;
+  limit?: number;
+  timing?: MemoryRecallTiming;
+  project?: string;
+  sourceRefs?: string[];
+  entities?: string[];
+  handoffState?: RecollectionTriggerInput["handoffState"];
+  rediscoveryRisk?: boolean;
+  now?: Date;
+  recollectionThreshold?: number;
+}
+
+export interface ContextInjectionResult {
+  text: string;
+  memories: RuntimeMemory[];
+  recollection: RecollectionDecision;
+  contextPack: RecollectionContextPack;
 }
 
 const SYNONYMS: Record<string, string[]> = {
@@ -98,6 +147,20 @@ function idFor(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
+function applyRecollectionMetadata(memory: RuntimeMemory, input: RuntimeMemoryInput): RuntimeMemory {
+  return {
+    ...memory,
+    ...(input.tier ? { tier: input.tier } : {}),
+    ...(input.beliefStage ? { beliefStage: input.beliefStage } : {}),
+    ...(input.sourceHealth ? { sourceHealth: input.sourceHealth } : {}),
+    ...(input.importance !== undefined ? { importance: input.importance } : {}),
+    ...(input.priorUsefulness !== undefined ? { priorUsefulness: input.priorUsefulness } : {}),
+    ...(input.authorization ? { authorization: input.authorization } : {}),
+    ...(input.policyRisk ? { policyRisk: input.policyRisk } : {}),
+    ...(input.provenance ? { provenance: input.provenance } : {}),
+  };
+}
+
 export function addMemory(root: string, input: RuntimeMemoryInput): RuntimeMemory {
   const memories = readStore(root);
   const tokens = tokenize(input.content);
@@ -108,11 +171,12 @@ export function addMemory(root: string, input: RuntimeMemoryInput): RuntimeMemor
     duplicate.tags = Array.from(new Set([...duplicate.tags, ...(input.tags ?? [])]));
     duplicate.mergeCount += 1;
     duplicate.updatedAt = now;
+    Object.assign(duplicate, applyRecollectionMetadata(duplicate, input));
     writeStore(root, memories);
     return duplicate;
   }
 
-  const memory: RuntimeMemory = {
+  const memory: RuntimeMemory = applyRecollectionMetadata({
     id: idFor(`${input.content}:${now}`),
     content: input.content,
     tags: input.tags ?? [],
@@ -120,7 +184,7 @@ export function addMemory(root: string, input: RuntimeMemoryInput): RuntimeMemor
     mergeCount: 1,
     createdAt: input.createdAt ?? now,
     updatedAt: now,
-  };
+  }, input);
   memories.push(memory);
   writeStore(root, memories);
   return memory;
@@ -140,18 +204,71 @@ export function searchMemories(root: string, query: string, options: { limit?: n
     .slice(0, limit);
 }
 
-export function buildContextInjection(root: string, topic: string, options: { maxChars?: number; limit?: number } = {}) {
+function memoryToRecollectionCandidate(memory: RuntimeMemory): RecollectionCandidate {
+  return {
+    id: memory.id,
+    tier: memory.tier ?? "episodic",
+    content: memory.content,
+    beliefStage: memory.beliefStage ?? "gold_operational_truth",
+    capturedAt: memory.updatedAt ?? memory.createdAt,
+    sourceHealth: memory.sourceHealth ?? "ok",
+    importance: memory.importance ?? Math.min(1, 0.45 + memory.mergeCount * 0.1),
+    priorUsefulness: memory.priorUsefulness ?? Math.min(1, memory.score ?? 0),
+    authorization: memory.authorization ?? "allowed",
+    policyRisk: memory.policyRisk ?? "low",
+    provenance: memory.provenance ?? `agent-runtime:${memory.id}`,
+  };
+}
+
+function formatContextItem(content: string, caveatReason: string | null): string {
+  return caveatReason ? `${content} (${caveatReason})` : content;
+}
+
+export function buildContextInjection(root: string, topic: string, options: ContextInjectionOptions = {}): ContextInjectionResult {
   const maxChars = options.maxChars ?? 1500;
-  const memories = searchMemories(root, topic, { limit: options.limit ?? 10, threshold: 0.5 });
+  const limit = options.limit ?? 10;
+  const entities = options.entities ?? (topic.trim() ? [topic] : []);
+  const recollection = decideRecollection({
+    taskText: topic,
+    timing: options.timing ?? "before_plan",
+    project: options.project,
+    sourceRefs: options.sourceRefs,
+    entities,
+    handoffState: options.handoffState,
+    rediscoveryRisk: options.rediscoveryRisk,
+    requestedLimit: limit,
+    now: options.now,
+  });
+
+  if (recollection.decision === "search_skipped") {
+    return {
+      text: "",
+      memories: [],
+      recollection,
+      contextPack: { injected: [], ignored: [] },
+    };
+  }
+
+  const query = recollection.queries[0]?.text ?? topic;
+  const memories = searchMemories(root, query, { limit: Math.min(limit, recollection.queries[0]?.limit ?? limit), threshold: 0.5 });
+  const contextPack = assembleRecollectionContextPack(memories.map(memoryToRecollectionCandidate), {
+    taskText: topic,
+    now: options.now,
+    threshold: options.recollectionThreshold,
+    maxItems: limit,
+  });
+  const memoryById = new Map(memories.map((memory) => [memory.id, memory]));
   let text = "";
   const injected: RuntimeMemory[] = [];
-  for (const memory of memories) {
-    const next = `${text ? "\n" : ""}- ${memory.content}`;
+  for (const item of contextPack.injected) {
+    const memory = memoryById.get(item.id);
+    if (!memory) continue;
+    const next = `${text ? "\n" : ""}- ${formatContextItem(item.content, item.caveatReason)}`;
     if (next.length > maxChars) break;
     text = next;
     injected.push(memory);
   }
-  return { text, memories: injected };
+  return { text, memories: injected, recollection, contextPack };
 }
 
 export function purgeExpiredMemories(root: string, now = new Date()) {
