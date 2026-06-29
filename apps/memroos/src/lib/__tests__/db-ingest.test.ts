@@ -377,14 +377,14 @@ describe('db-ingest: direct provider file ingestion', () => {
       {
         type: 'user',
         timestamp: '2025-03-01T10:00:00Z',
-        cwd: '/home/user/project',
+        cwd: '/workspace/project',
         gitBranch: 'feature-x',
         message: { role: 'user', parts: [{ text: 'qwen hello' }] },
       },
       {
         type: 'assistant',
         timestamp: '2025-03-01T10:00:01Z',
-        cwd: '/home/user/project',
+        cwd: '/workspace/project',
         gitBranch: 'feature-x',
         message: { role: 'assistant', parts: [{ text: 'qwen reply' }] },
       },
@@ -400,7 +400,7 @@ describe('db-ingest: direct provider file ingestion', () => {
     expect(rows.length).toBe(2);
     expect(rows.every((row) => row.project === 'qwen:memroos')).toBe(true);
     expect(rows.every((row) => row.agent_id === 'memroos')).toBe(true);
-    expect(rows.every((row) => row.cwd === '/home/user/project')).toBe(true);
+    expect(rows.every((row) => row.cwd === '/workspace/project')).toBe(true);
     expect(rows.every((row) => row.git_branch === 'feature-x')).toBe(true);
     expect(rows[0].timestamp).toBe('2025-03-01T10:00:00Z');
   });
