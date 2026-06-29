@@ -93,3 +93,5 @@ context-sources.local.json
 *.db-wal
 *.sqlite
 *.sqlite3
+.gitnexus.backup*/
+.gitnexus.pre-*
