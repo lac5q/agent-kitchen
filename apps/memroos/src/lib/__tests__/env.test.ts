@@ -95,7 +95,7 @@ describe("loadMemroosEnv", () => {
   });
 
   it("validates startup configuration and returns root config status", () => {
-    const result = validateMemroosEnvAtStartup({ HOME: "/Users/USERNAME", MEM0_URL: "http://mem0.test" });
+    const result = validateMemroosEnvAtStartup({ HOME: "/tmp/memroos-home", MEM0_URL: "http://mem0.test" });
 
     expect(result.env.MEM0_URL).toBe("http://mem0.test");
     expect(result.rootConfigStatus.map((entry) => entry.file)).toEqual([

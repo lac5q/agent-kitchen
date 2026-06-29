@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "storage": {
+    "defaultVisibility": "internal",
+    "defaultPolicy": "indexable",
+    "dedupeStrategy": "provider-workspace-channel-thread-message-id"
+  },
+  "providers": {
+    "discord": {
+      "enabled": false,
+      "botTokenEnv": "DISCORD_BOT_TOKEN",
+      "publicKeyEnv": "DISCORD_PUBLIC_KEY",
+      "allowGuildIds": ["example-discord-guild-id"],
+      "includeBotMessages": false
+    },
+    "slack": {
+      "enabled": false,
+      "botTokenEnv": "SLACK_BOT_TOKEN",
+      "signingSecretEnv": "SLACK_SIGNING_SECRET",
+      "allowTeamIds": ["example-slack-team-id"],
+      "includeBotMessages": false
+    }
+  }
+}
