@@ -87,6 +87,8 @@ MemroOS is the company-owned memory and governance layer that makes agent harnes
 
 The repository began as `memroos.dev`; some internal package names, paths, and environment variables still use `memroos` for compatibility. The public product and positioning are now MemroOS.
 
+Related public agent-operations project: [Beastmode](https://github.com/lac5q/beastmode) is a MofA / Mixture of Agents orchestration framework for Hermes Agent, OpenClaw, Codex, Claude Code, Qwen, and MemroOS-style context continuity.
+
 ## Competitive Benchmark
 
 MemroOS now has a public-evidence benchmark for enterprise agentic memory and a passing live recall gate for the local beta architecture.
