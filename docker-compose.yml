@@ -12,12 +12,13 @@ services:
       MEMROOS_PUBLIC_BASE_URL: ${MEMROOS_PUBLIC_BASE_URL:-http://localhost:3000}
       MEMROOS_A2A_ENDPOINT_BASE_URL: ${MEMROOS_A2A_ENDPOINT_BASE_URL:-http://localhost:3000}
       MEMROOS_OPERATOR_API_KEY: ${MEMROOS_OPERATOR_API_KEY:-}
-      MEM0_URL: ${MEM0_URL:-http://host.docker.internal:3201}
-      ORCHESTRATION_SERVICE_URL: ${ORCHESTRATION_SERVICE_URL:-}
-      NEO4J_HTTP_URL: ${NEO4J_HTTP_URL:-}
+      MEMROOS_JWT_SECRET: ${MEMROOS_JWT_SECRET:-local-compose-jwt-secret-change-me-32chars}
+      MEM0_URL: ${MEMROOS_DOCKER_MEM0_URL:-http://mem0:3201}
+      ORCHESTRATION_SERVICE_URL: ${MEMROOS_DOCKER_ORCHESTRATION_SERVICE_URL:-http://orchestration:3210}
+      NEO4J_HTTP_URL: ${MEMROOS_DOCKER_NEO4J_HTTP_URL:-http://neo4j:7474}
       NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
+      NEO4J_PASSWORD: ${MEMROOS_DOCKER_NEO4J_PASSWORD:-local-neo4j-password}
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
@@ -34,8 +35,10 @@ services:
         condition: service_healthy
       orchestration:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -64,6 +67,24 @@ services:
       timeout: 5s
       retries: 5
 
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      MEMROOS_DOCKER_NEO4J_PASSWORD: ${MEMROOS_DOCKER_NEO4J_PASSWORD:-local-neo4j-password}
+      NEO4J_AUTH: neo4j/${MEMROOS_DOCKER_NEO4J_PASSWORD:-local-neo4j-password}
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://127.0.0.1:7687 -u neo4j -p \"$${MEMROOS_DOCKER_NEO4J_PASSWORD}\" 'RETURN 1' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+
   orchestration:
     build:
       context: .
@@ -85,4 +106,6 @@ volumes:
   memroos-data:
   mem0-logs:
   mem0-history:
+  neo4j-data:
+  neo4j-logs:
   orchestration-data:
