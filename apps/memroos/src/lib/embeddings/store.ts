@@ -110,6 +110,7 @@ export function messagesNeedingEmbedding(
        WHERE e.message_id IS NULL
          AND m.policy = 'indexable'
          AND m.visibility IN ('internal','public_safe','public_approved')
+         AND length(trim(m.content, ' ' || char(9) || char(10) || char(13))) > 0
        ORDER BY m.id DESC
        LIMIT ?`
     )

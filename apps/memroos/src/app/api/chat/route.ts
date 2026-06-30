@@ -15,6 +15,11 @@ import {
 import { getRegisteredAgent } from "@/lib/agent-registry";
 import { getDb } from "@/lib/db";
 import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
+import {
+  buildMemoryDoctorDiagnostic,
+  formatMemoryDoctorReport,
+  isMemoryDoctorCommand,
+} from "@/lib/memory-doctor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -155,6 +160,24 @@ function buildLocalFallbackResponse(params: {
 function enqueueText(controller: ReadableStreamDefaultController<Uint8Array>, encoder: TextEncoder, text: string) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
   controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+}
+
+function streamTextResponse(text: string): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      enqueueText(controller, encoder, text);
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
@@ -345,6 +368,11 @@ export async function POST(req: NextRequest) {
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "message required" }), { status: 400 });
+  }
+
+  if (isMemoryDoctorCommand(message)) {
+    const diagnostic = buildMemoryDoctorDiagnostic(getDb(), process.cwd());
+    return streamTextResponse(formatMemoryDoctorReport(diagnostic));
   }
 
   const messages: ChatMessage[] = [

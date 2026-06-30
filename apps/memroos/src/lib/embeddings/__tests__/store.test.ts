@@ -184,4 +184,28 @@ describe("message_embeddings store (RECALL-02)", () => {
     expect(needsEmbedding).toContain(publicId);
     expect(needsEmbedding).not.toContain(privateId);
   });
+
+  it("messagesNeedingEmbedding skips blank messages that cannot produce useful vectors", () => {
+    const db = getDb();
+    const session = `sess-${Date.now()}-h`;
+    const blankId = db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      session,
+      "test-project",
+      "test-agent",
+      "user",
+      "   \n\t",
+      new Date().toISOString(),
+      "public_approved",
+      "indexable"
+    ).lastInsertRowid as number;
+    const contentId = insertTestMessage(db, session, 301);
+
+    const needsEmbedding = messagesNeedingEmbedding(db, 100);
+
+    expect(needsEmbedding).toContain(contentId);
+    expect(needsEmbedding).not.toContain(blankId);
+  });
 });

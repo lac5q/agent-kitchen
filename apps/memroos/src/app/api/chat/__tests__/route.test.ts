@@ -347,6 +347,28 @@ describe("chat route model resolution", () => {
     expect(text).toContain("Qwen fallback response");
   });
 
+  it("streams the in-product memory diagnostic for /doctor without invoking a provider", async () => {
+    const { POST } = await loadPostRouteWithAnthropicFailure("provider should not run for /doctor");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "ceo",
+        message: "/doctor",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    const text = await readStream(res);
+
+    expect(res.status).toBe(200);
+    expect(text).toContain("Memory Doctor");
+    expect(text).toContain("Status:");
+    expect(text).toContain("Discord messages:");
+    expect(text).toContain("product-owned NOC and memory health surfaces");
+    expect(text).not.toContain("provider should not run for /doctor");
+  });
+
   it("records operator question telemetry with deterministic memory hit correlation", async () => {
     await registerTestAgent({
       id: "claude-sonnet-engineer",

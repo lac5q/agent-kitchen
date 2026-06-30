@@ -1,6 +1,7 @@
 import { apiError } from "@/lib/api-error";
 import { collectLocalFootprintInventory } from "@/lib/cloud-offload/footprint";
 import { getDb } from "@/lib/db";
+import { buildMemoryIterationSnapshot } from "@/lib/memory-doctor";
 import {
   LOCAL_NOC_AGENT_IDS,
   normalizeNocWindow,
@@ -391,6 +392,7 @@ async function buildNocResponse(request: Request) {
     "SELECT COUNT(*) AS value FROM cron_health_jobs WHERE status = 'active' AND (warning IS NOT NULL OR last_failure_at IS NOT NULL)"
   );
   const localFootprint = collectLocalFootprintInventory(process.cwd());
+  const memoryIteration = buildMemoryIterationSnapshot(db, localFootprint);
 
   const lastMessage = db
     .prepare(`SELECT MAX(timestamp) AS value FROM messages m WHERE m.timestamp >= ? ${ws}`)
@@ -408,6 +410,7 @@ async function buildNocResponse(request: Request) {
       enabledSkills,
       cronWarnings,
       localFootprintBytes: localFootprint.totalBytes,
+      memoryIteration,
       efficiency: efficiencyMetrics,
     },
     panels: {
@@ -423,9 +426,16 @@ async function buildNocResponse(request: Request) {
         localFootprint.generatedAt,
         localFootprint.warnings
       ),
+      memoryIteration: panel(
+        memoryIteration.status === "healthy" ? "live" : "degraded",
+        "SQLite/QMD/embedding iteration loop",
+        memoryIteration.observe.lastDiscordMessageAt ?? localFootprint.generatedAt,
+        memoryIteration.warnings
+      ),
       efficiency: efficiencyPanelFor(efficiencyMetrics),
     },
     localFootprint,
+    memoryIteration,
   });
 }
 
