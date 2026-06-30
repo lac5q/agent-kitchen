@@ -6,7 +6,11 @@ node_modules
 .qdrant_storage
 .qwen
 .planning
+data
 apps/memroos/data/*.db
 apps/memroos/data/*.db-*
+services/**/logs
+.gitnexus.backup*
+.gitnexus.pre-*
 *.log
 .DS_Store
