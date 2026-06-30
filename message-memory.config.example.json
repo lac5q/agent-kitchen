@@ -15,9 +15,13 @@
     },
     "slack": {
       "enabled": false,
+      "eventsPath": "/api/integrations/slack/events",
+      "manifestPath": "/api/integrations/slack/events",
       "botTokenEnv": "SLACK_BOT_TOKEN",
       "signingSecretEnv": "SLACK_SIGNING_SECRET",
+      "allowTeamIdsEnv": "MESSAGE_MEMORY_SLACK_ALLOW_TEAM_IDS",
       "allowTeamIds": ["example-slack-team-id"],
+      "includeBotMessagesEnv": "MESSAGE_MEMORY_SLACK_INCLUDE_BOT_MESSAGES",
       "includeBotMessages": false
     }
   }
