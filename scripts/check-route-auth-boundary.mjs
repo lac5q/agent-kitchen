@@ -9,6 +9,14 @@ const proxyPath = path.join(repoRoot, "apps/memroos/src/proxy.ts");
 
 const routeLocalAuthCoverage = [
   {
+    pattern: "/^\\/api\\/onboarding\\/script$/",
+    files: [["apps/memroos/src/app/api/onboarding/script/route.ts", ["verifyAgentOnboardingToken("]]],
+  },
+  {
+    pattern: "/^\\/api\\/onboarding\\/register$/",
+    files: [["apps/memroos/src/app/api/onboarding/register/route.ts", ["verifyAgentOnboardingToken("]]],
+  },
+  {
     pattern: "/^\\/api\\/chatgpt\\/actions\\//",
     files: [
       ["apps/memroos/src/app/api/chatgpt/actions/search/route.ts", ["authorizeChatGptAction("]],
