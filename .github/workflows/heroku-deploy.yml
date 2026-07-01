@@ -12,15 +12,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Heroku CLI
         run: curl https://cli-assets.heroku.com/install.sh | sh
 
-      - name: Resolve Heroku app name
-        id: heroku
+      - name: Deploy to Heroku
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+          NPM_CONFIG_PRODUCTION: "false"
         run: |
           set -euo pipefail
           if [ -z "${HEROKU_API_KEY:-}" ]; then
@@ -28,29 +30,20 @@ jobs:
             exit 1
           fi
           export HEROKU_API_KEY
-          if [ -n "${HEROKU_APP_NAME:-}" ]; then
-            echo "name=${HEROKU_APP_NAME}" >> "$GITHUB_OUTPUT"
-            echo "Using configured Heroku app: ${HEROKU_APP_NAME}"
-            exit 0
+          app_name="${HEROKU_APP_NAME:-}"
+          if [ -z "$app_name" ]; then
+            app_name="$(heroku apps --json | node -e '
+              const apps = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              const preferred = apps.find((app) => /memroos|epilogue/i.test(app.name));
+              const chosen = preferred ?? apps[0];
+              if (!chosen) {
+                console.error("No Heroku apps visible for this API key.");
+                process.exit(1);
+              }
+              process.stdout.write(chosen.name);
+            ')"
           fi
-          app_name="$(heroku apps --json | node -e '
-            const apps = JSON.parse(require("fs").readFileSync(0, "utf8"));
-            const preferred = apps.find((app) => /memroos|epilogue/i.test(app.name));
-            const chosen = preferred ?? apps[0];
-            if (!chosen) {
-              console.error("No Heroku apps visible for this API key.");
-              process.exit(1);
-            }
-            process.stdout.write(chosen.name);
-          ')"
-          echo "name=${app_name}" >> "$GITHUB_OUTPUT"
-          echo "Resolved Heroku app: ${app_name}"
-
-      - name: Deploy to Heroku
-        uses: akhileshns/heroku-deploy@v3.15.15
-        with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ steps.heroku.outputs.name }}
-          heroku_email: ${{ secrets.HEROKU_EMAIL }}
-        env:
-          NPM_CONFIG_PRODUCTION: "false"
+          echo "Deploying to Heroku app: ${app_name}"
+          git remote remove heroku 2>/dev/null || true
+          git remote add heroku "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${app_name}.git"
+          git push heroku HEAD:main
