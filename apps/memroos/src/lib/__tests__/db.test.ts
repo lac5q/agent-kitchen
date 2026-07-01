@@ -135,6 +135,35 @@ describe('SQLite DB layer', () => {
     }
   });
 
+  it('Test 4e: getDb seeds registered agents from the repo config when enabled', () => {
+    if (closeDb) closeDb();
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+
+    const previousSeed = process.env.MEMROOS_SEED_REGISTERED_AGENTS;
+    process.env.MEMROOS_SEED_REGISTERED_AGENTS = 'true';
+
+    try {
+      const db = getDb();
+      const agents = db
+        .prepare('SELECT id, name, platform, protocol FROM registered_agents ORDER BY id')
+        .all() as Array<{ id: string; name: string; platform: string; protocol: string }>;
+      const apiKeys = db.prepare('SELECT COUNT(*) AS count FROM agent_api_keys').get() as { count: number };
+
+      expect(agents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'alba', name: 'Alba', platform: 'hermes' }),
+          expect.objectContaining({ id: 'opencode', name: 'OpenCode', platform: 'opencode', protocol: 'rest' }),
+          expect.objectContaining({ id: 'sophia', name: 'Sophia', platform: 'openclaw' }),
+        ])
+      );
+      expect(apiKeys.count).toBe(0);
+    } finally {
+      if (previousSeed === undefined) delete process.env.MEMROOS_SEED_REGISTERED_AGENTS;
+      else process.env.MEMROOS_SEED_REGISTERED_AGENTS = previousSeed;
+    }
+  });
+
   it('Test 5: messages table has expected columns', () => {
     const db = getDb();
     const cols = db.pragma('table_info(messages)') as { name: string }[];

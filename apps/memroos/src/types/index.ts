@@ -6,6 +6,7 @@ export type AgentPlatform =
   | "qwen"
   | "gemini"
   | "opencode"
+  | "cortex"
   | "hermes"
   | "openclaw"
   | "chatgpt";

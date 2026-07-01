@@ -5,6 +5,7 @@ import { loadMemroosEnv } from './env';
 import { initSchema } from './db-schema';
 import { resolveFromRepoRoot } from './paths';
 import { seedDefaultAdmin } from './auth/seed';
+import { seedRegisteredAgents } from './agent-registry-seed';
 
 let _db: Database.Database | null = null;
 
@@ -25,6 +26,7 @@ export function getDb(): Database.Database {
     db.pragma('busy_timeout = 5000');
     initSchema(db);
     seedDefaultAdmin(db);
+    seedRegisteredAgents(db);
     _db = db;
   }
   return _db;
