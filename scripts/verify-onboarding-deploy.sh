@@ -5,8 +5,8 @@ set -euo pipefail
 BASE="${MEMROOS_PUBLIC_URL:-https://memroos.epiloguecapital.com}"
 SCRIPT_URL="${BASE}/api/onboarding/script?token=bad"
 
-code="$(curl -fsS -o /tmp/memroos-onboarding-verify.txt -w "%{http_code}" "$SCRIPT_URL" || true)"
-body="$(tr '\n' ' ' < /tmp/memroos-onboarding-verify.txt | head -c 200)"
+code="$(curl -sS -o /tmp/memroos-onboarding-verify.txt -w "%{http_code}" "$SCRIPT_URL" || true)"
+body="$(tr '\n' ' ' < /tmp/memroos-onboarding-verify.txt 2>/dev/null | head -c 200)"
 
 if [[ "$code" == "403" ]]; then
   echo "OK: onboarding script reachable (HTTP 403 for bad token): ${body}"
