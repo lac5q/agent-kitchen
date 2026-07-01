@@ -8,6 +8,8 @@ import {
 
 const PROXY_FIXTURE = `
 const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
+  { method: "GET", pattern: /^\\/api\\/onboarding\\/script$/ },
+  { method: "POST", pattern: /^\\/api\\/onboarding\\/register$/ },
   { pattern: /^\\/api\\/chatgpt\\/actions\\// },
   { pattern: /^\\/api\\/agent-context\\// },
   { method: "POST", pattern: /^\\/api\\/agent-memory\\/capture$/ },
@@ -32,6 +34,8 @@ const AUTH_MARKERS = {
 
 function goodFiles() {
   return new Map([
+    ["apps/memroos/src/app/api/onboarding/script/route.ts", "verifyAgentOnboardingToken("],
+    ["apps/memroos/src/app/api/onboarding/register/route.ts", "verifyAgentOnboardingToken("],
     ["apps/memroos/src/app/api/chatgpt/actions/search/route.ts", AUTH_MARKERS.chatgpt],
     ["apps/memroos/src/app/api/chatgpt/actions/fetch/route.ts", AUTH_MARKERS.chatgpt],
     ["apps/memroos/src/app/api/chatgpt/actions/save/route.ts", AUTH_MARKERS.chatgpt],
@@ -74,6 +78,8 @@ function goodFiles() {
 describe("route auth boundary checker", () => {
   it("parses proxy route-local auth patterns", () => {
     assert.deepEqual(parseRouteLocalAuthPatterns(PROXY_FIXTURE), [
+      "/^\\/api\\/onboarding\\/script$/",
+      "/^\\/api\\/onboarding\\/register$/",
       "/^\\/api\\/chatgpt\\/actions\\//",
       "/^\\/api\\/agent-context\\//",
       "/^\\/api\\/agent-memory\\/capture$/",
