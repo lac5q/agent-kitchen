@@ -78,6 +78,26 @@ describe("proxy", () => {
     expect(await response.json()).toEqual({ error: "authentication required" });
   });
 
+  it("lets agent onboarding bootstrap routes handle their own signed-token authorization", async () => {
+    const scriptResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/script?token=signed-token", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+    const registerResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/onboarding/register", {
+        method: "POST",
+        headers: { host: "localhost:3002", "content-type": "application/json" },
+      })
+    );
+
+    expect(scriptResponse.status).toBe(200);
+    expect(await scriptResponse.text()).toBe("");
+    expect(registerResponse.status).toBe(200);
+    expect(await registerResponse.text()).toBe("");
+  });
+
   it("rejects expired or malformed JWT credentials on protected API routes", async () => {
     const expired = await expiredAccessToken("reviewer-expired", "reviewer");
     const expiredResponse = await proxy(

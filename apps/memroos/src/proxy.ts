@@ -75,6 +75,9 @@ const ADMIN_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
 ];
 
 const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
+  // Agent onboarding bootstrap uses signed invite tokens, not human JWTs.
+  { method: "GET", pattern: /^\/api\/onboarding\/script$/ },
+  { method: "POST", pattern: /^\/api\/onboarding\/register$/ },
   { pattern: /^\/api\/chatgpt\/actions\// },
   { pattern: /^\/api\/agent-context\// },
   { method: "POST", pattern: /^\/api\/agent-memory\/capture$/ },
