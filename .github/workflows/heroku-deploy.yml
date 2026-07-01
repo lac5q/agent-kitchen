@@ -16,11 +16,41 @@ jobs:
       - name: Install Heroku CLI
         run: curl https://cli-assets.heroku.com/install.sh | sh
 
+      - name: Resolve Heroku app name
+        id: heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEROKU_API_KEY:-}" ]; then
+            echo "HEROKU_API_KEY is not configured in repository secrets." >&2
+            exit 1
+          fi
+          export HEROKU_API_KEY
+          if [ -n "${HEROKU_APP_NAME:-}" ]; then
+            echo "name=${HEROKU_APP_NAME}" >> "$GITHUB_OUTPUT"
+            echo "Using configured Heroku app: ${HEROKU_APP_NAME}"
+            exit 0
+          fi
+          app_name="$(heroku apps --json | node -e '
+            const apps = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const preferred = apps.find((app) => /memroos|epilogue/i.test(app.name));
+            const chosen = preferred ?? apps[0];
+            if (!chosen) {
+              console.error("No Heroku apps visible for this API key.");
+              process.exit(1);
+            }
+            process.stdout.write(chosen.name);
+          ')"
+          echo "name=${app_name}" >> "$GITHUB_OUTPUT"
+          echo "Resolved Heroku app: ${app_name}"
+
       - name: Deploy to Heroku
         uses: akhileshns/heroku-deploy@v3.15.15
         with:
           heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_app_name: ${{ steps.heroku.outputs.name }}
           heroku_email: ${{ secrets.HEROKU_EMAIL }}
         env:
           NPM_CONFIG_PRODUCTION: "false"
