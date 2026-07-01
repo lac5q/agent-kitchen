@@ -8,7 +8,12 @@
     "apps/*",
     "packages/*"
   ],
+  "engines": {
+    "node": "22.x",
+    "npm": "11.x"
+  },
   "scripts": {
+    "heroku-postbuild": "npm ci --include=dev && npm install @rolldown/binding-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu @unrs/resolver-binding-linux-x64-gnu --no-save && npm rebuild --workspace apps/memroos better-sqlite3 && npm run build",
     "dev": "npm --prefix apps/memroos run dev --",
     "build": "npm --prefix apps/memroos run build",
     "typecheck": "npm --prefix apps/memroos run typecheck",
