@@ -47,3 +47,6 @@ jobs:
           git remote remove heroku 2>/dev/null || true
           git remote add heroku "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${app_name}.git"
           git push heroku HEAD:main
+
+      - name: Verify onboarding route on production
+        run: bash scripts/verify-onboarding-deploy.sh

@@ -52,7 +52,8 @@
     "profiles:check": "node scripts/validate-operating-profiles.mjs",
     "first-run:check": "node scripts/first-run-wizard.mjs --check",
     "setup": "bash install.sh",
-    "check:roadmap-priority": "node scripts/check-roadmap-priority.mjs"
+    "check:roadmap-priority": "node scripts/check-roadmap-priority.mjs",
+    "check:onboarding-deploy": "bash scripts/verify-onboarding-deploy.sh"
   },
   "overrides": {
     "ip-address": "10.2.0",

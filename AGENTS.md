@@ -69,6 +69,16 @@ available on demand via the `catalog` and `read` actions.
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
 
+## Production deployment
+
+Read `docs/production-deployment.md` before any deploy or onboarding task.
+
+- **Operator production** is `https://memroos.epiloguecapital.com` on **Heroku** (`memroos-agent-onboarding`).
+- **Marketing site** is `https://memroos.com` on **Vercel** — not the operator app.
+- Never treat Vercel PR checks as operator production deploy.
+- After deploy, run `bash scripts/verify-onboarding-deploy.sh`. Onboarding script with a bad token must return **403**, not **401**.
+- Onboarding token signatures use `MEMROOS_ONBOARDING_SECRET` (or `MEMROOS_OPERATOR_API_KEY`). If invites fail with **Invalid onboarding token signature**, regenerate the invite after aligning Heroku config vars.
+
 ## Codex Cloud Development
 
 For Codex Cloud environments on `lac5q/memroos`, use `bash scripts/setup-codex-cloud.sh`
