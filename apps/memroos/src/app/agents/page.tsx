@@ -31,7 +31,7 @@ function inviteErrorMessage(error: unknown) {
 function formatAgentOnboardingPrompt(command: string) {
   return [
     "Run this MemroOS onboarding command exactly as written.",
-    "It will register you, save your per-agent credentials, and install the MemroOS MCP server for your runtime.",
+    "It will register you, infer your agent identity when no name is provided, save your per-agent credentials, and install the MemroOS MCP server for your runtime.",
     "After it finishes, tell me whether it succeeded and include the onboarding report path it printed.",
     "",
     "Command to run:",

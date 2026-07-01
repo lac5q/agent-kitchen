@@ -123,7 +123,7 @@ Then **generate a fresh invite** from the Agents UI and run the bootstrap comman
 
 ```bash
 curl -fsSL 'https://memroos.epiloguecapital.com/api/onboarding/script?token=<TOKEN>' \
-  | bash -s -- --platform 'opencode' --mcp-target 'auto'
+  | bash -s -- --platform 'cursor' --mcp-target 'auto'
 ```
 
 **Success artifacts:**

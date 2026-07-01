@@ -49,7 +49,7 @@ AGENT_ROLE="\${AGENT_ROLE:-\${MEMROOS_AGENT_ROLE:-MemroOS agent}}"
 PLATFORM="\${PLATFORM:-\${MEMROOS_PLATFORM:-}}"
 
 if [[ -z "$PLATFORM" ]]; then
-  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <chatgpt|codex|claude|opencode|openclaw|hermes|gemini|qwen> [--mcp-target auto|stdout|codex|claude|gemini|qwen|opencode|openclaw|hermes|none|file:/path]" >&2
+  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|openclaw|hermes|gemini|qwen> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|openclaw|hermes|none|file:/path]" >&2
   exit 2
 fi
 
@@ -234,6 +234,10 @@ def install_codex():
     merge_json(home / ".codex" / "mcp.json", {"mcpServers": generic_servers})
     return True
 
+def install_cursor():
+    merge_json(pathlib.Path.cwd() / ".cursor" / "mcp.json", {"mcpServers": generic_servers})
+    return True
+
 def install_file(path_value):
     path = pathlib.Path(path_value).expanduser()
     merge_json(path, {"mcpServers": generic_servers})
@@ -257,6 +261,7 @@ def install_explicit(selected):
         "opencode": install_opencode,
         "openclaw": install_openclaw,
         "hermes": install_hermes,
+        "cursor": install_cursor,
     }
     installer = installers.get(selected)
     if installer is None:
@@ -265,6 +270,7 @@ def install_explicit(selected):
 
 def install_auto():
     platform_targets = {
+        "cursor": "cursor",
         "chatgpt": "stdout",
         "codex": "codex",
         "claude": "claude",

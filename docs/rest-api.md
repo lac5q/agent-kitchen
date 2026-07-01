@@ -110,7 +110,7 @@ Response:
 
 ### `GET /api/onboarding/script?token=...`
 
-Serves the bootstrap shell script for a valid invite token. The script posts to `/api/onboarding/register`, stores the one-time agent API key in `~/.memroos/<agent-id>.env`, and can install MCP config for `hermes`, `openclaw`, `claude`, `gemini`, `qwen`, `codex`, `stdout`, `none`, or a specific `file:/path`.
+Serves the bootstrap shell script for a valid invite token. The script posts to `/api/onboarding/register`, stores the one-time agent API key in `~/.memroos/<agent-id>.env`, and can install MCP config for `cursor`, `hermes`, `openclaw`, `claude`, `gemini`, `qwen`, `codex`, `stdout`, `none`, or a specific `file:/path`.
 
 The default `--mcp-target auto` maps from `platform` to the matching runtime installer. Runtime CLI commands are preferred over static config edits when available; fallback writes are scoped to each runtime's user config. The script also writes `~/.memroos/<agent-id>.onboarding-report.json` with the method used, so operators can see when a runtime CLI changed and a fallback was needed.
 

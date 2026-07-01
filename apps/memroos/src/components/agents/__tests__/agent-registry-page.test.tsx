@@ -127,6 +127,7 @@ describe("AgentRegistryPage", () => {
   it("submits registration and can deregister an agent", () => {
     render(<AgentRegistryPage />);
 
+    fireEvent.click(screen.getByText("Advanced"));
     fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "New Agent" } });
     fireEvent.change(screen.getByLabelText("Agent role"), { target: { value: "Does work" } });
     fireEvent.change(screen.getByLabelText("Agent capabilities"), { target: { value: "Memory, Tools" } });
@@ -144,7 +145,7 @@ describe("AgentRegistryPage", () => {
   it("creates a generic invite command for the selected platform", () => {
     render(<AgentRegistryPage />);
 
-    expect(screen.getByLabelText("Agent platform")).toHaveTextContent("opencode");
+    expect(screen.getByLabelText("Agent platform")).toHaveTextContent("cursor");
     fireEvent.change(screen.getByLabelText("Agent platform"), { target: { value: "hermes" } });
     fireEvent.click(screen.getByText("Copy Invite"));
 
@@ -175,6 +176,9 @@ describe("AgentRegistryPage", () => {
     });
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("Run this MemroOS onboarding command exactly as written.")
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("infer your agent identity when no name is provided")
     );
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("Command to run:\n```bash\ncurl -fsSL 'https://memroos.example.test/invite' | bash\n```")
@@ -209,6 +213,7 @@ describe("AgentRegistryPage", () => {
   it("supports A2A card registration mode", () => {
     render(<AgentRegistryPage />);
 
+    fireEvent.click(screen.getByText("Advanced"));
     fireEvent.click(screen.getByText("A2A card URL"));
     expect(screen.getByText("Register A2A Agent")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("A2A agent-card URL"), {
