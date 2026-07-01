@@ -153,6 +153,10 @@ describe('SQLite DB layer', () => {
       expect(agents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'alba', name: 'Alba', platform: 'hermes' }),
+          expect.objectContaining({ id: 'codex-cloud-memroos', name: 'Codex Cloud', platform: 'codex' }),
+          expect.objectContaining({ id: 'codex-desktop-luis-mbp', name: 'Codex Desktop', platform: 'codex' }),
+          expect.objectContaining({ id: 'cursor-cloud-memroos', name: 'Cursor Cloud', platform: 'cursor' }),
+          expect.objectContaining({ id: 'cursor-desktop-luis-mbp', name: 'Cursor Desktop', platform: 'cursor' }),
           expect.objectContaining({ id: 'opencode', name: 'OpenCode', platform: 'opencode', protocol: 'rest' }),
           expect.objectContaining({ id: 'sophia', name: 'Sophia', platform: 'openclaw' }),
         ])

@@ -71,6 +71,58 @@
       "host": "localhost",
       "port": 3000,
       "healthEndpoint": "/health"
+    },
+    {
+      "id": "cursor-desktop-luis-mbp",
+      "name": "Cursor Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "cursor",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "cursor",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "cursor-cloud-memroos",
+      "name": "Cursor Cloud",
+      "role": "Coding Agent (Cloud)",
+      "platform": "cursor",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "cursor",
+        "runtimeKind": "cloud",
+        "environment": "lac5q/memroos"
+      }
+    },
+    {
+      "id": "codex-desktop-luis-mbp",
+      "name": "Codex Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "codex",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "codex",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "codex-cloud-memroos",
+      "name": "Codex Cloud",
+      "role": "Coding Agent (Cloud)",
+      "platform": "codex",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "codex",
+        "runtimeKind": "cloud",
+        "environment": "lac5q/memroos"
+      }
     }
   ]
 }
