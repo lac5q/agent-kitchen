@@ -7,7 +7,7 @@ the defense-in-depth layer for privileged APIs.
 ## Reviewed Baseline
 
 - Reviewed Next.js dependency: `^16.2.7`
-- Reviewed proxy sha256: `8ec45a8fa941800764109978f3255ad4425736916e2a6ec9fc72854095286f9b`
+- Reviewed proxy sha256: `2805d91afc06b92f5d457ba350ef83c60399a97276e83f93cf5485622c50e40d`
 
 ## Required Before Changing Next Or Proxy
 
