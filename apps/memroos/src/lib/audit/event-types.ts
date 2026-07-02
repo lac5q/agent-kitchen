@@ -14,6 +14,8 @@ export const AUDIT_EVENT_TYPES = {
   AGENT_FLAGGED: "agent.flagged",
   /** Agent escalated to HIL queue. */
   AGENT_ESCALATED: "agent.escalated",
+  /** Agent persisted a crash-resumable checkpoint with provenance receipts. */
+  AGENT_CHECKPOINTED: "agent.checkpointed",
 
   // SEAL proposal lifecycle
   /** Reflection generated a proposal. */
@@ -76,6 +78,7 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT
 /** Valid entity types for audit entries. */
 export const ENTITY_TYPES = {
   AGENT: "agent",
+  AGENT_CHECKPOINT: "agent_checkpoint",
   SEAL_PROPOSAL: "seal_proposal",
   EVAL_RUN: "eval_run",
   HIL_ESCALATION: "hil_escalation",

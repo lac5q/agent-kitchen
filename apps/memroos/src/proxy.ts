@@ -139,8 +139,8 @@ function getTokenFromRequest(req: NextRequest): string | null {
 async function enforceAuth(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
-  // 1. Always pass through auth endpoints and public API
-  if (pathname.startsWith("/api/auth/") || pathname.startsWith("/api/public/")) {
+  // 1. Always pass through auth endpoints, public API, and operational health.
+  if (pathname.startsWith("/api/auth/") || pathname.startsWith("/api/public/") || pathname === "/api/health") {
     return NextResponse.next();
   }
 

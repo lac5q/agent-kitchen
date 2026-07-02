@@ -143,6 +143,15 @@
 - [x] **RECOLLECT-06**: Operator/NOC surfaces expose recent recollection decisions, skipped-search reasons, false-positive rate, and the downstream answer/tool step that used or ignored injected memory.
 - [x] **RECOLLECT-07**: Recollection and context-pack receipts label each memory item by belief stage: bronze raw source snapshot, silver candidate claim, or gold admitted operational truth; agents may rely on gold directly, must caveat silver, and may use bronze only as source evidence unless promotion policy admits it.
 
+## PROV Verifiable Action Provenance + Tamper-Evident Audit (Proposed)
+
+*Source: 2026-07-01 external developer question (Arden) on crash-consistent, auditable "proof" linking agent output to consumed memories and tools. See ROADMAP.md Backlog item 18.*
+
+- [ ] **PROV-01**: Provenance is captured at the read/tool-call boundary (which memories were read, which tools/commands ran, with source id + hash) rather than self-reported by the agent at checkpoint time, so every output carries a verified set of consumed inputs.
+- [ ] **PROV-02**: The audit entry for a significant action is written inside the same database transaction as the action itself, so the action and its audit row commit or fail together and rows cannot be silently dropped; the current "audit never breaks the primary action" contract is preserved or explicitly redesigned.
+- [ ] **PROV-03**: Audit entries are hash-chained (each row references the prior row's hash) so tampering, deletion, or gaps in the trail are detectable, with a verification path that reports the first broken link.
+- [ ] **PROV-04**: On crash/restart, the resumed checkpoint plus the transactional audit chain reconstruct a verifiable trail with no unaccounted actions between the last checkpoint and the crash; verification work stays off the hot path and provenance receipts expose no raw sensitive payloads.
+
 ---
 
 ## Future Requirements (Bounded Spikes Complete; Adoption Deferred)

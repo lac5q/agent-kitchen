@@ -78,6 +78,18 @@ describe("proxy", () => {
     expect(await response.json()).toEqual({ error: "authentication required" });
   });
 
+  it("lets runtime health respond without a session token", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/health", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets agent onboarding bootstrap routes handle their own signed-token authorization", async () => {
     const scriptResponse = await proxy(
       new NextRequest("http://localhost:3002/api/onboarding/script?token=signed-token", {

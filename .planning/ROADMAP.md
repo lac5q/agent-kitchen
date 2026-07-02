@@ -538,6 +538,13 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `UX-FOLLOWUP-07` and `INSTALL-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
    - Goal: make service health and ownership visible from the UI, then preserve Docker as an explicit optional test/demo path instead of letting local containers, images, or demo volumes become the default operator footprint.
 
+18. **P1 — Plan Verifiable Action Provenance + Tamper-Evident Audit.**
+   - Source signal: 2026-07-01 external developer question (Arden) on whether agent action "proof" — binding an output to the memories it consumed and tools it used — stays consistent and auditable across crashes/restarts. Current state does not enforce this: `provenancePointers` are agent-supplied and pass straight through (`apps/memroos/src/app/api/agent-checkpoints/route.ts`), and `writeAuditLog` is fire-and-forget and never throws (`apps/memroos/src/lib/audit.ts`), so rows can drop silently.
+   - Related backlog: overlaps the P1 Harness Control Plane evidence-bundle work (item 5) and the "Universal evidence bundles" / "Audit/HIL hardening: hash chaining" Later Ideas; this item is the integrity/consistency slice of that surface.
+   - Requirements: `PROV-01..04` in `.planning/REQUIREMENTS.md`.
+   - Goal: move provenance from honor-system to enforced — capture consumed memories/tools at the read/tool-call boundary rather than self-report, write the audit entry in the same transaction as the action so they commit or fail atomically, and hash-chain audit entries so gaps or edits are detectable; on crash/restart the resumed checkpoint reconstructs a verifiable trail.
+   - Gate: the availability contract that audit failures must not break the primary action must be preserved or explicitly redesigned; no heavy verification work on the hot path; no raw sensitive payloads exposed in provenance receipts.
+
 ### Later Ideas
 
 - [ ] HIL edit-and-continue semantics (modify task state before resuming graph)

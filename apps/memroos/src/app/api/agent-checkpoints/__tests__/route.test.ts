@@ -1,10 +1,28 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { initSchema } from "@/lib/db-schema";
+
+let db: Database.Database;
+
+vi.mock("@/lib/db", () => ({
+  getDb: () => db,
+  closeDb: () => {},
+}));
 
 const checkpointsRoute = await import("../route");
 const metricsRoute = await import("../metrics/route");
 
 describe("/api/agent-checkpoints", () => {
+  beforeEach(() => {
+    db = new Database(":memory:");
+    initSchema(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
   it("blocks direct non-local checkpoint writes without operator authorization", async () => {
     const req = new Request("https://memroos.example.com/api/agent-checkpoints", {
       method: "POST",
