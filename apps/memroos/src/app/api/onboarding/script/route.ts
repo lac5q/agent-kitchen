@@ -94,6 +94,7 @@ python3 - "$response" "$AGENT_ID" "$MCP_TARGET" "$PLATFORM" <<'PY'
 import json
 import os
 import pathlib
+import re
 import shutil
 import stat
 import subprocess
@@ -191,6 +192,37 @@ def merge_hermes_yaml(path):
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     remember("write-hermes-yaml", "ok", str(path))
 
+def merge_codex_toml(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table = "[mcp_servers.memroos]"
+    block = (
+        "# MemRoOS MCP added by MemRoOS onboarding.\n"
+        f"{table}\n"
+        f"url = {json.dumps(mcp_url)}\n"
+    )
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+        if table in text:
+            updated = re.sub(
+                r"(?ms)^(?:# MemRoOS MCP added by MemRoOS onboarding\.\n)?\[mcp_servers\.memroos\]\n.*?(?=^\[|\Z)",
+                block.rstrip() + "\n\n",
+                text,
+                count=1,
+            )
+            if updated == text:
+                sidecar = path.parent / "memroos.mcp.config.toml"
+                sidecar.write_text(block, encoding="utf-8")
+                remember("write-codex-toml", "fallback", f"Existing {table} in {path}; wrote {sidecar}")
+                return
+            path.write_text(updated.rstrip() + "\n", encoding="utf-8")
+            remember("write-codex-toml", "ok", str(path))
+            return
+        text = text.rstrip() + "\n\n" + block
+    else:
+        text = block
+    path.write_text(text, encoding="utf-8")
+    remember("write-codex-toml", "ok", str(path))
+
 def install_claude():
     ok = run_if_available("claude", ["mcp", "add", "--transport", "http", "memroos", "--scope", "user", mcp_url])
     return ok
@@ -227,11 +259,15 @@ def install_opencode():
     return True
 
 def install_hermes():
+    if run_if_available("hermes", ["mcp", "add", "memroos", "--url", mcp_url]):
+        return True
     merge_hermes_yaml(home / ".hermes" / "config.yaml")
     return True
 
 def install_codex():
-    merge_json(home / ".codex" / "mcp.json", {"mcpServers": generic_servers})
+    if run_if_available("codex", ["mcp", "add", "memroos", "--url", mcp_url]):
+        return True
+    merge_codex_toml(home / ".codex" / "config.toml")
     return True
 
 def install_cursor():

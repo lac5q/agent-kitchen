@@ -153,11 +153,15 @@ describe('SQLite DB layer', () => {
       expect(agents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'alba', name: 'Alba', platform: 'hermes' }),
+          expect.objectContaining({ id: 'claude-code-luis-mbp', name: 'Claude Code', platform: 'claude' }),
           expect.objectContaining({ id: 'codex-cloud-memroos', name: 'Codex Cloud', platform: 'codex' }),
           expect.objectContaining({ id: 'codex-desktop-luis-mbp', name: 'Codex Desktop', platform: 'codex' }),
           expect.objectContaining({ id: 'cursor-cloud-memroos', name: 'Cursor Cloud', platform: 'cursor' }),
           expect.objectContaining({ id: 'cursor-desktop-luis-mbp', name: 'Cursor Desktop', platform: 'cursor' }),
+          expect.objectContaining({ id: 'gemini-cli-luis-mbp', name: 'Gemini CLI', platform: 'gemini' }),
           expect.objectContaining({ id: 'opencode', name: 'OpenCode', platform: 'opencode', protocol: 'rest' }),
+          expect.objectContaining({ id: 'openclaw-desktop-luis-mbp', name: 'OpenClaw Desktop', platform: 'openclaw' }),
+          expect.objectContaining({ id: 'qwen-cli-luis-mbp', name: 'Qwen CLI', platform: 'qwen' }),
           expect.objectContaining({ id: 'sophia', name: 'Sophia', platform: 'openclaw' }),
         ])
       );

@@ -149,14 +149,18 @@ describe("agent registry routes", () => {
 
   it("derives active status from live non-Paperclip local runtimes", async () => {
     const { agentsRoute, registerRoute } = await loadRoutes({
-      activeCliCount: 2,
-      byPlatform: { hermes: 1, openclaw: 1 },
+      activeCliCount: 6,
+      byPlatform: { claude: 1, codex: 1, gemini: 1, hermes: 1, openclaw: 1, qwen: 1 },
       scannedAt: "2026-05-07T07:45:00.000Z",
     });
 
     for (const agent of [
       { id: "alba", name: "Alba", platform: "hermes" },
       { id: "sophia", name: "Sophia", platform: "openclaw" },
+      { id: "claude-code-luis-mbp", name: "Claude Code", platform: "claude" },
+      { id: "codex-desktop-luis-mbp", name: "Codex Desktop", platform: "codex" },
+      { id: "gemini-cli-luis-mbp", name: "Gemini CLI", platform: "gemini" },
+      { id: "qwen-cli-luis-mbp", name: "Qwen CLI", platform: "qwen" },
       { id: "codex-persona", name: "Codex Persona", platform: "codex" },
     ]) {
       await registerRoute.POST(
@@ -184,6 +188,17 @@ describe("agent registry routes", () => {
       currentTask: "Local openclaw runtime detected",
       metadata: expect.objectContaining({ derivedActivity: "local_runtime_process" }),
     });
+    for (const id of [
+      "claude-code-luis-mbp",
+      "codex-desktop-luis-mbp",
+      "gemini-cli-luis-mbp",
+      "qwen-cli-luis-mbp",
+    ]) {
+      expect(agents.find((agent: { id: string }) => agent.id === id)).toMatchObject({
+        status: "active",
+        metadata: expect.objectContaining({ derivedActivity: "local_runtime_process" }),
+      });
+    }
     expect(agents.find((agent: { id: string }) => agent.id === "codex-persona")).toMatchObject({
       status: "dormant",
     });

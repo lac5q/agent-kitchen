@@ -46,19 +46,31 @@ first_readable_agent_id() {
 infer_agent_id() {
   case "${MEMROOS_MCP_CLIENT:-}" in
     codex)
-      first_readable_agent_id codex-desktop-luis-mbp opencode
+      first_readable_agent_id codex-desktop-luis-mbp codex-cloud-memroos opencode
       ;;
     claude|claude-code)
-      first_readable_agent_id claudebot
+      first_readable_agent_id claude-code-luis-mbp claudebot
       ;;
     hermes)
-      first_readable_agent_id alba
+      first_readable_agent_id alba maria
       ;;
     cursor)
-      first_readable_agent_id cursor-desktop-luis-mbp
+      first_readable_agent_id cursor-desktop-luis-mbp cursor-cloud-memroos
+      ;;
+    qwen)
+      first_readable_agent_id qwen-cli-luis-mbp
+      ;;
+    gemini)
+      first_readable_agent_id gemini-cli-luis-mbp
+      ;;
+    opencode)
+      first_readable_agent_id opencode
+      ;;
+    openclaw)
+      first_readable_agent_id openclaw-desktop-luis-mbp lucia sophia gwen
       ;;
     *)
-      first_readable_agent_id opencode codex-desktop-luis-mbp claudebot alba
+      first_readable_agent_id opencode codex-desktop-luis-mbp claude-code-luis-mbp claudebot alba
       ;;
   esac
 }

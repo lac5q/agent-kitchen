@@ -63,6 +63,58 @@
       "healthEndpoint": "/health"
     },
     {
+      "id": "claude-code-luis-mbp",
+      "name": "Claude Code",
+      "role": "Coding Agent (Desktop)",
+      "platform": "claude",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "claude",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "qwen-cli-luis-mbp",
+      "name": "Qwen CLI",
+      "role": "Coding Agent (Desktop)",
+      "platform": "qwen",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "qwen",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "gemini-cli-luis-mbp",
+      "name": "Gemini CLI",
+      "role": "Coding Agent (Desktop)",
+      "platform": "gemini",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "gemini",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "openclaw-desktop-luis-mbp",
+      "name": "OpenClaw Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "openclaw",
+      "protocol": "rest",
+      "location": "local",
+      "metadata": {
+        "agentFamily": "openclaw",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
       "id": "cortex",
       "name": "Cortex",
       "role": "Coding Agent",

@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 
 const RECENT_ACTIVITY_WINDOW_MS = 30 * 60 * 1000;
 const SINGLETON_CLI_AGENT_BY_PLATFORM: Partial<Record<AgentPlatform, string>> = {
-  claude: "claude-sonnet-engineer",
-  codex: "codex-cli-agent",
-  gemini: "gemini-senior-engineer",
-  qwen: "qwen-engineer",
+  claude: "claude-code-luis-mbp",
+  codex: "codex-desktop-luis-mbp",
+  gemini: "gemini-cli-luis-mbp",
+  qwen: "qwen-cli-luis-mbp",
 };
 const PLATFORM_RUNTIME_AGENTS = new Set<AgentPlatform>(["hermes", "openclaw", "opencode"]);
 

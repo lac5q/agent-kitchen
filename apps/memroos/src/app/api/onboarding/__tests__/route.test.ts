@@ -231,9 +231,13 @@ describe("agent onboarding routes", () => {
     expect(script).toContain("home / \".config\" / \"opencode\" / \"opencode.json\"");
     expect(script).toContain("pathlib.Path.cwd() / \".cursor\" / \"mcp.json\"");
     expect(script).toContain("\"type\": \"remote\"");
+    expect(script).toContain("codex\", [\"mcp\", \"add\", \"memroos\", \"--url\"");
+    expect(script).toContain("home / \".codex\" / \"config.toml\"");
+    expect(script).not.toContain("home / \".codex\" / \"mcp.json\"");
     expect(script).toContain("claude\", [\"mcp\", \"add\"");
     expect(script).toContain("gemini\", [\"mcp\", \"add\"");
     expect(script).toContain("qwen\", [\"mcp\", \"add\"");
+    expect(script).toContain("hermes\", [\"mcp\", \"add\", \"memroos\", \"--url\"");
 
     const rejected = await scriptRoute.GET(
       new Request("https://memroos.example.test/api/onboarding/script?token=bad")
@@ -241,7 +245,7 @@ describe("agent onboarding routes", () => {
     expect(rejected.status).toBe(403);
   });
 
-  it.each(["cursor", "hermes", "openclaw", "opencode", "claude", "gemini", "qwen"] as const)(
+  it.each(["cursor", "hermes", "openclaw", "opencode", "claude", "gemini", "qwen", "codex"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
       const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();
