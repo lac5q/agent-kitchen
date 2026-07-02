@@ -21,6 +21,7 @@
     "start:all": "bash start.sh",
     "mcp": "bash scripts/memroos-mcp.sh",
     "mcp:http": "bash scripts/memroos-mcp.sh --http --host 0.0.0.0 --port ${MEMROOS_MCP_PORT:-8765}",
+    "handoff:goal-state": "bash scripts/memroos-goal-state-handoff.sh",
     "install:mcp:chatgpt": "bash scripts/install-chatgpt-mcp-launchd.sh",
     "install:memory-resilience": "node scripts/install-memory-resilience.mjs install",
     "setup:codex-cloud": "bash scripts/setup-codex-cloud.sh",

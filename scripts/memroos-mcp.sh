@@ -8,6 +8,9 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 export MEMROOS_ROOT="${MEMROOS_ROOT:-$ROOT}"
 MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC:-90}"
+MEMROOS_AGENT_KEYS_DIR="${MEMROOS_AGENT_KEYS_DIR:-$HOME/.memroos/agent-keys}"
+MEMROOS_MCP_AGENT_ENV_STATUS=0
+MEMROOS_REQUIRE_SERVER_MEMORY="${MEMROOS_REQUIRE_SERVER_MEMORY:-0}"
 
 run_with_timeout() {
   local seconds="$1"
@@ -19,6 +22,129 @@ run_with_timeout() {
     gtimeout "$seconds" "$@"
   else
     "$@"
+  fi
+}
+
+agent_key_file_for() {
+  local agent_id="$1"
+  [[ -n "$agent_id" ]] || return 1
+  printf "%s/%s.key" "$MEMROOS_AGENT_KEYS_DIR" "$agent_id"
+}
+
+first_readable_agent_id() {
+  local candidate key_file
+  for candidate in "$@"; do
+    key_file="$(agent_key_file_for "$candidate")"
+    if [[ -r "$key_file" && -s "$key_file" ]]; then
+      printf "%s" "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+infer_agent_id() {
+  case "${MEMROOS_MCP_CLIENT:-}" in
+    codex)
+      first_readable_agent_id codex-desktop-luis-mbp opencode
+      ;;
+    claude|claude-code)
+      first_readable_agent_id claudebot
+      ;;
+    hermes)
+      first_readable_agent_id alba
+      ;;
+    cursor)
+      first_readable_agent_id cursor-desktop-luis-mbp
+      ;;
+    *)
+      first_readable_agent_id opencode codex-desktop-luis-mbp claudebot alba
+      ;;
+  esac
+}
+
+load_local_agent_key() {
+  [[ -z "${MEMROOS_AGENT_API_KEY:-}" ]] || return 0
+
+  if [[ -z "${MEMROOS_AGENT_ID:-}" ]]; then
+    local inferred
+    if inferred="$(infer_agent_id)"; then
+      export MEMROOS_AGENT_ID="$inferred"
+    fi
+  fi
+
+  local key_file="${MEMROOS_AGENT_KEY_FILE:-}"
+  if [[ -z "$key_file" && -n "${MEMROOS_AGENT_ID:-}" ]]; then
+    key_file="$(agent_key_file_for "$MEMROOS_AGENT_ID")"
+  fi
+
+  if [[ -n "$key_file" && -r "$key_file" && -s "$key_file" ]]; then
+    local key
+    key="$(tr -d '\r\n' < "$key_file")"
+    if [[ "$key" == ak_* ]]; then
+      export MEMROOS_AGENT_API_KEY="$key"
+      export MEMROOS_AGENT_KEY_FILE="$key_file"
+    else
+      echo "Ignoring malformed MemroOS agent key file: $key_file" >&2
+    fi
+  fi
+}
+
+is_true() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+strict_fail() {
+  echo "MemRoOS server memory unavailable: $*" >&2
+  echo "Unset MEMROOS_REQUIRE_SERVER_MEMORY to allow repo-local MCP tools without server memory." >&2
+  exit 78
+}
+
+require_server_memory_access() {
+  is_true "$MEMROOS_REQUIRE_SERVER_MEMORY" || return 0
+
+  command -v curl >/dev/null 2>&1 || strict_fail "curl is required for strict memory checks"
+  command -v jq >/dev/null 2>&1 || strict_fail "jq is required for strict memory checks"
+
+  local app_url agent_id key inbox_file health_file code unhealthy_tiers
+  app_url="${MEMROOS_APP_URL:-${MEMROOS_BASE_URL:-http://localhost:3002}}"
+  app_url="${app_url%/}"
+  agent_id="${MEMROOS_AGENT_ID:-}"
+  key="${MEMROOS_AGENT_API_KEY:-}"
+
+  [[ -n "$agent_id" ]] || strict_fail "MEMROOS_AGENT_ID could not be resolved"
+  [[ -n "$key" ]] || strict_fail "MEMROOS_AGENT_API_KEY could not be loaded for ${agent_id}"
+
+  inbox_file="$(mktemp -t memroos-mcp-agent-context.XXXXXX.json)"
+  health_file="$(mktemp -t memroos-mcp-memory-health.XXXXXX.json)"
+  trap 'rm -f "$inbox_file" "$health_file"' RETURN
+
+  code="$(curl -sS -o "$inbox_file" -w "%{http_code}" \
+    "${app_url}/api/agent-context/messages?agent=${agent_id}&box=inbox&status=pending&limit=1" \
+    -H "Authorization: Bearer ${key}" \
+    --max-time 10 2>/dev/null || true)"
+  if [[ ! "$code" =~ ^2 ]]; then
+    strict_fail "agent-context auth check failed for ${agent_id} at ${app_url} (HTTP ${code:-curl_failed})"
+  fi
+  jq -e '.ok == true' "$inbox_file" >/dev/null \
+    || strict_fail "agent-context auth check returned an unexpected response for ${agent_id}"
+
+  code="$(curl -sS -o "$health_file" -w "%{http_code}" \
+    "${app_url}/api/memory/health" \
+    -H "Authorization: Bearer ${key}" \
+    --max-time 10 2>/dev/null || true)"
+  if [[ ! "$code" =~ ^2 ]]; then
+    strict_fail "memory health check failed at ${app_url}/api/memory/health (HTTP ${code:-curl_failed})"
+  fi
+  jq -e '.ok == true and (.tiers | type == "array")' "$health_file" >/dev/null \
+    || strict_fail "memory health check returned an unexpected response"
+
+  unhealthy_tiers="$(jq -r '[.tiers[]? | select(.status != "up") | "\(.tier)=\(.status)" ] | join(", ")' "$health_file")"
+  if [[ -n "$unhealthy_tiers" ]]; then
+    strict_fail "memory tiers are not healthy: ${unhealthy_tiers}"
   fi
 }
 
@@ -64,6 +190,10 @@ while [[ $# -gt 0 ]]; do
       export MEM0_URL="${2:?--mem0-url requires a value}"
       shift 2
       ;;
+    --agent-env-status)
+      MEMROOS_MCP_AGENT_ENV_STATUS=1
+      shift
+      ;;
     --stateless-http)
       export MEMROOS_MCP_STATELESS_HTTP="true"
       shift
@@ -82,6 +212,7 @@ Options:
   --path PATH             Streamable HTTP path, default /mcp
   --knowledge-root PATH   Knowledge root to expose; defaults to ~/github/knowledge if present, else repo root
   --mem0-url URL          mem0 base URL for memory_search/memory_save
+  --agent-env-status      Print non-secret agent auth status and exit
   --stateless-http        Enable FastMCP stateless HTTP mode
 
 Examples:
@@ -96,6 +227,24 @@ HELP
       ;;
   esac
 done
+
+load_local_agent_key
+
+if [[ "$MEMROOS_MCP_AGENT_ENV_STATUS" == "1" ]]; then
+  if [[ -n "${MEMROOS_AGENT_API_KEY:-}" ]]; then
+    key_status="present"
+  else
+    key_status="missing"
+  fi
+  printf 'agent_id=%s\n' "${MEMROOS_AGENT_ID:-}"
+  printf 'key_status=%s\n' "$key_status"
+  printf 'key_file=%s\n' "${MEMROOS_AGENT_KEY_FILE:-}"
+  printf 'app_url=%s\n' "${MEMROOS_APP_URL:-${MEMROOS_BASE_URL:-http://localhost:3002}}"
+  printf 'require_server_memory=%s\n' "$MEMROOS_REQUIRE_SERVER_MEMORY"
+  exit 0
+fi
+
+require_server_memory_access
 
 PYTHON="${KNOWLEDGE_PYTHON:-}"
 if [[ -z "$PYTHON" ]]; then

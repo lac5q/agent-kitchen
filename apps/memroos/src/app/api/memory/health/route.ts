@@ -1,4 +1,5 @@
 import { apiError } from "@/lib/api-error";
+import { authenticateAgentHeaders } from "@/lib/agent-registry";
 import { getDb } from "@/lib/db";
 import { checkGraphHealth, checkVectorHealth, type MemoryTierHealth } from "@/lib/memory/backends";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
@@ -12,7 +13,7 @@ function episodicHealth(): MemoryTierHealth {
 }
 
 async function buildMemoryHealthResponse(request: Request) {
-  if (!authorizeRegistryWrite(request)) {
+  if (!authorizeRegistryWrite(request) && !authenticateAgentHeaders(request.headers)) {
     return registryWriteUnauthorizedResponse();
   }
 

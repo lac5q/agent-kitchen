@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MEMROOS_PORT="${MEMROOS_PORT:-3000}"
 MEMROOS_URL="http://localhost:${MEMROOS_PORT}"
-DB_PATH_RAW="${SQLITE_DB_PATH:-data/memroos.db}"
+DB_PATH_RAW="${SQLITE_DB_PATH:-data/conversations.db}"
 if [[ "${DB_PATH_RAW}" = /* ]]; then DB_PATH="${DB_PATH_RAW}"; else DB_PATH="${REPO_ROOT}/${DB_PATH_RAW}"; fi
 KEYS_DIR="${MEMROOS_AGENT_KEYS_DIR:-${HOME}/.memroos/agent-keys}"
 RUN_API_SMOKE="${RUN_API_SMOKE:-1}"

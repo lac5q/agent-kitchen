@@ -79,17 +79,20 @@ Do not report the Qwen/Beastmode worker as operational until that smoke check re
 Set these as Codex environment variables when the cloud agent should use the live development brain:
 
 ```env
-MEMROOS_AGENT_ID=codex-cloud-dev
+MEMROOS_AGENT_ID=codex-cloud-memroos
 MEM0_URL=https://your-mem0-service.example.com
 MEMROOS_APP_URL=https://your-memroos-app.example.com
 MEMROOS_AGENT_API_KEY=<scoped-dev-agent-key>
+MEMROOS_REQUIRE_SERVER_MEMORY=1
 ```
 
 `MEM0_URL` enables `memory_search` and `memory_save`. `MEMROOS_APP_URL` plus `MEMROOS_AGENT_API_KEY` enables audited agent-memory writes and agent-context messages through the MemRoOS app.
 
 Codex Cloud secrets are available to setup scripts, then removed before the agent phase. If the MCP server needs `MEMROOS_AGENT_API_KEY` during the agent phase, use a narrowly scoped development agent key as an environment variable, not a broad personal/admin secret.
 
-If those variables are omitted, the MCP still serves repo-local knowledge, tool discovery, and skill-pack catalog actions from the checked-out repository.
+If `MEMROOS_REQUIRE_SERVER_MEMORY=1`, the MCP server fails startup when server memory or scoped agent auth is unavailable. Set it to `0` only for intentional repo-local/offline work where losing server recall is acceptable.
+
+For local Codex runs on Luis's MacBook, the MCP launcher can load `~/.memroos/agent-keys/codex-desktop-luis-mbp.key` when it exists, or fall back to the older `opencode.key`. Do not write the key value into `config.toml`; use `MEMROOS_AGENT_ID`, `MEMROOS_AGENT_KEY_FILE`, or the local key-file convention.
 
 ## What Not To Run In Cloud
 

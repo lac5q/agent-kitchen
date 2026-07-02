@@ -4,7 +4,7 @@
 
 [mcp_servers.memroos]
 command = "/bin/bash"
-args = ["-lc", 'exec "${MEMROOS_ROOT:-$PWD}/scripts/memroos-mcp.sh"']
+args = ["-lc", 'export MEMROOS_MCP_CLIENT="${MEMROOS_MCP_CLIENT:-codex}"; export MEMROOS_REQUIRE_SERVER_MEMORY="${MEMROOS_REQUIRE_SERVER_MEMORY:-1}"; exec "${MEMROOS_ROOT:-$PWD}/scripts/memroos-mcp.sh"']
 startup_timeout_sec = 120.0
 env_vars = [
   "MEMROOS_ROOT",
@@ -12,6 +12,28 @@ env_vars = [
   "MEM0_URL",
   "MEMROOS_APP_URL",
   "MEMROOS_BASE_URL",
+  "MEMROOS_MCP_CLIENT",
+  "MEMROOS_REQUIRE_SERVER_MEMORY",
+  "MEMROOS_AGENT_KEY_FILE",
+  "MEMROOS_AGENT_KEYS_DIR",
   "MEMROOS_AGENT_ID",
   "MEMROOS_AGENT_API_KEY"
 ]
+
+[mcp_servers.memroos.tools.agent_context_ack]
+approval_mode = "approve"
+
+[mcp_servers.memroos.tools.agent_context_inbox]
+approval_mode = "approve"
+
+[mcp_servers.memroos.tools.agent_context_reply]
+approval_mode = "approve"
+
+[mcp_servers.memroos.tools.agent_context_send]
+approval_mode = "approve"
+
+[mcp_servers.memroos.tools.agent_memory_save]
+approval_mode = "approve"
+
+[mcp_servers.memroos.tools.agent_tool_outcome_record]
+approval_mode = "approve"

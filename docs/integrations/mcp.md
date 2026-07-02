@@ -13,6 +13,10 @@ scripts/memroos-mcp.sh
 
 It keeps stdout clean for MCP JSON-RPC, installs missing Python MCP dependencies into `.venv` if needed, and defaults `KNOWLEDGE_ROOT` to `~/github/knowledge` when present.
 
+When `MEMROOS_AGENT_API_KEY` is not inherited, the launcher can load a local scoped agent key from `~/.memroos/agent-keys/<agent-id>.key`. Set `MEMROOS_AGENT_ID` explicitly when possible. Codex configs should set `MEMROOS_MCP_CLIENT=codex`; the launcher then prefers `codex-desktop-luis-mbp` when that key exists and falls back to the older `opencode` local key.
+
+Set `MEMROOS_REQUIRE_SERVER_MEMORY=1` when the agent must fail actively if server-backed memory is unavailable. In strict mode, `scripts/memroos-mcp.sh` exits before starting MCP unless the scoped agent can authenticate to the MemRoOS app and `/api/memory/health` reports every memory tier as `up`. Set `MEMROOS_REQUIRE_SERVER_MEMORY=0` only for intentional repo-local/offline MCP work.
+
 ## Option A — local stdio client
 
 Use this when the agent client can run commands on the same filesystem as the MemroOS clone.
@@ -24,8 +28,11 @@ Use this when the agent client can run commands on the same filesystem as the Me
       "command": "/bin/bash",
       "args": [
         "-lc",
-        "exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
-      ]
+        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-codex}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
+      ],
+      "env": {
+        "MEMROOS_AGENT_ID": "codex-desktop-luis-mbp"
+      }
     }
   }
 }
@@ -91,6 +98,16 @@ Verify the exported contract with:
 npm run check:mcp-schema
 ```
 
+## Goal-state handoffs
+
+Long agent runs should persist their active state through MemRoOS before compaction, restart, or cross-agent transfer. Keep the project-local `GOAL_STATE.md` current, then send it through the audited agent-context bus:
+
+```bash
+npm run handoff:goal-state -- --repo /path/to/project --to-agent codex-desktop-luis-mbp
+```
+
+The script searches `.beastmode/GOAL_STATE.md`, `GOAL_STATE.md`, then `.planning/GOAL_STATE.md`. It sends a `context_sync` message and sets `saveToMemory=true`, so the handoff is available both in the recipient inbox and in audited agent memory. It never prints the API key.
+
 ## ChatGPT connector server
 
 ChatGPT custom connectors and Deep Research-compatible MCP servers need read-only `search` and `fetch` tools. The MemroOS MCP facade includes those tools alongside the richer knowledge, memory, and tool-attention tools.
@@ -132,6 +149,9 @@ Local stdio config parse:
 
 ```bash
 bash -n scripts/memroos-mcp.sh
+bash -n scripts/memroos-goal-state-handoff.sh
+MEMROOS_MCP_CLIENT=codex scripts/memroos-mcp.sh --agent-env-status
+MEMROOS_MCP_CLIENT=codex MEMROOS_REQUIRE_SERVER_MEMORY=1 scripts/memroos-mcp.sh --agent-env-status
 ```
 
 Remote HTTP server health via MCP initialize is easiest with an MCP-aware client, but a basic HTTP reachability check should return an MCP response rather than connection refused:

@@ -178,15 +178,23 @@ describe("proxy", () => {
   });
 
   it("lets agent-authenticated API routes handle their own authorization", async () => {
-    const response = await proxy(
+    const addResponse = await proxy(
       new NextRequest("http://localhost:3002/api/memory/add", {
         method: "POST",
         headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
       })
     );
+    const healthResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/memory/health", {
+        method: "GET",
+        headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
+      })
+    );
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("");
+    expect(addResponse.status).toBe(200);
+    expect(await addResponse.text()).toBe("");
+    expect(healthResponse.status).toBe(200);
+    expect(await healthResponse.text()).toBe("");
   });
 
   it("lets operator-key API routes handle their own authorization", async () => {

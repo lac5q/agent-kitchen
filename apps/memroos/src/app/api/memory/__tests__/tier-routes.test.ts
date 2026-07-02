@@ -1,5 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { authenticateAgentHeaders } from "@/lib/agent-registry";
+
+vi.mock("@/lib/agent-registry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agent-registry")>();
+  return { ...actual, authenticateAgentHeaders: vi.fn(() => null) };
+});
+
+const mockAuthenticateAgentHeaders = vi.mocked(authenticateAgentHeaders);
 
 async function loadSearchRoute() {
   vi.resetModules();
@@ -18,6 +26,8 @@ async function loadHealthRoute() {
 
 describe("memory tier routes", () => {
   beforeEach(() => {
+    mockAuthenticateAgentHeaders.mockReset();
+    mockAuthenticateAgentHeaders.mockReturnValue(null);
     process.env.MEM0_URL = "http://mem0.test";
     process.env.NEO4J_HTTP_URL = "http://neo4j.test";
     process.env.NEO4J_USERNAME = "neo4j";
@@ -30,6 +40,7 @@ describe("memory tier routes", () => {
     delete process.env.NEO4J_HTTP_URL;
     delete process.env.NEO4J_USERNAME;
     delete process.env.NEO4J_PASSWORD;
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
     vi.unstubAllGlobals();
   });
 
@@ -145,7 +156,22 @@ describe("memory tier routes", () => {
     expect((await searchRoute.GET(new Request("https://memroos.example/api/memory/search?q=secret"))).status).toBe(403);
     expect((await graphRoute.GET(new Request("https://memroos.example/api/memory/graph?q=secret"))).status).toBe(403);
     expect((await healthRoute.GET(new Request("https://memroos.example/api/memory/health"))).status).toBe(403);
+  });
 
-    delete process.env.MEMROOS_OPERATOR_API_KEY;
+  it("allows authenticated registered agents to read non-local memory health", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
+    mockAuthenticateAgentHeaders.mockReturnValueOnce({ id: "codex-desktop-luis-mbp" } as never);
+    const healthRoute = await loadHealthRoute();
+
+    const response = await healthRoute.GET(
+      new Request("https://memroos.example/api/memory/health", {
+        headers: { authorization: "Bearer scoped-agent-key" },
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.tiers.map((tier: { tier: string }) => tier.tier)).toEqual(["vector", "graph", "episodic"]);
+    expect(mockAuthenticateAgentHeaders).toHaveBeenCalled();
   });
 });

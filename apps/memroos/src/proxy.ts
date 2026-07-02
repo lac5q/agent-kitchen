@@ -86,6 +86,7 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { method: "POST", pattern: /^\/api\/dispatch$/ },
   { method: "POST", pattern: /^\/api\/heartbeat$/ },
   { method: "POST", pattern: /^\/api\/memory\/add$/ },
+  { method: "GET", pattern: /^\/api\/memory\/health$/ },
   { pattern: /^\/api\/memory\/evals\// },
   { method: "POST", pattern: /^\/api\/skills\/report$/ },
   // SkillForge endpoints implement their own local/operator-key auth. The proxy

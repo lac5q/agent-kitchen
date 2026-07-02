@@ -10,7 +10,7 @@ MEMROOS_URL="http://localhost:${MEMROOS_PORT}"
 LOG_DIR="${REPO_ROOT}/scripts/logs"
 DEV_LOG="${LOG_DIR}/memroos-dev.log"
 PID_FILE="${LOG_DIR}/memroos-dev.pid"
-DB_PATH_RAW="${SQLITE_DB_PATH:-data/memroos.db}"
+DB_PATH_RAW="${SQLITE_DB_PATH:-data/conversations.db}"
 if [[ "${DB_PATH_RAW}" = /* ]]; then DB_PATH="${DB_PATH_RAW}"; else DB_PATH="${REPO_ROOT}/${DB_PATH_RAW}"; fi
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -91,7 +91,7 @@ start_app() {
   info "Starting MemroOS Next.js app on port ${MEMROOS_PORT}"
   (
     cd "${REPO_ROOT}/apps/memroos"
-    SQLITE_DB_PATH="${DB_PATH}" npm run dev -- --port "${MEMROOS_PORT}" > "${DEV_LOG}" 2>&1 &
+    nohup env SQLITE_DB_PATH="${DB_PATH}" npm run dev -- --port "${MEMROOS_PORT}" > "${DEV_LOG}" 2>&1 < /dev/null &
     echo $! > "${PID_FILE}"
   )
   DEV_PID="$(cat "${PID_FILE}")"

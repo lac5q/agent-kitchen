@@ -18,8 +18,8 @@ MEMROOS_URL="http://localhost:${MEMROOS_PORT}"
 KEYS_DIR="${HOME}/.memroos/agent-keys"
 LOG_DIR="${REPO_ROOT}/scripts/logs"
 
-# Phase-116/agent-bus bootstrap uses data/memroos.db unless caller overrides SQLITE_DB_PATH.
-DB_PATH_RAW="${SQLITE_DB_PATH:-data/memroos.db}"
+# Match apps/memroos/src/lib/env.ts unless caller overrides SQLITE_DB_PATH.
+DB_PATH_RAW="${SQLITE_DB_PATH:-data/conversations.db}"
 if [[ "${DB_PATH_RAW}" = /* ]]; then
   DB_PATH="${DB_PATH_RAW}"
 else
@@ -140,7 +140,7 @@ ensure_app_running() {
   mkdir -p "${LOG_DIR}"
   (
     cd "${REPO_ROOT}/apps/memroos"
-    SQLITE_DB_PATH="${DB_PATH}" npm run dev -- --port "${MEMROOS_PORT}" > "${LOG_DIR}/memroos-dev.log" 2>&1 &
+    nohup env SQLITE_DB_PATH="${DB_PATH}" npm run dev -- --port "${MEMROOS_PORT}" > "${LOG_DIR}/memroos-dev.log" 2>&1 < /dev/null &
     echo $! > "${LOG_DIR}/memroos-dev.pid"
   )
 
