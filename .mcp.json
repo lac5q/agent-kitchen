@@ -4,11 +4,8 @@
       "command": "/bin/bash",
       "args": [
         "-lc",
-        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-codex}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
-      ],
-      "env": {
-        "MEMROOS_AGENT_ID": "codex-desktop-luis-mbp"
-      }
+        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-auto}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
+      ]
     }
   }
 }

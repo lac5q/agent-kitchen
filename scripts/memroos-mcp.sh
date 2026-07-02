@@ -43,8 +43,40 @@ first_readable_agent_id() {
   return 1
 }
 
-infer_agent_id() {
+detect_mcp_client() {
   case "${MEMROOS_MCP_CLIENT:-}" in
+    ""|auto|detect)
+      ;;
+    *)
+      printf "%s" "$MEMROOS_MCP_CLIENT"
+      return 0
+      ;;
+  esac
+
+  local pid="${PPID:-}" seen=0 process
+  while [[ -n "$pid" && "$pid" != "0" && "$seen" -lt 12 ]]; do
+    process="$(ps -p "$pid" -o comm= -o args= 2>/dev/null || true)"
+    case "$process" in
+      *qwen*) printf "qwen"; return 0 ;;
+      *gemini*) printf "gemini"; return 0 ;;
+      *opencode*) printf "opencode"; return 0 ;;
+      *openclaw*) printf "openclaw"; return 0 ;;
+      *hermes*) printf "hermes"; return 0 ;;
+      *claude*) printf "claude"; return 0 ;;
+      *codex*) printf "codex"; return 0 ;;
+    esac
+    pid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]')"
+    seen=$((seen + 1))
+  done
+
+  return 1
+}
+
+infer_agent_id() {
+  local mcp_client
+  mcp_client="$(detect_mcp_client || true)"
+
+  case "$mcp_client" in
     codex)
       first_readable_agent_id codex-desktop-luis-mbp codex-cloud-memroos opencode
       ;;
