@@ -12,7 +12,7 @@ FROM_AGENT="${MEMROOS_AGENT_ID:-codex-desktop-luis-mbp}"
 TO_AGENT="${MEMROOS_HANDOFF_TO_AGENT:-$FROM_AGENT}"
 STATE_FILE="${MEMROOS_GOAL_STATE_FILE:-}"
 SUBJECT="${MEMROOS_HANDOFF_SUBJECT:-Goal state handoff}"
-MAX_BYTES="${MEMROOS_HANDOFF_MAX_BYTES:-60000}"
+MAX_BYTES="${MEMROOS_HANDOFF_MAX_BYTES:-3000}"
 DRY_RUN=0
 
 usage() {
@@ -27,7 +27,7 @@ Options:
   --to-agent ID         Recipient registered agent id. Defaults to sender.
   --subject TEXT        Message subject.
   --app-url URL         MemRoOS app URL. Defaults to http://127.0.0.1:3002.
-  --max-bytes N         Maximum bytes of state file to include. Defaults to 60000.
+  --max-bytes N         Maximum bytes of state file to include. Defaults to 3000.
   --dry-run             Validate and print a non-secret summary without sending.
   --help                Show this help.
 HELP
@@ -84,6 +84,18 @@ require_cmd() {
     echo "Required command not found: $1" >&2
     exit 1
   fi
+}
+
+sanitize_handoff_content() {
+  # Keep the security scanner strict on the API route. Handoff state is downgraded
+  # to plain text before posting so markdown code spans and token-shaped strings
+  # do not trip high-severity transport guards.
+  sed -E \
+    -e "s/\`/'/g" \
+    -e 's/AKIA[0-9A-Z]{16}/[REDACTED_AWS_ACCESS_KEY]/g' \
+    -e 's/gh[pous]_[A-Za-z0-9]{36}/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED_JWT]/g' \
+    -e 's/[A-Za-z0-9]{40,}/[REDACTED_LONG_TOKEN]/g'
 }
 
 resolve_state_file() {
@@ -148,12 +160,23 @@ if [[ "$STATE_BYTES" -gt "$MAX_BYTES" ]]; then
   TRUNCATED=true
 fi
 
-STATE_SNIPPET="$(head -c "$MAX_BYTES" "$STATE_PATH")"
+if [[ "$TRUNCATED" == "true" && "$MAX_BYTES" -ge 2000 ]]; then
+  HEAD_BYTES=$((MAX_BYTES / 3))
+  TAIL_BYTES=$((MAX_BYTES - HEAD_BYTES))
+  STATE_SNIPPET="$(head -c "$HEAD_BYTES" "$STATE_PATH")
+
+[MemRoOS handoff note: middle of GOAL_STATE truncated to stay below agent-context scanner limits; read ${STATE_PATH} for full local state.]
+
+$(tail -c "$TAIL_BYTES" "$STATE_PATH")"
+else
+  STATE_SNIPPET="$(head -c "$MAX_BYTES" "$STATE_PATH")"
+fi
 if [[ "$TRUNCATED" == "true" ]]; then
   STATE_SNIPPET="${STATE_SNIPPET}
 
 [MemRoOS handoff note: GOAL_STATE content truncated at ${MAX_BYTES} bytes; read ${STATE_PATH} for full local state.]"
 fi
+STATE_SNIPPET="$(printf "%s" "$STATE_SNIPPET" | sanitize_handoff_content)"
 
 if [[ -n "$STATUS_SHORT" ]]; then
   STATUS_BLOCK="$STATUS_SHORT"

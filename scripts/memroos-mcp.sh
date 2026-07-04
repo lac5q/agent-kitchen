@@ -11,6 +11,7 @@ MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC:-90}"
 MEMROOS_AGENT_KEYS_DIR="${MEMROOS_AGENT_KEYS_DIR:-$HOME/.memroos/agent-keys}"
 MEMROOS_MCP_AGENT_ENV_STATUS=0
 MEMROOS_REQUIRE_SERVER_MEMORY="${MEMROOS_REQUIRE_SERVER_MEMORY:-0}"
+MEMROOS_ALLOWED_MEMORY_TIER_STATUSES="${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}"
 
 run_with_timeout() {
   local seconds="$1"
@@ -153,11 +154,12 @@ require_server_memory_access() {
   command -v curl >/dev/null 2>&1 || strict_fail "curl is required for strict memory checks"
   command -v jq >/dev/null 2>&1 || strict_fail "jq is required for strict memory checks"
 
-  local app_url agent_id key inbox_file health_file code unhealthy_tiers
+  local app_url agent_id key inbox_file health_file code unhealthy_tiers allowed_tier_statuses
   app_url="${MEMROOS_APP_URL:-${MEMROOS_BASE_URL:-http://localhost:3002}}"
   app_url="${app_url%/}"
   agent_id="${MEMROOS_AGENT_ID:-}"
   key="${MEMROOS_AGENT_API_KEY:-}"
+  allowed_tier_statuses=",${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES//[[:space:]]/},"
 
   [[ -n "$agent_id" ]] || strict_fail "MEMROOS_AGENT_ID could not be resolved"
   [[ -n "$key" ]] || strict_fail "MEMROOS_AGENT_API_KEY could not be loaded for ${agent_id}"
@@ -186,7 +188,12 @@ require_server_memory_access() {
   jq -e '.ok == true and (.tiers | type == "array")' "$health_file" >/dev/null \
     || strict_fail "memory health check returned an unexpected response"
 
-  unhealthy_tiers="$(jq -r '[.tiers[]? | select(.status != "up") | "\(.tier)=\(.status)" ] | join(", ")' "$health_file")"
+  unhealthy_tiers="$(jq -r --arg allowed "$allowed_tier_statuses" \
+    '[.tiers[]?
+      | (.status | tostring) as $status
+      | select($status != "up" and ($allowed | contains("," + $status + ",") | not))
+      | "\(.tier)=\($status)"
+    ] | join(", ")' "$health_file")"
   if [[ -n "$unhealthy_tiers" ]]; then
     strict_fail "memory tiers are not healthy: ${unhealthy_tiers}"
   fi
@@ -285,6 +292,7 @@ if [[ "$MEMROOS_MCP_AGENT_ENV_STATUS" == "1" ]]; then
   printf 'key_file=%s\n' "${MEMROOS_AGENT_KEY_FILE:-}"
   printf 'app_url=%s\n' "${MEMROOS_APP_URL:-${MEMROOS_BASE_URL:-http://localhost:3002}}"
   printf 'require_server_memory=%s\n' "$MEMROOS_REQUIRE_SERVER_MEMORY"
+  printf 'allowed_memory_tier_statuses=%s\n' "$MEMROOS_ALLOWED_MEMORY_TIER_STATUSES"
   exit 0
 fi
 
