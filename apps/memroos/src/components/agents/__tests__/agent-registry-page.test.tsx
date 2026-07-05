@@ -146,12 +146,12 @@ describe("AgentRegistryPage", () => {
     render(<AgentRegistryPage />);
 
     expect(screen.getByLabelText("Agent platform")).toHaveTextContent("cursor");
-    fireEvent.change(screen.getByLabelText("Agent platform"), { target: { value: "hermes" } });
+    fireEvent.change(screen.getByLabelText("Agent platform"), { target: { value: "pi" } });
     fireEvent.click(screen.getByText("Copy Invite"));
 
     expect(mutateInvite).toHaveBeenCalledWith(
       expect.objectContaining({
-        platform: "hermes",
+        platform: "pi",
         protocol: "rest",
         ttlMinutes: 60,
         mcpTarget: "auto",

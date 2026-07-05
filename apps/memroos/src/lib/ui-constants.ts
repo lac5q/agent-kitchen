@@ -35,6 +35,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   cursor: "Cursor",
   codex: "Codex",
   qwen: "Qwen",
+  pi: "Pi",
   gemini: "Gemini",
   opencode: "OpenCode",
   cortex: "Cortex",

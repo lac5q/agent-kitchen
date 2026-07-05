@@ -4,6 +4,7 @@ export type AgentPlatform =
   | "claude"
   | "codex"
   | "qwen"
+  | "pi"
   | "gemini"
   | "opencode"
   | "cortex"

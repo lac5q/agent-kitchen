@@ -9,6 +9,7 @@ const PLATFORMS = new Set([
   "claude",
   "codex",
   "qwen",
+  "pi",
   "gemini",
   "opencode",
   "cortex",

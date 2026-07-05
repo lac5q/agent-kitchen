@@ -49,7 +49,7 @@ AGENT_ROLE="\${AGENT_ROLE:-\${MEMROOS_AGENT_ROLE:-MemroOS agent}}"
 PLATFORM="\${PLATFORM:-\${MEMROOS_PLATFORM:-}}"
 
 if [[ -z "$PLATFORM" ]]; then
-  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|openclaw|hermes|gemini|qwen> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|openclaw|hermes|none|file:/path]" >&2
+  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|openclaw|hermes|none|file:/path]" >&2
   exit 2
 fi
 
@@ -312,6 +312,7 @@ def install_auto():
         "claude": "claude",
         "gemini": "gemini",
         "qwen": "qwen",
+        "pi": "stdout",
         "openclaw": "openclaw",
         "opencode": "opencode",
         "hermes": "hermes",

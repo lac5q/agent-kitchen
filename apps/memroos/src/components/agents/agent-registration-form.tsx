@@ -15,6 +15,7 @@ const ONBOARDING_PLATFORMS: AgentPlatform[] = [
   "claude",
   "gemini",
   "qwen",
+  "pi",
   "chatgpt",
   "codex",
 ];

@@ -8,6 +8,7 @@ const VALID_PLATFORMS = new Set<AgentPlatform>([
   "claude",
   "codex",
   "qwen",
+  "pi",
   "gemini",
   "opencode",
   "hermes",

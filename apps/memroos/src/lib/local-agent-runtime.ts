@@ -59,6 +59,7 @@ function detectCliPlatform(command: string): AgentPlatform | null {
   if (/\bhermes_cli\.main\b|(?:^|\s)(?:\S*\/)?hermes(?:\s|$)/i.test(command)) return "hermes";
   if (/\bopenclaw\/dist\/index\.js\b|\/node_modules\/openclaw\//i.test(command)) return "openclaw";
   if (isDirectExecutable(command, ["qwen"])) return "qwen";
+  if (isDirectExecutable(command, ["pi"])) return "pi";
   if (isDirectExecutable(command, ["claude"])) return "claude";
   if (isDirectExecutable(command, ["codex"])) return "codex";
   if (isDirectExecutable(command, ["gemini"])) return "gemini";

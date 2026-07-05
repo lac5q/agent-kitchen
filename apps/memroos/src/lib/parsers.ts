@@ -26,6 +26,7 @@ function detectPlatform(agentName: string): AgentPlatform {
   if (name.includes("hermes")) return "hermes";
   if (name.includes("openclaw")) return "openclaw";
   if (name.includes("qwen")) return "qwen";
+  if (name.includes("pi")) return "pi";
   if (name.includes("gemini")) return "gemini";
   if (name.includes("codex")) return "codex";
   if (name.includes("opencode")) return "opencode";
