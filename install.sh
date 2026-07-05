@@ -383,6 +383,21 @@ show_status() {
   fi
 }
 
+install_agent_integrations() {
+  # Wire MemroOS into every agent CLI on this machine.
+  # This is the canonical install path — single source of truth.
+  if [[ -x "$MEMROOS_DIR/scripts/install-agent-integrations.sh" ]]; then
+    echo ""
+    log "Wiring MemroOS into detected agent CLIs (Claude, Codex, Hermes, OpenClaw, etc.)..."
+    if bash "$MEMROOS_DIR/scripts/install-agent-integrations.sh" --check >/dev/null 2>&1; then
+      ok "Agent integrations already up to date"
+    else
+      bash "$MEMROOS_DIR/scripts/install-agent-integrations.sh" || \
+        warn "Agent integrations install failed — agents will work but may not auto-persist research. Re-run: bash $MEMROOS_DIR/scripts/install-agent-integrations.sh"
+    fi
+  fi
+}
+
 show_next_steps() {
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
@@ -423,6 +438,7 @@ main() {
   check_dependencies
   clone_repo
   select_mode
+  install_agent_integrations
   show_status
   show_next_steps
 
