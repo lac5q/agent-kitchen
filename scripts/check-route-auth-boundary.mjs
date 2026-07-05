@@ -63,11 +63,23 @@ const routeLocalAuthCoverage = [
     files: [["apps/memroos/src/app/api/memory/health/route.ts", ["authenticateAgentHeaders(", "authorizeRegistryWrite("]]],
   },
   {
+    pattern: "/^\\/api\\/memory\\/search$/",
+    files: [["apps/memroos/src/app/api/memory/search/route.ts", ["authorizeRegistryWrite("]]],
+  },
+  {
     pattern: "/^\\/api\\/memory\\/evals\\//",
     files: [
       ["apps/memroos/src/app/api/memory/evals/latest/route.ts", ["authorizeRegistryWrite("]],
       ["apps/memroos/src/app/api/memory/evals/run/route.ts", ["authorizeRegistryWrite("]],
     ],
+  },
+  {
+    pattern: "/^\\/api\\/recall$/",
+    files: [["apps/memroos/src/app/api/recall/route.ts", ["authorizeRegistryWrite("]]],
+  },
+  {
+    pattern: "/^\\/api\\/recall\\/ingest$/",
+    files: [["apps/memroos/src/app/api/recall/ingest/route.ts", ["authorizeRegistryWrite("]]],
   },
   {
     pattern: "/^\\/api\\/skills\\/report$/",
