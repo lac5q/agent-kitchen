@@ -100,6 +100,23 @@ Microsoft's IQ stack is proprietary, but the surrounding ecosystem is genuinely 
 | 6 | A2A context persistence | Adopt-OSS | Spike | 60% | Cheap optionality; do as a bounded spike first |
 | — | Work IQ replica, Web IQ replica, no-code ontology UI | Skip | — | — | Integration notes only |
 
+## 3a. Cost Profile — Zero-Paid-Services Constraint (operator directive, 2026-07-05)
+
+Operator constraint: no paid services. Every priority item passes, with two watch-items:
+
+| Item | License / cost | Hidden cost to watch |
+|---|---|---|
+| L1–L3 storage labels | Own code, $0 | None |
+| R1 read trimming | Own code, $0 | None |
+| MAF memory adapter | MIT, $0 | **Use local MAF only.** Foundry *hosted* agents/memory are consumption-billed — explicitly out of scope. The adapter targets self-hosted MAF apps, which is the wedge anyway. |
+| R2 federated retrieval | Own code + MCP, $0 | Only register free-tier MCP sources |
+| R3 ontology via GraphRAG | MIT, $0 license | **LLM indexing spend.** GraphRAG extraction is token-heavy. Keep at $0 by running incremental extraction (on write, not full-corpus) through a local model (Ollama) or existing subscription capacity — never a metered API by default. |
+| Presidio | MIT, $0 | None (runs local) |
+| A2A persistence | Open protocol, $0 | None |
+| Web grounding | Skip/build nothing | If users want it: Brave Search MCP free tier; avoid metered search APIs |
+
+Nothing in priorities 1–3 requires any spend at all. The only real dollar risk in the whole plan is GraphRAG indexing (priority 5, already gated last) — and it's avoidable with local models.
+
 ## 4. The Platform Thesis — why MemroOS is the right seed to grow into an "IQ"
 
 Microsoft built IQ top-down from distribution (they own the data, so context is easy; memory and write governance are afterthoughts). MemroOS is built bottom-up from the parts Microsoft *can't* bundle without weakening lock-in:
