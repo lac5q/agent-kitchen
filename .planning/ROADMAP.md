@@ -452,21 +452,21 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 
 ### Future Milestone Priority
 
-1. **P0 — Plan Permissioned Memory Foundation.**
+1. **P0 — Permissioned Memory Foundation — COMPLETED (Phases 74–78).** All MEMSEC-01..08 and CTX-FOLLOWUP-03 requirements shipped: label schema + raw vault, fail-closed classification cascade, retrieval authorization gate, safe index projections + envelope encryption, and leak-prevention regression tests. Retained for traceability.
    - Source notes: `.planning/notes/privacy-classification-policy-spike.md`, `.planning/notes/memory-security-storage-spike.md`.
    - Requirements: `CTX-FOLLOWUP-03` and `MEMSEC-01..08` in `.planning/REQUIREMENTS.md`.
    - Goal: make MemRoOS safe to trust with sensitive organizational memory before expanding recall power: raw evidence vault, fail-closed privacy/legal/finance/HR classification, retrieval authorization, safe indexes, envelope encryption, and leak-prevention regression tests.
 
-2. **P0 — Plan Context Source Reliability + Sink Health.**
+2. **P0 — Context Source Reliability + Sink Health — COMPLETED (Phase 80).** CTX-FOLLOWUP-01..02, CRON-HEALTH-01..05, and UX-FOLLOWUP-03 shipped as the cron health registry + schedules console. Retained for traceability.
    - Requirements: `CTX-FOLLOWUP-01..02`, `CRON-HEALTH-01..05`, and `UX-FOLLOWUP-03` in `.planning/REQUIREMENTS.md`.
    - Goal: prove sources are ingested, indexed, fresh, replayable, and degraded honestly; recurring transcript/email/context sinks become observable jobs with heartbeat, caught-up status, warning/critical state, and pause/resume/stop controls.
 
-3. **P0 — Plan Cloud Offload + Local Footprint Reduction.**
+3. **P0 — Cloud Offload + Local Footprint Reduction — COMPLETED (Phase 108).** CLOUDOFFLOAD-01..06 shipped as the operating-profile implementation (footprint inventory, `npm run check:local-footprint`, NOC footprint status, prune-safety classification). Turbovec limitation below remains in force. Retained for traceability.
    - Requirements: `CLOUDOFFLOAD-01..06` in `.planning/REQUIREMENTS.md`.
    - Goal: reduce local disk, RAM, and background-service pressure by inventorying permanent local stores versus rebuildable caches, then moving eligible heavy storage/indexing to cloud-managed services with encryption, retention, rollback, and local-cache caps.
    - Limitation/test: evaluate compressed local vector caches such as Turbovec only as future shadow indexes. Qdrant remains canonical; no Turbovec dependency, backend swap, or implementation work starts without Luis approval first. Any future test must pass memory recall evals with no recall/precision regression and prove materially lower hot-path p95 latency.
 
-4. **P1 — Plan corrective Operations NOC Real-Data Wiring phase.**
+4. **P1 — Operations NOC Real-Data Wiring — COMPLETED (Phases 79, 117).** NOC-01..14 and OPS-AUDIT-01..04 shipped as live NOC + provenance wiring; Phase 117 added the efficiency telemetry layer. Retained for traceability.
    - Source note: `.planning/notes/operations-noc-real-data-requirements.md`.
    - Requirements: `NOC-01..NOC-14` and `OPS-AUDIT-01..04` in `.planning/REQUIREMENTS.md`.
    - Goal: replace mock home-screen panels with live operational data, explicit missing/degraded states, functional controls, date-windowed performance views, and the telemetry streams needed for efficiency signals.
@@ -544,6 +544,13 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
    - Requirements: `PROV-01..04` in `.planning/REQUIREMENTS.md`.
    - Goal: move provenance from honor-system to enforced — capture consumed memories/tools at the read/tool-call boundary rather than self-report, write the audit entry in the same transaction as the action so they commit or fail atomically, and hash-chain audit entries so gaps or edits are detectable; on crash/restart the resumed checkpoint reconstructs a verifiable trail.
    - Gate: the availability contract that audit failures must not break the primary action must be preserved or explicitly redesigned; no heavy verification work on the hot path; no raw sensitive payloads exposed in provenance receipts.
+
+19. **P1 — Microsoft IQ Competitive Adoption (free/OSS only).**
+   - Research intake: Microsoft IQ pillar analysis (Work IQ, Fabric IQ, Foundry IQ, Web IQ) with adopt/label/complement/skip decisions, priorities, and success probabilities in `content/research/microsoft-iq-feature-adoption-analysis.md`; positioning comparison in `content/blog/memroos-vs-microsoft-iq.md`.
+   - Requirements: `MSIQ-01..06` in `.planning/REQUIREMENTS.md`.
+   - Goal: extend the shipped MEMSEC label/authorization model (Phases 74–78) from memory tiers to the git-backed knowledge repo (sensitivity/authoritative/freshness labels enforced at knowledge_write and knowledge_search/read), ship a MemroOS memory adapter for self-hosted Microsoft Agent Framework agents (their durable memory is a paid Foundry feature — the self-hosted segment is MemroOS's wedge), and add a capped federated retrieval planner across memory tiers + registered MCP sources.
+   - Overlap: `MSIQ-06` (GraphRAG bounded spike) is research intake for Backlog item 6 (Knowledge Graph Intelligence), not a separate graph system.
+   - Gate (operator directive 2026-07-05): zero paid services. MIT/OSS dependencies only (Microsoft Agent Framework, GraphRAG, Presidio); no Foundry-hosted agents/memory in any path; GraphRAG extraction via local models only, and it remains a bounded spike — no dependency adoption or production extraction without Luis approval. Work IQ and Web IQ replicas are explicitly skipped (integration notes only).
 
 ### Later Ideas
 

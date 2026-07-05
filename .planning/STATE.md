@@ -90,6 +90,11 @@ Next action: Choose any follow-on adoption implementation explicitly; Phase 119 
 
 ## Accumulated Context
 
+### Roadmap Evolution (2026-07-05)
+
+- Backlog item 19 (`MSIQ-01..06`) was added from the Microsoft IQ feature adoption analysis (`content/research/microsoft-iq-feature-adoption-analysis.md`). The architecture review found MEMSEC-01..08 already deliver labels + retrieval authorization for memory tiers, so MSIQ scopes down to the genuinely new surfaces: extending labels/authorization to the git-backed knowledge repo, a memory adapter for self-hosted Microsoft Agent Framework agents, a capped federated retrieval planner, and a bounded GraphRAG spike feeding the existing Knowledge Graph Intelligence item. Operator gate: zero paid services — MIT/OSS only, no Foundry-hosted paths, local-model-only GraphRAG extraction.
+- Backlog hygiene: items 1–4 (Permissioned Memory Foundation, Context Source Reliability, Cloud Offload, NOC Real-Data Wiring) were marked COMPLETED in the backlog — they shipped in Phases 74–80, 108, and 117 but were still listed as un-planned P0/P1 work.
+
 ### Roadmap Evolution (2026-06-19)
 
 - Phase 115 trust-boundary hardening advanced: handler-local operator guards and direct non-local regression tests now cover agent checkpoints, checkpoint metrics, agent version create/list/promote/rollback, memory trace POST/GET, runtime observability dashboard reads, hive POST writes, and model-routing telemetry POST writes. At the time, `ARCHREV-01` and `ARCHREV-09` remained open for the broader privileged route inventory and future proxy/Next.js migration checklist; later 2026-06-27 entries supersede the `ARCHREV-09` status.
