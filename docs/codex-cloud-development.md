@@ -90,7 +90,7 @@ MEMROOS_REQUIRE_SERVER_MEMORY=1
 
 Codex Cloud secrets are available to setup scripts, then removed before the agent phase. If the MCP server needs `MEMROOS_AGENT_API_KEY` during the agent phase, use a narrowly scoped development agent key as an environment variable, not a broad personal/admin secret.
 
-If `MEMROOS_REQUIRE_SERVER_MEMORY=1`, the MCP server fails startup when server memory or scoped agent auth is unavailable. Set it to `0` only for intentional repo-local/offline work where losing server recall is acceptable.
+If `MEMROOS_REQUIRE_SERVER_MEMORY=1`, the MCP server fails startup when server memory or scoped agent auth is unavailable. The launcher retries strict auth and memory-health checks before failing so transient vector-memory flaps do not prevent tool registration. Tune with `MEMROOS_MCP_STRICT_CHECK_ATTEMPTS`, `MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC`, and `MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC`; set `MEMROOS_REQUIRE_SERVER_MEMORY=0` only for intentional repo-local/offline work where losing server recall is acceptable.
 
 For local Codex runs on Luis's MacBook, the MCP launcher can load `~/.memroos/agent-keys/codex-desktop-luis-mbp.key` when it exists, or fall back to the older `opencode.key`. Do not write the key value into `config.toml`; use `MEMROOS_AGENT_ID`, `MEMROOS_AGENT_KEY_FILE`, or the local key-file convention.
 

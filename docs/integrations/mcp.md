@@ -15,7 +15,15 @@ It keeps stdout clean for MCP JSON-RPC, installs missing Python MCP dependencies
 
 When `MEMROOS_AGENT_API_KEY` is not inherited, the launcher can load a local scoped agent key from `~/.memroos/agent-keys/<agent-id>.key`. Set `MEMROOS_AGENT_ID` explicitly when possible. Codex configs should set `MEMROOS_MCP_CLIENT=codex`; the launcher then prefers `codex-desktop-luis-mbp` when that key exists and falls back to the older `opencode` local key.
 
-Set `MEMROOS_REQUIRE_SERVER_MEMORY=1` when the agent must fail actively if server-backed memory is unavailable. In strict mode, `scripts/memroos-mcp.sh` exits before starting MCP unless the scoped agent can authenticate to the MemRoOS app and `/api/memory/health` reports every memory tier as `up`. Set `MEMROOS_REQUIRE_SERVER_MEMORY=0` only for intentional repo-local/offline MCP work.
+Set `MEMROOS_REQUIRE_SERVER_MEMORY=1` when the agent must fail actively if server-backed memory is unavailable. In strict mode, `scripts/memroos-mcp.sh` exits before starting MCP unless the scoped agent can authenticate to the MemRoOS app and `/api/memory/health` reports every memory tier as `up`. The strict gate retries transient failures before exiting so short vector-memory health flaps do not permanently hide MCP tools from a session. Set `MEMROOS_REQUIRE_SERVER_MEMORY=0` only for intentional repo-local/offline MCP work.
+
+Strict gate tuning:
+
+```bash
+MEMROOS_MCP_STRICT_CHECK_ATTEMPTS=5
+MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC=2
+MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC=10
+```
 
 ## Option A — local stdio client
 
@@ -152,6 +160,7 @@ bash -n scripts/memroos-mcp.sh
 bash -n scripts/memroos-goal-state-handoff.sh
 MEMROOS_MCP_CLIENT=codex scripts/memroos-mcp.sh --agent-env-status
 MEMROOS_MCP_CLIENT=codex MEMROOS_REQUIRE_SERVER_MEMORY=1 scripts/memroos-mcp.sh --agent-env-status
+MEMROOS_MCP_CLIENT=codex MEMROOS_REQUIRE_SERVER_MEMORY=1 scripts/memroos-mcp.sh --strict-memory-check
 ```
 
 Remote HTTP server health via MCP initialize is easiest with an MCP-aware client, but a basic HTTP reachability check should return an MCP response rather than connection refused:

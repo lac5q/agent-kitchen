@@ -10,8 +10,12 @@ export MEMROOS_ROOT="${MEMROOS_ROOT:-$ROOT}"
 MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_DEP_CHECK_TIMEOUT_SEC:-90}"
 MEMROOS_AGENT_KEYS_DIR="${MEMROOS_AGENT_KEYS_DIR:-$HOME/.memroos/agent-keys}"
 MEMROOS_MCP_AGENT_ENV_STATUS=0
+MEMROOS_MCP_STRICT_MEMORY_CHECK=0
 MEMROOS_REQUIRE_SERVER_MEMORY="${MEMROOS_REQUIRE_SERVER_MEMORY:-0}"
 MEMROOS_ALLOWED_MEMORY_TIER_STATUSES="${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}"
+MEMROOS_MCP_STRICT_CHECK_ATTEMPTS="${MEMROOS_MCP_STRICT_CHECK_ATTEMPTS:-5}"
+MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC="${MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC:-2}"
+MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC:-10}"
 
 run_with_timeout() {
   local seconds="$1"
@@ -142,6 +146,24 @@ is_true() {
   esac
 }
 
+positive_int_or_default() {
+  local raw="$1" default="$2"
+  if [[ "$raw" =~ ^[0-9]+$ && "$raw" -gt 0 ]]; then
+    printf "%s" "$raw"
+  else
+    printf "%s" "$default"
+  fi
+}
+
+nonnegative_int_or_default() {
+  local raw="$1" default="$2"
+  if [[ "$raw" =~ ^[0-9]+$ ]]; then
+    printf "%s" "$raw"
+  else
+    printf "%s" "$default"
+  fi
+}
+
 strict_fail() {
   echo "MemRoOS server memory unavailable: $*" >&2
   echo "Unset MEMROOS_REQUIRE_SERVER_MEMORY to allow repo-local MCP tools without server memory." >&2
@@ -155,11 +177,15 @@ require_server_memory_access() {
   command -v jq >/dev/null 2>&1 || strict_fail "jq is required for strict memory checks"
 
   local app_url agent_id key inbox_file health_file code unhealthy_tiers allowed_tier_statuses
+  local attempts delay timeout attempt last_error
   app_url="${MEMROOS_APP_URL:-${MEMROOS_BASE_URL:-http://localhost:3002}}"
   app_url="${app_url%/}"
   agent_id="${MEMROOS_AGENT_ID:-}"
   key="${MEMROOS_AGENT_API_KEY:-}"
   allowed_tier_statuses=",${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES//[[:space:]]/},"
+  attempts="$(positive_int_or_default "$MEMROOS_MCP_STRICT_CHECK_ATTEMPTS" 5)"
+  delay="$(nonnegative_int_or_default "$MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC" 2)"
+  timeout="$(positive_int_or_default "$MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC" 10)"
 
   [[ -n "$agent_id" ]] || strict_fail "MEMROOS_AGENT_ID could not be resolved"
   [[ -n "$key" ]] || strict_fail "MEMROOS_AGENT_API_KEY could not be loaded for ${agent_id}"
@@ -168,35 +194,48 @@ require_server_memory_access() {
   health_file="$(mktemp -t memroos-mcp-memory-health.XXXXXX.json)"
   trap 'rm -f "$inbox_file" "$health_file"' RETURN
 
-  code="$(curl -sS -o "$inbox_file" -w "%{http_code}" \
-    "${app_url}/api/agent-context/messages?agent=${agent_id}&box=inbox&status=pending&limit=1" \
-    -H "Authorization: Bearer ${key}" \
-    --max-time 10 2>/dev/null || true)"
-  if [[ ! "$code" =~ ^2 ]]; then
-    strict_fail "agent-context auth check failed for ${agent_id} at ${app_url} (HTTP ${code:-curl_failed})"
-  fi
-  jq -e '.ok == true' "$inbox_file" >/dev/null \
-    || strict_fail "agent-context auth check returned an unexpected response for ${agent_id}"
+  for attempt in $(seq 1 "$attempts"); do
+    code="$(curl -sS -o "$inbox_file" -w "%{http_code}" \
+      "${app_url}/api/agent-context/messages?agent=${agent_id}&box=inbox&status=pending&limit=1" \
+      -H "Authorization: Bearer ${key}" \
+      --max-time "$timeout" 2>/dev/null || true)"
+    if [[ ! "$code" =~ ^2 ]]; then
+      last_error="agent-context auth check failed for ${agent_id} at ${app_url} (HTTP ${code:-curl_failed})"
+    elif ! jq -e '.ok == true' "$inbox_file" >/dev/null; then
+      last_error="agent-context auth check returned an unexpected response for ${agent_id}"
+    else
+      code="$(curl -sS -o "$health_file" -w "%{http_code}" \
+        "${app_url}/api/memory/health" \
+        -H "Authorization: Bearer ${key}" \
+        --max-time "$timeout" 2>/dev/null || true)"
+      if [[ ! "$code" =~ ^2 ]]; then
+        last_error="memory health check failed at ${app_url}/api/memory/health (HTTP ${code:-curl_failed})"
+      elif ! jq -e '.ok == true and (.tiers | type == "array")' "$health_file" >/dev/null; then
+        last_error="memory health check returned an unexpected response"
+      else
+        unhealthy_tiers="$(jq -r --arg allowed "$allowed_tier_statuses" \
+          '[.tiers[]?
+            | (.status | tostring) as $status
+            | select($status != "up" and ($allowed | contains("," + $status + ",") | not))
+            | "\(.tier)=\($status)"
+          ] | join(", ")' "$health_file")"
+        if [[ -z "$unhealthy_tiers" ]]; then
+          if [[ "$attempt" -gt 1 ]]; then
+            echo "MemRoOS strict memory check recovered on attempt ${attempt}/${attempts}." >&2
+          fi
+          return 0
+        fi
+        last_error="memory tiers are not healthy: ${unhealthy_tiers}"
+      fi
+    fi
 
-  code="$(curl -sS -o "$health_file" -w "%{http_code}" \
-    "${app_url}/api/memory/health" \
-    -H "Authorization: Bearer ${key}" \
-    --max-time 10 2>/dev/null || true)"
-  if [[ ! "$code" =~ ^2 ]]; then
-    strict_fail "memory health check failed at ${app_url}/api/memory/health (HTTP ${code:-curl_failed})"
-  fi
-  jq -e '.ok == true and (.tiers | type == "array")' "$health_file" >/dev/null \
-    || strict_fail "memory health check returned an unexpected response"
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      echo "MemRoOS strict memory check attempt ${attempt}/${attempts} failed: ${last_error}; retrying in ${delay}s." >&2
+      sleep "$delay"
+    fi
+  done
 
-  unhealthy_tiers="$(jq -r --arg allowed "$allowed_tier_statuses" \
-    '[.tiers[]?
-      | (.status | tostring) as $status
-      | select($status != "up" and ($allowed | contains("," + $status + ",") | not))
-      | "\(.tier)=\($status)"
-    ] | join(", ")' "$health_file")"
-  if [[ -n "$unhealthy_tiers" ]]; then
-    strict_fail "memory tiers are not healthy: ${unhealthy_tiers}"
-  fi
+  strict_fail "${last_error:-strict memory check failed}"
 }
 
 if [[ -z "${KNOWLEDGE_ROOT:-}" ]]; then
@@ -245,6 +284,10 @@ while [[ $# -gt 0 ]]; do
       MEMROOS_MCP_AGENT_ENV_STATUS=1
       shift
       ;;
+    --strict-memory-check)
+      MEMROOS_MCP_STRICT_MEMORY_CHECK=1
+      shift
+      ;;
     --stateless-http)
       export MEMROOS_MCP_STATELESS_HTTP="true"
       shift
@@ -264,6 +307,7 @@ Options:
   --knowledge-root PATH   Knowledge root to expose; defaults to ~/github/knowledge if present, else repo root
   --mem0-url URL          mem0 base URL for memory_search/memory_save
   --agent-env-status      Print non-secret agent auth status and exit
+  --strict-memory-check   Run the strict server-memory gate and exit without starting MCP
   --stateless-http        Enable FastMCP stateless HTTP mode
 
 Examples:
@@ -297,6 +341,10 @@ if [[ "$MEMROOS_MCP_AGENT_ENV_STATUS" == "1" ]]; then
 fi
 
 require_server_memory_access
+if [[ "$MEMROOS_MCP_STRICT_MEMORY_CHECK" == "1" ]]; then
+  echo "MemRoOS strict memory check passed." >&2
+  exit 0
+fi
 
 PYTHON="${KNOWLEDGE_PYTHON:-}"
 if [[ -z "$PYTHON" ]]; then
