@@ -194,6 +194,37 @@ ON CONFLICT(id) DO UPDATE SET
 SQL
 }
 
+sync_capabilities_direct() {
+  local index="$1" id="$2"
+  local cap_count j cap_id cap_name cap_description cap_tags
+  local id_sql cap_id_sql cap_name_sql cap_description_sql cap_tags_sql
+  cap_count=$(jq ".remoteAgents[$index].capabilities // [] | length" "${AGENTS_CONFIG}")
+  [[ "${cap_count}" -gt 0 ]] || return 0
+
+  id_sql=$(json_escape_sql "${id}")
+  for j in $(seq 0 $((cap_count - 1))); do
+    cap_id=$(jq -r ".remoteAgents[$index].capabilities[$j].id" "${AGENTS_CONFIG}")
+    cap_name=$(jq -r ".remoteAgents[$index].capabilities[$j].name" "${AGENTS_CONFIG}")
+    cap_description=$(jq -r ".remoteAgents[$index].capabilities[$j].description // \"\"" "${AGENTS_CONFIG}")
+    cap_tags=$(jq -c ".remoteAgents[$index].capabilities[$j].tags // []" "${AGENTS_CONFIG}")
+    [[ -n "${cap_id}" && "${cap_id}" != "null" && -n "${cap_name}" && "${cap_name}" != "null" ]] || continue
+
+    cap_id_sql=$(json_escape_sql "${cap_id}")
+    cap_name_sql=$(json_escape_sql "${cap_name}")
+    cap_description_sql=$(json_escape_sql "${cap_description}")
+    cap_tags_sql=$(json_escape_sql "${cap_tags}")
+    sqlite3 "${DB_PATH}" <<SQL
+INSERT INTO agent_capabilities (agent_id, capability_id, name, description, tags, updated_at)
+VALUES ('${id_sql}', '${cap_id_sql}', '${cap_name_sql}', '${cap_description_sql}', '${cap_tags_sql}', strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+ON CONFLICT(agent_id, capability_id) DO UPDATE SET
+  name = excluded.name,
+  description = excluded.description,
+  tags = excluded.tags,
+  updated_at = excluded.updated_at;
+SQL
+  done
+}
+
 hash_api_key() {
   printf "%s" "$1" | shasum -a 256 | awk '{print $1}'
 }
@@ -286,6 +317,7 @@ main() {
     tunnel=$(jq -r ".remoteAgents[$i].tunnelUrl // \"\"" "${AGENTS_CONFIG}")
 
     if register_agent_direct "${id}" "${name}" "${role}" "${platform}" "${location}" "${host}" "${port}" "${health}" "${tunnel}"; then
+      sync_capabilities_direct "${i}" "${id}"
       key_file="${KEYS_DIR}/${id}.key"
       api_key=$(select_api_key_direct "${id}" "${key_file}")
       printf "%s\n" "${api_key}" > "${key_file}"

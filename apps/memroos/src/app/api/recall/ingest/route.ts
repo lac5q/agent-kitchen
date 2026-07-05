@@ -1,10 +1,15 @@
 import { getDb } from '@/lib/db';
 import { ingestAllSessions } from '@/lib/db-ingest';
 import { writeAuditLog } from '@/lib/audit';
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!authorizeRegistryWrite(request)) {
+    return registryWriteUnauthorizedResponse();
+  }
+
   try {
     const db = getDb();
     const { filesProcessed, rowsInserted, filesSkipped } = ingestAllSessions(db);

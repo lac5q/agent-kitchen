@@ -149,6 +149,14 @@ describe('SQLite DB layer', () => {
         .prepare('SELECT id, name, platform, protocol FROM registered_agents ORDER BY id')
         .all() as Array<{ id: string; name: string; platform: string; protocol: string }>;
       const apiKeys = db.prepare('SELECT COUNT(*) AS count FROM agent_api_keys').get() as { count: number };
+      const capabilities = db
+        .prepare(
+          `SELECT agent_id, capability_id
+           FROM agent_capabilities
+           WHERE agent_id IN ('alba', 'codex-desktop-luis-mbp')
+           ORDER BY agent_id, capability_id`
+        )
+        .all() as Array<{ agent_id: string; capability_id: string }>;
 
       expect(agents).toEqual(
         expect.arrayContaining([
@@ -166,6 +174,14 @@ describe('SQLite DB layer', () => {
         ])
       );
       expect(apiKeys.count).toBe(0);
+      expect(capabilities).toEqual(
+        expect.arrayContaining([
+          { agent_id: 'alba', capability_id: 'memory:write:episodic' },
+          { agent_id: 'alba', capability_id: 'memory:write:vector' },
+          { agent_id: 'codex-desktop-luis-mbp', capability_id: 'memory:write:episodic' },
+          { agent_id: 'codex-desktop-luis-mbp', capability_id: 'memory:write:vector' },
+        ])
+      );
     } finally {
       if (previousSeed === undefined) delete process.env.MEMROOS_SEED_REGISTERED_AGENTS;
       else process.env.MEMROOS_SEED_REGISTERED_AGENTS = previousSeed;

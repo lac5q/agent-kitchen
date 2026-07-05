@@ -18,6 +18,7 @@ import { writeAuditLog } from "@/lib/audit";
 
 const mockIngestAllSessions = vi.mocked(ingestAllSessions);
 const mockWriteAuditLog = vi.mocked(writeAuditLog);
+const originalOperatorKey = process.env.MEMROOS_OPERATOR_API_KEY;
 
 async function loadRoute() {
   vi.resetModules();
@@ -30,6 +31,7 @@ describe("POST /api/recall/ingest", () => {
   });
 
   afterEach(() => {
+    process.env.MEMROOS_OPERATOR_API_KEY = originalOperatorKey;
     vi.restoreAllMocks();
   });
 
@@ -41,7 +43,7 @@ describe("POST /api/recall/ingest", () => {
     });
 
     const { POST } = await loadRoute();
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/recall/ingest", { method: "POST" }));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -67,7 +69,7 @@ describe("POST /api/recall/ingest", () => {
     });
 
     const { POST } = await loadRoute();
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/recall/ingest", { method: "POST" }));
     const body = await response.json();
 
     expect(response.status).toBe(500);
@@ -80,10 +82,44 @@ describe("POST /api/recall/ingest", () => {
     });
 
     const { POST } = await loadRoute();
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/recall/ingest", { method: "POST" }));
     const body = await response.json();
 
     expect(response.status).toBe(500);
     expect(body.error).toBe("string error");
+  });
+
+  it("rejects non-local requests without operator authorization", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
+
+    const { POST } = await loadRoute();
+    const response = await POST(new Request("https://memroos.example/api/recall/ingest", { method: "POST" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.ok).toBe(false);
+    expect(mockIngestAllSessions).not.toHaveBeenCalled();
+  });
+
+  it("allows non-local requests with operator authorization", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
+    mockIngestAllSessions.mockReturnValue({
+      filesProcessed: 1,
+      rowsInserted: 2,
+      filesSkipped: 0,
+    });
+
+    const { POST } = await loadRoute();
+    const response = await POST(
+      new Request("https://memroos.example/api/recall/ingest", {
+        method: "POST",
+        headers: { "x-memroos-operator-key": "operator-secret" },
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.rowsInserted).toBe(2);
+    expect(mockIngestAllSessions).toHaveBeenCalledOnce();
   });
 });

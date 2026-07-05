@@ -29,7 +29,15 @@ interface SeedAgent {
   port: number | null;
   healthEndpoint: string | null;
   tunnelUrl: string | null;
+  capabilities: SeedCapability[];
   metadata: Record<string, unknown>;
+}
+
+interface SeedCapability {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,11 +52,29 @@ function optionalPort(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+function parseSeedCapability(value: unknown): SeedCapability | null {
+  if (!isRecord(value)) return null;
+  const { id, name } = value;
+  if (typeof id !== "string" || !id.trim()) return null;
+  if (typeof name !== "string" || !name.trim()) return null;
+
+  const rawTags = Array.isArray(value.tags) ? value.tags : [];
+  return {
+    id: id.trim(),
+    name: name.trim(),
+    description: typeof value.description === "string" ? value.description : "",
+    tags: rawTags.map(String),
+  };
+}
+
 function parseSeedAgent(value: unknown): SeedAgent | null {
   if (!isRecord(value)) return null;
   const { id, name, role, platform } = value;
   const protocol = typeof value.protocol === "string" ? value.protocol : "rest";
   const location = typeof value.location === "string" ? value.location : "local";
+  const capabilities = Array.isArray(value.capabilities)
+    ? value.capabilities.map(parseSeedCapability).filter((capability): capability is SeedCapability => Boolean(capability))
+    : [];
 
   if (typeof id !== "string" || !id.trim()) return null;
   if (typeof name !== "string" || !name.trim()) return null;
@@ -68,6 +94,7 @@ function parseSeedAgent(value: unknown): SeedAgent | null {
     port: optionalPort(value.port),
     healthEndpoint: optionalString(value.healthEndpoint),
     tunnelUrl: optionalString(value.tunnelUrl),
+    capabilities,
     metadata: isRecord(value.metadata) ? value.metadata : {},
   };
 }
@@ -106,6 +133,17 @@ export function seedRegisteredAgents(db: Database.Database): void {
      )
      ON CONFLICT(id) DO NOTHING`
   );
+  const upsertCapability = db.prepare(
+    `INSERT INTO agent_capabilities
+       (agent_id, capability_id, name, description, tags, updated_at)
+     VALUES
+       (@agentId, @capabilityId, @name, @description, @tags, @updatedAt)
+     ON CONFLICT(agent_id, capability_id) DO UPDATE SET
+       name = excluded.name,
+       description = excluded.description,
+       tags = excluded.tags,
+       updated_at = excluded.updated_at`
+  );
 
   const tx = db.transaction(() => {
     for (const agent of agents) {
@@ -117,6 +155,16 @@ export function seedRegisteredAgents(db: Database.Database): void {
         }),
         timestamp,
       });
+      for (const capability of agent.capabilities) {
+        upsertCapability.run({
+          agentId: agent.id,
+          capabilityId: capability.id,
+          name: capability.name,
+          description: capability.description,
+          tags: JSON.stringify(capability.tags),
+          updatedAt: timestamp,
+        });
+      }
     }
   });
   tx();

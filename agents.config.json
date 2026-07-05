@@ -39,7 +39,21 @@
       "location": "local",
       "host": "localhost",
       "port": 18793,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ]
     },
     {
       "id": "gwen",
@@ -60,7 +74,21 @@
       "location": "local",
       "host": "localhost",
       "port": 3000,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ]
     },
     {
       "id": "claude-code-luis-mbp",
@@ -69,6 +97,20 @@
       "platform": "claude",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "claude",
         "runtimeKind": "desktop",
@@ -82,6 +124,20 @@
       "platform": "qwen",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "qwen",
         "runtimeKind": "desktop",
@@ -95,6 +151,20 @@
       "platform": "gemini",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "gemini",
         "runtimeKind": "desktop",
@@ -108,6 +178,20 @@
       "platform": "openclaw",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "openclaw",
         "runtimeKind": "desktop",
@@ -131,6 +215,20 @@
       "platform": "cursor",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "cursor",
         "runtimeKind": "desktop",
@@ -144,6 +242,20 @@
       "platform": "cursor",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "cursor",
         "runtimeKind": "cloud",
@@ -157,6 +269,20 @@
       "platform": "codex",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "codex",
         "runtimeKind": "desktop",
@@ -170,6 +296,20 @@
       "platform": "codex",
       "protocol": "rest",
       "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
       "metadata": {
         "agentFamily": "codex",
         "runtimeKind": "cloud",

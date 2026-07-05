@@ -40,6 +40,7 @@ describe("memory tier routes", () => {
     delete process.env.NEO4J_HTTP_URL;
     delete process.env.NEO4J_USERNAME;
     delete process.env.NEO4J_PASSWORD;
+    delete process.env.MEMROOS_RECALL_INGEST_STALE_AFTER_HOURS;
     delete process.env.MEMROOS_OPERATOR_API_KEY;
     vi.unstubAllGlobals();
   });
@@ -111,6 +112,19 @@ describe("memory tier routes", () => {
 
     expect(response.status).toBe(200);
     expect(body.tiers.map((tier: { tier: string }) => tier.tier)).toEqual(["vector", "graph", "episodic"]);
+    expect(body.recallIngest).toMatchObject({ backend: "sqlite-recall" });
+  });
+
+  it("surfaces stale recall ingestion separately from vector memory health", async () => {
+    process.env.MEMROOS_RECALL_INGEST_STALE_AFTER_HOURS = "0.000001";
+    const { GET } = await loadHealthRoute();
+
+    const response = await GET(new Request("http://localhost/api/memory/health"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.recallIngest.status).toBe("stale");
+    expect(body.recallIngest.backend).toBe("sqlite-recall");
   });
 
   it("reports vector memory as degraded when mem0 has queued saves", async () => {

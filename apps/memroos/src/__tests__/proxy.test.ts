@@ -197,11 +197,47 @@ describe("proxy", () => {
     expect(await healthResponse.text()).toBe("");
   });
 
+  it("lets local memory search handle its own authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/memory/search?q=omnisend", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets operator-key API routes handle their own authorization", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/agents/register", {
         method: "POST",
         headers: { host: "localhost:3002", "x-memroos-operator-key": "operator-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
+  it("lets recall ingest handle its own operator-key authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/recall/ingest", {
+        method: "POST",
+        headers: { host: "localhost:3002", "x-memroos-operator-key": "operator-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
+  it("lets recall search handle its own memory policy gate", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/recall?q=mkt-hub", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
       })
     );
 
