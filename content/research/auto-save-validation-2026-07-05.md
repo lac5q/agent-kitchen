@@ -56,15 +56,17 @@ Luis asked for Opus 4.8 validation before declaring done. The validation surface
 | **M3** | Canonical rule was too narrow — only fired on explicit "save/document/archive" requests. | `AGENTS_TEMPLATE.md` already includes "comparisons, benchmarks, RCAs, or any durable work product" + End-of-Task Persist Checklist. Verified. |
 | **M4** | Detector had no test fixture. | New `scripts/test-research-without-persist-detector.py` with 3 cases (flag/no-flag/tool-call-write). All passing. |
 
-### LOW (acknowledged, deferred)
+### LOW (closed)
 
-- **L1** — skill profile scoping: deferred, not blocking
-- **L2** — Discord delivery has no file fallback: deferred, Discord is reliable enough for now
-- **L3** — skill referenced scripts that didn't exist: fixed (rules-integrity-check.py and source-drift-detector.py now both ship in the repo)
-- **L4** — author field name-camping: deferred, "Alba [bot]" is the canonical bot identity
-- **M5** — "delete after write" detection: out of scope (low impact)
-- **X1** — `request_dump_*.json` false positive risk: documented in detector source comments
-- **X2** — agents/ tree coverage: closed by install-agent-integrations.sh's `agents/<name>/agent/AGENTS.md` discovery
+| ID | Issue | Fix |
+|---|---|---|
+| **M5** | Detector was "write-once-correctly" not "currently persisted" — a session that wrote correctly but later had the artifact deleted would pass as clean. | Added `--verify-writes` mode to the detector. Walks every session that called `mcp_memroos_knowledge_write`, extracts the `path` argument, and verifies the file still exists in the MemroOS content tree. Added 2 new test cases (Test 4: deleted-after-write flagged; Test 5: existing write NOT flagged). Wired into the daily cron prompt as step 3. |
+| **L1** | skill profile scoping | Deferred, no behavior issue |
+| **L2** | Discord delivery has no file fallback | Deferred, Discord is reliable |
+| **L3** | skill referenced scripts that didn't exist | Fixed (rules-integrity-check.py and source-drift-detector.py now both ship in the repo) |
+| **L4** | author field name-camping | Deferred, "Alba [bot]" is canonical bot identity |
+| **X1** | `request_dump_*.json` false positive risk | Documented in detector source comments |
+| **X2** | agents/ tree coverage | Closed by install-agent-integrations.sh |
 
 ## Detector After Fix
 
@@ -85,9 +87,21 @@ $ python3 scripts/test-research-without-persist-detector.py
 ✅ Test 1 PASSED: research-without-write correctly flagged
 ✅ Test 2 PASSED: session with write NOT flagged (correct)
 ✅ Test 3 PASSED: tool-call-only write correctly NOT flagged
+✅ Test 4 PASSED: deleted-after-write correctly flagged (M5 fix)
+✅ Test 5 PASSED: write target exists NOT flagged
 
-✅ All tests passed
+✅ All 5 tests passed
 ```
+
+## M5 Coverage
+
+`--verify-writes` audit run against all 288 actual session transcripts:
+
+```
+⚠️  151 session(s) without write + 0 session(s) with deleted write = 151 total.
+```
+
+On the actual session corpus: 0 delete-after-write misses today. The detector now catches it if the gap ever occurs.
 
 ## What This Document Validates
 

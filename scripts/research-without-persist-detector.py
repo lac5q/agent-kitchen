@@ -259,7 +259,11 @@ def set_last_run_marker(epoch: float) -> None:
     STATE_FILE.write_text(f"{epoch}\n")
 
 
-def write_report(findings: list[Finding], since_epoch: float | None) -> Path:
+def write_report(
+    findings: list[Finding],
+    since_epoch: float | None,
+    missing_writes: list[dict] | None = None,
+) -> Path:
     """Write a Markdown report to OUTPUT_DIR."""
     from datetime import datetime, timezone
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -273,6 +277,16 @@ def write_report(findings: list[Finding], since_epoch: float | None) -> Path:
         f"**Findings:** {len(findings)}",
         "",
     ]
+    missing_writes = missing_writes or []
+    if missing_writes:
+        lines.append("## ⚠️ Sessions that wrote but the artifact was later deleted (M5)")
+        lines.append("")
+        for m in missing_writes:
+            lines.append(f"### `{m['session_id']}`")
+            lines.append(f"- **Session:** `{m['session_path']}`")
+            lines.append(f"- **Expected file:** `{m['expected_path']}`")
+            lines.append(f"- **Missing on disk:** `{m['missing_file']}`")
+            lines.append("")
     if findings:
         lines.append("## ⚠️ Sessions that produced research without writing to MemroOS")
         lines.append("")
@@ -299,26 +313,91 @@ def write_report(findings: list[Finding], since_epoch: float | None) -> Path:
     return report_path
 
 
+def find_missing_writes(since_epoch: float | None) -> list[dict]:
+    """Find sessions that called mcp_memroos_knowledge_write, where the
+    write target no longer exists in the MemroOS knowledge base.
+
+    This addresses M5 (delete-after-write): a session that wrote correctly
+    at the time but whose artifact was later deleted is still surfaced.
+    """
+    misses: list[dict] = []
+    if not SESSIONS_DIR.is_dir():
+        return misses
+    for session_path in SESSIONS_DIR.glob("*.jsonl"):
+        try:
+            mtime = session_path.stat().st_mtime
+        except OSError:
+            continue
+        if since_epoch is not None and mtime < since_epoch:
+            continue
+        messages = load_session(session_path)
+        if not messages:
+            continue
+        # Find write paths called in this session
+        write_paths: list[str] = []
+        for msg in messages:
+            if msg.get("role") != "assistant":
+                continue
+            for tc in msg.get("tool_calls") or []:
+                if not isinstance(tc, dict):
+                    continue
+                fn = tc.get("function") or {}
+                if not isinstance(fn, dict) or fn.get("name") != "mcp_memroos_knowledge_write":
+                    continue
+                args = fn.get("arguments")
+                if isinstance(args, str):
+                    try:
+                        args_obj = json.loads(args)
+                    except json.JSONDecodeError:
+                        args_obj = {}
+                elif isinstance(args, dict):
+                    args_obj = args
+                else:
+                    args_obj = {}
+                path = args_obj.get("path")
+                if isinstance(path, str):
+                    write_paths.append(path)
+        if not write_paths:
+            continue
+        # Check each write path on disk
+        for path in write_paths:
+            full = MEMROOS_KB_DIR / path
+            if not full.exists():
+                misses.append({
+                    "session_id": session_path.stem,
+                    "session_path": str(session_path),
+                    "expected_path": path,
+                    "missing_file": str(full),
+                })
+    return misses
+
+
 def main() -> int:
-    full = "--full" in sys.argv
+    args = sys.argv[1:]
+    full = "--full" in args
+    verify_writes = "--verify-writes" in args
+
     since_epoch: float | None
-    if full:
-        # First run: scan the last 30 days to catch historical misses
-        since_epoch = None  # no cutoff → scan all
+    if full or verify_writes:
+        # First run or M5 audit: scan all
+        since_epoch = None
     else:
-        # Subsequent runs: only what's new since last run
         last = get_last_run_marker()
         since_epoch = last if last > 0 else None
 
     findings = scan_sessions(since_epoch)
+    missing_writes: list[dict] = []
+    if verify_writes:
+        missing_writes = find_missing_writes(since_epoch)
     set_last_run_marker(__import__("time").time())
-    report = write_report(findings, since_epoch)
+    report = write_report(findings, since_epoch, missing_writes)
 
-    if findings:
-        print(f"⚠️  {len(findings)} session(s) produced research without persisting to MemroOS.")
+    total = len(findings) + len(missing_writes)
+    if total:
+        print(f"⚠️  {len(findings)} session(s) without write + {len(missing_writes)} session(s) with deleted write = {total} total.")
         print(f"   Report: {report}")
         return 1
-    print(f"✅ Clean — no research-without-persist findings.")
+    print(f"✅ Clean — no findings.")
     print(f"   Report: {report}")
     return 0
 
