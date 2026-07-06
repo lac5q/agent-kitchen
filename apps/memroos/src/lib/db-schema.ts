@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 type SchemaMigration = {
   version: number;
@@ -94,6 +94,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 2,
     name: 'efficiency-telemetry-events',
     up: applyEfficiencyTelemetrySchema,
+  },
+  {
+    version: 3,
+    name: 'belief-stage-promotion',
+    up: applyBeliefStagePromotionSchema,
   },
 ];
 
@@ -164,6 +169,92 @@ function applyEfficiencyTelemetrySchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS efficiency_events_task
       ON efficiency_events(tenant_id, task_id, created_at DESC);
   `);
+}
+
+function addBeliefStageColumns(db: Database.Database): void {
+  // Additive ALTERs on agent_memory_candidates. Mirrors the existing
+  // try/catch idempotency pattern for additive columns in this file.
+  for (const statement of [
+    `ALTER TABLE agent_memory_candidates ADD COLUMN belief_stage TEXT NOT NULL DEFAULT 'silver_candidate_claim'`,
+    `ALTER TABLE agent_memory_candidates ADD COLUMN promoted_at TEXT`,
+    `ALTER TABLE agent_memory_candidates ADD COLUMN promoted_by TEXT`,
+    `ALTER TABLE agent_memory_candidates ADD COLUMN demoted_at TEXT`,
+    `ALTER TABLE agent_memory_candidates ADD COLUMN demotion_reason TEXT`,
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+}
+
+function applyBeliefStagePromotionSchema(db: Database.Database): void {
+  // Phase 122: belief-stage promotion pipeline (BELIEF-PROMO-01..08).
+  // Migration v3 wires the silver -> gold pipeline:
+  //   - additive belief_stage + provenance columns on agent_memory_candidates
+  //   - belief_promotion_decisions: append-only receipt log (hash-chained)
+  //   - belief_review_queue: human-review queue for high-stakes categories
+  // Receipts are append-only; UPDATE/DELETE forbidden via code convention.
+  // Receipt metadata contains hashes + ids only -- no raw candidate content.
+  addBeliefStageColumns(db);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS belief_promotion_decisions (
+      id                  TEXT    PRIMARY KEY,
+      tenant_id           TEXT    NOT NULL DEFAULT 'default-tenant'
+                              REFERENCES tenants(id),
+      candidate_id        TEXT    NOT NULL
+                          REFERENCES agent_memory_candidates(id) ON DELETE CASCADE,
+      decision_type       TEXT    NOT NULL
+                          CHECK(decision_type IN (
+                            'promoted','demoted','queued_for_review','review_approved','review_rejected',
+                            'admission_denied'
+                          )),
+      category            TEXT    NOT NULL,
+      actor_id            TEXT,
+      actor_role          TEXT    NOT NULL,
+      from_stage          TEXT    NOT NULL,
+      to_stage            TEXT    NOT NULL,
+      reason              TEXT,
+      metadata_json       TEXT    NOT NULL DEFAULT '{}',
+      previous_entry_hash TEXT,
+      entry_hash          TEXT    NOT NULL,
+      created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS belief_promotion_decisions_candidate
+      ON belief_promotion_decisions(tenant_id, candidate_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS belief_promotion_decisions_tenant_chain
+      ON belief_promotion_decisions(tenant_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS belief_promotion_decisions_type
+      ON belief_promotion_decisions(tenant_id, decision_type, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS belief_review_queue (
+      id              TEXT    PRIMARY KEY,
+      tenant_id       TEXT    NOT NULL DEFAULT 'default-tenant'
+                      REFERENCES tenants(id),
+      candidate_id    TEXT    NOT NULL
+                      REFERENCES agent_memory_candidates(id) ON DELETE CASCADE,
+      category        TEXT    NOT NULL,
+      status          TEXT    NOT NULL DEFAULT 'open'
+                      CHECK(status IN ('open','approved','rejected')),
+      opened_by       TEXT,
+      resolved_by     TEXT,
+      resolution_note TEXT,
+      opened_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      resolved_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS belief_review_queue_open
+      ON belief_review_queue(tenant_id, status, opened_at DESC);
+    CREATE INDEX IF NOT EXISTS belief_review_queue_candidate
+      ON belief_review_queue(candidate_id);
+  `);
+
+  // Backfill belief_stage for any rows already present in
+  // agent_memory_candidates created before v3. Bronze -> silver default
+  // is enforced at the column level; existing rows simply inherit it.
+  // No data loss: a candidate only ever moves bronze -> silver -> gold
+  // through the promotion pipeline, never via the default.
 }
 
 function applyCurrentSchema(db: Database.Database): void {
