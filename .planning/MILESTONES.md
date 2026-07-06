@@ -2,13 +2,30 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: Architecture Hardening, NOC Telemetry, and Proactive Recollection (Completed 2026-06-27)
+## Current Position: Agent OS GSD Stack (Planned 2026-07-06)
 
 **Scope:**
 
-1. Refresh memroos.com, README, screenshots, public metadata, and LLM-readable docs so they match the completed v6.4/v6.5/v6.6/v7.0 product state.
-2. Keep the public story centered on company-owned memory and governance for agent harnesses, governed dispatch, source-backed proof, SkillForge hardening, Agent Context Bus, local-footprint inventory, and client-ready validation.
-3. Ship the next memory quality lane around proactive recollection: trigger policy, query planning, recency/importance ranking, receipts, and evals that prove agents search when they should and skip when they should.
+1. Implement the Mark Kashef transcript-audit stack through GSD as a MemRoOS-native control plane, not as a Hermes/OpenClaw replacement project.
+2. Put shared product substrate in MemRoOS: context packet, run ledger, proof gates, command state, evals, model-routing receipts, safety gates, and adapter contracts.
+3. Bundle only portable procedures as skills: GSD roadmap operator, MemRoOS context consumer, shipcheck client wrapper, skill-audit operator, bounded discuss/review council, and lane-specific research/code/handoff playbooks.
+4. Keep Hermes, Discord/Telegram, Codex, Claude Code, and future UIs as thin adapters over the same MemRoOS state.
+
+---
+
+## v8.3 Agent OS GSD Stack (Planned 2026-07-06)
+
+**Phases:** 132-136
+
+**Scope:**
+
+1. **Agent Context Packet + Run Ledger (Phase 132)** — Typed packet plus queryable task/event/proof ledger, reusing Agent Context Bus, checkpoint, memory-trace, hive, and provenance surfaces.
+2. **Shipcheck + Goal/Resume/Standup Commands (Phase 133)** — Lane-specific proof gate and durable command surface.
+3. **Portable Skill Boundary + Skill Audit (Phase 134)** — Classify skill-vs-core product boundaries and audit the skill corpus without auto-deleting.
+4. **Lane Evals + Model Routing Policy (Phase 135)** — Research/code/memory/handoff/GTM/safety eval fixtures and logged routing policy.
+5. **Thin Interface Adapters + Safety Slice (Phase 136)** — Hermes/Discord/Telegram/Codex/Claude adapters over the shared contract, with PII/secrets/destructive-action/cost gates.
+
+**Verification target:** every interface can trigger work, but MemRoOS remains the source of truth for context, task state, proof, skills, evals, model routing, policy, and safety.
 
 ---
 

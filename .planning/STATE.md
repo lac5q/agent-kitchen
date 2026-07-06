@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v7.6
-milestone_name: Future Spike Queue
-status: completed
-stopped_at: Phase 119 completed (2026-06-27)
-last_updated: "2026-06-28T06:31:00.000Z"
+milestone: v8.3
+milestone_name: Agent OS GSD Stack
+status: planned
+stopped_at: Phase 132 planned (2026-07-06)
+last_updated: "2026-07-06T00:00:00.000Z"
 progress:
   total_phases: 62
   completed_phases: 40
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** Phase 119 completed — future spike queue closed as bounded research with adoption deferred.
+**Current focus:** v8.3 Agent OS GSD Stack planned — implement the Mark Kashef transcript-audit stack as MemRoOS-native control plane plus portable skill boundary.
 
 ## Current Position
 
-Phase: 119
-Plan: 119-01 completed
-Status: Future spike queue completed as bounded reports (v7.6)
+Phase: 132
+Plan: 132-01 planned
+Status: Agent context packet + run ledger planned as the first executable v8.3 slice
 
 ## Session Continuity
 
-Last session: 2026-06-28T06:31:00.000Z
-Stopped at: Phase 119 completed (2026-06-27)
-Resume file: None
-Next action: v8.0 Belief + Provenance Core Phases 120-123 ALL COMPLETE (PROV-01..04 + BELIEF-01..05 test-verified + Watcher-approved 2026-07-06). v8.1 Phase 124 Operator Load Proof + SLO Gate complete (ENTOPS-01); Phases 125-127 (ENTOPS-02..08) remain and have real infra dependencies (hosted multi-tenant operator, IdP/MDM, Hermes/Claude memory-write interception) that need explicit operator sign-off on deployment model before code work. v8.2 Team-Scale + Policy Plane (Phases 128-131) follows. Phase 119 spike-adoption gates remain in force.
+Last session: 2026-07-06T00:00:00.000Z
+Stopped at: Phase 132 planned (2026-07-06)
+Resume file: `.planning/phases/132-agent-os-gsd-control-plane/132-01-PLAN.md`
+Next action: execute Phase 132. Build the typed agent context packet and canonical run ledger/query view first. Keep v8.1/v8.2 enterprise/policy work planned, but use v8.3 as the practical implementation spine for the Mark Kashef stack: context packet, ledger, shipcheck, durable commands, skill-boundary manifest, skill audit, lane evals, model routing, thin adapters, and safety slice. Phase 119 spike-adoption gates remain in force.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -94,6 +94,11 @@ Next action: v8.0 Belief + Provenance Core Phases 120-123 ALL COMPLETE (PROV-01.
 
 - Backlog item 19 (`MSIQ-01..06`) was added from the Microsoft IQ feature adoption analysis (`content/research/microsoft-iq-feature-adoption-analysis.md`). The architecture review found MEMSEC-01..08 already deliver labels + retrieval authorization for memory tiers, so MSIQ scopes down to the genuinely new surfaces: extending labels/authorization to the git-backed knowledge repo, a memory adapter for self-hosted Microsoft Agent Framework agents, a capped federated retrieval planner, and a bounded GraphRAG spike feeding the existing Knowledge Graph Intelligence item. Operator gate: zero paid services — MIT/OSS only, no Foundry-hosted paths, local-model-only GraphRAG extraction.
 - Backlog hygiene: items 1–4 (Permissioned Memory Foundation, Context Source Reliability, Cloud Offload, NOC Real-Data Wiring) were marked COMPLETED in the backlog — they shipped in Phases 74–80, 108, and 117 but were still listed as un-planned P0/P1 work.
+
+### Roadmap Evolution (2026-07-06)
+
+- v8.3 Agent OS GSD Stack was added from the Mark Kashef full-channel transcript audit and prioritization. The implementation decision is to make MemRoOS the control plane and keep Hermes/Discord/Telegram/Codex/Claude Code as thin adapters. Product substrate belongs in GSD roadmap phases when it needs shared state, schema, policy, audit/proof receipts, eval storage, model-routing telemetry, or adapter state. Portable skills are limited to repeatable cross-runtime procedures and wrappers that teach agents how to consume the substrate.
+- Phase 132 is the first executable slice: typed agent context packet plus canonical run ledger/query view, reusing Agent Context Bus, hive/checkpoint/memory-trace/provenance surfaces. Phase 133 adds shipcheck and goal/resume/standup commands. Phase 134 handles skill-boundary manifest and skill audit. Phase 135 adds lane evals and model routing. Phase 136 wires thin adapters and first safety slice.
 
 ### Roadmap Evolution (2026-06-19)
 

@@ -38,6 +38,7 @@
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
+- 🔜 **v8.3 Agent OS GSD Stack** — Phases 132-136 (planned 2026-07-06; implements the Mark Kashef transcript-audit stack as MemRoOS-native control plane + portable skill boundary)
 
 ## Phases
 
@@ -616,6 +617,78 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: yes
 
+## v8.3 Agent OS GSD Stack (Phases 132-136) — PLANNED
+
+Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization (`content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md`, `content/research/mark-kashef-agent-stack-prioritization-2026-07-06.md`). Decision: implement the stack through GSD as a MemRoOS-native control plane, not as a Hermes/OpenClaw replacement project. Hermes, Discord, Telegram, Codex, Claude Code, and future UIs are adapters. MemRoOS owns context, task state, proof, policy, skill contracts, evals, and routing receipts.
+
+**Skill boundary rule:** bundle a capability as a skill only when it is a portable, repeatable procedure an agent should carry across runtimes. Embed it in MemRoOS when it requires product state, schema, API, policy, audit/proof receipts, or shared persistence.
+
+- [ ] **Phase 132: Agent Context Packet + Run Ledger** — GSDSTACK-01, GSDSTACK-02
+- [ ] **Phase 133: Shipcheck + Goal/Resume/Standup Commands** — GSDSTACK-03, GSDSTACK-04
+- [ ] **Phase 134: Portable Skill Boundary + Skill Audit** — GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
+- [ ] **Phase 135: Lane Evals + Model Routing Policy** — GSDSTACK-08, GSDSTACK-09
+- [ ] **Phase 136: Thin Interface Adapters + Safety Slice** — GSDSTACK-10, GSDSTACK-11
+
+### Phase 132: Agent Context Packet + Run Ledger
+**Goal**: Every agent receives the same compact, typed truth packet before acting, and every meaningful run event lands in a durable ledger.
+**Depends on**: Phase 107 (Agent Context Bus), Phase 103/104 (checkpoint/resume + memory traces), Phase 120/121 (provenance/audit)
+**Requirements**: GSDSTACK-01, GSDSTACK-02
+**Success Criteria** (what must be TRUE):
+  1. A typed agent context packet endpoint/tool returns active goal, project/repo/client, constraints, relevant gold/silver/bronze memories with provenance, required verification surface, approvals, forbidden actions, and resume marker
+  2. Context packet assembly emits receipts for included, denied, skipped, and stale sources; no raw sensitive payloads leak into receipts
+  3. A canonical run ledger records task, event, artifact, approval, cost, verification, and handoff rows or maps existing hive/checkpoint/evidence surfaces into one queryable view
+  4. A deterministic smoke test proves a known goal produces the expected memory, constraint, verification requirement, and prior handoff
+**Plans**: 1/? planned (`.planning/phases/132-agent-os-gsd-control-plane/132-01-PLAN.md`)
+**UI hint**: yes (debug packet + run ledger list)
+
+### Phase 133: Shipcheck + Goal/Resume/Standup Commands
+**Goal**: Agents cannot call work complete without a lane-appropriate proof receipt, and the daily control commands are backed by the ledger/context packet rather than chat history.
+**Depends on**: Phase 132
+**Requirements**: GSDSTACK-03, GSDSTACK-04
+**Success Criteria** (what must be TRUE):
+  1. `/shipcheck` evaluates lane-specific proof requirements for research, code, memory, deployment, email/doc, GTM, and safety tasks; "done" is blocked unless required proof exists or an explicit bypass reason is logged
+  2. `/goal` creates or resumes a task with acceptance criteria, owner, lane, verification requirement, and policy constraints
+  3. `/resume` reconstructs a working context packet and handoff state without asking the operator to restate background
+  4. `/standup` reports active goals, blockers, recent proof, pending approvals, and next action from ledger data
+**Plans**: 0/? planned
+**UI hint**: yes (command output cards + proof receipt links)
+
+### Phase 134: Portable Skill Boundary + Skill Audit
+**Goal**: Decide what becomes a portable skill versus MemRoOS product substrate, then audit the skill corpus for stale, duplicate, untested, overbroad, or unsafe skills.
+**Depends on**: Phase 132 (run ledger), Phase 98 (skill distribution core), Phase 106 (SkillForge hardening), Phase 123 (gold-only outbound policy)
+**Requirements**: GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
+**Success Criteria** (what must be TRUE):
+  1. A skill-boundary manifest classifies candidate capabilities into `core_product`, `portable_skill`, `adapter_skill`, `reference_only`, or `defer`; classifications include rationale and owner
+  2. Portable skills are limited to repeatable agent procedures: GSD roadmap operator, MemRoOS context consumer, shipcheck client wrapper, skill audit operator, bounded discuss/review council, and lane-specific research/code/handoff playbooks
+  3. Core product features are explicitly barred from being shipped as skills-only: context packet schema, run ledger, proof gate, policy decisions, eval store, model-routing telemetry, audit chain, and adapter state
+  4. `/skill-audit` reports missing owner, missing smoke test, stale review date, duplicate trigger, unsafe tool instructions, no examples, and no usage evidence; it drafts SkillForge proposals but does not auto-delete
+**Plans**: 0/? planned
+**UI hint**: yes (skill boundary table + audit findings)
+
+### Phase 135: Lane Evals + Model Routing Policy
+**Goal**: Prove the stack improves real agent lanes and make model choice explicit, logged, and cheap by default where safe.
+**Depends on**: Phase 132, Phase 133, Phase 57/94 (eval substrate), Phase 46/47 (model routing telemetry)
+**Requirements**: GSDSTACK-08, GSDSTACK-09
+**Success Criteria** (what must be TRUE):
+  1. Research, code, memory, handoff, GTM, and safety lanes each have committed fixtures, scoring rubrics, and CI/scheduled eval runs
+  2. Evals record source coverage, proof compliance, recall provenance, handoff resumability, GTM claim grounding, and safety gate outcomes into the run ledger
+  3. Static model-routing policy maps task classes to cheap/local, frontier, private/customer-bound, vision, and validator models with explicit override reason
+  4. Routing receipts record model, reason, cost estimate/actual, latency, and result quality; the first adaptive routing review is based on observed outcomes, not vibes
+**Plans**: 0/? planned
+**UI hint**: yes (eval lane status + routing/cost report)
+
+### Phase 136: Thin Interface Adapters + Safety Slice
+**Goal**: Hermes/Discord/Telegram/Codex/Claude Code consume the same MemRoOS control plane without owning state, and adapter actions are guarded by the first safety slice.
+**Depends on**: Phase 132, Phase 133, Phase 128/129 where available
+**Requirements**: GSDSTACK-10, GSDSTACK-11
+**Success Criteria** (what must be TRUE):
+  1. Hermes, Discord/Telegram, Codex, and Claude Code adapters can create tasks, request context, post proof receipts, ask for standup/resume, and request approvals through the same API/tool contract
+  2. Adapter contract tests prove no adapter owns memory, task state, proof state, policy state, or model routing decisions
+  3. Secrets/PII scanner, destructive-action approval gate, and cost cap checks run before adapter-triggered sends/writes/destructive actions
+  4. Adapter failure degrades honestly: no silent local git fallback in shared mode, no unlogged writes, and no "done" messages without proof receipts
+**Plans**: 0/? planned
+**UI hint**: no for MVP; later adapter health in NOC
+
 ---
 
 ## Backlog
@@ -636,20 +709,22 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 - **S8 — Customer/sponsor-bank audit**: "prove what data your agents used for this claim" answered from enforced provenance + hash-chained audit, not agent self-report. (PROV-01..04)
 - **S9 — Day-1 new hire on a locked-down Mac**: invite token → MDM installer → verification script; agents carry team directives with no admin rights and no operator intervention. (ENTOPS-05, ENTOPS-04)
 - **S10 — Operator outage at 50 seats**: agents degrade honestly (no git-fallback corpus pull to laptops — that's an exfiltration path, not resilience); solo mode keeps git fallback. (ENTOPS-04)
+- **S11 — Operator wants to run the Mark/Kashef-style stack**: any interface can trigger work, but context, task state, proof, skills, evals, model routing, and safety decisions come from MemRoOS; the same task resumes across Hermes/Codex/Claude without losing proof. (GSDSTACK-01..11)
 
 **Enterprise review learning (2026-07-06)** — `content/research/memroos-enterprise-review-2026-07-06.md` (GPT-5.5xhigh + Claude adversarial consensus): the deployment substrate, not the governance logic, is the first enterprise blocker. Per-laptop MCP launcher = SPOF + 50 disconnected SQLite/audit files; single shared vault = SOC2 tenancy collapse; git fallback = CISO-dealbreaker exfiltration vector; line-cap auto-trim = silent data destruction; Day-1 onboarding broken without Luis. Adopted verdict: ship-modified, two SKUs (Free Solo local-MCP vs Enterprise operator-only). This inserted v8.1 Enterprise Operator Control Plane (`ENTOPS-01..08`) ahead of team-scale access and gates enterprise claims on a load-test SLO (100 agents, 1k writes/hr, p95 < 500ms, <0.1% errors).
 
 Priority order (each is a candidate milestone; requirements in `.planning/REQUIREMENTS.md`):
 
-1. **P0 — v8.0 Belief + Provenance Core — IN PROGRESS (Phases 120-121 complete 2026-07-06; 122-123 next).** `BELIEF-01..05`, `PROV-01..04` complete (absorbs prior Backlog items 9 and 18). The trust kernel: governed silver→gold promotion with demotion/conflict handling, and provenance captured at the read/tool boundary with transactional, hash-chained audit. Everything else (policy receipts, ontology promotion, skill trust) builds on admitted truth + verifiable provenance. Scenarios: S2, S3, S5, S8.
+1. **P0 — v8.0 Belief + Provenance Core — COMPLETE (Phases 120-123 complete 2026-07-06).** `BELIEF-01..05`, `PROV-01..04` complete (absorbs prior Backlog items 9 and 18). The trust kernel: governed silver→gold promotion with demotion/conflict handling, and provenance captured at the read/tool boundary with transactional, hash-chained audit. Everything else (policy receipts, ontology promotion, skill trust) builds on admitted truth + verifiable provenance. Scenarios: S2, S3, S5, S8.
 2. **P0 — v8.1 Enterprise Operator Control Plane — PLANNED as Phases 124-127 (2026-07-06, from enterprise review).** `ENTOPS-01..08`. Load-proven hosted operator, per-tenant/per-user vaults with central hash-chained audit, operator-stub distribution (no git fallback in shared mode), Day-1 MDM/invite-token onboarding, write-side native-memory enforcement (never auto-trim), and exit/DSAR tooling. Two-SKU shape: Free Solo (local) vs Enterprise (operator-only). Parallelizable with v8.0 Phases 122-123 (different subsystems). Scenarios: S9, S10; substrate for S1/S7.
 3. **P0 — v8.2 Team-Scale Access + Policy Plane — PLANNED as Phases 128-131 (2026-07-06).** `TEAMSCALE-01..06`, `POLGOV-01..05`, `MSIQ-01..03`. Spaces/teams over the shipped label model, joiner/mover/leaver for humans + agents, delegation chains, and one declarative policy engine with decision receipts, shadow mode, and CI policy regression; knowledge-repo labels (MSIQ-01..03) land here so memory and knowledge share one enforcement plane. Scenarios: S1, S4, S7 (access half).
-4. **P1 — v8.3 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
-5. **P1 — v8.4 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
-6. **P1 — v8.5 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
-7. **P1 — v8.6 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.3.
-8. **P2 — v8.7 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
-9. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
+4. **P0 — v8.3 Agent OS GSD Stack — PLANNED as Phases 132-136 (2026-07-06, from Mark Kashef transcript audit).** `GSDSTACK-01..11`. Context packet, run ledger, shipcheck, goal/resume/standup, portable skill boundary, skill audit, lane evals, model routing, thin adapters, and safety slice. This is the implementation spine that makes Hermes/Discord/Telegram/Codex/Claude replaceable interfaces over MemRoOS rather than competing OSes. Scenario: S11.
+5. **P1 — v8.4 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
+6. **P1 — v8.5 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
+7. **P1 — v8.6 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
+8. **P1 — v8.7 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.4.
+9. **P2 — v8.8 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
+10. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
 
 Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays cloud and canonical; no spike-to-adoption without Luis approval; no raw sensitive payloads in any receipt; fail-closed defaults everywhere.
 
