@@ -511,7 +511,7 @@ The trust kernel of the governed memory store: provenance enforced at the read/t
 
 Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-enterprise-review-2026-07-06.md`). The governed-memory logic (v8.0, v8.2+) is necessary but not sufficient: the current per-laptop MCP launcher, single shared vault, per-user deletable audit logs, and git fallback fail the 10-100 person ICP on contact — MCP SPOF, git-fallback exfiltration vector, SOC2 tenancy collapse, broken Day-1 onboarding. Verdict adopted: ship-modified, two SKUs — **Free Solo** (local MCP + git fallback + per-machine discipline) and **Enterprise** (operator-only, per-tenant/per-user vaults, write-side enforcement, no git fallback). ICP scenarios: S9, S10; substrate for S1/S7.
 
-- [ ] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
+- [x] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
 - [ ] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03
 - [ ] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06
 - [ ] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08
