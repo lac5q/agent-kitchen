@@ -38,7 +38,7 @@
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
-- 🔜 **v8.3 Agent OS GSD Stack** — Phases 132-136 (planned 2026-07-06; implements the Mark Kashef transcript-audit stack as MemRoOS-native control plane + portable skill boundary)
+- 🔄 **v8.3 Agent OS GSD Stack** — Phases 132-136 (in progress 2026-07-06; Phase 132 complete; implements the Mark Kashef transcript-audit stack as MemRoOS-native control plane + portable skill boundary)
 
 ## Phases
 
@@ -617,14 +617,14 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: yes
 
-## v8.3 Agent OS GSD Stack (Phases 132-136) — PLANNED
+## v8.3 Agent OS GSD Stack (Phases 132-136) — IN PROGRESS
 
 Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization (`content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md`, `content/research/mark-kashef-agent-stack-prioritization-2026-07-06.md`). Decision: implement the stack through GSD as a MemRoOS-native control plane, not as a Hermes/OpenClaw replacement project. Hermes, Discord, Telegram, Codex, Claude Code, and future UIs are adapters. MemRoOS owns context, task state, proof, policy, skill contracts, evals, and routing receipts.
 
 **Skill boundary rule:** bundle a capability as a skill only when it is a portable, repeatable procedure an agent should carry across runtimes. Embed it in MemRoOS when it requires product state, schema, API, policy, audit/proof receipts, or shared persistence.
 
-- [ ] **Phase 132: Agent Context Packet + Run Ledger** — GSDSTACK-01, GSDSTACK-02
-- [ ] **Phase 133: Shipcheck + Goal/Resume/Standup Commands** — GSDSTACK-03, GSDSTACK-04
+- [x] **Phase 132: Agent Context Packet + Run Ledger** — GSDSTACK-01, GSDSTACK-02
+- [x] **Phase 133: Shipcheck + Goal/Resume/Standup Commands** — GSDSTACK-03, GSDSTACK-04
 - [ ] **Phase 134: Portable Skill Boundary + Skill Audit** — GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
 - [ ] **Phase 135: Lane Evals + Model Routing Policy** — GSDSTACK-08, GSDSTACK-09
 - [ ] **Phase 136: Thin Interface Adapters + Safety Slice** — GSDSTACK-10, GSDSTACK-11
@@ -633,24 +633,26 @@ Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization 
 **Goal**: Every agent receives the same compact, typed truth packet before acting, and every meaningful run event lands in a durable ledger.
 **Depends on**: Phase 107 (Agent Context Bus), Phase 103/104 (checkpoint/resume + memory traces), Phase 120/121 (provenance/audit)
 **Requirements**: GSDSTACK-01, GSDSTACK-02
+**Status**: COMPLETE (2026-07-06). Implemented `AgentContextPacket` and run-ledger read model in `apps/memroos/src/lib/agent-context-packet.ts`, agent-authenticated `GET /api/agent-context`, and `scripts/show-agent-context-packet.mjs` debug CLI wrapper. The implementation federates hive delegations/actions, checkpoints, memory traces, efficiency events, audit entries, agent context messages, memory candidates, and handoff packs without exposing raw candidate content, message bodies, or trace candidate text.
 **Success Criteria** (what must be TRUE):
   1. A typed agent context packet endpoint/tool returns active goal, project/repo/client, constraints, relevant gold/silver/bronze memories with provenance, required verification surface, approvals, forbidden actions, and resume marker
   2. Context packet assembly emits receipts for included, denied, skipped, and stale sources; no raw sensitive payloads leak into receipts
   3. A canonical run ledger records task, event, artifact, approval, cost, verification, and handoff rows or maps existing hive/checkpoint/evidence surfaces into one queryable view
   4. A deterministic smoke test proves a known goal produces the expected memory, constraint, verification requirement, and prior handoff
-**Plans**: 1/? planned (`.planning/phases/132-agent-os-gsd-control-plane/132-01-PLAN.md`)
+**Plans**: 1/1 complete (`.planning/phases/132-agent-os-gsd-control-plane/132-01-PLAN.md`)
 **UI hint**: yes (debug packet + run ledger list)
 
 ### Phase 133: Shipcheck + Goal/Resume/Standup Commands
 **Goal**: Agents cannot call work complete without a lane-appropriate proof receipt, and the daily control commands are backed by the ledger/context packet rather than chat history.
 **Depends on**: Phase 132
 **Requirements**: GSDSTACK-03, GSDSTACK-04
+**Status**: COMPLETE (2026-07-06). Implemented `apps/memroos/src/lib/agent-gsd-control.ts` plus agent-key authenticated `POST /api/gsd/goal`, `POST /api/gsd/shipcheck`, `GET /api/gsd/resume`, and `GET /api/gsd/standup`. The implementation reuses hive delegations/actions, checkpoints, the Phase 132 context packet, and the run-ledger read model. `/shipcheck` blocks missing lane proof unless an explicit bypass reason is logged as a ledger receipt.
 **Success Criteria** (what must be TRUE):
   1. `/shipcheck` evaluates lane-specific proof requirements for research, code, memory, deployment, email/doc, GTM, and safety tasks; "done" is blocked unless required proof exists or an explicit bypass reason is logged
   2. `/goal` creates or resumes a task with acceptance criteria, owner, lane, verification requirement, and policy constraints
   3. `/resume` reconstructs a working context packet and handoff state without asking the operator to restate background
   4. `/standup` reports active goals, blockers, recent proof, pending approvals, and next action from ledger data
-**Plans**: 0/? planned
+**Plans**: 1/1 complete (`.planning/phases/133-shipcheck-goal-resume-standup/133-01-PLAN.md`)
 **UI hint**: yes (command output cards + proof receipt links)
 
 ### Phase 134: Portable Skill Boundary + Skill Audit

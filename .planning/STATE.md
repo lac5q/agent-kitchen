@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v8.3
 milestone_name: Agent OS GSD Stack
-status: planned
-stopped_at: Phase 132 planned (2026-07-06)
-last_updated: "2026-07-06T00:00:00.000Z"
+status: in_progress
+stopped_at: Phase 133 complete (2026-07-06)
+last_updated: "2026-07-06T23:02:35.000Z"
 progress:
   total_phases: 62
-  completed_phases: 40
+  completed_phases: 41
   total_plans: 74
-  completed_plans: 83
-  percent: 65
+  completed_plans: 84
+  percent: 67
 ---
 
 # State: Memroos
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v8.3 Agent OS GSD Stack planned — implement the Mark Kashef transcript-audit stack as MemRoOS-native control plane plus portable skill boundary.
+**Current focus:** v8.3 Agent OS GSD Stack in progress — implement the Mark Kashef transcript-audit stack as MemRoOS-native control plane plus portable skill boundary.
 
 ## Current Position
 
-Phase: 132
-Plan: 132-01 planned
-Status: Agent context packet + run ledger planned as the first executable v8.3 slice
+Phase: 133
+Plan: 133-01 complete
+Status: Shipcheck plus goal/resume/standup command substrate shipped on top of the Phase 132 packet and ledger
 
 ## Session Continuity
 
-Last session: 2026-07-06T00:00:00.000Z
-Stopped at: Phase 132 planned (2026-07-06)
-Resume file: `.planning/phases/132-agent-os-gsd-control-plane/132-01-PLAN.md`
-Next action: execute Phase 132. Build the typed agent context packet and canonical run ledger/query view first. Keep v8.1/v8.2 enterprise/policy work planned, but use v8.3 as the practical implementation spine for the Mark Kashef stack: context packet, ledger, shipcheck, durable commands, skill-boundary manifest, skill audit, lane evals, model routing, thin adapters, and safety slice. Phase 119 spike-adoption gates remain in force.
+Last session: 2026-07-06T23:02:35.000Z
+Stopped at: Phase 133 complete (2026-07-06)
+Resume file: `.planning/phases/133-shipcheck-goal-resume-standup/133-01-PLAN.md`
+Next action: execute Phase 134. Build the portable skill-boundary manifest and `/skill-audit` reporting surface on top of the Phase 132/133 state: context packet, run ledger, shipcheck receipts, and durable command surfaces. Keep v8.1/v8.2 enterprise/policy work planned, but use v8.3 as the practical implementation spine for the Mark Kashef stack. Phase 119 spike-adoption gates remain in force.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -99,6 +99,8 @@ Next action: execute Phase 132. Build the typed agent context packet and canonic
 
 - v8.3 Agent OS GSD Stack was added from the Mark Kashef full-channel transcript audit and prioritization. The implementation decision is to make MemRoOS the control plane and keep Hermes/Discord/Telegram/Codex/Claude Code as thin adapters. Product substrate belongs in GSD roadmap phases when it needs shared state, schema, policy, audit/proof receipts, eval storage, model-routing telemetry, or adapter state. Portable skills are limited to repeatable cross-runtime procedures and wrappers that teach agents how to consume the substrate.
 - Phase 132 is the first executable slice: typed agent context packet plus canonical run ledger/query view, reusing Agent Context Bus, hive/checkpoint/memory-trace/provenance surfaces. Phase 133 adds shipcheck and goal/resume/standup commands. Phase 134 handles skill-boundary manifest and skill audit. Phase 135 adds lane evals and model routing. Phase 136 wires thin adapters and first safety slice.
+- Phase 132 is complete as of 2026-07-06T22:53:22Z. `apps/memroos/src/lib/agent-context-packet.ts` builds the redaction-first `AgentContextPacket` and run-ledger read model, `GET /api/agent-context` exposes it through agent API-key auth, and `scripts/show-agent-context-packet.mjs` gives operators a read-only debug wrapper. Verification covered focused packet/proxy/route tests, existing agent-context route tests, typecheck, contract manifest, route-auth boundary, lint, build, GitNexus detect-changes, and Beastmode watcher fallback validation. Claude Opus xhigh was attempted but quota-limited; GLM tier 2 was attempted but the provider token was expired; Codex gpt-5.5/high tier 3 passed after fixes for the proxy bypass, tenant scope, and denied metadata redaction.
+- Phase 133 is complete as of 2026-07-06T23:02:35Z. `apps/memroos/src/lib/agent-gsd-control.ts` implements the command substrate for `/goal`, `/shipcheck`, `/resume`, and `/standup`; `apps/memroos/src/app/api/gsd/*` exposes it through agent API-key auth. The implementation reuses hive delegations/actions, checkpoints, the Phase 132 context packet, and the run-ledger read model. Verification so far covered focused GSD route/library/proxy tests, route-auth boundary, typecheck, and contract manifest.
 
 ### Roadmap Evolution (2026-06-19)
 
