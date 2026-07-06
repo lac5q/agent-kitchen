@@ -1,0 +1,58 @@
+[
+  {
+    "id": "unsupported_silver_never_truth",
+    "description": "Silver candidates that lack provenance must NEVER reach outbound as gold truth; outbound policy must leave them as caveated claims.",
+    "tenantId": "default-tenant",
+    "category": "operational",
+    "expectations": {
+      "admitToGold": false,
+      "outboundStage": "silver",
+      "outboundCaveatNotNull": true,
+      "outboundReceiptAction": "emitted",
+      "receiptContainsRawContent": false
+    }
+  },
+  {
+    "id": "contradicted_gold_demotes_in_one_cycle",
+    "description": "A gold candidate contradicted by a new silver claiming the same (memory_type, content_hash) must be demoted (or rejected) within one promotion cycle so the outbound view reflects no contradictory gold truth.",
+    "tenantId": "default-tenant",
+    "category": "operational",
+    "expectations": {
+      "demoteExistingGold": true,
+      "outboundNoActiveGoldConflict": true
+    }
+  },
+  {
+    "id": "receipt_exposes_stage",
+    "description": "The OutboundReceipt must expose claimHash + stage + action + reason; the JSON of the receipt array must NOT contain raw claim content.",
+    "tenantId": "default-tenant",
+    "category": "operational",
+    "expectations": {
+      "everyReceiptHasClaimHash": true,
+      "everyReceiptExposesStage": true,
+      "stringifiedReceiptsDoNotContainRawContent": true
+    }
+  },
+  {
+    "id": "high_stakes_blocked_until_review",
+    "description": "High-stakes category (pricing) must NOT auto-admit to gold; it lands in the review queue and the candidate stays silver until a review approved event.",
+    "tenantId": "default-tenant",
+    "category": "pricing",
+    "expectations": {
+      "admitToGold": false,
+      "queuedForReview": true,
+      "outboundStage": "silver",
+      "outboundCaveatNotNull": true
+    }
+  },
+  {
+    "id": "bronze_citation_only",
+    "description": "Bronze raw sources are dropped from the default outbound claim stream but pass through as citationOnly when citation mode is on.",
+    "tenantId": "default-tenant",
+    "category": "operational",
+    "expectations": {
+      "defaultOutboundDropsBronze": true,
+      "citationModeEmitsBronzeWithFlag": true
+    }
+  }
+]

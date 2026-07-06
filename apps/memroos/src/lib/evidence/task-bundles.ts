@@ -1,7 +1,24 @@
 import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
 
+import {
+  applyOutboundPolicyToMemoryItems,
+  type FilteredOutboundItem,
+  type OutboundMemoryItem,
+  type OutboundPolicy,
+  type OutboundReceipt,
+} from "../belief/outbound-policy-wiring";
+import { loadOutboundPolicy } from "../belief/outbound-policy";
+
 type JsonList = Array<Record<string, unknown> | string>;
+
+export interface TaskBundleOutboundTelemetry {
+  receipts: OutboundReceipt[];
+  /** The filtered items that passed the policy and can leave the trust boundary. */
+  emittedMemories: FilteredOutboundItem[];
+  /** The filtered sources that passed. */
+  emittedSources: FilteredOutboundItem[];
+}
 
 export interface TaskEvidenceBundleInput {
   id?: string;
@@ -149,5 +166,55 @@ function mapTaskEvidenceBundle(row: Record<string, unknown>): TaskEvidenceBundle
     rollbackHandle: typeof row.rollback_handle === "string" ? row.rollback_handle : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+  };
+}
+
+/**
+ * Phase 123: build the outbound view of an evidence bundle.
+ *
+ * The raw bundle stays as-is in storage. When something leaves the trust
+ * boundary (operator console, agent outbound payload, audit feed, ...) we
+ * run the memories + sources buckets through the outbound policy filter.
+ * Items without `beliefStage` pass through unchanged so legacy bundles are
+ * not penalized for missing metadata.
+ *
+ * Returns the filtered emitted items + the receipts (content-free). The
+ * underlying stored bundle is untouched: callers must use this helper (not
+ * the raw bundle) when shipping data outbound.
+ */
+export function getOutboundFilteredBundle(
+  db: Database.Database,
+  id: string,
+  options: { policy?: OutboundPolicy; citationMode?: boolean } = {}
+): { bundle: TaskEvidenceBundle; telemetry: TaskBundleOutboundTelemetry } | null {
+  const bundle = getTaskEvidenceBundle(db, id);
+  if (!bundle) return null;
+  const policy = options.policy ?? loadOutboundPolicy();
+
+  const memoriesAsItems: OutboundMemoryItem[] = bundle.memories
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => entry as OutboundMemoryItem);
+  const sourcesAsItems: OutboundMemoryItem[] = bundle.sources
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => entry as OutboundMemoryItem);
+
+  const memoryFilter = applyOutboundPolicyToMemoryItems(
+    memoriesAsItems,
+    policy,
+    { citationMode: options.citationMode === true }
+  );
+  const sourceFilter = applyOutboundPolicyToMemoryItems(
+    sourcesAsItems,
+    policy,
+    { citationMode: options.citationMode === true }
+  );
+
+  return {
+    bundle,
+    telemetry: {
+      receipts: [...memoryFilter.receipts, ...sourceFilter.receipts],
+      emittedMemories: memoryFilter.emitted,
+      emittedSources: sourceFilter.emitted,
+    },
   };
 }
