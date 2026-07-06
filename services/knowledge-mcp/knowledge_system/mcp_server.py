@@ -338,6 +338,35 @@ def _memroos_agent_id(agent_id: Optional[str] = None) -> str:
     return (agent_id or os.environ.get("MEMROOS_AGENT_ID") or "shared").strip() or "shared"
 
 
+def _memroos_tenant_id(tenant_id: Optional[str] = None) -> Optional[str]:
+    """Resolve the active tenant id for a knowledge op.
+
+    Phase 125 / ENTOPS-02: ordered precedence:
+      1. Explicit tool argument (caller-provided, e.g. from authenticated session).
+      2. `MEMROOS_TENANT_ID` env var (set by the runtime harness / operator).
+      3. None -- represents the default-tenant solo path (today's behaviour).
+    """
+    explicit = (tenant_id or "").strip()
+    if explicit:
+        return explicit
+    env_value = os.environ.get("MEMROOS_TENANT_ID", "").strip()
+    return env_value or None
+
+
+def _memroos_user_id(user_id: Optional[str] = None) -> Optional[str]:
+    """Resolve the active user id for a knowledge op (Phase 125, ENTOPS-03).
+
+    Same precedence as `_memroos_tenant_id`. Optional everywhere because
+    solo mode pre-dates user identity -- leaving it None matches the
+    pre-Phase-125 behaviour exactly.
+    """
+    explicit = (user_id or "").strip()
+    if explicit:
+        return explicit
+    env_value = os.environ.get("MEMROOS_USER_ID", "").strip()
+    return env_value or None
+
+
 def _memroos_agent_headers() -> dict[str, str] | None:
     key = os.environ.get("MEMROOS_AGENT_API_KEY", "").strip()
     if not key:
@@ -513,15 +542,45 @@ def knowledge_manifest() -> dict:
 
 
 @_mcp_tool
-def knowledge_search(query: str, limit: int = 20) -> list[dict]:
-    """Search source and generated wiki markdown for a literal query."""
-    return KnowledgeStore(_root()).search(query=query, limit=limit)
+def knowledge_search(query: str, limit: int = 20, tenant_id: str = "", user_id: str = "") -> list[dict]:
+    """Search source and generated wiki markdown for a literal query.
+
+    Phase 125 / ENTOPS-02/03: the active tenant/user is resolved from the
+    tool args or the `MEMROOS_TENANT_ID` / `MEMROOS_USER_ID` env vars, and
+    forwarded to the underlying `KnowledgeStore.search` so the vault
+    isolation + central audit bridge apply. Solo mode (no env, no args)
+    preserves the pre-Phase-125 behaviour exactly.
+    """
+    store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
+    return store.search(
+        query=query,
+        limit=limit,
+        tenant_id=_memroos_tenant_id(tenant_id),
+        user_id=_memroos_user_id(user_id),
+        agent_id=_memroos_agent_id(),
+    )
 
 
 @_mcp_tool
-def knowledge_read(path: str, max_chars: int = 20000) -> dict:
-    """Read a knowledge file by repo-relative path with traversal protection."""
-    return KnowledgeStore(_root()).read_text(path, max_chars=max_chars)
+def knowledge_read(
+    path: str,
+    max_chars: int = 20000,
+    tenant_id: str = "",
+    user_id: str = "",
+) -> dict:
+    """Read a knowledge file by repo-relative path with traversal protection.
+
+    Phase 125 / ENTOPS-02/03: tenant-scoped read. Tenant + user identity
+    forwarded for the central audit bridge.
+    """
+    store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
+    return store.read_text(
+        path,
+        max_chars=max_chars,
+        tenant_id=_memroos_tenant_id(tenant_id),
+        user_id=_memroos_user_id(user_id),
+        agent_id=_memroos_agent_id(),
+    )
 
 
 @_mcp_tool
@@ -534,6 +593,8 @@ def knowledge_write(
     require_frontmatter: bool = False,
     auto_commit: bool = True,
     commit_message: str = "",
+    tenant_id: str = "",
+    user_id: str = "",
 ) -> dict:
     """Write content to a knowledge file. Agents MUST use this instead of direct filesystem access.
 
@@ -546,11 +607,13 @@ def knowledge_write(
         require_frontmatter: If True, validate YAML frontmatter before writing
         auto_commit: If True, automatically stage and commit the change
         commit_message: Custom git commit message (auto-generated if empty)
+        tenant_id: Tenant identifier (Phase 125, ENTOPS-02/03)
+        user_id: User identifier (Phase 125, ENTOPS-03)
 
     Returns:
         dict with status, path, bytes_written, commit_sha
     """
-    store = KnowledgeStore(_root())
+    store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
     return store.write_text(
         relative_path=path,
         content=content,
@@ -560,6 +623,8 @@ def knowledge_write(
         require_frontmatter=require_frontmatter,
         auto_commit=auto_commit,
         commit_message=commit_message,
+        tenant_id=_memroos_tenant_id(tenant_id),
+        user_id=_memroos_user_id(user_id),
     )
 
 
@@ -569,6 +634,8 @@ def knowledge_delete(
     agent_id: str = "unknown",
     role: str = "agent",
     auto_commit: bool = True,
+    tenant_id: str = "",
+    user_id: str = "",
 ) -> dict:
     """Delete a knowledge file. Requires admin role.
 
@@ -577,16 +644,20 @@ def knowledge_delete(
         agent_id: Agent identifier for audit trail
         role: Must be "admin" to delete files
         auto_commit: If True, automatically stage and commit the deletion
+        tenant_id: Tenant identifier (Phase 125, ENTOPS-02/03)
+        user_id: User identifier (Phase 125, ENTOPS-03)
 
     Returns:
         dict with status, path, deleted, commit_sha
     """
-    store = KnowledgeStore(_root())
+    store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
     return store.delete_file(
         relative_path=path,
         agent_id=agent_id,
         role=role,
         auto_commit=auto_commit,
+        tenant_id=_memroos_tenant_id(tenant_id),
+        user_id=_memroos_user_id(user_id),
     )
 
 

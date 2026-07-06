@@ -77,6 +77,12 @@ export interface AuditQueryFilter {
   eventType?: AuditEventType | AuditEventType[];
   actorId?: string;
   tenantId?: string;
+  /**
+   * Match entries whose metadata_json contains `userId` (or `user_id`) equal
+   * to this value. Used for DSAR / SIEM queries ("show everything user X wrote").
+   * Phase 125, ENTOPS-03.
+   */
+  userId?: string;
   entityType?: EntityType;
   entityId?: string;
   from?: string;
