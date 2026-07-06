@@ -172,9 +172,9 @@
 
 *Source: RECOLLECT-07 shipped the bronze/silver/gold labels on recollection receipts; the promotion machinery itself (Backlog item 9) is not built. ICP anchor: a Cordant-style GTM agent extracts "prospect signaled willingness to pay $X" from a meeting transcript — that claim must stay silver until reviewed, and outreach/CRM writeback may only use gold claims.*
 
-- [ ] **BELIEF-01**: A promotion pipeline moves memories bronze → silver → gold with explicit checks at each admission: provenance present, source freshness, policy/label clearance, conflict scan against existing gold, and dedupe — no silver-to-gold admission by LLM judgment alone.
-- [ ] **BELIEF-02**: Promotion decisions are auditable receipts (who/what promoted, checks passed, evidence pointers) and demotion exists: a gold fact whose source is invalidated or contradicted drops back to silver with a visible reason.
-- [ ] **BELIEF-03**: High-stakes claim categories (pricing/willingness-to-pay, product capability claims, legal/compliance statements, personal data) require human review for gold admission; category list is policy-configured, fail-closed for unlisted sensitive labels.
+- [x] **BELIEF-01**: A promotion pipeline moves memories bronze → silver → gold with explicit checks at each admission: provenance present, source freshness, policy/label clearance, conflict scan against existing gold, and dedupe — no silver-to-gold admission by LLM judgment alone.
+- [x] **BELIEF-02**: Promotion decisions are auditable receipts (who/what promoted, checks passed, evidence pointers) and demotion exists: a gold fact whose source is invalidated or contradicted drops back to silver with a visible reason.
+- [x] **BELIEF-03**: High-stakes claim categories (pricing/willingness-to-pay, product capability claims, legal/compliance statements, personal data) require human review for gold admission; category list is policy-configured, fail-closed for unlisted sensitive labels.
 - [ ] **BELIEF-04**: Outbound-facing generation paths (outreach drafts, CRM writeback, published docs) can be policy-restricted to gold-only claims, with silver usage forced to carry an inline caveat and bronze excluded except as cited evidence.
 - [ ] **BELIEF-05**: Phase 118 recall evals extend to promotion: unsupported candidate claims never surface as operational truth, contradicted gold is demoted within one promotion cycle, and receipts expose belief stage on every injected memory.
 
