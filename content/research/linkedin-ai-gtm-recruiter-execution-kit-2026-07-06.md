@@ -23,7 +23,7 @@ Files:
 - `ai-gtm-recruiter-networking-runbook-2026-07-06.md`: target rings, title keywords, Boolean searches, company seeds, scoring, disqualifiers, first-week workflow, and safety rules.
 - `message-bank.md`: connection notes, accepted-connection follow-ups, and recruiter reply scripts in Luis's preferred direct voice.
 - `outreach-tracker.csv`: manual tracker seeded with Benjamin Greenspan.
-- `scripts/open-linkedin-networking-searches.sh`: local helper that opens LinkedIn people searches for manual review only.
+- `scripts/open-linkedin-networking-searches.sh`: local helper that prints LinkedIn people-search URLs by default, with an explicit `--open` option for manual browser review.
 
 Execution stance:
 
