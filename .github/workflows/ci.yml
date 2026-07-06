@@ -136,3 +136,30 @@ jobs:
         # produces a fresh status:"pass" report). Does not execute the
         # live harness — production-style runs are opt-in via env.
         run: npm run check:operator-load-slo
+
+  promotion-eval:
+    name: BELIEF-05 promotion eval canary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install linux native bindings
+        run: npm install @rolldown/binding-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu @unrs/resolver-binding-linux-x64-gnu --no-save
+
+      - name: Run BELIEF-05 promotion eval gate
+        # Runs the committed gold promotion eval cases (evals/belief/cases.json)
+        # through the real promotion pipeline against an in-memory DB. Fails on
+        # any of the five BELIEF-05 invariants regressing. Sits next to the
+        # recall canary; extends (does not replace) the Phase 118 recall evals.
+        run: npm run check:belief-eval

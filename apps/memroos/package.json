@@ -19,7 +19,8 @@
     "curate:skills": "node ../../scripts/curate-agent-skills.mjs",
     "install:skill-curation": "node ../../scripts/install-skill-curation-launchd.mjs",
     "test": "vitest",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:belief-eval": "vitest run src/lib/__tests__/belief-promotion-eval-ci.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
