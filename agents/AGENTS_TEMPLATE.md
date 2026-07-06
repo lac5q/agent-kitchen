@@ -120,6 +120,19 @@ The `memroos-save` skill (canonical location: `lac5q/memroos/.agents/skills/memr
 
 The canonical rule will never go stale.
 
+## Dev Server Logs (When Debugging a Running Repo)
+
+When a repo has a long-running dev server (Next, Vite, Rails, Django, Phoenix, FastAPI, etc.), agents debug by reading the log, not by owning the process. Convention:
+
+- Dev server runs as `dev:log` (writes to `logs/dev.log`, truncated per run)
+- Sidecars / workers: `logs/<service>.log`
+- `logs/` is gitignored
+- Agents must check `logs/dev.log` before starting their own dev server
+- Independent of RTK. RTK's `[tee]` is failure-only and unrelated
+
+Full reference (load on demand): `~/github/knowledge/content/devops/dev-log-convention-2026-07-06.md`
+Wrapper script: `~/github/knowledge/scripts/dev-log.sh`
+
 ## Source
 
 - Repo: https://github.com/lac5q/memroos
