@@ -33,7 +33,7 @@ Status: Future spike queue completed as bounded reports (v7.6)
 Last session: 2026-06-28T06:31:00.000Z
 Stopped at: Phase 119 completed (2026-06-27)
 Resume file: None
-Next action: Choose any follow-on adoption implementation explicitly; Phase 119 only completed bounded spikes and does not approve dependency adoption, backend swaps, hosted/private uploads, production indexing, Qdrant upgrades, or runtime replacements.
+Next action: Start v8.0 Belief + Provenance Core (Phases 120-123, planned 2026-07-06 from the Governed Memory OS deep-dive) via `$gsd-plan-phase` — governed silver→gold belief promotion plus enforced provenance and hash-chained audit (BELIEF-01..05, PROV-01..04). v8.1 Team-Scale Access + Policy Plane (Phases 124-127) follows. Phase 119 spike-adoption gates remain in force: no dependency adoption, backend swaps, hosted/private uploads, production indexing, Qdrant upgrades, or runtime replacements without explicit approval.
 
 ## Roadmap Summary (v5.0 + v6.0)
 

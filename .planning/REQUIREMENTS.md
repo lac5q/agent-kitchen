@@ -163,6 +163,68 @@
 - [ ] **MSIQ-05**: A federated retrieval planner fans one query across memory tiers, the knowledge repo, and operator-registered MCP sources, merging ranked results with per-source receipts; scope is capped at local tiers plus explicitly registered free-tier sources — no connector-breadth chase.
 - [ ] **MSIQ-06**: Bounded GraphRAG (MIT) spike compares entity/relationship extraction over `content/` against the existing Graphify-style knowledge-graph plan (Backlog item 6); extraction runs incrementally on write through local models (Ollama) only — no metered LLM APIs, no dependency adoption, no production extraction path without Luis approval.
 
+## BELIEF Belief-Stage Promotion Pipeline (Proposed)
+
+*Source: RECOLLECT-07 shipped the bronze/silver/gold labels on recollection receipts; the promotion machinery itself (Backlog item 9) is not built. ICP anchor: a Cordant-style GTM agent extracts "prospect signaled willingness to pay $X" from a meeting transcript — that claim must stay silver until reviewed, and outreach/CRM writeback may only use gold claims.*
+
+- [ ] **BELIEF-01**: A promotion pipeline moves memories bronze → silver → gold with explicit checks at each admission: provenance present, source freshness, policy/label clearance, conflict scan against existing gold, and dedupe — no silver-to-gold admission by LLM judgment alone.
+- [ ] **BELIEF-02**: Promotion decisions are auditable receipts (who/what promoted, checks passed, evidence pointers) and demotion exists: a gold fact whose source is invalidated or contradicted drops back to silver with a visible reason.
+- [ ] **BELIEF-03**: High-stakes claim categories (pricing/willingness-to-pay, product capability claims, legal/compliance statements, personal data) require human review for gold admission; category list is policy-configured, fail-closed for unlisted sensitive labels.
+- [ ] **BELIEF-04**: Outbound-facing generation paths (outreach drafts, CRM writeback, published docs) can be policy-restricted to gold-only claims, with silver usage forced to carry an inline caveat and bronze excluded except as cited evidence.
+- [ ] **BELIEF-05**: Phase 118 recall evals extend to promotion: unsupported candidate claims never surface as operational truth, contradicted gold is demoted within one promotion cycle, and receipts expose belief stage on every injected memory.
+
+## ONTO Governed Emergent Ontology (Proposed)
+
+*Source: operator question "how to manage the ontology" (2026-07-06). Decision: neither a hand-authored heavyweight ontology nor a fully emergent one — a small fixed upper ontology, an emergent extracted layer, and SEAL-governed promotion between them. Cordant's GTM data objects (Account, Contact, Complexity Signal, Relationship Path, Dossier, Meeting Learning) are the first domain instantiation.*
+
+- [ ] **ONTO-01**: A versioned upper ontology (~12-15 core types: Person, Organization/Account, Team, Agent, Skill, Tool, Project, Task, Event/Meeting, Source/Document, Claim, Decision, Policy, Relationship-Path) lives in git as the single shared vocabulary, mirrored into Neo4j labels, knowledge frontmatter fields, and memory-tier metadata.
+- [ ] **ONTO-02**: Domain schemas (e.g. GTM: Segment, Complexity Signal, Dossier) extend the upper ontology in namespaced packs; a tenant/project can enable a domain pack without forking core types.
+- [ ] **ONTO-03**: Extraction (local-model GraphRAG per MSIQ-06 or existing pipelines) may propose new entity/relation types only as candidates tagged EXTRACTED/INFERRED/AMBIGUOUS; candidate types are bronze/silver vocabulary — retrievable with caveats, never authorization-bearing.
+- [ ] **ONTO-04**: Candidate type/relation promotion into a domain pack goes through the SEAL proposal lifecycle: operator approval, recall/precision non-regression eval, and a migration entry; renames are alias-based, never destructive.
+- [ ] **ONTO-05**: Ontology versions are migration-managed like the SQLite schema (`PRAGMA user_version` pattern): every stored entity records the ontology version it was written under, and queries resolve aliases across versions.
+- [ ] **ONTO-06**: Retrieval, policy, and belief-stage receipts reference ontology types (e.g. "this is a gold Claim about an Account"), so authorization and promotion rules can be written per-type instead of per-record.
+
+## POLGOV Policy-as-Code Governance Plane (Proposed)
+
+*Source: gate logic is currently scattered — MEMSEC retrieval gate, capability policy, knowledge_policy_check, dispatch fail-closed rules. At 100-person scale (many teams, many agents) policy must be one declarative, testable layer. Local/OSS engines only (OPA/Cedar-class or in-repo), zero paid services.*
+
+- [ ] **POLGOV-01**: A single declarative policy layer evaluates retrieval, memory write/promotion, knowledge read/write, skill dispatch, and A2A/tool capability decisions, replacing scattered per-route logic; policies are versioned files in git with review history.
+- [ ] **POLGOV-02**: Every policy decision emits a receipt (policy version, rule matched, allow/deny/redact, reason) that lands in the evidence bundle and audit chain; agents see deny reasons without seeing the withheld content.
+- [ ] **POLGOV-03**: Policies support subject (user/team/agent/role), object (ontology type + labels + belief stage), action, and purpose dimensions — e.g. "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them."
+- [ ] **POLGOV-04**: A shadow/dry-run mode evaluates a proposed policy version against recent live decisions and reports the diff (newly denied / newly allowed) before activation; activation is operator-gated.
+- [ ] **POLGOV-05**: Policy regression tests run in CI: a committed corpus of decision cases (including MEMSEC-08 leak-prevention cases) must produce identical or explicitly-approved-different outcomes on every policy change.
+
+## TEAMSCALE Multi-Team Organizational Scale (Proposed)
+
+*Source: ICP is an agentic-heavy company growing to ~100 people (Cordant.ai reference). Current model is single-operator-plus-agents; the ICP needs teams, spaces, and joiner/mover/leaver flows for humans AND their agents.*
+
+- [ ] **TEAMSCALE-01**: Memory and knowledge support team/space scoping (e.g. GTM, Product, Finance) layered on the existing label model: a space defines default labels, membership (humans + agents), and cross-space sharing rules; per-space recall works with no cross-space leakage by default.
+- [ ] **TEAMSCALE-02**: Joiner flow: onboarding a new person (e.g. a fractional seller) provisions their identity, role, space memberships, and a standard agent kit (scoped keys, allowed skills, context pack) in one operator action, with an onboarding receipt listing exactly what was granted.
+- [ ] **TEAMSCALE-03**: Mover/leaver flow: role change or offboarding revokes human and dependent-agent credentials atomically, reassigns owned artifacts, and triggers a MEMLIFE erasure/retention review for their personal data; no orphaned agent identities with live keys.
+- [ ] **TEAMSCALE-04**: Delegation chains are explicit: an agent acting for a user carries the user's identity in a verifiable chain (user → agent → sub-agent), and policy evaluates the weakest link; A2A hops preserve the chain.
+- [ ] **TEAMSCALE-05**: Org-level observability: per-team NOC views of memory growth, promotion queue depth, policy denials, skill usage, and agent activity, so a 100-person org can see which teams' memory is healthy, stale, or leaking effort.
+- [ ] **TEAMSCALE-06**: Relationship-sensitive assets (e.g. investor/warm-intro graphs in the Cordant scenario) support named-owner approval gates: any agent use of the asset requires the owner's standing or per-use approval, enforced by POLGOV and visible in receipts.
+
+## SKILLTRUST Skill Trust Chain (Proposed)
+
+*Source: SkillForge governs skill optimization, and the marketplace distributes skills, but imported/synced skills are trusted on import. Skills are executable instructions — at ICP scale they need supply-chain treatment. Promotes the "governed skill contracts" and "cross-harness skill auto-sync" Later Ideas.*
+
+- [ ] **SKILLTRUST-01**: Every registered skill carries a contract: preconditions, allowed tools, risk tier, verification checks, owner, rollback behavior, and evidence examples; dispatch remains fail-closed on incomplete contracts (extends the shipped completeness gate).
+- [ ] **SKILLTRUST-02**: Skills are content-hashed and signed at publish/import; the registry records provenance (author, source harness/marketplace, signature) and dispatch can be policy-restricted to signed skills above a trust threshold.
+- [ ] **SKILLTRUST-03**: Imported/marketplace skills run a quarantine lane before enablement: injection/scanner pass, sandboxed eval against the skill's declared verification checks, and operator approval — no direct-to-enabled imports.
+- [ ] **SKILLTRUST-04**: Cross-harness auto-sync (Claude Code, Codex, Hermes, OpenCode dirs) becomes governed: detected skill changes arrive as import proposals with diffs, not silent updates; version pinning per agent with one-step rollback.
+- [ ] **SKILLTRUST-05**: Skill lifecycle states (draft, enabled, deprecated, retired) with deprecation warnings surfaced to dependent agents, a dependency view of which agents/workflows use which skill versions, and audit on every state change.
+
+## MEMLIFE Memory Lifecycle, Retention + Erasure (Proposed)
+
+*Source: a governed store must forget as reliably as it remembers. Embeddings, graph nodes, FTS rows, and qmd projections all copy data — erasure must chase every derivative. ICP anchor: a contractor offboards, or a prospect requests data deletion.*
+
+- [ ] **MEMLIFE-01**: Retention policies per ontology type + label (e.g. meeting transcripts 24 months, personal contact data until offboarding + 30 days), with scheduled enforcement, legal-hold override, and receipts for every expiry action.
+- [ ] **MEMLIFE-02**: Verified erasure: deleting a memory/entity purges or provably tombstones every derivative — vector points, graph nodes/edges, FTS rows, qmd index entries, caches, and context-pack snapshots — with an erasure report listing each store touched.
+- [ ] **MEMLIFE-03**: Subject-scoped erasure: "erase person X" resolves via the ontology to all Claims/Events/Contacts referencing X across tiers, producing a reviewable erasure plan before execution (GDPR/CCPA data-subject shape).
+- [ ] **MEMLIFE-04**: Decay + consolidation: low-salience episodic memories age into summarized semantic form on a schedule, with the original moved to the raw vault (not silently dropped) and consolidation receipts linking summary to sources.
+- [ ] **MEMLIFE-05**: Tombstones preserve audit integrity: erasure never breaks the hash chain or evidence bundles — receipts retain non-sensitive pointers ("a record existed and was erased under policy P") without the erased content.
+
 ---
 
 ## Future Requirements (Bounded Spikes Complete; Adoption Deferred)
