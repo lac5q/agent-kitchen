@@ -175,8 +175,8 @@
 - [x] **BELIEF-01**: A promotion pipeline moves memories bronze → silver → gold with explicit checks at each admission: provenance present, source freshness, policy/label clearance, conflict scan against existing gold, and dedupe — no silver-to-gold admission by LLM judgment alone.
 - [x] **BELIEF-02**: Promotion decisions are auditable receipts (who/what promoted, checks passed, evidence pointers) and demotion exists: a gold fact whose source is invalidated or contradicted drops back to silver with a visible reason.
 - [x] **BELIEF-03**: High-stakes claim categories (pricing/willingness-to-pay, product capability claims, legal/compliance statements, personal data) require human review for gold admission; category list is policy-configured, fail-closed for unlisted sensitive labels.
-- [ ] **BELIEF-04**: Outbound-facing generation paths (outreach drafts, CRM writeback, published docs) can be policy-restricted to gold-only claims, with silver usage forced to carry an inline caveat and bronze excluded except as cited evidence.
-- [ ] **BELIEF-05**: Phase 118 recall evals extend to promotion: unsupported candidate claims never surface as operational truth, contradicted gold is demoted within one promotion cycle, and receipts expose belief stage on every injected memory.
+- [x] **BELIEF-04**: Outbound-facing generation paths (outreach drafts, CRM writeback, published docs) can be policy-restricted to gold-only claims, with silver usage forced to carry an inline caveat and bronze excluded except as cited evidence.
+- [x] **BELIEF-05**: Phase 118 recall evals extend to promotion: unsupported candidate claims never surface as operational truth, contradicted gold is demoted within one promotion cycle, and receipts expose belief stage on every injected memory.
 
 ## ONTO Governed Emergent Ontology (Proposed)
 

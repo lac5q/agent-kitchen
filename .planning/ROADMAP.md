@@ -458,7 +458,7 @@ The trust kernel of the governed memory store: provenance enforced at the read/t
 - [x] **Phase 120: Provenance Capture + Transactional Audit** — PROV-01, PROV-02; completed 2026-07-06 (`agent-checkpoints.ts` boundary receipts + transactional audit; `agent-checkpoints.test.ts` green — see REQUIREMENTS.md PROV verification notes)
 - [x] **Phase 121: Hash-Chained Audit + Crash-Consistent Verification** — PROV-03, PROV-04; completed 2026-07-06 (`verifyCheckpointAuditChain` first-broken-link detection; crash-resume provenance audit verified)
 - [x] **Phase 122: Belief Promotion Pipeline** — BELIEF-01, BELIEF-02, BELIEF-03
-- [ ] **Phase 123: Gold-Only Outbound Policy + Promotion Evals** — BELIEF-04, BELIEF-05
+- [x] **Phase 123: Gold-Only Outbound Policy + Promotion Evals** — BELIEF-04, BELIEF-05
 
 ### Phase 120: Provenance Capture + Transactional Audit
 **Goal**: Every significant agent action carries a verified (not self-reported) set of consumed inputs, and its audit row commits atomically with the action.
