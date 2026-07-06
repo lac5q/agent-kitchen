@@ -171,6 +171,7 @@ describe('SQLite DB layer', () => {
           expect.objectContaining({ id: 'openclaw-desktop-luis-mbp', name: 'OpenClaw Desktop', platform: 'openclaw' }),
           expect.objectContaining({ id: 'qwen-cli-luis-mbp', name: 'Qwen CLI', platform: 'qwen' }),
           expect.objectContaining({ id: 'sophia', name: 'Sophia', platform: 'openclaw' }),
+          expect.objectContaining({ id: 'zcode-desktop-luis-mbp', name: 'ZCode Desktop', platform: 'zcode' }),
         ])
       );
       expect(apiKeys.count).toBe(0);

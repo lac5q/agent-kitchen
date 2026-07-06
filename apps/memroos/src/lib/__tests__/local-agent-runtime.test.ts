@@ -15,6 +15,7 @@ describe("local agent runtime process summary", () => {
         " 2100     1 /opt/homebrew/opt/node/bin/node /opt/homebrew/lib/node_modules/openclaw/dist/index.js gateway --port 18789",
         " 2200  1190 /opt/homebrew/bin/opencode run",
         " 2300  1190 node /opt/homebrew/bin/codex",
+        " 2350  1190 /Applications/ZCode.app/Contents/MacOS/zcode",
         " 2400  1190 /Users/yourname/.local/bin/pi --model local",
         " 1134   641 /Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled",
         "18672  1134 ./Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient mcp",
@@ -24,7 +25,7 @@ describe("local agent runtime process summary", () => {
     );
 
     expect(summary).toEqual({
-      activeCliCount: 8,
+      activeCliCount: 9,
       byPlatform: {
         claude: 1,
         codex: 1,
@@ -33,6 +34,7 @@ describe("local agent runtime process summary", () => {
         opencode: 1,
         pi: 1,
         qwen: 2,
+        zcode: 1,
       },
       scannedAt: "2026-05-07T07:45:00.000Z",
     });

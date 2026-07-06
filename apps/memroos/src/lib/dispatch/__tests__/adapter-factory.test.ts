@@ -54,4 +54,8 @@ describe("selectAdapter", () => {
   it("qwen platform -> hive-poll", () => {
     expect(selectAdapter(makeAgent("qwen-agent", "qwen"))).toBe(hivePollAdapter);
   });
+
+  it("zcode platform -> hive-poll", () => {
+    expect(selectAdapter(makeAgent("zcode-agent", "zcode"))).toBe(hivePollAdapter);
+  });
 });

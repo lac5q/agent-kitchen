@@ -32,5 +32,6 @@ describe("hivePollAdapter", () => {
     expect(platforms).toContain("codex");
     expect(platforms).toContain("qwen");
     expect(platforms).toContain("gemini");
+    expect(platforms).toContain("zcode");
   });
 });

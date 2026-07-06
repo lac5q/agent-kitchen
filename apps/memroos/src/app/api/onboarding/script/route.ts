@@ -49,7 +49,7 @@ AGENT_ROLE="\${AGENT_ROLE:-\${MEMROOS_AGENT_ROLE:-MemroOS agent}}"
 PLATFORM="\${PLATFORM:-\${MEMROOS_PLATFORM:-}}"
 
 if [[ -z "$PLATFORM" ]]; then
-  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|openclaw|hermes|none|file:/path]" >&2
+  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|zcode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|zcode|openclaw|hermes|none|file:/path]" >&2
   exit 2
 fi
 
@@ -258,6 +258,21 @@ def install_opencode():
     })
     return True
 
+def install_zcode():
+    merge_json(home / ".zcode" / "cli" / "config.json", {
+        "mcp": {
+            "servers": {
+                "memroos": {
+                    "type": "http",
+                    "url": mcp_url,
+                    "enabled": True,
+                    "timeoutMs": 60000,
+                }
+            }
+        }
+    })
+    return True
+
 def install_hermes():
     if run_if_available("hermes", ["mcp", "add", "memroos", "--url", mcp_url]):
         return True
@@ -295,6 +310,7 @@ def install_explicit(selected):
         "gemini": install_gemini,
         "qwen": install_qwen,
         "opencode": install_opencode,
+        "zcode": install_zcode,
         "openclaw": install_openclaw,
         "hermes": install_hermes,
         "cursor": install_cursor,
@@ -315,6 +331,7 @@ def install_auto():
         "pi": "stdout",
         "openclaw": "openclaw",
         "opencode": "opencode",
+        "zcode": "zcode",
         "hermes": "hermes",
     }
     return install_explicit(platform_targets.get(platform, "stdout"))

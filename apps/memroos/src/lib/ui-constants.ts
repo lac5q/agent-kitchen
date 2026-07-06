@@ -38,6 +38,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   pi: "Pi",
   gemini: "Gemini",
   opencode: "OpenCode",
+  zcode: "ZCode",
   cortex: "Cortex",
   hermes: "Hermes",
   openclaw: "OpenClaw",

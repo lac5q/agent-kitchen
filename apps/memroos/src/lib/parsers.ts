@@ -30,6 +30,7 @@ function detectPlatform(agentName: string): AgentPlatform {
   if (name.includes("gemini")) return "gemini";
   if (name.includes("codex")) return "codex";
   if (name.includes("opencode")) return "opencode";
+  if (name.includes("zcode")) return "zcode";
   return "claude";
 }
 

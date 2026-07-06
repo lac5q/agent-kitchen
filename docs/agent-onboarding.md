@@ -47,6 +47,7 @@ When the canonical rule changes:
 | Cursor | `~/.cursorrules` + `~/.cursor/mcp.json` | `mcpServers` block in `mcp.json` |
 | Gemini | `~/.gemini/GEMINI.md` | YAML in adjacent `mcp.yaml` |
 | Qwen | `~/.qwen/QWEN.md` | YAML in adjacent `mcp.yaml` |
+| ZCode | `~/.zcode/AGENTS.md` + `~/.zcode/cli/config.json` | `mcp.servers` block in `config.json` |
 | OpenCode | `~/.config/opencode/instructions.md` | YAML in adjacent `mcp.yaml` |
 | Hermes | `~/.hermes/AGENTS.md` + `~/.hermes/profiles/<name>/config.yaml` | `mcp_servers:` block in `config.yaml` |
 | OpenClaw | `~/.openclaw/workspace*/AGENTS.md` | YAML in adjacent `mcp.yaml` |
@@ -56,7 +57,7 @@ When the installer runs, it writes to all of the above that exist on the machine
 ## How to add a new agent CLI
 
 1. Add a row to the `TARGETS` array in `scripts/install-agent-integrations.sh`
-2. Format: `"name|<AGENTS.md-path>|<skills-dir>|<mcp-style>"` where `mcp-style` is `yaml`, `toml`, or `json`
+2. Format: `"name|<AGENTS.md-path>|<skills-dir>|<mcp-style>"` where `mcp-style` is `yaml`, `toml`, `json`, or a tool-specific style such as `zcode-json`
 3. Run `bash scripts/verify-agent-integrations.sh` to confirm
 4. Add a row to the table above
 5. Commit and push

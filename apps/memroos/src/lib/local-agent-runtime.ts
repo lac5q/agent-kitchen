@@ -64,6 +64,7 @@ function detectCliPlatform(command: string): AgentPlatform | null {
   if (isDirectExecutable(command, ["codex"])) return "codex";
   if (isDirectExecutable(command, ["gemini"])) return "gemini";
   if (isDirectExecutable(command, ["opencode", "opencode-ai"])) return "opencode";
+  if (isDirectExecutable(command, ["zcode"])) return "zcode";
   if (isDirectExecutable(command, ["openclaw"])) return "openclaw";
   return null;
 }

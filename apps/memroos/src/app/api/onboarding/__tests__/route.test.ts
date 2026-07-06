@@ -224,12 +224,14 @@ describe("agent onboarding routes", () => {
     expect(script).toContain("\"claude\": \"claude\"");
     expect(script).toContain("\"gemini\": \"gemini\"");
     expect(script).toContain("\"qwen\": \"qwen\"");
+    expect(script).toContain("\"zcode\": \"zcode\"");
     expect(script).toContain("\"pi\": \"stdout\"");
     expect(script).toContain("\"openclaw\": \"openclaw\"");
     expect(script).toContain("\"opencode\": \"opencode\"");
     expect(script).toContain("\"hermes\": \"hermes\"");
     expect(script).toContain("\"cursor\": \"cursor\"");
     expect(script).toContain("home / \".config\" / \"opencode\" / \"opencode.json\"");
+    expect(script).toContain("home / \".zcode\" / \"cli\" / \"config.json\"");
     expect(script).toContain("pathlib.Path.cwd() / \".cursor\" / \"mcp.json\"");
     expect(script).toContain("\"type\": \"remote\"");
     expect(script).toContain("codex\", [\"mcp\", \"add\", \"memroos\", \"--url\"");
@@ -246,7 +248,7 @@ describe("agent onboarding routes", () => {
     expect(rejected.status).toBe(403);
   });
 
-  it.each(["cursor", "hermes", "openclaw", "opencode", "claude", "gemini", "qwen", "codex", "pi"] as const)(
+  it.each(["cursor", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
       const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();

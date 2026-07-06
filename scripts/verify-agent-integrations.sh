@@ -97,8 +97,8 @@ else
 fi
 echo ""
 
-# Test 5: Sample audit of one target's installed AGENTS.md
-echo "Test 5: Spot-check installed AGENTS.md (Hermes)"
+# Test 5: Sample audit of installed AGENTS.md files
+echo "Test 5: Spot-check installed AGENTS.md files"
 if [[ -f "$HOME_DIR/.hermes/AGENTS.md" ]]; then
   if diff -q "$TEMPLATE" "$HOME_DIR/.hermes/AGENTS.md" >/dev/null 2>&1; then
     ok "$HOME_DIR/.hermes/AGENTS.md matches canonical exactly"
@@ -109,6 +109,34 @@ if [[ -f "$HOME_DIR/.hermes/AGENTS.md" ]]; then
 else
   err "$HOME_DIR/.hermes/AGENTS.md missing"
   exit 1
+fi
+if [[ -d "$HOME_DIR/.zcode" ]]; then
+  if [[ -f "$HOME_DIR/.zcode/AGENTS.md" ]] && diff -q "$TEMPLATE" "$HOME_DIR/.zcode/AGENTS.md" >/dev/null 2>&1; then
+    ok "$HOME_DIR/.zcode/AGENTS.md matches canonical exactly"
+  else
+    err "$HOME_DIR/.zcode/AGENTS.md missing or diverged from canonical — run installer"
+    exit 1
+  fi
+  if python3 - "$HOME_DIR/.zcode/cli/config.json" <<'PY' >/dev/null 2>&1
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+server = data.get("mcp", {}).get("servers", {}).get("memroos")
+if not isinstance(server, dict):
+    sys.exit(1)
+if server.get("command") != "/bin/bash":
+    sys.exit(1)
+if server.get("type") != "stdio":
+    sys.exit(1)
+PY
+  then
+    ok "$HOME_DIR/.zcode/cli/config.json registers MemroOS MCP"
+  else
+    err "$HOME_DIR/.zcode/cli/config.json missing MemroOS MCP registration — run installer"
+    exit 1
+  fi
+else
+  warn "ZCode home not found — skipping ZCode spot-check"
 fi
 
 echo ""

@@ -69,6 +69,7 @@ MODE="install"
 #
 # TOML targets (Claude/Codex/Qwen/Cursor) need a TOML-aware registration.
 # YAML targets (Hermes/OpenClaw/etc.) need a YAML-aware registration.
+# ZCode uses its own JSON shape under ~/.zcode/cli/config.json.
 # Plain markdown targets (AGENTS.md only) just get the file copy.
 
 MCP_BASH_COMMAND_LINE='-lc exec "${MEMROOS_ROOT:-\$HOME/github/memroos}/scripts/memroos-mcp.sh"'
@@ -80,6 +81,7 @@ declare -a TARGETS=(
   "cursor|$HOME_DIR/.cursorrules|$HOME_DIR/.cursor/skills|json"
   "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|yaml"
   "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|yaml"
+  "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|zcode-json"
   "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|yaml"
   "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|yaml"
 )
@@ -121,27 +123,29 @@ if [[ ${#OPENCLAW_WORKSPACES[@]} -gt 0 ]]; then
   rm -f /tmp/.memroos-ws-list.$$
 fi
 
-for ws_dir in "${OPENCLAW_WORKSPACES[@]}"; do
-  # Naming:
-  #   ~/.openclaw/workspace/AGENTS.md           → "openclaw"
-  #   ~/.openclaw/workspace-<name>/AGENTS.md    → "openclaw-<name>"
-  #   ~/.openclaw/workspace/<name>/AGENTS.md    → "openclaw-<name>"
-  parent="$(dirname "$ws_dir")"
-  base="$(basename "$ws_dir")"
-  if [[ "$base" == "workspace" ]]; then
-    # Layout option 3: bare workspace/
-    name="openclaw"
-  elif [[ "$parent" == "$d/workspace" ]]; then
-    # Layout option 1: nested under workspace/
-    name="openclaw-$base"
-  elif [[ "$base" == workspace-* ]]; then
-    # Layout option 2: workspace-<name>/ sibling
-    name="openclaw-${base#workspace-}"
-  else
-    name="openclaw-$base"
-  fi
-  TARGETS+=("$name|$ws_dir/AGENTS.md|$ws_dir/skills|yaml")
-done
+if [[ ${#OPENCLAW_WORKSPACES[@]} -gt 0 ]]; then
+  for ws_dir in "${OPENCLAW_WORKSPACES[@]}"; do
+    # Naming:
+    #   ~/.openclaw/workspace/AGENTS.md           → "openclaw"
+    #   ~/.openclaw/workspace-<name>/AGENTS.md    → "openclaw-<name>"
+    #   ~/.openclaw/workspace/<name>/AGENTS.md    → "openclaw-<name>"
+    parent="$(dirname "$ws_dir")"
+    base="$(basename "$ws_dir")"
+    if [[ "$base" == "workspace" ]]; then
+      # Layout option 3: bare workspace/
+      name="openclaw"
+    elif [[ "$parent" == "$d/workspace" ]]; then
+      # Layout option 1: nested under workspace/
+      name="openclaw-$base"
+    elif [[ "$base" == workspace-* ]]; then
+      # Layout option 2: workspace-<name>/ sibling
+      name="openclaw-${base#workspace-}"
+    else
+      name="openclaw-$base"
+    fi
+    TARGETS+=("$name|$ws_dir/AGENTS.md|$ws_dir/skills|yaml")
+  done
+fi
 
 # ---- Helpers --------------------------------------------------------------
 
@@ -252,6 +256,36 @@ with open(path, "w") as f:
 PY
 }
 
+upsert_zcode_mcp_block() {
+  local target_file="$1"
+  mkdir -p "$(dirname "$target_file")"
+  if [[ ! -f "$target_file" ]]; then
+    echo '{}' > "$target_file"
+  fi
+
+  python3 - "$target_file" <<'PY'
+import sys, json
+path = sys.argv[1]
+with open(path) as f:
+    try:
+        data = json.load(f)
+    except json.JSONDecodeError:
+        data = {}
+data.setdefault("mcp", {})
+data["mcp"].setdefault("servers", {})
+data["mcp"]["servers"]["memroos"] = {
+    "type": "stdio",
+    "command": "/bin/bash",
+    "args": ["-lc", "exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""],
+    "enabled": True,
+    "timeoutMs": 60000,
+}
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+}
+
 install_agents_md() {
   local target_file="$1"
   mkdir -p "$(dirname "$target_file")"
@@ -325,6 +359,26 @@ with open(path, "w") as f:
 PY
 }
 
+uninstall_zcode_mcp_block() {
+  local target_file="$1"
+  [[ -f "$target_file" ]] || return 0
+  python3 - "$target_file" <<'PY'
+import sys, json
+path = sys.argv[1]
+with open(path) as f:
+    try:
+        data = json.load(f)
+    except json.JSONDecodeError:
+        sys.exit(0)
+servers = data.get("mcp", {}).get("servers")
+if isinstance(servers, dict):
+    servers.pop("memroos", None)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+}
+
 # ---- Main loop ------------------------------------------------------------
 
 echo "MemroOS Agent Integrations Installer"
@@ -347,6 +401,7 @@ case "$MODE" in
         yaml) upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
         toml) upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
         json) upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
+        zcode-json) upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
       esac
       log "$name → $agents_file"
     done
@@ -390,6 +445,7 @@ case "$MODE" in
         yaml) uninstall_yaml_mcp_block "${agents_file%.md}.mcp.yaml" ;;
         toml) uninstall_toml_mcp_block "${agents_file%.md}.mcp.toml" ;;
         json) uninstall_json_mcp_block "${agents_file%.md}.mcp.json" ;;
+        zcode-json) uninstall_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" ;;
       esac
       log "$name: removed"
     done

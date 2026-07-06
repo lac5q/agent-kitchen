@@ -11,6 +11,7 @@ const VALID_PLATFORMS = new Set<AgentPlatform>([
   "pi",
   "gemini",
   "opencode",
+  "zcode",
   "hermes",
   "openclaw",
   "chatgpt",

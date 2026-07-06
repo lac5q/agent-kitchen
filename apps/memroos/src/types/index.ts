@@ -7,6 +7,7 @@ export type AgentPlatform =
   | "pi"
   | "gemini"
   | "opencode"
+  | "zcode"
   | "cortex"
   | "hermes"
   | "openclaw"

@@ -107,7 +107,7 @@ It is idempotent — running it again re-converges every target.
 
 The `memroos-save` skill (canonical location: `lac5q/memroos/.agents/skills/memroos-save/SKILL.md`) is installed alongside this directive. Load it with:
 
-- Claude Code / Cursor / OpenCode: auto-loaded on first save/document request
+- Claude Code / Cursor / ZCode / OpenCode: auto-loaded on first save/document request
 - Hermes / OpenClaw: explicit `skill_view(name="memroos-save")`
 - Codex: load via `/skills`
 

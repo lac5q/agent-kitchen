@@ -315,6 +315,33 @@
         "runtimeKind": "cloud",
         "environment": "lac5q/memroos"
       }
+    },
+    {
+      "id": "zcode-desktop-luis-mbp",
+      "name": "ZCode Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "zcode",
+      "protocol": "rest",
+      "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
+      "metadata": {
+        "agentFamily": "zcode",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
     }
   ]
 }
