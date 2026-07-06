@@ -28,6 +28,8 @@ Files:
 Execution stance:
 
 - Do not automate LinkedIn invitations.
+- Do not automate LinkedIn-internal browsing, scraping, profile extraction, messaging, reactions, comments, or connection sending.
+- Automate only the safe surrounding workflow: query generation, search URL opening, public non-LinkedIn source discovery, tracker formatting, scoring prompts, message drafting, and weekly metrics.
 - Use LinkedIn manually.
 - Send 8 to 12 connection requests per day, with only the strongest 3 personalized.
 - Track acceptance rate, real conversations, role leads, introductions, and wrong-fit patterns.
@@ -38,7 +40,20 @@ Target priority:
 1. AI product recruiters, AI/ML sourcers, and executive product recruiters.
 2. Venture talent partners and portfolio talent leaders for AI funds.
 3. AI GTM operators and product advisors who touch agentic AI commercialization.
-4. Broad AI recruiters only after higher-intent rings are moving.
+4. Forward Deployed Engineers, AI Solutions Architects, Field CTOs, and Forward Deployed Engineering Managers at target companies, mainly for referrals and role reality checks.
+5. Broad AI recruiters only after higher-intent rings are moving.
+
+Recruiter priority:
+
+1. Company recruiters or sourcers at target AI-core companies hiring for product, forward deployed, deployment, solutions, or applied AI roles.
+2. Venture or portfolio talent partners who can route across multiple AI companies.
+3. Specialized external recruiters with visible AI product, FDE, deployment, or GTM searches.
+4. Senior general recruiters only when they show recent AI-core roles, named clients, or product/executive search ownership.
+5. Broad technical recruiters with no AI/product/deployment signal.
+
+Rule of thumb: a junior company recruiter on the right AI/FDE team usually beats a senior generic recruiter.
+
+FDEs are not mainly a recruiter lane. Use them as referral targets, reality checks on whether a deployment role is product-shaped or support-shaped, sources for title language, and bridges to field/product leadership.
 
 Best positioning:
 
