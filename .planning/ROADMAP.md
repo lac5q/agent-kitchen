@@ -35,8 +35,8 @@
 - ✅ **v7.4 NOC Efficiency Telemetry** — Phase 117 (completed 2026-06-27)
 - ✅ **v7.5 Proactive Recollection Triggering** — Phase 118 (completed 2026-06-27)
 - ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
-- 🔄 **v8.0 Belief + Provenance Core** — Phases 120-123 (in progress; Phases 120-121 PROV complete + test-verified 2026-07-06)
-- 🔜 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (planned 2026-07-06 from enterprise review; parallelizable with v8.0 Phases 122-123)
+- ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
+- 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
 
 ## Phases
@@ -451,7 +451,7 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 
 ---
 
-## v8.0 Belief + Provenance Core (Phases 120-123) — IN PROGRESS
+## v8.0 Belief + Provenance Core (Phases 120-123) — COMPLETE
 
 The trust kernel of the governed memory store: provenance enforced at the read/tool boundary with a tamper-evident audit chain, and a governed bronze→silver→gold belief promotion pipeline with demotion and conflict handling. Absorbs prior Backlog items 9 (belief stages) and 18 (verifiable action provenance). ICP scenarios: S2, S3, S5, S8 (see Backlog deep-dive section).
 

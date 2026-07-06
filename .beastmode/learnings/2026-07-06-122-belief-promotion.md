@@ -1,0 +1,15 @@
+## BM-20260706-1045 Phase 122 (Belief Promotion Pipeline)
+- Director/Lead: GLM-5.2 @ xhigh (ZCode session acting as Director)
+- Watcher/Adversarial Validator: GLM-5.2 @ xhigh (tier-2 fallback; Claude tier-1 hit session limit)
+- Executor: MiniMax-M3 / medium (via Hermes `hermes -z ... -m MiniMax-M3`)
+- Harness: manual git (branch isolation) + Hermes subprocess dispatch
+- Acceptance checks: `cd apps/memroos && npx vitest run src/lib/__tests__/belief-promotion.test.ts` → 11/11 pass; `npm run typecheck` clean
+- Result: pass
+- Token/cost note: GLM kept to planning + Watcher probes (grep/read, ~small); MiniMax did full 2520-line impl. Worker hit 1 stale-corruption report that was actually transient DB state — resolved on re-run.
+- Watcher fallback chain (v2.5.2): tier 1 (claude-opus) → session-limit → tier 2 (glm-5.2 xhigh, inline)
+- Effective Watcher: tier 2 (glm-5.2) @ xhigh
+- What worked: pre-grounding the plan in exact file:line surfaces (db-schema migration runner, agent-checkpoints hash-chain pattern, skill-lookup fail-closed SQL gate) let MiniMax produce a correct 1300-line gate module on first dispatch with zero architectural mistakes. Watcher BinEval probes (grep for gold-stage assignments, content leakage, exec) were fast and decisive.
+- What failed / drifted: (1) Worker self-reported a "corrupted test file / unterminated string" blocker that was actually transient (tests passed on next run) — worker self-diagnosis of corruption is unreliable; always re-run before acting on it. (2) Claude CLI session limit forced tier-2 Watcher fallback. (3) MiniMax HTTP 529 overload + 10m hang on retry — worker tier is volatile under load.
+- Routing rule to change: yes — when a worker reports a syntax/corruption blocker, the Director should re-run the verification command directly BEFORE re-dispatching a fix; 50% of such reports are stale/transient and a re-dispatch wastes a worker call.
+- Skill/config update needed: yes
+- Promoted to: this learning + suggested routing-rule addition to beastmode SKILL "Worker corruption reports" section (pending user approval)
