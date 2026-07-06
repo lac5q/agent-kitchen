@@ -14,7 +14,8 @@ export type MemoryUsePurpose =
   | "dispatch"
   | "index-write"
   | "evidence-bundle"
-  | "memory_search";
+  | "memory_search"
+  | "memory-promotion";
 
 export interface MemoryUseActor {
   id: string;

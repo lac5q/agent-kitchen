@@ -65,6 +65,20 @@ export const AUDIT_EVENT_TYPES = {
   /** Finance transaction identified as duplicate. */
   FINANCE_RECONCILIATION_DUPLICATE: "finance.reconciliation_duplicate",
 
+  // Belief promotion pipeline (Phase 122)
+  /** Candidate admitted silver -> gold after passing all deterministic checks. */
+  BELIEF_PROMOTED: "belief.promoted",
+  /** Gold candidate demoted back to silver (source invalidation, conflict supersession, manual). */
+  BELIEF_DEMOTED: "belief.demoted",
+  /** High-stakes candidate routed to human-review queue (fail-closed). */
+  BELIEF_QUEUED_FOR_REVIEW: "belief.queued_for_review",
+  /** Operator approved a queued candidate via review (candidate then admitted). */
+  BELIEF_REVIEW_APPROVED: "belief.review_approved",
+  /** Operator rejected a queued candidate. */
+  BELIEF_REVIEW_REJECTED: "belief.review_rejected",
+  /** canAdmitToGold denied admission for a candidate. Receipt only -- no gold mutation. */
+  BELIEF_ADMISSION_DENIED: "belief.admission_denied",
+
   // Admin / system
   /** Annotation added to a prior entry (metadata_json.ref_entry_id). */
   AUDIT_ANNOTATION: "audit.annotation",
@@ -79,6 +93,9 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[keyof typeof AUDIT_EVENT
 export const ENTITY_TYPES = {
   AGENT: "agent",
   AGENT_CHECKPOINT: "agent_checkpoint",
+  AGENT_MEMORY_CANDIDATE: "agent_memory_candidate",
+  BELIEF_PROMOTION_DECISION: "belief_promotion_decision",
+  BELIEF_REVIEW_ITEM: "belief_review_item",
   SEAL_PROPOSAL: "seal_proposal",
   EVAL_RUN: "eval_run",
   HIL_ESCALATION: "hil_escalation",
