@@ -1,0 +1,33 @@
+{
+  "status": "baseline",
+  "note": "Placeholder baseline. The check:operator-load-slo gate treats status:\"baseline\" as NOT pass. A real run against a live operator will write reports/operator-load/latest.json with status:\"pass\" once p95 < 500ms and errorRate < 0.001 are met.",
+  "generatedAt": "2026-07-06T00:00:00.000Z",
+  "durationSeconds": 0,
+  "totalRequests": 0,
+  "throughputRps": 0,
+  "p50Ms": null,
+  "p95Ms": null,
+  "p99Ms": null,
+  "errorRate": 0,
+  "agents": 100,
+  "writesPerHour": 1000,
+  "endpoint": "/api/knowledge",
+  "targetHost": "n/a",
+  "slo": {
+    "p95MaxMs": 500,
+    "errorRateMax": 0.001
+  },
+  "findings": [
+    "This is a committed placeholder baseline. It is intentionally NOT a pass."
+  ],
+  "manifest": {
+    "gitSha": "0000000000000000000000000000000000000000",
+    "timestamp": "2026-07-06T00:00:00.000Z",
+    "sloThresholds": {
+      "p95MaxMs": 500,
+      "errorRateMax": 0.001
+    },
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signedBy": "operator-load-test baseline (not signed by a real run)"
+  }
+}
