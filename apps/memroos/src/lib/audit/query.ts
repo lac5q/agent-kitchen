@@ -13,6 +13,15 @@ const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
 
 /**
+ * Escape LIKE wildcards in user-controlled filter values. The queries
+ * below use `LIKE` (not json_extract) so user-provided `userId` strings
+ * need to escape `%` and `_` to avoid wildcard expansion.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
  * Queries audit entries with optional filters. Returns paginated results.
  *
  * @param filter - Filter parameters including agentId, eventType, actorId, etc.
@@ -57,6 +66,17 @@ export function queryAuditEntries(
   if (filter.actorId) {
     conditions.push("actor_id = ?");
     params.push(filter.actorId);
+  }
+  if (filter.userId) {
+    // Phase 125: DSAR / SIEM — match either `userId` or `user_id` in metadata_json.
+    // LIKE is portable and JSON1 too; pick LIKE because the existing
+    // hil tests already rely on it for the same column.
+    conditions.push(
+      "(metadata_json LIKE ? OR metadata_json LIKE ?)"
+    );
+    const escaped = escapeLike(filter.userId);
+    params.push(`%"userId":%"${escaped}"%`);
+    params.push(`%"user_id":"${escaped}"%`);
   }
   if (filter.from) {
     conditions.push("created_at >= ?");
@@ -128,6 +148,13 @@ export function streamAuditEntries(
   if (filter.actorId) {
     conditions.push("actor_id = ?");
     params.push(filter.actorId);
+  }
+  if (filter.userId) {
+    // Phase 125: DSAR / SIEM. See note in queryAuditEntries.
+    conditions.push("(metadata_json LIKE ? OR metadata_json LIKE ?)");
+    const escaped = escapeLike(filter.userId);
+    params.push(`%"userId":%"${escaped}"%`);
+    params.push(`%"user_id":"${escaped}"%`);
   }
   if (filter.from) {
     conditions.push("created_at >= ?");

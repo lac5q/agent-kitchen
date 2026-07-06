@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
     eventType: (sp.get("eventType") ?? undefined) as AuditEventType | undefined,
     actorId: sp.get("actorId") ?? undefined,
     tenantId: sp.get("tenantId") ?? session.tenantId,
+    // Phase 125, ENTOPS-03: DSAR / SIEM — one query for "everything user X wrote".
+    userId: sp.get("userId") ?? undefined,
     from: sp.get("from") ?? undefined,
     to: sp.get("to") ?? undefined,
   };

@@ -84,6 +84,10 @@ export const AUDIT_EVENT_TYPES = {
   AUDIT_ANNOTATION: "audit.annotation",
   /** Admin changed compliance posture controls. */
   ADMIN_COMPLIANCE_UPDATED: "admin.compliance_updated",
+
+  // Knowledge vault access (Phase 125, ENTOPS-03)
+  /** Knowledge MCP op (read/write/delete) was centrally audited. Per-tenant hash-chained. */
+  KNOWLEDGE_ACCESS: "knowledge.access",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -102,6 +106,8 @@ export const ENTITY_TYPES = {
   MEETING: "meeting",
   FINANCE_RECONCILIATION: "finance_reconciliation",
   COMPLIANCE_CONTROL: "compliance_control",
+  /** Per-tenant knowledge vault accessed via the knowledge MCP (Phase 125, ENTOPS-03). */
+  KNOWLEDGE_VAULT: "knowledge_vault",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
