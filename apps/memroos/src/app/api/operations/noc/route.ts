@@ -9,8 +9,78 @@ import {
   nocWindowToSinceIso,
   type NocWorkspace,
 } from "@/lib/noc-filters";
+import fs from "node:fs";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
+
+type OperatorLoadStatus = {
+  status: "pass" | "fail" | "unreachable" | "baseline" | "missing";
+  p95Ms: number | null;
+  errorRate: number | null;
+  generatedAt: string | null;
+  ageHours: number | null;
+  targetHost: string | null;
+  endpoint: string | null;
+  findings: string[];
+  gitSha: string | null;
+};
+
+function readOperatorLoadReport(repoRoot: string): OperatorLoadStatus | null {
+  // Phase 124 (ENTOPS-01): read the latest committed operator load
+  // report without making this a hard dependency for the rest of NOC.
+  // If the file is missing or unreadable, fall through to "missing".
+  try {
+    const reportPath = path.join(repoRoot, "reports", "operator-load", "latest.json");
+    if (!fs.existsSync(reportPath)) return null;
+    const raw = fs.readFileSync(reportPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      status?: string;
+      p95Ms?: number | null;
+      errorRate?: number | null;
+      generatedAt?: string;
+      targetHost?: string;
+      endpoint?: string;
+      findings?: string[];
+      manifest?: { gitSha?: string };
+    };
+    const generatedAt = parsed.generatedAt ?? null;
+    const ageHours =
+      generatedAt && Number.isFinite(Date.parse(generatedAt))
+        ? (Date.now() - Date.parse(generatedAt)) / (1000 * 60 * 60)
+        : null;
+    const rawStatus = parsed.status ?? "missing";
+    const status: OperatorLoadStatus["status"] =
+      rawStatus === "pass" || rawStatus === "fail" || rawStatus === "unreachable" || rawStatus === "baseline"
+        ? rawStatus
+        : "missing";
+    return {
+      status,
+      p95Ms: typeof parsed.p95Ms === "number" ? parsed.p95Ms : null,
+      errorRate: typeof parsed.errorRate === "number" ? parsed.errorRate : null,
+      generatedAt,
+      ageHours: ageHours == null ? null : Number(ageHours.toFixed(2)),
+      targetHost: parsed.targetHost ?? null,
+      endpoint: parsed.endpoint ?? null,
+      findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+      gitSha: parsed.manifest?.gitSha ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findRepoRoot(startDir: string): string {
+  // Walk up from the Next.js app dir until we see the reports/ folder.
+  let dir = startDir;
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, "reports", "operator-load"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return startDir;
+}
 
 type PanelStatus = "live" | "empty" | "degraded" | "missing";
 
@@ -393,6 +463,7 @@ async function buildNocResponse(request: Request) {
   );
   const localFootprint = collectLocalFootprintInventory(process.cwd());
   const memoryIteration = buildMemoryIterationSnapshot(db, localFootprint);
+  const operatorLoadStatus = readOperatorLoadReport(findRepoRoot(process.cwd()));
 
   const lastMessage = db
     .prepare(`SELECT MAX(timestamp) AS value FROM messages m WHERE m.timestamp >= ? ${ws}`)
@@ -412,6 +483,17 @@ async function buildNocResponse(request: Request) {
       localFootprintBytes: localFootprint.totalBytes,
       memoryIteration,
       efficiency: efficiencyMetrics,
+    },
+    operatorLoadStatus: operatorLoadStatus ?? {
+      status: "missing",
+      p95Ms: null,
+      errorRate: null,
+      generatedAt: null,
+      ageHours: null,
+      targetHost: null,
+      endpoint: null,
+      findings: [],
+      gitSha: null,
     },
     panels: {
       pulse: panel(memoryRows > 0 || activeDispatches > 0 ? "live" : "empty", "SQLite messages + hive_delegations", lastMessage.value),
@@ -433,6 +515,23 @@ async function buildNocResponse(request: Request) {
         memoryIteration.warnings
       ),
       efficiency: efficiencyPanelFor(efficiencyMetrics),
+      operatorLoad: panel(
+        operatorLoadStatus?.status === "pass"
+          ? "live"
+          : operatorLoadStatus?.status === "missing"
+            ? "missing"
+            : "degraded",
+        "reports/operator-load/latest.json",
+        operatorLoadStatus?.generatedAt ?? null,
+        operatorLoadStatus?.status === "pass"
+          ? []
+          : [
+              `Latest operator load report is "${operatorLoadStatus?.status ?? "missing"}"` +
+                (operatorLoadStatus?.p95Ms != null
+                  ? ` (p95=${operatorLoadStatus.p95Ms}ms, errorRate=${operatorLoadStatus.errorRate ?? "n/a"})`
+                  : ""),
+            ]
+      ),
     },
     localFootprint,
     memoryIteration,

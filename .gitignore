@@ -95,3 +95,9 @@ context-sources.local.json
 *.sqlite3
 .gitnexus.backup*/
 .gitnexus.pre-*
+
+# Operator load harness (Phase 124 / ENTOPS-01) — live run artifacts.
+# baseline.json + .gitkeep are committed so the CI gate has something
+# to read on first run; the gate treats baseline as NOT pass.
+reports/operator-load/latest.json
+reports/operator-load/latest.md

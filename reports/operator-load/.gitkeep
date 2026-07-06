@@ -1,0 +1,6 @@
+# Keep this directory present in the repo.
+# reports/operator-load/baseline.json is committed so the CI gate has
+# something to read on first run; the gate treats status:"baseline"
+# as NOT pass so enterprise-readiness claims stay blocked until a real
+# load run produces status:"pass". Live run artifacts (latest.json,
+# latest.md) are gitignored.
