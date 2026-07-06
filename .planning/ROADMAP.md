@@ -35,8 +35,9 @@
 - ✅ **v7.4 NOC Efficiency Telemetry** — Phase 117 (completed 2026-06-27)
 - ✅ **v7.5 Proactive Recollection Triggering** — Phase 118 (completed 2026-06-27)
 - ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
-- 🔜 **v8.0 Belief + Provenance Core** — Phases 120-123 (planned 2026-07-06; next up)
-- 🔜 **v8.1 Team-Scale Access + Policy Plane** — Phases 124-127 (planned 2026-07-06; depends on v8.0)
+- 🔄 **v8.0 Belief + Provenance Core** — Phases 120-123 (in progress; Phases 120-121 PROV complete + test-verified 2026-07-06)
+- 🔜 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (planned 2026-07-06 from enterprise review; parallelizable with v8.0 Phases 122-123)
+- 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
 
 ## Phases
 
@@ -450,12 +451,12 @@ Full archive: `.planning/milestones/v1.7-ROADMAP.md`
 
 ---
 
-## v8.0 Belief + Provenance Core (Phases 120-123) — PLANNED
+## v8.0 Belief + Provenance Core (Phases 120-123) — IN PROGRESS
 
 The trust kernel of the governed memory store: provenance enforced at the read/tool boundary with a tamper-evident audit chain, and a governed bronze→silver→gold belief promotion pipeline with demotion and conflict handling. Absorbs prior Backlog items 9 (belief stages) and 18 (verifiable action provenance). ICP scenarios: S2, S3, S5, S8 (see Backlog deep-dive section).
 
-- [ ] **Phase 120: Provenance Capture + Transactional Audit** — PROV-01, PROV-02
-- [ ] **Phase 121: Hash-Chained Audit + Crash-Consistent Verification** — PROV-03, PROV-04
+- [x] **Phase 120: Provenance Capture + Transactional Audit** — PROV-01, PROV-02; completed 2026-07-06 (`agent-checkpoints.ts` boundary receipts + transactional audit; `agent-checkpoints.test.ts` green — see REQUIREMENTS.md PROV verification notes)
+- [x] **Phase 121: Hash-Chained Audit + Crash-Consistent Verification** — PROV-03, PROV-04; completed 2026-07-06 (`verifyCheckpointAuditChain` first-broken-link detection; crash-resume provenance audit verified)
 - [ ] **Phase 122: Belief Promotion Pipeline** — BELIEF-01, BELIEF-02, BELIEF-03
 - [ ] **Phase 123: Gold-Only Outbound Policy + Promotion Evals** — BELIEF-04, BELIEF-05
 
@@ -506,16 +507,70 @@ The trust kernel of the governed memory store: provenance enforced at the read/t
 **Plans**: 0/? planned
 **UI hint**: yes
 
-## v8.1 Team-Scale Access + Policy Plane (Phases 124-127) — PLANNED
+## v8.1 Enterprise Operator Control Plane (Phases 124-127) — PLANNED
 
-One declarative policy engine with decision receipts replacing scattered gate logic, plus teams/spaces and human+agent identity lifecycle for the 100-person agentic-heavy ICP. ICP scenarios: S1, S4, S7 (access half).
+Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-enterprise-review-2026-07-06.md`). The governed-memory logic (v8.0, v8.2+) is necessary but not sufficient: the current per-laptop MCP launcher, single shared vault, per-user deletable audit logs, and git fallback fail the 10-100 person ICP on contact — MCP SPOF, git-fallback exfiltration vector, SOC2 tenancy collapse, broken Day-1 onboarding. Verdict adopted: ship-modified, two SKUs — **Free Solo** (local MCP + git fallback + per-machine discipline) and **Enterprise** (operator-only, per-tenant/per-user vaults, write-side enforcement, no git fallback). ICP scenarios: S9, S10; substrate for S1/S7.
 
-- [ ] **Phase 124: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02
-- [ ] **Phase 125: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05
-- [ ] **Phase 126: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03
-- [ ] **Phase 127: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
+- [ ] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
+- [ ] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03
+- [ ] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06
+- [ ] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08
 
-### Phase 124: Policy Engine Core + Decision Receipts
+### Phase 124: Operator Load Proof + SLO Gate
+**Goal**: The hosted operator's capacity is proven, not assumed — a repeatable load harness gates all enterprise-readiness claims.
+**Depends on**: Phase 113 (operator deploy baseline)
+**Requirements**: ENTOPS-01
+**Success Criteria** (what must be TRUE):
+  1. A committed load-test harness simulates 100 agents at 1,000 knowledge writes/hour against a staging operator and produces a signed report (p95 `knowledge_write` < 500ms, error rate < 0.1%)
+  2. The harness runs on demand and on a schedule; regressions fail visibly in CI/NOC
+  3. Enterprise SKU/positioning claims are blocked by a check until the latest report is green (mirrors the future-spikes gate pattern)
+**Plans**: 0/? planned
+**UI hint**: no
+
+### Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit
+**Goal**: Tenancy stops collapsing — per-tenant/per-user vault isolation with team ACLs, and all knowledge reads/writes audited centrally with identity, hash-chained, SIEM-exportable.
+**Depends on**: Phase 124 (capacity proven), Phase 121 (PROV hash-chain pattern to reuse)
+**Requirements**: ENTOPS-02, ENTOPS-03
+**Success Criteria** (what must be TRUE):
+  1. Two tenants and two users within a tenant demonstrably cannot read each other's vaults except through explicit ACL grants (regression-tested, fail-closed)
+  2. "Show every artifact user X wrote in Q3" is one operator query; audit rows carry tenant/user/agent identity, are hash-chained, and are not deletable by the writing user
+  3. Audit export to a SIEM-consumable format works end-to-end; the per-laptop JSONL becomes a local mirror, never the system of record in shared mode
+  4. `--local` solo mode still works unchanged (Free Solo SKU preserved)
+**Plans**: 0/? planned
+**UI hint**: yes (tenant/vault admin surfaces)
+
+### Phase 126: Operator-Stub Distribution + Day-1 Onboarding
+**Goal**: The installer defaults to operator-stub mode with IdP auth, git fallback is disabled in shared mode, and a new hire's agents work on day one on a locked-down Mac without operator intervention.
+**Depends on**: Phase 125
+**Requirements**: ENTOPS-04, ENTOPS-05, ENTOPS-06
+**Success Criteria** (what must be TRUE):
+  1. `install-agent-integrations.sh` defaults to `MEMROOS_OPERATOR_URL` + OAuth device flow; `--local` is the explicit solo escape hatch; shared-mode stubs contain no git-clone fallback path (S10: on MCP outage, agents degrade honestly instead of pulling the corpus)
+  2. S9 demo: invite token → MDM-deployable installer on a locked-down corporate Mac without admin rights → first-day verification script passes → the new hire's agents carry their team directives with zero human intervention
+  3. Directive budgets are per-tenant config (default 200 lines, admin-overridable); enforcement warns and diffs against canonical — no auto-trim path exists anywhere
+**Plans**: 0/? planned
+**UI hint**: yes (onboarding + budget admin)
+
+### Phase 127: Write-Side Native-Memory Enforcement + Exit Tool
+**Goal**: Native memory files become an output of MemroOS sync rather than an input, and procurement-grade exit/DSAR tooling ships.
+**Depends on**: Phase 126
+**Requirements**: ENTOPS-07, ENTOPS-08
+**Success Criteria** (what must be TRUE):
+  1. Harness auto-memory writes (Claude auto-memory, Hermes `memory add`, Codex `/memory`) route to MemroOS first, are filtered/sanitized, and replay into local files under the server-enforced budget; `directive_diff` alerts on drift and never deletes
+  2. Hermes MEMORY.md retains its skills-routing layer — only the directive body is stubbed (regression-tested against Hermes routing behavior)
+  3. `memroos export --flat` produces a markdown tarball + signed manifest of the org vault; per-user DSAR export (vault + audit trail) works in one action; right-to-delete tombstones via MEMLIFE semantics without breaking the audit chain
+**Plans**: 0/? planned
+**UI hint**: yes
+
+## v8.2 Team-Scale Access + Policy Plane (Phases 128-131) — PLANNED
+
+One declarative policy engine with decision receipts replacing scattered gate logic, plus teams/spaces and human+agent identity lifecycle for the 100-person agentic-heavy ICP — running on the v8.1 multi-tenant substrate. ICP scenarios: S1, S4, S7 (access half).
+
+- [ ] **Phase 128: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02
+- [ ] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05
+- [ ] **Phase 130: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03
+- [ ] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
+
+### Phase 128: Policy Engine Core + Decision Receipts
 **Goal**: Retrieval, memory write/promotion, knowledge read/write, skill dispatch, and capability decisions evaluate through one versioned declarative policy layer that emits receipts.
 **Depends on**: Phase 76 (retrieval gate semantics to preserve), Phase 121 (receipts land in audit chain)
 **Requirements**: POLGOV-01, POLGOV-02
@@ -526,9 +581,9 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: no
 
-### Phase 125: Policy Dimensions, Shadow Mode + CI Regression
+### Phase 129: Policy Dimensions, Shadow Mode + CI Regression
 **Goal**: Policies express subject/object/action/purpose (including ontology labels and belief stage), proposed versions dry-run against live decisions before activation, and CI locks policy behavior.
-**Depends on**: Phase 124
+**Depends on**: Phase 128
 **Requirements**: POLGOV-03, POLGOV-04, POLGOV-05
 **Success Criteria** (what must be TRUE):
   1. A policy like "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them" is expressible and enforced end-to-end (S1 scoping demo)
@@ -537,9 +592,9 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: yes (policy diff review)
 
-### Phase 126: Teams/Spaces + Knowledge-Repo Labels
+### Phase 130: Teams/Spaces + Knowledge-Repo Labels
 **Goal**: Memory and knowledge support team/space scoping over the shipped label model, and the git-backed knowledge repo carries enforced sensitivity/authoritative/freshness labels.
-**Depends on**: Phase 124 (spaces enforce through the policy engine)
+**Depends on**: Phase 128 (spaces enforce through the policy engine), Phase 125 (per-tenant vault substrate)
 **Requirements**: TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03
 **Success Criteria** (what must be TRUE):
   1. A space (e.g. GTM) defines default labels, human+agent membership, and cross-space sharing rules; per-space recall shows zero cross-space leakage in regression tests
@@ -548,9 +603,9 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: yes (space membership + knowledge label surfaces)
 
-### Phase 127: Identity Lifecycle + Delegation Chains
+### Phase 131: Identity Lifecycle + Delegation Chains
 **Goal**: Joiner/mover/leaver flows provision and revoke humans and their dependent agents atomically, delegation chains are verifiable across A2A hops, relationship-sensitive assets carry named-owner gates, and per-team NOC views exist.
-**Depends on**: Phase 126, Phase 82 (auth), Phase 107 (context bus identity)
+**Depends on**: Phase 130, Phase 126 (Day-1 onboarding flow), Phase 82 (auth), Phase 107 (context bus identity)
 **Requirements**: TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
 **Success Criteria** (what must be TRUE):
   1. S1 demo: one operator action onboards a fractional seller with role, space memberships, and a standard agent kit (scoped keys, allowed skills, context pack), producing an onboarding receipt of exactly what was granted
@@ -579,17 +634,22 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 - **S6 — Marketplace/cross-harness skill import**: skill arrives signed, quarantined, sandbox-evaluated against its contract, and operator-approved before any agent can dispatch it. (SKILLTRUST-01..04)
 - **S7 — Contractor offboards / prospect requests deletion**: credentials (human + dependent agents) revoked atomically; subject-scoped erasure chases embeddings, graph, FTS, and qmd projections, with an erasure report that doesn't break the audit chain. (TEAMSCALE-03, MEMLIFE-02/03/05)
 - **S8 — Customer/sponsor-bank audit**: "prove what data your agents used for this claim" answered from enforced provenance + hash-chained audit, not agent self-report. (PROV-01..04)
+- **S9 — Day-1 new hire on a locked-down Mac**: invite token → MDM installer → verification script; agents carry team directives with no admin rights and no operator intervention. (ENTOPS-05, ENTOPS-04)
+- **S10 — Operator outage at 50 seats**: agents degrade honestly (no git-fallback corpus pull to laptops — that's an exfiltration path, not resilience); solo mode keeps git fallback. (ENTOPS-04)
+
+**Enterprise review learning (2026-07-06)** — `content/research/memroos-enterprise-review-2026-07-06.md` (GPT-5.5xhigh + Claude adversarial consensus): the deployment substrate, not the governance logic, is the first enterprise blocker. Per-laptop MCP launcher = SPOF + 50 disconnected SQLite/audit files; single shared vault = SOC2 tenancy collapse; git fallback = CISO-dealbreaker exfiltration vector; line-cap auto-trim = silent data destruction; Day-1 onboarding broken without Luis. Adopted verdict: ship-modified, two SKUs (Free Solo local-MCP vs Enterprise operator-only). This inserted v8.1 Enterprise Operator Control Plane (`ENTOPS-01..08`) ahead of team-scale access and gates enterprise claims on a load-test SLO (100 agents, 1k writes/hr, p95 < 500ms, <0.1% errors).
 
 Priority order (each is a candidate milestone; requirements in `.planning/REQUIREMENTS.md`):
 
-1. **P0 — v8.0 Belief + Provenance Core — PLANNED as Phases 120-123 (2026-07-06).** `BELIEF-01..05`, `PROV-01..04` (absorbs prior Backlog items 9 and 18). The trust kernel: governed silver→gold promotion with demotion/conflict handling, and provenance captured at the read/tool boundary with transactional, hash-chained audit. Everything else (policy receipts, ontology promotion, skill trust) builds on admitted truth + verifiable provenance. Scenarios: S2, S3, S5, S8.
-2. **P0 — v8.1 Team-Scale Access + Policy Plane — PLANNED as Phases 124-127 (2026-07-06).** `TEAMSCALE-01..06`, `POLGOV-01..05`, `MSIQ-01..03`. Spaces/teams over the shipped label model, joiner/mover/leaver for humans + agents, delegation chains, and one declarative policy engine with decision receipts, shadow mode, and CI policy regression; knowledge-repo labels (MSIQ-01..03) land here so memory and knowledge share one enforcement plane. Scenarios: S1, S4, S7 (access half).
-3. **P1 — v8.2 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
-4. **P1 — v8.3 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
-5. **P1 — v8.4 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
-6. **P1 — v8.5 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.2.
-7. **P2 — v8.6 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
-8. **P2/P3 — carried forward unchanged**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
+1. **P0 — v8.0 Belief + Provenance Core — IN PROGRESS (Phases 120-121 complete 2026-07-06; 122-123 next).** `BELIEF-01..05`, `PROV-01..04` complete (absorbs prior Backlog items 9 and 18). The trust kernel: governed silver→gold promotion with demotion/conflict handling, and provenance captured at the read/tool boundary with transactional, hash-chained audit. Everything else (policy receipts, ontology promotion, skill trust) builds on admitted truth + verifiable provenance. Scenarios: S2, S3, S5, S8.
+2. **P0 — v8.1 Enterprise Operator Control Plane — PLANNED as Phases 124-127 (2026-07-06, from enterprise review).** `ENTOPS-01..08`. Load-proven hosted operator, per-tenant/per-user vaults with central hash-chained audit, operator-stub distribution (no git fallback in shared mode), Day-1 MDM/invite-token onboarding, write-side native-memory enforcement (never auto-trim), and exit/DSAR tooling. Two-SKU shape: Free Solo (local) vs Enterprise (operator-only). Parallelizable with v8.0 Phases 122-123 (different subsystems). Scenarios: S9, S10; substrate for S1/S7.
+3. **P0 — v8.2 Team-Scale Access + Policy Plane — PLANNED as Phases 128-131 (2026-07-06).** `TEAMSCALE-01..06`, `POLGOV-01..05`, `MSIQ-01..03`. Spaces/teams over the shipped label model, joiner/mover/leaver for humans + agents, delegation chains, and one declarative policy engine with decision receipts, shadow mode, and CI policy regression; knowledge-repo labels (MSIQ-01..03) land here so memory and knowledge share one enforcement plane. Scenarios: S1, S4, S7 (access half).
+4. **P1 — v8.3 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
+5. **P1 — v8.4 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
+6. **P1 — v8.5 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
+7. **P1 — v8.6 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.3.
+8. **P2 — v8.7 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
+9. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
 
 Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays cloud and canonical; no spike-to-adoption without Luis approval; no raw sensitive payloads in any receipt; fail-closed defaults everywhere.
 

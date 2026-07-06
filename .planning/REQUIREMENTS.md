@@ -143,14 +143,19 @@
 - [x] **RECOLLECT-06**: Operator/NOC surfaces expose recent recollection decisions, skipped-search reasons, false-positive rate, and the downstream answer/tool step that used or ignored injected memory.
 - [x] **RECOLLECT-07**: Recollection and context-pack receipts label each memory item by belief stage: bronze raw source snapshot, silver candidate claim, or gold admitted operational truth; agents may rely on gold directly, must caveat silver, and may use bronze only as source evidence unless promotion policy admits it.
 
-## PROV Verifiable Action Provenance + Tamper-Evident Audit (Proposed)
+## PROV Verifiable Action Provenance + Tamper-Evident Audit — COMPLETE (Phase 120-121)
 
 *Source: 2026-07-01 external developer question (Arden) on crash-consistent, auditable "proof" linking agent output to consumed memories and tools. See ROADMAP.md Backlog item 18.*
+*Implementation: `apps/memroos/src/lib/agent-checkpoints.ts` (commit `09b448f feat: add verifiable checkpoint provenance`). Verified 2026-07-06 by running `agent-checkpoints.test.ts` — all 5 tests green.*
 
-- [ ] **PROV-01**: Provenance is captured at the read/tool-call boundary (which memories were read, which tools/commands ran, with source id + hash) rather than self-reported by the agent at checkpoint time, so every output carries a verified set of consumed inputs.
-- [ ] **PROV-02**: The audit entry for a significant action is written inside the same database transaction as the action itself, so the action and its audit row commit or fail together and rows cannot be silently dropped; the current "audit never breaks the primary action" contract is preserved or explicitly redesigned.
-- [ ] **PROV-03**: Audit entries are hash-chained (each row references the prior row's hash) so tampering, deletion, or gaps in the trail are detectable, with a verification path that reports the first broken link.
-- [ ] **PROV-04**: On crash/restart, the resumed checkpoint plus the transactional audit chain reconstruct a verifiable trail with no unaccounted actions between the last checkpoint and the crash; verification work stays off the hot path and provenance receipts expose no raw sensitive payloads.
+- [x] **PROV-01**: Provenance is captured at the read/tool-call boundary (which memories were read, which tools/commands ran, with source id + hash) rather than self-reported by the agent at checkpoint time, so every output carries a verified set of consumed inputs.
+  - Verified: `collectBoundaryProvenanceReceipts()` reads `efficiency_events` (`source_read`, `retrieval_trace`, `memory_write`); test asserts the agent-supplied `provenancePointers` string never reaches the receipt set.
+- [x] **PROV-02**: The audit entry for a significant action is written inside the same database transaction as the action itself, so the action and its audit row commit or fail together and rows cannot be silently dropped; the current "audit never breaks the primary action" contract is preserved or explicitly redesigned.
+  - Verified: `createAgentCheckpoint` wraps checkpoint INSERT + `insertCheckpointAuditEntry` in one `db.transaction()`; test "rolls back the checkpoint insert when the transactional audit write fails" passes.
+- [x] **PROV-03**: Audit entries are hash-chained (each row references the prior row's hash) so tampering, deletion, or gaps in the trail are detectable, with a verification path that reports the first broken link.
+  - Verified: `verifyCheckpointAuditChain()` recomputes `entryHash` and checks `previousEntryHash` linkage, returning `{firstBrokenEntryId, reason}`; test "detects a broken checkpoint audit chain row" passes.
+- [x] **PROV-04**: On crash/restart, the resumed checkpoint plus the transactional audit chain reconstruct a verifiable trail with no unaccounted actions between the last checkpoint and the crash; verification work stays off the hot path and provenance receipts expose no raw sensitive payloads.
+  - Verified: resume reconstructs `provenanceAudit` via `getCheckpointProvenanceAudit`; receipts expose only hashes (sourceId/sourceHash/evidenceHash), no raw content.
 
 ## MSIQ Microsoft IQ Competitive Adoption (Proposed)
 
@@ -224,6 +229,19 @@
 - [ ] **MEMLIFE-03**: Subject-scoped erasure: "erase person X" resolves via the ontology to all Claims/Events/Contacts referencing X across tiers, producing a reviewable erasure plan before execution (GDPR/CCPA data-subject shape).
 - [ ] **MEMLIFE-04**: Decay + consolidation: low-salience episodic memories age into summarized semantic form on a schedule, with the original moved to the raw vault (not silently dropped) and consolidation receipts linking summary to sources.
 - [ ] **MEMLIFE-05**: Tombstones preserve audit integrity: erasure never breaks the hash chain or evidence bundles — receipts retain non-sensitive pointers ("a record existed and was erased under policy P") without the erased content.
+
+## ENTOPS Enterprise Operator Control Plane (Proposed)
+
+*Source: 2026-07-06 adversarial enterprise review of the native-memory stub pattern (GPT-5.5xhigh + Claude consensus) — `content/research/memroos-enterprise-review-2026-07-06.md`. Finding: the per-laptop MCP launcher, single shared vault, per-user deletable audit JSONL, and git fallback fail the 10-100 person ICP on day one (SPOF, exfiltration vector, SOC2 tenancy collapse, broken Day-1 onboarding). Verdict: ship-modified, two SKUs — Free Solo (local MCP, git fallback OK) and Enterprise (operator-only). Governance logic (BELIEF/POLGOV/TEAMSCALE) is necessary but not sufficient without this substrate.*
+
+- [ ] **ENTOPS-01**: A repeatable committed load-test harness proves the hosted operator sustains 100 simulated agents at 1,000 knowledge writes/hour with p95 `knowledge_write` latency < 500ms and error rate < 0.1%; enterprise-readiness claims and SKU work are gated on this passing.
+- [ ] **ENTOPS-02**: The operator provides per-tenant and per-user vault isolation with team ACL groups; cross-user search only within policy scope; the per-laptop SQLite/bash-launcher mode remains supported solo-only behind a `--local` flag and is never the shared-team path.
+- [ ] **ENTOPS-03**: Every knowledge read/write on the operator is audited centrally with tenant/user/agent identity — not user-deletable laptop JSONL — exportable to SIEM, and answers "show every artifact user X wrote in Q3" in one query; central audit reuses the PROV hash-chain pattern for tamper evidence.
+- [ ] **ENTOPS-04**: The installer defaults to operator-stub mode (`MEMROOS_OPERATOR_URL` + IdP/OAuth device-flow auth); git fallback is disabled in shared/enterprise mode (retained solo-only) — on MCP outage agents degrade honestly rather than pulling the corpus to laptops.
+- [ ] **ENTOPS-05**: Day-1 self-bootstrap onboarding works without operator intervention: invite-token flow, MDM-deployable installer verified on a locked-down corporate Mac without admin rights, and a first-day verification script; a new hire's agents receive their directives before any human touches their machine.
+- [ ] **ENTOPS-06**: Native-memory directive budgets are per-tenant configuration (default 200 lines, overridable via admin endpoint for compliance-heavy teams); enforcement is warn + diff-against-canonical, never auto-trim — no path silently deletes user memory content.
+- [ ] **ENTOPS-07**: Native-memory files become an output of MemroOS sync, not an input: harness auto-memory writes route to MemroOS first, are filtered/sanitized, then replayed into local files under the server-enforced budget; drift detection (`directive_diff`) alerts and never deletes; Hermes MEMORY.md keeps its skills-routing layer intact (stub the directive body only).
+- [ ] **ENTOPS-08**: An exit tool (`memroos export --flat`) produces a markdown tarball of the org vault with a signed manifest, plus per-user DSAR export (vault + audit trail) and right-to-delete tombstoning within the compliance window (executes via MEMLIFE erasure semantics).
 
 ---
 
