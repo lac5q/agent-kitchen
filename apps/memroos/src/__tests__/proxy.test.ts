@@ -455,6 +455,17 @@ describe("proxy", () => {
     );
   });
 
+  it("redirects www public traffic to the canonical apex host", async () => {
+    const response = await proxy(
+      new NextRequest("https://www.memroos.com/blog?ref=gsc", {
+        headers: { host: "www.memroos.com" },
+      })
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://memroos.com/blog?ref=gsc");
+  });
+
   it("allows analytics and Google Fonts endpoints in the content security policy", async () => {
     const response = await proxy(
       new NextRequest("https://memroos.com/", {

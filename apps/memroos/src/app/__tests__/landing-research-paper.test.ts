@@ -62,6 +62,7 @@ describe("public landing research proof", () => {
 
     const landingSource = readFileSync(landingIndexPath, "utf8");
     expect(landingSource).toContain("See the actual product");
+    expect(landingSource).toContain('<link rel="canonical" href="https://memroos.com/">');
     expect(landingSource).toContain("data-shot=\"dispatch\"");
     expect(landingSource).toContain("/landing/assets/shots/operator-floor.png");
     expect(landingSource).toContain("/landing/styles/memroos-refresh.css");
