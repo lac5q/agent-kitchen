@@ -112,3 +112,29 @@ Use `/skills`, `$gsd-help`, `$qwen-cloud`, or `$beastmode-qwen-cloud` to access
 cloud workflows in Codex. Qwen is an external executor in cloud; do not claim it
 is operational until `~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"`
 returns `QWEN OK`.
+
+## Cursor Cloud specific instructions
+
+The primary dev target is the Next.js 16 app `apps/memroos` (operator console + API).
+Standard commands are in the root `package.json`: `npm run dev` (port 3000),
+`npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build`.
+
+- **Native binding gotcha (required for `npm test` and `npm run build`):** on Linux,
+  npm's optional-dependency bug means `npm ci`/`npm install` alone can miss
+  `@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, and
+  `@unrs/resolver-binding-linux-x64-gnu`. Without them, Vitest fails at startup with
+  "Cannot find native binding". The startup update script installs them with
+  `--no-save` (mirroring the `heroku-postbuild` step). If you re-run `npm ci` manually,
+  reinstall those three packages afterward.
+- **Auth / login:** the app degrades gracefully without downstream services, but login
+  needs `apps/memroos/.env.local` with `MEMROOS_JWT_SECRET` plus `MEMROOS_ADMIN_EMAIL`
+  and `MEMROOS_ADMIN_PASSWORD`. The admin is seeded on first startup only when the
+  `users` table is empty (SQLite DB under `apps/memroos/data/`); to re-seed, delete that
+  DB. `.env.local` is gitignored.
+- **Degraded services are expected in cloud:** the header showing "N services degraded"
+  (mem0, orchestration, Ollama, Neo4j, Qdrant, voice) is normal — those are optional and
+  not run here. SQLite is embedded, so core console flows (auth, API keys, settings) work
+  without them.
+- **Known pre-existing test failures (not environment issues):**
+  `src/lib/__tests__/efficiency-telemetry.test.ts` has 2 failures because the tests expect
+  SQLite `user_version` 2 but the schema is now 3. All other tests pass.
