@@ -97,42 +97,51 @@ export async function POST(req: NextRequest) {
   const body = parsed.data;
   const db = getDb();
 
-  // Ensure the tenant row exists before the audit INSERT -- audit_entries.tenant_id
-  // REFERENCES tenants(id), and a knowledge op may be the first event for a tenant
-  // that the core app has not seeded yet (e.g. a vault-only tenant). INSERT OR IGNORE
-  // is idempotent and never clobbers an existing named tenant.
-  db.prepare("INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)").run(
-    body.tenant_id,
-    body.tenant_id
-  );
-
-  const entry = buildKnowledgeAuditEntry(db, {
-    tenantId: body.tenant_id,
-    actorId: body.agent_id,
-    actorRole: "system",
-    agentId: body.agent_id,
-    userId: body.user_id ?? null,
-    operation: body.operation,
-    path: body.path,
-    opHash: body.op_hash,
-    reason: `knowledge ${body.operation} on ${body.path} by ${body.agent_id}`,
-  });
-
-  const newEntry: NewAuditEntry = {
-    id: entry.id,
-    tenant_id: entry.tenantId,
-    actor_id: entry.actorId,
-    actor_role: entry.actorRole as NewAuditEntry["actor_role"],
-    event_type: entry.eventType as NewAuditEntry["event_type"],
-    entity_type: entry.entityType as NewAuditEntry["entity_type"],
-    entity_id: entry.entityId,
-    reason: entry.reason,
-    metadata_json: entry.metadata_json,
-    created_at: entry.created_at,
-  };
-
+  // The chain tip read (buildKnowledgeAuditEntry -> previousKnowledgeEntryHash)
+  // and the INSERT must be atomic and serialized: two concurrent same-tenant
+  // POSTs must not both read the same tip and fork the chain. `.immediate()`
+  // takes the SQLite write lock at BEGIN so the read+write is a single critical
+  // section across connections, not a TOCTOU window.
+  let entry: ReturnType<typeof buildKnowledgeAuditEntry>;
   try {
-    writeAuditEntry(newEntry, db);
+    entry = db.transaction(() => {
+      // Ensure the tenant row exists before the audit INSERT -- audit_entries.tenant_id
+      // REFERENCES tenants(id), and a knowledge op may be the first event for a tenant
+      // that the core app has not seeded yet (e.g. a vault-only tenant). INSERT OR IGNORE
+      // is idempotent and never clobbers an existing named tenant.
+      db.prepare("INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)").run(
+        body.tenant_id,
+        body.tenant_id
+      );
+
+      const built = buildKnowledgeAuditEntry(db, {
+        tenantId: body.tenant_id,
+        actorId: body.agent_id,
+        actorRole: "system",
+        agentId: body.agent_id,
+        userId: body.user_id ?? null,
+        operation: body.operation,
+        path: body.path,
+        opHash: body.op_hash,
+        reason: `knowledge ${body.operation} on ${body.path} by ${body.agent_id}`,
+      });
+
+      const newEntry: NewAuditEntry = {
+        id: built.id,
+        tenant_id: built.tenantId,
+        actor_id: built.actorId,
+        actor_role: built.actorRole as NewAuditEntry["actor_role"],
+        event_type: built.eventType as NewAuditEntry["event_type"],
+        entity_type: built.entityType as NewAuditEntry["entity_type"],
+        entity_id: built.entityId,
+        reason: built.reason,
+        metadata_json: built.metadata_json,
+        created_at: built.created_at,
+      };
+
+      writeAuditEntry(newEntry, db);
+      return built;
+    }).immediate();
   } catch (err) {
     // INSERT failures in this table are exclusively due to the
     // append-only triggers or schema mismatches. Both are permanent --

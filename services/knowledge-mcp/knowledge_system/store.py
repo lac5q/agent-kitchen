@@ -279,6 +279,23 @@ class KnowledgeStore:
             return self.root
         return self.root / "tenants" / tid
 
+    def _operator_scope_ok(self) -> bool:
+        """Fail-closed guard for data ops.
+
+        In OPERATOR MODE a tenant MUST be bound before any read/write/
+        delete/search touches the store. Without a bound tenant,
+        `effective_root()` would fall back to the unscoped shared root --
+        that is fail-OPEN and would leak the shared vault to a caller who
+        forgot to resolve a tenant (e.g. `MEMROOS_TENANT_ID` unset and no
+        tool arg). Data ops call this and refuse when it returns False.
+
+        Solo mode (no operator URL) always passes -- there is no tenant
+        concept, and today's behaviour is preserved exactly.
+        """
+        if _operator_mode() and not self._bound_tenant_id:
+            return False
+        return True
+
     def _is_safe_child(self, path: Path, root: Optional[Path] = None) -> bool:
         base = (root or self.effective_root()).resolve()
         try:
@@ -400,6 +417,10 @@ class KnowledgeStore:
         BEFORE returning. Failure of the POST fails the read (fail-closed).
         The local JSONL audit row is always written (mirror).
         """
+        if not self._operator_scope_ok():
+            raise PermissionError(
+                "operator mode requires a bound tenant_id (fail-closed)"
+            )
         path = self._validate_path(relative_path)
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(relative_path)
@@ -469,6 +490,12 @@ class KnowledgeStore:
         Returns:
             dict with status, path, bytes_written, commit_sha
         """
+        if not self._operator_scope_ok():
+            return {
+                "status": "forbidden",
+                "error": "operator mode requires a bound tenant_id (fail-closed)",
+                "path": relative_path,
+            }
         try:
             path = self._validate_path(relative_path)
         except ValueError as exc:
@@ -583,6 +610,12 @@ class KnowledgeStore:
         user_id: Optional[str] = None,
     ) -> dict:
         """Delete a file with admin role requirement."""
+        if not self._operator_scope_ok():
+            return {
+                "status": "forbidden",
+                "error": "operator mode requires a bound tenant_id (fail-closed)",
+                "path": relative_path,
+            }
         try:
             path = self._validate_path(relative_path)
         except ValueError as exc:
@@ -844,6 +877,13 @@ class KnowledgeStore:
         returning any results (fail-closed). Search results only contain
         path + line + preview -- NEVER file content.
         """
+        if not self._operator_scope_ok():
+            return [
+                {
+                    "status": "forbidden",
+                    "error": "operator mode requires a bound tenant_id (fail-closed)",
+                }
+            ]
         needle = query.lower().strip()
         effective = self.effective_root()
         if not needle:

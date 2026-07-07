@@ -220,6 +220,50 @@ def test_cross_tenant_write_fails_closed(monkeypatch, tmp_path):
         acme._validate_path("../../../etc/passwd")
 
 
+def test_operator_mode_no_bound_tenant_fails_closed(monkeypatch, tmp_path):
+    """Operator mode + no bound tenant MUST fail closed on every data op.
+
+    Regression for the fail-OPEN gap: without this guard, effective_root()
+    falls back to the unscoped shared root, leaking it to a caller who did
+    not resolve a tenant (e.g. MEMROOS_TENANT_ID unset, no tool arg).
+    """
+    monkeypatch.setenv("MEMROOS_APP_URL", "https://ops.example.com")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+
+    root = tmp_path / "shared-root"
+    root.mkdir()
+    # Seed a file at the unscoped shared root -- this must NOT be reachable.
+    (root / "shared").mkdir()
+    (root / "shared" / "SECRET.md").write_text("shared secret", encoding="utf-8")
+
+    # No tenant bound in operator mode.
+    store = KnowledgeStore(root)
+    assert store.bound_tenant_id() is None
+    assert store._operator_scope_ok() is False
+
+    # read: raises (does not return shared content)
+    with pytest.raises(PermissionError):
+        store.read_text("shared/SECRET.md", agent_id="a")
+
+    # write: forbidden dict, no file written
+    write_result = store.write_text(
+        relative_path="shared/notes.md",
+        content="should not persist",
+        agent_id="a",
+        role="agent",
+        auto_commit=False,
+    )
+    assert write_result["status"] == "forbidden"
+
+    # delete: forbidden dict
+    delete_result = store.delete_file("shared/SECRET.md", agent_id="a", role="admin")
+    assert delete_result["status"] == "forbidden"
+
+    # search: single forbidden element, no shared results leaked
+    search_result = store.search("secret", agent_id="a")
+    assert search_result and search_result[0]["status"] == "forbidden"
+
+
 # ---------------------------------------------------------------------------
 # Central-audit POST bridge
 # ---------------------------------------------------------------------------

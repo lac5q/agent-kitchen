@@ -36,7 +36,7 @@
 - ✅ **v7.5 Proactive Recollection Triggering** — Phase 118 (completed 2026-06-27)
 - ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
-- 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
+- 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phases 124-125 complete 2026-07-07; Phases 126-127 have infra deps — IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
 - 🔜 **v8.4 Project-Centric Operator UX** — Phases 137-141 (planned 2026-07-07; from MemClaw competitor analysis; closes the operator-UX gap while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit; 22 new requirement IDs: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03)
@@ -514,7 +514,7 @@ The trust kernel of the governed memory store: provenance enforced at the read/t
 Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-enterprise-review-2026-07-06.md`). The governed-memory logic (v8.0, v8.2+) is necessary but not sufficient: the current per-laptop MCP launcher, single shared vault, per-user deletable audit logs, and git fallback fail the 10-100 person ICP on contact — MCP SPOF, git-fallback exfiltration vector, SOC2 tenancy collapse, broken Day-1 onboarding. Verdict adopted: ship-modified, two SKUs — **Free Solo** (local MCP + git fallback + per-machine discipline) and **Enterprise** (operator-only, per-tenant/per-user vaults, write-side enforcement, no git fallback). ICP scenarios: S9, S10; substrate for S1/S7.
 
 - [x] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
-- [x] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03
+- [x] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03 (completed 2026-07-07; per-tenant vault isolation with operator-mode fail-closed guard, MCP→operator central hash-chained audit bridge, SIEM/DSAR export by user; Beastmode watcher PASS after chain-race + fail-open hardening)
 - [ ] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06
 - [ ] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08
 

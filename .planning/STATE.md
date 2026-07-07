@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 136
-Plan: 136-01 complete
-Status: Thin adapters plus safety slice shipped; v8.3 GSD stack complete
+Phase: 125
+Plan: 125-01 complete
+Status: v8.1 Phase 125 complete (Multi-Tenant Vaults + Central Tamper-Evident Audit); v8.3 GSD stack complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T03:55:00.000Z
-Stopped at: Phase 136 complete (2026-07-07)
-Resume file: `.planning/phases/136-thin-adapters-safety-slice/136-01-PLAN.md`
-Next action: v8.3 GSD stack is complete. Resume v8.1 enterprise operator control plane (Phases 125-127) or v8.2 team-scale policy plane (Phases 128-131) when infra dependencies are available.
+Last session: 2026-07-07T13:35:00.000Z
+Stopped at: Phase 125 complete (2026-07-07)
+Resume file: `.planning/phases/125-multi-tenant-vaults-central-audit/125-01-PLAN.md`
+Next action: v8.1 Phases 126-127 are infra-gated (IdP/MDM). Next code-implementable milestone is v8.2 Phase 128 (Policy Engine Core + Decision Receipts) — deps met (Phase 76 + 121). Then Phases 129-131, then v8.4 Phases 137-141.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,13 @@ Next action: v8.3 GSD stack is complete. Resume v8.1 enterprise operator control
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-07, Phase 125)
+
+- Phase 125 (v8.1, ENTOPS-02/03) completed via Beastmode takeover. The implementation was already present on main but unpromoted; the Director run verified it, ran the Claude Opus watcher (inline-context single-turn to avoid session-quota timeouts), and the watcher returned FAIL on two blocking findings: (C5) the per-tenant hash-chain `build`+`insert` in `POST /api/audit/knowledge` was a TOCTOU race with no enclosing transaction (concurrent same-tenant writes could fork the chain), and (C1) `KnowledgeStore.effective_root()` fell back to the unscoped shared root in operator mode when no tenant was bound (fail-OPEN).
+- Fixes: wrapped tenant-insert + `buildKnowledgeAuditEntry` + `writeAuditEntry` in a single `db.transaction(...).immediate()` (acquires the SQLite write lock at BEGIN, serializing read-tip-then-append); added `KnowledgeStore._operator_scope_ok()` fail-closed guard on read/write/delete/search so operator mode with no bound tenant refuses instead of hitting the shared vault. Added `test_operator_mode_no_bound_tenant_fails_closed`. Re-validation watcher verdict: PASS.
+- Acknowledged scope limitations (plan's "no IdP" non-goal, not blockers): the central-audit tenant/user identity is carried by the shared `MEMROOS_AGENT_API_KEY` caller (attribution trust = key trust), `_validate_tenant_boundary` remains a documented no-op ACL hook, and search audits the raw query string (tighten to a query hash if queries can carry PII in a later phase).
+- Verification: `test_tenant_isolation.py` 13/13, `knowledge-chain.test.ts` + `route.test.ts` 21/21, `check:route-auth-boundary` 49/49; production files typecheck clean (route.test.ts has pre-existing `vi`/`NextRequest` typing quirks tolerated by vitest).
 
 ### Roadmap Evolution (2026-07-05)
 
