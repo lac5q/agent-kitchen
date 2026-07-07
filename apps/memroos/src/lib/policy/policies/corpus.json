@@ -1,0 +1,263 @@
+{
+  "version": "2026.07.128",
+  "cases": [
+    {
+      "id": "memsec-08-sealed-legal-privileged",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.test",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "legal",
+            "sensitivity": "privileged",
+            "policy": "sealed"
+          }
+        }
+      },
+      "expectedOutcome": "deny"
+    },
+    {
+      "id": "memsec-08-finance-payment-review",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.finance-payment",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "finance",
+            "sensitivity": "payment",
+            "policy": "requires_human_review"
+          }
+        }
+      },
+      "expectedOutcome": "review-required"
+    },
+    {
+      "id": "memsec-08-hr-personal-review",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.hr-personal",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "hr",
+            "sensitivity": "personal",
+            "policy": "requires_human_review"
+          }
+        }
+      },
+      "expectedOutcome": "review-required"
+    },
+    {
+      "id": "memsec-08-credential-review",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.credential",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "engineering",
+            "sensitivity": "credential",
+            "policy": "requires_human_review"
+          }
+        }
+      },
+      "expectedOutcome": "review-required"
+    },
+    {
+      "id": "memsec-08-health-review",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.health",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "personal",
+            "sensitivity": "health",
+            "policy": "requires_human_review"
+          }
+        }
+      },
+      "expectedOutcome": "review-required"
+    },
+    {
+      "id": "memsec-08-public-promotion-review",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.public-promotion",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "dispatch",
+          "label": {
+            "visibility": "private",
+            "domain": "engineering",
+            "policy": "requires_human_review"
+          }
+        }
+      },
+      "expectedOutcome": "review-required"
+    },
+    {
+      "id": "approved-indexable-allow",
+      "request": {
+        "domain": "memory-use",
+        "action": "recall.indexable",
+        "actor": { "id": "agent:test", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:test", "role": "agent" },
+          "purpose": "recall",
+          "label": {
+            "visibility": "public_approved",
+            "domain": "engineering",
+            "policy": "indexable"
+          }
+        }
+      },
+      "expectedOutcome": "allow"
+    },
+    {
+      "id": "capability-dispatch-no-skills-deny",
+      "request": {
+        "domain": "capability",
+        "action": "dispatch.test",
+        "actor": { "id": "agent:from", "role": "agent" },
+        "capability": {
+          "kind": "dispatch",
+          "fromAgentId": "agent:from",
+          "targetAgent": {
+            "id": "agent:remote-no-dispatch",
+            "name": "remote",
+            "role": "worker",
+            "platform": "claude",
+            "protocol": "a2a",
+            "location": "cloudflare",
+            "host": "example.com",
+            "port": 443,
+            "healthEndpoint": "/health",
+            "skills": [
+              {
+                "id": "summarize",
+                "name": "Summarize",
+                "description": "n/a",
+                "tags": [],
+                "inputModes": ["text"],
+                "outputModes": ["text"]
+              }
+            ]
+          }
+        }
+      },
+      "expectedOutcome": "deny"
+    },
+    {
+      "id": "dimension-gtm-export-client-privileged-tightens-to-deny",
+      "request": {
+        "domain": "memory-use",
+        "action": "export.gtm-client",
+        "actor": { "id": "agent:gtm-bot", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:gtm-bot", "role": "agent" },
+          "purpose": "export",
+          "label": {
+            "visibility": "internal",
+            "domain": "client",
+            "sensitivity": "privileged",
+            "policy": "agent_visible"
+          }
+        },
+        "dimensions": {
+          "subject": { "team": ["GTM"] },
+          "object": { "domain": ["client"], "sensitivity": ["privileged"] },
+          "action": "export.gtm-client",
+          "purpose": "export"
+        }
+      },
+      "expectedOutcome": "deny"
+    },
+    {
+      "id": "dimension-no-match-base-unchanged",
+      "request": {
+        "domain": "memory-use",
+        "action": "export.engineering-default",
+        "actor": { "id": "agent:eng-bot", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:eng-bot", "role": "agent" },
+          "purpose": "export",
+          "label": {
+            "visibility": "internal",
+            "domain": "engineering",
+            "policy": "agent_visible"
+          }
+        }
+      },
+      "expectedOutcome": "allow"
+    },
+    {
+      "id": "dimension-different-team-no-match-base-unchanged",
+      "request": {
+        "domain": "memory-use",
+        "action": "export.eng-client",
+        "actor": { "id": "agent:ops-bot", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:ops-bot", "role": "agent" },
+          "purpose": "export",
+          "label": {
+            "visibility": "internal",
+            "domain": "client",
+            "sensitivity": "privileged",
+            "policy": "agent_visible"
+          }
+        },
+        "dimensions": {
+          "subject": { "team": ["OPS"] },
+          "object": { "domain": ["client"], "sensitivity": ["privileged"] },
+          "action": "export.eng-client",
+          "purpose": "export"
+        }
+      },
+      "expectedOutcome": "allow"
+    },
+    {
+      "id": "dimension-redact-base-tightens-to-deny",
+      "request": {
+        "domain": "memory-use",
+        "action": "export.gtm-pii",
+        "actor": { "id": "agent:gtm-bot", "role": "agent" },
+        "memoryUse": {
+          "actor": { "id": "agent:gtm-bot", "role": "agent" },
+          "purpose": "export",
+          "label": {
+            "visibility": "internal",
+            "domain": "client",
+            "sensitivity": "privileged",
+            "policy": "requires_redaction"
+          }
+        },
+        "dimensions": {
+          "subject": { "team": ["GTM"] },
+          "object": { "domain": ["client"], "sensitivity": ["privileged"] },
+          "action": "export.gtm-pii",
+          "purpose": "export"
+        }
+      },
+      "expectedOutcome": "deny"
+    }
+  ]
+}

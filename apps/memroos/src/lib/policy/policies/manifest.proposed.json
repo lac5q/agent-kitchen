@@ -1,5 +1,5 @@
 {
-  "version": "2026.07.129",
+  "version": "2026.07.129-proposed",
   "rules": [
     {
       "id": "memsec.memory-use",
@@ -34,7 +34,7 @@
     {
       "id": "gtm.meeting-prep-export-deny",
       "domain": "memory-use",
-      "description": "GTM agents cannot export client/privileged claims",
+      "description": "GTM agents cannot export client/privileged claims (tighten from allow to deny for export purpose)",
       "implementation": "memsec.authorizeMemoryUse",
       "dimensions": {
         "subject": { "team": ["GTM"] },

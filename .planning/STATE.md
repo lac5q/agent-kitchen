@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 128
-Plan: 128-01 complete
-Status: v8.2 Phase 128 complete (Policy Engine Core + Decision Receipts); v8.1 Phase 125 complete; v8.3 GSD stack complete
+Phase: 129
+Plan: 129-01 complete
+Status: v8.2 Phase 129 complete (Policy Dimensions, Shadow Mode + CI Regression); Phase 128 complete; v8.1 Phase 125 complete; v8.3 GSD stack complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T14:45:00.000Z
-Stopped at: Phase 128 complete (2026-07-07)
-Resume file: `.planning/phases/128-policy-engine-core-decision-receipts/128-01-PLAN.md`
-Next action: Phase 129 (Policy Dimensions, Shadow Mode + CI Regression, POLGOV-03/04/05) — deps met (Phase 128). Then Phases 130-131, then v8.4 Phases 137-141.
+Last session: 2026-07-07T15:00:00.000Z
+Stopped at: Phase 129 complete (2026-07-07)
+Resume file: `.planning/phases/129-policy-dimensions-shadow-ci/129-01-PLAN.md`
+Next action: Phase 130 (Teams/Spaces + Knowledge-Repo Labels, TEAMSCALE-01 + MSIQ-01/02/03) — deps met (Phase 128 + 125). Then Phase 131, then v8.4 Phases 137-141.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,12 @@ Next action: Phase 129 (Policy Dimensions, Shadow Mode + CI Regression, POLGOV-0
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-07, Phase 129)
+
+- Phase 129 (v8.2, POLGOV-03/04/05) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK (hermes inline-context). Three capabilities shipped: (1) additive dimension rules (subject/object/action/purpose) that only tighten to deny — a rule like "GTM agents cannot export client/privileged claims" is expressible and enforced; (2) shadow mode (`shadowEvaluate`) that replays a proposed manifest against recent decisions and reports newly-denied/newly-allowed diffs, with operator-gated `activatePolicyVersion`; (3) CI regression corpus (`corpus.json` + `regression.test.ts` + `approved-diffs.json` + `check:policy-regression` npm script + CI workflow job).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Dimension matching only runs when the request supplies `dimensions`; no dimensions = no dimension rules match = byte-identical. Wrapped files unchanged. Manifest version bumped to 2026.07.129.
+- Verification: dimensions 14 + shadow 9 + regression 25 + receipt 3 + engine 7 + MEMSEC-08 8 = 66 tests pass; zero tsc errors; GLM-5.2 validator PASS. Non-blocking finding: empty array in dimension rules is treated as wildcard (foot-gun, no current breakage).
 
 ### Roadmap Evolution (2026-07-07, Phase 128)
 

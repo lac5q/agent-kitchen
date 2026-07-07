@@ -243,9 +243,9 @@
 
 - [x] **POLGOV-01**: A single declarative policy layer evaluates retrieval, memory write/promotion, knowledge read/write, skill dispatch, and A2A/tool capability decisions, replacing scattered per-route logic; policies are versioned files in git with review history.
 - [x] **POLGOV-02**: Every policy decision emits a receipt (policy version, rule matched, allow/deny/redact, reason) that lands in the evidence bundle and audit chain; agents see deny reasons without seeing the withheld content.
-- [ ] **POLGOV-03**: Policies support subject (user/team/agent/role), object (ontology type + labels + belief stage), action, and purpose dimensions — e.g. "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them."
-- [ ] **POLGOV-04**: A shadow/dry-run mode evaluates a proposed policy version against recent live decisions and reports the diff (newly denied / newly allowed) before activation; activation is operator-gated.
-- [ ] **POLGOV-05**: Policy regression tests run in CI: a committed corpus of decision cases (including MEMSEC-08 leak-prevention cases) must produce identical or explicitly-approved-different outcomes on every policy change.
+- [x] **POLGOV-03**: Policies support subject (user/team/agent/role), object (ontology type + labels + belief stage), action, and purpose dimensions — e.g. "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them."
+- [x] **POLGOV-04**: A shadow/dry-run mode evaluates a proposed policy version against recent live decisions and reports the diff (newly denied / newly allowed) before activation; activation is operator-gated.
+- [x] **POLGOV-05**: Policy regression tests run in CI: a committed corpus of decision cases (including MEMSEC-08 leak-prevention cases) must produce identical or explicitly-approved-different outcomes on every policy change.
 
 ## TEAMSCALE Multi-Team Organizational Scale (Proposed)
 

@@ -568,7 +568,7 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
 One declarative policy engine with decision receipts replacing scattered gate logic, plus teams/spaces and human+agent identity lifecycle for the 100-person agentic-heavy ICP — running on the v8.1 multi-tenant substrate. ICP scenarios: S1, S4, S7 (access half).
 
 - [x] **Phase 128: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02 (completed 2026-07-07; wrap-not-rewrite engine delegates to authorizeMemoryUse + checkDispatchPolicy/checkA2aSendPolicy/checkMemoryWritePolicy, adds versioned manifest + POLICY_DECISION audit receipts; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
-- [ ] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05
+- [x] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05 (completed 2026-07-07; additive dimension rules (subject/object/action/purpose) that only tighten to deny, shadow mode with proposed manifest replay + operator-gated activation, CI regression corpus with approved-diffs override; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
 - [ ] **Phase 130: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03
 - [ ] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
 

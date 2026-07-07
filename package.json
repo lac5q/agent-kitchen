@@ -44,6 +44,7 @@
     "check:a2a-schema": "npm run test --workspace apps/memroos -- --run src/lib/a2a/__tests__/contract.test.ts src/lib/a2a/__tests__/agent-card.test.ts src/app/api/a2a/openapi/__tests__/route.test.ts",
     "check:mcp-schema": ".venv/bin/python -m pytest services/knowledge-mcp/tests/test_knowledge_system.py -q",
     "check:recall-canary": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/memory-recall-evals.test.ts src/lib/__tests__/memory-recall-canary-ci.test.ts",
+    "check:policy-regression": "npm run test --workspace apps/memroos -- --run src/lib/policy/__tests__/regression.test.ts",
     "check:belief-eval": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/belief-promotion-eval-ci.test.ts",
     "check:gsd-lane-evals": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/gsd-phase135.test.ts src/lib/__tests__/gsd-lane-evals-ci.test.ts",
     "check:recall-anchors": "node scripts/check-recall-anchors.mjs --skip-mem0",

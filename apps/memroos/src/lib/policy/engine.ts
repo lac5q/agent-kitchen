@@ -42,11 +42,27 @@ import type { RegisteredAgent, RemoteAgentConfig } from "@/types";
 
 import manifest from "./policies/manifest.json";
 import {
+  matchDimensions,
+  type PolicyDimensionRule,
+  type PolicyRequestDimensions,
+} from "./dimensions";
+import {
   emitPolicyReceipt,
   type PolicyDomain,
   type PolicyOutcome,
   type PolicyReceipt,
 } from "./receipt";
+
+/**
+ * Shape of the dimension rules in the manifest. The manifest is JSON, so
+ * `dimensions` may be absent or `effect` may be some other value; we only
+ * honor rules with `effect: "deny"`.
+ */
+interface ManifestRuleWithDimensions {
+  id: string;
+  domain: string;
+  dimensions?: PolicyDimensionRule;
+}
 
 /**
  * Engine policy version. Sourced from `policies/manifest.json` so changing
@@ -93,6 +109,12 @@ export interface PolicyRequest {
         agent: RegisteredAgent;
         tier: MemoryTier;
       };
+  /**
+   * Optional per-request dimensions used by Phase 129 dimension rules.
+   * When undefined, no dimension rule can match a rule with ANY specified
+   * field — preserving the Phase 128 byte-identical contract.
+   */
+  dimensions?: PolicyRequestDimensions;
 }
 
 export interface PolicyEvaluation {
@@ -325,7 +347,55 @@ export function evaluatePolicy(
     throw new Error(`evaluatePolicy: unsupported domain: ${String(req.domain)}`);
   }
 
+  // Phase 129 (POLGOV-03): additive dimension tightening. Only runs when
+  // the caller supplied `dimensions`. Skipped entirely otherwise — byte-
+  // identical for every Phase 128 caller (no dimensions supplied).
+  evaluation = applyDimensionTightening(evaluation, req);
+
   if (db) emitPolicyReceipt(db, evaluation.receipt);
+
+  return evaluation;
+}
+
+/**
+ * Walk the manifest's rules for the request domain, find any dimension rule
+ * with `effect: "deny"` whose dimensions match the request, and tighten
+ * the receipt outcome from allow/redact/review-required to deny. A deny
+ * stays deny (already terminal). Records the matched rule id in
+ * `receipt.ruleMatched` for traceability.
+ *
+ * The underlying wrapped-function result is intentionally left unchanged
+ * on `evaluation.memoryUse` / `evaluation.capability` — those remain the
+ * byte-identical wrapped output so callers can still rely on them. The
+ * dimension rule only modifies the *engine*'s view of the decision.
+ */
+function applyDimensionTightening(
+  evaluation: PolicyEvaluation,
+  req: PolicyRequest
+): PolicyEvaluation {
+  if (req.dimensions === undefined) return evaluation;
+  // No point tightening an already-deny decision.
+  if (evaluation.receipt.outcome === "deny") return evaluation;
+
+  const dimensionRules = (manifest.rules as ManifestRuleWithDimensions[]).filter(
+    (rule) => rule.domain === req.domain && rule.dimensions !== undefined
+  );
+
+  for (const rule of dimensionRules) {
+    if (!rule.dimensions) continue;
+    if (rule.dimensions.effect !== "deny") continue;
+    if (!matchDimensions(rule.dimensions, req.dimensions)) continue;
+
+    return {
+      ...evaluation,
+      receipt: {
+        ...evaluation.receipt,
+        outcome: "deny",
+        reason: `dimension_deny:${rule.id}`,
+        ruleMatched: rule.id,
+      },
+    };
+  }
 
   return evaluation;
 }
