@@ -130,16 +130,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate operator load gate logic on PRs
-        if: github.event_name == 'pull_request'
+      - name: Validate operator load gate logic
         run: node --test scripts/check-operator-load-slo.test.mjs
 
-      - name: Run operator load SLO gate
-        if: github.event_name != 'pull_request'
-        # Reads reports/operator-load/latest.json (committed baseline by
-        # default; gate treats baseline as NOT pass until a real run
-        # produces a fresh status:"pass" report). Does not execute the
-        # live harness — production-style runs are opt-in via env.
+      - name: Run operator load SLO gate (live report required)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        # Reads reports/operator-load/latest.json (gitignored; uploaded by
+        # opt-in load harness runs). Baseline is intentionally non-passing
+        # so enterprise-claim vocabulary stays blocked until a real run
+        # produces status:"pass". Push/PR CI validates gate logic only.
         run: npm run check:operator-load-slo
 
   promotion-eval:
