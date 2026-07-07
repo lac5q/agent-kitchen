@@ -26,12 +26,22 @@ const routeLocalAuthCoverage = [
     notes: ["apps/memroos/src/app/api/chatgpt/actions/openapi/route.ts is public metadata only."],
   },
   {
-    pattern: "/^\\/api\\/agent-context\\//",
+    pattern: "/^\\/api\\/agent-context(?:\\/|$)/",
     files: [
+      ["apps/memroos/src/app/api/agent-context/route.ts", ["authenticateAgentHeaders("]],
       ["apps/memroos/src/app/api/agent-context/messages/route.ts", ["authenticateAgentHeaders("]],
       ["apps/memroos/src/app/api/agent-context/messages/[id]/route.ts", ["authenticateAgentHeaders("]],
       ["apps/memroos/src/app/api/agent-context/messages/[id]/ack/route.ts", ["authenticateAgentHeaders("]],
       ["apps/memroos/src/app/api/agent-context/messages/[id]/reply/route.ts", ["authenticateAgentHeaders("]],
+    ],
+  },
+  {
+    pattern: "/^\\/api\\/gsd(?:\\/|$)/",
+    files: [
+      ["apps/memroos/src/app/api/gsd/goal/route.ts", ["authenticateAgentHeaders("]],
+      ["apps/memroos/src/app/api/gsd/resume/route.ts", ["authenticateAgentHeaders("]],
+      ["apps/memroos/src/app/api/gsd/shipcheck/route.ts", ["authenticateAgentHeaders("]],
+      ["apps/memroos/src/app/api/gsd/standup/route.ts", ["authenticateAgentHeaders("]],
     ],
   },
   {
@@ -113,6 +123,7 @@ const proxyOperatorCoverage = [
 const requiredRegressionTests = [
   ["apps/memroos/src/lib/__tests__/operator-auth.test.ts", ["blocks non-local registry writes"]],
   ["apps/memroos/src/app/api/agent-context/__tests__/route.test.ts", ["rejects unauthorized"]],
+  ["apps/memroos/src/app/api/gsd/__tests__/route.test.ts", ["requires authenticated agent keys"]],
   ["apps/memroos/src/app/api/agent-checkpoints/__tests__/route.test.ts", ["blocks direct non-local"]],
   ["apps/memroos/src/app/api/agent-memory/traces/__tests__/route.test.ts", ["blocks direct non-local"]],
   ["apps/memroos/src/app/api/agent-runtime/observability/__tests__/route.test.ts", ["blocks direct non-local"]],

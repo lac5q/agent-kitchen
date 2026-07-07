@@ -197,6 +197,30 @@ describe("proxy", () => {
     expect(await healthResponse.text()).toBe("");
   });
 
+  it("lets the agent context packet route handle its own agent-key authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/agent-context?goal_id=phase-132", {
+        method: "GET",
+        headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
+  it("lets GSD command routes handle their own agent-key authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/gsd/shipcheck", {
+        method: "POST",
+        headers: { host: "localhost:3002", authorization: "Bearer agent-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets local memory search handle its own authorization", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/memory/search?q=omnisend", {

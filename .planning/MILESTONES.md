@@ -2,7 +2,7 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: Agent OS GSD Stack (Planned 2026-07-06)
+## Current Position: Agent OS GSD Stack (In Progress 2026-07-06)
 
 **Scope:**
 
@@ -13,17 +13,19 @@ This file tracks the current high-level product milestone state. Detailed requir
 
 ---
 
-## v8.3 Agent OS GSD Stack (Planned 2026-07-06)
+## v8.3 Agent OS GSD Stack (In Progress 2026-07-06)
 
 **Phases:** 132-136
 
 **Scope:**
 
-1. **Agent Context Packet + Run Ledger (Phase 132)** — Typed packet plus queryable task/event/proof ledger, reusing Agent Context Bus, checkpoint, memory-trace, hive, and provenance surfaces.
-2. **Shipcheck + Goal/Resume/Standup Commands (Phase 133)** — Lane-specific proof gate and durable command surface.
+1. **Agent Context Packet + Run Ledger (Phase 132)** — Complete 2026-07-06. Typed packet plus queryable task/event/proof ledger, reusing Agent Context Bus, checkpoint, memory-trace, hive, and provenance surfaces.
+2. **Shipcheck + Goal/Resume/Standup Commands (Phase 133)** — Complete 2026-07-06. Lane-specific proof gate and durable command surface backed by the packet and ledger.
 3. **Portable Skill Boundary + Skill Audit (Phase 134)** — Classify skill-vs-core product boundaries and audit the skill corpus without auto-deleting.
 4. **Lane Evals + Model Routing Policy (Phase 135)** — Research/code/memory/handoff/GTM/safety eval fixtures and logged routing policy.
 5. **Thin Interface Adapters + Safety Slice (Phase 136)** — Hermes/Discord/Telegram/Codex/Claude adapters over the shared contract, with PII/secrets/destructive-action/cost gates.
+
+**Current verification:** Phase 132 has a redaction-first packet/ledger builder, authenticated `GET /api/agent-context`, and read-only debug wrapper. Phase 133 has authenticated `POST /api/gsd/goal`, `POST /api/gsd/shipcheck`, `GET /api/gsd/resume`, and `GET /api/gsd/standup`. Remaining v8.3 work starts at Phase 134.
 
 **Verification target:** every interface can trigger work, but MemRoOS remains the source of truth for context, task state, proof, skills, evals, model routing, policy, and safety.
 

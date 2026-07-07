@@ -186,10 +186,10 @@
 
 *Source: 2026-07-06 Mark Kashef full-channel transcript audit and stack prioritization (`content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md`, `content/research/mark-kashef-agent-stack-prioritization-2026-07-06.md`). Decision: implement the stack through GSD as MemRoOS product substrate plus portable skills. Skills are for repeatable cross-runtime procedures; core product behavior is embedded when it needs shared state, schema, policy, audit, proof, or eval storage.*
 
-- [ ] **GSDSTACK-01**: A typed agent context packet endpoint/tool returns active goal, project/repo/client, constraints, relevant memories with provenance and belief stage, prior decisions, forbidden actions, required verification surface, approval requirements, source receipts, and resume marker; packet assembly emits included/denied/skipped/stale receipts with no raw sensitive payload leakage.
-- [ ] **GSDSTACK-02**: A canonical task/event/proof run ledger records or federates task, event, artifact, approval, cost, verification, and handoff rows from existing hive/checkpoint/evidence surfaces into one queryable model; noisy events have compaction/retention rules and every significant action remains auditable.
-- [ ] **GSDSTACK-03**: `/shipcheck` blocks completion until lane-specific proof exists for research, code, memory, deployment, email/doc, GTM, and safety tasks; bypass requires an explicit reason, actor, and receipt in the run ledger.
-- [ ] **GSDSTACK-04**: `/goal`, `/resume`, and `/standup` are backed by the context packet and run ledger: goals include acceptance criteria and verification requirements, resume reconstructs state without operator restatement, and standup reports active goals, blockers, recent proof, pending approvals, and next actions.
+- [x] **GSDSTACK-01**: A typed agent context packet endpoint/tool returns active goal, project/repo/client, constraints, relevant memories with provenance and belief stage, prior decisions, forbidden actions, required verification surface, approval requirements, source receipts, and resume marker; packet assembly emits included/denied/skipped/stale receipts with no raw sensitive payload leakage.
+- [x] **GSDSTACK-02**: A canonical task/event/proof run ledger records or federates task, event, artifact, approval, cost, verification, and handoff rows from existing hive/checkpoint/evidence surfaces into one queryable model; noisy events have compaction/retention rules and every significant action remains auditable.
+- [x] **GSDSTACK-03**: `/shipcheck` blocks completion until lane-specific proof exists for research, code, memory, deployment, email/doc, GTM, and safety tasks; bypass requires an explicit reason, actor, and receipt in the run ledger.
+- [x] **GSDSTACK-04**: `/goal`, `/resume`, and `/standup` are backed by the context packet and run ledger: goals include acceptance criteria and verification requirements, resume reconstructs state without operator restatement, and standup reports active goals, blockers, recent proof, pending approvals, and next actions.
 - [ ] **GSDSTACK-05**: `/discuss` is a bounded council workflow, not an autonomous swarm: role definitions, task budget, shared context packet, verdict schema, validator pass, and ledgered outputs are required for every run.
 - [ ] **GSDSTACK-06**: A skill-boundary manifest classifies candidate capabilities as `core_product`, `portable_skill`, `adapter_skill`, `reference_only`, or `defer`, with rationale and owner. Core product surfaces include context packet, run ledger, proof gate, policy decisions, eval store, model-routing telemetry, audit chain, and adapter state; these cannot ship as skills-only.
 - [ ] **GSDSTACK-07**: `/skill-audit` reports missing owner, missing smoke test, stale review date, duplicate trigger, unsafe tool instructions, no examples, and no usage evidence across registered skills; it drafts SkillForge proposals for operator review and never auto-deletes.
@@ -368,10 +368,10 @@
 | RECOLLECT-05 | 118 | Done |
 | RECOLLECT-06 | 118 | Done |
 | RECOLLECT-07 | 118 | Done |
-| GSDSTACK-01 | 132 | Planned |
-| GSDSTACK-02 | 132 | Planned |
-| GSDSTACK-03 | 133 | Planned |
-| GSDSTACK-04 | 133 | Planned |
+| GSDSTACK-01 | 132 | Done |
+| GSDSTACK-02 | 132 | Done |
+| GSDSTACK-03 | 133 | Done |
+| GSDSTACK-04 | 133 | Done |
 | GSDSTACK-05 | 134 | Planned |
 | GSDSTACK-06 | 134 | Planned |
 | GSDSTACK-07 | 134 | Planned |
