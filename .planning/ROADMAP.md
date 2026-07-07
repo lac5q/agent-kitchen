@@ -38,7 +38,7 @@
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
-- 🔄 **v8.3 Agent OS GSD Stack** — Phases 132-136 (in progress 2026-07-06; Phase 132 complete; implements the Mark Kashef transcript-audit stack as MemRoOS-native control plane + portable skill boundary)
+- ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
 - 🔜 **v8.4 Project-Centric Operator UX** — Phases 137-141 (planned 2026-07-07; from MemClaw competitor analysis; closes the operator-UX gap while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit; 22 new requirement IDs: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03)
 
 ## Phases
@@ -618,7 +618,7 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 **Plans**: 0/? planned
 **UI hint**: yes
 
-## v8.3 Agent OS GSD Stack (Phases 132-136) — IN PROGRESS
+## v8.3 Agent OS GSD Stack (Phases 132-136) — COMPLETE
 
 Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization (`content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md`, `content/research/mark-kashef-agent-stack-prioritization-2026-07-06.md`). Decision: implement the stack through GSD as a MemRoOS-native control plane, not as a Hermes/OpenClaw replacement project. Hermes, Discord, Telegram, Codex, Claude Code, and future UIs are adapters. MemRoOS owns context, task state, proof, policy, skill contracts, evals, and routing receipts.
 
@@ -626,9 +626,9 @@ Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization 
 
 - [x] **Phase 132: Agent Context Packet + Run Ledger** — GSDSTACK-01, GSDSTACK-02
 - [x] **Phase 133: Shipcheck + Goal/Resume/Standup Commands** — GSDSTACK-03, GSDSTACK-04
-- [ ] **Phase 134: Portable Skill Boundary + Skill Audit** — GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
-- [ ] **Phase 135: Lane Evals + Model Routing Policy** — GSDSTACK-08, GSDSTACK-09
-- [ ] **Phase 136: Thin Interface Adapters + Safety Slice** — GSDSTACK-10, GSDSTACK-11
+- [x] **Phase 134: Portable Skill Boundary + Skill Audit** — GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
+- [x] **Phase 135: Lane Evals + Model Routing Policy** — GSDSTACK-08, GSDSTACK-09
+- [x] **Phase 136: Thin Interface Adapters + Safety Slice** — GSDSTACK-10, GSDSTACK-11
 
 ### Phase 132: Agent Context Packet + Run Ledger
 **Goal**: Every agent receives the same compact, typed truth packet before acting, and every meaningful run event lands in a durable ledger.
@@ -660,36 +660,39 @@ Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization 
 **Goal**: Decide what becomes a portable skill versus MemRoOS product substrate, then audit the skill corpus for stale, duplicate, untested, overbroad, or unsafe skills.
 **Depends on**: Phase 132 (run ledger), Phase 98 (skill distribution core), Phase 106 (SkillForge hardening), Phase 123 (gold-only outbound policy)
 **Requirements**: GSDSTACK-05, GSDSTACK-06, GSDSTACK-07
+**Status**: COMPLETE (2026-07-07). Implemented `apps/memroos/src/lib/gsd/skill-boundary-manifest.json`, `skill-boundary.ts`, `discuss.ts`, and agent-authenticated `GET /api/gsd/skill-boundary`, `POST /api/gsd/skill-audit`, and `POST /api/gsd/discuss`. Skill audit drafts SkillForge proposals and never auto-deletes registry rows.
 **Success Criteria** (what must be TRUE):
   1. A skill-boundary manifest classifies candidate capabilities into `core_product`, `portable_skill`, `adapter_skill`, `reference_only`, or `defer`; classifications include rationale and owner
   2. Portable skills are limited to repeatable agent procedures: GSD roadmap operator, MemRoOS context consumer, shipcheck client wrapper, skill audit operator, bounded discuss/review council, and lane-specific research/code/handoff playbooks
   3. Core product features are explicitly barred from being shipped as skills-only: context packet schema, run ledger, proof gate, policy decisions, eval store, model-routing telemetry, audit chain, and adapter state
   4. `/skill-audit` reports missing owner, missing smoke test, stale review date, duplicate trigger, unsafe tool instructions, no examples, and no usage evidence; it drafts SkillForge proposals but does not auto-delete
-**Plans**: 0/? planned
+**Plans**: 1/1 complete (`.planning/phases/134-portable-skill-boundary-skill-audit/134-01-PLAN.md`)
 **UI hint**: yes (skill boundary table + audit findings)
 
 ### Phase 135: Lane Evals + Model Routing Policy
 **Goal**: Prove the stack improves real agent lanes and make model choice explicit, logged, and cheap by default where safe.
 **Depends on**: Phase 132, Phase 133, Phase 57/94 (eval substrate), Phase 46/47 (model routing telemetry)
 **Requirements**: GSDSTACK-08, GSDSTACK-09
+**Status**: COMPLETE (2026-07-07). Implemented `apps/memroos/evals/gsd-lane-evals/cases.json`, `lane-evals.ts`, `model-routing-policy.ts`, `GET/POST /api/gsd/lane-eval`, `GET/POST /api/gsd/model-route`, and `npm run check:gsd-lane-evals`.
 **Success Criteria** (what must be TRUE):
   1. Research, code, memory, handoff, GTM, and safety lanes each have committed fixtures, scoring rubrics, and CI/scheduled eval runs
   2. Evals record source coverage, proof compliance, recall provenance, handoff resumability, GTM claim grounding, and safety gate outcomes into the run ledger
   3. Static model-routing policy maps task classes to cheap/local, frontier, private/customer-bound, vision, and validator models with explicit override reason
   4. Routing receipts record model, reason, cost estimate/actual, latency, and result quality; the first adaptive routing review is based on observed outcomes, not vibes
-**Plans**: 0/? planned
+**Plans**: 1/1 complete (`.planning/phases/135-lane-evals-model-routing/135-01-PLAN.md`)
 **UI hint**: yes (eval lane status + routing/cost report)
 
 ### Phase 136: Thin Interface Adapters + Safety Slice
 **Goal**: Hermes/Discord/Telegram/Codex/Claude Code consume the same MemRoOS control plane without owning state, and adapter actions are guarded by the first safety slice.
 **Depends on**: Phase 132, Phase 133, Phase 128/129 where available
 **Requirements**: GSDSTACK-10, GSDSTACK-11
+**Status**: COMPLETE (2026-07-07). Implemented `apps/memroos/src/lib/gsd/adapters.ts`, `adapter-safety.ts`, and `GET/POST /api/gsd/adapter` with secrets/PII scan, destructive-action approval, cost cap, and honest shared-mode degradation.
 **Success Criteria** (what must be TRUE):
   1. Hermes, Discord/Telegram, Codex, and Claude Code adapters can create tasks, request context, post proof receipts, ask for standup/resume, and request approvals through the same API/tool contract
   2. Adapter contract tests prove no adapter owns memory, task state, proof state, policy state, or model routing decisions
   3. Secrets/PII scanner, destructive-action approval gate, and cost cap checks run before adapter-triggered sends/writes/destructive actions
   4. Adapter failure degrades honestly: no silent local git fallback in shared mode, no unlogged writes, and no "done" messages without proof receipts
-**Plans**: 0/? planned
+**Plans**: 1/1 complete (`.planning/phases/136-thin-adapters-safety-slice/136-01-PLAN.md`)
 **UI hint**: no for MVP; later adapter health in NOC
 
 ---

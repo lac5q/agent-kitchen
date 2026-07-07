@@ -45,6 +45,7 @@
     "check:mcp-schema": ".venv/bin/python -m pytest services/knowledge-mcp/tests/test_knowledge_system.py -q",
     "check:recall-canary": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/memory-recall-evals.test.ts src/lib/__tests__/memory-recall-canary-ci.test.ts",
     "check:belief-eval": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/belief-promotion-eval-ci.test.ts",
+    "check:gsd-lane-evals": "npm run test --workspace apps/memroos -- --run src/lib/__tests__/gsd-phase135.test.ts src/lib/__tests__/gsd-lane-evals-ci.test.ts",
     "check:recall-anchors": "node scripts/check-recall-anchors.mjs --skip-mem0",
     "check:recall-anchors:live": "node scripts/check-recall-anchors.mjs --require-mem0",
     "install:runtime-services": "node scripts/install-runtime-services.mjs install",

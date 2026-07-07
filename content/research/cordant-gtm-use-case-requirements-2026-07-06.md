@@ -10,7 +10,7 @@ sources:
   - Circleback meeting "Eric <> Luis Agentic Conversation", created 2026-05-18, meeting id 8854184
   - Cordant local artifacts 2026-06-28 and 2026-06-29 GTM OS review documents
 derived_from:
-  - /Users/lcalderon/github/cordant/artifacts/docs/2026-07-06-cordant-gtm-use-case-requirements.md
+  - /Users/USERNAME/github/cordant/artifacts/docs/2026-07-06-cordant-gtm-use-case-requirements.md
   - Google Doc https://docs.google.com/document/d/1ek1uAsty0s_EaVTqfQzXuPJphupevQN4U6Yh2Wlv6n0/edit
 regen_prompt: "Integrate Eric Rosenthal's wholesale ISO example and other described GTM/BD examples into a Cordant GTM OS use case requirements document."
 ---

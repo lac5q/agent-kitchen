@@ -3,10 +3,10 @@ title: LinkedIn AI GTM Recruiter Execution Kit
 date: 2026-07-06
 model: GPT-5 Codex with xhigh multi-agent support
 sources:
-  - /Users/lcalderon/github/jobhunt/ops-data/linkedin-networking/ai-gtm-recruiter-networking-runbook-2026-07-06.md
-  - /Users/lcalderon/github/jobhunt/ops-data/linkedin-networking/message-bank.md
-  - /Users/lcalderon/github/jobhunt/ops-data/linkedin-networking/outreach-tracker.csv
-  - /Users/lcalderon/github/jobhunt/scripts/open-linkedin-networking-searches.sh
+  - /Users/USERNAME/github/jobhunt/ops-data/linkedin-networking/ai-gtm-recruiter-networking-runbook-2026-07-06.md
+  - /Users/USERNAME/github/jobhunt/ops-data/linkedin-networking/message-bank.md
+  - /Users/USERNAME/github/jobhunt/ops-data/linkedin-networking/outreach-tracker.csv
+  - /Users/USERNAME/github/jobhunt/scripts/open-linkedin-networking-searches.sh
   - https://www.linkedin.com/help/linkedin/answer/a551012/types-of-restrictions-for-sending-invitations
   - https://www.linkedin.com/help/linkedin/answer/a563153/personalize-invitations-to-connect
 derived_from:
@@ -16,7 +16,7 @@ regen_prompt: "Create a human-safe execution kit for LinkedIn outreach to AI pro
 
 # LinkedIn AI GTM Recruiter Execution Kit
 
-Created a local execution kit in `/Users/lcalderon/github/jobhunt/ops-data/linkedin-networking/`.
+Created a local execution kit in `/Users/USERNAME/github/jobhunt/ops-data/linkedin-networking/`.
 
 Files:
 

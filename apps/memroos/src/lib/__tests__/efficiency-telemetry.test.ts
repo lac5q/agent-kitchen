@@ -2,7 +2,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { initSchema } from "@/lib/db-schema";
+import { CURRENT_SCHEMA_VERSION, initSchema } from "@/lib/db-schema";
 import {
   listEfficiencyEvents,
   recordEfficiencyEvent,
@@ -31,7 +31,7 @@ describe("efficiency telemetry event foundation", () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'efficiency_events_%'")
       .all() as { name: string }[];
 
-    expect(version).toBe(2);
+    expect(version).toBe(CURRENT_SCHEMA_VERSION);
     expect(table?.name).toBe("efficiency_events");
     expect(memoryTraceColumns.map((column) => column.name)).toContain("agent_id");
     expect(indexes.map((index) => index.name)).toEqual(
@@ -69,7 +69,7 @@ describe("efficiency telemetry event foundation", () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'efficiency_events'")
       .get() as { name: string } | undefined;
     const memoryTraceColumns = db.pragma("table_info(agent_memory_traces)") as { name: string }[];
-    expect(db.pragma("user_version", { simple: true })).toBe(2);
+    expect(db.pragma("user_version", { simple: true })).toBe(CURRENT_SCHEMA_VERSION);
     expect(table?.name).toBe("efficiency_events");
     expect(memoryTraceColumns.map((column) => column.name)).toContain("agent_id");
   });

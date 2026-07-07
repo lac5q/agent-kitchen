@@ -3,7 +3,7 @@ title: Mark Kashef Agent Stack Prioritization Decision Memo
 date: 2026-07-06
 model: GPT-5 Codex
 sources:
-  - /Users/lcalderon/github/memroos/content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md
+  - /Users/USERNAME/github/memroos/content/research/mark-kashef-youtube-transcript-audit-2026-07-06.md
   - https://www.youtube.com/@Mark_Kashef
 derived_from:
   - Full transcript audit of 207 of 207 available Mark Kashef YouTube transcripts.

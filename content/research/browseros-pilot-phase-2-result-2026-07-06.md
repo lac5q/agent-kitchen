@@ -28,7 +28,7 @@ The first attempt used `delegate_task` to dispatch two subagents, each driving o
 
 Three things had to be fixed:
 
-1. **Pilot Chrome needed auth.** Luis manually signed in to the pilot Chrome window on 9223 with `luis@epiloguecapital.com`.
+1. **Pilot Chrome needed auth.** Luis manually signed in to the pilot Chrome window on 9223 with his work account.
 2. **Both browsers needed `--remote-allow-origins=*`.** Chrome 111+ blocks WebSocket connections from non-allowlisted origins by default. Both had to be restarted with this flag.
 3. **Direct CDP driver (`scripts/direct-cdp-driver.py`).** Bypasses MCP/Browserbase entirely. Uses raw WebSocket + CDP commands. No subagent, no MCP layer.
 
@@ -37,7 +37,7 @@ Three things had to be fixed:
 | Browser | Success | Emails | Duration | Errors | reCAPTCHA |
 |---|---|---|---|---|---|
 | BrowserOS (luis.calderon@gmail.com) | ✅ true | 5 | 14.13s | 0 | 0 |
-| Pilot Chrome (luis@epiloguecapital.com) | ✅ true | 5 | 4.97s | 0 | 0 |
+| Pilot Chrome (work account) | ✅ true | 5 | 4.97s | 0 | 0 |
 
 **Decision gate (per docs/decision-gate.md):**
 - Gate 1 (both reported): ✓
@@ -85,7 +85,7 @@ This is a **browser-side state issue**, not a BrowserOS architecture problem. A 
 
 ## Persistent state at end of pilot
 
-- **Pilot Chrome 9223**: running, `--remote-allow-origins=*`, signed into `luis@epiloguecapital.com`, ~20 tabs of state
+- **Pilot Chrome 9223**: running, `--remote-allow-origins=*`, signed into Luis's work account, ~20 tabs of state
 - **BrowserOS 9239**: running, `--remote-allow-origins=*`, signed into `luis.calderon@gmail.com`, 8 tabs (Gmail/Linear/Slack)
 - **Pilot repo**: 8+ commits, infrastructure reproducible
 - **MemroOS**: 4 research docs persisted
