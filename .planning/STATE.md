@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 129
-Plan: 129-01 complete
-Status: v8.2 Phase 129 complete (Policy Dimensions, Shadow Mode + CI Regression); Phase 128 complete; v8.1 Phase 125 complete; v8.3 GSD stack complete
+Phase: 130
+Plan: 130-01 complete
+Status: v8.2 Phase 130 complete (Teams/Spaces + Knowledge-Repo Labels); Phases 128-129 complete; v8.1 Phase 125 complete; v8.3 GSD stack complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T15:00:00.000Z
-Stopped at: Phase 129 complete (2026-07-07)
-Resume file: `.planning/phases/129-policy-dimensions-shadow-ci/129-01-PLAN.md`
-Next action: Phase 130 (Teams/Spaces + Knowledge-Repo Labels, TEAMSCALE-01 + MSIQ-01/02/03) — deps met (Phase 128 + 125). Then Phase 131, then v8.4 Phases 137-141.
+Last session: 2026-07-07T15:15:00.000Z
+Stopped at: Phase 130 complete (2026-07-07)
+Resume file: `.planning/phases/130-teams-spaces-knowledge-labels/130-01-PLAN.md`
+Next action: Phase 131 (Identity Lifecycle + Delegation Chains, TEAMSCALE-02..06) — deps partially met (Phase 130 + 82 + 107; Phase 126 is infra-gated). Then v8.4 Phases 137-141.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,13 @@ Next action: Phase 130 (Teams/Spaces + Knowledge-Repo Labels, TEAMSCALE-01 + MSI
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-07, Phase 130)
+
+- Phase 130 (v8.2, TEAMSCALE-01 + MSIQ-01/02/03) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK (hermes). Four capabilities shipped: (1) spaces + space_members schema with membership and zero cross-space leakage (TEAMSCALE-01); (2) knowledge frontmatter label validation for sensitivity/authoritative/verified_at/expires_at (MSIQ-01); (3) label-aware search/read authorization with default-open for unlabeled docs (MSIQ-02); (4) ranking boosts authoritative, demotes expired, flag_expired_unverified job (MSIQ-03).
+- Schema migration: v3→v4, added spaces + space_members tables and messages.space_id column. Backward-compatible (nullable space_id, project-name fallback in filterBySpace).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical. Wrapped files unchanged.
+- Verification: 76 TS tests pass (10 space + 66 policy/MEMSEC-08) + 32 Python tests pass (19 labels + 13 tenant isolation); zero tsc errors under src/lib/space; GLM-5.2 validator PASS. Non-blocking: filterBySpace project-name fallback could theoretically match a sibling space by name, bounded by one-project-per-space invariant.
 
 ### Roadmap Evolution (2026-07-07, Phase 129)
 

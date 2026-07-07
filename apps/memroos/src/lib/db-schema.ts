@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 type SchemaMigration = {
   version: number;
@@ -99,6 +99,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 3,
     name: 'belief-stage-promotion',
     up: applyBeliefStagePromotionSchema,
+  },
+  {
+    version: 4,
+    name: 'spaces-and-team-scale-access',
+    up: applySpacesAndTeamScaleAccessSchema,
   },
 ];
 
@@ -255,6 +260,51 @@ function applyBeliefStagePromotionSchema(db: Database.Database): void {
   // is enforced at the column level; existing rows simply inherit it.
   // No data loss: a candidate only ever moves bronze -> silver -> gold
   // through the promotion pipeline, never via the default.
+}
+
+function applySpacesAndTeamScaleAccessSchema(db: Database.Database): void {
+  // Phase 130 / TEAMSCALE-01: spaces + space_members + messages.space_id.
+  //
+  // Spaces are the team-scale scoping unit. Each space belongs to a tenant,
+  // and humans/agents become members. The messages.space_id column is the
+  // row-level scope on the conversation store; existing rows remain valid
+  // because the column is nullable, and `filterBySpace` falls back to the
+  // legacy `project` column for backward compatibility.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS spaces (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant'
+                           REFERENCES tenants(id) ON DELETE CASCADE,
+      name                 TEXT NOT NULL,
+      default_labels_json  TEXT NOT NULL DEFAULT '{}',
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS spaces_tenant ON spaces(tenant_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS spaces_tenant_name ON spaces(tenant_id, name);
+
+    CREATE TABLE IF NOT EXISTS space_members (
+      space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      member_id   TEXT NOT NULL,
+      member_type TEXT NOT NULL CHECK(member_type IN ('human', 'agent')),
+      role        TEXT NOT NULL DEFAULT 'member',
+      created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (space_id, member_id)
+    );
+    CREATE INDEX IF NOT EXISTS space_members_member ON space_members(member_id);
+  `);
+
+  // Additive: nullable space_id on messages. Existing rows stay NULL;
+  // filterBySpace falls back to project-name matching when space_id is null.
+  try {
+    db.exec('ALTER TABLE messages ADD COLUMN space_id TEXT REFERENCES spaces(id) ON DELETE SET NULL');
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS messages_space ON messages(space_id)');
+  } catch {
+    // Index already exists -- safe to ignore.
+  }
 }
 
 function applyCurrentSchema(db: Database.Database): void {

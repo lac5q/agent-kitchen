@@ -338,6 +338,21 @@ def _memroos_agent_id(agent_id: Optional[str] = None) -> str:
     return (agent_id or os.environ.get("MEMROOS_AGENT_ID") or "shared").strip() or "shared"
 
 
+def _memroos_agent_role(agent_role: Optional[str] = None) -> str:
+    """Resolve the active agent role for label-aware authorization.
+
+    Phase 130 / MSIQ-02: same precedence as `_memroos_tenant_id` --
+    explicit tool argument first, then the `MEMROOS_AGENT_ROLE` env var,
+    then the conservative default `"agent"` (which cannot read restricted
+    or confidential docs).
+    """
+    explicit = (agent_role or "").strip()
+    if explicit:
+        return explicit
+    env_value = os.environ.get("MEMROOS_AGENT_ROLE", "").strip()
+    return env_value or "agent"
+
+
 def _memroos_tenant_id(tenant_id: Optional[str] = None) -> Optional[str]:
     """Resolve the active tenant id for a knowledge op.
 
@@ -542,7 +557,13 @@ def knowledge_manifest() -> dict:
 
 
 @_mcp_tool
-def knowledge_search(query: str, limit: int = 20, tenant_id: str = "", user_id: str = "") -> list[dict]:
+def knowledge_search(
+    query: str,
+    limit: int = 20,
+    tenant_id: str = "",
+    user_id: str = "",
+    agent_role: str = "",
+) -> list[dict]:
     """Search source and generated wiki markdown for a literal query.
 
     Phase 125 / ENTOPS-02/03: the active tenant/user is resolved from the
@@ -550,6 +571,9 @@ def knowledge_search(query: str, limit: int = 20, tenant_id: str = "", user_id: 
     forwarded to the underlying `KnowledgeStore.search` so the vault
     isolation + central audit bridge apply. Solo mode (no env, no args)
     preserves the pre-Phase-125 behaviour exactly.
+
+    Phase 130 / MSIQ-02: `agent_role` (or `MEMROOS_AGENT_ROLE` env) is
+    forwarded so restricted/confidential docs are filtered per-role.
     """
     store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
     return store.search(
@@ -558,6 +582,7 @@ def knowledge_search(query: str, limit: int = 20, tenant_id: str = "", user_id: 
         tenant_id=_memroos_tenant_id(tenant_id),
         user_id=_memroos_user_id(user_id),
         agent_id=_memroos_agent_id(),
+        agent_role=_memroos_agent_role(agent_role),
     )
 
 
@@ -567,11 +592,15 @@ def knowledge_read(
     max_chars: int = 20000,
     tenant_id: str = "",
     user_id: str = "",
+    agent_role: str = "",
 ) -> dict:
     """Read a knowledge file by repo-relative path with traversal protection.
 
     Phase 125 / ENTOPS-02/03: tenant-scoped read. Tenant + user identity
     forwarded for the central audit bridge.
+
+    Phase 130 / MSIQ-02: `agent_role` forwarded so restricted/confidential
+    docs return a forbidden dict instead of the content.
     """
     store = KnowledgeStore(_root(), tenant_id=_memroos_tenant_id(tenant_id))
     return store.read_text(
@@ -580,6 +609,7 @@ def knowledge_read(
         tenant_id=_memroos_tenant_id(tenant_id),
         user_id=_memroos_user_id(user_id),
         agent_id=_memroos_agent_id(),
+        agent_role=_memroos_agent_role(agent_role),
     )
 
 
