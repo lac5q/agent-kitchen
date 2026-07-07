@@ -9,6 +9,15 @@ const paperPath = path.resolve(
   "../../../public/research/memroos-governed-knowledge-architecture-paper.pdf"
 );
 const landingIndexPath = path.resolve(__dirname, "../../../public/landing/index.html");
+const growthAlchemyStylePath = path.resolve(
+  __dirname,
+  "../../../public/landing/styles/growthalchemy.css"
+);
+const askStylePath = path.resolve(__dirname, "../../../public/landing/styles/ask.css");
+const memroosRefreshStylePath = path.resolve(
+  __dirname,
+  "../../../public/landing/styles/memroos-refresh.css"
+);
 const landingStylePaths = [
   "../../../public/landing/styles/growthalchemy.css",
   "../../../public/landing/styles/ask.css",
@@ -131,5 +140,30 @@ describe("public landing research proof", () => {
 
     expect(llmsSource).toContain("https://memroos.com/sitemap.xml");
     expect(llmsFullSource).toContain("https://memroos.com/llms.txt");
+  });
+
+  it("keeps primary CTAs ink-first with signal only as an accent", () => {
+    const growthAlchemySource = readFileSync(growthAlchemyStylePath, "utf8");
+    const askSource = readFileSync(askStylePath, "utf8");
+    const memroosRefreshSource = readFileSync(memroosRefreshStylePath, "utf8");
+
+    expect(growthAlchemySource).toContain(".brand-lockup {");
+    expect(growthAlchemySource).toContain("background: #fff; color: var(--ink-900);");
+    expect(growthAlchemySource).toContain(
+      ".btn--solid:hover { background: var(--ink-800); box-shadow: inset 0 -3px 0 var(--signal); }"
+    );
+    expect(growthAlchemySource).toContain(
+      ".mm-cta:hover { background: var(--ink-800); box-shadow: inset 0 -3px 0 var(--signal); }"
+    );
+    expect(askSource).toContain(
+      ".ask-form button:hover { background: var(--ink-800); box-shadow: inset 0 -3px 0 var(--signal); }"
+    );
+    expect(memroosRefreshSource).toContain(
+      ".ctl.on { background: var(--ink-900); color: #fff; box-shadow: inset 0 -3px 0 var(--signal); }"
+    );
+    expect(growthAlchemySource).not.toContain(".btn--solid:hover { background: var(--signal); }");
+    expect(growthAlchemySource).not.toContain(".mm-cta:hover { background: var(--signal); }");
+    expect(askSource).not.toContain(".ask-form button:hover { background: var(--signal); }");
+    expect(memroosRefreshSource).not.toContain(".ctl.on { background: var(--signal); color: #fff; }");
   });
 });
