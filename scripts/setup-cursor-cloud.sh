@@ -114,7 +114,18 @@ fi
 
 if [[ "${CURSOR_CLOUD_INSTALL_MCP_DEPS:-1}" == "1" ]]; then
   echo "Installing MemRoOS MCP Python dependencies..."
-  "$PYTHON_BIN" -m venv "$ROOT/.venv"
+  if ! "$PYTHON_BIN" -m venv "$ROOT/.venv" 2>/dev/null; then
+    echo "python venv module unavailable; installing python3-venv..."
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update -qq
+      py_minor="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+      sudo apt-get install -y -qq "python${py_minor}-venv" || sudo apt-get install -y -qq python3-venv
+    else
+      echo "Could not create Python venv and apt-get is unavailable." >&2
+      exit 1
+    fi
+    "$PYTHON_BIN" -m venv "$ROOT/.venv"
+  fi
   "$ROOT/.venv/bin/python" -m pip install -q --upgrade pip
   "$ROOT/.venv/bin/python" -m pip install -q -r "$ROOT/services/knowledge-mcp/requirements.txt"
 else
