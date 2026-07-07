@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 125
-Plan: 125-01 complete
-Status: v8.1 Phase 125 complete (Multi-Tenant Vaults + Central Tamper-Evident Audit); v8.3 GSD stack complete
+Phase: 128
+Plan: 128-01 complete
+Status: v8.2 Phase 128 complete (Policy Engine Core + Decision Receipts); v8.1 Phase 125 complete; v8.3 GSD stack complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T13:35:00.000Z
-Stopped at: Phase 125 complete (2026-07-07)
-Resume file: `.planning/phases/125-multi-tenant-vaults-central-audit/125-01-PLAN.md`
-Next action: v8.1 Phases 126-127 are infra-gated (IdP/MDM). Next code-implementable milestone is v8.2 Phase 128 (Policy Engine Core + Decision Receipts) — deps met (Phase 76 + 121). Then Phases 129-131, then v8.4 Phases 137-141.
+Last session: 2026-07-07T14:45:00.000Z
+Stopped at: Phase 128 complete (2026-07-07)
+Resume file: `.planning/phases/128-policy-engine-core-decision-receipts/128-01-PLAN.md`
+Next action: Phase 129 (Policy Dimensions, Shadow Mode + CI Regression, POLGOV-03/04/05) — deps met (Phase 128). Then Phases 130-131, then v8.4 Phases 137-141.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,12 @@ Next action: v8.1 Phases 126-127 are infra-gated (IdP/MDM). Next code-implementa
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-07, Phase 128)
+
+- Phase 128 (v8.2, POLGOV-01/02) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes dispatch), Validator = GLM-5.2 BYOK (hermes inline-context). The engine is wrap-not-rewrite: `evaluatePolicy(req)` routes by domain (memory-use | capability | knowledge) to the existing decision functions (`authorizeMemoryUse`, `checkDispatchPolicy`/`checkA2aSendPolicy`/`checkMemoryWritePolicy`, declarative knowledge pass-through) and adds a `POLICY_VERSION` (from `manifest.json`) + `ruleMatched` + `POLICY_DECISION` audit receipt via `emitPolicyReceipt`.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests, no outcome change). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified unchanged via git diff. Receipts are best-effort (try/catch swallow) and carry ids/labels/codes/reasons only — never content.
+- Verification: policy engine 7 tests + receipt 3 tests + MEMSEC-08 8 tests = 18 pass; zero tsc errors under `src/lib/policy`; GLM-5.2 validator verdict PASS (one non-blocking note: `evaluateKnowledgePolicy` metadata type is `Record<string, unknown>` — safe today, narrow later).
 
 ### Roadmap Evolution (2026-07-07, Phase 125)
 

@@ -88,6 +88,10 @@ export const AUDIT_EVENT_TYPES = {
   // Knowledge vault access (Phase 125, ENTOPS-03)
   /** Knowledge MCP op (read/write/delete) was centrally audited. Per-tenant hash-chained. */
   KNOWLEDGE_ACCESS: "knowledge.access",
+
+  // Policy engine (Phase 128, POLGOV-01/02)
+  /** A decision (retrieval/memory/knowledge/capability) was evaluated through the shared policy engine. */
+  POLICY_DECISION: "policy.decision",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -108,6 +112,8 @@ export const ENTITY_TYPES = {
   COMPLIANCE_CONTROL: "compliance_control",
   /** Per-tenant knowledge vault accessed via the knowledge MCP (Phase 125, ENTOPS-03). */
   KNOWLEDGE_VAULT: "knowledge_vault",
+  /** A shared-policy-engine decision (Phase 128, POLGOV-01/02). */
+  POLICY_DECISION: "policy_decision",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
