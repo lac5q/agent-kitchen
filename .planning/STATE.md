@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 130
-Plan: 130-01 complete
-Status: v8.2 Phase 130 complete (Teams/Spaces + Knowledge-Repo Labels); Phases 128-129 complete; v8.1 Phase 125 complete; v8.3 GSD stack complete
+Phase: 131
+Plan: 131-01 complete
+Status: v8.2 COMPLETE (Phases 128-131 all done); v8.1 Phase 125 complete; v8.3 GSD stack complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T15:15:00.000Z
-Stopped at: Phase 130 complete (2026-07-07)
-Resume file: `.planning/phases/130-teams-spaces-knowledge-labels/130-01-PLAN.md`
-Next action: Phase 131 (Identity Lifecycle + Delegation Chains, TEAMSCALE-02..06) — deps partially met (Phase 130 + 82 + 107; Phase 126 is infra-gated). Then v8.4 Phases 137-141.
+Last session: 2026-07-07T15:55:00.000Z
+Stopped at: Phase 131 complete (2026-07-07) — v8.2 milestone complete
+Resume file: `.planning/phases/131-identity-lifecycle-delegation-chains/131-01-PLAN.md`
+Next action: v8.2 milestone complete. Create v8.4 branch for Phases 137-141 (Project-Centric Operator UX: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03).
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,14 @@ Next action: Phase 131 (Identity Lifecycle + Delegation Chains, TEAMSCALE-02..06
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-07, Phase 131)
+
+- Phase 131 (v8.2, TEAMSCALE-02..06) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK. Five capabilities: (1) atomic joiner flow `onboardUser` (user+role+space+agent+key in one transaction with OnboardingReceipt); (2) atomic leaver flow `offboardUser` (revoke credentials+deregister agents+reassign artifacts+MEMLIFE review) + `scanOrphanedAgents`; (3) verifiable delegation chains with `weakestLinkOutcome` (policy evaluates weakest link); (4) per-team NOC views (`getTeamNocView` with memoryGrowth, promotionQueueDepth, policyDenials, skillUsage, agentActivity); (5) owner-gated assets with standing/per-use approval (`checkOwnerGate` + `grantStandingApproval` + `grantPerUseApproval`).
+- Schema migration: v4→v5, added `owner_id` on `registered_agents` (ON DELETE SET NULL) + `owner_gate_approvals` table (standing/per-use with CHECK constraint + 3 indexes). Idempotent.
+- Director caught and reverted unrelated scope creep (worker added "droid" platform type to 8 files outside Phase 131 scope; reverted via `git checkout HEAD`).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical. Wrapped files unchanged.
+- Verification: 101 tests pass (35 identity + 66 policy/MEMSEC-08); zero tsc errors under src/lib/identity; GLM-5.2 validator PASS. Non-blocking: verifyDelegationChain doc/code drift (capability subset check not enforced), LIKE pattern on metadata_json for policyDenials, dead crypto import in owner-gate.ts.
 
 ### Roadmap Evolution (2026-07-07, Phase 130)
 

@@ -37,7 +37,7 @@
 - ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phases 124-125 complete 2026-07-07; Phases 126-127 have infra deps — IdP / MDM)
-- 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
+- ✅ **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (completed 2026-07-07; POLGOV-01..05 + TEAMSCALE-01..06 + MSIQ-01..03 shipped; policy engine with dimensions/shadow/CI, spaces + knowledge labels, identity lifecycle + delegation chains + NOC + owner gates)
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
 - 🔜 **v8.4 Project-Centric Operator UX** — Phases 137-141 (planned 2026-07-07; from MemClaw competitor analysis; closes the operator-UX gap while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit; 22 new requirement IDs: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03)
 
@@ -570,7 +570,7 @@ One declarative policy engine with decision receipts replacing scattered gate lo
 - [x] **Phase 128: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02 (completed 2026-07-07; wrap-not-rewrite engine delegates to authorizeMemoryUse + checkDispatchPolicy/checkA2aSendPolicy/checkMemoryWritePolicy, adds versioned manifest + POLICY_DECISION audit receipts; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
 - [x] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05 (completed 2026-07-07; additive dimension rules (subject/object/action/purpose) that only tighten to deny, shadow mode with proposed manifest replay + operator-gated activation, CI regression corpus with approved-diffs override; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
 - [x] **Phase 130: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03 (completed 2026-07-07; spaces + space_members schema with membership and zero cross-space leakage; knowledge frontmatter label validation (sensitivity/authoritative/verified_at/expires_at); label-aware search/read authorization (default-open for unlabeled); ranking boosts authoritative + demotes expired + flag job; GLM-5.2 validator PASS)
-- [ ] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
+- [x] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06 (completed 2026-07-07; atomic joiner/leaver flows with onboarding/offboarding receipts, scanOrphanedAgents; verifiable delegation chains with weakest-link policy; per-team NOC views; owner-gated assets with standing/per-use approval; GLM-5.2 validator PASS)
 
 ### Phase 128: Policy Engine Core + Decision Receipts
 **Goal**: Retrieval, memory write/promotion, knowledge read/write, skill dispatch, and capability decisions evaluate through one versioned declarative policy layer that emits receipts.

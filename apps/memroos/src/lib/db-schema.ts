@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 type SchemaMigration = {
   version: number;
@@ -104,6 +104,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 4,
     name: 'spaces-and-team-scale-access',
     up: applySpacesAndTeamScaleAccessSchema,
+  },
+  {
+    version: 5,
+    name: 'identity-lifecycle-and-owner-gates',
+    up: applyIdentityLifecycleAndOwnerGatesSchema,
   },
 ];
 
@@ -305,6 +310,51 @@ function applySpacesAndTeamScaleAccessSchema(db: Database.Database): void {
   } catch {
     // Index already exists -- safe to ignore.
   }
+}
+
+function applyIdentityLifecycleAndOwnerGatesSchema(db: Database.Database): void {
+  // Phase 131 / TEAMSCALE-02..06: identity lifecycle + delegation + NOC + owner gates.
+  //
+  // This migration is purely additive. It creates:
+  //   - agent_owners: nullable ownership linkage on registered_agents so the
+  //     lifecycle code can identify "orphaned" agents (live key, owner gone).
+  //   - owner_gate_approvals: standing + per-use approval grants on assets.
+  // Both tables are referenced from new code in src/lib/identity/*. The
+  // migration is idempotent (CREATE TABLE IF NOT EXISTS / try/catch on
+  // ALTER) so it is safe to re-run on already-migrated databases.
+
+  // Additive: nullable owner_id on registered_agents. Existing rows stay NULL.
+  try {
+    db.exec("ALTER TABLE registered_agents ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+
+  db.exec(`
+    -- owner_gate_approvals: standing or per-use grants from an asset owner.
+    --   approval_mode = 'standing'   -> allows any agent (agent_id NULL)
+    --   approval_mode = 'per_use'    -> scoped to a specific agent_id
+    -- Both modes honor revoked_at: a row with revoked_at NOT NULL is inactive.
+    CREATE TABLE IF NOT EXISTS owner_gate_approvals (
+      id            INTEGER PRIMARY KEY,
+      tenant_id     TEXT    NOT NULL DEFAULT 'default-tenant'
+                    REFERENCES tenants(id) ON DELETE CASCADE,
+      owner_id      TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset_type    TEXT    NOT NULL,
+      asset_id      TEXT    NOT NULL,
+      approval_mode TEXT    NOT NULL
+                    CHECK(approval_mode IN ('standing','per_use')),
+      agent_id      TEXT    REFERENCES registered_agents(id) ON DELETE CASCADE,
+      created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      revoked_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_asset
+      ON owner_gate_approvals(asset_type, asset_id, revoked_at);
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_owner
+      ON owner_gate_approvals(owner_id, revoked_at);
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_agent
+      ON owner_gate_approvals(agent_id, revoked_at);
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {
