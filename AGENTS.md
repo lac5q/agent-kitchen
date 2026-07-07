@@ -79,6 +79,18 @@ Read `docs/production-deployment.md` before any deploy or onboarding task.
 - After deploy, run `bash scripts/verify-onboarding-deploy.sh`. Onboarding script with a bad token must return **403**, not **401**.
 - Onboarding token signatures use `MEMROOS_ONBOARDING_SECRET` (or `MEMROOS_OPERATOR_API_KEY`). If invites fail with **Invalid onboarding token signature**, regenerate the invite after aligning Heroku config vars.
 
+## Cursor Cloud Development
+
+For Cursor Cloud environments on `lac5q/memroos`, commit `.cursor/environment.json` so
+new environments run `bash scripts/setup-cursor-cloud.sh` automatically before each
+agent session. This wires the MemRoOS MCP "main brain" without running the
+Docker-oriented local installer. It installs the full GSD Cursor skill catalog
+(`CURSOR_CLOUD_GSD_PROFILE=full` by default), MemRoOS cloud skills (`$qwen-cloud`,
+`$beastmode-qwen-cloud`), and the Qwen executor lane unless disabled via
+`CURSOR_CLOUD_INSTALL_GSD=0` or `CURSOR_CLOUD_INSTALL_QWEN=0`.
+
+See `docs/cursor-cloud-development.md` for verification steps and environment knobs.
+
 ## Codex Cloud Development
 
 For Codex Cloud environments on `lac5q/memroos`, use `bash scripts/setup-codex-cloud.sh`
