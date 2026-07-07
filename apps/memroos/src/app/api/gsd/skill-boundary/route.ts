@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 
 import { authenticateAgentHeaders } from "@/lib/agent-registry";
 import { loadSkillBoundaryManifest } from "@/lib/gsd/skill-boundary";
-import { gsdInputFromJson } from "@/lib/agent-gsd-control";
 
 export const dynamic = "force-dynamic";
 
