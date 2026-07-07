@@ -190,13 +190,13 @@
 - [x] **GSDSTACK-02**: A canonical task/event/proof run ledger records or federates task, event, artifact, approval, cost, verification, and handoff rows from existing hive/checkpoint/evidence surfaces into one queryable model; noisy events have compaction/retention rules and every significant action remains auditable.
 - [x] **GSDSTACK-03**: `/shipcheck` blocks completion until lane-specific proof exists for research, code, memory, deployment, email/doc, GTM, and safety tasks; bypass requires an explicit reason, actor, and receipt in the run ledger.
 - [x] **GSDSTACK-04**: `/goal`, `/resume`, and `/standup` are backed by the context packet and run ledger: goals include acceptance criteria and verification requirements, resume reconstructs state without operator restatement, and standup reports active goals, blockers, recent proof, pending approvals, and next actions.
-- [ ] **GSDSTACK-05**: `/discuss` is a bounded council workflow, not an autonomous swarm: role definitions, task budget, shared context packet, verdict schema, validator pass, and ledgered outputs are required for every run.
-- [ ] **GSDSTACK-06**: A skill-boundary manifest classifies candidate capabilities as `core_product`, `portable_skill`, `adapter_skill`, `reference_only`, or `defer`, with rationale and owner. Core product surfaces include context packet, run ledger, proof gate, policy decisions, eval store, model-routing telemetry, audit chain, and adapter state; these cannot ship as skills-only.
-- [ ] **GSDSTACK-07**: `/skill-audit` reports missing owner, missing smoke test, stale review date, duplicate trigger, unsafe tool instructions, no examples, and no usage evidence across registered skills; it drafts SkillForge proposals for operator review and never auto-deletes.
-- [ ] **GSDSTACK-08**: Research, code, memory, handoff, GTM, and safety lanes each have committed eval fixtures, scoring rubrics, CI or scheduled execution, and ledger receipts for source coverage, proof compliance, recall provenance, resumability, claim grounding, and safety-gate outcomes.
-- [ ] **GSDSTACK-09**: Model routing starts as a static policy with logged overrides: cheap/local for extraction/classification/formatting, frontier for hard reasoning/final synthesis, private/customer-bound for sensitive data, vision for multimodal evidence, and validator models for high-risk review. Receipts record model, reason, estimate/actual cost, latency, and quality outcome.
-- [ ] **GSDSTACK-10**: Hermes, Discord/Telegram, Codex, Claude Code, and future UIs are thin adapters over the same MemRoOS contract: they may create tasks, request context, post proof, request standup/resume, and ask for approvals, but they do not own memory, task state, proof state, policy state, or model-routing decisions.
-- [ ] **GSDSTACK-11**: Adapter-triggered sends, writes, destructive actions, and memory persistence run through the first safety slice: secrets/PII scan, destructive-action approval, cost cap, and honest-degradation behavior. Shared/enterprise mode cannot silently fall back to local git corpus pulls or unlogged writes.
+- [x] **GSDSTACK-05**: `/discuss` is a bounded council workflow, not an autonomous swarm: role definitions, task budget, shared context packet, verdict schema, validator pass, and ledgered outputs are required for every run.
+- [x] **GSDSTACK-06**: A skill-boundary manifest classifies candidate capabilities as `core_product`, `portable_skill`, `adapter_skill`, `reference_only`, or `defer`, with rationale and owner. Core product surfaces include context packet, run ledger, proof gate, policy decisions, eval store, model-routing telemetry, audit chain, and adapter state; these cannot ship as skills-only.
+- [x] **GSDSTACK-07**: `/skill-audit` reports missing owner, missing smoke test, stale review date, duplicate trigger, unsafe tool instructions, no examples, and no usage evidence across registered skills; it drafts SkillForge proposals for operator review and never auto-deletes.
+- [x] **GSDSTACK-08**: Research, code, memory, handoff, GTM, and safety lanes each have committed eval fixtures, scoring rubrics, CI or scheduled execution, and ledger receipts for source coverage, proof compliance, recall provenance, resumability, claim grounding, and safety-gate outcomes.
+- [x] **GSDSTACK-09**: Model routing starts as a static policy with logged overrides: cheap/local for extraction/classification/formatting, frontier for hard reasoning/final synthesis, private/customer-bound for sensitive data, vision for multimodal evidence, and validator models for high-risk review. Receipts record model, reason, estimate/actual cost, latency, and quality outcome.
+- [x] **GSDSTACK-10**: Hermes, Discord/Telegram, Codex, Claude Code, and future UIs are thin adapters over the same MemRoOS contract: they may create tasks, request context, post proof, request standup/resume, and ask for approvals, but they do not own memory, task state, proof state, policy state, or model-routing decisions.
+- [x] **GSDSTACK-11**: Adapter-triggered sends, writes, destructive actions, and memory persistence run through the first safety slice: secrets/PII scan, destructive-action approval, cost cap, and honest-degradation behavior. Shared/enterprise mode cannot silently fall back to local git corpus pulls or unlogged writes.
 
 ## ONTO Governed Emergent Ontology (Proposed)
 
@@ -372,10 +372,10 @@
 | GSDSTACK-02 | 132 | Done |
 | GSDSTACK-03 | 133 | Done |
 | GSDSTACK-04 | 133 | Done |
-| GSDSTACK-05 | 134 | Planned |
-| GSDSTACK-06 | 134 | Planned |
-| GSDSTACK-07 | 134 | Planned |
-| GSDSTACK-08 | 135 | Planned |
-| GSDSTACK-09 | 135 | Planned |
-| GSDSTACK-10 | 136 | Planned |
-| GSDSTACK-11 | 136 | Planned |
+| GSDSTACK-05 | 134 | Complete |
+| GSDSTACK-06 | 134 | Complete |
+| GSDSTACK-07 | 134 | Complete |
+| GSDSTACK-08 | 135 | Complete |
+| GSDSTACK-09 | 135 | Complete |
+| GSDSTACK-10 | 136 | Complete |
+| GSDSTACK-11 | 136 | Complete |

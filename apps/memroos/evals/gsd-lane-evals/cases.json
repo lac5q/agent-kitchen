@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-07T00:00:00.000Z",
+  "lanes": [
+    {
+      "id": "research-lane-source-coverage",
+      "lane": "research",
+      "scenario": "Research lane requires source receipts before synthesis.",
+      "rubric": {
+        "source_coverage": { "weight": 0.4, "minimum": 1 },
+        "proof_compliance": { "weight": 0.3, "minimum": 1 },
+        "claim_grounding": { "weight": 0.3, "minimum": 0.8 }
+      },
+      "input": {
+        "requiredProof": ["source_receipts"],
+        "proof": { "source_receipts": ["doc://research/phase-134"] },
+        "sources": ["doc://research/phase-134"]
+      },
+      "expected": {
+        "proofCompliant": true,
+        "sourceCoverage": 1,
+        "minimumScore": 0.7
+      }
+    },
+    {
+      "id": "code-lane-focused-tests",
+      "lane": "code",
+      "scenario": "Code lane blocks shipcheck without focused_tests proof.",
+      "rubric": {
+        "proof_compliance": { "weight": 0.5, "minimum": 1 },
+        "resumability": { "weight": 0.25, "minimum": 1 },
+        "source_coverage": { "weight": 0.25, "minimum": 0.5 }
+      },
+      "input": {
+        "requiredProof": ["focused_tests"],
+        "proof": {},
+        "handoffMarker": "resume-from-checkpoint"
+      },
+      "expected": {
+        "proofCompliant": false,
+        "missingProof": ["focused_tests"],
+        "minimumScore": 0
+      }
+    },
+    {
+      "id": "memory-lane-write-receipt",
+      "lane": "memory",
+      "scenario": "Memory lane requires memory_write_receipt and recall provenance.",
+      "rubric": {
+        "proof_compliance": { "weight": 0.35, "minimum": 1 },
+        "recall_provenance": { "weight": 0.4, "minimum": 1 },
+        "source_coverage": { "weight": 0.25, "minimum": 0.5 }
+      },
+      "input": {
+        "requiredProof": ["memory_write_receipt"],
+        "proof": { "memory_write_receipt": "mem://write/abc123" },
+        "recallProvenance": ["mem://write/abc123", "trace://recall/1"],
+        "sources": ["mem://write/abc123"]
+      },
+      "expected": {
+        "proofCompliant": true,
+        "recallProvenanceCount": 2,
+        "minimumScore": 0.75
+      }
+    },
+    {
+      "id": "handoff-lane-resumability",
+      "lane": "ops",
+      "scenario": "Handoff lane requires resumable checkpoint marker.",
+      "rubric": {
+        "resumability": { "weight": 0.5, "minimum": 1 },
+        "proof_compliance": { "weight": 0.3, "minimum": 1 },
+        "source_coverage": { "weight": 0.2, "minimum": 0.5 }
+      },
+      "input": {
+        "requiredProof": ["operator_receipt"],
+        "proof": { "operator_receipt": "checkpoint://handoff/1" },
+        "handoffMarker": "checkpoint://handoff/1",
+        "sources": ["checkpoint://handoff/1"]
+      },
+      "expected": {
+        "proofCompliant": true,
+        "resumable": true,
+        "minimumScore": 0.8
+      }
+    },
+    {
+      "id": "gtm-lane-claim-grounding",
+      "lane": "gtm",
+      "scenario": "GTM lane requires grounded claims with artifact review proof.",
+      "rubric": {
+        "claim_grounding": { "weight": 0.45, "minimum": 0.9 },
+        "proof_compliance": { "weight": 0.35, "minimum": 1 },
+        "source_coverage": { "weight": 0.2, "minimum": 0.5 }
+      },
+      "input": {
+        "requiredProof": ["artifact_review"],
+        "proof": { "artifact_review": "crm://account/42" },
+        "claims": [{ "text": "Customer renewed", "source": "crm://account/42" }],
+        "sources": ["crm://account/42"]
+      },
+      "expected": {
+        "proofCompliant": true,
+        "groundedClaims": 1,
+        "minimumScore": 0.8
+      }
+    },
+    {
+      "id": "safety-lane-gate",
+      "lane": "safety",
+      "scenario": "Safety lane requires safety_review proof and blocks without it.",
+      "rubric": {
+        "safety_gate": { "weight": 0.5, "minimum": 1 },
+        "proof_compliance": { "weight": 0.3, "minimum": 1 },
+        "source_coverage": { "weight": 0.2, "minimum": 0.5 }
+      },
+      "input": {
+        "requiredProof": ["safety_review"],
+        "proof": {},
+        "destructiveAction": "delete-production-data"
+      },
+      "expected": {
+        "proofCompliant": false,
+        "safetyGatePassed": false,
+        "minimumScore": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-07T00:00:00.000Z",
+  "rule": "Bundle as portable_skill when the capability is a repeatable cross-runtime procedure. Embed as core_product when it needs shared state, schema, policy, audit, proof, or eval storage.",
+  "coreProductBarredFromSkillsOnly": [
+    "context_packet_schema",
+    "run_ledger",
+    "proof_gate",
+    "policy_decisions",
+    "eval_store",
+    "model_routing_telemetry",
+    "audit_chain",
+    "adapter_state"
+  ],
+  "entries": [
+    {
+      "id": "agent_context_packet",
+      "name": "Agent Context Packet",
+      "classification": "core_product",
+      "owner": "memroos-platform",
+      "rationale": "Requires shared schema, redaction receipts, and federated memory/provenance state."
+    },
+    {
+      "id": "run_ledger",
+      "name": "Run Ledger",
+      "classification": "core_product",
+      "owner": "memroos-platform",
+      "rationale": "Federates hive/checkpoint/evidence surfaces into one queryable durable model."
+    },
+    {
+      "id": "shipcheck_gate",
+      "name": "Shipcheck Proof Gate",
+      "classification": "core_product",
+      "owner": "memroos-platform",
+      "rationale": "Lane proof enforcement and bypass receipts require product persistence."
+    },
+    {
+      "id": "gsd_commands",
+      "name": "Goal/Resume/Standup Commands",
+      "classification": "core_product",
+      "owner": "memroos-platform",
+      "rationale": "Command state machine persists goals, checkpoints, and ledger receipts."
+    },
+    {
+      "id": "memroos-gsd-operator",
+      "name": "GSD Roadmap Operator",
+      "classification": "portable_skill",
+      "owner": "memroos-platform",
+      "rationale": "Repeatable procedure for editing GSD planning docs safely across runtimes."
+    },
+    {
+      "id": "memroos-context-consumer",
+      "name": "MemRoOS Context Consumer",
+      "classification": "portable_skill",
+      "owner": "memroos-platform",
+      "rationale": "Teaches agents how to request, read, and obey an Agent Context Packet."
+    },
+    {
+      "id": "memroos-shipcheck-client",
+      "name": "Shipcheck Client Wrapper",
+      "classification": "portable_skill",
+      "owner": "memroos-platform",
+      "rationale": "Portable client procedure for checking lane proof before finalizing work."
+    },
+    {
+      "id": "memroos-skill-audit-operator",
+      "name": "Skill Audit Operator",
+      "classification": "portable_skill",
+      "owner": "memroos-platform",
+      "rationale": "Interprets skill-audit output and drafts SkillForge proposals for operator review."
+    },
+    {
+      "id": "bounded-discuss-council",
+      "name": "Bounded Discuss Council",
+      "classification": "portable_skill",
+      "owner": "memroos-platform",
+      "rationale": "Repeatable review-council playbook with roles, budget, and validator pass."
+    },
+    {
+      "id": "hermes_adapter",
+      "name": "Hermes Interface Adapter",
+      "classification": "adapter_skill",
+      "owner": "memroos-platform",
+      "rationale": "Thin adapter over MemRoOS GSD contract; does not own task or proof state."
+    },
+    {
+      "id": "discord_telegram_adapter",
+      "name": "Discord/Telegram Adapter",
+      "classification": "adapter_skill",
+      "owner": "memroos-platform",
+      "rationale": "Messaging surface adapter; state remains in MemRoOS."
+    },
+    {
+      "id": "codex_claude_adapter",
+      "name": "Codex/Claude Code Adapter",
+      "classification": "adapter_skill",
+      "owner": "memroos-platform",
+      "rationale": "IDE/runtime adapter consuming the same GSD API contract."
+    },
+    {
+      "id": "mark_kashef_transcript_audit",
+      "name": "Mark Kashef Transcript Audit",
+      "classification": "reference_only",
+      "owner": "memroos-research",
+      "rationale": "Research input for v8.3 prioritization; not an executable skill contract."
+    },
+    {
+      "id": "autonomous_swarm",
+      "name": "Autonomous Agent Swarm",
+      "classification": "defer",
+      "owner": "memroos-platform",
+      "rationale": "Deferred; bounded /discuss council replaces open-ended swarm for now."
+    },
+    {
+      "id": "graph_first_mobile_ui",
+      "name": "Graph-First Mobile UI",
+      "classification": "defer",
+      "owner": "memroos-platform",
+      "rationale": "Deferred UI surface; control-plane substrate ships first."
+    }
+  ]
+}
