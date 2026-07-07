@@ -27,6 +27,38 @@ const productShotPaths = [
 ].map((relativePath) => path.resolve(__dirname, relativePath));
 const faviconPath = path.resolve(__dirname, "../favicon.ico");
 const iconSvgPath = path.resolve(__dirname, "../icon.svg");
+const llmsPath = path.resolve(__dirname, "../../../public/llms.txt");
+const llmsFullPath = path.resolve(__dirname, "../../../public/llms-full.txt");
+
+const publicIndexUrls = [
+  "https://memroos.com",
+  "https://memroos.com/platform",
+  "https://memroos.com/use-cases/product",
+  "https://memroos.com/use-cases/sales",
+  "https://memroos.com/use-cases/engineering",
+  "https://memroos.com/blog",
+  "https://memroos.com/blog/what-is-agent-memory",
+  "https://memroos.com/blog/agentic-memory-architecture",
+  "https://memroos.com/blog/ai-agent-context-management",
+  "https://memroos.com/blog/ai-agent-persistent-memory",
+  "https://memroos.com/blog/engineering-ai-memory",
+  "https://memroos.com/blog/sales-ai-agent-memory",
+  "https://memroos.com/blog/governed-agent-memory-enterprise",
+  "https://memroos.com/blog/mcp-memory-layer",
+  "https://memroos.com/blog/agent-orchestration-audit-trail",
+  "https://memroos.com/blog/agentic-memory-benchmark",
+  "https://memroos.com/blog/memroos-vs-letta",
+  "https://memroos.com/blog/memroos-vs-zep",
+  "https://memroos.com/vs/letta",
+  "https://memroos.com/vs/zep",
+  "https://memroos.com/vs/midbrain",
+  "https://memroos.com/vs/gbrain",
+  "https://memroos.com/vs/evermemos",
+  "https://memroos.com/vs/axme",
+  "https://memroos.com/vs/agenticmemory",
+  "https://memroos.com/vs/worldflow",
+  "https://memroos.com/vs/tytan",
+];
 
 describe("public landing research proof", () => {
   it("keeps the public landing focused on the top three feature priorities", () => {
@@ -83,5 +115,21 @@ describe("public landing research proof", () => {
     const favicon = readFileSync(faviconPath);
     expect(Array.from(favicon.subarray(0, 4))).toEqual([0, 0, 1, 0]);
     expect(favicon.length).toBeGreaterThan(1000);
+  });
+
+  it("keeps LLM crawler index files aligned with public pages", () => {
+    expect(existsSync(llmsPath)).toBe(true);
+    expect(existsSync(llmsFullPath)).toBe(true);
+
+    const llmsSource = readFileSync(llmsPath, "utf8");
+    const llmsFullSource = readFileSync(llmsFullPath, "utf8");
+
+    for (const url of publicIndexUrls) {
+      expect(llmsSource).toContain(url);
+      expect(llmsFullSource).toContain(url);
+    }
+
+    expect(llmsSource).toContain("https://memroos.com/sitemap.xml");
+    expect(llmsFullSource).toContain("https://memroos.com/llms.txt");
   });
 });

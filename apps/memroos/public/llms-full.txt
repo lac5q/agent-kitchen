@@ -1,4 +1,4 @@
-# MemroOS — Full Documentation Summary
+# MemroOS - Full Documentation Summary
 
 > Version: 1.0.0-beta.2 | License: PolyForm Small Business 1.0.0
 
@@ -9,61 +9,94 @@ MemroOS is source-available, company-owned memory and governance for agent harne
 ## Memory Architecture
 
 MemroOS uses a multi-tier memory model:
-- **Vector memory:** Semantic similarity search across documents, decisions, and conversations
-- **Graph memory:** Relationship-aware knowledge representation
-- **Episodic memory:** Time-stamped event and outcome records
-- **Knowledge surfaces:** Structured knowledge with source attribution
-- **Skill memory:** Reusable, promoted workflow patterns
+
+- **Vector memory:** Semantic similarity search across documents, decisions, and conversations.
+- **Graph memory:** Relationship-aware knowledge representation.
+- **Episodic memory:** Time-stamped event and outcome records.
+- **Knowledge surfaces:** Structured knowledge with source attribution.
+- **Skill memory:** Reusable, promoted workflow patterns.
 
 All memory writes are gated by operator auth. Each agent has defined read/write paths.
 
 ## Orchestration
 
-- Human-in-the-loop (HIL) checkpoints
-- A2A protocol ready
-- LangGraph delegation
-- Retry, rollback, and state inspection
-- Dispatch via chat, REST, or A2A
+- Human-in-the-loop checkpoints.
+- A2A protocol readiness.
+- LangGraph delegation.
+- Retry, rollback, and state inspection.
+- Dispatch via chat, REST, or A2A.
 
 ## Evaluation
 
-Public benchmark: Marketplace Agentic Memory Benchmark (May 2026)
-MemroOS beta live score: 84.06/100 (rank #1)
-Competing platforms: Letta (70.58), Mem0 (70.44), Zep (68.64), Midbrain (65.21)
+Public benchmark: Marketplace Agentic Memory Benchmark, May 2026.
+
+MemroOS beta live score: 84.06/100, rank #1.
+
+Competing platforms: Letta 70.58, Mem0 70.44, Zep 68.64, Midbrain 65.21.
 
 Note: Midbrain's SmartSearch retrieval metrics are cited from third-party paper results (arXiv 2504.00553). These are public-evidence architecture scores, not independently rerun retrieval benchmarks. MemroOS leads on governed memory, audit lineage, orchestration, and operator-controlled self-improvement. Midbrain leads on retrieval substrate depth within the SmartSearch lane.
 
 ## Key Differentiators
 
-1. Company-owned context layer across models and agent frameworks
-2. Governed memory with per-agent write paths and full audit lineage
-3. Multi-tier typed memory (not just vector search)
-4. Orchestration integrated with memory (context-aware dispatch)
-5. Operator console: NOC-style visibility into agent activity
-6. Self-improvement loop: SEAL — review, approve, promote to skills
-7. Local-first, self-hosted, source-available
+1. Company-owned context layer across models and agent frameworks.
+2. Governed memory with per-agent write paths and full audit lineage.
+3. Multi-tier typed memory, not just vector search.
+4. Orchestration integrated with memory and context-aware dispatch.
+5. Operator console with NOC-style visibility into agent activity.
+6. Self-improvement loop: review, approve, promote to skills.
+7. Local-first, self-hosted, source-available deployment model.
 
 ## Integration Points
 
-- MCP (Model Context Protocol): memory tools exposed as MCP server
-- Claude Code: via @memroos MCP tools
-- LangGraph: memory-aware delegation adapter
-- CrewAI / AutoGen: REST shim
-- Google ADK: direct integration
-- REST API: docs at /docs/rest-api
+- MCP (Model Context Protocol): memory tools exposed as an MCP server.
+- Claude Code: via MemroOS MCP tools.
+- Codex and local agent CLIs: shared memory and governance through the MemroOS agent stack.
+- LangGraph: memory-aware delegation adapter.
+- CrewAI / AutoGen: REST shim.
+- Google ADK: direct integration.
+- A2A protocol: public agent-card surfaces.
+- REST API: docs in the repository at `/docs/rest-api.md`.
 
-## Pages
+## Public Pages
 
-- https://memroos.com — Homepage
-- https://memroos.com/platform — Platform capabilities
-- https://memroos.com/use-cases/product — Product team use case
-- https://memroos.com/use-cases/sales — Sales team use case
-- https://memroos.com/use-cases/engineering — Engineering team use case
-- https://memroos.com/blog — All articles
-- https://memroos.com/vs/letta — MemroOS vs Letta
-- https://memroos.com/vs/zep — MemroOS vs Zep
-- https://memroos.com/vs/midbrain — MemroOS vs Midbrain
-- https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf — Architecture paper
+- Homepage: https://memroos.com
+- Platform capabilities: https://memroos.com/platform
+- Use cases: https://memroos.com/use-cases
+- Product team use case: https://memroos.com/use-cases/product
+- Sales team use case: https://memroos.com/use-cases/sales
+- Engineering team use case: https://memroos.com/use-cases/engineering
+- Blog index: https://memroos.com/blog
+- Comparison index: https://memroos.com/vs
+- Research paper: https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf
+- Sitemap: https://memroos.com/sitemap.xml
+- Short LLM index: https://memroos.com/llms.txt
+
+## Blog Articles
+
+- What Is Agent Memory?: https://memroos.com/blog/what-is-agent-memory
+- Agentic Memory Architecture: https://memroos.com/blog/agentic-memory-architecture
+- AI Agent Context Management: https://memroos.com/blog/ai-agent-context-management
+- AI Agent Persistent Memory: https://memroos.com/blog/ai-agent-persistent-memory
+- Engineering AI Memory: https://memroos.com/blog/engineering-ai-memory
+- Sales AI Agent Memory: https://memroos.com/blog/sales-ai-agent-memory
+- Governed Agent Memory for Enterprise: https://memroos.com/blog/governed-agent-memory-enterprise
+- MCP Memory Layer for Claude Code: https://memroos.com/blog/mcp-memory-layer
+- Agent Orchestration Audit Trail: https://memroos.com/blog/agent-orchestration-audit-trail
+- Agentic Memory Benchmark: https://memroos.com/blog/agentic-memory-benchmark
+- MemroOS vs Letta: https://memroos.com/blog/memroos-vs-letta
+- MemroOS vs Zep: https://memroos.com/blog/memroos-vs-zep
+
+## Competitor Comparisons
+
+- MemroOS vs Letta: https://memroos.com/vs/letta
+- MemroOS vs Zep: https://memroos.com/vs/zep
+- MemroOS vs Midbrain: https://memroos.com/vs/midbrain
+- MemroOS vs GBrain: https://memroos.com/vs/gbrain
+- MemroOS vs EverMemos: https://memroos.com/vs/evermemos
+- MemroOS vs AXME: https://memroos.com/vs/axme
+- MemroOS vs AgenticMemory: https://memroos.com/vs/agenticmemory
+- MemroOS vs Worldflow: https://memroos.com/vs/worldflow
+- MemroOS vs Tytan: https://memroos.com/vs/tytan
 
 ## Repository
 

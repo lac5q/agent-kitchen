@@ -10,7 +10,11 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/", "/settings/", "/register", "/login", "/invite/"],
       },
       { userAgent: "GPTBot", allow: "/" },
+      { userAgent: "OAI-SearchBot", allow: "/" },
+      { userAgent: "ChatGPT-User", allow: "/" },
       { userAgent: "ClaudeBot", allow: "/" },
+      { userAgent: "Claude-SearchBot", allow: "/" },
+      { userAgent: "Claude-User", allow: "/" },
       { userAgent: "anthropic-ai", allow: "/" },
       { userAgent: "PerplexityBot", allow: "/" },
       { userAgent: "cohere-ai", allow: "/" },
@@ -18,5 +22,6 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "Applebot-Extended", allow: "/" },
     ],
     sitemap: `${BASE_URL}/sitemap.xml`,
+    host: "memroos.com",
   };
 }

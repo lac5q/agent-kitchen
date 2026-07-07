@@ -18,8 +18,12 @@ MemroOS keeps company context, permissions, evals, dispatch, and proof outside a
 
 - Homepage: https://memroos.com
 - Platform overview: https://memroos.com/platform
-- Blog: https://memroos.com/blog
+- Product team use case: https://memroos.com/use-cases/product
+- Sales team use case: https://memroos.com/use-cases/sales
+- Engineering team use case: https://memroos.com/use-cases/engineering
+- Blog index: https://memroos.com/blog
 - Competitive benchmark: https://memroos.com/blog/agentic-memory-benchmark
+- Sitemap: https://memroos.com/sitemap.xml
 
 ## Integrations
 
@@ -35,18 +39,23 @@ Multi-tier memory model: vector, graph, episodic, knowledge, and skill surfaces.
 
 ## Research
 
-Architecture paper: https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf
-GitHub: https://github.com/lac5q/memroos
+- Architecture paper: https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf
+- GitHub: https://github.com/lac5q/memroos
 
 ## Blog Articles
 
-- What Is Agent Memory? https://memroos.com/blog/what-is-agent-memory
+- What Is Agent Memory?: https://memroos.com/blog/what-is-agent-memory
 - Agentic Memory Architecture: https://memroos.com/blog/agentic-memory-architecture
+- AI Agent Context Management: https://memroos.com/blog/ai-agent-context-management
 - AI Agent Persistent Memory: https://memroos.com/blog/ai-agent-persistent-memory
+- Engineering AI Memory: https://memroos.com/blog/engineering-ai-memory
+- Sales AI Agent Memory: https://memroos.com/blog/sales-ai-agent-memory
 - Governed Agent Memory for Enterprise: https://memroos.com/blog/governed-agent-memory-enterprise
 - MCP Memory Layer for Claude Code: https://memroos.com/blog/mcp-memory-layer
 - Agent Orchestration Audit Trail: https://memroos.com/blog/agent-orchestration-audit-trail
 - Agentic Memory Benchmark: https://memroos.com/blog/agentic-memory-benchmark
+- MemroOS vs Letta: https://memroos.com/blog/memroos-vs-letta
+- MemroOS vs Zep: https://memroos.com/blog/memroos-vs-zep
 
 ## Competitor Comparisons
 
@@ -54,4 +63,8 @@ GitHub: https://github.com/lac5q/memroos
 - MemroOS vs Zep: https://memroos.com/vs/zep
 - MemroOS vs Midbrain: https://memroos.com/vs/midbrain
 - MemroOS vs GBrain: https://memroos.com/vs/gbrain
-- MemroOS vs EverMind: https://memroos.com/vs/evermemos
+- MemroOS vs EverMemos: https://memroos.com/vs/evermemos
+- MemroOS vs AXME: https://memroos.com/vs/axme
+- MemroOS vs AgenticMemory: https://memroos.com/vs/agenticmemory
+- MemroOS vs Worldflow: https://memroos.com/vs/worldflow
+- MemroOS vs Tytan: https://memroos.com/vs/tytan
