@@ -65,11 +65,11 @@ export default function UseCasesPage() {
             <a
               key={uc.href}
               href={uc.href}
-              className="rounded-xl border border-slate-200 p-6 hover:border-amber-400 hover:shadow-sm transition-all"
+              className="rounded-xl border border-slate-200 p-6 hover:border-[#A8392C] hover:shadow-sm transition-all"
             >
               <h2 className="text-xl font-bold mb-3">{uc.title}</h2>
               <p className="text-slate-600 text-sm leading-relaxed">{uc.description}</p>
-              <span className="mt-4 inline-block text-amber-600 font-semibold text-sm">
+              <span className="mt-4 inline-block text-[#A8392C] font-semibold text-sm">
                 Learn more →
               </span>
             </a>
@@ -88,7 +88,7 @@ export default function UseCasesPage() {
         <div className="flex gap-4">
           <a
             href="https://github.com/lac5q/memroos"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
           >
             Get Started →
           </a>

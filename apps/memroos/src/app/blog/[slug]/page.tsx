@@ -95,14 +95,14 @@ export default async function BlogPostPage({ params }: Props) {
           <ReactMarkdown>{content}</ReactMarkdown>
         </article>
 
-        <div className="mt-16 rounded-xl bg-amber-50 border border-amber-200 p-8 text-center">
+        <div className="mt-16 rounded-xl bg-[#F2E2DC]/40 border border-[#A8392C]/30 p-8 text-center">
           <h2 className="text-2xl font-bold mb-3">Try MemroOS</h2>
           <p className="text-slate-600 mb-6">
             Self-hosted agentic memory and orchestration. Ready in 5 minutes.
           </p>
           <a
             href="https://github.com/lac5q/memroos"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
           >
             Get Started on GitHub →
           </a>

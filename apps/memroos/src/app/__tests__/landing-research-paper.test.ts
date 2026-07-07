@@ -18,6 +18,17 @@ const memroosRefreshStylePath = path.resolve(
   __dirname,
   "../../../public/landing/styles/memroos-refresh.css"
 );
+const publicMarketingSourcePaths = [
+  "../platform/page.tsx",
+  "../use-cases/page.tsx",
+  "../use-cases/product/page.tsx",
+  "../use-cases/engineering/page.tsx",
+  "../use-cases/sales/page.tsx",
+  "../vs/page.tsx",
+  "../vs/[competitor]/page.tsx",
+  "../blog/[slug]/page.tsx",
+  "../../components/blog/post-card.tsx",
+].map((relativePath) => path.resolve(__dirname, relativePath));
 const landingStylePaths = [
   "../../../public/landing/styles/growthalchemy.css",
   "../../../public/landing/styles/ask.css",
@@ -165,5 +176,14 @@ describe("public landing research proof", () => {
     expect(growthAlchemySource).not.toContain(".mm-cta:hover { background: var(--signal); }");
     expect(askSource).not.toContain(".ask-form button:hover { background: var(--signal); }");
     expect(memroosRefreshSource).not.toContain(".ctl.on { background: var(--signal); color: #fff; }");
+  });
+
+  it("keeps public marketing pages on the ink and oxblood palette", () => {
+    for (const sourcePath of publicMarketingSourcePaths) {
+      const source = readFileSync(sourcePath, "utf8");
+
+      expect(source).not.toMatch(/(?:bg|text|border|hover:bg|hover:text|hover:border)-amber-/);
+      expect(source).not.toContain("amber-");
+    }
   });
 });

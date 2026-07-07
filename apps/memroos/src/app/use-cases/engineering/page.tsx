@@ -74,7 +74,7 @@ export default function EngineeringUseCasePage() {
             <ul className="space-y-2 text-slate-700">
               {retained.map((item) => (
                 <li key={item} className="flex gap-2">
-                  <span className="text-amber-600 font-bold flex-shrink-0">✓</span>
+                  <span className="text-[#A8392C] font-bold flex-shrink-0">✓</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -85,7 +85,7 @@ export default function EngineeringUseCasePage() {
             <ul className="space-y-2 text-slate-700">
               {consumed.map((item) => (
                 <li key={item} className="flex gap-2">
-                  <span className="text-amber-600 font-bold flex-shrink-0">✓</span>
+                  <span className="text-[#A8392C] font-bold flex-shrink-0">✓</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -105,7 +105,7 @@ export default function EngineeringUseCasePage() {
         <div className="flex gap-4">
           <a
             href="https://github.com/lac5q/memroos"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
           >
             Get Started →
           </a>

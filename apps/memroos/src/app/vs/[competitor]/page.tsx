@@ -87,7 +87,7 @@ export default async function CompetitorPage({ params }: Props) {
 
         <div className="grid grid-cols-2 gap-6 mb-12">
           <div className="rounded-xl border border-slate-200 p-6 text-center">
-            <div className="text-5xl font-bold text-amber-600 mb-2">{MEMROOS_TOTAL_SCORE}</div>
+            <div className="text-5xl font-bold text-[#A8392C] mb-2">{MEMROOS_TOTAL_SCORE}</div>
             <div className="text-lg font-semibold">MemroOS</div>
             <div className="text-sm text-slate-500">Benchmark Score (/100)</div>
           </div>
@@ -112,7 +112,7 @@ export default async function CompetitorPage({ params }: Props) {
               {criteria.map((key) => (
                 <tr key={key} className="border-b border-slate-100">
                   <td className="py-3 pr-4 font-medium">{CRITERIA_LABELS[key]}</td>
-                  <td className="py-3 px-4 text-center font-bold text-amber-600">
+                  <td className="py-3 px-4 text-center font-bold text-[#A8392C]">
                     {MEMROOS_SCORES[key]?.score ?? "—"}/5
                   </td>
                   <td className="py-3 px-4 text-center text-slate-500">
@@ -128,7 +128,7 @@ export default async function CompetitorPage({ params }: Props) {
         <ul className="space-y-3 mb-12 text-slate-700">
           {whyReasons.map((reason) => (
             <li key={reason} className="flex gap-3">
-              <span className="text-amber-600 font-bold flex-shrink-0">✓</span>
+              <span className="text-[#A8392C] font-bold flex-shrink-0">✓</span>
               <span>{reason}</span>
             </li>
           ))}
@@ -144,12 +144,12 @@ export default async function CompetitorPage({ params }: Props) {
           ))}
         </div>
 
-        <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-8 text-center">
+        <div className="mt-8 rounded-xl bg-[#F2E2DC]/40 border border-[#A8392C]/30 p-8 text-center">
           <h2 className="text-2xl font-bold mb-3">Try MemroOS</h2>
           <p className="text-slate-600 mb-6">Self-hosted, source-available, ready in 5 minutes.</p>
           <a
             href="https://github.com/lac5q/memroos"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
           >
             View on GitHub →
           </a>

@@ -113,7 +113,7 @@ export default function PlatformPage() {
           <div className="mt-8 flex gap-4 justify-center">
             <a
               href="https://github.com/lac5q/memroos"
-              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
             >
               Get Started →
             </a>
@@ -130,7 +130,7 @@ export default function PlatformPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
           {capabilities.map((cap) => (
             <div key={cap.title} className="rounded-xl border border-slate-200 p-6">
-              <cap.icon className="h-8 w-8 text-amber-600 mb-4" />
+              <cap.icon className="h-8 w-8 text-[#A8392C] mb-4" />
               <h3 className="font-semibold text-lg mb-2">{cap.title}</h3>
               <p className="text-slate-600 text-sm">{cap.description}</p>
             </div>
@@ -147,7 +147,7 @@ export default function PlatformPage() {
           ))}
         </div>
 
-        <div className="rounded-xl bg-amber-50 border border-amber-200 p-8 text-center">
+        <div className="rounded-xl bg-[#F2E2DC]/40 border border-[#A8392C]/30 p-8 text-center">
           <h2 className="text-2xl font-bold mb-3">See the Benchmark</h2>
           <p className="text-slate-600 mb-6">
             MemroOS scores 84/100 on the Marketplace Agentic Memory Benchmark — #1 among evaluated
@@ -155,7 +155,7 @@ export default function PlatformPage() {
           </p>
           <Link
             href="/blog/agentic-memory-benchmark"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 text-white px-6 py-3 font-semibold hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 text-white px-6 py-3 font-semibold hover:bg-slate-800 hover:shadow-[inset_0_-3px_0_#A8392C] transition-all"
           >
             View Benchmark →
           </Link>

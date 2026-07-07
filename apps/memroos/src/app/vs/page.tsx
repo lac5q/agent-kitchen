@@ -47,7 +47,7 @@ export default function VsIndexPage() {
             <a
               key={comp!.slug}
               href={`/vs/${comp!.slug}`}
-              className="flex items-center justify-between rounded-xl border border-slate-200 p-5 hover:border-amber-400 hover:shadow-sm transition-all"
+              className="flex items-center justify-between rounded-xl border border-slate-200 p-5 hover:border-[#A8392C] hover:shadow-sm transition-all"
             >
               <div>
                 <h2 className="font-semibold text-lg">MemroOS vs {comp!.name}</h2>
@@ -55,7 +55,7 @@ export default function VsIndexPage() {
               </div>
               <div className="text-right flex-shrink-0 ml-6">
                 <div className="text-xs text-slate-400">Benchmark score</div>
-                <div className="font-bold text-amber-600">84 vs {comp!.totalScore}</div>
+                <div className="font-bold text-[#A8392C]">84 vs {comp!.totalScore}</div>
               </div>
             </a>
           ))}

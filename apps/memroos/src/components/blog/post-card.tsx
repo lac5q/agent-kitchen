@@ -12,7 +12,7 @@ export function PostCard({ post }: { post: Post }) {
     <article className="border-b border-slate-100 pb-8">
       <time className="text-sm text-slate-400">{date}</time>
       <h2 className="text-xl font-semibold mt-1 mb-2">
-        <a href={`/blog/${slug}`} className="hover:text-amber-600 transition-colors">
+        <a href={`/blog/${slug}`} className="hover:text-[#A8392C] transition-colors">
           {frontmatter.title}
         </a>
       </h2>
