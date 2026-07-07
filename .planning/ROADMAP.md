@@ -39,6 +39,7 @@
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phase 124 complete 2026-07-06; Phases 125-127 have infra deps — hosted operator / IdP / MDM)
 - 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
+- 🔜 **v8.4 Project-Centric Operator UX** — Phases 137-141 (planned 2026-07-07; from MemClaw competitor analysis; closes the operator-UX gap while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit; 22 new requirement IDs: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03)
 
 ## Phases
 
@@ -696,6 +697,83 @@ Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization 
 
 ---
 
+## v8.4 Project-Centric Operator UX (Phases 137-141) — PLANNED
+
+Source: 2026-07-07 MemClaw competitor analysis (`content/research/memclaw-gap-analysis-2026-07-07.md`). MemClaw (Felo-Inc, MIT) ships 6 specific UX patterns today that MemroOS does not yet surface: single-load workspace binding, operator-visible write rules + document directory, `is_shared` boolean read-only flag, per-space cache invalidation transparency, and a save-artifact gate with auto-README update. None of these conflict with the standing gates (zero paid services, MIT-OSS only). Decision: borrow the UX patterns, preserve governance — embed them in MemroOS product, not as portable skills, because each touches shared persistence, schema, and operator surfaces.
+
+**Borrowing rule:** ship MemClaw's operator-UX primitives (workspace load, write rules, document directory, `is_shared`, cache transparency, save gate), but keep MEMSEC labels, belief stages, evidence bundles, and hash-chained audit as first-class. MemroOS is self-hostable; MemClaw's hosted-LiveDoc backend is explicitly rejected per the enterprise review's SOC2 tenancy-collapse finding.
+
+- [ ] **Phase 137: Single-Load Workspace + Auto Context Packet** — WORKLOAD-01, WORKLOAD-02, WORKLOAD-03, WORKLOAD-04, WORKLOAD-05
+- [ ] **Phase 138: Operator-Visible Write Rules + Document Directory** — WRITERULES-01, WRITERULES-02, WRITERULES-03, WRITERULES-04, WRITERULES-05, WRITERULES-06
+- [ ] **Phase 139: is_shared: Single-Boolean Read-Only Toggle** — SHAREDRO-01, SHAREDRO-02, SHAREDRO-03
+- [ ] **Phase 140: Per-Space Cache + Invalidation Surface** — CACHEADMIN-01, CACHEADMIN-02, CACHEADMIN-03, CACHEADMIN-04, CACHEADMIN-05
+- [ ] **Phase 141: Save-Artifact Gate + Auto-README Update** — ARTGATE-01, ARTGATE-02, ARTGATE-03
+
+### Phase 137: Single-Load Workspace + Auto Context Packet
+**Goal**: One operator command ("load <space>") primes the Agent Context Packet for that space and binds it as the active workspace for all subsequent writes, reads, and NOC/lane surfaces.
+**Depends on**: Phase 132 (Agent Context Packet + Run Ledger), Phase 130 (Teams/Spaces)
+**Requirements**: WORKLOAD-01, WORKLOAD-02, WORKLOAD-03, WORKLOAD-04, WORKLOAD-05
+**Success Criteria** (what must be TRUE):
+  1. An operator-facing `/load <space>` (or "load Client X") command primes the Agent Context Packet for the named space and binds it as the active workspace for all subsequent writes, reads, and the NOC/lane surfaces
+  2. When a space is loaded, the active workspace is recorded in the run ledger as an event with actor, space id, and timestamp; the load is replayable
+  3. Adapter calls without an active workspace prompt the operator to select one (matches MemClaw's "There is no active project right now — which project do you want to operate on?"); the prompt is a single confirmation, not a recurring permission dialog
+  4. The active workspace is visible in the operator console header at all times
+  5. Headless / non-interactive agent runs (no operator present) **fail closed**: no silent default workspace, no last-used-workspace fallback in shared/team mode, the load event references actor="system:headless" and a run-ledger reason
+  6. Cross-space read is allowed but always policy-receipted; the loaded space is the **write target**, not the read universe
+**Plans**: 0/? planned
+**UI hint**: yes (active workspace chip in header, load-space command output card, ledger event row)
+
+### Phase 138: Operator-Visible Write Rules + Document Directory
+**Goal**: Make "what goes into which space" a table the operator can read and edit, not an internal adapter detail.
+**Depends on**: Phase 83 (Memory Inventory Clarity), Phase 130 (Teams/Spaces)
+**Requirements**: WRITERULES-01, WRITERULES-02, WRITERULES-03, WRITERULES-04, WRITERULES-05, WRITERULES-06
+**Success Criteria** (what must be TRUE):
+  1. Each space has a declarative "Write Rules" table (data type → target document/resource) editable in the operator UI
+  2. The agent's memory adapter consults the Write Rules table before routing a save; mismatches are surfaced as receipts, not silently re-routed
+  3. Each space has a Document Directory (name + purpose + resource/artifact id) editable in the operator UI; this is the agent's and the operator's shared lookup table
+  4. Write Rules + Document Directory changes ship in the run ledger so the agent's view stays in sync with the operator's; stale rules trigger a drift receipt
+  5. Concurrency: operator edits to Write Rules / Document Directory are **versioned + locked**; concurrent agent writes during an edit either wait or fail with a policy receipt (no silent overwrite, no race-condition loss)
+  6. Write Rules are schema-validated (data type, target document, fallback rule); invalid rules are rejected at edit time with a structured error, not at write time with a silent reroute
+**Plans**: 0/? planned
+**UI hint**: yes (Write Rules table view, Document Directory view per space, drift receipt in NOC)
+
+### Phase 139: is_shared: Single-Boolean Read-Only Toggle
+**Goal**: Replace multi-step policy edit with a one-click "Share read-only" toggle that is enforced at the retrieval gate, not as a UI-only switch.
+**Depends on**: Phase 76 (Retrieval Authorization Gate), Phase 130 (Teams/Spaces), Phase 137 (Single-Load Workspace)
+**Requirements**: SHAREDRO-01, SHAREDRO-02, SHAREDRO-03
+**Success Criteria** (what must be TRUE):
+  1. A single boolean `is_shared` flag on a space makes it read-only for all agents (no writes, no README updates, no document creation); the flag is enforced at **both** the retrieval gate (Phase 76, read-side) **and** the write-persistence gate (memory adapter write path, save-artifact path, README-update path, document-creation path), not as a UI-only toggle. A single source of truth (the space record) drives both enforcement points.
+  2. The `is_shared` flag is policy-receipted: every read or attempted write produces a receipt that references the flag and the space id, so the audit chain explains why a write was blocked
+  3. Operator UI shows a single "Share read-only" toggle per space; toggling emits a run-ledger event with actor and timestamp; toggling off requires a policy reason
+**Plans**: 0/? planned
+**UI hint**: yes (per-space share toggle, attempted-write receipt, share-state in NOC)
+
+### Phase 140: Per-Space Cache + Invalidation Surface
+**Goal**: Make per-space cache state visible and invalidatable to the operator; align with MemClaw's transparent cache path (`~/.memclaw/cache/{livedocid}/{resource_id}_{ts}.md`).
+**Depends on**: Phase 76 (Retrieval Authorization Gate), Phase 137, Phase 139 (is_shared enforcement)
+**Requirements**: CACHEADMIN-01, CACHEADMIN-02, CACHEADMIN-03, CACHEADMIN-04, CACHEADMIN-05
+**Success Criteria** (what must be TRUE):
+  1. Each space exposes its current cache state (per-resource last-fetched timestamp, total cached size, retrieval count) in the operator UI
+  2. Operator can invalidate a single resource cache or the whole space cache; invalidation emits a run-ledger event
+  3. Cache invalidation respects MEMSEC labels and the `is_shared` flag; shared read-only spaces expose invalidate-from-source only with a policy receipt
+  4. Thundering-herd protection: cache invalidation is rate-limited and bounded per space; concurrent invalidations for the same resource coalesce into a single event; an invalidation loop (operator action repeated >N times in <T) emits a rate-limit receipt
+  5. Invalidation events are queryable from the run ledger (who invalidated what, when, why) and are surfaced in the NOC governance strip
+**Plans**: 0/? planned
+**UI hint**: yes (per-space cache panel, invalidate-resource action, ledger event)
+
+### Phase 141: Save-Artifact Gate + Auto-README Update
+**Goal**: One "Save to current space?" prompt for long-form artifacts, with auto-README/Document Directory update; matches MemClaw's "ask once, never again" pattern but keeps evidence-bundled receipts.
+**Depends on**: Phase 137, Phase 138
+**Requirements**: ARTGATE-01, ARTGATE-02, ARTGATE-03
+**Success Criteria** (what must be TRUE):
+  1. When the agent produces a long-form artifact (report, document, deck) for a loaded space, the operator gets a single "Save to <space>?" prompt — no recurring permission dialog
+  2. On save, the agent appends the artifact to the Document Directory (or creates a new document) and emits a run-ledger event with the resource id and belief stage
+  3. On save, the agent updates the space README's "Last artifact" pointer in the Document Directory; the operator can disable auto-update per-space; auto-updates are policy-receipted
+**Plans**: 0/? planned
+**UI hint**: yes (save prompt card, document directory refresh, ledger event)
+
+---
+
 ## Backlog
 
 ### Next Milestone Priorities — Governed Memory OS Deep-Dive (revised 2026-07-06)
@@ -724,12 +802,15 @@ Priority order (each is a candidate milestone; requirements in `.planning/REQUIR
 2. **P0 — v8.1 Enterprise Operator Control Plane — PLANNED as Phases 124-127 (2026-07-06, from enterprise review).** `ENTOPS-01..08`. Load-proven hosted operator, per-tenant/per-user vaults with central hash-chained audit, operator-stub distribution (no git fallback in shared mode), Day-1 MDM/invite-token onboarding, write-side native-memory enforcement (never auto-trim), and exit/DSAR tooling. Two-SKU shape: Free Solo (local) vs Enterprise (operator-only). Parallelizable with v8.0 Phases 122-123 (different subsystems). Scenarios: S9, S10; substrate for S1/S7.
 3. **P0 — v8.2 Team-Scale Access + Policy Plane — PLANNED as Phases 128-131 (2026-07-06).** `TEAMSCALE-01..06`, `POLGOV-01..05`, `MSIQ-01..03`. Spaces/teams over the shipped label model, joiner/mover/leaver for humans + agents, delegation chains, and one declarative policy engine with decision receipts, shadow mode, and CI policy regression; knowledge-repo labels (MSIQ-01..03) land here so memory and knowledge share one enforcement plane. Scenarios: S1, S4, S7 (access half).
 4. **P0 — v8.3 Agent OS GSD Stack — PLANNED as Phases 132-136 (2026-07-06, from Mark Kashef transcript audit).** `GSDSTACK-01..11`. Context packet, run ledger, shipcheck, goal/resume/standup, portable skill boundary, skill audit, lane evals, model routing, thin adapters, and safety slice. This is the implementation spine that makes Hermes/Discord/Telegram/Codex/Claude replaceable interfaces over MemRoOS rather than competing OSes. Scenario: S11.
-5. **P1 — v8.4 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
+5. **P1 — v8.4 Project-Centric Operator UX — PLANNED as Phases 137-141 (2026-07-07, from MemClaw competitor analysis).** `WORKLOAD-01..05`, `WRITERULES-01..06`, `SHAREDRO-01..03`, `CACHEADMIN-01..05`, `ARTGATE-01..03`. MemClaw parity for operator UX primitives (single-load workspace, declarative write rules, document directory, `is_shared` boolean, per-space cache transparency, save-artifact gate) while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit. Source: `content/research/memclaw-gap-analysis-2026-07-07.md`. Depends on v8.2 Phases 128-131 (policy engine + spaces) and v8.3 Phases 132-136 (context packet + run ledger).
 6. **P1 — v8.5 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
 7. **P1 — v8.6 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
-8. **P1 — v8.7 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.4.
+8. **P1 — v8.7 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.5 (v8.4 writes into spaces; v8.5 skill trust is the next governance lane).
 9. **P2 — v8.8 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
-10. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
+10. **P2 — v8.9 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
+11. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
+
+**Renumbering note (2026-07-07):** the prior "v8.4 Governed Ontology Foundation" entry was renumbered to **v8.9** to make room for the new v8.4 Project-Centric Operator UX. v8.5-v8.7 keep their numbers (P1); v8.8-v8.9 keep their numbers (P2); the previously-numbered item 10 (P2/P3 carried forward) is now item 11. Future renumbers should preserve the chronological-then-priority ordering: shipped (v8.0-v8.3) → next-to-ship (v8.4, P1) → P1 candidates (v8.5-v8.7) → P2 candidates (v8.8-v8.9) → carried-forward (P2/P3, no version).
 
 Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays cloud and canonical; no spike-to-adoption without Luis approval; no raw sensitive payloads in any receipt; fail-closed defaults everywhere.
 

@@ -10,6 +10,8 @@ const PUBLIC_HOSTS = new Set([
   "memroos.vercel.app",
   "memroos.localhost",
 ]);
+const CANONICAL_PUBLIC_HOST = "memroos.com";
+const WWW_PUBLIC_HOST = "www.memroos.com";
 const LEGACY_HOSTS = new Set(["memroos.dev", "www.memroos.dev"]);
 const DEFAULT_HTTPS_APP_HOSTS = new Set<string>();
 
@@ -234,6 +236,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Legacy host → permanent redirect to canonical domain
   if (LEGACY_HOSTS.has(host)) {
     return NextResponse.redirect("https://memroos.com/", 308);
+  }
+
+  if (host === WWW_PUBLIC_HOST) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = CANONICAL_PUBLIC_HOST;
+    return withSecurityHeaders(NextResponse.redirect(canonicalUrl, 308));
   }
 
   // Public marketing host: serve landing assets, redirect everything else to "/"
