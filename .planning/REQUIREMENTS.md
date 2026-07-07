@@ -19,6 +19,7 @@
 - v8.1 Enterprise Operator Control Plane — planned
 - v8.2 Team-Scale Access + Policy Plane — planned
 - v8.3 Agent OS GSD Stack — planned
+- v8.4 Project-Centric Operator UX — planned
 
 ---
 
@@ -197,6 +198,33 @@
 - [ ] **GSDSTACK-09**: Model routing starts as a static policy with logged overrides: cheap/local for extraction/classification/formatting, frontier for hard reasoning/final synthesis, private/customer-bound for sensitive data, vision for multimodal evidence, and validator models for high-risk review. Receipts record model, reason, estimate/actual cost, latency, and quality outcome.
 - [ ] **GSDSTACK-10**: Hermes, Discord/Telegram, Codex, Claude Code, and future UIs are thin adapters over the same MemRoOS contract: they may create tasks, request context, post proof, request standup/resume, and ask for approvals, but they do not own memory, task state, proof state, policy state, or model-routing decisions.
 - [ ] **GSDSTACK-11**: Adapter-triggered sends, writes, destructive actions, and memory persistence run through the first safety slice: secrets/PII scan, destructive-action approval, cost cap, and honest-degradation behavior. Shared/enterprise mode cannot silently fall back to local git corpus pulls or unlogged writes.
+
+## v8.4 Project-Centric Operator UX (Proposed)
+
+*Source: 2026-07-07 MemClaw (Felo-Inc) competitor gap analysis (`content/research/memclaw-gap-analysis-2026-07-07.md`). Decision: borrow MemClaw's operator-UX primitives — single-load workspace, declarative write rules + document directory, `is_shared` boolean, per-space cache transparency, save-artifact gate — but keep MemroOS governance (MEMSEC labels, belief stages, hash-chained audit) as first-class. MemClaw's hosted Felo API dependency and PPT generation are explicitly rejected per the zero-paid-services and self-host gates.*
+
+- [ ] **WORKLOAD-01**: An operator-facing `/load <space>` (or "load Client X") command primes the Agent Context Packet for the named space and binds it as the active workspace for all subsequent writes, reads, and the NOC/lane surfaces.
+- [ ] **WORKLOAD-02**: When a space is loaded, the active workspace is recorded in the run ledger as an event with actor, space id, and timestamp; the load is replayable from the ledger.
+- [ ] **WORKLOAD-03**: Adapter calls without an active workspace prompt the operator to select one (matches MemClaw's "There is no active project right now — which project do you want to operate on?"); the prompt is a single confirmation, not a recurring permission dialog.
+- [ ] **WORKLOAD-04**: Headless / non-interactive agent runs (no operator present) **fail closed**: no silent default workspace, no last-used-workspace fallback in shared/team mode; the load event references actor="system:headless" and a run-ledger reason.
+- [ ] **WORKLOAD-05**: Cross-space read is allowed but always policy-receipted; the loaded space is the **write target**, not the read universe; reads across spaces are surfaced in the run ledger.
+- [ ] **WRITERULES-01**: Each space has a declarative "Write Rules" table (data type → target document/resource) editable in the operator UI.
+- [ ] **WRITERULES-02**: The agent's memory adapter consults the Write Rules table before routing a save; mismatches are surfaced as receipts, not silently re-routed.
+- [ ] **WRITERULES-03**: Each space has a Document Directory (name + purpose + resource/artifact id) editable in the operator UI; this is the agent's and the operator's shared lookup table.
+- [ ] **WRITERULES-04**: Write Rules + Document Directory changes ship in the run ledger so the agent's view stays in sync with the operator's; stale rules trigger a drift receipt.
+- [ ] **WRITERULES-05**: Operator edits to Write Rules / Document Directory are **versioned + locked**; concurrent agent writes during an edit either wait or fail with a policy receipt (no silent overwrite, no race-condition loss).
+- [ ] **WRITERULES-06**: Write Rules are schema-validated (data type, target document, fallback rule); invalid rules are rejected at edit time with a structured error, not at write time with a silent reroute.
+- [ ] **SHAREDRO-01**: A single boolean `is_shared` flag on a space makes it read-only for all agents (no writes, no README updates, no document creation); the flag is enforced at **both** the retrieval gate (Phase 76, read-side) **and** the write-persistence gate (memory adapter write path, save-artifact path, README-update path, document-creation path), not as a UI-only toggle. The two enforcement points must agree and a single source of truth (the space record) drives both.
+- [ ] **SHAREDRO-02**: The `is_shared` flag is policy-receipted: every read or attempted write produces a receipt that references the flag and the space id, so the audit chain explains why a write was blocked.
+- [ ] **SHAREDRO-03**: Operator UI shows a single "Share read-only" toggle per space; toggling emits a run-ledger event with actor and timestamp; toggling off requires a policy reason.
+- [ ] **CACHEADMIN-01**: Each space exposes its current cache state (per-resource last-fetched timestamp, total cached size, retrieval count) in the operator UI.
+- [ ] **CACHEADMIN-02**: Operator can invalidate a single resource cache or the whole space cache; invalidation emits a run-ledger event.
+- [ ] **CACHEADMIN-03**: Cache invalidation respects MEMSEC labels and the `is_shared` flag; shared read-only spaces expose invalidate-from-source only with a policy receipt.
+- [ ] **CACHEADMIN-04**: Thundering-herd protection: cache invalidation is rate-limited and bounded per space; concurrent invalidations for the same resource coalesce into a single event; an invalidation loop (operator action repeated >N times in <T) emits a rate-limit receipt.
+- [ ] **CACHEADMIN-05**: Invalidation events are queryable from the run ledger (who invalidated what, when, why) and are surfaced in the NOC governance strip.
+- [ ] **ARTGATE-01**: When the agent produces a long-form artifact (report, document, deck) for a loaded space, the operator gets a single "Save to <space>?" prompt — no recurring permission dialog.
+- [ ] **ARTGATE-02**: On save, the agent appends the artifact to the Document Directory (or creates a new document) and emits a run-ledger event with the resource id and belief stage.
+- [ ] **ARTGATE-03**: On save, the agent updates the space README's "Last artifact" pointer in the Document Directory; the operator can disable auto-update per-space; auto-updates are policy-receipted.
 
 ## ONTO Governed Emergent Ontology (Proposed)
 
@@ -379,3 +407,25 @@
 | GSDSTACK-09 | 135 | Planned |
 | GSDSTACK-10 | 136 | Planned |
 | GSDSTACK-11 | 136 | Planned |
+| WORKLOAD-01 | 137 | Planned |
+| WORKLOAD-02 | 137 | Planned |
+| WORKLOAD-03 | 137 | Planned |
+| WORKLOAD-04 | 137 | Planned |
+| WORKLOAD-05 | 137 | Planned |
+| WRITERULES-01 | 138 | Planned |
+| WRITERULES-02 | 138 | Planned |
+| WRITERULES-03 | 138 | Planned |
+| WRITERULES-04 | 138 | Planned |
+| WRITERULES-05 | 138 | Planned |
+| WRITERULES-06 | 138 | Planned |
+| SHAREDRO-01 | 139 | Planned |
+| SHAREDRO-02 | 139 | Planned |
+| SHAREDRO-03 | 139 | Planned |
+| CACHEADMIN-01 | 140 | Planned |
+| CACHEADMIN-02 | 140 | Planned |
+| CACHEADMIN-03 | 140 | Planned |
+| CACHEADMIN-04 | 140 | Planned |
+| CACHEADMIN-05 | 140 | Planned |
+| ARTGATE-01 | 141 | Planned |
+| ARTGATE-02 | 141 | Planned |
+| ARTGATE-03 | 141 | Planned |
