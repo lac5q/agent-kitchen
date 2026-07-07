@@ -135,6 +135,5 @@ Standard commands are in the root `package.json`: `npm run dev` (port 3000),
   (mem0, orchestration, Ollama, Neo4j, Qdrant, voice) is normal — those are optional and
   not run here. SQLite is embedded, so core console flows (auth, API keys, settings) work
   without them.
-- **Known pre-existing test failures (not environment issues):**
-  `src/lib/__tests__/efficiency-telemetry.test.ts` has 2 failures because the tests expect
-  SQLite `user_version` 2 but the schema is now 3. All other tests pass.
+- `src/lib/__tests__/efficiency-telemetry.test.ts` was updated on 2026-07-07 to assert the
+ current schema version rather than a stale hard-coded value.

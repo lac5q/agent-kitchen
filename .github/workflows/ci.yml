@@ -130,7 +130,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate operator load gate logic on PRs
+        if: github.event_name == 'pull_request'
+        run: node --test scripts/check-operator-load-slo.test.mjs
+
       - name: Run operator load SLO gate
+        if: github.event_name != 'pull_request'
         # Reads reports/operator-load/latest.json (committed baseline by
         # default; gate treats baseline as NOT pass until a real run
         # produces a fresh status:"pass" report). Does not execute the

@@ -5,7 +5,7 @@ model: GPT-5 Codex
 sources:
   - https://www.linkedin.com/help/linkedin/answer/a551012/types-of-restrictions-for-sending-invitations
   - https://www.linkedin.com/help/linkedin/answer/a563153/personalize-invitations-to-connect
-  - /Users/lcalderon/.codex/memories/MEMORY.md
+  - /Users/USERNAME/.codex/memories/MEMORY.md
 derived_from:
   - Luis mentioned a LinkedIn connection from Benjamin Greenspan, an AI-focused GTM person, and asked about connecting with many product-management, AI-agentic, and deployment-engineer-focused recruiters.
 regen_prompt: "Assess the pros and cons of a LinkedIn recruiter network-mining strategy for an AI/product/deployment-engineering job search, then recommend a high-throughput but human operating model."

@@ -73,7 +73,7 @@ Luis asked for Opus 4.8 validation before declaring done. The validation surface
 ```bash
 $ python3 scripts/research-without-persist-detector.py --full
 ⚠️  151 session(s) produced research without persisting to MemroOS.
-   Report: /Users/lcalderon/.hermes/cron/output/research-without-persist-2026-07-05.md
+   Report: /Users/USERNAME/.hermes/cron/output/research-without-persist-2026-07-05.md
 
 real    0m11.438s
 ```
@@ -114,7 +114,7 @@ On the actual session corpus: 0 delete-after-write misses today. The detector no
 
 ## Source
 
-- Validation report: `/Users/lcalderon/.hermes/cron/output/validation-report-auto-save-fix-2026-07-05.md` (Opus 4.8, Jul 5)
+- Validation report: `/Users/USERNAME/.hermes/cron/output/validation-report-auto-save-fix-2026-07-05.md` (Opus 4.8, Jul 5)
 - Original RCA: `content/research/memroos-persist-failure-rca-2026-07-05.md`
 - Artyfacts comparison: `content/research/memroos-vs-artyfacts.md`
 - Hardening round 2: `content/research/memroos-hardening-july-2026.md`

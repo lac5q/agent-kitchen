@@ -11,7 +11,7 @@ sources:
   - "https://github.com/lac5q/memroos/blob/main/scripts/research-without-persist-detector.py"
   - "https://github.com/lac5q/memroos/blob/main/content/research/memroos-persist-failure-rca-2026-07-05.md"
   - "https://github.com/lac5q/memroos/blob/main/.agents/skills/memroos-save/SKILL.md"
-  - "file:///Users/lcalderon/.hermes/cron/output/research-without-persist-2026-07-05.md"
+  - "file:///Users/USERNAME/.hermes/cron/output/research-without-persist-2026-07-05.md"
 derived_from:
   - "content/research/memroos-persist-failure-rca-2026-07-05.md"
   - "content/research/memroos-hardening-july-2026.md"

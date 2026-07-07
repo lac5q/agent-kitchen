@@ -20,7 +20,7 @@ regen_prompt: "Re-read the recovered session JSONL at ~/.hermes/sessions/2026051
 
 **Recovered from session:** `20260519_173730_5a6fb4` (2026-05-19)
 **Original ask:** "We need to make progress reaching out to new creators. What content and payment terms should put together for the offer? Can we reduce upfront costs and compensate them on the back end to reduce cash investment?"
-**Persist gate status:** ⚠️  Partially — assistant said "Full report saved to `/Users/lcalderon/content-os/drafts/collabstr-influencer-vetting-report.md`" but that path is OUTSIDE the canonical `~/github/knowledge/` and `~/github/memroos/` repos, so the durable-research mission was not fulfilled.
+**Persist gate status:** ⚠️  Partially — assistant said "Full report saved to `/Users/USERNAME/content-os/drafts/collabstr-influencer-vetting-report.md`" but that path is OUTSIDE the canonical `~/github/knowledge/` and `~/github/memroos/` repos, so the durable-research mission was not fulfilled.
 **Recovered by:** `research-without-persist-detector` cron, 2026-07-05.
 
 ---
@@ -60,7 +60,7 @@ To reduce upfront cash:
 - **Revenue share:** 10-15% of sales from their code
 - **Gifted product + commission:** Free portrait + 15% of all sales
 
-Full report saved to `/Users/lcalderon/content-os/drafts/collabstr-influencer-vetting-report.md`. Want me to reach out to these creators, or check engagement on more from the list first?
+Full report saved to `/Users/USERNAME/content-os/drafts/collabstr-influencer-vetting-report.md`. Want me to reach out to these creators, or check engagement on more from the list first?
 
 ---
 
@@ -86,8 +86,8 @@ To reduce upfront cash investment:
 - Source session: `~/.hermes/sessions/20260519_173730_5a6fb4.jsonl`
 - 8 user messages, 10 assistant messages, 30 URLs cited
 - 40 creators on Collabstr list reviewed; top 3 had engagement independently verified
-- Original (non-canonical) draft at: `/Users/lcalderon/content-os/drafts/collabstr-influencer-vetting-report.md` (8.7 KB, 173 lines)
+- Original (non-canonical) draft at: `/Users/USERNAME/content-os/drafts/collabstr-influencer-vetting-report.md` (8.7 KB, 173 lines)
 
 ## Why this was missed
 
-The assistant did mention saving the report to `~/Users/lcalderon/content-os/drafts/...` — but `content-os/drafts/` is not under either `~/github/knowledge/` (private KB) or `~/github/memroos/` (public product repo). The research did not durably land where the agent infrastructure expects it. This doc restores it to the canonical `memroos/content/research/` path.
+The assistant did mention saving the report to `~/Users/USERNAME/content-os/drafts/...` — but `content-os/drafts/` is not under either `~/github/knowledge/` (private KB) or `~/github/memroos/` (public product repo). The research did not durably land where the agent infrastructure expects it. This doc restores it to the canonical `memroos/content/research/` path.
