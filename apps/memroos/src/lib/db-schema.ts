@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 type SchemaMigration = {
   version: number;
@@ -119,6 +119,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 7,
     name: 'write-rules-and-document-directory',
     up: applyWriteRulesAndDocumentDirectorySchema,
+  },
+  {
+    version: 8,
+    name: 'shared-space-toggle',
+    up: applySharedSpaceSchema,
   },
 ];
 
@@ -437,6 +442,26 @@ function applyWriteRulesAndDocumentDirectorySchema(db: Database.Database): void 
     CREATE UNIQUE INDEX IF NOT EXISTS document_directory_space_name ON document_directory(space_id, name);
     CREATE INDEX IF NOT EXISTS document_directory_space ON document_directory(space_id);
   `);
+}
+
+function applySharedSpaceSchema(db: Database.Database): void {
+  // Phase 139 / SHAREDRO-01..03: is_shared read-only toggle on spaces.
+  //
+  // A space with is_shared=1 is treated as read-only for writes
+  // (assertWritableSpace throws) and records a policy receipt for every
+  // read (assertReadableSpace writes an audit_entries row). Both columns
+  // are additive and idempotent: re-running the migration on an
+  // already-migrated database is a no-op.
+  try {
+    db.exec("ALTER TABLE spaces ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+  try {
+    db.exec("ALTER TABLE spaces ADD COLUMN shared_reason TEXT");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
 }
 
 function applyCurrentSchema(db: Database.Database): void {
