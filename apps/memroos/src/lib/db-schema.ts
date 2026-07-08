@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 type SchemaMigration = {
   version: number;
@@ -114,6 +114,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 6,
     name: 'active-workspace',
     up: applyActiveWorkspaceSchema,
+  },
+  {
+    version: 7,
+    name: 'write-rules-and-document-directory',
+    up: applyWriteRulesAndDocumentDirectorySchema,
   },
 ];
 
@@ -383,6 +388,54 @@ function applyActiveWorkspaceSchema(db: Database.Database): void {
       ON active_workspace(cleared_at) WHERE cleared_at IS NULL;
     CREATE INDEX IF NOT EXISTS active_workspace_space
       ON active_workspace(space_id, loaded_at DESC);
+  `);
+}
+
+function applyWriteRulesAndDocumentDirectorySchema(db: Database.Database): void {
+  // Phase 138 / WRITERULES-01..06: operator-visible write rules + document directory.
+  //
+  // write_rules: per-space routing rules that map a data_type to a target
+  // document. When an agent writes memory, resolveWriteTarget consults these
+  // rules to decide where the write lands. fallback_rule='reject' blocks
+  // unmatched writes; 'default_doc' routes them to a configured fallback.
+  //
+  // document_directory: per-space catalog of named documents with optional
+  // resource_id pointers and human-readable purposes. Entries are the
+  // targets referenced by write_rules.target_document.
+  //
+  // Both tables use optimistic locking via a version column that is
+  // incremented on every update. All mutations write to audit_entries for
+  // the run ledger.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS write_rules (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      data_type     TEXT NOT NULL,
+      target_document TEXT NOT NULL,
+      fallback_rule TEXT NOT NULL DEFAULT 'reject' CHECK(fallback_rule IN ('reject','default_doc')),
+      version       INTEGER NOT NULL DEFAULT 1,
+      created_by    TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at    TEXT,
+      updated_by    TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS write_rules_space_type ON write_rules(space_id, data_type);
+    CREATE INDEX IF NOT EXISTS write_rules_space ON write_rules(space_id);
+
+    CREATE TABLE IF NOT EXISTS document_directory (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      purpose       TEXT,
+      resource_id   TEXT,
+      version       INTEGER NOT NULL DEFAULT 1,
+      created_by    TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at    TEXT,
+      updated_by    TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS document_directory_space_name ON document_directory(space_id, name);
+    CREATE INDEX IF NOT EXISTS document_directory_space ON document_directory(space_id);
   `);
 }
 
