@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v8.4
 milestone_name: Project-Centric Operator UX
 status: in_progress
-stopped_at: Phase 137 complete (2026-07-08)
-last_updated: "2026-07-08T02:25:00.000Z"
+stopped_at: Phase 138 complete (2026-07-08)
+last_updated: "2026-07-08T03:50:00.000Z"
 progress:
   total_phases: 67
-  completed_phases: 42
+  completed_phases: 43
   total_plans: 75
-  completed_plans: 85
-  percent: 63
+  completed_plans: 86
+  percent: 64
 ---
 
 # State: Memroos
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 137
-Plan: 137-01 complete
-Status: v8.4 IN PROGRESS — Phase 137 complete (WORKLOAD-01..05); v8.3 GSD stack complete; v8.2 COMPLETE (Phases 128-131 all done); v8.1 Phase 125 complete
+Phase: 138
+Plan: 138-01 complete
+Status: v8.4 IN PROGRESS — Phase 138 complete (WRITERULES-01..06); Phase 137 complete (WORKLOAD-01..05); v8.3 GSD stack complete; v8.2 COMPLETE (Phases 128-131 all done); v8.1 Phase 125 complete
 
 ## Session Continuity
 
-Last session: 2026-07-08T02:25:00.000Z
-Stopped at: Phase 137 complete (2026-07-08) — WORKLOAD-01..05 shipped
-Resume file: `.planning/phases/137-single-load-workspace-auto-context-packet/137-01-SUMMARY.md`
-Next action: Plan and execute Phase 138 (next v8.4 requirement group: WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, or ARTGATE-01..03).
+Last session: 2026-07-08T03:50:00.000Z
+Stopped at: Phase 138 complete (2026-07-08) — WRITERULES-01..06 shipped
+Resume file: `.planning/phases/138-operator-visible-write-rules-document-directory/138-01-SUMMARY.md`
+Next action: Plan and execute Phase 139 (SHAREDRO-01..03: is_shared single-boolean read-only toggle).
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,13 @@ Next action: Plan and execute Phase 138 (next v8.4 requirement group: WRITERULES
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-08, Phase 138)
+
+- Phase 138 (v8.4, WRITERULES-01..06) completed via Beastmode Director/Worker/Validator loop. Worker = inherit model (MiniMax-M3 BYOK unavailable), Validator = GLM-5.2 BYOK. Six capabilities: (1) declarative write rules table per space (data_type → target_document with fallback_rule) with CRUD; (2) `resolveWriteTarget` consults rules before routing saves, writes mismatch audit receipts; (3) document directory CRUD per space (name + purpose + resource_id); (4) all mutations write typed audit_entries events + `checkWriteRuleDrift` detects stale agent views; (5) optimistic locking on all update/delete (version mismatch throws, version increments); (6) schema validation rejects invalid rules at edit time (empty dataType/targetDocument, invalid fallbackRule).
+- Schema migration: v6→v7, added `write_rules` + `document_directory` tables with unique indexes and ON DELETE CASCADE to spaces. Idempotent. Backward-compatible.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified zero git diff.
+- Verification: 104 tests pass (28 write-rules + 58 policy + 8 MEMSEC-08 + 10 workspace); zero tsc errors under `src/lib/write-rules`; GLM-5.2 validator PASS. Non-blocking: cosmetic error message copy-paste on document directory version conflicts, audit inserts best-effort, drift check only covers write_rules not document_directory.
 
 ### Roadmap Evolution (2026-07-08, Phase 137)
 
