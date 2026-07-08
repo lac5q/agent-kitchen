@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 type SchemaMigration = {
   version: number;
@@ -124,6 +124,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 8,
     name: 'shared-space-toggle',
     up: applySharedSpaceSchema,
+  },
+  {
+    version: 9,
+    name: 'per-space-cache-invalidation-surface',
+    up: applySpaceCacheSchema,
   },
 ];
 
@@ -462,6 +467,27 @@ function applySharedSpaceSchema(db: Database.Database): void {
   } catch {
     // Column already exists -- additive migration is safe to re-run.
   }
+}
+
+function applySpaceCacheSchema(db: Database.Database): void {
+  // Phase 140 / CACHEADMIN-01..05: per-space cache + invalidation surface.
+  //
+  // Tracks per-resource cache state for each space and records
+  // invalidation events in audit_entries for operator visibility.
+  // All DDL is idempotent (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS space_cache_state (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id        TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      resource_id     TEXT NOT NULL,
+      last_fetched    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      cached_size     INTEGER NOT NULL DEFAULT 0,
+      retrieval_count INTEGER NOT NULL DEFAULT 0,
+      invalidated_at  TEXT,
+      UNIQUE(space_id, resource_id)
+    );
+    CREATE INDEX IF NOT EXISTS space_cache_state_space ON space_cache_state(space_id);
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {
