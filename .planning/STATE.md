@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v8.4
 milestone_name: Project-Centric Operator UX
-status: in_progress
-stopped_at: Phase 140 complete (2026-07-08)
-last_updated: "2026-07-08T04:30:00.000Z"
+status: complete
+stopped_at: Phase 141 complete (2026-07-08) — v8.4 milestone complete
+last_updated: "2026-07-08T04:50:00.000Z"
 progress:
   total_phases: 67
-  completed_phases: 45
+  completed_phases: 46
   total_plans: 75
-  completed_plans: 88
-  percent: 66
+  completed_plans: 89
+  percent: 67
 ---
 
 # State: Memroos
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 140
-Plan: 140-01 complete
-Status: v8.4 IN PROGRESS — Phase 140 complete (CACHEADMIN-01..05); Phases 137-139 complete; v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
+Phase: 141
+Plan: 141-01 complete
+Status: v8.4 COMPLETE (Phases 137-141 all done); v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
 
 ## Session Continuity
 
-Last session: 2026-07-08T04:30:00.000Z
-Stopped at: Phase 140 complete (2026-07-08) — CACHEADMIN-01..05 shipped
-Resume file: `.planning/phases/140-per-space-cache-invalidation-surface/140-01-SUMMARY.md`
-Next action: Plan and execute Phase 141 (ARTGATE-01..03: Save-Artifact Gate + Auto-README Update) — final v8.4 phase.
+Last session: 2026-07-08T04:50:00.000Z
+Stopped at: Phase 141 complete (2026-07-08) — v8.4 milestone complete
+Resume file: `.planning/phases/141-save-artifact-gate-auto-readme/141-01-SUMMARY.md`
+Next action: v8.4 milestone complete. All 22 requirement IDs shipped (WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03). Next milestone candidates: v8.5 Skill Trust Chain, v8.6 Memory Lifecycle + Erasure, v8.7 Orchestration Evidence Depth.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,13 @@ Next action: Plan and execute Phase 141 (ARTGATE-01..03: Save-Artifact Gate + Au
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-08, Phases 139-141)
+
+- Phase 139 (v8.4, SHAREDRO-01..03) completed. `is_shared` boolean flag on spaces table (v8 migration), enforced at both write-persistence gate (`assertWritableSpace` throws on shared) and read-side gate (`assertReadableSpace` writes policy receipt). Toggling off requires a reason. 14 tests, GLM-5.2 PASS.
+- Phase 140 (v8.4, CACHEADMIN-01..05) completed. `space_cache_state` table (v9 migration) with per-resource tracking. `getCacheState` returns summary; `invalidateResource`/`invalidateSpace` with shared-space enforcement, 5s coalescing, and rate limiting (5/60s resource, 3/60s space). `getInvalidationHistory` from audit entries. 14 tests, GLM-5.2 PASS.
+- Phase 141 (v8.4, ARTGATE-01..03) completed. `space_artifact_settings` table (v10 migration). `promptSaveArtifact` single-confirmation prompt; `saveArtifact` enforces writable + active workspace gates, creates/updates document directory entry, emits audit with belief stage; auto-README pointer update per-space toggle. 14 tests, GLM-5.2 PASS.
+- v8.4 milestone COMPLETE. All 22 requirement IDs shipped across 5 phases (137-141). 146 total tests pass across v8.4 modules. MEMSEC-08 regression corpus byte-identical throughout. Zero new npm dependencies.
 
 ### Roadmap Evolution (2026-07-08, Phase 138)
 
