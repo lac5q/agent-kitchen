@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 type SchemaMigration = {
   version: number;
@@ -129,6 +129,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 9,
     name: 'per-space-cache-invalidation-surface',
     up: applySpaceCacheSchema,
+  },
+  {
+    version: 10,
+    name: 'save-artifact-gate-auto-readme',
+    up: applyArtifactGateSchema,
   },
 ];
 
@@ -487,6 +492,30 @@ function applySpaceCacheSchema(db: Database.Database): void {
       UNIQUE(space_id, resource_id)
     );
     CREATE INDEX IF NOT EXISTS space_cache_state_space ON space_cache_state(space_id);
+  `);
+}
+
+function applyArtifactGateSchema(db: Database.Database): void {
+  // Phase 141 / ARTGATE-01..03: save-artifact gate + auto-README update.
+  //
+  // space_artifact_settings holds per-space artifact-save metadata:
+  //   - auto_readme_update: toggle for the auto-README-update behavior
+  //     (default 1 = enabled). When enabled, saveArtifact updates the
+  //     last_artifact_* pointer columns after a successful save.
+  //   - last_artifact_resource_id / name / saved_at: the most recent
+  //     artifact saved into this space, surfaced for README auto-update.
+  //   - updated_by / updated_at: provenance for the last settings mutation.
+  // All DDL is idempotent (CREATE TABLE IF NOT EXISTS).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS space_artifact_settings (
+      space_id              TEXT PRIMARY KEY REFERENCES spaces(id) ON DELETE CASCADE,
+      auto_readme_update    INTEGER NOT NULL DEFAULT 1,
+      last_artifact_resource_id TEXT,
+      last_artifact_name    TEXT,
+      last_artifact_saved_at TEXT,
+      updated_by            TEXT,
+      updated_at            TEXT
+    );
   `);
 }
 
