@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.3
-milestone_name: Agent OS GSD Stack
-status: complete
-stopped_at: Phase 136 complete (2026-07-07)
-last_updated: "2026-07-07T03:55:00.000Z"
+milestone: v8.4
+milestone_name: Project-Centric Operator UX
+status: in_progress
+stopped_at: Phase 137 complete (2026-07-08)
+last_updated: "2026-07-08T02:25:00.000Z"
 progress:
-  total_phases: 62
-  completed_phases: 41
-  total_plans: 74
-  completed_plans: 84
-  percent: 67
+  total_phases: 67
+  completed_phases: 42
+  total_plans: 75
+  completed_plans: 85
+  percent: 63
 ---
 
 # State: Memroos
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 131
-Plan: 131-01 complete
-Status: v8.2 COMPLETE (Phases 128-131 all done); v8.1 Phase 125 complete; v8.3 GSD stack complete
+Phase: 137
+Plan: 137-01 complete
+Status: v8.4 IN PROGRESS — Phase 137 complete (WORKLOAD-01..05); v8.3 GSD stack complete; v8.2 COMPLETE (Phases 128-131 all done); v8.1 Phase 125 complete
 
 ## Session Continuity
 
-Last session: 2026-07-07T15:55:00.000Z
-Stopped at: Phase 131 complete (2026-07-07) — v8.2 milestone complete
-Resume file: `.planning/phases/131-identity-lifecycle-delegation-chains/131-01-PLAN.md`
-Next action: v8.2 milestone complete. Create v8.4 branch for Phases 137-141 (Project-Centric Operator UX: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03).
+Last session: 2026-07-08T02:25:00.000Z
+Stopped at: Phase 137 complete (2026-07-08) — WORKLOAD-01..05 shipped
+Resume file: `.planning/phases/137-single-load-workspace-auto-context-packet/137-01-SUMMARY.md`
+Next action: Plan and execute Phase 138 (next v8.4 requirement group: WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, or ARTGATE-01..03).
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,13 @@ Next action: v8.2 milestone complete. Create v8.4 branch for Phases 137-141 (Pro
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-08, Phase 137)
+
+- Phase 137 (v8.4, WORKLOAD-01..05) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK, Validator = GLM-5.2 BYOK. Five capabilities: (1) `loadWorkspace` atomically clears prior active row + inserts new `active_workspace` row + writes `workspace.loaded` audit entry; (2) load event recorded in `audit_entries` with actor/spaceId/timestamp/isHeadless metadata (replayable); (3) `promptWorkspaceSelection` returns `needsSelection: true` with available spaces only when no workspace active (single confirmation, not recurring); (4) `assertWorkspaceForHeadless` throws with explicit WORKLOAD-04 reference (no silent default, no last-used fallback); (5) `isWriteTargetInWorkspace` deny-by-default for non-matching spaces + `recordCrossSpaceRead` writes policy-receipted audit row with fromSpaceId/toSpaceId/policyReceiptId.
+- Schema migration: v5→v6, added `active_workspace` table with `space_id` FK, `is_headless` flag, `cleared_at` for lifecycle, and two indexes (partial active + space lookup). Idempotent. Backward-compatible.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified zero git diff.
+- Verification: 76 tests pass (10 workspace + 58 policy + 8 MEMSEC-08); zero tsc errors under `src/lib/workspace`; GLM-5.2 validator PASS. Non-blocking: hardcoded `'default-tenant'` in audit INSERT (matches Phase 130/131 conventions), silent catch on best-effort audit write, defensive `ORDER BY id DESC LIMIT 1` in `getActiveWorkspace`.
 
 ### Roadmap Evolution (2026-07-07, Phase 131)
 
