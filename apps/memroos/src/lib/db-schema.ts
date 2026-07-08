@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 type SchemaMigration = {
   version: number;
@@ -109,6 +109,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 5,
     name: 'identity-lifecycle-and-owner-gates',
     up: applyIdentityLifecycleAndOwnerGatesSchema,
+  },
+  {
+    version: 6,
+    name: 'active-workspace',
+    up: applyActiveWorkspaceSchema,
   },
 ];
 
@@ -354,6 +359,30 @@ function applyIdentityLifecycleAndOwnerGatesSchema(db: Database.Database): void 
       ON owner_gate_approvals(owner_id, revoked_at);
     CREATE INDEX IF NOT EXISTS owner_gate_approvals_agent
       ON owner_gate_approvals(agent_id, revoked_at);
+  `);
+}
+
+function applyActiveWorkspaceSchema(db: Database.Database): void {
+  // Phase 137 / WORKLOAD-01..05: single-load workspace foundation.
+  //
+  // One row per "load workspace" event. The "active" workspace is the row
+  // with cleared_at IS NULL (only one is allowed at a time -- loadWorkspace
+  // marks the previous row cleared before inserting a new one). Headless
+  // runs surface via is_headless=1 so downstream tooling can distinguish
+  // automatic loads from interactive ones.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS active_workspace (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      loaded_by   TEXT NOT NULL,
+      loaded_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      is_headless INTEGER NOT NULL DEFAULT 0,
+      cleared_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS active_workspace_active
+      ON active_workspace(cleared_at) WHERE cleared_at IS NULL;
+    CREATE INDEX IF NOT EXISTS active_workspace_space
+      ON active_workspace(space_id, loaded_at DESC);
   `);
 }
 
