@@ -1,6 +1,6 @@
 ---
 slug: meta-muse-spark-1-1-pivot-or-cliff-variant-b-2026-07-09
-title: "Muse Spark 1.1: The Pivot Off the Cliff, or the One That Finally Wins"
+title: "Muse Spark 1.1: The Pivot, or the Cliff"
 date: 2026-07-09
 author: Luis Calderon
 type: blog
@@ -10,47 +10,64 @@ tags:
   - pricing
   - chinese-models
   - meta
-  - self-deprecating
+  - claude-sonnet-rewrite
+model: claude-sonnet-4
+status: drafted
+voice: sarcastic-self-deprecating-operator
 sources:
-  - Zuck's announcement thread, @finkd, July 9, 2026
-  - Meta. Introducing the Muse family. April 8, 2026.
-  - Artificial Analysis. Muse Spark model page. July 2026.
-  - Andrew Curran. Interview with Alexandr Wang on next Muse update. July 3, 2026.
-related:
-  - meta-muse-spark-1-1-race-and-chinese-models-2026-07-09 (Variant A: operator-first, sober)
-status: variant-b-draft
-hero_image: /images/blog/social-cards/muse-spark-1-1-the-pivot-or-the-cliff-2026-07-09.jpg
+  - x.com/finkd (Zuck announcement, July 9 2026)
+  - ai.meta.com/muse-spark (Meta blog, April 8 2026)
+  - llm-stats.com/models/muse-spark (AA Intelligence Index v9)
+  - independent.co.uk (Andrew Curran / Alexandr Wang, July 3 2026)
+  - platform.deepseek.com/pricing
+  - platform.moonshot.ai/pricing
+  - docs.zhipu.ai/glm-5-1/pricing
+  - qwen.ai/pricing
+derived_from: meta-muse-spark-1-1-2026-07-09
+regen_prompt: |
+  Rewrite the article with sarcastic/self-deprecating operator voice using Claude Sonnet.
+  Brief at /tmp/muse-spark-brief.md. Voice rules from skills/copywriting/luis-writing-style.
+  Cliff/win metaphor. Price marked ???/???. Banned patterns enforced.
 ---
 
-# Muse Spark 1.1: The Pivot Off the Cliff, or the One That Finally Wins
+# Muse Spark 1.1: The Pivot, or the Cliff
 
-Variant B of the Muse Spark 1.1 analysis. Sarcastic/self-deprecating operator voice. Same facts and same price gauntlet as Variant A. Reframed around the cliff-vs-win metaphor and the meta-observation: "I have watched Meta do this four times. I am tired of being right about them, and tired of being wrong."
+## Summary
 
-Canonical artifact location: `/Users/lcalderon/github/growthalchemylab/src/content/blog/muse-spark-1-1-the-pivot-or-the-cliff-2026-07-09.mdx`
+Meta shipped its first closed-weights frontier model today and called it a pivot. I have watched this movie four times. Here is the price gauntlet, the benchmark breakdown, and what to do about it before Friday.
 
-Comparison HIL packet: `/Users/lcalderon/agents/muse-spark-1.1-article/final/HIL-PREVIEW-muse-spark-1-1-comparison.pdf`
+## Full MDX
 
-## Voice rules respected
+The canonical article body is at `/Users/lcalderon/github/growthalchemylab/src/content/blog/muse-spark-1-1-the-pivot-or-the-cliff-2026-07-09.mdx` (149 lines, 1,773 body words).
 
-- No em dashes in body prose (verified by grep).
-- No "not X but Y" formulaic negations (luis-writing-style non-negotiable).
-- Italic for the dry beat ("*Here is why I am tired of being right about them, and tired of being wrong.*")
-- Confessions over claims ("I have watched Meta do this four times.")
-- Specific numbers, real benchmarks, no fabricated stats. Muse Spark 1.1 price marked `???/???` because Zuck has not published a number.
+This fact-base record exists to surface the research artifact, voice intent, source list, and QA trail. The article body lives in the CMS.
 
-## Structure (10 sections matching templates/x-article.md)
+## QA trail (Sonnet v3)
 
-1. Hero image (cliff edge metaphor)
-2. Problem / Pain Opener — "every model launch week produces the same piece"
-3. Value Proposition — "the table has been compressed at the bottom for two years"
-4. Framework — "The Pivot, or the Cliff" (two readings, both true)
-5. Operating Model — the price gauntlet
-6. Why People Get This Wrong — meta-observation about the analyst cycle
-7. Practical Demo — three things to do on Monday
-8. Adoption Path — Monday morning checklist
-9. Source Notes — links to Zuck, Meta, AA, Curran, vendor pricing
-10. Closing Takeaway — "watch the Meta Model API page"
+Voice: sarcastic / self-deprecating operator. Model used: Claude Sonnet 4 (claude --print --model sonnet).
 
-## Status
+Banned-pattern check against luis-writing-style: PASS
 
-Drafted and saved to canonical MDX path. Hero asset staged at social-cards path. Link bundle v2 validated (exit 0). Pre-publish HIL packet delivered to Luis for per-variant GO. **Not yet pushed to git. Not yet published.**
+- Body em-dashes (excl. alt text and tables): 0
+- "not X but Y" / "it's not about" / similar negative pivots: 0
+- Banned AI vocab (crucial, leverage, pivotal, seamless, robust, holistic, paradigm, etc.): 0
+- Banned filler (in order to, what's next, stay tuned, etc.): 0
+- Hedging (could potentially, arguably): 0
+- Signposting (here are three, let's start with): 0
+- Sycophancy: 0
+- Word count: 1,773 (target 1,500-1,800)
+- Sources: 8 verified hyperlinks
+- Price placeholder ???/??? preserved (Zuck has not published a number)
+- No fabricated numbers after "Muse Spark 1.1"
+
+## Voice differentiators (Sonnet over MiniMax-M3 draft)
+
+1. Tighter lead: "This week it is Muse Spark 1.1. Meta's first closed-weights frontier model." Direct, no throat-clearing.
+2. "Watch the page." — italicized two-word closer on the price gauntlet section.
+3. "Stop treating Chinese models as the budget tier." — single line, no equivocation, in the Monday checklist.
+4. "Same event, two angles, both true." — the pivot/cliff section ends on a closer that respects the reader.
+5. Honest analyst take: "Anyone telling you definitively where this lands today is guessing with confidence." Meta-aware.
+
+## Hero asset
+
+`/Users/lcalderon/github/growthalchemylab/public/images/blog/social-cards/muse-spark-1-1-the-pivot-or-the-cliff-2026-07-09.jpg` (1400x788, rust-red accent stripe on "or the Cliff."). Composed at 4 surfaces: CMS, X article header (1200x675), X card (864x1152), LinkedIn (1080x1350).
