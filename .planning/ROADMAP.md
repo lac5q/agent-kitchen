@@ -739,7 +739,7 @@ Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research"
 - [x] **Phase 143: Runtime Adapter Maturity Matrix** — FLEET-05, FLEET-06, FLEET-07, FLEET-08
 - [x] **Phase 144: LangGraph Peer Contract + Checkpoint Durability** — FLEET-09, FLEET-10, FLEET-11, FLEET-12
 - [x] **Phase 145: Pre-Execution Policy Gate (OPA/Rego)** — FLEET-13, FLEET-14, FLEET-15, FLEET-16
-- [ ] **Phase 146: Paperclip Tenant Integration + Cost Delegation** — FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
+- [x] **Phase 146: Paperclip Tenant Integration + Cost Delegation** — FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
 - [ ] **Phase 147: Secrets Broker + Kernel HA Path** — FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
 
 ### Phase 142: Fleet Architecture Lock + Validation Gate
@@ -795,19 +795,20 @@ Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research"
 **UI hint**: receipt in NOC governance strip / run ledger
 **Status**: COMPLETE / LOCKED (2026-07-09). Validator: beastmode-validator (GLM-5.2 BYOK) — PASS.
 
-### Phase 146: Paperclip Tenant Integration + Cost Delegation
+### Phase 146: Paperclip Tenant Integration + Cost Delegation — COMPLETE
 **Goal**: Treat Paperclip as a parallel tenant: contract + minimal integration + budget hard-stop ownership stays in Paperclip.
 **Milestone**: v8.5
 **Depends on**: Phase 142, Paperclip audit (`content/audits/paperclip-control-plane-audit-2026-07-08.md`)
 **Requirements**: FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
 **Success Criteria** (what must be TRUE):
-  1. `docs/integrations/paperclip.md` states ownership boundaries and rejects MemroOS re-implementation of board budgets
-  2. At least one live or contract-tested path: Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue
-  3. Cost/budget hard-stop is delegated to Paperclip (documented API/source of truth)
-  4. No multi-Paperclip federation attempted
-  5. Hermes adapter passivity (runtime must already exist) is documented so operators do not expect Paperclip to provision hosts
-**Plans**: 1 potential plan (`.planning/phases/146-paperclip-tenant-integration/146-01-PLAN.md`)
+  1. `docs/integrations/paperclip.md` states ownership boundaries and rejects MemroOS re-implementation of board budgets ✅
+  2. At least one live or contract-tested path: Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue ✅
+  3. Cost/budget hard-stop is delegated to Paperclip (documented API/source of truth) ✅
+  4. No multi-Paperclip federation attempted ✅
+  5. Hermes adapter passivity (runtime must already exist) is documented so operators do not expect Paperclip to provision hosts ✅
+**Plans**: 1 plan + 1 summary (`.planning/phases/146-paperclip-tenant-integration/146-01-PLAN.md`, `146-01-SUMMARY.md`)
 **UI hint**: optional NOC tenant strip; contract-first
+**Status**: COMPLETE / LOCKED (2026-07-09). No new runtime deps; MEMSEC-08 regression green; 24 new tests pass.
 
 ### Phase 147: Secrets Broker + Kernel HA Path
 **Goal**: Minimum secrets + HA/durability path so fleet is not permanently single-host SQLite without a restore story.

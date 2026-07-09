@@ -244,6 +244,63 @@ export interface PaperclipFleetResponse {
   timestamp: string;
 }
 
+// Paperclip tenant integration types (Phase 146 — FLEET-17..21)
+
+/**
+ * A Paperclip activity event ingested into MemroOS for NOC/audit/operations
+ * visibility. Paperclip owns the activity log; MemroOS mirrors a thin,
+ * redacted copy so the operator can see Paperclip-sourced fleet activity
+ * without leaving the MemroOS console.
+ *
+ * Secrets, adapter configs, auth headers, and env vars are NEVER included —
+ * the Paperclip audit confirmed these are redacted at source.
+ */
+export interface PaperclipActivityEvent {
+  /** Paperclip company id the event belongs to. */
+  companyId: string;
+  /** Paperclip actor type: "agent" | "user" | "system". */
+  actorType: "agent" | "user" | "system";
+  /** Paperclip actor id (agent id, user id, or "system"). */
+  actorId: string;
+  /** Paperclip action verb (e.g. "agent.heartbeat", "issue.checked_out", "budget.warning"). */
+  action: string;
+  /** Paperclip entity type (e.g. "agent", "issue", "budget", "approval"). */
+  entityType: string;
+  /** Paperclip entity id. */
+  entityId: string;
+  /** Optional human-readable summary of the activity. */
+  summary?: string;
+  /** ISO 8601 timestamp of the event as recorded by Paperclip. */
+  timestamp: string;
+}
+
+/**
+ * Thin budget summary returned by the MemroOS budget delegation endpoint.
+ * The hard-stop (monthly auto-pause at 100%) stays in Paperclip — MemroOS
+ * does NOT re-implement it. This surface is read-only and for operator
+ * visibility only.
+ */
+export interface PaperclipBudgetSummary {
+  /** Paperclip company id. */
+  companyId: string;
+  /** Budget scope: "company" | "agent" | "project". */
+  scope: "company" | "agent" | "project";
+  /** Optional scope id (agent id or project id) when scope is not "company". */
+  scopeId: string | null;
+  /** Current monthly spend in the budget's currency unit. */
+  spent: number;
+  /** Monthly budget cap. */
+  limit: number;
+  /** Spend ratio (0..1+). Values >= 1.0 mean hard-stop is active in Paperclip. */
+  utilization: number;
+  /** Budget status as reported by Paperclip: "ok" | "warning" | "hard_stop". */
+  status: "ok" | "warning" | "hard_stop";
+  /** ISO 8601 timestamp of the budget snapshot. */
+  asOf: string;
+  /** Explicit marker that hard-stop enforcement is delegated to Paperclip. */
+  hardStopOwner: "paperclip";
+}
+
 export interface ToolAttentionContextPack {
   task_type?: string;
   repo?: string;

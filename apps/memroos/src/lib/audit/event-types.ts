@@ -92,6 +92,10 @@ export const AUDIT_EVENT_TYPES = {
   // Policy engine (Phase 128, POLGOV-01/02)
   /** A decision (retrieval/memory/knowledge/capability) was evaluated through the shared policy engine. */
   POLICY_DECISION: "policy.decision",
+
+  // Paperclip tenant integration (Phase 146, FLEET-18)
+  /** A Paperclip activity event was ingested into MemroOS for NOC/audit visibility. */
+  PAPERCLIP_ACTIVITY: "paperclip.activity",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -114,6 +118,8 @@ export const ENTITY_TYPES = {
   KNOWLEDGE_VAULT: "knowledge_vault",
   /** A shared-policy-engine decision (Phase 128, POLGOV-01/02). */
   POLICY_DECISION: "policy_decision",
+  /** A Paperclip tenant entity (company, agent, issue, budget) observed via activity ingestion (Phase 146, FLEET-18). */
+  PAPERCLIP: "paperclip",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

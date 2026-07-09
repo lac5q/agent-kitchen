@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.5
 milestone_name: Agent Fleet Plane
 status: in_progress
-stopped_at: Phase 145 complete (2026-07-09), Phase 146 next (Paperclip Tenant Integration, FLEET-17..20)
-last_updated: "2026-07-09T17:05:00.000Z"
+stopped_at: Phase 146 complete (2026-07-09), Phase 147 next (Secrets Broker + Kernel HA Path, FLEET-22..26)
+last_updated: "2026-07-09T18:30:00.000Z"
 progress:
   total_phases: 67
   completed_phases: 46
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 145 complete, Phase 146 next
-Plan: FLEET-13..16 locked (Pre-Execution Policy Gate complete); next: FLEET-17..20 Paperclip Tenant Integration (cost delegation, company/budget boundaries)
-Status: v8.5 IN PROGRESS (Phase 145 complete/locked); v8.4 Project-Centric Operator UX COMPLETE; v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
+Phase: 146 complete, Phase 147 next
+Plan: FLEET-17..21 locked (Paperclip Tenant Integration complete); next: FLEET-22..26 Secrets Broker + Kernel HA Path
+Status: v8.5 IN PROGRESS (Phase 146 complete/locked); v8.4 Project-Centric Operator UX COMPLETE; v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
 
 ## Session Continuity
 
-Last session: 2026-07-09T17:05:00.000Z
-Stopped at: Phase 145 complete (Pre-Execution Policy Gate locked, FLEET-13..16 satisfied); Phase 146 next (Paperclip Tenant Integration, FLEET-17..20).
+Last session: 2026-07-09T18:30:00.000Z
+Stopped at: Phase 146 complete (Paperclip Tenant Integration locked, FLEET-17..21 satisfied); Phase 147 next (Secrets Broker + Kernel HA Path, FLEET-22..26).
 Resume file: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`
-Next action: Execute Phase 146 — Paperclip Tenant Integration (cost delegation, company/budget boundaries, FLEET-17..20). Phase 147 (Secrets Fleet HA, FLEET-21..26) follows. Post-v8.5 milestone candidates (renumbered 2026-07-08): v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
+Next action: Execute Phase 147 — Secrets Broker + Kernel HA Path (FLEET-22..26). This is the final v8.5 phase. Post-v8.5 milestone candidates (renumbered 2026-07-08): v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,12 @@ Next action: Execute Phase 146 — Paperclip Tenant Integration (cost delegation
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-09, Phase 146 complete)
+
+- Phase 146 (v8.5, FLEET-17..21) completed and locked. Paperclip Tenant Integration + Cost Delegation: ownership boundary contract pinned at `docs/integrations/paperclip.md` (Paperclip owns companies/issues/budgets/board/activity; MemroOS owns registry/memory/fleet governance; no federation; passive adapters; cost hard-stop delegated to Paperclip). Two integration paths shipped: `POST /api/paperclip/activity` ingests Paperclip activity events into the MemroOS audit chain (`audit_entries` with `event_type=paperclip.activity`, `entity_type=paperclip`) with defense-in-depth secret redaction; `GET /api/paperclip/budget` proxies a thin budget summary from Paperclip with `hardStopOwner: "paperclip"` on every response (read-only, never pauses agents). Types added: `PaperclipActivityEvent`, `PaperclipBudgetSummary` in `types/index.ts`; `PAPERCLIP_ACTIVITY` event type + `PAPERCLIP` entity type in `audit/event-types.ts`. Env vars added to `.env.example` as placeholders (`PAPERCLIP_BASE_URL`, `PAPERCLIP_STATUS_PATH`, `PAPERCLIP_DISPATCH_PATH`, `PAPERCLIP_BUDGET_PATH`). Tests: 24 new tests (12 activity + 12 budget) covering ingestion, delegation, no secret leaks, and graceful degradation. No new runtime npm deps. MEMSEC-08 regression corpus remains green. No external model validation was run in this session (validator unavailable); implementation is self-verified via typecheck, lint, tests, build, and MEMSEC-08.
+- Non-blocking findings logged in `.planning/phases/146-paperclip-tenant-integration/146-01-SUMMARY.md`: budget endpoint proxies the default budget surface (no per-scope query params yet), activity endpoint is single-event (no batching), and no external model validation was run.
+- Phase 146 status moved from potential plan to complete/locked. Phase 147 (Secrets Broker + Kernel HA Path, FLEET-22..26) is now the next and final executable phase for v8.5.
 
 ### Roadmap Evolution (2026-07-09, Phase 145 complete)
 

@@ -261,11 +261,11 @@
 
 ### Paperclip tenant + cost delegation
 
-- [ ] **FLEET-17**: `docs/integrations/paperclip.md` states ownership boundaries: Paperclip owns companies/issues/budgets/board; MemroOS owns cross-runtime registry/memory/fleet governance.
-- [ ] **FLEET-18**: At least one integration path exists (contract-tested or live): Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue.
-- [ ] **FLEET-19**: Fleet cost/budget hard-stop is **delegated to Paperclip** (source of truth documented); MemroOS does not re-implement monthly hard-stop auto-pause.
-- [ ] **FLEET-20**: Multi-Paperclip server federation is explicitly out of scope and documented as Paperclip V1 exclusion.
-- [ ] **FLEET-21**: Passive Hermes/OpenClaw adapter behavior is documented (runtime must already exist; Paperclip does not provision agent hosts).
+- [x] **FLEET-17**: `docs/integrations/paperclip.md` states ownership boundaries: Paperclip owns companies/issues/budgets/board; MemroOS owns cross-runtime registry/memory/fleet governance.
+- [x] **FLEET-18**: At least one integration path exists (contract-tested or live): Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue.
+- [x] **FLEET-19**: Fleet cost/budget hard-stop is **delegated to Paperclip** (source of truth documented); MemroOS does not re-implement monthly hard-stop auto-pause.
+- [x] **FLEET-20**: Multi-Paperclip server federation is explicitly out of scope and documented as Paperclip V1 exclusion.
+- [x] **FLEET-21**: Passive Hermes/OpenClaw adapter behavior is documented (runtime must already exist; Paperclip does not provision agent hosts).
 
 ### Secrets + HA
 
