@@ -269,11 +269,11 @@
 
 ### Secrets + HA
 
-- [ ] **FLEET-22**: Adapter API keys have a documented secrets path (broker/rotation); secrets never land in git or audit receipts.
-- [ ] **FLEET-23**: MemroOS kernel durability path (litestream or Postgres) is documented with one executed restore drill.
-- [ ] **FLEET-24**: LangGraph checkpoint durability is aligned with FLEET-11.
-- [ ] **FLEET-25**: Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit for 50-host fleets) is documented as **not v8.5**.
-- [ ] **FLEET-26**: Auto-provision of new agent hosts on demand remains explicitly out of scope (industry gap; none of Paperclip/LangGraph/Archestra own it cleanly).
+- [x] **FLEET-22**: Adapter API keys have a documented secrets path (broker/rotation); secrets never land in git or audit receipts.
+- [x] **FLEET-23**: MemroOS kernel durability path (litestream or Postgres) is documented with one executed restore drill.
+- [x] **FLEET-24**: LangGraph checkpoint durability is aligned with FLEET-11.
+- [x] **FLEET-25**: Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit for 50-host fleets) is documented as **not v8.5**.
+- [x] **FLEET-26**: Auto-provision of new agent hosts on demand remains explicitly out of scope (industry gap; none of Paperclip/LangGraph/Archestra own it cleanly).
 
 ## ONTO Governed Emergent Ontology (Proposed)
 

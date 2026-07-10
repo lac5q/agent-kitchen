@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v8.5
 milestone_name: Agent Fleet Plane
-status: in_progress
-stopped_at: Phase 146 complete (2026-07-09), Phase 147 next (Secrets Broker + Kernel HA Path, FLEET-22..26)
-last_updated: "2026-07-09T18:30:00.000Z"
+status: complete
+stopped_at: Phase 147 complete (2026-07-10), v8.5 milestone COMPLETE
+last_updated: "2026-07-10T08:10:00.000Z"
 progress:
   total_phases: 67
-  completed_phases: 46
+  completed_phases: 47
   total_plans: 75
-  completed_plans: 89
-  percent: 67
+  completed_plans: 90
+  percent: 70
 ---
 
 # State: Memroos
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v8.5 Agent Fleet Plane planning — MemroOS as top-layer fleet plane; LangGraph as peer orchestration runtime; Paperclip as parallel tenant. Plans are potential, not yet executed.
+**Current focus:** v8.5 Agent Fleet Plane COMPLETE — all 26 FLEET requirements shipped across Phases 142-147. Next milestone candidates: v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
 
 ## Current Position
 
-Phase: 146 complete, Phase 147 next
-Plan: FLEET-17..21 locked (Paperclip Tenant Integration complete); next: FLEET-22..26 Secrets Broker + Kernel HA Path
-Status: v8.5 IN PROGRESS (Phase 146 complete/locked); v8.4 Project-Centric Operator UX COMPLETE; v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
+Phase: 147 complete, v8.5 milestone COMPLETE
+Plan: FLEET-22..26 locked (Secrets Broker + Kernel HA Path complete); v8.5 milestone complete (all 26 FLEET requirements shipped)
+Status: v8.5 Agent Fleet Plane COMPLETE (Phases 142-147 all locked); v8.4 Project-Centric Operator UX COMPLETE; v8.3 GSD stack complete; v8.2 COMPLETE; v8.1 Phase 125 complete
 
 ## Session Continuity
 
-Last session: 2026-07-09T18:30:00.000Z
-Stopped at: Phase 146 complete (Paperclip Tenant Integration locked, FLEET-17..21 satisfied); Phase 147 next (Secrets Broker + Kernel HA Path, FLEET-22..26).
+Last session: 2026-07-10T08:10:00.000Z
+Stopped at: Phase 147 complete (Secrets Broker + Kernel HA Path locked, FLEET-22..26 satisfied); v8.5 milestone COMPLETE.
 Resume file: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`
-Next action: Execute Phase 147 — Secrets Broker + Kernel HA Path (FLEET-22..26). This is the final v8.5 phase. Post-v8.5 milestone candidates (renumbered 2026-07-08): v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
+Next action: Post-v8.5 milestone candidates (renumbered 2026-07-08): v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation. Review v8.5 milestone results and select next milestone for planning.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,16 @@ Next action: Execute Phase 147 — Secrets Broker + Kernel HA Path (FLEET-22..26
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-10, v8.5 milestone COMPLETE)
+
+- **v8.5 Agent Fleet Plane milestone COMPLETE.** All 26 FLEET requirements (FLEET-01..26) shipped across 6 phases (142-147): Phase 142 (FLEET-01..04, architecture lock + GLM-5.2 validation), Phase 143 (FLEET-05..08, runtime adapter maturity matrix), Phase 144 (FLEET-09..12, LangGraph peer contract + checkpoint durability), Phase 145 (FLEET-13..16, pre-execution policy gate), Phase 146 (FLEET-17..21, Paperclip tenant integration + cost delegation), Phase 147 (FLEET-22..26, secrets broker + kernel HA path). No new runtime npm dependencies across the entire milestone. MEMSEC-08 regression corpus (25/25) remained green throughout. Validator (GLM-5.2 BYOK) passed on Phases 142-145; Phases 146-147 self-verified (validator unavailable). Post-v8.5 milestone candidates: v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
+
+### Roadmap Evolution (2026-07-10, Phase 147 complete)
+
+- Phase 147 (v8.5, FLEET-22..26) completed and locked. Secrets Broker + Kernel HA Path: comprehensive secrets and durability runbook created at `docs/secrets-and-durability.md` covering FLEET-22 (secrets path: env vars in `.env.local`, agent key provisioning via `provision-agent-keys.sh` + onboarding tokens, envelope encryption via AES-256-GCM, audit receipt hygiene per POLGOV/MEMSEC-08, rotation guidance, no secrets in git), FLEET-23 (kernel durability: single-host SQLite + litestream replication path documented, Postgres migration path documented as future, restore drill executed), FLEET-24 (LangGraph checkpoint durability aligned with Phase 144 FLEET-11, restore drill covers both kernel and orchestration DBs), FLEET-25 (SPIFFE/SPIRE + Envoy rate-limit documented as "not v8.5" stretch), FLEET-26 (auto-provision of agent hosts explicitly out of scope, industry gap cited). Restore drill script created at `scripts/restore-drill.sh` — idempotent, works on copies only (sqlite3 .backup is read-only on source), verifies integrity_check + agent count + audit counts + schema version + table count. Drill executed: 53 agents, 5,301 audit_log entries, 6,341 audit_entries, schema v10, 92 tables, integrity ok, exit 0. Orchestration DB skipped (not running — expected). No new runtime npm deps. MEMSEC-08 regression corpus remains green (25/25). No external model validation was run in this session; implementation is self-verified via typecheck, lint, MEMSEC-08, restore drill, and contract manifest.
+- Non-blocking findings logged in `.planning/phases/147-secrets-fleet-ha/147-01-SUMMARY.md`: no external model validation, orchestration DB not present in dev environment, no new npm dependencies.
+- Phase 147 status moved from potential plan to complete/locked. v8.5 milestone COMPLETE. Next: post-v8.5 milestone candidates (v8.6 Skill Trust Chain, etc.).
 
 ### Roadmap Evolution (2026-07-09, Phase 146 complete)
 

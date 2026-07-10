@@ -740,7 +740,7 @@ Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research"
 - [x] **Phase 144: LangGraph Peer Contract + Checkpoint Durability** — FLEET-09, FLEET-10, FLEET-11, FLEET-12
 - [x] **Phase 145: Pre-Execution Policy Gate (OPA/Rego)** — FLEET-13, FLEET-14, FLEET-15, FLEET-16
 - [x] **Phase 146: Paperclip Tenant Integration + Cost Delegation** — FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
-- [ ] **Phase 147: Secrets Broker + Kernel HA Path** — FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
+- [x] **Phase 147: Secrets Broker + Kernel HA Path** — FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
 
 ### Phase 142: Fleet Architecture Lock + Validation Gate
 **Goal**: Make the MemroOS-top / LangGraph-peer / Paperclip-tenant decision binding in product docs and GSD, with independent second-opinion model validation (not MiniMax self-validation) and scenario S12 recorded.
@@ -810,19 +810,20 @@ Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research"
 **UI hint**: optional NOC tenant strip; contract-first
 **Status**: COMPLETE / LOCKED (2026-07-09). No new runtime deps; MEMSEC-08 regression green; 24 new tests pass.
 
-### Phase 147: Secrets Broker + Kernel HA Path
+### Phase 147: Secrets Broker + Kernel HA Path — COMPLETE
 **Goal**: Minimum secrets + HA/durability path so fleet is not permanently single-host SQLite without a restore story.
 **Milestone**: v8.5
 **Depends on**: Phase 144 (checkpoint durability alignment), Phase 146 optional
 **Requirements**: FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
 **Success Criteria** (what must be TRUE):
-  1. Secrets path for adapter keys documented (and used for at least one key class); no secrets in git/receipts
-  2. Kernel durability path (litestream or Postgres) documented with one executed restore drill
-  3. LangGraph checkpoint durability aligned with Phase 144
-  4. Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit) documented as **not v8.5**
-  5. Auto-provision new agent hosts remains explicitly out of scope (industry gap)
-**Plans**: 1 potential plan (`.planning/phases/147-secrets-fleet-ha/147-01-PLAN.md`)
+  1. Secrets path for adapter keys documented (and used for at least one key class); no secrets in git/receipts ✅
+  2. Kernel durability path (litestream or Postgres) documented with one executed restore drill ✅
+  3. LangGraph checkpoint durability aligned with Phase 144 ✅
+  4. Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit) documented as **not v8.5** ✅
+  5. Auto-provision new agent hosts remains explicitly out of scope (industry gap) ✅
+**Plans**: 1 plan + 1 summary + 1 drill log (`.planning/phases/147-secrets-fleet-ha/147-01-PLAN.md`, `147-01-SUMMARY.md`, `restore-drill-log.md`)
 **UI hint**: no
+**Status**: COMPLETE / LOCKED (2026-07-10). No new runtime deps; MEMSEC-08 regression green (25/25); restore drill passed (53 agents, 5301 audit_log, 6341 audit_entries, schema v10, 92 tables, integrity ok). v8.5 milestone COMPLETE — all 26 FLEET requirements shipped across Phases 142-147.
 
 ---
 
