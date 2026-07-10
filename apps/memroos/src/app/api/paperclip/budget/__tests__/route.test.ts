@@ -157,7 +157,7 @@ describe("GET /api/paperclip/budget — graceful degradation", () => {
 
 describe("GET /api/paperclip/budget — no secret leaks", () => {
   it("does not expose PAPERCLIP_BASE_URL or upstream auth in the response", async () => {
-    process.env.PAPERCLIP_BASE_URL = "http://PLACEHOLDER:PLACEHOLDER@localhost:3100";
+    process.env.PAPERCLIP_BASE_URL = "http://localhost:3100";
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(JSON.stringify(MOCK_BUDGET_PAYLOAD), { status: 200 }))
