@@ -85,6 +85,10 @@ Rule of thumb:
 - If it runs once, validates state, installs config, or produces a report, put it under `scripts`.
 - If multiple runtimes need the same contract, define the schema or manifest once and generate or validate consumers from it.
 
+## Fleet plane
+
+MemroOS acts as the top-layer agent fleet plane across all runtimes (Hermes, Claude Code, Codex, OpenClaw, Cursor, Qwen, Gemini, ZCode, OpenCode). LangGraph is a peer orchestration runtime inside the MemroOS boundary, not a competing control plane. Paperclip is treated as a parallel product plane that subscribes as one tenant via its existing adapters (`hermes_gateway`, `openclaw-gateway`, MCP, A2A). This split keeps registry, governance, memory, and NOC ownership in MemroOS while delegating per-company task lifecycle, budget hard-stop, and board UI to Paperclip. See the binding architecture decision in [`content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`](../content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md), the validation artifact in [`content/architecture/memroos-fleet-plane-validation-glm52-2026-07-09.md`](../content/architecture/memroos-fleet-plane-validation-glm52-2026-07-09.md), and the honest adapter maturity view in [`docs/runtime-adapter-maturity.md`](runtime-adapter-maturity.md).
+
 ## Deployment Boundaries
 
 Recommended startup deployment:
@@ -110,6 +114,25 @@ Cloud deployment:
 | Qdrant Cloud | mem0 | Vector memory |
 | Neo4j | mem0 / MemRoOS graph routes | Graph memory |
 | Orchestration SQLite | LangGraph service | Checkpoints and HIL state |
+
+### SQLite Ownership Split
+
+MemRoOS and the LangGraph orchestration service each own separate SQLite files
+and never open each other's database directly. Communication is always over HTTP.
+
+| SQLite file | Owner | Path | Tables / Contents |
+| --- | --- | --- | --- |
+| MemRoOS canonical registry | MemRoOS kernel | `apps/memroos/data/` (or `SQLITE_DB_PATH`) | Registry, A2A tasks, audit, episodic memory, agent bus, telemetry |
+| LangGraph checkpoints | LangGraph service | `data/orchestration.db` (or `ORCHESTRATION_DB_PATH`) | `checkpoints`, `writes` (LangGraph `SqliteSaver`); `orchestration_runs`, `orchestration_lineage`, `orchestration_hil_decisions` (MemRoOS engine layer) |
+
+Within `data/orchestration.db`, the `checkpoints` and `writes` tables are
+created and managed exclusively by LangGraph's `SqliteSaver`. The
+`orchestration_runs`, `orchestration_lineage`, and `orchestration_hil_decisions`
+tables are created and managed by the MemRoOS engine layer
+(`OrchestrationStore`). They share a single file for operational simplicity and
+WAL-mode concurrent access, but ownership is disciplined: each layer only writes
+its own tables. See the [LangGraph Peer Contract](integrations/langgraph.md#checkpoint-store-layout)
+for the full table-level ownership breakdown and durability path.
 
 ## Design Choices
 

@@ -1,0 +1,49 @@
+# Litestream replication configuration for the orchestration SQLite DB.
+#
+# Phase 144 — FLEET-11: minimum checkpoint durability via litestream sidecar.
+#
+# Copy this file to services/orchestration/litestream.yml and fill in the
+# endpoint credentials via environment variables. NEVER hardcode secrets here.
+#
+# Usage:
+#   litestream replicate -config services/orchestration/litestream.yml
+#
+# Restore:
+#   litestream restore -config services/orchestration/litestream.yml \
+#     -o data/orchestration.db
+#
+# See docs/integrations/langgraph.md → "Checkpoint Durability" for full restore
+# drill steps.
+#
+# Docker Compose: run litestream as a sidecar sharing the orchestration-data
+# volume. Example service stanza:
+#
+#   orchestration-litestream:
+#     image: litestream/litestream:0.3
+#     command: ["replicate", "-config", "/etc/litestream.yml"]
+#     volumes:
+#       - orchestration-data:/data
+#       - ./services/orchestration/litestream.yml:/etc/litestream.yml:ro
+#     environment:
+#       LITESTREAM_ACCESS_KEY_ID: ${LITESTREAM_ACCESS_KEY_ID}
+#       LITESTREAM_SECRET_ACCESS_KEY: ${LITESTREAM_SECRET_ACCESS_KEY}
+#     depends_on:
+#       orchestration:
+#         condition: service_healthy
+
+dbs:
+  - path: /data/orchestration.db
+    replicas:
+      # S3-compatible endpoint (MinIO, Cloudflare R2, AWS S3, Backblaze B2, etc.)
+      # Use environment variables for credentials — do not hardcode.
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: orchestration
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+        # Sync interval: how often litestream flushes WAL frames to the replica.
+        # Default is 1s; increase for lower bandwidth, decrease for lower RPO.
+        sync-interval: 1s

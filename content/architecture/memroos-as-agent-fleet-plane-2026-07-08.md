@@ -4,8 +4,8 @@ author: "Alba (Hermes) for Luis Calderon"
 date: 2026-07-08
 type: architecture-decision
 tags: [memroos, paperclip, langgraph, fleet-control, governance, agent-runtime, archestra]
-status: draft-for-review
-model: MiniMax-M3 (Alba); GLM-5.2 validation provenance uncertain
+status: reviewed
+model: MiniMax-M3 (Alba); GLM-5.2 validation via beastmode-validator (BYOK)
 sources:
   - ~/github/memroos/docs/architecture.md
   - ~/github/memroos/docs/agent-onboarding.md
@@ -79,6 +79,7 @@ From the research:
 - **No OSS project named "Gardner" / "Gardnr" / "Garden"** exists as an agent orchestrator. Closest collisions are unrelated: Vertex AI Agent Garden (cloud-only starter-agent library), `garden-io/garden` (Kubernetes deployment tool), SAP Gardener (Kubernetes-as-a-Service). None fill this role.
 - **Archestra** is the closest functional cousin to Paperclip for governance + multi-machine agent plane (K8s operator, MCP gateway, Dual-LLM/Lethal-Trifecta guardrails, SSO/RBAC, cost limits), but it is **AGPLv3 + Enterprise dual license** — a real constraint if Epilogue ever ships a hosted offering. Adopting it would also mean re-plumbing all nine runtime adapters against it.
 - **LangGraph** is a runtime/framework, not a fleet control plane. Using it as the top layer means re-implementing what MemroOS already ships.
+- **Microsoft Agent Governance Toolkit** (MIT, public preview) is a preview-stage framework for agent governance patterns, not a substitute for a fleet control plane. It does not replace MemroOS's registry, memory routing, or multi-runtime governance.
 - **CrewAI Agent Control Plane** is a cloud (AMP) feature, not self-hostable OSS. Rules editing requires Enterprise/Ultra plan.
 - **AWS Bedrock AgentCore, Azure AI Foundry Agent Service, Vertex AI Agent Engine** are cloud-only proprietary services. They are useful as governance reference implementations, not as substitutes.
 - **Microsoft AutoGen Studio** is deprecated. Folded into Microsoft Agent Framework, which is a framework not a control plane.
@@ -133,15 +134,17 @@ Adding any of these as a new layer between MemroOS and the runtimes would (a) du
                  └─────────────────┘
 ```
 
-## Risks and gaps (from independent validation, provenance uncertain)
+## Risks and gaps (from independent validation, GLM-5.2 PASS)
 
-A second-opinion validator reviewed this architecture and flagged five concerns that are real and should be tracked:
+A second-opinion validator (`beastmode-validator` running GLM-5.2 via BYOK) reviewed this architecture on 2026-07-09 and flagged five concerns that are real and should be tracked:
 
 1. **MemroOS single-host coupling** — `architecture.md:92` says MemroOS runs on one host. The kernel + LangGraph service + canonical registry SQLite are not designed for HA. Before scaling beyond one operator laptop, the canonical registry needs replication (litestream + S3, or migrate to Postgres) and the operator key store needs split-brain protection. *Mitigation*: defer until fleet grows past 5 machines; revisit at 10+.
 2. **Adapter maturity is not uniform** — the nine-runtime reach of `install-agent-integrations.sh` is impressive, but the runtime adapters (Hermes gateway, Claude Code, OpenClaw gateway) are not at the same maturity level. Paperclip's Hermes and OpenClaw adapters are the most mature (built-in, documented); others are thinner. *Mitigation*: publish an adapter maturity matrix in `~/github/memroos/docs/` before the next phase.
 3. **Pre-execution policy hook is under-specified** — the kernel has `/api/audit`, `/api/classification`, `/api/evidence`, but the runtime adapters are what actually execute tool calls. Audit-after-the-fact is not "operating system" — that is a logger. *Mitigation*: add a pre-execution policy gate using Open Policy Agent (Rego) at the adapter boundary, so policy is data not code per adapter.
 4. **Fleet-level cost/budget ownership is ambiguous** — the kernel has per-agent telemetry (`lib/efficiency-telemetry.ts`, `/api/model-usage`) but no fleet-level cost router or budget hard-stop. Paperclip already ships "Budget hard-stop auto-pause" per its AGENTS.md. *Mitigation*: MemroOS should explicitly delegate fleet cost enforcement to Paperclip via MCP/A2A — not re-implement it. Write the contract down.
 5. **LangGraph checkpoint store ownership split** — MemroOS owns SQLite for registry/audit; LangGraph service owns its own SQLite for checkpoints. If the LangGraph host is lost, in-flight graph state is lost. *Mitigation*: pin the contract in `integrations/langgraph.md` (input schema, output schema, checkpoint layout, HIL protocol, failure modes).
+
+**Phase 145 reconciliation note.** Phase 145 must build the pre-execution policy gate on top of the already-shipped POLGOV engine (POLGOV-01..05) so the fleet does not end up with two policy engines; the adapter-boundary gate should wrap or delegate to the existing declarative policy engine rather than replace it.
 
 ## Required follow-up actions
 
@@ -163,5 +166,6 @@ The `agent-knowledge` repo (indexed by GitNexus) should remain the canonical kno
 ## Provenance notes
 
 - **Architecture decision** authored by Alba (MiniMax-M3) on 2026-07-08 in Discord #devops thread "Agent fleet control tooling research".
-- **Independent validation** by a second-opinion model reviewer was attempted on GLM-5.2 but `GLM_API_KEY` was unset in this shell, so the actual model that produced `/tmp/glm52-verdict.json` is **unconfirmed**. Treat the validation as advisory, not authoritative. The five risks above were corroborated by direct repo inspection, so they hold regardless of validator identity.
+- **Independent validation status — ACHIEVED.** On 2026-07-09 the `beastmode-validator` custom droid ran a second-opinion review using **GLM-5.2 (BYOK)** and returned verdict **PASS**. The validator confirmed the MemroOS-top / LangGraph-peer / Paperclip-tenant topology is consistent, the rejected alternatives are correctly excluded, and the five risks listed above are non-blocking follow-up work for Phases 143–147. The full validation artifact is filed at `content/architecture/memroos-fleet-plane-validation-glm52-2026-07-09.md`.
+- **Historical context (2026-07-08):** The first attempt at GLM-5.2 validation failed because `GLM_API_KEY` was unset, and a follow-up probe confirmed the initial validator run was actually served by **MiniMax-M3** — the same model that authored the decision. That earlier run was therefore self-validation, not independent review. The 2026-07-09 run closed that gap.
 - **Repo evidence** is real: file:line citations point at the working trees at `~/github/memroos` and `~/github/paperclip` (master branch, commit `ad961227f`). All other claims about third-party projects were verified against canonical GitHub LICENSE files, official docs, and community discourse (Reddit, HN, X).

@@ -30,6 +30,54 @@ All durable agent knowledge **must** be written to MemroOS via MCP. MemroOS is g
 - NEVER leave durable work product only in session-scoped paths (`~/.hermes/hermes-agent/reports/`, `/tmp/`, Discord messages).
 - NEVER write to `~/github/knowledge/` directly via `write_file` or shell when MemroOS MCP is available. Direct file I/O bypasses gatekeeper validation and audit logging.
 
+## Where Class Lessons Live: Skills > Memory (operator directive 2026-07-09)
+
+The user has explicitly directed that **durable memory for "how this class of work goes"** belongs in **skills**, not in MEMORY.md or persistent memory. Skills are git-backed, version-controlled, diff-able, and re-loadable across agents. Persistent memory is a per-session injected snippet with a hard char budget; it should never duplicate what a skill already says.
+
+### Always Do
+
+- **MUST encode class-level lessons (procedures, pitfalls, gotchas, "don't repeat this" corrections) into the relevant skill.** The skill's `SKILL.md` or a `references/*.md` under the skill is the durable home. Memo­ry never receives a lesson the skill can already explain.
+- **MUST cite the skill in your reply** when invoking a skill, per the "Skill Check (MANDATORY)" rule.
+- **MUST keep MEMORY.md lean.** Reserved for operator facts that are true across every session and that no skill would reasonably contain (user identity, family, global tool quirks, environment constants). If a memory entry points to a skill, the entry is correctly a one-line pointer — not a paragraph that duplicates the skill.
+- **When you find yourself about to `memory.add` something that already lives in a skill, stop.** Drop the add, and instead verify the skill is up-to-date.
+
+### Never Do
+
+- NEVER persist a class lesson (procedure / framework / pitfall / "make sure you don't do X again" correction) to MEMORY.md if a skill file is the natural home. Persistent memory is finite and is for user-profile / environment facts.
+- NEVER use `memory.add` as a substitute for fixing a skill. The right response to "I keep doing X wrong" is to update or create a skill — not to add a memory entry that says "don't do X."
+- NEVER let MEMORY.md grow past ~50% of its char budget. If you're approaching the cap, the cure is to compress or remove, not to add.
+
+### Correct Flow
+
+```
+Class lesson surfaces (a bug, a pitfall, a user correction, a "don't repeat this")
+   ↓
+Update the relevant skill (SKILL.md or references/*.md)
+   ↓
+(Only if it crosses sessions and is NOT a class lesson) → memory.add
+   ↓
+   ↓ (parallel — does NOT replace the skill update)
+   ↓
+mcp_memroos_knowledge_write (for full durable work product: RCAs, benchmarks, comparisons)
+```
+
+### Anti-pattern examples (rejected 2026-07-09)
+
+- Adding `Podcast show-art 3000×3000 + Transistor upload pipeline` to MEMORY.md when the same recipe already exists in `content-publishing-os/references/...` — reject; the skill is the home.
+- Adding `clarify() batching rule: one combined per batch, not N parallel` to MEMORY.md when `devops-service-operations` §consent-batching already encodes it — reject; the skill is the home.
+- Adding `cross-model delegation has zero provenance` to MEMORY.md when `agent-operations/references/cross-model-delegation-provenance.md` already encodes it — reject; the skill is the home.
+- A memory entry MAY be a one-line pointer like `cross-model delegation → agent-operations/references/cross-model-delegation-provenance.md`. A two-line rule with the same content as the skill is duplication.
+
+### When memory IS the right home
+
+- User identity: name, role, team, key relationships.
+- Family / personal: daughter Maia, softball team rules, etc. (operator-curated).
+- Environment: machine paths, OS quirks, tool creds locations.
+- Stable preferences: voice default, profile selection, crosspost defaults.
+- Cross-session invariants that no single skill would own.
+
+Everything else: skill first, memroos second, memory last (and brief).
+
 ### End-of-Task Persist Checklist (mandatory for research/analysis work)
 
 Before sending your final reply to the user on any task that produced research, competitive analysis, market positioning, comparison content, benchmark results, or root-cause analysis:
