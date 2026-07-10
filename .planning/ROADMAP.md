@@ -40,7 +40,7 @@
 - ✅ **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (completed 2026-07-07; POLGOV-01..05 + TEAMSCALE-01..06 + MSIQ-01..03 shipped; policy engine with dimensions/shadow/CI, spaces + knowledge labels, identity lifecycle + delegation chains + NOC + owner gates)
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
 - ✅ **v8.4 Project-Centric Operator UX** — Phases 137-141 (completed 2026-07-08; MemClaw operator-UX parity: workspace load, write rules, document directory, `is_shared`, cache admin, save-artifact gate; 22 requirement IDs shipped)
-- 🔜 **v8.5 Agent Fleet Plane** — Phases 142-147 (planned 2026-07-08; MemroOS as top-layer fleet plane across runtimes, LangGraph as peer orchestration runtime, Paperclip as parallel tenant; FLEET-01..26; sources: Discord #devops fleet research + Paperclip audit + OSS control-plane survey)
+- ✅ **v8.5 Agent Fleet Plane** — Phases 142-147 (completed 2026-07-10; MemroOS as top-layer fleet plane across runtimes, LangGraph as peer orchestration runtime, Paperclip as parallel tenant; FLEET-01..26 shipped; sources: Discord #devops fleet research + Paperclip audit + OSS control-plane survey)
 
 ## Phases
 
@@ -714,7 +714,7 @@ Source: 2026-07-07 MemClaw competitor analysis (`content/research/memclaw-gap-an
 
 ---
 
-## v8.5 Agent Fleet Plane (Phases 142-147) — PLANNED
+## v8.5 Agent Fleet Plane (Phases 142-147) — COMPLETE (2026-07-10)
 
 Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research" + deep research package:
 - `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`
