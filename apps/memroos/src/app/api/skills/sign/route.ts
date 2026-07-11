@@ -178,25 +178,93 @@ export async function POST(request: Request) {
   const contentHash = hashSkillContent(row.raw_body);
   const record = signRawSkillBody(row.raw_body, keyPair);
 
-  // Persist signature columns back to the registry row.
+  // Persist signature columns back to the registry row + audit atomically (VAL-038, VAL-039)
   try {
-    db.prepare(
-      `UPDATE skill_registry
-          SET content_hash = ?,
-              signature = ?,
-              signed_by = ?,
-              signed_at = ?,
-              trust_level = 'signed',
-              public_key_fingerprint = ?
-        WHERE id = ?`
-    ).run(
-      contentHash,
-      record.signature,
-      record.signed_by,
-      record.signed_at,
-      record.public_key_fingerprint,
-      row.id
-    );
+    db.transaction(() => {
+      db.prepare(
+        `UPDATE skill_registry
+            SET content_hash = ?,
+                signature = ?,
+                signed_by = ?,
+                signed_at = ?,
+                trust_level = 'signed',
+                public_key_fingerprint = ?
+          WHERE id = ?`
+      ).run(
+        contentHash,
+        record.signature,
+        record.signed_by,
+        record.signed_at,
+        record.public_key_fingerprint,
+        row.id
+      );
+
+      // Audit receipt for signing — IDs/hashes/classifications/reasons only (no raw secrets)
+      try {
+        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
+          buildSkillAuditEntry: (db: any, input: any) => any;
+        };
+        const built = buildSkillAuditEntry(db, {
+          tenantId: "default-tenant",
+          actorId: record.signed_by,
+          actorRole: "operator" as const,
+          eventType: "skill.signed",
+          entityType: "skill",
+          entityId: `skill:${row.id}`,
+          reason: `skill signed: ${row.name}@${row.source_harness}`,
+          metadata: {
+            skill_id: row.id,
+            skill_name: row.name,
+            source_harness: row.source_harness,
+            content_hash: contentHash,
+            public_key_fingerprint: record.public_key_fingerprint,
+            classification: "skill_signing",
+          },
+        });
+        db.prepare(
+          `INSERT INTO audit_entries
+            (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          built.id,
+          built.tenantId,
+          built.actorId,
+          built.actorRole,
+          built.eventType,
+          built.entityType,
+          built.entityId,
+          built.reason,
+          built.metadata_json,
+          built.created_at
+        );
+      } catch {
+        // fallback plain audit if chain builder unavailable
+        const { randomUUID } = require("crypto");
+        db.prepare(
+          `INSERT INTO audit_entries
+            (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          randomUUID(),
+          "default-tenant",
+          record.signed_by,
+          "operator",
+          "skill.signed",
+          "skill",
+          `skill:${row.id}`,
+          `skill signed: ${row.name}@${row.source_harness}`,
+          JSON.stringify({
+            skill_id: row.id,
+            skill_name: row.name,
+            source_harness: row.source_harness,
+            content_hash: contentHash,
+            public_key_fingerprint: record.public_key_fingerprint,
+            classification: "skill_signing",
+          }),
+          new Date().toISOString()
+        );
+      }
+    })();
   } catch (err) {
     return Response.json(
       {

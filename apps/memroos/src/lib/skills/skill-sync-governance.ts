@@ -403,6 +403,58 @@ function writeAuditEntry(
 ): string {
   const id = randomUUID();
   try {
+    // VAL-039: use chained audit for skill domain events
+    if (entry.eventType.startsWith("skill.")) {
+      try {
+        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
+          buildSkillAuditEntry: (db: any, input: any) => any;
+        };
+        const built = buildSkillAuditEntry(db, {
+          tenantId: "default-tenant",
+          actorId: entry.actor,
+          actorRole: "operator" as const,
+          eventType: entry.eventType,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          reason: entry.reason ?? null,
+          metadata: entry.metadata ?? {},
+        });
+        db.prepare(
+          `INSERT INTO audit_entries
+            (id, tenant_id, actor_id, actor_role, event_type, entity_type,
+             entity_id, reason, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          built.id,
+          built.tenantId,
+          built.actorId,
+          built.actorRole,
+          built.eventType,
+          built.entityType,
+          built.entityId,
+          built.reason,
+          built.metadata_json,
+          built.created_at
+        );
+        return built.id;
+      } catch (e) {
+        // If chained build fails, fall back to plain insert below
+        // but if audit_entries exists, propagate error for atomicity unless it's missing hash chain table issue
+        try {
+          const exists = db
+            .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)
+            .get() as { name: string } | undefined;
+          if (exists) {
+            // Try plain insert still, if that also fails throw
+          } else {
+            return id;
+          }
+        } catch {
+          return id;
+        }
+      }
+    }
+
     db.prepare(
       `INSERT INTO audit_entries
         (id, tenant_id, actor_id, actor_role, event_type, entity_type,
@@ -420,12 +472,18 @@ function writeAuditEntry(
       JSON.stringify(entry.metadata ?? {}),
       nowIso()
     );
-  } catch {
-    // audit_entries is append-only and may not exist on partial test
-    // schemas. We deliberately swallow the failure here so a missing
-    // audit table never breaks the primary action; a higher-level
-    // integration test verifies the entry is written when the schema
-    // is fully migrated.
+  } catch (e) {
+    try {
+      const exists = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)
+        .get() as { name: string } | undefined;
+      if (!exists) {
+        return id;
+      }
+    } catch {
+      return id;
+    }
+    throw e;
   }
   return id;
 }
@@ -699,36 +757,43 @@ export function approveImportProposal(
   }
 
   const now = nowIso();
-  db.prepare(
-    `UPDATE skill_import_proposals
-        SET status = 'approved',
-            decided_by = ?,
-            decided_at = ?,
-            decision_reason = ?,
-            updated_at = ?
-      WHERE id = ?`
-  ).run(actor, now, reason?.trim() || null, now, id);
+  let updated: ImportProposalRow | null = null;
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_import_proposals
+          SET status = 'approved',
+              decided_by = ?,
+              decided_at = ?,
+              decision_reason = ?,
+              updated_at = ?
+        WHERE id = ?`
+    ).run(actor, now, reason?.trim() || null, now, id);
 
-  const updated = loadProposalById(db, id);
+    const row = loadProposalById(db, id);
+    if (!row) {
+      throw new SyncGovernanceError(
+        `approveImportProposal: row vanished for ${id}`
+      );
+    }
+    updated = row;
+
+    writeAuditEntry(db, {
+      actor,
+      eventType: "skill.proposal.approved",
+      entityType: "skill_import_proposal",
+      entityId: id,
+      reason: reason ?? null,
+      metadata: {
+        source_harness: row.source_harness,
+        skill_name: row.skill_name,
+        affected_skill_id: row.affected_skill_id,
+      },
+    });
+  })();
+
   if (!updated) {
-    throw new SyncGovernanceError(
-      `approveImportProposal: row vanished for ${id}`
-    );
+    throw new SyncGovernanceError(`approveImportProposal: failed for ${id}`);
   }
-
-  writeAuditEntry(db, {
-    actor,
-    eventType: "skill.proposal.approved",
-    entityType: "skill_import_proposal",
-    entityId: id,
-    reason: reason ?? null,
-    metadata: {
-      source_harness: updated.source_harness,
-      skill_name: updated.skill_name,
-      affected_skill_id: updated.affected_skill_id,
-    },
-  });
-
   return updated;
 }
 
@@ -769,36 +834,40 @@ export function rejectImportProposal(
   }
 
   const now = nowIso();
-  db.prepare(
-    `UPDATE skill_import_proposals
-        SET status = 'rejected',
-            decided_by = ?,
-            decided_at = ?,
-            decision_reason = ?,
-            updated_at = ?
-      WHERE id = ?`
-  ).run(actor, now, reasonText, now, id);
+  let updated: ImportProposalRow | null = null;
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_import_proposals
+          SET status = 'rejected',
+              decided_by = ?,
+              decided_at = ?,
+              decision_reason = ?,
+              updated_at = ?
+        WHERE id = ?`
+    ).run(actor, now, reasonText, now, id);
 
-  const updated = loadProposalById(db, id);
-  if (!updated) {
-    throw new SyncGovernanceError(
-      `rejectImportProposal: row vanished for ${id}`
-    );
-  }
+    const row = loadProposalById(db, id);
+    if (!row) {
+      throw new SyncGovernanceError(
+        `rejectImportProposal: row vanished for ${id}`
+      );
+    }
+    updated = row;
 
-  writeAuditEntry(db, {
-    actor,
-    eventType: "skill.proposal.rejected",
-    entityType: "skill_import_proposal",
-    entityId: id,
-    reason: reasonText,
-    metadata: {
-      source_harness: updated.source_harness,
-      skill_name: updated.skill_name,
-    },
-  });
+    writeAuditEntry(db, {
+      actor,
+      eventType: "skill.proposal.rejected",
+      entityType: "skill_import_proposal",
+      entityId: id,
+      reason: reasonText,
+      metadata: {
+        source_harness: row.source_harness,
+        skill_name: row.skill_name,
+      },
+    });
+  })();
 
-  return updated;
+  return updated!;
 }
 
 // ---------------------------------------------------------------------------
@@ -919,11 +988,7 @@ export function createOrUpdateAgentVersionPin(
     )
     .get(agentId, skillName);
 
-  // VAL-SKILL-030 — optimistic-concurrency check. When the caller
-  // supplies expected_current_updated_at, the existing pin's
-  // updated_at must match exactly. A mismatch surfaces as a typed
-  // error so the caller can re-fetch and retry without silently
-  // overwriting the other side's intent.
+  // VAL-SKILL-030 — optimistic-concurrency check.
   if (
     existingPin &&
     typeof params.expected_current_updated_at === "string" &&
@@ -935,12 +1000,7 @@ export function createOrUpdateAgentVersionPin(
     );
   }
 
-  // VAL-SKILL-030 — idempotency check. When the caller supplies an
-  // idempotency_key we compute a deterministic request hash and look
-  // up any prior key usage. Matching key + matching body => return
-  // the previously produced pin without mutation. Matching key +
-  // mismatched body => typed conflict (the caller is reusing the
-  // key for a different request, which is always wrong).
+  // VAL-SKILL-030 — idempotency check.
   const idempotencyKey =
     typeof params.idempotency_key === "string" && params.idempotency_key.trim()
       ? params.idempotency_key.trim()
@@ -984,139 +1044,131 @@ export function createOrUpdateAgentVersionPin(
       }
       const priorPin = getVersionPin(db, existingKey.pin_id);
       if (priorPin) return rowToPin(priorPin);
-      // The pin row was hard-deleted but the idempotency key survived;
-      // treat as a fresh insert below.
     }
   }
 
   const now = nowIso();
+  let resultingPinId: number | null = null;
 
-  if (existingPin) {
-    const previousVersion = existingPin.current_version;
-    const previousHash = existingPin.current_content_hash;
-    const previousSkillId = existingPin.skill_id;
+  // VAL-038: atomic transaction wrapping pin mutation + audit + idempotency key
+  const txn = db.transaction(() => {
+    if (existingPin) {
+      const previousVersion = existingPin.current_version;
+      const previousHash = existingPin.current_content_hash;
+      const previousSkillId = existingPin.skill_id;
 
-    // Refuse silent no-op updates that would otherwise overwrite audit data.
-    if (
-      previousVersion === currentVersion &&
-      previousHash === currentHash &&
-      previousSkillId === skillId
-    ) {
-      // Idempotent: return the existing pin untouched.
-      return rowToPin(existingPin);
-    }
+      if (
+        previousVersion === currentVersion &&
+        previousHash === currentHash &&
+        previousSkillId === skillId
+      ) {
+        resultingPinId = existingPin.id;
+        return;
+      }
 
-    db.prepare(
-      `UPDATE skill_version_pins
-          SET skill_id = ?,
-              current_version = ?,
-              current_content_hash = ?,
-              prior_version = ?,
-              prior_content_hash = ?,
-              prior_skill_id = ?,
-              actor = ?,
-              updated_at = ?,
-              rolled_back_at = NULL,
-              rolled_back_by = NULL,
-              last_rollback_event_id = NULL
-        WHERE id = ?`
-    ).run(
-      skillId,
-      currentVersion,
-      currentHash,
-      previousVersion,
-      previousHash,
-      previousSkillId,
-      actor,
-      now,
-      existingPin.id
-    );
-
-    writeAuditEntry(db, {
-      actor,
-      eventType: "skill.pin.updated",
-      entityType: "skill_version_pin",
-      entityId: String(existingPin.id),
-      metadata: {
-        agent_id: agentId,
-        skill_name: skillName,
-        current_version: currentVersion,
-        prior_version: previousVersion,
-      },
-    });
-
-    if (idempotencyKey && requestHash) {
-      persistPinIdempotencyKey(db, {
-        agentId,
-        skillName,
-        idempotencyKey,
-        pinId: existingPin.id,
-        requestHash,
-      });
-    }
-
-    const refreshed = db
-      .prepare<[number], PinSqlRow>(
-        `SELECT id, agent_id, skill_name, skill_id, current_version,
-                current_content_hash, prior_version, prior_content_hash,
-                prior_skill_id, actor, created_at, updated_at,
-                rolled_back_at, rolled_back_by, last_rollback_event_id
-           FROM skill_version_pins
+      db.prepare(
+        `UPDATE skill_version_pins
+            SET skill_id = ?,
+                current_version = ?,
+                current_content_hash = ?,
+                prior_version = ?,
+                prior_content_hash = ?,
+                prior_skill_id = ?,
+                actor = ?,
+                updated_at = ?,
+                rolled_back_at = NULL,
+                rolled_back_by = NULL,
+                last_rollback_event_id = NULL
           WHERE id = ?`
-      )
-      .get(existingPin.id);
-    if (!refreshed) {
-      throw new SyncGovernanceError(
-        `createOrUpdateAgentVersionPin: row vanished for pin_id=${existingPin.id}`
+      ).run(
+        skillId,
+        currentVersion,
+        currentHash,
+        previousVersion,
+        previousHash,
+        previousSkillId,
+        actor,
+        now,
+        existingPin.id
       );
+
+      writeAuditEntry(db, {
+        actor,
+        eventType: "skill.pin.updated",
+        entityType: "skill_version_pin",
+        entityId: String(existingPin.id),
+        metadata: {
+          agent_id: agentId,
+          skill_name: skillName,
+          current_version: currentVersion,
+          prior_version: previousVersion,
+        },
+      });
+
+      if (idempotencyKey && requestHash) {
+        persistPinIdempotencyKey(db, {
+          agentId,
+          skillName,
+          idempotencyKey,
+          pinId: existingPin.id,
+          requestHash,
+        });
+      }
+
+      resultingPinId = existingPin.id;
+    } else {
+      const insertResult = db
+        .prepare(
+          `INSERT INTO skill_version_pins
+            (agent_id, skill_name, skill_id, current_version, current_content_hash,
+             prior_version, prior_content_hash, prior_skill_id, actor,
+             created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          agentId,
+          skillName,
+          skillId,
+          currentVersion,
+          currentHash,
+          null,
+          null,
+          null,
+          actor,
+          now,
+          now
+        );
+
+      const pinId = Number(insertResult.lastInsertRowid);
+      resultingPinId = pinId;
+
+      writeAuditEntry(db, {
+        actor,
+        eventType: "skill.pin.created",
+        entityType: "skill_version_pin",
+        entityId: String(pinId),
+        metadata: {
+          agent_id: agentId,
+          skill_name: skillName,
+          current_version: currentVersion,
+        },
+      });
+
+      if (idempotencyKey && requestHash) {
+        persistPinIdempotencyKey(db, {
+          agentId,
+          skillName,
+          idempotencyKey,
+          pinId,
+          requestHash,
+        });
+      }
     }
-    return rowToPin(refreshed);
-  }
-
-  // Fresh insert.
-  const insertResult = db
-    .prepare(
-      `INSERT INTO skill_version_pins
-        (agent_id, skill_name, skill_id, current_version, current_content_hash,
-         prior_version, prior_content_hash, prior_skill_id, actor,
-         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      agentId,
-      skillName,
-      skillId,
-      currentVersion,
-      currentHash,
-      null,
-      null,
-      null,
-      actor,
-      now,
-      now
-    );
-
-  const pinId = Number(insertResult.lastInsertRowid);
-  writeAuditEntry(db, {
-    actor,
-    eventType: "skill.pin.created",
-    entityType: "skill_version_pin",
-    entityId: String(pinId),
-    metadata: {
-      agent_id: agentId,
-      skill_name: skillName,
-      current_version: currentVersion,
-    },
   });
+  txn();
 
-  if (idempotencyKey && requestHash) {
-    persistPinIdempotencyKey(db, {
-      agentId,
-      skillName,
-      idempotencyKey,
-      pinId,
-      requestHash,
-    });
+  if (resultingPinId === null) {
+    throw new SyncGovernanceError("createOrUpdateAgentVersionPin: unexpected empty pin id");
   }
 
   const refreshed = db
@@ -1128,14 +1180,15 @@ export function createOrUpdateAgentVersionPin(
          FROM skill_version_pins
         WHERE id = ?`
     )
-    .get(pinId);
+    .get(resultingPinId);
   if (!refreshed) {
     throw new SyncGovernanceError(
-      `createOrUpdateAgentVersionPin: row vanished for new pin_id=${pinId}`
+      `createOrUpdateAgentVersionPin: row vanished for pin_id=${resultingPinId}`
     );
   }
   return rowToPin(refreshed);
 }
+
 
 export function getAgentVersionPin(
   db: Database.Database,
@@ -1392,46 +1445,47 @@ export function rollbackAgentVersionPin(
   }
 
   const now = nowIso();
-  // Rotate current <- prior; previous current is discarded (single-step
-  // rollback, no chained history).
-  db.prepare(
-    `UPDATE skill_version_pins
-        SET current_version = prior_version,
-            current_content_hash = prior_content_hash,
-            skill_id = prior_skill_id,
-            prior_version = NULL,
-            prior_content_hash = NULL,
-            prior_skill_id = NULL,
-            actor = ?,
-            updated_at = ?,
-            rolled_back_at = ?,
-            rolled_back_by = ?,
-            last_rollback_event_id = ?
-      WHERE id = ?`
-  ).run(operator, now, now, operator, "PENDING", params.pin_id);
+  let eventId = "";
 
-  const eventId = writeAuditEntry(db, {
-    actor: operator,
-    eventType: "skill.pin.rolled_back",
-    entityType: "skill_version_pin",
-    entityId: String(params.pin_id),
-    reason: params.reason ?? null,
-    metadata: {
-      agent_id: pin.agent_id,
-      skill_name: pin.skill_name,
-      rolled_back_from_version: pin.current_version,
-      rolled_back_from_hash: pin.current_content_hash,
-      rolled_back_to_version: pin.prior_version,
-      rolled_back_to_hash: pin.prior_content_hash,
-    },
-  });
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET current_version = prior_version,
+              current_content_hash = prior_content_hash,
+              skill_id = prior_skill_id,
+              prior_version = NULL,
+              prior_content_hash = NULL,
+              prior_skill_id = NULL,
+              actor = ?,
+              updated_at = ?,
+              rolled_back_at = ?,
+              rolled_back_by = ?,
+              last_rollback_event_id = ?
+        WHERE id = ?`
+    ).run(operator, now, now, operator, "PENDING", params.pin_id);
 
-  // Stamp the audit entry id back onto the pin row.
-  db.prepare(
-    `UPDATE skill_version_pins
-        SET last_rollback_event_id = ?, updated_at = ?
-      WHERE id = ?`
-  ).run(eventId, now, params.pin_id);
+    eventId = writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.pin.rolled_back",
+      entityType: "skill_version_pin",
+      entityId: String(params.pin_id),
+      reason: params.reason ?? null,
+      metadata: {
+        agent_id: pin.agent_id,
+        skill_name: pin.skill_name,
+        rolled_back_from_version: pin.current_version,
+        rolled_back_from_hash: pin.current_content_hash,
+        rolled_back_to_version: pin.prior_version,
+        rolled_back_to_hash: pin.prior_content_hash,
+      },
+    });
+
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET last_rollback_event_id = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(eventId, now, params.pin_id);
+  })();
 
   const refreshed = getVersionPin(db, params.pin_id);
   if (!refreshed) {
@@ -1442,9 +1496,6 @@ export function rollbackAgentVersionPin(
   return refreshed;
 }
 
-// ---------------------------------------------------------------------------
-// Content hashing re-export (helpers)
-// ---------------------------------------------------------------------------
 
 /**
  * Helper that computes the same SHA-256 hex digest the governance

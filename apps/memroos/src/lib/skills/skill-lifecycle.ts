@@ -44,6 +44,7 @@
 
 import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
+import { buildSkillAuditEntry } from "@/lib/audit/skill-chain";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -310,27 +311,45 @@ function appendUnifiedAuditEntry(
   }
 ): void {
   try {
+    const built = buildSkillAuditEntry(db, {
+      tenantId: "default-tenant",
+      actorId: params.actor,
+      actorRole: "operator",
+      eventType: params.eventType,
+      entityType: "skill",
+      entityId: `skill:${params.skillId}`,
+      reason: params.reason,
+      metadata: params.metadata,
+    });
     db.prepare(
       `INSERT INTO audit_entries
-        (id, tenant_id, actor_id, actor_role, event_type, entity_type,
-         entity_id, reason, metadata_json, created_at)
+        (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      randomUUID(),
-      "default-tenant",
-      params.actor,
-      "operator",
-      params.eventType,
-      "skill",
-      `skill:${params.skillId}`,
-      params.reason,
-      JSON.stringify(params.metadata),
-      new Date().toISOString()
+      built.id,
+      built.tenantId,
+      built.actorId,
+      built.actorRole,
+      built.eventType,
+      built.entityType,
+      built.entityId,
+      built.reason,
+      built.metadata_json,
+      built.created_at
     );
-  } catch {
-    // audit_entries may not exist on partially migrated test DBs; swallow
-    // so the primary transition still succeeds. Integration tests verify
-    // the row exists once the schema is fully migrated.
+  } catch (e) {
+    // On partial test DBs audit_entries may not exist — allow primary mutation.
+    // When table exists, rethrow to enforce audit-atomicity.
+    try {
+      const exists = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)
+        .get() as { name: string } | undefined;
+      if (!exists) return;
+    } catch {
+      return;
+    }
+    // If the error is from missing entryHash validation, still enforce if table exists
+    throw e;
   }
 }
 

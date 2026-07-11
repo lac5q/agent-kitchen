@@ -96,6 +96,40 @@ export const AUDIT_EVENT_TYPES = {
   // Paperclip tenant integration (Phase 146, FLEET-18)
   /** A Paperclip activity event was ingested into MemroOS for NOC/audit visibility. */
   PAPERCLIP_ACTIVITY: "paperclip.activity",
+
+  // Skill governance (Phase 148-150, SKILLTRUST)
+  /** Skill quarantine stage transition. */
+  SKILL_QUARANTINE_TRANSITIONED: "skill.quarantine.transitioned",
+  /** Skill lifecycle state transitioned. */
+  SKILL_LIFECYCLE_TRANSITIONED: "skill_lifecycle_transitioned",
+  /** Skill deprecated notification for dependent. */
+  SKILL_LIFECYCLE_DEPRECATED: "skill_lifecycle_deprecated",
+  /** Skill signed (Ed25519). */
+  SKILL_SIGNED: "skill.signed",
+  /** Skill sync approved. */
+  SKILL_SYNC_APPROVED: "skill.sync.approved",
+  /** Skill sync rejected. */
+  SKILL_SYNC_REJECTED: "skill.sync.rejected",
+  /** Skill sync proposal approved (id-based). */
+  SKILL_SYNC_PROPOSAL_APPROVED: "skill.sync.proposal.approved",
+  /** Skill sync proposal rejected. */
+  SKILL_SYNC_PROPOSAL_REJECTED: "skill.sync.proposal.rejected",
+  /** Skill version pin created. */
+  SKILL_PIN_CREATED: "skill.pin.created",
+  /** Skill version pin updated. */
+  SKILL_PIN_UPDATED: "skill.pin.updated",
+  /** Skill version pin rolled back. */
+  SKILL_PIN_ROLLED_BACK: "skill.pin.rolled_back",
+  /** Skill import proposal approved. */
+  SKILL_PROPOSAL_APPROVED: "skill.proposal.approved",
+  /** Skill import proposal rejected. */
+  SKILL_PROPOSAL_REJECTED: "skill.proposal.rejected",
+  /** Skill sync pinned. */
+  SKILL_SYNC_PINNED: "skill.sync.pinned",
+  /** Skill sync unpinned. */
+  SKILL_SYNC_UNPINNED: "skill.sync.unpinned",
+  /** Skill sync rolled back. */
+  SKILL_SYNC_ROLLED_BACK: "skill.sync.rolled_back",
 } as const;
 
 /** Union type of all valid audit event type string values. */

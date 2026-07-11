@@ -498,6 +498,50 @@ function writeAuditEntry(
 ): string {
   const id = randomUUID();
   try {
+    if (entry.eventType.startsWith("skill.")) {
+      try {
+        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
+          buildSkillAuditEntry: (db: any, input: any) => any;
+        };
+        const built = buildSkillAuditEntry(db, {
+          tenantId: "default-tenant",
+          actorId: entry.actor,
+          actorRole: "operator" as const,
+          eventType: entry.eventType,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          reason: entry.reason ?? null,
+          metadata: entry.metadata ?? {},
+        });
+        db.prepare(
+          `INSERT INTO audit_entries
+            (id, tenant_id, actor_id, actor_role, event_type, entity_type,
+             entity_id, reason, metadata_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          built.id,
+          built.tenantId,
+          built.actorId,
+          built.actorRole,
+          built.eventType,
+          built.entityType,
+          built.entityId,
+          built.reason,
+          built.metadata_json,
+          built.created_at
+        );
+        return built.id;
+      } catch (e) {
+        try {
+          const exists = db
+            .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)
+            .get() as { name: string } | undefined;
+          if (!exists) return id;
+        } catch {
+          return id;
+        }
+      }
+    }
     db.prepare(
       `INSERT INTO audit_entries
         (id, tenant_id, actor_id, actor_role, event_type, entity_type,
@@ -515,11 +559,16 @@ function writeAuditEntry(
       JSON.stringify(entry.metadata ?? {}),
       nowIso()
     );
-  } catch {
-    // audit_entries may not exist on partially migrated test DBs; we
-    // swallow the failure here so a missing audit table never breaks
-    // the primary action. Higher-level integration tests assert on the
-    // row when the schema is fully migrated.
+  } catch (e) {
+    try {
+      const exists = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)
+        .get() as { name: string } | undefined;
+      if (!exists) return id;
+    } catch {
+      return id;
+    }
+    throw e;
   }
   return id;
 }
@@ -1232,115 +1281,102 @@ export function approveImportProposal(
     );
   }
 
-  if (applyToRegistry) {
-    // Find the existing registry row and update / insert accordingly.
-    const registryRow = db
-      .prepare<[string, string], {
-        id: number;
-        raw_body: string | null;
-      }>(
-        `SELECT id, raw_body FROM skill_registry
-          WHERE source_harness = ? AND name = ?
-          LIMIT 1`
-      )
-      .get(sourceHarness, skillName);
+  db.transaction(() => {
+    if (applyToRegistry) {
+      const registryRow = db
+        .prepare<[string, string], {
+          id: number;
+          raw_body: string | null;
+        }>(
+          `SELECT id, raw_body FROM skill_registry
+            WHERE source_harness = ? AND name = ?
+            LIMIT 1`
+        )
+        .get(sourceHarness, skillName);
 
-    // Pull the proposed body from the registry when it was already there
-    // (the diff_payload stored detected_content_hash but the body itself
-    // lives on the sync check payload; for approval we re-read the
-    // pending diff_payload which contains the raw_body when supplied by
-    // the caller). The proposal API keeps raw_body on the registry when
-    // it exists, so prefer the registry copy.
-    let proposedBody: string | null = null;
-    let proposedVersion: string | null = existing.pending_detected_version;
-    if (existing.pending_diff_payload) {
-      try {
-        const parsed = JSON.parse(existing.pending_diff_payload) as Record<
-          string,
-          unknown
-        >;
-        if (typeof parsed["raw_body"] === "string") {
-          proposedBody = parsed["raw_body"] as string;
+      let proposedBody: string | null = null;
+      let proposedVersion: string | null = existing.pending_detected_version;
+      if (existing.pending_diff_payload) {
+        try {
+          const parsed = JSON.parse(existing.pending_diff_payload) as Record<
+            string,
+            unknown
+          >;
+          if (typeof parsed["raw_body"] === "string") {
+            proposedBody = parsed["raw_body"] as string;
+          }
+          if (typeof parsed["version"] === "string") {
+            proposedVersion = parsed["version"] as string;
+          }
+        } catch {
+          /* ignore */
         }
-        if (typeof parsed["version"] === "string") {
-          proposedVersion = parsed["version"] as string;
-        }
-      } catch {
-        /* ignore */
+      }
+
+      if (registryRow) {
+        db.prepare(
+          `UPDATE skill_registry
+              SET raw_body = COALESCE(?, raw_body),
+                  version = COALESCE(?, version),
+                  content_hash = ?,
+                  dispatch_status = 'quarantined'
+            WHERE id = ?`
+        ).run(proposedBody, proposedVersion, newHash, registryRow.id);
+      } else {
+        db.prepare(
+          `INSERT INTO skill_registry (
+            name, description, owner, source_harness, risk_tier, dispatch_status,
+            version, preconditions, allowed_tools, verification_checks, rollback_behavior,
+            raw_body, completeness_pct, missing_fields_json, imported_by, imported_at,
+            evidence_examples, content_hash, signature, signed_by, signed_at, trust_level,
+            public_key_fingerprint
+          ) VALUES (
+            ?, '', ?, ?, 'unknown', 'quarantined',
+            ?, '', '', '', '',
+            ?, 0, '[]', ?, ?,
+            '', ?, NULL, NULL, NULL, 'unsigned',
+            NULL
+          )`
+        ).run(
+          skillName,
+          operator,
+          sourceHarness,
+          proposedVersion,
+          proposedBody ?? "",
+          operator,
+          now,
+          newHash
+        );
       }
     }
 
-    if (registryRow) {
-      db.prepare(
-        `UPDATE skill_registry
-            SET raw_body = COALESCE(?, raw_body),
-                version = COALESCE(?, version),
-                content_hash = ?,
-                dispatch_status = 'quarantined'
-          WHERE id = ?`
-      ).run(proposedBody, proposedVersion, newHash, registryRow.id);
-    } else {
-      // Insert a new quarantined row so the registry has a placeholder
-      // for the approved content. The quarantine pipeline will compute
-      // completeness_pct etc. when it scans.
-      db.prepare(
-        `INSERT INTO skill_registry (
-          name, description, owner, source_harness, risk_tier, dispatch_status,
-          version, preconditions, allowed_tools, verification_checks, rollback_behavior,
-          raw_body, completeness_pct, missing_fields_json, imported_by, imported_at,
-          evidence_examples, content_hash, signature, signed_by, signed_at, trust_level,
-          public_key_fingerprint
-        ) VALUES (
-          ?, '', ?, ?, 'unknown', 'quarantined',
-          ?, '', '', '', '',
-          ?, 0, '[]', ?, ?,
-          '', ?, NULL, NULL, NULL, 'unsigned',
-          NULL
-        )`
-      ).run(
-        skillName,
-        operator,
-        sourceHarness,
-        proposedVersion,
-        proposedBody ?? "",
-        operator,
-        now,
-        newHash
-      );
-    }
-  }
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET approved_by = ?,
+              approved_at = ?,
+              last_synced_hash = ?,
+              pending_proposal_id = NULL,
+              pending_detected_hash = NULL,
+              pending_detected_version = NULL,
+              pending_diff_summary = '',
+              pending_proposed_by = NULL,
+              pending_proposed_at = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?`
+    ).run(operator, now, newHash, now, skillName, sourceHarness);
 
-  db.prepare(
-    `UPDATE skill_sync_state
-        SET approved_by = ?,
-            approved_at = ?,
-            last_synced_hash = ?,
-            pending_proposal_id = NULL,
-            pending_detected_hash = NULL,
-            pending_detected_version = NULL,
-            pending_diff_summary = '',
-            pending_proposed_by = NULL,
-            pending_proposed_at = NULL,
-            updated_at = ?
-      WHERE skill_name = ? AND source_harness = ?`
-  ).run(operator, now, newHash, now, skillName, sourceHarness);
-
-  // NOTE: pending_diff_payload is intentionally preserved across
-  // approval so rollbackToPriorVersion can recover the prior_raw_body
-  // for a full restore. The payload is not operator-facing (no API
-  // exposes it directly) so it is safe to retain for audit purposes.
-
-  writeAuditEntry(db, {
-    actor: operator,
-    eventType: "skill.sync.approved",
-    entityType: "skill_sync_state",
-    entityId: `${skillName}@${sourceHarness}`,
-    metadata: {
-      skill_name: skillName,
-      source_harness: sourceHarness,
-      last_synced_hash: newHash,
-    },
-  });
+    writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.sync.approved",
+      entityType: "skill_sync_state",
+      entityId: `${skillName}@${sourceHarness}`,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+        last_synced_hash: newHash,
+      },
+    });
+  })();
 
   const refreshed = loadSyncStateRow(db, skillName, sourceHarness);
   if (!refreshed) {
@@ -1351,16 +1387,8 @@ export function approveImportProposal(
   return refreshed;
 }
 
-/**
- * Rejects a pending proposal. Clears the pending proposal without
- * mutating the skill_registry row. Records operator + reason.
- *
- * Throws SkillSyncError when:
- *   - no sync_state row exists for (skill_name, source_harness),
- *   - no pending proposal exists (already approved/rejected),
- *   - reason is empty,
- *   - operator identity is empty.
- */
+
+
 export function rejectImportProposal(
   db: Database.Database,
   params: RejectImportProposalParams
@@ -1388,34 +1416,36 @@ export function rejectImportProposal(
   }
 
   const now = nowIso();
-  db.prepare(
-    `UPDATE skill_sync_state
-        SET rejected_by = ?,
-            rejected_at = ?,
-            rejection_reason = ?,
-            pending_proposal_id = NULL,
-            pending_detected_hash = NULL,
-            pending_detected_version = NULL,
-            pending_diff_summary = '',
-            pending_diff_payload = '{}',
-            pending_proposed_by = NULL,
-            pending_proposed_at = NULL,
-            updated_at = ?
-      WHERE skill_name = ? AND source_harness = ?`
-  ).run(operator, now, reason, now, skillName, sourceHarness);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET rejected_by = ?,
+              rejected_at = ?,
+              rejection_reason = ?,
+              pending_proposal_id = NULL,
+              pending_detected_hash = NULL,
+              pending_detected_version = NULL,
+              pending_diff_summary = '',
+              pending_diff_payload = '{}',
+              pending_proposed_by = NULL,
+              pending_proposed_at = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?`
+    ).run(operator, now, reason, now, skillName, sourceHarness);
 
-  writeAuditEntry(db, {
-    actor: operator,
-    eventType: "skill.sync.rejected",
-    entityType: "skill_sync_state",
-    entityId: `${skillName}@${sourceHarness}`,
-    reason,
-    metadata: {
-      skill_name: skillName,
-      source_harness: sourceHarness,
-      rejection_reason: reason,
-    },
-  });
+    writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.sync.rejected",
+      entityType: "skill_sync_state",
+      entityId: `${skillName}@${sourceHarness}`,
+      reason,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+        rejection_reason: reason,
+      },
+    });
+  })();
 
   const refreshed = loadSyncStateRow(db, skillName, sourceHarness);
   if (!refreshed) {
@@ -1425,6 +1455,7 @@ export function rejectImportProposal(
   }
   return refreshed;
 }
+
 
 // ---------------------------------------------------------------------------
 // Proposal-id approve / reject (VAL-SKILL-028 / VAL-SKILL-029)
@@ -1822,43 +1853,45 @@ export function pinVersion(
   const version = requireNonEmpty(params.version, "version");
   const actor = requireNonEmpty(params.actor, "actor");
 
-  const existing = loadSyncStateRow(db, skillName, sourceHarness);
   const now = nowIso();
 
-  if (existing) {
-    db.prepare(
-      `UPDATE skill_sync_state
-          SET version_pinned_to = ?,
-              updated_at = ?
-        WHERE skill_name = ? AND source_harness = ?`
-    ).run(version, now, skillName, sourceHarness);
-  } else {
-    db.prepare(
-      `INSERT INTO skill_sync_state (
-        skill_name, source_harness, last_synced_hash, pending_proposal_id,
-        pending_detected_hash, pending_detected_version, pending_diff_summary,
-        pending_diff_payload, pending_proposed_by, pending_proposed_at,
-        version_pinned_to, last_check_at, prior_version, prior_content_hash,
-        prior_skill_id, approved_by, approved_at, rejected_by, rejected_at,
-        rejection_reason, created_at, updated_at
-      ) VALUES (
-        ?, ?, NULL, NULL,
-        NULL, NULL, '',
-        '{}', NULL, NULL,
-        ?, ?, NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL,
-        NULL, ?, ?
-      )`
-    ).run(skillName, sourceHarness, version, now, now, now);
-  }
+  db.transaction(() => {
+    const existing = loadSyncStateRow(db, skillName, sourceHarness);
+    if (existing) {
+      db.prepare(
+        `UPDATE skill_sync_state
+            SET version_pinned_to = ?,
+                updated_at = ?
+          WHERE skill_name = ? AND source_harness = ?`
+      ).run(version, now, skillName, sourceHarness);
+    } else {
+      db.prepare(
+        `INSERT INTO skill_sync_state (
+          skill_name, source_harness, last_synced_hash, pending_proposal_id,
+          pending_detected_hash, pending_detected_version, pending_diff_summary,
+          pending_diff_payload, pending_proposed_by, pending_proposed_at,
+          version_pinned_to, last_check_at, prior_version, prior_content_hash,
+          prior_skill_id, approved_by, approved_at, rejected_by, rejected_at,
+          rejection_reason, created_at, updated_at
+        ) VALUES (
+          ?, ?, NULL, NULL,
+          NULL, NULL, '',
+          '{}', NULL, NULL,
+          ?, ?, NULL, NULL,
+          NULL, NULL, NULL, NULL, NULL,
+          NULL, ?, ?
+        )`
+      ).run(skillName, sourceHarness, version, now, now, now);
+    }
 
-  writeAuditEntry(db, {
-    actor,
-    eventType: "skill.sync.pinned",
-    entityType: "skill_sync_state",
-    entityId: `${skillName}@${sourceHarness}`,
-    metadata: { skill_name: skillName, source_harness: sourceHarness, version },
-  });
+    writeAuditEntry(db, {
+      actor,
+      eventType: "skill.sync.pinned",
+      entityType: "skill_sync_state",
+      entityId: `${skillName}@${sourceHarness}`,
+      metadata: { skill_name: skillName, source_harness: sourceHarness, version },
+    });
+  })();
 
   const refreshed = loadSyncStateRow(db, skillName, sourceHarness);
   if (!refreshed) {
@@ -1869,11 +1902,8 @@ export function pinVersion(
   return refreshed;
 }
 
-/**
- * Clears an existing version pin, allowing drift proposals to be
- * created again on the next sync check. Throws SkillSyncError when no
- * pin is set.
- */
+
+
 export function clearVersionPin(
   db: Database.Database,
   params: ClearPinParams
@@ -1895,24 +1925,26 @@ export function clearVersionPin(
   }
 
   const now = nowIso();
-  db.prepare(
-    `UPDATE skill_sync_state
-        SET version_pinned_to = NULL,
-            updated_at = ?
-      WHERE skill_name = ? AND source_harness = ?`
-  ).run(now, skillName, sourceHarness);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET version_pinned_to = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?`
+    ).run(now, skillName, sourceHarness);
 
-  writeAuditEntry(db, {
-    actor,
-    eventType: "skill.sync.unpinned",
-    entityType: "skill_sync_state",
-    entityId: `${skillName}@${sourceHarness}`,
-    metadata: {
-      skill_name: skillName,
-      source_harness: sourceHarness,
-      prior_pin: existing.version_pinned_to,
-    },
-  });
+    writeAuditEntry(db, {
+      actor,
+      eventType: "skill.sync.unpinned",
+      entityType: "skill_sync_state",
+      entityId: `${skillName}@${sourceHarness}`,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+        prior_pin: existing.version_pinned_to,
+      },
+    });
+  })();
 
   const refreshed = loadSyncStateRow(db, skillName, sourceHarness);
   if (!refreshed) {
@@ -1923,30 +1955,8 @@ export function clearVersionPin(
   return refreshed;
 }
 
-// ---------------------------------------------------------------------------
-// Rollback
-// ---------------------------------------------------------------------------
 
-/**
- * One-step rollback: restores the immediately prior version of a skill
- * to the registry and updates last_synced_hash accordingly. The prior
- * version comes from the `prior_*` columns on skill_sync_state.
- *
- * Behavior:
- *   - When `prior_skill_id` is set, the registry row at that id is
- *     updated to point at the prior content (or, if that registry row
- *     no longer exists, the new registry row is updated).
- *   - When no prior_skill_id is set (the prior was never in the
- *     registry, e.g. initial sync), the registry row's content is
- *     restored from the prior_* fields directly.
- *   - After rollback, prior_* are cleared so the rollback is exactly
- *     one step. A second rollback fails.
- *
- * Throws SkillSyncError when:
- *   - no sync_state row exists,
- *   - no prior_version/prior_content_hash is recorded,
- *   - the operator identity is empty.
- */
+
 export function rollbackToPriorVersion(
   db: Database.Database,
   params: RollbackParams
@@ -1968,89 +1978,89 @@ export function rollbackToPriorVersion(
   }
 
   const now = nowIso();
-  const registryRow = db
-    .prepare<[string, string], { id: number }>(
-      `SELECT id FROM skill_registry
-        WHERE source_harness = ? AND name = ?
-        LIMIT 1`
-    )
-    .get(sourceHarness, skillName);
 
-  // Best-effort restore of the prior raw_body from the proposal payload.
-  // When no proposal payload carried it (e.g. legacy migration), we leave
-  // the registry raw_body as-is so we never lose content.
-  let priorRawBody: string | null = null;
-  const proposalPayload = db
-    .prepare<[string, string], { pending_diff_payload: string | null }>(
-      `SELECT pending_diff_payload FROM skill_sync_state
-        WHERE skill_name = ? AND source_harness = ?
-        LIMIT 1`
-    )
-    .get(skillName, sourceHarness);
-  if (proposalPayload?.pending_diff_payload) {
-    try {
-      const parsed = JSON.parse(proposalPayload.pending_diff_payload) as Record<
-        string,
-        unknown
-      >;
-      if (typeof parsed["prior_raw_body"] === "string") {
-        priorRawBody = parsed["prior_raw_body"] as string;
+  db.transaction(() => {
+    const registryRow = db
+      .prepare<[string, string], { id: number }>(
+        `SELECT id FROM skill_registry
+          WHERE source_harness = ? AND name = ?
+          LIMIT 1`
+      )
+      .get(sourceHarness, skillName);
+
+    let priorRawBody: string | null = null;
+    const proposalPayload = db
+      .prepare<[string, string], { pending_diff_payload: string | null }>(
+        `SELECT pending_diff_payload FROM skill_sync_state
+          WHERE skill_name = ? AND source_harness = ?
+          LIMIT 1`
+      )
+      .get(skillName, sourceHarness);
+    if (proposalPayload?.pending_diff_payload) {
+      try {
+        const parsed = JSON.parse(proposalPayload.pending_diff_payload) as Record<
+          string,
+          unknown
+        >;
+        if (typeof parsed["prior_raw_body"] === "string") {
+          priorRawBody = parsed["prior_raw_body"] as string;
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
-  }
 
-  if (registryRow) {
-    if (priorRawBody !== null) {
-      db.prepare(
-        `UPDATE skill_registry
-            SET raw_body = ?,
-                version = ?,
-                content_hash = ?,
-                dispatch_status = 'quarantined'
-          WHERE id = ?`
-      ).run(priorRawBody, existing.prior_version, existing.prior_content_hash, registryRow.id);
-    } else {
-      db.prepare(
-        `UPDATE skill_registry
-            SET version = ?,
-                content_hash = ?,
-                dispatch_status = 'quarantined'
-          WHERE id = ?`
-      ).run(existing.prior_version, existing.prior_content_hash, registryRow.id);
+    if (registryRow) {
+      if (priorRawBody !== null) {
+        db.prepare(
+          `UPDATE skill_registry
+              SET raw_body = ?,
+                  version = ?,
+                  content_hash = ?,
+                  dispatch_status = 'quarantined'
+            WHERE id = ?`
+        ).run(priorRawBody, existing.prior_version, existing.prior_content_hash, registryRow.id);
+      } else {
+        db.prepare(
+          `UPDATE skill_registry
+              SET version = ?,
+                  content_hash = ?,
+                  dispatch_status = 'quarantined'
+            WHERE id = ?`
+        ).run(existing.prior_version, existing.prior_content_hash, registryRow.id);
+      }
     }
-  }
 
-  db.prepare(
-    `UPDATE skill_sync_state
-        SET last_synced_hash = ?,
-            pending_proposal_id = NULL,
-            pending_detected_hash = NULL,
-            pending_detected_version = NULL,
-            pending_diff_summary = '',
-            pending_diff_payload = '{}',
-            pending_proposed_by = NULL,
-            pending_proposed_at = NULL,
-            prior_version = NULL,
-            prior_content_hash = NULL,
-            prior_skill_id = NULL,
-            updated_at = ?
-      WHERE skill_name = ? AND source_harness = ?`
-  ).run(existing.prior_content_hash, now, skillName, sourceHarness);
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET last_synced_hash = ?,
+              pending_proposal_id = NULL,
+              pending_detected_hash = NULL,
+              pending_detected_version = NULL,
+              pending_diff_summary = '',
+              pending_diff_payload = '{}',
+              pending_proposed_by = NULL,
+              pending_proposed_at = NULL,
+              prior_version = NULL,
+              prior_content_hash = NULL,
+              prior_skill_id = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?`
+    ).run(existing.prior_content_hash, now, skillName, sourceHarness);
 
-  writeAuditEntry(db, {
-    actor: operator,
-    eventType: "skill.sync.rolled_back",
-    entityType: "skill_sync_state",
-    entityId: `${skillName}@${sourceHarness}`,
-    metadata: {
-      skill_name: skillName,
-      source_harness: sourceHarness,
-      rolled_back_to_version: existing.prior_version,
-      rolled_back_to_hash: existing.prior_content_hash,
-    },
-  });
+    writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.sync.rolled_back",
+      entityType: "skill_sync_state",
+      entityId: `${skillName}@${sourceHarness}`,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+        rolled_back_to_version: existing.prior_version,
+        rolled_back_to_hash: existing.prior_content_hash,
+      },
+    });
+  })();
 
   const refreshed = loadSyncStateRow(db, skillName, sourceHarness);
   if (!refreshed) {
@@ -2060,6 +2070,8 @@ export function rollbackToPriorVersion(
   }
   return refreshed;
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Top-level checkSync — scans filesystem + creates proposals

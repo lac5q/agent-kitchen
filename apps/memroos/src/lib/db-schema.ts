@@ -623,6 +623,7 @@ function applySkillTrustChainSchema(db: Database.Database): void {
   // ALTER a CHECK in place, so we follow the same pattern used for
   // hive_delegations: CREATE TABLE _new, INSERT SELECT, DROP, RENAME.
   // Guarded by a meta flag so subsequent migrations are no-ops.
+  // VAL-SKILL-040: Fix idempotent guard and make DROP FK-safe.
   const quarantineCheckMigrated = db
     .prepare(
       `SELECT value FROM meta WHERE key = 'skill_registry_quarantine_check_v1'`
@@ -630,86 +631,106 @@ function applySkillTrustChainSchema(db: Database.Database): void {
     .get() as { value: string } | undefined;
 
   if (!quarantineCheckMigrated) {
-    const columns = db
-      .prepare(`PRAGMA table_info(skill_registry)`)
-      .all() as Array<{ name: string }>;
-    const columnNames = columns.map((c) => c.name);
+    // Additional idempotency: if sqlite_master already contains the quarantined CHECK, skip rebuild.
+    const registrySql = db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'skill_registry'`)
+      .get() as { sql: string } | undefined;
+    const alreadyHasQuarantined = registrySql?.sql?.includes("'quarantined'") ?? false;
 
-    // Defensive: skip if the new column set is missing (e.g. partial
-    // migration on a test DB that hasn't applied v11 yet).
-    const required = [
-      "id",
-      "name",
-      "description",
-      "owner",
-      "source_harness",
-      "risk_tier",
-      "dispatch_status",
-      "version",
-      "preconditions",
-      "allowed_tools",
-      "verification_checks",
-      "rollback_behavior",
-      "raw_body",
-      "completeness_pct",
-      "missing_fields_json",
-      "imported_by",
-      "imported_at",
-      "evidence_examples",
-      "content_hash",
-      "signature",
-      "signed_by",
-      "signed_at",
-      "trust_level",
-      "public_key_fingerprint",
-    ];
-    const missing = required.filter((col) => !columnNames.includes(col));
+    if (!alreadyHasQuarantined) {
+      const columns = db
+        .prepare(`PRAGMA table_info(skill_registry)`)
+        .all() as Array<{ name: string }>;
+      const columnNames = columns.map((c) => c.name);
 
-    if (missing.length === 0) {
-      const quotedColumns = required.map((c) => `"${c}"`).join(", ");
+      // Defensive: skip if the new column set is missing (e.g. partial
+      // migration on a test DB that hasn't applied v11 yet).
+      const required = [
+        "id",
+        "name",
+        "description",
+        "owner",
+        "source_harness",
+        "risk_tier",
+        "dispatch_status",
+        "version",
+        "preconditions",
+        "allowed_tools",
+        "verification_checks",
+        "rollback_behavior",
+        "raw_body",
+        "completeness_pct",
+        "missing_fields_json",
+        "imported_by",
+        "imported_at",
+        "evidence_examples",
+        "content_hash",
+        "signature",
+        "signed_by",
+        "signed_at",
+        "trust_level",
+        "public_key_fingerprint",
+      ];
+      const missing = required.filter((col) => !columnNames.includes(col));
 
-      db.exec(`
-        CREATE TABLE skill_registry_new (
-          id                  INTEGER PRIMARY KEY,
-          name                TEXT    NOT NULL,
-          description         TEXT,
-          owner               TEXT,
-          source_harness      TEXT    NOT NULL,
-          risk_tier           TEXT,
-          dispatch_status     TEXT    NOT NULL DEFAULT 'incomplete'
-                              CHECK(dispatch_status IN ('enabled','disabled','incomplete','review','quarantined')),
-          version             TEXT,
-          preconditions       TEXT,
-          allowed_tools       TEXT,
-          verification_checks TEXT,
-          rollback_behavior   TEXT,
-          raw_body            TEXT    NOT NULL DEFAULT '',
-          completeness_pct    INTEGER NOT NULL DEFAULT 0,
-          missing_fields_json TEXT    NOT NULL DEFAULT '[]',
-          imported_by         TEXT    NOT NULL,
-          imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-          evidence_examples   TEXT,
-          content_hash        TEXT,
-          signature           TEXT,
-          signed_by           TEXT,
-          signed_at           TEXT,
-          trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
-                              CHECK(trust_level IN ('unsigned','signed','verified')),
-          public_key_fingerprint TEXT,
-          UNIQUE(name, source_harness)
-        );
-        CREATE INDEX IF NOT EXISTS skill_registry_source_status
-          ON skill_registry(source_harness, dispatch_status);
-        CREATE INDEX IF NOT EXISTS skill_registry_dispatch
-          ON skill_registry(dispatch_status, imported_at DESC);
-        CREATE INDEX IF NOT EXISTS skill_registry_imported
-          ON skill_registry(imported_at DESC);
+      if (missing.length === 0) {
+        const quotedColumns = required.map((c) => `"${c}"`).join(", ");
 
-        INSERT INTO skill_registry_new (${quotedColumns})
-          SELECT ${quotedColumns} FROM skill_registry;
-        DROP TABLE skill_registry;
-        ALTER TABLE skill_registry_new RENAME TO skill_registry;
-      `);
+        // VAL-SKILL-040: FK-safe rebuild. Disable foreign_keys during DROP/RENAME
+        // so child tables (skill_quarantine, pins, etc.) that may exist on rerun
+        // do not cause SQLITE_CONSTRAINT. Re-enable afterwards. The meta flag
+        // ensures this path is only taken once, but defensively handle reruns.
+        const fkWasOn = db.prepare(`PRAGMA foreign_keys`).get() as unknown as number;
+        try {
+          db.exec(`PRAGMA foreign_keys = OFF`);
+          db.exec(`
+            CREATE TABLE skill_registry_new (
+              id                  INTEGER PRIMARY KEY,
+              name                TEXT    NOT NULL,
+              description         TEXT,
+              owner               TEXT,
+              source_harness      TEXT    NOT NULL,
+              risk_tier           TEXT,
+              dispatch_status     TEXT    NOT NULL DEFAULT 'incomplete'
+                                  CHECK(dispatch_status IN ('enabled','disabled','incomplete','review','quarantined')),
+              version             TEXT,
+              preconditions       TEXT,
+              allowed_tools       TEXT,
+              verification_checks TEXT,
+              rollback_behavior   TEXT,
+              raw_body            TEXT    NOT NULL DEFAULT '',
+              completeness_pct    INTEGER NOT NULL DEFAULT 0,
+              missing_fields_json TEXT    NOT NULL DEFAULT '[]',
+              imported_by         TEXT    NOT NULL,
+              imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+              evidence_examples   TEXT,
+              content_hash        TEXT,
+              signature           TEXT,
+              signed_by           TEXT,
+              signed_at           TEXT,
+              trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
+                                  CHECK(trust_level IN ('unsigned','signed','verified')),
+              public_key_fingerprint TEXT,
+              UNIQUE(name, source_harness)
+            );
+            CREATE INDEX IF NOT EXISTS skill_registry_source_status
+              ON skill_registry(source_harness, dispatch_status);
+            CREATE INDEX IF NOT EXISTS skill_registry_dispatch
+              ON skill_registry(dispatch_status, imported_at DESC);
+            CREATE INDEX IF NOT EXISTS skill_registry_imported
+              ON skill_registry(imported_at DESC);
+
+            INSERT INTO skill_registry_new (${quotedColumns})
+              SELECT ${quotedColumns} FROM skill_registry;
+            DROP TABLE skill_registry;
+            ALTER TABLE skill_registry_new RENAME TO skill_registry;
+          `);
+        } finally {
+          if (fkWasOn) {
+            db.exec(`PRAGMA foreign_keys = ON`);
+          }
+        }
+      }
     }
 
     db.prepare(
