@@ -351,8 +351,15 @@ describe("VAL-SKILL-037 export binds hashes and records truthfully", () => {
     };
     expect(reg.version).toBe(result.postVersion);
     expect(reg.content_hash).toBe(result.postHash);
-    expect(reg.raw_body).toContain("original body");
-    expect(reg.raw_body).toContain(proposal.proposedDiff);
+    // raw_body is JSON stringified runtime skill; diff is inside parsed body + diff field
+    const parsed = (() => {
+      try { return JSON.parse(reg.raw_body); } catch { return { body: reg.raw_body, diff: reg.raw_body }; }
+    })() as { body?: string; diff?: string };
+    const bodyText = parsed.body ?? reg.raw_body;
+    const diffText = parsed.diff ?? reg.raw_body;
+    expect(bodyText).toContain("original body");
+    expect(diffText).toContain("+++ fix");
+    expect(diffText).toContain("improved trigger");
 
     const exportLog = db.prepare(`SELECT pre_version, pre_hash, post_version, post_hash, edit_hash, actor FROM skillforge_exports WHERE proposal_id = ?`).get(proposal.id) as any;
     expect(exportLog).toBeTruthy();

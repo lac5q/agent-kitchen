@@ -55,11 +55,18 @@ describe("SkillForge Integration", () => {
         allowed_tools TEXT,
         verification_checks TEXT,
         rollback_behavior TEXT,
-        raw_body TEXT NOT NULL DEFAULT '',
+        raw_body TEXT NOT NULL DEFAULT 'original body',
         completeness_pct INTEGER NOT NULL DEFAULT 0,
         missing_fields_json TEXT NOT NULL DEFAULT '[]',
         imported_by TEXT NOT NULL,
-        imported_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        imported_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        evidence_examples TEXT,
+        content_hash TEXT,
+        signature TEXT,
+        signed_by TEXT,
+        signed_at TEXT,
+        trust_level TEXT NOT NULL DEFAULT 'unsigned',
+        lifecycle_state TEXT NOT NULL DEFAULT 'draft'
       );
       CREATE TABLE skillforge_proposals (
         id TEXT PRIMARY KEY,
@@ -68,10 +75,18 @@ describe("SkillForge Integration", () => {
         source_version TEXT NOT NULL,
         proposed_diff TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
+        edit_hash TEXT,
         train_split_id TEXT,
+        validation_split_id TEXT,
+        held_out_split_id TEXT,
+        baseline_w REAL,
+        validation_w REAL,
+        held_out_w REAL,
         validation_results TEXT,
         held_out_results TEXT,
         w_delta REAL,
+        evaluator_receipts TEXT NOT NULL DEFAULT '[]',
+        typed_edit_ops TEXT NOT NULL DEFAULT '[]',
         rejected_edits TEXT NOT NULL DEFAULT '[]',
         residual_risks TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
@@ -93,6 +108,40 @@ describe("SkillForge Integration", () => {
         proposals_created INTEGER NOT NULL DEFAULT 0,
         proposals_submitted INTEGER NOT NULL DEFAULT 0,
         errors TEXT
+      );
+      CREATE TABLE skillforge_splits (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL,
+        split_type TEXT NOT NULL,
+        task_samples TEXT,
+        created_at TEXT
+      );
+      CREATE TABLE audit_entries (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        actor_role TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        reason TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE skillforge_exports (
+        id TEXT PRIMARY KEY,
+        proposal_id TEXT NOT NULL,
+        skill_id TEXT NOT NULL,
+        skill_registry_id INTEGER,
+        pre_version TEXT,
+        pre_hash TEXT,
+        pre_raw_body TEXT,
+        post_version TEXT,
+        post_hash TEXT,
+        edit_hash TEXT,
+        eval_receipt_hash TEXT,
+        actor TEXT,
+        created_at TEXT NOT NULL
       );
     `);
   });
@@ -148,8 +197,8 @@ describe("SkillForge Integration", () => {
     const result = await runSkillCycle(db, config);
 
     expect(result.lintPassed).toBe(true);
-    expect(result.syncComplete).toBe(false); // Missing skillforge tables in :memory:
-    expect(result.errors.length).toBeGreaterThan(0);
+    // After fixing fixture to include required tables, sync should now complete.
+    expect(result.syncComplete).toBe(true);
   });
 
   it("detects missing tables in cycle", async () => {
