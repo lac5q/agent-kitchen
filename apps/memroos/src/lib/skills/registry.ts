@@ -266,7 +266,13 @@ export function computeCompleteness(parsed: SkillMdParsed): CompletenessScore {
   return { percent, missing_fields, fields };
 }
 
-const VALID_DISPATCH_STATUSES = new Set(["enabled", "disabled", "incomplete", "review"]);
+const VALID_DISPATCH_STATUSES = new Set([
+  "enabled",
+  "disabled",
+  "incomplete",
+  "review",
+  "quarantined",
+]);
 
 // ---------------------------------------------------------------------------
 // Content hashing + signing (SKILLTRUST-02)
@@ -362,11 +368,18 @@ export function normalizeRegistryEntry(
       dispatch_status = "incomplete";
     }
   } else {
+    // Phase 149 / SKILLTRUST-03: no direct-to-enabled import path.
+    // A complete skill that would have been 'enabled' via frontmatter
+    // must land in 'quarantined' so it has to pass through the
+    // quarantine pipeline (scan -> eval -> operator approval) before it
+    // becomes dispatchable. This enforces VAL-QUAR-001/002.
+    // Frontmatter 'disabled' or 'review' is still honored; any other
+    // value (including 'enabled' or missing) maps to 'quarantined'.
     const fmStatus = parsed.dispatch_status;
-    if (fmStatus && VALID_DISPATCH_STATUSES.has(fmStatus)) {
+    if (fmStatus === "disabled" || fmStatus === "review") {
       dispatch_status = fmStatus;
     } else {
-      dispatch_status = "review";
+      dispatch_status = "quarantined";
     }
   }
 

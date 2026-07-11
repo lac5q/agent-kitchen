@@ -6,11 +6,23 @@
  *     verification_checks, or rollback_behavior, evidence_examples, signature,
  *     or public_key_fingerprint because these are untrusted imported content.
  *   - Only safe identifying fields (id, name, source_harness, risk_tier,
- *     completeness_pct, dispatch_status, trust_level) appear in evidence.
+ *     completeness_pct, dispatch_status, trust_level, content_hash) appear in
+ *     evidence. Skill names are not secrets, but body text and example text are.
  *   - The enabled+complete filter is performed in SQL WHERE (not JS post-filter)
  *     so that no disabled/incomplete row can slip through a future code path.
- *   - Phase 148 SKILLTRUST-02: when `minTrustLevel` is supplied, the lookup
+ *   - Phase 148 SKILLTRUST-02: when minTrustLevel is supplied, the lookup
  *     fail-closes on skills below that trust rank (unsigned < signed < verified).
+ *
+ * SKILLTRUST-01 (continued) / VAL-SKILL-017 / VAL-SKILL-018 / VAL-SKILL-019:
+ *   - When source_harness is supplied the lookup is constrained to a single
+ *     harness identity, so the named request can never silently select
+ *     another harness or version.
+ *   - When source_harness is omitted and multiple harnesses share the
+ *     skill_name, the lookup returns an ambiguous result instead of picking
+ *     an arbitrary row.
+ *   - The result of a fallback (no skill_name) is null so the dispatcher
+ *     can produce mode=fallback evidence without performing any
+ *     registry lookup at all.
  *
  * Performance: lookup uses the (dispatch_status, imported_at DESC) index from
  * the skill_registry schema. A search by name alone hits the table primary scan
@@ -54,6 +66,13 @@ export type SkillLookupResult =
       reason: string;
       dispatch_status: string | null;
       trust_level?: TrustLevel | null;
+      source_harness?: string | null;
+    }
+  | {
+      kind: "ambiguous";
+      skill_name: string;
+      candidate_harnesses: string[];
+      reason: string;
     };
 
 /** Evidence block appended to DispatchResult.evidence. */
@@ -96,11 +115,24 @@ interface SkillRow {
   completeness_pct: number;
   trust_level: string | null;
   signature: string | null;
+  version: string | null;
+  content_hash: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Lookup
 // ---------------------------------------------------------------------------
+
+export interface SkillLookupOptions {
+  /** Minimum trust rank the selected row must satisfy. */
+  minTrustLevel?: TrustLevel | null;
+  /** Restrict to a single source harness identity (VAL-SKILL-018). */
+  sourceHarness?: string | null;
+  /** Restrict to a specific version string (VAL-SKILL-017). */
+  version?: string | null;
+  /** Require the row to carry a signature. */
+  requireSigned?: boolean;
+}
 
 /**
  * Looks up a skill by name in the governed registry.
@@ -109,56 +141,158 @@ interface SkillRow {
  *   - null if no skill_name provided (normal dispatch proceeds, no governance check)
  *   - { kind: 'hit', skill } if an enabled+complete contract is found
  *   - { kind: 'denied', ... } for disabled/incomplete/review/not-found contracts
+ *   - { kind: 'ambiguous', ... } when multiple harnesses share the skill_name
+ *     and no explicit source_harness binding was supplied.
  *
  * The enabled+complete predicate is applied in SQL to guarantee fail-closed behavior.
+ *
+ * SKILLTRUST-01 (continued):
+ *   - When sourceHarness is supplied, the SQL gate is constrained to that
+ *     exact (name, source_harness) tuple, so the result is deterministic.
+ *   - When sourceHarness is omitted and multiple rows share the skill name
+ *     the result is 'ambiguous' so the dispatcher can refuse to silently pick
+ *     a harness.
  */
 export function lookupSkillContract(
   db: Database.Database,
   skillName: string | null | undefined,
-  minTrustLevel?: TrustLevel | null,
-  options?: { requireSigned?: boolean }
+  secondArg?: TrustLevel | SkillLookupOptions | null,
+  thirdArg?: { requireSigned?: boolean } | SkillLookupOptions | null
 ): SkillLookupResult | null {
   if (!skillName || skillName.trim() === "") {
-    // No skill name — fall through to normal per-agent dispatch
     return null;
   }
 
   const name = skillName.trim();
-  const requireSigned = Boolean(options?.requireSigned);
 
-  // Step 1: attempt an enabled+complete lookup in SQL.
+  // Backwards compat: supports (db, name, minTrustLevel, options) legacy signature
+  // used by Phase 148 tests, and (db, name, options) new signature.
+  let options: SkillLookupOptions = {};
+  let legacyMinTrust: TrustLevel | null = null;
+
+  if (secondArg === null || secondArg === undefined) {
+    // secondArg is null/undefined -> treat as no minTrust, thirdArg may be options
+    if (thirdArg && typeof thirdArg === 'object') {
+      options = thirdArg as SkillLookupOptions;
+    }
+  } else if (typeof secondArg === 'string') {
+    // legacy: secondArg is TrustLevel string
+    legacyMinTrust = secondArg as TrustLevel;
+    if (thirdArg && typeof thirdArg === 'object') {
+      options = thirdArg as SkillLookupOptions;
+    }
+  } else if (typeof secondArg === 'object') {
+    // new style: secondArg is options object
+    options = secondArg as SkillLookupOptions;
+    // thirdArg ignored if present (should not happen)
+  }
+
+  // Merge legacy minTrust into options if not already set
+  const minTrustLevel = options.minTrustLevel ?? legacyMinTrust ?? null;
+  const requireSigned = Boolean(options.requireSigned);
+  const sourceHarness = options.sourceHarness?.trim()
+    ? options.sourceHarness.trim()
+    : null;
+  const version = options.version?.trim() ? options.version.trim() : null;
+
+  // Step 1: ambiguity check (VAL-SKILL-018). When the caller did not bind
+  // a specific harness AND the skill_name exists in two or more harnesses,
+  // we must refuse to silently select one -- the result is 'ambiguous'.
+  // This runs before the enabled+complete lookup so the operator-facing
+  // reason is clear (multiple harnesses) rather than masked behind an
+  // incomplete-or-disabled denial.
+  if (!sourceHarness) {
+    const distinctHarnesses = db
+      .prepare<[string], { source_harness: string }>(
+        `SELECT DISTINCT source_harness
+            FROM skill_registry
+           WHERE name = ?`
+      )
+      .all(name);
+
+    if (distinctHarnesses.length > 1) {
+      const sortedHarnesses = distinctHarnesses
+        .map((row) => row.source_harness)
+        .sort((a, b) => a.localeCompare(b));
+      return {
+        kind: "ambiguous",
+        skill_name: name,
+        candidate_harnesses: sortedHarnesses,
+        reason:
+          `Skill name '${name}' exists in multiple harnesses (${sortedHarnesses.join(", ")}); supply an explicit source_harness to dispatch`,
+      };
+    }
+  }
+
+  // Step 2: attempt an enabled+complete lookup in SQL.
   // The fail-closed filter lives in WHERE, not in JS, so no disabled row
   // can slip through, even when multiple harnesses share the same skill name.
   // (skill_registry has UNIQUE(name, source_harness); same name may appear in
   //  multiple harnesses with different statuses.)
-  //
-  // Phase 148 SKILLTRUST-02: when the operator enables
-  // `require_signed_skills` (via MEMROOS_REQUIRE_SIGNED_SKILLS=true) the SQL
-  // gate additionally requires `signature IS NOT NULL`, so unsigned rows are
-  // denied at the SQL layer instead of via JS post-filter.
   const requireSignedPredicate = requireSigned ? " AND signature IS NOT NULL" : "";
-  const enabledRow = db
-    .prepare<[string], SkillRow>(
-      `SELECT id, name, source_harness, risk_tier, dispatch_status,
-              completeness_pct, trust_level, signature
+  const sourceHarnessPredicate = sourceHarness ? " AND source_harness = ?" : "";
+  const buildEnabledSql = (includeVersion: boolean) => {
+    const extra = includeVersion ? ", version, content_hash" : "";
+    return `SELECT id, name, source_harness, risk_tier, dispatch_status,
+              completeness_pct, trust_level, signature${extra}
          FROM skill_registry
         WHERE name = ?
           AND dispatch_status = 'enabled'
           AND completeness_pct = 100
-          ${requireSignedPredicate}
+          ${requireSignedPredicate}${sourceHarnessPredicate}
         ORDER BY imported_at DESC
-        LIMIT 1`
-    )
-    .get(name);
+        LIMIT 1`;
+  };
+  let enabledRow: SkillRow | null = null;
+  const tryFetchEnabled = (sql: string): SkillRow | null => {
+    try {
+      if (sourceHarness) {
+        return (db.prepare<[string, string], SkillRow>(sql).get(name, sourceHarness) ?? null) as SkillRow | null;
+      }
+      return (db.prepare<[string], SkillRow>(sql).get(name) ?? null) as SkillRow | null;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("no such column")) return null;
+      throw e;
+    }
+  };
+  // Try full query first, fall back to minimal columns for legacy test DBs
+  enabledRow = tryFetchEnabled(buildEnabledSql(true));
+  if (!enabledRow) {
+    const minimalSql = buildEnabledSql(false);
+    // Only retry minimal if full failed due to missing columns
+    try {
+      if (sourceHarness) {
+        enabledRow = (db.prepare<[string, string], SkillRow>(minimalSql).get(name, sourceHarness) ?? null) as SkillRow | null;
+      } else {
+        enabledRow = (db.prepare<[string], SkillRow>(minimalSql).get(name) ?? null) as SkillRow | null;
+      }
+    } catch {
+      enabledRow = null;
+    }
+  }
 
   if (enabledRow) {
-    // A valid, enabled, complete contract found — return safe summary only
-    const rowTrust = (enabledRow.trust_level ?? "unsigned") as TrustLevel;
-    if (minTrustLevel && trustLevelRank(rowTrust) < trustLevelRank(minTrustLevel)) {
-      // Enabled+complete but trust tier too low — fail-closed denial.
+    // VAL-SKILL-017: explicit version binding is honored. A mismatched
+    // version is denied rather than silently falling back to a different row.
+    if (version && enabledRow.version && enabledRow.version !== version) {
       return {
         kind: "denied",
         skill_name: name,
+        source_harness: enabledRow.source_harness,
+        reason: `Skill version mismatch: requested '${version}' but registry row is '${enabledRow.version}'`,
+        dispatch_status: enabledRow.dispatch_status,
+        trust_level: (enabledRow.trust_level ?? "unsigned") as TrustLevel,
+      };
+    }
+    // A valid, enabled, complete contract found -- return safe summary only
+    const rowTrust = (enabledRow.trust_level ?? "unsigned") as TrustLevel;
+    if (minTrustLevel && trustLevelRank(rowTrust) < trustLevelRank(minTrustLevel)) {
+      // Enabled+complete but trust tier too low -- fail-closed denial.
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: enabledRow.source_harness,
         reason: `Skill trust level '${rowTrust}' is below required minimum '${minTrustLevel}'`,
         dispatch_status: enabledRow.dispatch_status,
         trust_level: rowTrust,
@@ -177,51 +311,68 @@ export function lookupSkillContract(
     return { kind: "hit", skill: summary };
   }
 
-  // Step 2: no enabled+complete row. Check whether any contract exists at all
-  // so we can produce an informative denial (vs. not-found).
-  const anyRow = db
-    .prepare<[string], SkillRow>(
-      `SELECT id, name, source_harness, risk_tier, dispatch_status,
-              completeness_pct, trust_level, signature
+  // Step 3: no enabled+complete row in the constrained search. Check
+  // whether any contract exists at all so we can produce an informative
+  // denial (vs. not-found).
+  const buildAnySql = (includeVersion: boolean) => {
+    const extra = includeVersion ? ", version, content_hash" : "";
+    return `SELECT id, name, source_harness, risk_tier, dispatch_status,
+              completeness_pct, trust_level, signature${extra}
          FROM skill_registry
         WHERE name = ?
+          ${sourceHarnessPredicate}
         ORDER BY imported_at DESC
-        LIMIT 1`
-    )
-    .get(name);
+        LIMIT 1`;
+  };
+  let anyRow: SkillRow | null = null;
+  // Try full first, fall back to minimal for legacy test DBs
+  try {
+    const fullAnySql = buildAnySql(true);
+    anyRow = sourceHarness
+      ? (db.prepare<[string, string], SkillRow>(fullAnySql).get(name, sourceHarness) ?? null) as SkillRow | null
+      : (db.prepare<[string], SkillRow>(fullAnySql).get(name) ?? null) as SkillRow | null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes("no such column")) throw e;
+    // retry minimal
+    const minimalAnySql = buildAnySql(false);
+    try {
+      anyRow = sourceHarness
+        ? (db.prepare<[string, string], SkillRow>(minimalAnySql).get(name, sourceHarness) ?? null) as SkillRow | null
+        : (db.prepare<[string], SkillRow>(minimalAnySql).get(name) ?? null) as SkillRow | null;
+    } catch {
+      anyRow = null;
+    }
+  }
 
   if (!anyRow) {
     return {
       kind: "denied",
       skill_name: name,
-      reason: `Skill contract not found in registry`,
+      source_harness: sourceHarness,
+      reason: sourceHarness
+        ? `Skill contract not found in registry for harness '${sourceHarness}'`
+        : `Skill contract not found in registry`,
       dispatch_status: null,
       trust_level: null,
     };
   }
 
-  // Step 2.5: when require_signed_skills=true and the row exists but has
+  // Step 4: when require_signed_skills=true and the row exists but has
   // no signature, surface an explicit denial so the operator audit row
-  // captures the precise reason. This branch is unreachable when the
-  // SQL gate already filtered out unsigned rows, but kept as a defensive
-  // check for callers that pass requireSigned alongside a custom DB view.
+  // captures the precise reason.
   if (requireSigned && !anyRow.signature) {
     return {
       kind: "denied",
       skill_name: name,
+      source_harness: anyRow.source_harness,
       reason: "Skill is unsigned and dispatch policy require_signed_skills=true",
       dispatch_status: anyRow.dispatch_status,
       trust_level: (anyRow.trust_level ?? null) as TrustLevel | null,
     };
   }
 
-  // Contract exists but is not enabled+complete — deny with informative reason.
-  //
-  // SKILLTRUST-01 (Phase 148): a row with dispatch_status='enabled' but
-  // completeness_pct < 100 is denied with the more accurate 'incomplete'
-  // label, not the misleading 'enabled'. The Step 1 SQL gate
-  // (dispatch_status='enabled' AND completeness_pct=100) is the source of
-  // truth for fail-closed dispatch; this label is purely operator-facing.
+  // Step 5: contract exists but is not enabled+complete -- deny with informative reason.
   let statusLabel: string;
   if (anyRow.completeness_pct < 100) {
     statusLabel = "incomplete";
@@ -231,6 +382,8 @@ export function lookupSkillContract(
     statusLabel = "incomplete";
   } else if (anyRow.dispatch_status === "review") {
     statusLabel = "under review";
+  } else if (anyRow.dispatch_status === "quarantined") {
+    statusLabel = "quarantined";
   } else {
     statusLabel = anyRow.dispatch_status ?? "unknown";
   }
@@ -238,6 +391,7 @@ export function lookupSkillContract(
   return {
     kind: "denied",
     skill_name: name,
+    source_harness: anyRow.source_harness,
     reason: `Skill contract is ${statusLabel} and cannot be used for governed dispatch`,
     dispatch_status: anyRow.dispatch_status,
     trust_level: anyRowTrust,
@@ -252,9 +406,13 @@ export function lookupSkillContract(
  * Converts a SkillLookupResult (or null for fallback) into a SkillGovernanceEvidence
  * block suitable for merging into DispatchResult.evidence.
  *
- * Phase 148 SKILLTRUST-02: when `minTrustLevel` is provided, the returned
- * evidence carries a `required_trust_level` field so the operator audit row
+ * Phase 148 SKILLTRUST-02: when minTrustLevel is provided, the returned
+ * evidence carries a required_trust_level field so the operator audit row
  * records the configured threshold alongside any denial reason.
+ *
+ * Phase 149 SKILLTRUST-01 (continued) / VAL-SKILL-019: when the result is
+ * ambiguous the evidence surfaces the candidate harnesses so the operator can
+ * see the conflict and choose one explicitly.
  */
 export function buildSkillEvidence(
   result: SkillLookupResult | null,
@@ -274,6 +432,17 @@ export function buildSkillEvidence(
       skill_governance: {
         mode: "governed",
         selected_skill: result.skill,
+        ...(minTrustLevel ? { required_trust_level: minTrustLevel } : {}),
+      },
+    };
+  }
+
+  if (result.kind === "ambiguous") {
+    return {
+      skill_governance: {
+        mode: "governed",
+        denial_reason: result.reason,
+        denied_skill: result.skill_name,
         ...(minTrustLevel ? { required_trust_level: minTrustLevel } : {}),
       },
     };

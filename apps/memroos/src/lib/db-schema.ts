@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 type SchemaMigration = {
   version: number;
@@ -139,6 +139,16 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 11,
     name: 'skill-trust-chain-enhanced-contracts',
     up: applySkillTrustChainSchema,
+  },
+  {
+    version: 12,
+    name: 'skill-sync-governance-pins-proposals',
+    up: applySkillSyncGovernanceSchema,
+  },
+  {
+    version: 13,
+    name: 'skill-sync-engine-state-table',
+    up: applySkillSyncEngineSchema,
   },
 ];
 
@@ -570,35 +580,276 @@ function applySkillTrustChainSchema(db: Database.Database): void {
       missing_fields_json: string | null;
     }>;
 
-  if (rows.length === 0) {
-    return;
+  if (rows.length > 0) {
+    const update = db.prepare(
+      `UPDATE skill_registry
+          SET completeness_pct = ?,
+              missing_fields_json = ?
+        WHERE id = ?`
+    );
+
+    for (const row of rows) {
+      let missingFields: string[];
+      try {
+        const parsed = JSON.parse(row.missing_fields_json ?? "[]");
+        missingFields = Array.isArray(parsed)
+          ? parsed.filter((field): field is string => typeof field === "string")
+          : [];
+      } catch {
+        missingFields = [];
+      }
+
+      if (!missingFields.includes("evidence_examples")) {
+        missingFields.push("evidence_examples");
+      }
+
+      const completenessPct = row.completeness_pct >= 100 ? 91 : row.completeness_pct;
+      update.run(completenessPct, JSON.stringify(missingFields), row.id);
+    }
   }
 
-  const update = db.prepare(
-    `UPDATE skill_registry
-        SET completeness_pct = ?,
-            missing_fields_json = ?
-      WHERE id = ?`
-  );
+  // SKILLTRUST-03 quarantine pipeline: rebuild skill_registry so the
+  // dispatch_status CHECK constraint accepts 'quarantined'. SQLite cannot
+  // ALTER a CHECK in place, so we follow the same pattern used for
+  // hive_delegations: CREATE TABLE _new, INSERT SELECT, DROP, RENAME.
+  // Guarded by a meta flag so subsequent migrations are no-ops.
+  const quarantineCheckMigrated = db
+    .prepare(
+      `SELECT value FROM meta WHERE key = 'skill_registry_quarantine_check_v1'`
+    )
+    .get() as { value: string } | undefined;
 
-  for (const row of rows) {
-    let missingFields: string[];
-    try {
-      const parsed = JSON.parse(row.missing_fields_json ?? "[]");
-      missingFields = Array.isArray(parsed)
-        ? parsed.filter((field): field is string => typeof field === "string")
-        : [];
-    } catch {
-      missingFields = [];
+  if (!quarantineCheckMigrated) {
+    const columns = db
+      .prepare(`PRAGMA table_info(skill_registry)`)
+      .all() as Array<{ name: string }>;
+    const columnNames = columns.map((c) => c.name);
+
+    // Defensive: skip if the new column set is missing (e.g. partial
+    // migration on a test DB that hasn't applied v11 yet).
+    const required = [
+      "id",
+      "name",
+      "description",
+      "owner",
+      "source_harness",
+      "risk_tier",
+      "dispatch_status",
+      "version",
+      "preconditions",
+      "allowed_tools",
+      "verification_checks",
+      "rollback_behavior",
+      "raw_body",
+      "completeness_pct",
+      "missing_fields_json",
+      "imported_by",
+      "imported_at",
+      "evidence_examples",
+      "content_hash",
+      "signature",
+      "signed_by",
+      "signed_at",
+      "trust_level",
+      "public_key_fingerprint",
+    ];
+    const missing = required.filter((col) => !columnNames.includes(col));
+
+    if (missing.length === 0) {
+      const quotedColumns = required.map((c) => `"${c}"`).join(", ");
+
+      db.exec(`
+        CREATE TABLE skill_registry_new (
+          id                  INTEGER PRIMARY KEY,
+          name                TEXT    NOT NULL,
+          description         TEXT,
+          owner               TEXT,
+          source_harness      TEXT    NOT NULL,
+          risk_tier           TEXT,
+          dispatch_status     TEXT    NOT NULL DEFAULT 'incomplete'
+                              CHECK(dispatch_status IN ('enabled','disabled','incomplete','review','quarantined')),
+          version             TEXT,
+          preconditions       TEXT,
+          allowed_tools       TEXT,
+          verification_checks TEXT,
+          rollback_behavior   TEXT,
+          raw_body            TEXT    NOT NULL DEFAULT '',
+          completeness_pct    INTEGER NOT NULL DEFAULT 0,
+          missing_fields_json TEXT    NOT NULL DEFAULT '[]',
+          imported_by         TEXT    NOT NULL,
+          imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+          evidence_examples   TEXT,
+          content_hash        TEXT,
+          signature           TEXT,
+          signed_by           TEXT,
+          signed_at           TEXT,
+          trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
+                              CHECK(trust_level IN ('unsigned','signed','verified')),
+          public_key_fingerprint TEXT,
+          UNIQUE(name, source_harness)
+        );
+        CREATE INDEX IF NOT EXISTS skill_registry_source_status
+          ON skill_registry(source_harness, dispatch_status);
+        CREATE INDEX IF NOT EXISTS skill_registry_dispatch
+          ON skill_registry(dispatch_status, imported_at DESC);
+        CREATE INDEX IF NOT EXISTS skill_registry_imported
+          ON skill_registry(imported_at DESC);
+
+        INSERT INTO skill_registry_new (${quotedColumns})
+          SELECT ${quotedColumns} FROM skill_registry;
+        DROP TABLE skill_registry;
+        ALTER TABLE skill_registry_new RENAME TO skill_registry;
+      `);
     }
 
-    if (!missingFields.includes("evidence_examples")) {
-      missingFields.push("evidence_examples");
-    }
-
-    const completenessPct = row.completeness_pct >= 100 ? 91 : row.completeness_pct;
-    update.run(completenessPct, JSON.stringify(missingFields), row.id);
+    db.prepare(
+      `INSERT OR REPLACE INTO meta(key,value) VALUES('skill_registry_quarantine_check_v1','1')`
+    ).run();
   }
+
+  // SKILLTRUST-03 quarantine lane: skill_quarantine table persists every
+  // stage transition for imported skills. The table is keyed on skill_id
+  // (FK to skill_registry.id) and stores the full audit trail: scanner
+  // output, eval score, approval decision, rejection reason, and the
+  // operator who signed off. Approval status follows three values:
+  // pending -> approved | rejected.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_quarantine (
+      id                INTEGER PRIMARY KEY,
+      skill_id          INTEGER NOT NULL UNIQUE
+                        REFERENCES skill_registry(id) ON DELETE CASCADE,
+      stage             TEXT    NOT NULL DEFAULT 'imported'
+                        CHECK(stage IN (
+                          'imported','scanning','eval_sandbox',
+                          'pending_approval','enabled','rejected'
+                        )),
+      scanner_result    TEXT    NOT NULL DEFAULT '{}',
+      eval_score        REAL,
+      approval_status   TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(approval_status IN ('pending','approved','rejected')),
+      approved_by       TEXT,
+      approved_at       TEXT,
+      rejection_reason  TEXT,
+      created_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS skill_quarantine_stage
+      ON skill_quarantine(stage, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS skill_quarantine_approval
+      ON skill_quarantine(approval_status, updated_at DESC);
+  `);
+}
+
+function applySkillSyncGovernanceSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_import_proposals (
+      id                    TEXT    PRIMARY KEY,
+      source_harness        TEXT    NOT NULL,
+      skill_name            TEXT    NOT NULL,
+      skill_identity        TEXT    NOT NULL,
+      current_content_hash  TEXT,
+      detected_content_hash TEXT    NOT NULL,
+      prior_content_hash    TEXT,
+      prior_version         TEXT,
+      version               TEXT,
+      diff_summary          TEXT    NOT NULL DEFAULT '',
+      diff_payload          TEXT    NOT NULL DEFAULT '{}',
+      status                TEXT    NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','approved','rejected')),
+      proposed_by           TEXT    NOT NULL,
+      proposed_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      decided_by            TEXT,
+      decided_at            TEXT,
+      decision_reason       TEXT,
+      affected_skill_id     INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(source_harness, skill_name, detected_content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS skill_import_proposals_status
+      ON skill_import_proposals(status);
+    CREATE INDEX IF NOT EXISTS skill_import_proposals_harness_name
+      ON skill_import_proposals(source_harness, skill_name);
+
+    CREATE TABLE IF NOT EXISTS skill_version_pins (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id              TEXT    NOT NULL REFERENCES registered_agents(id) ON DELETE CASCADE,
+      skill_name            TEXT    NOT NULL,
+      skill_id              INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      current_version       TEXT    NOT NULL,
+      current_content_hash  TEXT    NOT NULL,
+      prior_version         TEXT,
+      prior_content_hash    TEXT,
+      prior_skill_id        INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      actor                 TEXT    NOT NULL,
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      rolled_back_at        TEXT,
+      rolled_back_by        TEXT,
+      last_rollback_event_id TEXT,
+      UNIQUE(agent_id, skill_name)
+    );
+    CREATE INDEX IF NOT EXISTS skill_version_pins_agent
+      ON skill_version_pins(agent_id);
+  `);
+}
+
+// Phase 149 / SKILLTRUST-04 — Governed cross-harness sync engine.
+//
+// skill_sync_state is the per-(skill_name, source_harness) observability
+// + proposal ledger for the auto-sync engine. A row tracks:
+//   - the last_synced_hash (the hash that has been approved and applied to
+//     the registry),
+//   - a pending_proposal_id (UUID) plus the detected hash/version/diff that
+//     are waiting for operator action,
+//   - a version_pinned_to (TEXT) — when set, no new drift proposals are
+//     created for this (skill_name, source_harness),
+//   - last_check_at (timestamp of the most recent scan),
+//   - prior_* fields for one-step rollback to the version that was current
+//     immediately before the most recent approved proposal.
+//
+// All sync operations are additive and idempotent: re-running a check with
+// no changes does not duplicate a pending proposal, and re-running a check
+// with the same detected hash while a proposal is already pending returns
+// the existing row. The table is the source of truth for "is this skill
+// drifted?" — callers can derive drift=true when pending_proposal_id is set
+// AND last_synced_hash != pending_detected_hash.
+function applySkillSyncEngineSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_sync_state (
+      skill_name                TEXT    NOT NULL,
+      source_harness            TEXT    NOT NULL,
+      last_synced_hash          TEXT,
+      pending_proposal_id       TEXT,
+      pending_detected_hash     TEXT,
+      pending_detected_version  TEXT,
+      pending_diff_summary      TEXT    NOT NULL DEFAULT '',
+      pending_diff_payload      TEXT    NOT NULL DEFAULT '{}',
+      pending_proposed_by       TEXT,
+      pending_proposed_at       TEXT,
+      version_pinned_to         TEXT,
+      last_check_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      prior_version             TEXT,
+      prior_content_hash        TEXT,
+      prior_skill_id            INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      approved_by               TEXT,
+      approved_at               TEXT,
+      rejected_by               TEXT,
+      rejected_at               TEXT,
+      rejection_reason          TEXT,
+      created_at                TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at                TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (skill_name, source_harness)
+    );
+    CREATE INDEX IF NOT EXISTS skill_sync_state_pending
+      ON skill_sync_state(pending_proposal_id) WHERE pending_proposal_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS skill_sync_state_pin
+      ON skill_sync_state(version_pinned_to) WHERE version_pinned_to IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS skill_sync_state_checked
+      ON skill_sync_state(last_check_at DESC);
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {

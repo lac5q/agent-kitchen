@@ -276,6 +276,7 @@ description: import test
 owner: ops
 source_harness: claude
 risk_tier: low
+dispatch_status: enabled
 ---
 
 ## Preconditions
