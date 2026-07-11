@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   try {
     const { classifyText } = await import("@/lib/classification/cascade");
     const classification = classifyText({
-      content: storageBody.text || rawContent || "",
+      content: String(storageBody.text || "") || rawContent || "",
       sourceType: "memory_api",
       metadata: isRecord(body.metadata) ? body.metadata : {}
     });
