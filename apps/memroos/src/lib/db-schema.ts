@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 type SchemaMigration = {
   version: number;
@@ -134,6 +134,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 10,
     name: 'save-artifact-gate-auto-readme',
     up: applyArtifactGateSchema,
+  },
+  {
+    version: 11,
+    name: 'skill-trust-chain-enhanced-contracts',
+    up: applySkillTrustChainSchema,
   },
 ];
 
@@ -517,6 +522,34 @@ function applyArtifactGateSchema(db: Database.Database): void {
       updated_at            TEXT
     );
   `);
+}
+
+// Phase 148 / SKILLTRUST-01..02: Enhanced contracts + content hashing/signing.
+// Additive columns on skill_registry: evidence_examples, content_hash,
+// signature, signed_by, trust_level. Idempotent via try/catch pattern.
+//
+// SKILLTRUST-01: evidence_examples stores the trimmed markdown body of the
+// `## Evidence Examples` section. The default is the empty string — non-empty
+// values satisfy the completeness gate; empty values score as missing.
+function applySkillTrustChainSchema(db: Database.Database): void {
+  for (const statement of [
+    "ALTER TABLE skill_registry ADD COLUMN evidence_examples TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE skill_registry ADD COLUMN content_hash TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signature TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signed_by TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'unsigned'",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+
+  // Add CHECK constraint via a rebuild if trust_level values violate the
+  // constraint. In practice all existing rows default to 'unsigned' which
+  // satisfies the CHECK, so the constraint is enforced at the application
+  // layer for migrated DBs and at the schema layer for fresh DBs.
 }
 
 function applyCurrentSchema(db: Database.Database): void {
@@ -1808,6 +1841,12 @@ function applyCurrentSchema(db: Database.Database): void {
       missing_fields_json TEXT    NOT NULL DEFAULT '[]',
       imported_by         TEXT    NOT NULL,
       imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      evidence_examples   TEXT    NOT NULL DEFAULT '',
+      content_hash        TEXT,
+      signature           TEXT,
+      signed_by           TEXT,
+      trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
+                          CHECK(trust_level IN ('unsigned','signed','verified')),
       UNIQUE(name, source_harness)
     );
     CREATE INDEX IF NOT EXISTS skill_registry_source_status
