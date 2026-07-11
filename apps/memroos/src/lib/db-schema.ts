@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 15;
 
 type SchemaMigration = {
   version: number;
@@ -154,6 +154,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 14,
     name: 'skill-lifecycle-states-and-dependencies',
     up: applySkillLifecycleSchema,
+  },
+  {
+    version: 15,
+    name: 'skill-pin-idempotency-keys',
+    up: applySkillPinIdempotencySchema,
   },
 ];
 
@@ -965,6 +970,45 @@ function applySkillLifecycleSchema(db: Database.Database): void {
       ON skill_lifecycle_audit(skill_id, transitioned_at DESC);
     CREATE INDEX IF NOT EXISTS skill_lifecycle_audit_to_state
       ON skill_lifecycle_audit(to_state, transitioned_at DESC);
+  `);
+}
+
+// Phase 149 (continued) / SKILLTRUST-04 — Pin idempotency keys.
+//
+// VAL-SKILL-030 requires that the same idempotency key produces one
+// logical pin transition. We persist seen idempotency keys in a
+// dedicated table so retries with the same key are recognized as
+// duplicates and the same pin row is returned instead of being
+// recreated (or rotated) under the agent.
+//
+// Each row records:
+//   - id: deterministic key, unique per (agent_id, skill_name, key) tuple
+//   - agent_id / skill_name: the pin target
+//   - pin_id: the VersionPinRow id that was produced on first use
+//   - request_hash: a content hash of the request body fields, so
+//     reusing a key with a different body surfaces as a conflict
+//   - created_at: when the key was first observed
+//
+// The table is keyed on (agent_id, skill_name, idempotency_key) so the
+// first write wins; a UNIQUE constraint surfaces duplicate-key races
+// as SQLite errors so the route can return 409 without rotating the
+// pin.
+function applySkillPinIdempotencySchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_pin_idempotency_keys (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id          TEXT    NOT NULL,
+      skill_name        TEXT    NOT NULL,
+      idempotency_key   TEXT    NOT NULL,
+      pin_id            INTEGER NOT NULL
+                        REFERENCES skill_version_pins(id) ON DELETE CASCADE,
+      request_hash      TEXT    NOT NULL,
+      created_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(agent_id, skill_name, idempotency_key)
+    );
+    CREATE INDEX IF NOT EXISTS skill_pin_idempotency_keys_key
+      ON skill_pin_idempotency_keys(idempotency_key);
   `);
 }
 

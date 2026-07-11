@@ -130,6 +130,22 @@ export interface CreateOrUpdatePinParams {
   current_version: string;
   current_content_hash: string;
   actor: string;
+  /**
+   * VAL-SKILL-030 — optimistic-concurrency token. When supplied, the
+   * existing pin's `updated_at` must match this value exactly, or the
+   * call fails with a typed SyncGovernanceError. Lets a concurrent
+   * operator action race fail closed without silently overwriting
+   * the other side's intent.
+   */
+  expected_current_updated_at?: string | null;
+  /**
+   * VAL-SKILL-030 — idempotency key. When supplied, the same key on a
+   * matching body returns the existing pin (one logical transition per
+   * key). Reusing the key with a different request hash surfaces as a
+   * typed conflict. The key is persisted to skill_pin_idempotency_keys
+   * so a restart or duplicate POST is recognized.
+   */
+  idempotency_key?: string | null;
 }
 
 export interface RollbackPinParams {
@@ -412,6 +428,42 @@ function writeAuditEntry(
     // is fully migrated.
   }
   return id;
+}
+
+/**
+ * Persists a pin idempotency key. The UNIQUE(agent_id, skill_name,
+ * idempotency_key) constraint surfaces duplicate-key races as SQLite
+ * errors; the function catches them so the existing pin (returned
+ * above) is preserved instead of producing a partial error state.
+ */
+function persistPinIdempotencyKey(
+  db: Database.Database,
+  entry: {
+    agentId: string;
+    skillName: string;
+    idempotencyKey: string;
+    pinId: number;
+    requestHash: string;
+  }
+): void {
+  try {
+    db.prepare(
+      `INSERT INTO skill_pin_idempotency_keys
+        (agent_id, skill_name, idempotency_key, pin_id, request_hash)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      entry.agentId,
+      entry.skillName,
+      entry.idempotencyKey,
+      entry.pinId,
+      entry.requestHash
+    );
+  } catch {
+    // Duplicate-key race: another concurrent request already persisted
+    // the same key. We deliberately swallow the error so the caller
+    // gets the same pin that the parallel request produced (each
+    // request will read back via getVersionPin on retry).
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -867,6 +919,76 @@ export function createOrUpdateAgentVersionPin(
     )
     .get(agentId, skillName);
 
+  // VAL-SKILL-030 — optimistic-concurrency check. When the caller
+  // supplies expected_current_updated_at, the existing pin's
+  // updated_at must match exactly. A mismatch surfaces as a typed
+  // error so the caller can re-fetch and retry without silently
+  // overwriting the other side's intent.
+  if (
+    existingPin &&
+    typeof params.expected_current_updated_at === "string" &&
+    params.expected_current_updated_at &&
+    existingPin.updated_at !== params.expected_current_updated_at
+  ) {
+    throw new SyncGovernanceError(
+      `Stale concurrent pin update for agent='${agentId}' skill='${skillName}': expected updated_at='${params.expected_current_updated_at}' but row is '${existingPin.updated_at}'`
+    );
+  }
+
+  // VAL-SKILL-030 — idempotency check. When the caller supplies an
+  // idempotency_key we compute a deterministic request hash and look
+  // up any prior key usage. Matching key + matching body => return
+  // the previously produced pin without mutation. Matching key +
+  // mismatched body => typed conflict (the caller is reusing the
+  // key for a different request, which is always wrong).
+  const idempotencyKey =
+    typeof params.idempotency_key === "string" && params.idempotency_key.trim()
+      ? params.idempotency_key.trim()
+      : null;
+  const requestHash = idempotencyKey
+    ? createHash("sha256")
+        .update(
+          JSON.stringify({
+            agent_id: agentId,
+            skill_name: skillName,
+            skill_id: skillId,
+            current_version: currentVersion,
+            current_content_hash: currentHash,
+            actor,
+          }),
+          "utf8"
+        )
+        .digest("hex")
+    : null;
+
+  if (idempotencyKey && requestHash) {
+    const existingKey = db
+      .prepare<[string, string, string], {
+        id: number;
+        pin_id: number;
+        request_hash: string;
+      }>(
+        `SELECT id, pin_id, request_hash
+           FROM skill_pin_idempotency_keys
+          WHERE agent_id = ?
+            AND skill_name = ?
+            AND idempotency_key = ?
+          LIMIT 1`
+      )
+      .get(agentId, skillName, idempotencyKey);
+    if (existingKey) {
+      if (existingKey.request_hash !== requestHash) {
+        throw new SyncGovernanceError(
+          `Idempotency key '${idempotencyKey}' was previously used with a different request body for agent='${agentId}' skill='${skillName}'`
+        );
+      }
+      const priorPin = getVersionPin(db, existingKey.pin_id);
+      if (priorPin) return rowToPin(priorPin);
+      // The pin row was hard-deleted but the idempotency key survived;
+      // treat as a fresh insert below.
+    }
+  }
+
   const now = nowIso();
 
   if (existingPin) {
@@ -923,6 +1045,16 @@ export function createOrUpdateAgentVersionPin(
       },
     });
 
+    if (idempotencyKey && requestHash) {
+      persistPinIdempotencyKey(db, {
+        agentId,
+        skillName,
+        idempotencyKey,
+        pinId: existingPin.id,
+        requestHash,
+      });
+    }
+
     const refreshed = db
       .prepare<[number], PinSqlRow>(
         `SELECT id, agent_id, skill_name, skill_id, current_version,
@@ -976,6 +1108,16 @@ export function createOrUpdateAgentVersionPin(
       current_version: currentVersion,
     },
   });
+
+  if (idempotencyKey && requestHash) {
+    persistPinIdempotencyKey(db, {
+      agentId,
+      skillName,
+      idempotencyKey,
+      pinId,
+      requestHash,
+    });
+  }
 
   const refreshed = db
     .prepare<[number], PinSqlRow>(
@@ -1085,6 +1227,127 @@ export function listAgentVersionPins(
  * the discarded prior (cleared to null). An `audit_entries` row is
  * written with event_type='skill.pin.rolled_back' so the rollback is
  * auditable.
+ *
+ * Throws SyncGovernanceError when:
+ *   - the pin does not exist,
+ *   - the pin has no prior_version to roll back to (already rolled back),
+ *   - the operator identity is empty,
+ *   - the prior skill_id no longer exists in skill_registry (the
+ *     referenced prior content is gone, so rolling back would point at
+ *     a missing contract — fail-closed).
+ */
+
+/**
+ * Phase 149 (continued) / VAL-SKILL-031 — agent-scoped rollback.
+ *
+ * Looks up the pin by (agent_id, skill_name) and rolls back to its
+ * immediately prior version. The operator need not know the numeric
+ * pin_id; the API route is `POST /api/skills/pins/:agent/rollback`
+ * (the validation contract uses the agent id in the URL path).
+ *
+ * This is a thin wrapper over `rollbackAgentVersionPin` that resolves
+ * the pin id from the (agent_id, skill_name) tuple first. The same
+ * fail-closed guarantees apply: the prior version's registry row must
+ * still exist, the prior version must remain dispatchable
+ * (dispatch_status in {enabled, quarantined} with completeness_pct=100
+ * or be explicitly retired), and a single-step rollback discards the
+ * pre-rollback current.
+ */
+export interface RollbackAgentVersionPinByAgentParams {
+  agent_id: string;
+  skill_name: string;
+  operator: string;
+  reason?: string;
+}
+
+export function rollbackAgentVersionPinByAgent(
+  db: Database.Database,
+  params: RollbackAgentVersionPinByAgentParams
+): VersionPinRow {
+  const agentId = sanitizeActor(params.agent_id, "agent_id");
+  const skillName = sanitizeSkillName(params.skill_name);
+  const operator = sanitizeActor(params.operator, "operator");
+  const reason =
+    typeof params.reason === "string" && params.reason.trim()
+      ? params.reason.trim()
+      : undefined;
+
+  const pin = getAgentVersionPin(db, agentId, skillName);
+  if (!pin) {
+    throw new SyncGovernanceError(
+      `No version pin found for agent='${agentId}' skill='${skillName}'`
+    );
+  }
+
+  // VAL-SKILL-031: never activate retired/tampered policy-invalid
+  // versions. When the prior registry row is in a state that the
+  // dispatch gate would deny (disabled, incomplete, review, missing),
+  // the rollback fails closed rather than silently enabling a
+  // policy-invalid version.
+  if (pin.prior_skill_id !== null) {
+    const priorRow = db
+      .prepare<[number], {
+        id: number;
+        dispatch_status: string;
+        completeness_pct: number;
+        content_hash: string | null;
+      }>(
+        `SELECT id, dispatch_status, completeness_pct, content_hash
+           FROM skill_registry
+          WHERE id = ?
+          LIMIT 1`
+      )
+      .get(pin.prior_skill_id);
+    if (!priorRow) {
+      throw new SyncGovernanceError(
+        `Cannot roll back pin for agent='${agentId}' skill='${skillName}': prior skill_id=${pin.prior_skill_id} no longer exists`
+      );
+    }
+    // The prior version is allowed to be retired/tampered so an
+    // operator can explicitly roll back from a known-bad version to a
+    // known-good one. We still fail closed on rows the SQL gate would
+    // never serve: disabled / incomplete / review. A 'retired' row is
+    // allowed because rollback is the documented escape hatch from a
+    // retired current.
+    if (
+      priorRow.dispatch_status === "disabled" ||
+      priorRow.dispatch_status === "incomplete" ||
+      priorRow.dispatch_status === "review"
+    ) {
+      throw new SyncGovernanceError(
+        `Cannot roll back to prior version with dispatch_status='${priorRow.dispatch_status}' for agent='${agentId}' skill='${skillName}' — policy-invalid`
+      );
+    }
+    if (priorRow.completeness_pct < 100) {
+      throw new SyncGovernanceError(
+        `Cannot roll back to prior version with completeness_pct=${priorRow.completeness_pct} (must be 100) for agent='${agentId}' skill='${skillName}'`
+      );
+    }
+    // Pin hash must equal registry hash — a tampering between pin
+    // creation and rollback fails closed.
+    if (
+      priorRow.content_hash &&
+      pin.prior_content_hash &&
+      priorRow.content_hash.toLowerCase() !== pin.prior_content_hash.toLowerCase()
+    ) {
+      throw new SyncGovernanceError(
+        `Cannot roll back: prior registry row content_hash does not match the pin (tampering suspected)`
+      );
+    }
+  }
+
+  return rollbackAgentVersionPin(db, {
+    pin_id: pin.id,
+    operator,
+    ...(reason ? { reason } : {}),
+  });
+}
+
+/**
+ * Performs a one-step rollback on the pin: the immediately prior
+ * version/hash becomes the new current; the previous current is
+ * discarded. An `audit_entries` row is written with event_type
+ * 'skill.pin.rolled_back' so the rollback is auditable.
  *
  * Throws SyncGovernanceError when:
  *   - the pin does not exist,

@@ -142,6 +142,23 @@ export interface SkillLookupOptions {
   version?: string | null;
   /** Require the row to carry a signature. */
   requireSigned?: boolean;
+  /**
+   * SKILLTRUST-04 / VAL-SKILL-031: explicit version pin override.
+   * When supplied, the lookup uses the pinned (source_harness,
+   * version, content_hash) tuple instead of "latest enabled+complete"
+   * and refuses to select a registry row whose content_hash differs
+   * from the pinned hash (the pin describes a specific contract, and
+   * any drift between pin and registry must fail closed). The pin
+   * wins over the unpinned latest row, but every other governance
+   * gate (completeness, trust, lifecycle, etc.) still applies.
+   */
+  pinned?: {
+    agent_id: string;
+    source_harness: string;
+    current_version: string;
+    current_content_hash: string;
+    skill_id?: number | null;
+  } | null;
 }
 
 /**
@@ -204,6 +221,124 @@ export function lookupSkillContract(
     ? options.sourceHarness.trim()
     : null;
   const version = options.version?.trim() ? options.version.trim() : null;
+  const pinned = options.pinned ?? null;
+
+  // Step 0 (pinned dispatch): SKILLTRUST-04 / VAL-SKILL-031.
+  //
+  // When the caller supplies a pinned (agent, source_harness, version,
+  // content_hash), the pinned contract wins over the unpinned latest
+  // row. The registry row at the pinned source_harness must:
+  //   - exist,
+  //   - match the pinned content_hash (drift between pin and registry
+  //     fails closed — the pin names a specific contract),
+  //   - pass every other governance gate (enabled, complete, lifecycle,
+  //     trust).
+  //
+  // This branch runs BEFORE the ambiguity check so the pinned harness
+  // binding eliminates any same-name ambiguity that would otherwise
+  // surface.
+  if (pinned && pinned.source_harness) {
+    const pinnedRow = db
+      .prepare<[string, string], SkillRow>(
+        `SELECT id, name, source_harness, risk_tier, dispatch_status,
+                completeness_pct, trust_level, signature, version,
+                content_hash, lifecycle_state
+           FROM skill_registry
+          WHERE name = ? AND source_harness = ?
+          LIMIT 1`
+      )
+      .get(name, pinned.source_harness);
+    if (!pinnedRow) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned skill '${name}' for agent '${pinned.agent_id}' has no registry row in harness '${pinned.source_harness}'`,
+        dispatch_status: null,
+        trust_level: null,
+      };
+    }
+    const registryHash = (pinnedRow.content_hash ?? "").toLowerCase();
+    if (registryHash !== pinned.current_content_hash.toLowerCase()) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned hash mismatch for agent '${pinned.agent_id}': pin=${pinned.current_content_hash}, registry=${registryHash || "∅"}`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: (pinnedRow.trust_level ?? null) as TrustLevel | null,
+      };
+    }
+    // Pinned row must still satisfy all other governance gates.
+    const pinnedLifecycle = (pinnedRow.lifecycle_state ?? null) as string | null;
+    if (pinnedRow.completeness_pct < 100) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned skill '${name}' is incomplete (${pinnedRow.completeness_pct}%) and cannot be used for governed dispatch`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: (pinnedRow.trust_level ?? null) as TrustLevel | null,
+      };
+    }
+    if (pinnedRow.dispatch_status !== "enabled") {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned skill '${name}' has dispatch_status='${pinnedRow.dispatch_status}' and cannot be used for governed dispatch`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: (pinnedRow.trust_level ?? null) as TrustLevel | null,
+      };
+    }
+    if (pinnedLifecycle && pinnedLifecycle !== "enabled") {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned skill '${name}' has lifecycle_state='${pinnedLifecycle}' and cannot be used for governed dispatch`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: (pinnedRow.trust_level ?? null) as TrustLevel | null,
+      };
+    }
+    const pinnedRowTrust = (pinnedRow.trust_level ?? "unsigned") as TrustLevel;
+    if (minTrustLevel && trustLevelRank(pinnedRowTrust) < trustLevelRank(minTrustLevel)) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned skill trust level '${pinnedRowTrust}' is below required minimum '${minTrustLevel}'`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: pinnedRowTrust,
+      };
+    }
+    if (requireSigned && !pinnedRow.signature) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: "Pinned skill is unsigned and dispatch policy require_signed_skills=true",
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: pinnedRowTrust,
+      };
+    }
+    // Pinned hit. The summary carries the pinned identity so the
+    // evidence is identical to a non-pinned hit — only the selection
+    // path differs.
+    const summary: SkillContractSummary = {
+      id: pinnedRow.id,
+      name: pinnedRow.name,
+      source_harness: pinnedRow.source_harness,
+      version: pinnedRow.version ?? pinned.current_version,
+      risk_tier: pinnedRow.risk_tier,
+      dispatch_status: pinnedRow.dispatch_status,
+      completeness_pct: pinnedRow.completeness_pct,
+      trust_level: pinnedRowTrust,
+      signature: pinnedRow.signature,
+      content_hash: pinnedRow.content_hash ?? null,
+    };
+    return { kind: "hit", skill: summary };
+  }
 
   // Step 1: ambiguity check (VAL-SKILL-018). When the caller did not bind
   // a specific harness AND the skill_name exists in two or more harnesses,

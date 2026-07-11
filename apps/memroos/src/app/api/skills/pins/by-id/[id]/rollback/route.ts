@@ -19,7 +19,7 @@ import {
   rollbackAgentVersionPin,
   SyncGovernanceError,
 } from "@/lib/skills/skill-sync-governance";
-import { authorizeSyncWrite } from "../../../_sync-auth";
+import { authorizeSyncWrite } from "../../../../_sync-auth";
 
 export const dynamic = "force-dynamic";
 

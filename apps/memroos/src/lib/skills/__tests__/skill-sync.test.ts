@@ -912,3 +912,83 @@ describe("sync API auth gates", () => {
     expect([401, 403]).toContain(res.status);
   });
 });
+
+// ---------------------------------------------------------------------------
+// VAL-SKILL-028 — symlink / traversal protection
+// ---------------------------------------------------------------------------
+
+describe("VAL-SKILL-028 detectHarnessSkills rejects symlinks and traversal escape", () => {
+  it("skips symlinked files under the harness root and logs a refusal error", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+    // Real skill (should be picked up).
+    writeHarnessSkill(
+      harnessRoots.claude,
+      "real-skill",
+      VALID_SKILL_MD("real-skill", "1.0.0")
+    );
+    // External target file outside the harness root.
+    const externalDir = path.join(TMP_ROOT, "external");
+    fs.mkdirSync(externalDir, { recursive: true });
+    const externalFile = path.join(externalDir, "external-skill.md");
+    fs.writeFileSync(externalFile, VALID_SKILL_MD("external-skill", "1.0.0"), "utf8");
+    // Symlink from inside harness root to the external file.
+    fs.symlinkSync(externalFile, path.join(harnessRoots.claude, "leak-skill.md"));
+
+    const detected = detectHarnessSkills({ roots: harnessRoots });
+    const names = detected.entries.map((e) => e.skill_name);
+    expect(names).toContain("real-skill");
+    expect(names).not.toContain("external-skill");
+    expect(names).not.toContain("leak-skill");
+    const errorReasons = detected.errors.map((e) => e.reason);
+    expect(errorReasons.some((r) => r.includes("symlink"))).toBe(true);
+  });
+
+  it("rejects a symlinked harness root with an explicit error", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+    writeHarnessSkill(
+      harnessRoots.claude,
+      "real-skill",
+      VALID_SKILL_MD("real-skill", "1.0.0")
+    );
+    const realRoot = harnessRoots.claude;
+    const symlinkRoot = path.join(TMP_ROOT, "harness-symlink");
+    try {
+      fs.symlinkSync(realRoot, symlinkRoot);
+    } catch {
+      // On systems that forbid symlinks the test is effectively a no-op;
+      // the production code path is still exercised by the file-level
+      // check above.
+      return;
+    }
+    const roots = { ...harnessRoots, claude: symlinkRoot };
+    const detected = detectHarnessSkills({ roots });
+    // The symlinked root must be rejected.
+    const rootErr = detected.errors.find((e) => e.file_path === symlinkRoot);
+    expect(rootErr?.reason).toMatch(/symlink/i);
+  });
+
+  it("skips hidden / dot-prefixed entries under the harness root", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+    writeHarnessSkill(
+      harnessRoots.claude,
+      "normal-skill",
+      VALID_SKILL_MD("normal-skill", "1.0.0")
+    );
+    fs.writeFileSync(
+      path.join(harnessRoots.claude, ".hidden-skill.md"),
+      VALID_SKILL_MD("hidden-skill", "1.0.0"),
+      "utf8"
+    );
+    const detected = detectHarnessSkills({ roots: harnessRoots });
+    const names = detected.entries.map((e) => e.skill_name);
+    expect(names).toContain("normal-skill");
+    expect(names).not.toContain("hidden-skill");
+  });
+});
+

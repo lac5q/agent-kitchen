@@ -335,7 +335,7 @@ describe("GET /api/skills/pins (read-only)", () => {
 
 describe("POST /api/skills/pins/[id]/rollback", () => {
   async function loadPinRoute() {
-    return await import("../[id]/rollback/route");
+    return await import("../by-id/[id]/rollback/route");
   }
 
   it("401 without operator key", async () => {

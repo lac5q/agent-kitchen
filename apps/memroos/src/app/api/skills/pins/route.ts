@@ -95,6 +95,19 @@ export async function POST(request: Request) {
   const currentHash = body["current_content_hash"];
   const actor = body["actor"];
   const skillIdRaw = body["skill_id"];
+  // SKILLTRUST-04 / VAL-SKILL-030 — optional optimistic-concurrency
+  // and idempotency-key fields. The library functions fail closed on
+  // mismatched updated_at or key reuse with a different request body.
+  const expectedUpdatedAtRaw = body["expected_current_updated_at"];
+  const expectedCurrentUpdatedAt =
+    typeof expectedUpdatedAtRaw === "string" && expectedUpdatedAtRaw.trim()
+      ? expectedUpdatedAtRaw.trim()
+      : undefined;
+  const idempotencyKeyRaw = body["idempotency_key"];
+  const idempotencyKey =
+    typeof idempotencyKeyRaw === "string" && idempotencyKeyRaw.trim()
+      ? idempotencyKeyRaw.trim()
+      : undefined;
 
   if (typeof agentId !== "string" || !agentId.trim()) {
     return Response.json(
@@ -150,11 +163,21 @@ export async function POST(request: Request) {
       current_version: currentVersion.trim(),
       current_content_hash: currentHash,
       actor: actor.trim(),
+      ...(expectedCurrentUpdatedAt
+        ? { expected_current_updated_at: expectedCurrentUpdatedAt }
+        : {}),
+      ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     });
     return Response.json({ ok: true, pin });
   } catch (err) {
     if (err instanceof SyncGovernanceError) {
-      return Response.json({ ok: false, error: err.message }, { status: 400 });
+      const msg = err.message;
+      const status = msg.includes("Stale concurrent") ||
+        msg.includes("Idempotency key") ||
+        msg.includes("previously used with a different")
+        ? 409
+        : 400;
+      return Response.json({ ok: false, error: msg }, { status });
     }
     return Response.json(
       {

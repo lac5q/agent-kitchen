@@ -11,6 +11,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
 import { lookupSkillContract, buildSkillEvidence, parseTrustLevel } from "@/lib/dispatch/skill-lookup";
+import { getAgentVersionPin } from "@/lib/skills/skill-sync-governance";
 import {
   extractMemoryLabelSnapshot,
   filterAuthorizedMemoryItems,
@@ -265,11 +266,75 @@ export async function POST(req: NextRequest | Request) {
     requireSignedRaw === "1" ||
     requireSignedRaw === "yes" ||
     requireSignedRaw === "on";
+  // SKILLTRUST-04 / VAL-SKILL-031: when the requesting agent has a
+  // version pin for this skill, the pinned (source_harness, version,
+  // content_hash) tuple wins over the unpinned latest row. The pin
+  // lookup happens after auth so an anonymous caller cannot probe
+  // other agents' pins. agent_id prefix is stripped from from_agent
+  // because agent identifiers in the audit chain are stored as
+  // 'agent:<id>'.
+  let pinned: {
+    agent_id: string;
+    source_harness: string;
+    current_version: string;
+    current_content_hash: string;
+    skill_id: number | null;
+  } | null = null;
+  const fromAgentId = from_agent.startsWith("agent:")
+    ? from_agent.slice("agent:".length)
+    : from_agent;
+  if (skillName && fromAgentId) {
+    const agentPin = getAgentVersionPin(db, fromAgentId, skillName);
+    if (agentPin) {
+      // The pin does not store source_harness directly; the registry
+      // row pointed at by skill_id is authoritative for the harness
+      // identity. When skill_id is missing (legacy pin) we fall back
+      // to looking up the row by name. The dispatch lookup will then
+      // verify the pinned content_hash matches the registry row, so a
+      // mismatched or missing row fails closed.
+      let pinHarness: string | null = null;
+      if (agentPin.skill_id !== null) {
+        const regRow = db
+          .prepare<[number], { source_harness: string }>(
+            `SELECT source_harness FROM skill_registry WHERE id = ? LIMIT 1`
+          )
+          .get(agentPin.skill_id);
+        pinHarness = regRow?.source_harness ?? null;
+      }
+      if (!pinHarness) {
+        // Fall back to the most recent enabled+complete row with the
+        // matching name. This is used only to derive source_harness
+        // for the pin override — the dispatch lookup then enforces
+        // the pinned content_hash.
+        const namedRow = db
+          .prepare<[string], { source_harness: string }>(
+            `SELECT source_harness FROM skill_registry
+              WHERE name = ?
+                AND dispatch_status = 'enabled'
+                AND completeness_pct = 100
+              ORDER BY imported_at DESC
+              LIMIT 1`
+          )
+          .get(skillName);
+        pinHarness = namedRow?.source_harness ?? null;
+      }
+      if (pinHarness) {
+        pinned = {
+          agent_id: agentPin.agent_id,
+          source_harness: pinHarness,
+          current_version: agentPin.current_version,
+          current_content_hash: agentPin.current_content_hash,
+          skill_id: agentPin.skill_id,
+        };
+      }
+    }
+  }
   const skillContract = lookupSkillContract(db, skillName, {
     minTrustLevel,
     requireSigned,
     sourceHarness: parsed.data.source_harness ?? null,
     version: parsed.data.skill_version ?? null,
+    pinned,
   });
   const skillEvidence = buildSkillEvidence(skillContract, minTrustLevel);
 

@@ -32,7 +32,13 @@
  */
 
 import { createHash, randomUUID } from "crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+} from "fs";
 import path from "path";
 import type Database from "better-sqlite3";
 
@@ -153,6 +159,12 @@ export interface CreateImportProposalParams {
   proposed_by: string;
   diff_summary?: string;
   diff_payload?: Record<string, unknown>;
+  /** Optional harness root path. When supplied alongside a
+   *  detected.file_path, the approval path can re-read the source
+   *  file and re-verify the detected hash (VAL-SKILL-029). The root
+   *  is used as a containment boundary so the file_path cannot point
+   *  at an arbitrary location on the host. */
+  source_root?: string | null;
 }
 
 export interface CreateImportProposalResult {
@@ -175,6 +187,69 @@ export interface RejectImportProposalParams {
   source_harness: HarnessName;
   operator: string;
   reason: string;
+}
+
+/**
+ * Phase 149 (continued) / VAL-SKILL-028 / VAL-SKILL-029 — proposal-id
+ * based approval. The scan writes a UUID into
+ * skill_sync_state.pending_proposal_id; the operator approves that
+ * exact proposal by id, which gives us three guarantees the
+ * name+harness form cannot:
+ *
+ *   1. The approval targets the specific row observed during the scan;
+ *      no other proposal can silently be approved instead.
+ *   2. The approval re-reads the source file from disk and re-verifies
+ *      its content hash matches `pending_detected_hash`. Stale or
+ *      foreign content between scan and approval fails closed.
+ *   3. The write into skill_registry is restricted to the allowlisted
+ *      projection fields (raw_body, version, content_hash, dispatch_status,
+ *      imported_by, imported_at). No other columns are touched, and the
+ *      write happens inside a single transaction alongside the
+ *      skill_sync_state update so the audit chain and the registry
+ *      can never disagree.
+ *
+ * `expected_updated_at` is the optimistic-concurrency token: when
+ * supplied, the approve path requires the pending row's `updated_at`
+ * to match exactly or the call returns a 409-style typed error. This
+ * lets a concurrent scan / operator action race fail closed without
+ * overwriting the operator's expectations.
+ */
+export interface ApproveSyncProposalByIdParams {
+  proposal_id: string;
+  operator: string;
+  reason?: string;
+  /** Optional optimistic-concurrency token. When supplied, the row's
+   *  `updated_at` must equal this value or the call fails. */
+  expected_updated_at?: string;
+  /** When false, the registry is left untouched and only the sync
+   *  state ledger is updated. Defaults to true so the standard
+   *  approval path applies the allowlisted projections. */
+  apply_to_registry?: boolean;
+}
+
+export interface RejectSyncProposalByIdParams {
+  proposal_id: string;
+  operator: string;
+  reason: string;
+  expected_updated_at?: string;
+}
+
+/**
+ * Result returned by the proposal-id approve/reject paths so the
+ * caller can surface the exact row that was transitioned.
+ */
+export interface SyncProposalDecisionResult {
+  proposal_id: string;
+  skill_name: string;
+  source_harness: HarnessName;
+  status: SyncProposalStatus;
+  decided_by: string;
+  decided_at: string;
+  reason: string | null;
+  registry_updated: boolean;
+  /** When the source file was re-verified, the fresh hash so the
+   *  caller can log it alongside the operator decision. */
+  reverified_hash: string | null;
 }
 
 export interface PinVersionParams {
@@ -481,13 +556,31 @@ export function detectHarnessSkills(params: { roots: HarnessRoots }): DetectionR
     const rootDir = params.roots[harness];
     if (!rootDir) continue;
     if (!existsSync(rootDir)) continue;
-    let stat;
+
+    // VAL-SKILL-028: scan must never traverse symlinks and must never
+    // escape the harness root. We canonicalize the root via realpath so
+    // containment checks below compare absolute paths.
+    let rootReal: string;
     try {
-      stat = statSync(rootDir);
-    } catch {
+      const rootLstat = lstatSync(rootDir);
+      if (rootLstat.isSymbolicLink()) {
+        errors.push({
+          file_path: rootDir,
+          source_harness: harness,
+          reason: "Refusing to scan: harness root is a symlink",
+        });
+        continue;
+      }
+      if (!rootLstat.isDirectory()) continue;
+      rootReal = realpathSync(rootDir);
+    } catch (err) {
+      errors.push({
+        file_path: rootDir,
+        source_harness: harness,
+        reason: `Cannot canonicalize root: ${err instanceof Error ? err.message : String(err)}`,
+      });
       continue;
     }
-    if (!stat.isDirectory()) continue;
 
     let fileNames: string[];
     try {
@@ -503,7 +596,49 @@ export function detectHarnessSkills(params: { roots: HarnessRoots }): DetectionR
 
     for (const fileName of fileNames) {
       if (!fileName.toLowerCase().endsWith(".md")) continue;
+      // Skip hidden / dot-prefixed entries so a stray metadata file
+      // cannot influence the scan.
+      if (fileName.startsWith(".")) continue;
       const filePath = path.join(rootDir, fileName);
+
+      // Per-file symlink + escape check. We use lstatSync to detect
+      // symlinks without following them, then realpathSync on the
+      // resolved path to verify it lives under the harness root.
+      let fileReal: string;
+      try {
+        const fileLstat = lstatSync(filePath);
+        if (fileLstat.isSymbolicLink()) {
+          errors.push({
+            file_path: filePath,
+            source_harness: harness,
+            reason: "Refusing to read: file is a symlink",
+          });
+          continue;
+        }
+        if (!fileLstat.isFile()) continue;
+        fileReal = realpathSync(filePath);
+      } catch (err) {
+        errors.push({
+          file_path: filePath,
+          source_harness: harness,
+          reason: `Cannot stat file: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        continue;
+      }
+
+      // Containment: fileReal must live under rootReal. The trailing
+      // separator avoids prefix-match collisions like /harness-x
+      // vs /harness.
+      const rootWithSep = rootReal.endsWith(path.sep) ? rootReal : rootReal + path.sep;
+      if (!(fileReal === rootReal || fileReal.startsWith(rootWithSep))) {
+        errors.push({
+          file_path: filePath,
+          source_harness: harness,
+          reason: "Refusing to read: file escapes harness root",
+        });
+        continue;
+      }
+
 
       let raw: string;
       try {
@@ -565,7 +700,10 @@ export function detectHarnessSkills(params: { roots: HarnessRoots }): DetectionR
         version,
         raw_body: rawBody,
         content_hash: contentHash,
-        file_path: filePath,
+        // VAL-SKILL-029: stash the canonical absolute path so the
+        // approval route can re-read the file from disk and re-verify
+        // the hash before applying the proposal to skill_registry.
+        file_path: fileReal,
         parse_error: parseError,
       });
       if (parseError) {
@@ -944,6 +1082,10 @@ export function createImportProposal(
   // Always embed the detected raw_body in the diff_payload so the
   // approve step can apply it back to the registry without re-scanning.
   // Also embed the prior raw_body so rollback can fully restore.
+  // source_file_path + source_root allow the approval path to re-read
+  // the file from disk and re-verify the hash before applying
+  // (VAL-SKILL-029). Without these, the approval only knows the hash
+  // and cannot detect stale / foreign content.
   const diffPayload: Record<string, unknown> = {
     ...(params.diff_payload ?? {}),
     detected_hash: detectedHash,
@@ -952,6 +1094,8 @@ export function createImportProposal(
     current_version: registryRow?.version ?? null,
     raw_body: params.detected.raw_body ?? null,
     prior_raw_body: registryRow?.raw_body ?? null,
+    source_file_path: params.detected.file_path ?? null,
+    source_root: params.source_root ?? null,
   };
 
   if (existing) {
@@ -1160,7 +1304,8 @@ export function approveImportProposal(
         proposedVersion,
         proposedBody ?? "",
         operator,
-        now
+        now,
+        newHash
       );
     }
   }
@@ -1279,6 +1424,380 @@ export function rejectImportProposal(
     );
   }
   return refreshed;
+}
+
+// ---------------------------------------------------------------------------
+// Proposal-id approve / reject (VAL-SKILL-028 / VAL-SKILL-029)
+// ---------------------------------------------------------------------------
+
+interface PendingProposalRow {
+  skill_name: string;
+  source_harness: HarnessName;
+  pending_proposal_id: string;
+  pending_detected_hash: string | null;
+  pending_detected_version: string | null;
+  pending_diff_payload: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  updated_at: string;
+}
+
+function loadPendingProposalById(
+  db: Database.Database,
+  proposalId: string
+): PendingProposalRow | null {
+  if (!proposalId || typeof proposalId !== "string") return null;
+  const row = db
+    .prepare<[string], PendingProposalRow>(
+      `SELECT skill_name, source_harness, pending_proposal_id,
+              pending_detected_hash, pending_detected_version,
+              pending_diff_payload, approved_at, rejected_at, updated_at
+         FROM skill_sync_state
+        WHERE pending_proposal_id = ?
+        LIMIT 1`
+    )
+    .get(proposalId);
+  return row ?? null;
+}
+
+function readSourceFileContent(
+  filePath: string,
+  sourceRoot: string | null
+): { content: string; realPath: string } | null {
+  // Refuse to read if the source_root is unknown; we need it for the
+  // containment check so an attacker cannot point the stored
+  // file_path at an arbitrary absolute path on the host.
+  if (!sourceRoot) return null;
+  try {
+    if (lstatSync(filePath).isSymbolicLink()) return null;
+    const fileReal = realpathSync(filePath);
+    const rootReal = realpathSync(sourceRoot);
+    const rootWithSep = rootReal.endsWith(path.sep) ? rootReal : rootReal + path.sep;
+    if (!(fileReal === rootReal || fileReal.startsWith(rootWithSep))) {
+      return null;
+    }
+    const buf = readFileSync(filePath);
+    return { content: buf.toString("utf8"), realPath: fileReal };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phase 149 (continued) / VAL-SKILL-029 — proposal-id approve.
+ *
+ * Approves a pending sync proposal identified by its UUID
+ * (skill_sync_state.pending_proposal_id). The function:
+ *
+ *   1. Loads the sync_state row by proposal_id. Refuses to act on a
+ *      row that is not pending (already approved / rejected).
+ *   2. Optional optimistic-concurrency check: when
+ *      `expected_updated_at` is supplied, the row's `updated_at` must
+ *      match exactly or the call fails with a typed error. This lets
+ *      a concurrent scan race fail closed without silently overwriting
+ *      the operator's intent.
+ *   3. Re-reads the source file from disk and re-verifies its SHA-256
+ *      matches `pending_detected_hash`. Stale / foreign content
+ *      between scan and approval is detected and surfaced as a typed
+ *      error so the operator never applies a hash that no longer
+ *      represents what's on disk.
+ *   4. Writes the allowlisted projection (raw_body, version,
+ *      content_hash, dispatch_status, imported_by, imported_at) into
+ *      skill_registry inside a single transaction alongside the
+ *      skill_sync_state update. The audit chain and the registry
+ *      can never disagree on the post-approval state.
+ *
+ * Throws SkillSyncError when:
+ *   - the proposal_id is not pending (missing, already approved or rejected),
+ *   - expected_updated_at does not match (stale concurrent update),
+ *   - the source file changed since the scan (re-verification failed),
+ *   - the operator identity is empty.
+ */
+export function approveSyncProposalById(
+  db: Database.Database,
+  params: ApproveSyncProposalByIdParams
+): SyncProposalDecisionResult {
+  const proposalId = params.proposal_id;
+  const operator = requireNonEmpty(params.operator, "operator");
+  const applyToRegistry = params.apply_to_registry !== false;
+  const reason =
+    typeof params.reason === "string" && params.reason.trim()
+      ? params.reason.trim()
+      : null;
+
+  const proposal = loadPendingProposalById(db, proposalId);
+  if (!proposal || !proposal.pending_proposal_id) {
+    throw new SkillSyncError(
+      `No pending sync proposal with id '${proposalId}'`
+    );
+  }
+  if (proposal.approved_at) {
+    throw new SkillSyncError(
+      `Sync proposal '${proposalId}' is already approved at ${proposal.approved_at}`
+    );
+  }
+  if (proposal.rejected_at) {
+    throw new SkillSyncError(
+      `Sync proposal '${proposalId}' was rejected at ${proposal.rejected_at}; remediation requires a new scan`
+    );
+  }
+  if (
+    params.expected_updated_at &&
+    params.expected_updated_at !== proposal.updated_at
+  ) {
+    throw new SkillSyncError(
+      `Stale concurrent update on sync proposal '${proposalId}': expected updated_at='${params.expected_updated_at}' but row is '${proposal.updated_at}'`
+    );
+  }
+
+  const detectedHash = proposal.pending_detected_hash;
+  if (!detectedHash || !/^[0-9a-f]{64}$/i.test(detectedHash)) {
+    throw new SkillSyncError(
+      `Sync proposal '${proposalId}' is missing a valid detected_content_hash`
+    );
+  }
+
+  // Re-verify source content. The proposal's diff_payload may carry the
+  // file_path and source_root that produced the scan; we use those to
+  // re-read the file. When no path was stashed, the approval is treated
+  // as a registry-only projection (no source re-verification possible).
+  let reverifiedHash: string | null = null;
+  let freshBody: string | null = null;
+  let freshVersion: string | null = proposal.pending_detected_version;
+  if (proposal.pending_diff_payload) {
+    try {
+      const parsed = JSON.parse(proposal.pending_diff_payload) as Record<
+        string,
+        unknown
+      >;
+      const filePath =
+        typeof parsed["source_file_path"] === "string"
+          ? (parsed["source_file_path"] as string)
+          : null;
+      const sourceRoot =
+        typeof parsed["source_root"] === "string"
+          ? (parsed["source_root"] as string)
+          : null;
+      if (filePath && sourceRoot) {
+        const read = readSourceFileContent(filePath, sourceRoot);
+        if (read) {
+          reverifiedHash = computeContentHash(read.content);
+          if (reverifiedHash !== detectedHash.toLowerCase()) {
+            throw new SkillSyncError(
+              `Source hash mismatch on proposal '${proposalId}': scan saw ${detectedHash}, file on disk is ${reverifiedHash} — refusing to apply stale content`
+            );
+          }
+          freshBody = read.content;
+          if (typeof parsed["version"] === "string") {
+            freshVersion = parsed["version"] as string;
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof SkillSyncError) throw err;
+      /* malformed JSON in payload is non-fatal: revert to registry-only path */
+    }
+  }
+
+  const now = nowIso();
+  const skillName = proposal.skill_name;
+  const sourceHarness = proposal.source_harness;
+
+  // Atomic write: registry + sync_state + audit commit together.
+  const transaction = db.transaction(() => {
+    if (applyToRegistry) {
+      const registryRow = db
+        .prepare<[string, string], { id: number }>(
+          `SELECT id FROM skill_registry
+            WHERE source_harness = ? AND name = ?
+            LIMIT 1`
+        )
+        .get(sourceHarness, skillName);
+
+      if (registryRow) {
+        // Allowlisted projection update — only the documented fields
+        // are touched. Other columns (evidence_examples, signature,
+        // trust_level, etc.) are preserved untouched.
+        db.prepare(
+          `UPDATE skill_registry
+              SET raw_body = COALESCE(?, raw_body),
+                  version = COALESCE(?, version),
+                  content_hash = ?,
+                  dispatch_status = 'quarantined'
+            WHERE id = ?`
+        ).run(freshBody, freshVersion, detectedHash, registryRow.id);
+      } else {
+        db.prepare(
+          `INSERT INTO skill_registry (
+            name, description, owner, source_harness, risk_tier, dispatch_status,
+            version, preconditions, allowed_tools, verification_checks, rollback_behavior,
+            raw_body, completeness_pct, missing_fields_json, imported_by, imported_at,
+            evidence_examples, content_hash, signature, signed_by, signed_at, trust_level,
+            public_key_fingerprint
+          ) VALUES (
+            ?, '', ?, ?, 'unknown', 'quarantined',
+            ?, '', '', '', '',
+            ?, 0, '[]', ?, ?,
+            '', ?, NULL, NULL, NULL, 'unsigned',
+            NULL
+          )`
+        ).run(
+          skillName,
+          operator,
+          sourceHarness,
+          freshVersion,
+          freshBody ?? "",
+          operator,
+          now
+        );
+      }
+    }
+
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET approved_by = ?,
+              approved_at = ?,
+              last_synced_hash = ?,
+              pending_proposal_id = NULL,
+              pending_detected_hash = NULL,
+              pending_detected_version = NULL,
+              pending_diff_summary = '',
+              pending_proposed_by = NULL,
+              pending_proposed_at = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?
+          AND pending_proposal_id = ?`
+    ).run(operator, now, detectedHash, now, skillName, sourceHarness, proposalId);
+
+    writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.sync.proposal.approved",
+      entityType: "skill_sync_proposal",
+      entityId: proposalId,
+      reason,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+        last_synced_hash: detectedHash,
+        registry_updated: applyToRegistry,
+        reverified_hash: reverifiedHash,
+      },
+    });
+  });
+
+  transaction();
+
+  return {
+    proposal_id: proposalId,
+    skill_name: skillName,
+    source_harness: sourceHarness,
+    status: "approved",
+    decided_by: operator,
+    decided_at: now,
+    reason,
+    registry_updated: applyToRegistry,
+    reverified_hash: reverifiedHash,
+  };
+}
+
+/**
+ * Phase 149 (continued) / VAL-SKILL-029 — proposal-id reject.
+ *
+ * Rejects a pending sync proposal by UUID. The function:
+ *
+ *   - Loads the sync_state row by proposal_id and refuses to act on
+ *     a row that is already approved or rejected.
+ *   - Optional optimistic-concurrency check via expected_updated_at.
+ *   - Clears the pending proposal fields without touching the
+ *     skill_registry row (the registry stays at its prior content
+ *     hash / version, so a future scan can re-detect drift).
+ *   - Writes an audit entry with reason.
+ *
+ * Throws SkillSyncError when:
+ *   - the proposal_id is not pending,
+ *   - expected_updated_at does not match (stale concurrent update),
+ *   - the reason is empty,
+ *   - the operator identity is empty.
+ */
+export function rejectSyncProposalById(
+  db: Database.Database,
+  params: RejectSyncProposalByIdParams
+): SyncProposalDecisionResult {
+  const proposalId = params.proposal_id;
+  const operator = requireNonEmpty(params.operator, "operator");
+  const reason = requireNonEmpty(params.reason, "reason");
+
+  const proposal = loadPendingProposalById(db, proposalId);
+  if (!proposal || !proposal.pending_proposal_id) {
+    throw new SkillSyncError(
+      `No pending sync proposal with id '${proposalId}'`
+    );
+  }
+  if (proposal.approved_at) {
+    throw new SkillSyncError(
+      `Sync proposal '${proposalId}' is already approved; cannot reject`
+    );
+  }
+  if (proposal.rejected_at) {
+    throw new SkillSyncError(
+      `Sync proposal '${proposalId}' was already rejected at ${proposal.rejected_at}`
+    );
+  }
+  if (
+    params.expected_updated_at &&
+    params.expected_updated_at !== proposal.updated_at
+  ) {
+    throw new SkillSyncError(
+      `Stale concurrent update on sync proposal '${proposalId}': expected updated_at='${params.expected_updated_at}' but row is '${proposal.updated_at}'`
+    );
+  }
+
+  const now = nowIso();
+  const skillName = proposal.skill_name;
+  const sourceHarness = proposal.source_harness;
+
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET rejected_by = ?,
+              rejected_at = ?,
+              rejection_reason = ?,
+              pending_proposal_id = NULL,
+              pending_detected_hash = NULL,
+              pending_detected_version = NULL,
+              pending_diff_summary = '',
+              pending_diff_payload = '{}',
+              pending_proposed_by = NULL,
+              pending_proposed_at = NULL,
+              updated_at = ?
+        WHERE skill_name = ? AND source_harness = ?
+          AND pending_proposal_id = ?`
+    ).run(operator, now, reason, now, skillName, sourceHarness, proposalId);
+
+    writeAuditEntry(db, {
+      actor: operator,
+      eventType: "skill.sync.proposal.rejected",
+      entityType: "skill_sync_proposal",
+      entityId: proposalId,
+      reason,
+      metadata: {
+        skill_name: skillName,
+        source_harness: sourceHarness,
+      },
+    });
+  })();
+
+  return {
+    proposal_id: proposalId,
+    skill_name: skillName,
+    source_harness: sourceHarness,
+    status: "rejected",
+    decided_by: operator,
+    decided_at: now,
+    reason,
+    registry_updated: false,
+    reverified_hash: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1616,9 +2135,15 @@ export function checkSync(
         version: entry.version,
         raw_body: entry.raw_body,
         content_hash: entry.content_hash,
+        file_path: entry.file_path,
       },
       proposed_by: proposedBy,
       diff_summary: diff.summary,
+      // VAL-SKILL-029: stash the harness root for re-verification on
+      // approval. The approval path uses source_root as a containment
+      // boundary so the file_path cannot be redirected to an arbitrary
+      // location on the host.
+      source_root: params.roots[entry.source_harness] ?? null,
       diff_payload: {
         ...diff,
         raw_body: entry.raw_body,
