@@ -525,19 +525,26 @@ function applyArtifactGateSchema(db: Database.Database): void {
 }
 
 // Phase 148 / SKILLTRUST-01..02: Enhanced contracts + content hashing/signing.
-// Additive columns on skill_registry: evidence_examples, content_hash,
-// signature, signed_by, trust_level. Idempotent via try/catch pattern.
 //
-// SKILLTRUST-01: evidence_examples stores the trimmed markdown body of the
-// `## Evidence Examples` section. The default is the empty string — non-empty
-// values satisfy the completeness gate; empty values score as missing.
+// Migration v11 adds the `evidence_examples` column (SKILLTRUST-01) and the
+// content_hash / signature / signed_by / signed_at / trust_level /
+// public_key_fingerprint columns (SKILLTRUST-02). It also backfills existing
+// v10 rows so dispatch remains fail-closed — any row that predates the
+// evidence_examples column has `completeness_pct` lowered from 100 to 91
+// (one field short) and `evidence_examples` appended to its
+// `missing_fields_json` list. This keeps the SQL gate authoritative — a
+// legacy complete skill without evidence_examples must score below 100 and
+// be denied by lookupSkillContract. All migrations are additive and
+// idempotent (try/catch swallows duplicate-column errors).
 function applySkillTrustChainSchema(db: Database.Database): void {
   for (const statement of [
-    "ALTER TABLE skill_registry ADD COLUMN evidence_examples TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE skill_registry ADD COLUMN evidence_examples TEXT",
     "ALTER TABLE skill_registry ADD COLUMN content_hash TEXT",
     "ALTER TABLE skill_registry ADD COLUMN signature TEXT",
     "ALTER TABLE skill_registry ADD COLUMN signed_by TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signed_at TEXT",
     "ALTER TABLE skill_registry ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'unsigned'",
+    "ALTER TABLE skill_registry ADD COLUMN public_key_fingerprint TEXT",
   ]) {
     try {
       db.exec(statement);
@@ -546,10 +553,52 @@ function applySkillTrustChainSchema(db: Database.Database): void {
     }
   }
 
-  // Add CHECK constraint via a rebuild if trust_level values violate the
-  // constraint. In practice all existing rows default to 'unsigned' which
-  // satisfies the CHECK, so the constraint is enforced at the application
-  // layer for migrated DBs and at the schema layer for fresh DBs.
+  // SKILLTRUST-01 backfill: existing v10 rows whose evidence_examples column
+  // was just added with the DEFAULT '' must regress below 100% completeness so
+  // dispatch remains fail-closed. We touch only rows where evidence_examples
+  // is empty or whitespace-only and completeness_pct was 100. Other rows are
+  // left untouched.
+  const rows = db
+    .prepare(
+      `SELECT id, completeness_pct, missing_fields_json
+         FROM skill_registry
+        WHERE evidence_examples IS NULL OR trim(evidence_examples) = ''`
+    )
+    .all() as Array<{
+      id: number;
+      completeness_pct: number;
+      missing_fields_json: string | null;
+    }>;
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const update = db.prepare(
+    `UPDATE skill_registry
+        SET completeness_pct = ?,
+            missing_fields_json = ?
+      WHERE id = ?`
+  );
+
+  for (const row of rows) {
+    let missingFields: string[];
+    try {
+      const parsed = JSON.parse(row.missing_fields_json ?? "[]");
+      missingFields = Array.isArray(parsed)
+        ? parsed.filter((field): field is string => typeof field === "string")
+        : [];
+    } catch {
+      missingFields = [];
+    }
+
+    if (!missingFields.includes("evidence_examples")) {
+      missingFields.push("evidence_examples");
+    }
+
+    const completenessPct = row.completeness_pct >= 100 ? 91 : row.completeness_pct;
+    update.run(completenessPct, JSON.stringify(missingFields), row.id);
+  }
 }
 
 function applyCurrentSchema(db: Database.Database): void {
@@ -1841,12 +1890,14 @@ function applyCurrentSchema(db: Database.Database): void {
       missing_fields_json TEXT    NOT NULL DEFAULT '[]',
       imported_by         TEXT    NOT NULL,
       imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-      evidence_examples   TEXT    NOT NULL DEFAULT '',
+      evidence_examples   TEXT,
       content_hash        TEXT,
       signature           TEXT,
       signed_by           TEXT,
+      signed_at           TEXT,
       trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
                           CHECK(trust_level IN ('unsigned','signed','verified')),
+      public_key_fingerprint TEXT,
       UNIQUE(name, source_harness)
     );
     CREATE INDEX IF NOT EXISTS skill_registry_source_status

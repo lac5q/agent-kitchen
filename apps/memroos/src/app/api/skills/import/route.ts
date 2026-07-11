@@ -6,11 +6,26 @@
  * Requires operator authorization (x-memroos-operator-key or Bearer token).
  *
  * Plan: 72-05 (SKILL-01, SKILL-02, SKILL-04)
+ * Phase 148 SKILLTRUST-02: import signs content via Ed25519 operator keypair
+ * (apps/memroos/data/skill-signing-key.json) when the local key file exists;
+ * otherwise the row is stored unsigned. We also keep the legacy HMAC signing
+ * path (MEMROOS_SKILL_SIGNING_KEY env var) so existing deployments continue
+ * to work; if both are available the Ed25519 path wins because it persists
+ * the public_key_fingerprint needed for cross-area verification.
  */
 
 import { getDb } from "@/lib/db";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
-import { parseSkillMd, normalizeRegistryEntry } from "@/lib/skills/registry";
+import {
+  parseSkillMd,
+  normalizeRegistryEntry,
+  resolveSigningKey,
+  signRegistryEntry,
+} from "@/lib/skills/registry";
+import {
+  applySignatureToRegistryEntry,
+  loadOrCreateOperatorKeyPair,
+} from "@/lib/skills/skill-signing";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +73,34 @@ export async function POST(request: Request) {
 
   // Parse SKILL.md content as inert data — never executed
   const parsed = parseSkillMd(content);
-  const entry = normalizeRegistryEntry(parsed, source_harness.trim(), operatorId);
+  let entry = normalizeRegistryEntry(parsed, source_harness.trim(), operatorId);
+
+  // SKILLTRUST-02 auto-signing: prefer the Ed25519 operator keypair when one
+  // can be loaded from the local key file. The Ed25519 path persists the
+  // public_key_fingerprint so the dispatch policy (`require_signed_skills`)
+  // and the cross-area verification flow (SKILLTRUST-02 / VAL-SIGN-005)
+  // can identify the signer without exposing the private bytes. When the
+  // key file is missing the import is still allowed (row stays 'unsigned')
+  // so manual imports do not require a pre-existing key — only the dispatch
+  // policy flag turns that into a deny at dispatch time.
+  let signingKeyPair: ReturnType<typeof loadOrCreateOperatorKeyPair> | null = null;
+  try {
+    signingKeyPair = loadOrCreateOperatorKeyPair();
+  } catch {
+    signingKeyPair = null;
+  }
+
+  if (signingKeyPair && signingKeyPair.publicKey && signingKeyPair.privateKey) {
+    entry = applySignatureToRegistryEntry(entry, signingKeyPair, operatorId) as typeof entry;
+  } else {
+    // Legacy HMAC fallback: when MEMROOS_SKILL_SIGNING_KEY is configured but
+    // no Ed25519 key file exists, fall back to the registry's HMAC signer so
+    // existing operator deployments that rely on env-var HMAC keep working.
+    const hmacKey = resolveSigningKey();
+    if (hmacKey) {
+      entry = signRegistryEntry(entry, hmacKey);
+    }
+  }
 
   // Persist to skill_registry
   const db = getDb();
@@ -67,27 +109,38 @@ export async function POST(request: Request) {
       INSERT INTO skill_registry (
         name, description, owner, source_harness, risk_tier, dispatch_status,
         version, preconditions, allowed_tools, verification_checks, rollback_behavior,
-        raw_body, completeness_pct, missing_fields_json, imported_by, imported_at
+        raw_body, completeness_pct, missing_fields_json, imported_by, imported_at,
+        evidence_examples, content_hash, signature, signed_by, signed_at, trust_level,
+        public_key_fingerprint
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?
       )
       ON CONFLICT(name, source_harness) DO UPDATE SET
-        description         = excluded.description,
-        owner               = excluded.owner,
-        risk_tier           = excluded.risk_tier,
-        dispatch_status     = excluded.dispatch_status,
-        version             = excluded.version,
-        preconditions       = excluded.preconditions,
-        allowed_tools       = excluded.allowed_tools,
-        verification_checks = excluded.verification_checks,
-        rollback_behavior   = excluded.rollback_behavior,
-        raw_body            = excluded.raw_body,
-        completeness_pct    = excluded.completeness_pct,
-        missing_fields_json = excluded.missing_fields_json,
-        imported_by         = excluded.imported_by,
-        imported_at         = excluded.imported_at
+        description              = excluded.description,
+        owner                    = excluded.owner,
+        risk_tier                = excluded.risk_tier,
+        dispatch_status          = excluded.dispatch_status,
+        version                  = excluded.version,
+        preconditions            = excluded.preconditions,
+        allowed_tools            = excluded.allowed_tools,
+        verification_checks      = excluded.verification_checks,
+        rollback_behavior        = excluded.rollback_behavior,
+        raw_body                 = excluded.raw_body,
+        completeness_pct         = excluded.completeness_pct,
+        missing_fields_json      = excluded.missing_fields_json,
+        imported_by              = excluded.imported_by,
+        imported_at              = excluded.imported_at,
+        evidence_examples        = excluded.evidence_examples,
+        content_hash             = excluded.content_hash,
+        signature                = excluded.signature,
+        signed_by                = excluded.signed_by,
+        signed_at                = excluded.signed_at,
+        trust_level              = excluded.trust_level,
+        public_key_fingerprint   = excluded.public_key_fingerprint
     `);
 
     const result = stmt.run(
@@ -106,7 +159,14 @@ export async function POST(request: Request) {
       entry.completeness_pct,
       JSON.stringify(entry.missing_fields),
       entry.imported_by,
-      entry.imported_at
+      entry.imported_at,
+      entry.evidence_examples,
+      entry.content_hash,
+      entry.signature,
+      entry.signed_by,
+      entry.signed_at,
+      entry.trust_level,
+      entry.public_key_fingerprint ?? null
     );
 
     const id = result.lastInsertRowid;
@@ -119,6 +179,11 @@ export async function POST(request: Request) {
       dispatch_status: entry.dispatch_status,
       completeness_pct: entry.completeness_pct,
       missing_fields: entry.missing_fields,
+      content_hash: entry.content_hash,
+      trust_level: entry.trust_level,
+      signed_by: entry.signed_by,
+      signed_at: entry.signed_at,
+      public_key_fingerprint: entry.public_key_fingerprint,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -161,7 +226,9 @@ export async function GET(request: Request) {
     .prepare(
       `SELECT id, name, description, owner, source_harness, risk_tier,
               dispatch_status, version, completeness_pct, missing_fields_json,
-              verification_checks, imported_by, imported_at
+              verification_checks, imported_by, imported_at,
+              evidence_examples, content_hash, signature, signed_by,
+              signed_at, trust_level, public_key_fingerprint
        FROM skill_registry
        ${where}
        ORDER BY imported_at DESC

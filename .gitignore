@@ -96,6 +96,13 @@ context-sources.local.json
 .gitnexus.backup*/
 .gitnexus.pre-*
 
+# Skill signing layer (Phase 148 / SKILLTRUST-02): operator Ed25519 keypair.
+# The private key must never reach git — the public_key_fingerprint stored in
+# skill_registry.public_key_fingerprint is sufficient for verification.
+# Also ignore the legacy *.pem files that Node.js crypto may emit.
+apps/memroos/data/skill-signing-key.json
+apps/memroos/data/skill-signing-key.*
+
 # Operator load harness (Phase 124 / ENTOPS-01) — live run artifacts.
 # baseline.json + .gitkeep are committed so the CI gate has something
 # to read on first run; the gate treats baseline as NOT pass.

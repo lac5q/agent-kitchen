@@ -10,7 +10,7 @@ import { checkDispatchPolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
-import { lookupSkillContract, buildSkillEvidence } from "@/lib/dispatch/skill-lookup";
+import { lookupSkillContract, buildSkillEvidence, parseTrustLevel } from "@/lib/dispatch/skill-lookup";
 import {
   extractMemoryLabelSnapshot,
   filterAuthorizedMemoryItems,
@@ -235,9 +235,28 @@ export async function POST(req: NextRequest | Request) {
   // Skill governance check (SKILL-03): look up registry before per-agent instruction fallback.
   // Fail closed: incomplete, disabled, or risk-unknown contracts deny dispatch.
   // No skill_name in request → fallback (normal dispatch proceeds unchanged).
+  //
+  // Phase 148 SKILLTRUST-02: optionally enforce a minimum trust tier via
+  // MEMROOS_MIN_SKILL_TRUST_LEVEL env var. Accepted values:
+  //   - 'unsigned' | 'signed' | 'verified' (case-insensitive)
+  //   - unset / unknown → no threshold (backward-compatible fail-open for trust)
+  //
+  // Dispatch policy flag MEMROOS_REQUIRE_SIGNED_SKILLS=true (1/yes/on) restricts
+  // dispatch to signed skills via an extra SQL predicate (VAL-SIGN-008).
   const skillName: string | undefined = parsed.data.skill_name;
-  const skillContract = lookupSkillContract(db, skillName);
-  const skillEvidence = buildSkillEvidence(skillContract);
+  const minTrustLevel = parseTrustLevel(process.env["MEMROOS_MIN_SKILL_TRUST_LEVEL"]);
+  const requireSignedRaw = (process.env["MEMROOS_REQUIRE_SIGNED_SKILLS"] ?? "")
+    .trim()
+    .toLowerCase();
+  const requireSigned =
+    requireSignedRaw === "true" ||
+    requireSignedRaw === "1" ||
+    requireSignedRaw === "yes" ||
+    requireSignedRaw === "on";
+  const skillContract = lookupSkillContract(db, skillName, minTrustLevel, {
+    requireSigned,
+  });
+  const skillEvidence = buildSkillEvidence(skillContract, minTrustLevel);
 
   if (skillContract?.kind === "denied") {
     writeAuditLog(db, {
@@ -249,6 +268,8 @@ export async function POST(req: NextRequest | Request) {
         skill_name: skillContract.skill_name,
         reason: skillContract.reason,
         dispatch_status: skillContract.dispatch_status,
+        trust_level: skillContract.trust_level ?? null,
+        required_trust_level: minTrustLevel ?? null,
       }),
       severity: "high",
     });

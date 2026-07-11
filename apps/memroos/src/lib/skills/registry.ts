@@ -27,6 +27,22 @@ import { createHash, createHmac, timingSafeEqual } from "crypto";
 
 export type TrustLevel = "unsigned" | "signed" | "verified";
 
+/**
+ * Strict-weak ordering for trust levels. Index in this array is the
+ * "rank": unsigned=0, signed=1, verified=2. A skill with rank >= the
+ * minimum required rank passes the trust threshold.
+ */
+export const TRUST_LEVEL_ORDER: readonly TrustLevel[] = [
+  "unsigned",
+  "signed",
+  "verified",
+] as const;
+
+export function trustLevelRank(level: TrustLevel): number {
+  const idx = TRUST_LEVEL_ORDER.indexOf(level);
+  return idx === -1 ? 0 : idx;
+}
+
 export interface SkillMdParsed {
   name: string | null;
   description: string | null;
@@ -39,6 +55,9 @@ export interface SkillMdParsed {
   allowed_tools: string | null;
   verification_checks: string | null;
   rollback_behavior: string | null;
+  /** SKILLTRUST-01: trimmed body of the `## Evidence Examples` section.
+   *  Null when the section is absent. Treated as missing during completeness
+   *  scoring when the trimmed body is empty or whitespace-only. */
   evidence_examples: string | null;
   raw_body: string;
 }
@@ -70,7 +89,9 @@ export interface SkillRegistryEntry {
   content_hash: string | null;
   signature: string | null;
   signed_by: string | null;
+  signed_at: string | null;
   trust_level: TrustLevel;
+  public_key_fingerprint: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +393,39 @@ export function normalizeRegistryEntry(
     content_hash,
     signature: null,
     signed_by: null,
+    signed_at: null,
     trust_level: "unsigned",
+    public_key_fingerprint: null,
+  };
+}
+
+/**
+ * Returns a copy of the registry entry with the signature, signed_by,
+ * signed_at, and trust_level fields populated. The original entry is
+ * not mutated. If the entry has no content_hash (it should always have one
+ * after `normalizeRegistryEntry`), this function returns the entry unchanged.
+ *
+ * Signing is fail-closed: any failure to sign (missing content_hash, empty
+ * signing key) leaves trust_level='unsigned' and returns the original entry
+ * with explicit null signature fields. The caller is responsible for
+ * inspecting the result and surfacing the unsigned state.
+ */
+export function signRegistryEntry(
+  entry: SkillRegistryEntry,
+  signingKey: string
+): SkillRegistryEntry {
+  if (!entry.content_hash) {
+    return entry;
+  }
+  if (!signingKey) {
+    return entry;
+  }
+  const { signature, signedBy } = signSkill(entry.content_hash, signingKey);
+  return {
+    ...entry,
+    signature,
+    signed_by: signedBy,
+    signed_at: new Date().toISOString(),
+    trust_level: "signed",
   };
 }
