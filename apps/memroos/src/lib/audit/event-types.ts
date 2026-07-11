@@ -130,6 +130,14 @@ export const AUDIT_EVENT_TYPES = {
   SKILL_SYNC_UNPINNED: "skill.sync.unpinned",
   /** Skill sync rolled back. */
   SKILL_SYNC_ROLLED_BACK: "skill.sync.rolled_back",
+
+  // Memory lifecycle (v8.7, MEMLIFE-01..02)
+  /** Retention policy selected, unavailable, or conflicted for a record. */
+  MEMORY_RETENTION_DECISION: "memory.retention.decision",
+  /** Scheduled retention expiry run started, completed, failed, or replayed. */
+  MEMORY_RETENTION_EXPIRY_RUN: "memory.retention.expiry_run",
+  /** Legal hold created, updated, released, or expired. */
+  MEMORY_LEGAL_HOLD: "memory.legal_hold",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -154,6 +162,10 @@ export const ENTITY_TYPES = {
   POLICY_DECISION: "policy_decision",
   /** A Paperclip tenant entity (company, agent, issue, budget) observed via activity ingestion (Phase 146, FLEET-18). */
   PAPERCLIP: "paperclip",
+  /** A lifecycle retention policy or retention-scoped record. */
+  MEMORY_RETENTION: "memory_retention",
+  /** A legal hold over memory lifecycle records. */
+  MEMORY_LEGAL_HOLD: "memory_legal_hold",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

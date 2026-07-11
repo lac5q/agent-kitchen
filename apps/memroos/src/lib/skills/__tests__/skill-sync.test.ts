@@ -26,38 +26,31 @@
  *                   (dispatch_status != 'enabled'), not direct enablement.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { getDb, closeDb } from "@/lib/db";
 
 const TMP_ROOT = path.join(
   os.tmpdir(),
   `skill-sync-${crypto.randomUUID()}`
 );
 
-async function loadDb() {
-  process.env["MEMROOS_ROOT"] = TMP_ROOT;
-  process.env["SQLITE_DB_PATH"] = path.join(TMP_ROOT, `db-${crypto.randomUUID()}.db`);
-  vi.resetModules();
-  const dbModule = await import("@/lib/db");
-  const { getDb, closeDb } = dbModule;
-  const { initSchema } = await import("@/lib/db-schema");
-  const db = getDb();
-  initSchema(db);
-  return { db, getDb, closeDb };
-}
-
 let db: import("better-sqlite3").Database;
-let closeDb: () => void;
 
-beforeEach(async () => {
+beforeEach(() => {
   fs.rmSync(TMP_ROOT, { recursive: true, force: true });
   fs.mkdirSync(TMP_ROOT, { recursive: true });
-  const mods = await loadDb();
-  db = mods.db;
-  closeDb = mods.closeDb;
+  process.env["MEMROOS_ROOT"] = TMP_ROOT;
+  process.env["SQLITE_DB_PATH"] = path.join(TMP_ROOT, `db-${crypto.randomUUID()}.db`);
+  try {
+    closeDb();
+  } catch {
+    /* ignore */
+  }
+  db = getDb();
 });
 
 afterEach(() => {

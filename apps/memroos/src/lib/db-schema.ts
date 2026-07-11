@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 15;
+export const CURRENT_SCHEMA_VERSION = 16;
 
 type SchemaMigration = {
   version: number;
@@ -159,6 +159,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 15,
     name: 'skill-pin-idempotency-keys',
     up: applySkillPinIdempotencySchema,
+  },
+  {
+    version: 16,
+    name: 'memory-retention-expiry-and-holds',
+    up: applyMemoryRetentionLifecycleSchema,
   },
 ];
 
@@ -1030,6 +1035,114 @@ function applySkillPinIdempotencySchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS skill_pin_idempotency_keys_key
       ON skill_pin_idempotency_keys(idempotency_key);
+  `);
+}
+
+function applyMemoryRetentionLifecycleSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_retention_policies (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      name                 TEXT NOT NULL,
+      version              TEXT NOT NULL,
+      ontology_type        TEXT NOT NULL,
+      security_label_json  TEXT NOT NULL DEFAULT '{}',
+      purpose              TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      priority             INTEGER NOT NULL DEFAULT 0,
+      duration_days        INTEGER NOT NULL CHECK(duration_days >= 0),
+      action               TEXT NOT NULL DEFAULT 'expire'
+                           CHECK(action IN ('expire','tombstone','review')),
+      enabled              INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, name, version)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_policies_lookup
+      ON memory_retention_policies(tenant_id, enabled, ontology_type, purpose, priority DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_records (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      record_type          TEXT NOT NULL,
+      record_id            TEXT NOT NULL,
+      ontology_type        TEXT NOT NULL,
+      security_label_json  TEXT NOT NULL DEFAULT '{}',
+      purpose              TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      policy_id            TEXT REFERENCES memory_retention_policies(id),
+      policy_version       TEXT,
+      retention_deadline   TEXT,
+      status               TEXT NOT NULL DEFAULT 'active'
+                           CHECK(status IN ('active','expired','policy_unavailable','failed')),
+      content_hash         TEXT,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      expired_at           TEXT,
+      UNIQUE(tenant_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_records_due
+      ON memory_retention_records(tenant_id, status, retention_deadline);
+    CREATE INDEX IF NOT EXISTS memory_retention_records_policy
+      ON memory_retention_records(policy_id, policy_version);
+
+    CREATE TABLE IF NOT EXISTS memory_legal_holds (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      reason_code          TEXT NOT NULL,
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_by           TEXT,
+      updated_at           TEXT,
+      released_by          TEXT,
+      released_at          TEXT,
+      expires_at           TEXT,
+      status               TEXT NOT NULL DEFAULT 'active'
+                           CHECK(status IN ('active','released','expired'))
+    );
+    CREATE INDEX IF NOT EXISTS memory_legal_holds_scope
+      ON memory_legal_holds(tenant_id, status, expires_at);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_expiry_runs (
+      run_key              TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      lease_owner          TEXT NOT NULL,
+      lease_expires_at     TEXT NOT NULL,
+      status               TEXT NOT NULL
+                           CHECK(status IN ('running','completed','failed')),
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      started_at           TEXT NOT NULL,
+      completed_at         TEXT,
+      summary_json         TEXT NOT NULL DEFAULT '{}',
+      error_message        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_expiry_runs_tenant
+      ON memory_retention_expiry_runs(tenant_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_receipts (
+      id                        TEXT PRIMARY KEY,
+      tenant_id                 TEXT NOT NULL DEFAULT 'default-tenant',
+      run_key                   TEXT,
+      record_type               TEXT NOT NULL,
+      record_id                 TEXT NOT NULL,
+      policy_id                 TEXT,
+      policy_version            TEXT,
+      decision                  TEXT NOT NULL
+                                CHECK(decision IN ('active','expired','held','skipped_future','skipped_already_expired','policy_unavailable','conflict','failed','retried')),
+      reason                    TEXT NOT NULL,
+      actor_id                  TEXT NOT NULL,
+      scope_hash                TEXT NOT NULL,
+      derivative_outcomes_json  TEXT NOT NULL DEFAULT '[]',
+      metadata_json             TEXT NOT NULL DEFAULT '{}',
+      created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(run_key, record_type, record_id, decision, reason)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_receipts_record
+      ON memory_retention_receipts(tenant_id, record_type, record_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_retention_receipts_run
+      ON memory_retention_receipts(run_key, created_at DESC);
   `);
 }
 

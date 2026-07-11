@@ -11,37 +11,29 @@
  *   - insertAuditRow paired rows persist
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { getDb, closeDb } from "@/lib/db";
+import { resetAuditAtomicCache } from "@/lib/skills/skill-audit-atomic";
 
 const TMP_ROOT = path.join(os.tmpdir(), `audit-atomic-${crypto.randomUUID()}`);
 
-async function loadDb() {
+let db: import("better-sqlite3").Database;
+
+beforeEach(() => {
+  fs.rmSync(TMP_ROOT, { recursive: true, force: true });
   const root = path.join(TMP_ROOT, `db-${crypto.randomUUID()}`);
   fs.mkdirSync(root, { recursive: true });
   process.env["MEMROOS_ROOT"] = root;
   process.env["SQLITE_DB_PATH"] = path.join(root, "test.db");
-  vi.resetModules();
-  const { getDb, closeDb } = await import("@/lib/db");
-  const { initSchema } = await import("@/lib/db-schema");
-  const db = getDb();
-  initSchema(db);
-  return { db, closeDb };
-}
-
-let db: import("better-sqlite3").Database;
-let closeDb: () => void;
-
-beforeEach(async () => {
-  fs.rmSync(TMP_ROOT, { recursive: true, force: true });
-  fs.mkdirSync(TMP_ROOT, { recursive: true });
-  const mods = await loadDb();
-  db = mods.db;
-  closeDb = mods.closeDb;
-  await import("@/lib/skills/skill-audit-atomic").then((m) => m.resetAuditAtomicCache());
+  try {
+    closeDb();
+  } catch {}
+  db = getDb();
+  resetAuditAtomicCache();
 });
 
 afterEach(() => {
@@ -54,8 +46,8 @@ afterEach(() => {
 });
 
 describe("VAL-SKILL-038 audit-atomic mutations", () => {
-  it("commits body + audit row in single transaction", async () => {
-    const { commitAuditAtomic } = await import("@/lib/skills/skill-audit-atomic");
+  it("commits body + audit row in single transaction", () => {
+    const { commitAuditAtomic } = require("@/lib/skills/skill-audit-atomic") as typeof import("@/lib/skills/skill-audit-atomic");
 
     const result = commitAuditAtomic(db, {
       actor: "operator",
