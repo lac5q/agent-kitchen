@@ -123,6 +123,10 @@ interface SkillRow {
   signature: string | null;
   version: string | null;
   content_hash: string | null;
+  // SKILLTRUST-05: lifecycle_state column (v14 migration). Optional in the
+  // type because better-sqlite3 returns the row as a property bag -- legacy
+  // DBs that pre-date v14 simply omit this key entirely.
+  lifecycle_state?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,36 +241,52 @@ export function lookupSkillContract(
   //  multiple harnesses with different statuses.)
   const requireSignedPredicate = requireSigned ? " AND signature IS NOT NULL" : "";
   const sourceHarnessPredicate = sourceHarness ? " AND source_harness = ?" : "";
-  const buildEnabledSql = (includeVersion: boolean) => {
-    const extra = includeVersion ? ", version, content_hash" : "";
+  // SKILLTRUST-05 / VAL-LIFE-010: extend the fail-closed SQL gate to also
+  // require lifecycle_state = 'enabled'. A skill with dispatch_status='enabled'
+  // but lifecycle_state in (draft|deprecated|retired) is never dispatchable.
+  const lifecyclePredicate =
+    " AND (lifecycle_state IS NULL OR lifecycle_state = 'enabled')";
+  const buildEnabledSql = (includeVersion: boolean, includeLifecycle: boolean) => {
+    const versionExtra = includeVersion ? ", version, content_hash, lifecycle_state" : "";
+    const lifecycleExtra = includeLifecycle ? ", lifecycle_state" : "";
+    const lifecycleWhere = includeLifecycle ? lifecyclePredicate : "";
     return `SELECT id, name, source_harness, risk_tier, dispatch_status,
-              completeness_pct, trust_level, signature${extra}
+              completeness_pct, trust_level, signature${versionExtra}${lifecycleExtra}
          FROM skill_registry
         WHERE name = ?
           AND dispatch_status = 'enabled'
-          AND completeness_pct = 100
-          ${requireSignedPredicate}${sourceHarnessPredicate}
+          AND completeness_pct = 100${lifecycleWhere}${requireSignedPredicate}${sourceHarnessPredicate}
         ORDER BY imported_at DESC
         LIMIT 1`;
   };
   let enabledRow: SkillRow | null = null;
+  // tryFetchEnabled runs the supplied SQL and returns the row, or null
+  // when no row matched. "no such column" errors (which indicate a
+  // legacy DB without lifecycle_state / version) are rethrown so the
+  // outer try/catch can run the legacy fallback below. Non-legacy
+  // "no row matched" results stay null and are honored -- a deprecated
+  // / draft / retired skill with dispatch_status='enabled' must surface
+  // as denied, not silently succeed via the legacy fallback.
   const tryFetchEnabled = (sql: string): SkillRow | null => {
-    try {
-      if (sourceHarness) {
-        return (db.prepare<[string, string], SkillRow>(sql).get(name, sourceHarness) ?? null) as SkillRow | null;
-      }
-      return (db.prepare<[string], SkillRow>(sql).get(name) ?? null) as SkillRow | null;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes("no such column")) return null;
-      throw e;
+    if (sourceHarness) {
+      return (db.prepare<[string, string], SkillRow>(sql).get(name, sourceHarness) ?? null) as SkillRow | null;
     }
+    return (db.prepare<[string], SkillRow>(sql).get(name) ?? null) as SkillRow | null;
   };
-  // Try full query first, fall back to minimal columns for legacy test DBs
-  enabledRow = tryFetchEnabled(buildEnabledSql(true));
-  if (!enabledRow) {
-    const minimalSql = buildEnabledSql(false);
-    // Only retry minimal if full failed due to missing columns
+  // Try full query first. The lifecycle_state filter is mandatory for
+  // v14+ databases so a deprecated / draft / retired skill with
+  // dispatch_status='enabled' is correctly denied. The fallback to the
+  // minimal query (no lifecycle_state / version columns) is reserved
+  // for legacy test DBs that pre-date the v14 migration. The fallback
+  // runs only when the FULL query throws (typically "no such column"),
+  // NOT when it simply returns no row.
+  try {
+    enabledRow = tryFetchEnabled(buildEnabledSql(true, true));
+  } catch {
+    // Legacy DB without lifecycle_state / version columns -- fall back
+    // to the minimal query so older fixtures and pre-migration test
+    // DBs still produce a hit.
+    const minimalSql = buildEnabledSql(false, false);
     try {
       if (sourceHarness) {
         enabledRow = (db.prepare<[string, string], SkillRow>(minimalSql).get(name, sourceHarness) ?? null) as SkillRow | null;
@@ -322,10 +342,11 @@ export function lookupSkillContract(
   // Step 3: no enabled+complete row in the constrained search. Check
   // whether any contract exists at all so we can produce an informative
   // denial (vs. not-found).
-  const buildAnySql = (includeVersion: boolean) => {
-    const extra = includeVersion ? ", version, content_hash" : "";
+  const buildAnySql = (includeVersion: boolean, includeLifecycle: boolean) => {
+    const versionExtra = includeVersion ? ", version, content_hash, lifecycle_state" : "";
+    const lifecycleExtra = includeLifecycle ? ", lifecycle_state" : "";
     return `SELECT id, name, source_harness, risk_tier, dispatch_status,
-              completeness_pct, trust_level, signature${extra}
+              completeness_pct, trust_level, signature${versionExtra}${lifecycleExtra}
          FROM skill_registry
         WHERE name = ?
           ${sourceHarnessPredicate}
@@ -333,17 +354,18 @@ export function lookupSkillContract(
         LIMIT 1`;
   };
   let anyRow: SkillRow | null = null;
-  // Try full first, fall back to minimal for legacy test DBs
+  // Try full first, fall back to minimal for legacy test DBs (legacy
+  // databases may be missing the lifecycle_state column added in v14).
   try {
-    const fullAnySql = buildAnySql(true);
+    const fullAnySql = buildAnySql(true, true);
     anyRow = sourceHarness
       ? (db.prepare<[string, string], SkillRow>(fullAnySql).get(name, sourceHarness) ?? null) as SkillRow | null
       : (db.prepare<[string], SkillRow>(fullAnySql).get(name) ?? null) as SkillRow | null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!msg.includes("no such column")) throw e;
-    // retry minimal
-    const minimalAnySql = buildAnySql(false);
+    // retry without the lifecycle_state column or predicate
+    const minimalAnySql = buildAnySql(false, false);
     try {
       anyRow = sourceHarness
         ? (db.prepare<[string, string], SkillRow>(minimalAnySql).get(name, sourceHarness) ?? null) as SkillRow | null
@@ -352,6 +374,9 @@ export function lookupSkillContract(
       anyRow = null;
     }
   }
+  // No-op: anyRow / enabledRow are typed SkillRow | null already. The
+  // legacy fallback path returns rows without lifecycle_state, but
+  // downstream consumers treat missing/null uniformly.
 
   if (!anyRow) {
     return {
@@ -381,7 +406,16 @@ export function lookupSkillContract(
   }
 
   // Step 5: contract exists but is not enabled+complete -- deny with informative reason.
+  // Priority order: dispatch_status takes precedence over lifecycle_state
+  // for the user-facing reason because dispatch_status is the
+  // supply-chain gate (quarantined, review, etc.) while lifecycle_state
+  // describes a different orthogonal concern (draft, deprecated,
+  // retired). A skill with dispatch_status='quarantined' must surface
+  // the quarantine reason so operators see the actual blocker; a skill
+  // with dispatch_status='enabled' but lifecycle_state in (draft,
+  // deprecated, retired) is blocked by lifecycle_state.
   let statusLabel: string;
+  const lifecycle = (anyRow.lifecycle_state ?? null) as string | null;
   if (anyRow.completeness_pct < 100) {
     statusLabel = "incomplete";
   } else if (anyRow.dispatch_status === "disabled") {
@@ -391,7 +425,16 @@ export function lookupSkillContract(
   } else if (anyRow.dispatch_status === "review") {
     statusLabel = "under review";
   } else if (anyRow.dispatch_status === "quarantined") {
+    // VAL-SKILL-022 / VAL-QUAR-009: quarantined is the mandatory
+    // supply-chain gate label. Operators must see this exact word so
+    // the quarantine pipeline is the first thing surfaced.
     statusLabel = "quarantined";
+  } else if (lifecycle && lifecycle !== "enabled") {
+    statusLabel = lifecycle === "draft"
+      ? "in draft lifecycle (not yet enabled)"
+      : lifecycle === "deprecated"
+        ? "deprecated"
+        : lifecycle;
   } else {
     statusLabel = anyRow.dispatch_status ?? "unknown";
   }

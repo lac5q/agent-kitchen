@@ -404,6 +404,18 @@ function insertSkillWithTrust(
     signed_by: null,
     imported_by: "operator",
     imported_at: new Date().toISOString(),
+    // Phase 150 / SKILLTRUST-05: dispatch_status='enabled' rows must
+    // also have lifecycle_state='enabled' so the v14 SQL gate keeps
+    // them dispatchable. The schema default for legacy rows is 'draft'
+    // so tests that bypass the migration backfill need to set this
+    // explicitly. We evaluate against the FINAL dispatch_status (after
+    // applying the helper's own default of "enabled") rather than the
+    // raw override — otherwise rows that rely on the default would
+    // skip the lifecycle_state gate and get caught by the v14 deny.
+    lifecycle_state:
+      (overrides.dispatch_status ?? "enabled") === "enabled"
+        ? "enabled"
+        : "draft",
   };
 
   db.prepare(`
@@ -412,13 +424,13 @@ function insertSkillWithTrust(
        owner, description, version, raw_body, missing_fields_json,
        preconditions, allowed_tools, verification_checks, rollback_behavior,
        imported_by, imported_at, evidence_examples, content_hash, signature,
-       signed_by, trust_level)
+       signed_by, trust_level, lifecycle_state)
     VALUES
       (@name, @source_harness, @risk_tier, @dispatch_status, @completeness_pct,
        @owner, @description, @version, @raw_body, @missing_fields_json,
        @preconditions, @allowed_tools, @verification_checks, @rollback_behavior,
        @imported_by, @imported_at, @evidence_examples, @content_hash, @signature,
-       @signed_by, @trust_level)
+       @signed_by, @trust_level, @lifecycle_state)
   `).run(row);
 }
 

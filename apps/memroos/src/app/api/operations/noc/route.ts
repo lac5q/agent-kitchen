@@ -11,6 +11,7 @@ import {
 } from "@/lib/noc-filters";
 import fs from "node:fs";
 import path from "node:path";
+import { listDeprecatedSkills } from "@/lib/skills/skill-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -535,6 +536,9 @@ async function buildNocResponse(request: Request) {
     },
     localFootprint,
     memoryIteration,
+    skills: {
+      deprecated: listDeprecatedSkills(db, { limit: 50 }),
+    },
   });
 }
 

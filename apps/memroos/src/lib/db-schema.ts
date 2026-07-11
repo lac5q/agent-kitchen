@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 type SchemaMigration = {
   version: number;
@@ -149,6 +149,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 13,
     name: 'skill-sync-engine-state-table',
     up: applySkillSyncEngineSchema,
+  },
+  {
+    version: 14,
+    name: 'skill-lifecycle-states-and-dependencies',
+    up: applySkillLifecycleSchema,
   },
 ];
 
@@ -849,6 +854,117 @@ function applySkillSyncEngineSchema(db: Database.Database): void {
       ON skill_sync_state(version_pinned_to) WHERE version_pinned_to IS NOT NULL;
     CREATE INDEX IF NOT EXISTS skill_sync_state_checked
       ON skill_sync_state(last_check_at DESC);
+  `);
+}
+
+// Phase 150 / SKILLTRUST-05 — Skill Lifecycle Manager.
+//
+// Adds the lifecycle_state column to skill_registry with a CHECK constraint
+// limiting values to draft|enabled|deprecated|retired. Backfills from
+// dispatch_status so existing v13 rows remain dispatchable: rows with
+// dispatch_status='enabled' map to lifecycle_state='enabled', all others
+// map to 'draft'.
+//
+// Two new tables join to skill_registry.id:
+//
+//   skill_dependencies   -- durable ledger of agents that depend on a skill,
+//                            with the skill_version they were last known to
+//                            rely on. Used by transitionLifecycleState() to
+//                            block deprecated -> retired when dependents
+//                            still exist, and by getDependents() to surface
+//                            the dependency graph.
+//
+//   skill_lifecycle_audit -- append-only transition log. Every state change
+//                            records (skill_id, from_state, to_state, actor,
+//                            reason, transitioned_at). The
+//                            audit_entries table also receives a paired
+//                            skill_lifecycle_transitioned row so existing
+//                            audit-trail queries surface lifecycle events.
+//
+// All DDL is idempotent (ALTER wrapped in try/catch; CREATE TABLE IF NOT
+// EXISTS). The migration may be re-run safely on already-migrated DBs.
+function applySkillLifecycleSchema(db: Database.Database): void {
+  // 1. Add lifecycle_state column if missing. The DEFAULT 'draft' is the
+  //    safe initial value for any row that predates the migration. The
+  //    inline CHECK at ALTER time enforces the lifecycle state enum so
+  //    SQLite refuses INSERT/UPDATE values outside the canonical set
+  //    without needing a v11-style table-rebuild.
+  let needsBackfill = false;
+  try {
+    db.exec(
+      "ALTER TABLE skill_registry ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'draft' " +
+      "CHECK(lifecycle_state IN ('draft','enabled','deprecated','retired'))"
+    );
+    needsBackfill = true;
+  } catch {
+    // Column already exists; the backfill below is a no-op because all rows
+    // are already populated.
+  }
+
+  // 2. CHECK constraint: the column-constraint CHECK added in step 1
+  //    is sufficient. The v11-style table-rebuild (CREATE _new, INSERT
+  //    SELECT, DROP, RENAME) is intentionally NOT performed because it
+  //    can desynchronize the skill_quarantine foreign key on databases
+  //    that already ran v11+. The column-constraint CHECK is enforced
+  //    by SQLite at INSERT/UPDATE time regardless of whether the table
+  //    was rebuilt. sqlite_master.sql will surface the lifecycle_state
+  //    column + its inline CHECK constraint alongside the existing
+  //    dispatch_status CHECK on a fresh install.
+  // Note: the meta flag below is intentionally a no-op marker retained
+  // for parity with the v11 quarantine CHECK rebuild so external
+  // tooling that watches `meta` keys continues to see a recorded flag.
+  db.prepare(
+    `INSERT OR IGNORE INTO meta(key,value) VALUES('skill_registry_lifecycle_check_v14','1')`
+  ).run();
+
+  // 3. Backfill lifecycle_state from dispatch_status for legacy rows.
+  //    The DEFAULT 'draft' already handled most rows; this only touches
+  //    rows whose dispatch_status='enabled' so they map to
+  //    lifecycle_state='enabled' and the SQL gate keeps dispatching them.
+  if (needsBackfill) {
+    db.exec(
+      `UPDATE skill_registry
+          SET lifecycle_state = 'enabled'
+        WHERE dispatch_status = 'enabled'
+          AND lifecycle_state = 'draft'`
+    );
+  }
+
+  // 4. New tables — both idempotent so re-running the migration is safe.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_dependencies (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      skill_id              INTEGER NOT NULL
+                            REFERENCES skill_registry(id) ON DELETE CASCADE,
+      dependent_agent_id    TEXT    NOT NULL,
+      skill_version         TEXT    NOT NULL,
+      registered_by         TEXT    NOT NULL,
+      created_at            TEXT    NOT NULL
+                            DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL
+                            DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(skill_id, dependent_agent_id)
+    );
+    CREATE INDEX IF NOT EXISTS skill_dependencies_skill
+      ON skill_dependencies(skill_id);
+    CREATE INDEX IF NOT EXISTS skill_dependencies_agent
+      ON skill_dependencies(dependent_agent_id);
+
+    CREATE TABLE IF NOT EXISTS skill_lifecycle_audit (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      skill_id         INTEGER NOT NULL
+                       REFERENCES skill_registry(id) ON DELETE CASCADE,
+      from_state       TEXT    NOT NULL,
+      to_state         TEXT    NOT NULL,
+      actor            TEXT    NOT NULL,
+      reason           TEXT    NOT NULL DEFAULT '',
+      transitioned_at  TEXT    NOT NULL
+                       DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS skill_lifecycle_audit_skill
+      ON skill_lifecycle_audit(skill_id, transitioned_at DESC);
+    CREATE INDEX IF NOT EXISTS skill_lifecycle_audit_to_state
+      ON skill_lifecycle_audit(to_state, transitioned_at DESC);
   `);
 }
 

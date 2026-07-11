@@ -17,7 +17,7 @@
  *   - Evidence block contains only safe identifying fields -- never raw_body,
  *     contract sections, secrets, or untrusted example text.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import fs from "fs";
 import os from "os";
@@ -66,6 +66,9 @@ function insertSkill(
     risk_tier: overrides.risk_tier ?? "low",
     dispatch_status: overrides.dispatch_status ?? "enabled",
     completeness_pct: overrides.completeness_pct ?? 100,
+    // Phase 150: keep lifecycle_state aligned with dispatch_status so the
+    // v14 SQL gate lets enabled+complete rows through.
+    lifecycle_state: (overrides.dispatch_status ?? "enabled") === "enabled" ? "enabled" : "draft",
     owner: overrides.owner ?? "team-a",
     description: overrides.description ?? "A test skill",
     version: overrides.version ?? "1.0",
@@ -88,12 +91,12 @@ function insertSkill(
       (name, source_harness, risk_tier, dispatch_status, completeness_pct,
        owner, description, version, raw_body, missing_fields_json,
        preconditions, allowed_tools, verification_checks, rollback_behavior,
-       imported_by, imported_at, evidence_examples, signature, trust_level, content_hash)
+       imported_by, imported_at, evidence_examples, signature, trust_level, content_hash, lifecycle_state)
     VALUES
       (@name, @source_harness, @risk_tier, @dispatch_status, @completeness_pct,
        @owner, @description, @version, @raw_body, @missing_fields_json,
        @preconditions, @allowed_tools, @verification_checks, @rollback_behavior,
-       @imported_by, @imported_at, @evidence_examples, @signature, @trust_level, @content_hash)
+       @imported_by, @imported_at, @evidence_examples, @signature, @trust_level, @content_hash, @lifecycle_state)
   `).run(row);
 }
 
@@ -103,6 +106,7 @@ let closeDb: () => void;
 beforeEach(async () => {
   fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
   fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+  vi.resetModules();
   const mods = await loadModules();
   db = mods.db;
   closeDb = mods.closeDb;

@@ -63,6 +63,9 @@ function insertSkill(
     risk_tier: overrides.risk_tier ?? "low",
     dispatch_status: overrides.dispatch_status ?? "enabled",
     completeness_pct: overrides.completeness_pct ?? 100,
+    // Phase 150: keep lifecycle_state aligned with dispatch_status so the
+    // v14 SQL gate lets enabled+complete rows through.
+    lifecycle_state: (overrides.dispatch_status ?? "enabled") === "enabled" ? "enabled" : "draft",
     owner: overrides.owner ?? "team-a",
     description: overrides.description ?? "A test skill",
     version: overrides.version ?? "1.0",
@@ -82,12 +85,12 @@ function insertSkill(
       (name, source_harness, risk_tier, dispatch_status, completeness_pct,
        owner, description, version, raw_body, missing_fields_json,
        preconditions, allowed_tools, verification_checks, rollback_behavior,
-       imported_by, imported_at, evidence_examples)
+       imported_by, imported_at, evidence_examples, lifecycle_state)
     VALUES
       (@name, @source_harness, @risk_tier, @dispatch_status, @completeness_pct,
        @owner, @description, @version, @raw_body, @missing_fields_json,
        @preconditions, @allowed_tools, @verification_checks, @rollback_behavior,
-       @imported_by, @imported_at, @evidence_examples)
+       @imported_by, @imported_at, @evidence_examples, @lifecycle_state)
   `).run(row);
 }
 

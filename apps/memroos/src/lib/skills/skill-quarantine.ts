@@ -603,9 +603,15 @@ export function approveQuarantine(
   // Flip the registry to dispatchable. The completeness gate still applies:
   // a skill with completeness_pct < 100 stays dispatchable=true but is
   // denied by the SQL filter in lookupSkillContract (fail-closed).
+  // Phase 150 / SKILLTRUST-05: approval also promotes lifecycle_state
+  // to 'enabled' so the v14 SQL gate
+  // (lifecycle_state IS NULL OR lifecycle_state = 'enabled') lets the
+  // skill through. Without this, a freshly approved skill stays in
+  // draft lifecycle and the dispatcher refuses to invoke it.
   db.prepare(
     `UPDATE skill_registry
-        SET dispatch_status = 'enabled'
+        SET dispatch_status = 'enabled',
+            lifecycle_state = 'enabled'
       WHERE id = ?`
   ).run(skillId);
 
