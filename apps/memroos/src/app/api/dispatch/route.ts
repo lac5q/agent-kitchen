@@ -28,6 +28,18 @@ const DispatchBodySchema = z.object({
   input: z.record(z.string(), z.unknown()).optional(),
   priority: z.number().optional(),
   skill_name: z.string().optional(),
+  /**
+   * SKILLTRUST-01 (continued) / VAL-SKILL-018: explicit harness binding for
+   * the requested skill name. When omitted the dispatcher treats the request
+   * as ambiguous and refuses to silently select a harness.
+   */
+  source_harness: z.string().optional(),
+  /**
+   * SKILLTRUST-01 (continued) / VAL-SKILL-017: explicit version binding.
+   * When supplied the dispatcher denies mismatched versions rather than
+   * silently picking a different version.
+   */
+  skill_version: z.string().optional(),
   task_id: z.string().optional(),
   context_id: z.string().optional(),
   from_agent: z.string().optional(),
@@ -253,10 +265,40 @@ export async function POST(req: NextRequest | Request) {
     requireSignedRaw === "1" ||
     requireSignedRaw === "yes" ||
     requireSignedRaw === "on";
-  const skillContract = lookupSkillContract(db, skillName, minTrustLevel, {
+  const skillContract = lookupSkillContract(db, skillName, {
+    minTrustLevel,
     requireSigned,
+    sourceHarness: parsed.data.source_harness ?? null,
+    version: parsed.data.skill_version ?? null,
   });
   const skillEvidence = buildSkillEvidence(skillContract, minTrustLevel);
+
+  // Ambiguity denial: same-name skills from multiple harnesses cannot be
+  // silently selected. The caller must supply source_harness to dispatch.
+  // VAL-SKILL-017 / VAL-SKILL-018.
+  if (skillContract?.kind === "ambiguous") {
+    writeAuditLog(db, {
+      actor: from_agent,
+      action: "policy_denied",
+      target: "dispatch",
+      detail: JSON.stringify({
+        code: "SKILL_AMBIGUOUS",
+        skill_name: skillContract.skill_name,
+        reason: skillContract.reason,
+        candidate_harnesses: skillContract.candidate_harnesses,
+      }),
+      severity: "high",
+    });
+    return Response.json(
+      {
+        ok: false,
+        error: `Skill ambiguity: ${skillContract.reason}`,
+        code: "SKILL_AMBIGUOUS",
+        detail: skillEvidence,
+      },
+      { status: 409 }
+    );
+  }
 
   if (skillContract?.kind === "denied") {
     writeAuditLog(db, {
@@ -315,6 +357,8 @@ export async function POST(req: NextRequest | Request) {
     priority,
     dispatched_at,
     skill_name: skillName,
+    source_harness: parsed.data.source_harness ?? undefined,
+    skill_version: parsed.data.skill_version ?? undefined,
   };
   const result = await adapter.dispatch(task, agent);
 

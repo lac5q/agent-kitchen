@@ -46,6 +46,10 @@ export interface SkillContractSummary {
   id: number;
   name: string;
   source_harness: string;
+  /** SKILLTRUST-01 (continued): safe version field for explicit version
+   *  binding (VAL-SKILL-017). Surface in evidence so operators can verify
+   *  which version was selected without exposing raw_body. */
+  version: string | null;
   risk_tier: string | null;
   dispatch_status: string;
   completeness_pct: number;
@@ -55,6 +59,8 @@ export interface SkillContractSummary {
    *  unsigned rows. Surfaced in evidence so callers can verify which rows
    *  carry a signature without exposing the underlying skill body. */
   signature: string | null;
+  /** Safe content hash surfaced for binding verification. */
+  content_hash: string | null;
 }
 
 /** Discriminated union returned by lookupSkillContract. */
@@ -302,11 +308,13 @@ export function lookupSkillContract(
       id: enabledRow.id,
       name: enabledRow.name,
       source_harness: enabledRow.source_harness,
+      version: enabledRow.version ?? null,
       risk_tier: enabledRow.risk_tier,
       dispatch_status: enabledRow.dispatch_status,
       completeness_pct: enabledRow.completeness_pct,
       trust_level: rowTrust,
       signature: enabledRow.signature,
+      content_hash: enabledRow.content_hash ?? null,
     };
     return { kind: "hit", skill: summary };
   }
