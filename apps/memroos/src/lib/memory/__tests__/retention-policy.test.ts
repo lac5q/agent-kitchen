@@ -164,4 +164,30 @@ describe("memory retention policy selection", () => {
     expect(receiptJson).not.toContain("my secret memory text");
     expect(receiptJson).not.toMatch(/embedding|vector|password|token/i);
   });
+
+  it("handles empty arrays in scope as never matching", () => {
+    const database = freshDb();
+    createRetentionPolicy(database, {
+      id: "policy-empty-array",
+      name: "empty array scope",
+      ontologyType: "memory.note",
+      securityLabel: { sensitivity: "pii" },
+      purpose: "recall",
+      scope: { tenantId: "default-tenant", project: [] }, // Never matches anything
+      priority: 10,
+      durationDays: 30,
+      actorId: "operator-1",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const evaluation = evaluateRetentionPolicy(database, {
+      tenantId: "default-tenant",
+      ontologyType: "memory.note",
+      securityLabel: { sensitivity: "pii" },
+      purpose: "recall",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+    });
+
+    expect(evaluation.decision).toBe("policy_unavailable");
+  });
 });

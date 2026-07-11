@@ -187,4 +187,22 @@ describe("memory retention expiry runner and legal holds", () => {
     expect(serialized).not.toContain("sentinel raw memory");
     expect(serialized).not.toMatch(/embedding|vector|graph_properties|password|token|credential/i);
   });
+
+  it("does not replay destructive work if status is still running and lease has not expired", () => {
+    const database = freshDb();
+    registerRecord(database, "concurrent-1", "2026-01-01T00:00:00.000Z");
+
+    database.prepare(`INSERT INTO memory_retention_expiry_runs (run_key, tenant_id, lease_owner, lease_expires_at, status, scope_json, started_at, summary_json) VALUES (?, ?, ?, ?, 'running', ?, ?, '{}')`).run("run-concurrent", "default-tenant", "owner-1", "2026-01-02T01:00:00.000Z", "{}", "2026-01-02T00:00:00.000Z");
+
+    const concurrent = runRetentionExpiry(database, {
+      runKey: "run-concurrent",
+      actorId: "system",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    expect(concurrent.status).toBe("lease_held");
+    expect(concurrent.expired || 0).toBe(0);
+    expect(database.prepare("SELECT status FROM memory_retention_records WHERE record_id = ?").get("concurrent-1")).toMatchObject({ status: "active" });
+  });
 });
