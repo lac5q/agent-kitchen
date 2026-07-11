@@ -73,12 +73,12 @@ export async function POST(request: Request) {
   try {
     const { classifyText } = await import("@/lib/classification/cascade");
     const classification = classifyText({
-      content: rawContent || "",
+      content: storageBody.text || rawContent || "",
       sourceType: "memory_api",
       metadata: isRecord(body.metadata) ? body.metadata : {}
     });
     
-    if (classification.requiresReview || classification.label.policy === "sealed") {
+    if (classification.requiresReview) {
       // Return 403 to match standard classification rejections
       return Response.json({ 
         ok: false, 
