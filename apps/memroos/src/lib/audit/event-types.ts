@@ -169,6 +169,26 @@ export const AUDIT_EVENT_TYPES = {
   /** A single-record erasure completed across all registered derivatives. Used by the
    *  erasure coordinator; subject erasure uses MEMORY_SUBJECT_ERASURE_EXECUTED. */
   MEMORY_ERASURE_COMPLETED: "memory.erasure.completed",
+
+  // Orchestration evidence v8.8 / MSIQ-04..05 / ORCH-FOLLOWUP-01
+  /** MSIQ self-hosted Microsoft Agent Framework memory adapter established a session. */
+  ORCH_MSIQ_ADAPTER_SESSION: "orch.msiq.adapter.session",
+  /** MSIQ adapter write/read/search operation completed (success/deny/conflict). */
+  ORCH_MSIQ_ADAPTER_OPERATION: "orch.msiq.adapter.operation",
+  /** MCP protocol/capability validation step result (precedes adapter access). */
+  ORCH_MCP_VALIDATION: "orch.mcp.validation",
+  /** Federation source registered or updated. */
+  ORCH_FEDERATION_SOURCE_REGISTERED: "orch.federation.source.registered",
+  /** Federation budget exceeded (global or per-source). */
+  ORCH_FEDERATION_BUDGET_EXCEEDED: "orch.federation.budget_exceeded",
+  /** Per-source independent policy evaluation outcome recorded. */
+  ORCH_FEDERATION_POLICY_DECISION: "orch.federation.policy.decision",
+  /** Per-source federated retrieval outcome (success/empty/denied/omitted/stale/injection/timeout/malformed/failed). */
+  ORCH_FEDERATION_SOURCE_OUTCOME: "orch.federation.source_outcome",
+  /** Federated merge completed with deterministic pack hash + dedupe/rank metadata. */
+  ORCH_FEDERATION_MERGE: "orch.federation.merge",
+  /** Untrusted content was detected and dispositioned (omitted/quarantined) per policy. */
+  ORCH_INJECTION_DETECTED: "orch.injection.detected",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -213,6 +233,16 @@ export const ENTITY_TYPES = {
   MEMORY_TOMBSTONE: "memory_tombstone",
   /** Embedding provenance row linked to a canonical memory identity (model_version, removability, lifecycle state). */
   MEMORY_EMBEDDING: "memory_embedding",
+  /** MSIQ self-hosted Microsoft Agent Framework memory adapter session. */
+  MSIQ_ADAPTER_SESSION: "msiq_adapter_session",
+  /** Federation source registration (memory/knowledge/MCP, with type, handle, scope, trust, expiry). */
+  FEDERATION_SOURCE: "federation_source",
+  /** Federation budget evaluation record (global + per-source bounds). */
+  FEDERATION_BUDGET: "federation_budget",
+  /** Federation source outcome (per-source decision + receipt metadata). */
+  FEDERATION_OUTCOME: "federation_outcome",
+  /** Federation merged pack (deterministic dedupe + rank + provenance). */
+  FEDERATION_PACK: "federation_pack",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

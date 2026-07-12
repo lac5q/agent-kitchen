@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 19;
+export const CURRENT_SCHEMA_VERSION = 20;
 
 type SchemaMigration = {
   version: number;
@@ -179,6 +179,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 19,
     name: 'memory-embedding-provenance-and-lifecycle',
     up: applyMemoryEmbeddingProvenanceSchema,
+  },
+  {
+    version: 20,
+    name: 'orch-msiq-adapter-and-federation',
+    up: applyOrchMsiqAdapterAndFederationSchema,
   },
 ];
 
@@ -1465,6 +1470,182 @@ function applyMemoryEmbeddingProvenanceSchema(db: Database.Database): void {
       ON memory_embedding_provenance(tenant_id, lifecycle_state, updated_at DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS memory_embedding_provenance_dedupe
       ON memory_embedding_provenance(tenant_id, canonical_id, store_id, model_id, adapter_kind);
+  `);
+}
+
+function applyOrchMsiqAdapterAndFederationSchema(db: Database.Database): void {
+  // MSIQ-04..05 / VAL-ORCH-001..011:
+  //   - msiq_adapter_sessions: self-hosted Microsoft Agent Framework memory
+  //     adapter sessions (no Foundry / paid credentials). Each row is a
+  //     fail-closed session handle used by the adapter for idempotent writes
+  //     and provenance. Holds the negotiated MCP protocol version + tool list.
+  //   - msiq_adapter_idempotency: idempotency-keyed write ledger. Same key
+  //     + same payload hash + same scope => one logical write across
+  //     timeout / replay. Conflict => no overwrite, explicit error.
+  //   - msiq_adapter_operations: per-operation receipts (write/read/search)
+  //     with scope identity, MCP transcript hashes, policy/provenance
+  //     receipts and timing.
+  //   - federation_sources: explicitly registered federated retrieval
+  //     sources. Foreign, disabled, expired, incomplete, or unknown
+  //     sources are never accessed. One row per source identity with
+  //     type, handle, tenant/space/purpose/labels, allowed operations,
+  //     trust and expiry.
+  //   - federation_source_outcomes: per-source receipt ledger. Each row
+  //     records exactly one outcome (success, empty, denied, omitted,
+  //     stale, injection, timeout, malformed, failed) plus the
+  //     per-source policy decision and counts/hashes/timing.
+  //   - federation_merges: deterministic merge ledger with stable pack
+  //     hash, contributing source lineage, dedupe/rank metadata.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS msiq_adapter_sessions (
+      id                    TEXT    PRIMARY KEY,
+      tenant_id             TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_token         TEXT    NOT NULL UNIQUE,
+      actor_id              TEXT    NOT NULL,
+      actor_role            TEXT    NOT NULL,
+      agent_id              TEXT,
+      space_id              TEXT,
+      scope_hash            TEXT    NOT NULL,
+      mcp_protocol_version  TEXT    NOT NULL,
+      tool_manifest_json    TEXT    NOT NULL DEFAULT '[]',
+      capability_flags_json TEXT    NOT NULL DEFAULT '[]',
+      discovery_transcript  TEXT    NOT NULL DEFAULT '[]',
+      status                TEXT    NOT NULL DEFAULT 'active'
+                            CHECK(status IN ('active','closed','expired','revoked','denied')),
+      foundry_blocked       INTEGER NOT NULL DEFAULT 1 CHECK(foundry_blocked IN (0,1)),
+      foundry_only_mode     INTEGER NOT NULL DEFAULT 0 CHECK(foundry_only_mode IN (0,1)),
+      opened_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      closed_at             TEXT,
+      expires_at            TEXT,
+      label_json            TEXT    NOT NULL DEFAULT '{\"visibility\":\"private\",\"policy\":\"agent_visible\"}'
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_sessions_tenant
+      ON msiq_adapter_sessions(tenant_id, status, opened_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_sessions_token
+      ON msiq_adapter_sessions(session_token);
+
+    CREATE TABLE IF NOT EXISTS msiq_adapter_idempotency (
+      id                  TEXT    PRIMARY KEY,
+      tenant_id           TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_id          TEXT    NOT NULL REFERENCES msiq_adapter_sessions(id) ON DELETE CASCADE,
+      idempotency_key     TEXT    NOT NULL,
+      scope_hash          TEXT    NOT NULL,
+      request_payload     TEXT    NOT NULL,
+      request_hash        TEXT    NOT NULL,
+      response_payload    TEXT    NOT NULL,
+      response_hash       TEXT    NOT NULL,
+      canonical_memory_id TEXT,
+      provenance_hash     TEXT,
+      conflict            INTEGER NOT NULL DEFAULT 0 CHECK(conflict IN (0,1)),
+      replay_count        INTEGER NOT NULL DEFAULT 0,
+      created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, idempotency_key, scope_hash)
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_idempotency_session
+      ON msiq_adapter_idempotency(tenant_id, session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_idempotency_key
+      ON msiq_adapter_idempotency(tenant_id, idempotency_key);
+
+    CREATE TABLE IF NOT EXISTS msiq_adapter_operations (
+      id                    TEXT    PRIMARY KEY,
+      tenant_id             TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_id            TEXT    NOT NULL REFERENCES msiq_adapter_sessions(id) ON DELETE CASCADE,
+      operation_kind        TEXT    NOT NULL
+                            CHECK(operation_kind IN ('initialize','tools_list','write','read','search','close')),
+      decision              TEXT    NOT NULL
+                            CHECK(decision IN ('allow','deny','redact','conflict','unavailable','error')),
+      reason_code           TEXT    NOT NULL,
+      tool_name             TEXT,
+      scope_hash            TEXT    NOT NULL,
+      scope_identity_json   TEXT    NOT NULL DEFAULT '{}',
+      request_hash          TEXT,
+      response_hash         TEXT,
+      transcript_hash       TEXT,
+      duration_ms           INTEGER NOT NULL DEFAULT 0,
+      provenance_json       TEXT    NOT NULL DEFAULT '{}',
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_operations_session
+      ON msiq_adapter_operations(tenant_id, session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_operations_decision
+      ON msiq_adapter_operations(tenant_id, decision, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS federation_sources (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      source_handle            TEXT    NOT NULL,
+      source_kind              TEXT    NOT NULL
+                              CHECK(source_kind IN ('memory','knowledge','mcp')),
+      space_id                 TEXT,
+      purpose                  TEXT    NOT NULL,
+      label_policy_json        TEXT    NOT NULL DEFAULT '{}',
+      allowed_operations_json  TEXT    NOT NULL DEFAULT '[]',
+      trust_level              TEXT    NOT NULL DEFAULT 'registered'
+                              CHECK(trust_level IN ('registered','trusted','revoked','unknown')),
+      enabled                  INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+      has_expiry               INTEGER NOT NULL DEFAULT 0 CHECK(has_expiry IN (0,1)),
+      expires_at               TEXT,
+      transport                TEXT    NOT NULL DEFAULT 'local'
+                              CHECK(transport IN ('local','inproc','memory','mcp_stdio','mcp_http')),
+      descriptor_json          TEXT    NOT NULL DEFAULT '{}',
+      registration_hash        TEXT    NOT NULL,
+      last_health_at           TEXT,
+      created_by               TEXT    NOT NULL,
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, source_handle, source_kind)
+    );
+    CREATE INDEX IF NOT EXISTS federation_sources_tenant_kind
+      ON federation_sources(tenant_id, source_kind, enabled);
+    CREATE INDEX IF NOT EXISTS federation_sources_enabled
+      ON federation_sources(tenant_id, enabled, expires_at);
+
+    CREATE TABLE IF NOT EXISTS federation_source_outcomes (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      federation_run_id        TEXT    NOT NULL,
+      source_id                TEXT    NOT NULL REFERENCES federation_sources(id) ON DELETE CASCADE,
+      outcome                  TEXT    NOT NULL
+                              CHECK(outcome IN ('success','empty','denied','omitted','stale','injection','timeout','malformed','failed')),
+      reason_code              TEXT    NOT NULL,
+      policy_decision          TEXT    NOT NULL,
+      policy_version           TEXT,
+      result_count             INTEGER NOT NULL DEFAULT 0,
+      result_bytes             INTEGER NOT NULL DEFAULT 0,
+      duration_ms              INTEGER NOT NULL DEFAULT 0,
+      request_hash             TEXT,
+      response_hash            TEXT,
+      payload_hash             TEXT,
+      scope_hash               TEXT    NOT NULL,
+      metadata_json            TEXT    NOT NULL DEFAULT '{}',
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS federation_source_outcomes_run
+      ON federation_source_outcomes(tenant_id, federation_run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS federation_source_outcomes_source
+      ON federation_source_outcomes(tenant_id, source_id, outcome, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS federation_merges (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      federation_run_id        TEXT    NOT NULL,
+      pack_hash                TEXT    NOT NULL,
+      pack_bytes               INTEGER NOT NULL DEFAULT 0,
+      pack_item_count          INTEGER NOT NULL DEFAULT 0,
+      contributing_source_ids  TEXT    NOT NULL DEFAULT '[]',
+      contributing_outcome_ids TEXT    NOT NULL DEFAULT '[]',
+      dedupe_metadata_json     TEXT    NOT NULL DEFAULT '{}',
+      rank_metadata_json       TEXT    NOT NULL DEFAULT '{}',
+      budget_metadata_json     TEXT    NOT NULL DEFAULT '{}',
+      bound_status             TEXT    NOT NULL DEFAULT 'bounded'
+                              CHECK(bound_status IN ('bounded','partial_bounded','over_budget')),
+      scope_hash               TEXT    NOT NULL,
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_merges_pack
+      ON federation_merges(tenant_id, pack_hash);
   `);
 }
 
