@@ -284,7 +284,6 @@ export function executeOntologyMigration(db: Database.Database, input: { planId:
   if (plan.status === "completed") return { plan, ...executionCounts(db, plan) };
   if (plan.status !== "approved" && plan.status !== "incomplete") throw new OntologyGovernanceError("migration must be approved before execution", "conflict");
 
-  let processed = 0;
   for (const item of items) {
     const prior = db.prepare(`SELECT 1 FROM ontology_migration_checkpoints WHERE snapshot_item_id = ?`).get(item.id);
     if (prior) continue;
@@ -329,12 +328,10 @@ export function executeOntologyMigration(db: Database.Database, input: { planId:
           .run(checkpointId, plan.id, item.recordType, item.recordId, item.sourceType, targetType, outcome, reason, new Date().toISOString(), plan.snapshot.id, item.id, item.sourceOntologyId, item.sourceVersion, item.sourceHash, item.sourceId, item.sourceLifecycleHash, item.sourceRecordHash, versionedRecordId);
       },
     });
-    processed += 1;
   }
 
   const counts = executionCounts(db, plan);
   const status = counts.reviewRequired === 0 ? "completed" : "incomplete";
-  if (processed === 0) return { plan: { ...plan, status: plan.status === "approved" ? "incomplete" : plan.status }, ...counts };
   return commitAuditAtomic(db, {
     actor: clean(input.actor, "actor"),
     eventType: "ontology_migration_execution_reconciled",

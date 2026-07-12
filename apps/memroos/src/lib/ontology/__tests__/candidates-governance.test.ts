@@ -198,6 +198,42 @@ describe("ontology candidate governance", () => {
     expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versioned_records WHERE migration_snapshot_id = ?`).get(plan.snapshot.id)).toMatchObject({ count: 0 });
   });
 
+  it("retries final reconciliation after its audit fails without duplicating committed item work", async () => {
+    const { registry, ontology, migrations } = await setup();
+    const target = migrationTarget(registry, ontology);
+    seedMigrationSource(ontology, { tenantId: "tenant-a", spaceId: "space-a", recordType: "knowledge", recordId: "final-audit-fault-record", sourceType: "legacy" });
+    const plan = migrations.planOntologyMigration(db, {
+      tenantId: "tenant-a", spaceId: "space-a",
+      source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
+      target: { ontologyId: target.ontologyId, version: target.version, hash: target.contentHash },
+      mappings: { legacy: ["memory"] }, actor: "operator",
+    });
+    migrations.approveOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, planHash: plan.planHash, actor: "operator" });
+    db.exec(`CREATE TRIGGER deny_migration_final_audit BEFORE INSERT ON audit_entries
+      WHEN NEW.event_type = 'ontology_migration_execution_reconciled' BEGIN SELECT RAISE(ABORT, 'fault'); END;`);
+
+    expect(() => migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" }))
+      .toThrow(/audit|fault/);
+    expect(db.prepare(`SELECT status FROM ontology_migration_plans WHERE id = ?`).get(plan.id))
+      .toMatchObject({ status: "approved" });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_migration_checkpoints WHERE plan_id = ?`).get(plan.id))
+      .toMatchObject({ count: 1 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versioned_records WHERE migration_snapshot_id = ?`).get(plan.snapshot.id))
+      .toMatchObject({ count: 1 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_migration_execution_reconciled'`).get())
+      .toMatchObject({ count: 0 });
+
+    db.exec(`DROP TRIGGER deny_migration_final_audit;`);
+    expect(migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" }))
+      .toMatchObject({ migrated: 1, reviewRequired: 0, plan: { status: "completed" } });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_migration_checkpoints WHERE plan_id = ?`).get(plan.id))
+      .toMatchObject({ count: 1 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versioned_records WHERE migration_snapshot_id = ?`).get(plan.snapshot.id))
+      .toMatchObject({ count: 1 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_migration_execution_reconciled'`).get())
+      .toMatchObject({ count: 1 });
+  });
+
   it("revokes all candidate-derived authority on source change while retaining safe historic rows", async () => {
     const { ontology, candidates, aliases } = await setup();
     const candidate = candidates.extractOntologyCandidate(db, extraction());
