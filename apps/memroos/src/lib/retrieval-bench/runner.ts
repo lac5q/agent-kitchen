@@ -86,6 +86,7 @@ import {
   validateAdapterResult,
 } from "./failure";
 import { canonicalOutputPath, redactReport } from "./redaction";
+import { hashScopeIdentity, normalizeScopeIdentity } from "@/lib/msiq/scope-identity";
 
 // ============================================================================
 // BENCH-03 module imports (VAL-RETR-014..030)
@@ -197,6 +198,8 @@ export interface RunBenchmarkArgs {
    * compares tags attached to artifacts created by this run.
    */
   injectedArtifactTagsForTest?: ScopeTag[];
+  /** Test-only fanout candidate seam for live pipeline authorization tests. */
+  fanoutItemsForTest?: RetrievedItem[];
 }
 
 export type RunBenchmarkResult =
@@ -275,6 +278,39 @@ function defaultScope(adapter: AdapterId): AdapterScope {
     beliefStage: null,
     maxFreshnessSeconds: null,
   };
+}
+
+function filterLivePipelineCandidates(args: {
+  items: RetrievedItem[];
+  expectedScopeHash: string | null;
+  adapterAuthorizedItems: ReadonlySet<RetrievedItem>;
+}): {
+  allowed: RetrievedItem[];
+  denied: Array<{ id: string; reason: string }>;
+  stale: Array<{ id: string; reason: string }>;
+} {
+  const allowed: RetrievedItem[] = [];
+  const denied: Array<{ id: string; reason: string }> = [];
+  const stale: Array<{ id: string; reason: string }> = [];
+  for (const item of args.items) {
+    // Only objects emitted by the already-gated live adapter may advance.
+    // A fanout/rerank/dedupe stage can carry a forged matching scope hash,
+    // but cannot attest that it passed candidate-level scope comparison.
+    if (!args.adapterAuthorizedItems.has(item)) {
+      denied.push({ id: item.id, reason: "unverified_pipeline_candidate" });
+    } else if (item.authorizationResult === "stale") {
+      stale.push({ id: item.id, reason: "candidate_stale" });
+    } else if (item.authorizationResult !== "allowed") {
+      denied.push({ id: item.id, reason: "candidate_unauthorized" });
+    } else if (!item.scopeHash) {
+      denied.push({ id: item.id, reason: "candidate_scope_missing" });
+    } else if (!args.expectedScopeHash || item.scopeHash !== args.expectedScopeHash) {
+      denied.push({ id: item.id, reason: "scope_hash_mismatch" });
+    } else {
+      allowed.push(item);
+    }
+  }
+  return { allowed, denied, stale };
 }
 
 // ============================================================================
@@ -531,6 +567,9 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   const fixtureHash = hashFixtures(tasks);
   const retrievalPolicyVersion = args.retrievalPolicyVersion ?? "retrieval-v1";
   const scope = args.scope ?? defaultScope(args.adapter);
+  const scopeTenant = scope.tenantId ?? "default-tenant";
+  const normalizedLiveScope = args.adapter === "live" ? normalizeScopeIdentity(scope) : null;
+  const liveScopeHash = normalizedLiveScope ? hashScopeIdentity(normalizedLiveScope) : null;
   const runId = "bench-" + crypto.randomUUID();
 
   // 7) Establish isolation context (VAL-RETR-027, VAL-RETR-030). The
@@ -541,7 +580,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     dataset: args.dataset,
     adapter: args.adapter,
     tenantId,
-    scope: scope.tenantId + ":" + (scope.spaceId ?? "none"),
+    scope: scopeTenant + ":" + (scope.spaceId ?? "none"),
     seed: args.seed ?? 0,
   });
 
@@ -587,7 +626,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
       seed: args.seed ?? 0,
     });
     const entityMerge = decideEntityMerge({
-      scope: scope.tenantId,
+      scope: scopeTenant,
       candidates: ent.entities,
     });
     void entityMerge;
@@ -597,10 +636,11 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     const fanout = await performTierFanout({
       query: task.question,
       sources: defaultRegisteredSources(),
-      scope: scope.tenantId,
+      scope: scopeTenant,
       budget: defaultFanoutBudget(args.k ?? 3),
       allowedTiers: ["lexical", "vector-local", "mem0", "qdrant", "live"],
     });
+    const fanoutItems = [...fanout.items, ...(args.fanoutItemsForTest ?? [])];
 
     // (c) Adapter execution (this is the actual lexical/live/etc. run).
     const init: BenchmarkAdapterInit = {
@@ -662,12 +702,36 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     // (e) Dedupe (VAL-RETR-018) — combines rerank output + tier-fanout
     //     items into one canonical candidate set, then collapses
     //     duplicates. Runs AFTER rerank so the rerank cutoff is honored.
-    const combinedRetrieved: RetrievedItem[] = [
+    const unfilteredCombinedRetrieved: RetrievedItem[] = [
       ...rerank.items,
-      ...fanout.items,
+      ...fanoutItems,
     ];
+    const livePipeline = args.adapter === "live"
+      ? filterLivePipelineCandidates({
+          items: unfilteredCombinedRetrieved,
+          expectedScopeHash: liveScopeHash,
+          adapterAuthorizedItems: new Set(rerank.items),
+        })
+      : { allowed: unfilteredCombinedRetrieved, denied: [], stale: [] };
+    const combinedRetrieved = livePipeline.allowed;
+    if (livePipeline.denied.length > 0) {
+      stageRecords.push(stageRecord({
+        taskId: task.id,
+        stage: "denied",
+        ids: livePipeline.denied.map((item) => item.id),
+        reason: "live_pipeline_scope_gate",
+      }));
+    }
+    if (livePipeline.stale.length > 0) {
+      stageRecords.push(stageRecord({
+        taskId: task.id,
+        stage: "stale",
+        ids: livePipeline.stale.map((item) => item.id),
+        reason: "live_pipeline_scope_gate",
+      }));
+    }
     const dedup = dedupeRetrievalResults({
-      scope: scope.tenantId,
+      scope: scopeTenant,
       items: combinedRetrieved,
     });
     stageRecords.push(stageRecord({ taskId: task.id, stage: "deduped", ids: dedup.items.map((d) => d.id) }));
@@ -701,6 +765,8 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     for (const item of combinedRetrieved) {
       if (!finalInjectedIds.includes(item.id)) ignoredSet.add(item.id);
     }
+    for (const item of livePipeline.denied) ignoredSet.add(item.id);
+    for (const item of livePipeline.stale) ignoredSet.add(item.id);
 
     result = {
       ...result,
@@ -716,7 +782,15 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
           .map((o) => ({ id: o.id, whyMissed: o.reason, reasonCode: o.reason })),
         ...Array.from(ignoredSet)
           .filter((id) => !finalInjectedIds.includes(id) && !result.ignored.some((i) => i.id === id) && !pack.omitted.some((o) => o.id === id))
-          .map((id) => ({ id, whyMissed: "filtered_by_stage", reasonCode: "stage_pipeline_excluded" })),
+          .map((id) => {
+            const denied = livePipeline.denied.find((item) => item.id === id);
+            const stale = livePipeline.stale.find((item) => item.id === id);
+            return {
+              id,
+              whyMissed: stale ? "policy_stale" : denied ? "policy_denied" : "filtered_by_stage",
+              reasonCode: stale?.reason ?? denied?.reason ?? "stage_pipeline_excluded",
+            };
+          }),
       ],
       receipt: {
         ...result.receipt,

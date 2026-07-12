@@ -27,6 +27,7 @@ import {
   type NormalizedTask,
   type TaskType,
 } from "./schema";
+import { normalizeScopeIdentity } from "@/lib/msiq/scope-identity";
 
 const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -57,6 +58,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isArrayOfStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => isString(v));
+}
+
+function hasCompleteCandidateScope(value: unknown): boolean {
+  if (!isObject(value)) return false;
+  const required = ["tenantId", "userId", "agentId", "spaceId"];
+  if (required.some((field) => !isNonEmptyString(value[field]))) return false;
+  if (!isObject(value.label)) return false;
+  return isNonEmptyString(value.label.visibility) && isNonEmptyString(value.label.policy);
 }
 
 /**
@@ -275,6 +284,11 @@ function validateCorpusEntry(entry: unknown, index: number): FixtureValidationIs
   }
   if (e.entity_refs !== undefined && !isArrayOfStrings(e.entity_refs)) {
     issues.push({ field: "entity_refs", reason: "entity_refs_not_string_array" });
+  }
+  if (e.scope !== undefined) {
+    if (!hasCompleteCandidateScope(e.scope) || !normalizeScopeIdentity(e.scope ?? {})) {
+      issues.push({ field: "scope", reason: "candidate_scope_invalid" });
+    }
   }
   void index;
   return issues;

@@ -108,6 +108,26 @@ export function validateAdapterResult(result: AdapterResult): {
     // zero hiding behind a successful shape.
     reasons.push("non_ok_status_with_injections");
   }
+  if (result.adapterName === "live") {
+    const receiptScopeHash = result.receipt?.authorization?.scopeHash;
+    const retrievedIds = new Set(result.retrieved.map((item) => item.id));
+    if (result.injected.some((id) => !retrievedIds.has(id))) {
+      reasons.push("live_injected_id_not_retrieved");
+    }
+    if (result.retrieved.length > 0 && !receiptScopeHash) {
+      reasons.push("live_retrieval_missing_scope_hash");
+    }
+    if (
+      result.retrieved.some(
+        (item) =>
+          item.authorizationResult !== "allowed" ||
+          !item.scopeHash ||
+          item.scopeHash !== receiptScopeHash,
+      )
+    ) {
+      reasons.push("live_retrieval_scope_mismatch");
+    }
+  }
   return { ok: reasons.length === 0, reasons };
 }
 

@@ -27,8 +27,15 @@ export interface CliCommand {
   rerank: boolean;
   judge: boolean;
   scopeTenant: string | null;
+  scopeUser: string | null;
+  scopeAgent: string | null;
   scopeSpace: string | null;
+  scopeLabelVisibility: string | null;
+  scopeLabelPolicy: string | null;
+  scopeLabelDomain: string | null;
+  scopeLabelSensitivity: string | null;
   scopePurpose: string | null;
+  scopeBeliefStage: string | null;
   outputDir: string;
   configOverrides: Record<string, string>;
   rawArgs: string[];
@@ -43,6 +50,17 @@ export interface ParseResult {
 const DEFAULT_OUTPUT_DIR = "evals/comparative-retrieval/results";
 const DEFAULT_DATASET = "memroos_public_synthetic";
 const DEFAULT_ADAPTER = "lexical";
+const LIVE_PURPOSES = new Set([
+  "recall", "multi-search", "context-pack", "chatgpt-action", "export",
+  "summary", "dispatch", "index-write", "evidence-bundle", "memory_search", "memory-promotion",
+]);
+const LIVE_VISIBILITIES = new Set(["private", "internal", "public_safe", "public_approved"]);
+const LIVE_LABEL_POLICIES = new Set([
+  "indexable", "agent_visible", "requires_redaction", "requires_human_review", "sealed",
+]);
+const LIVE_BELIEF_STAGES = new Set([
+  "silver_candidate_claim", "gold_claim", "revoked", "superseded",
+]);
 
 export function parseCliArgs(argv: string[]): ParseResult {
   const command: CliCommand = {
@@ -56,8 +74,15 @@ export function parseCliArgs(argv: string[]): ParseResult {
     rerank: false,
     judge: false,
     scopeTenant: null,
+    scopeUser: null,
+    scopeAgent: null,
     scopeSpace: null,
+    scopeLabelVisibility: null,
+    scopeLabelPolicy: null,
+    scopeLabelDomain: null,
+    scopeLabelSensitivity: null,
     scopePurpose: null,
+    scopeBeliefStage: null,
     outputDir: DEFAULT_OUTPUT_DIR,
     configOverrides: {},
     rawArgs: [...argv],
@@ -188,6 +213,60 @@ export function parseCliArgs(argv: string[]): ParseResult {
         i += 1;
         break;
       }
+      case "--scope-user": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-user" };
+        }
+        command.scopeUser = next;
+        i += 1;
+        break;
+      }
+      case "--scope-agent": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-agent" };
+        }
+        command.scopeAgent = next;
+        i += 1;
+        break;
+      }
+      case "--scope-label-visibility": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-label-visibility" };
+        }
+        command.scopeLabelVisibility = next;
+        i += 1;
+        break;
+      }
+      case "--scope-label-policy": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-label-policy" };
+        }
+        command.scopeLabelPolicy = next;
+        i += 1;
+        break;
+      }
+      case "--scope-label-domain": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-label-domain" };
+        }
+        command.scopeLabelDomain = next;
+        i += 1;
+        break;
+      }
+      case "--scope-label-sensitivity": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-label-sensitivity" };
+        }
+        command.scopeLabelSensitivity = next;
+        i += 1;
+        break;
+      }
       case "--scope-purpose": {
         const next = argv[++i];
         if (next === undefined || next.startsWith("--")) {
@@ -197,6 +276,15 @@ export function parseCliArgs(argv: string[]): ParseResult {
           };
         }
         command.scopePurpose = next;
+        i += 1;
+        break;
+      }
+      case "--scope-belief-stage": {
+        const next = argv[++i];
+        if (next === undefined || next.startsWith("--")) {
+          return { ok: false, reason: "missing_value_for_flag:--scope-belief-stage" };
+        }
+        command.scopeBeliefStage = next;
         i += 1;
         break;
       }
@@ -222,6 +310,32 @@ export function parseCliArgs(argv: string[]): ParseResult {
         // positional arguments are not accepted.
         i += 1;
       }
+    }
+  }
+
+  if (command.adapter === "live") {
+    const required = [
+      command.scopeTenant,
+      command.scopeUser,
+      command.scopeAgent,
+      command.scopeSpace,
+      command.scopeLabelVisibility,
+      command.scopeLabelPolicy,
+      command.scopePurpose,
+      command.scopeBeliefStage,
+    ];
+    if (required.some((value) => value === null || value.length === 0)) {
+      return { ok: false, reason: "incomplete_live_scope" };
+    }
+    if (!LIVE_PURPOSES.has(command.scopePurpose!)) {
+      return { ok: false, reason: "invalid_purpose" };
+    }
+    if (
+      !LIVE_VISIBILITIES.has(command.scopeLabelVisibility!) ||
+      !LIVE_LABEL_POLICIES.has(command.scopeLabelPolicy!) ||
+      !LIVE_BELIEF_STAGES.has(command.scopeBeliefStage!)
+    ) {
+      return { ok: false, reason: "invalid_live_scope" };
     }
   }
 

@@ -142,6 +142,18 @@ describe("failure handling (VAL-RETR-009, VAL-RETR-022)", () => {
     }
   });
 
+  it("rejects live results that inject without an authorized scoped retrieval", () => {
+    const r = fakeResult();
+    r.adapterName = "live";
+    r.receipt.adapterName = "live";
+    r.injected = ["mem-1"];
+    const v = validateAdapterResult(r);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      expect(v.reasons).toContain("live_injected_id_not_retrieved");
+    }
+  });
+
   it("summarizeFailures counts failures by status", () => {
     const r1 = fakeResult();
     r1.status = "provider_timeout";

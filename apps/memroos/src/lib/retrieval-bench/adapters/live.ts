@@ -16,24 +16,104 @@
 import type {
   AdapterId,
   AdapterResult,
+  CorpusEntry,
   IgnoredItem,
   NormalizedTask,
+  RetrievedItem,
 } from "../schema";
 import {
   type BenchmarkAdapter,
   type BenchmarkAdapterInit,
 } from "./index";
 import { lexicalRank } from "./lexical";
+import {
+  hashScopeIdentity,
+  normalizeScopeIdentity,
+  type MsiqScopeIdentity,
+} from "@/lib/msiq/scope-identity";
 
 export const LIVE_ADAPTER_ID: AdapterId = "live";
 export const LIVE_ADAPTER_VERSION = "live-v1";
 
 const RETRIEVAL_POLICY_VERSION = "live-retrieval-v1";
+const LIVE_PURPOSES = new Set([
+  "recall", "multi-search", "context-pack", "chatgpt-action", "export",
+  "summary", "dispatch", "index-write", "evidence-bundle", "memory_search", "memory-promotion",
+]);
 
 export type LivePolicyDecision =
   | { kind: "allow"; reason: string }
   | { kind: "deny"; reason: string }
   | { kind: "stale"; reason: string };
+
+const LIVE_VISIBILITIES = new Set(["private", "internal", "public_safe", "public_approved"]);
+const LIVE_LABEL_POLICIES = new Set([
+  "indexable", "agent_visible", "requires_redaction", "requires_human_review", "sealed",
+]);
+const LIVE_BELIEF_STAGES = new Set([
+  "silver_candidate_claim", "gold_claim", "revoked", "superseded",
+]);
+
+function scopeInputIssue(value: unknown, candidate: boolean): string | null {
+  const missing = candidate ? "candidate_scope_missing" : "incomplete_scope";
+  const malformed = candidate ? "candidate_scope_malformed" : "invalid_scope";
+  const invalidPurpose = candidate ? "candidate_invalid_purpose" : "invalid_purpose";
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return missing;
+  const scope = value as Record<string, unknown>;
+  const required = ["tenantId", "userId", "agentId", "spaceId"];
+  if (required.some((field) => typeof scope[field] !== "string" || scope[field].length === 0)) return missing;
+  if (scope.purpose === null || scope.purpose === undefined) return missing;
+  if (typeof scope.purpose !== "string" || !LIVE_PURPOSES.has(scope.purpose)) return invalidPurpose;
+  if (typeof scope.beliefStage !== "string" || !LIVE_BELIEF_STAGES.has(scope.beliefStage)) return malformed;
+  if (scope.label === null || typeof scope.label !== "object" || Array.isArray(scope.label)) return missing;
+  const label = scope.label as Record<string, unknown>;
+  if (
+    typeof label.visibility !== "string" ||
+    !LIVE_VISIBILITIES.has(label.visibility) ||
+    typeof label.policy !== "string" ||
+    !LIVE_LABEL_POLICIES.has(label.policy)
+  ) {
+    return malformed;
+  }
+  if (
+    (label.domain !== null && label.domain !== undefined && typeof label.domain !== "string") ||
+    (label.sensitivity !== null && label.sensitivity !== undefined && typeof label.sensitivity !== "string")
+  ) {
+    return malformed;
+  }
+  return null;
+}
+
+function normalizeRequesterScope(
+  scope: BenchmarkAdapterInit["scope"] | undefined,
+): { scope: MsiqScopeIdentity } | { reason: string } {
+  const issue = scopeInputIssue(scope, false);
+  if (issue) return { reason: issue };
+  const normalized = normalizeScopeIdentity(scope ?? {});
+  if (!normalized) return { reason: "invalid_scope" };
+  return { scope: normalized };
+}
+
+function scopeMismatchReason(
+  requester: MsiqScopeIdentity,
+  candidate: MsiqScopeIdentity,
+): string | null {
+  if (requester.tenantId !== candidate.tenantId) return "tenant_mismatch";
+  if (requester.userId !== candidate.userId) return "user_mismatch";
+  if (requester.agentId !== candidate.agentId) return "agent_mismatch";
+  if (requester.spaceId !== candidate.spaceId) return "space_mismatch";
+  if (
+    requester.label.visibility !== candidate.label.visibility ||
+    requester.label.policy !== candidate.label.policy ||
+    requester.label.domain !== candidate.label.domain ||
+    requester.label.sensitivity !== candidate.label.sensitivity
+  ) {
+    return "label_mismatch";
+  }
+  if (requester.purpose !== candidate.purpose) return "purpose_mismatch";
+  if (requester.beliefStage !== candidate.beliefStage) return "belief_stage_mismatch";
+  return null;
+}
 
 /**
  * Evaluate the live adapter's policy for a single candidate corpus entry.
@@ -43,16 +123,20 @@ export type LivePolicyDecision =
 export function evaluateLivePolicy(args: {
   task: NormalizedTask;
   scope: BenchmarkAdapterInit["scope"];
-  candidate: { id: string; timestamp_iso?: string };
+  candidate: Pick<CorpusEntry, "id" | "timestamp_iso" | "scope">;
 }): LivePolicyDecision {
-  // Scope must be supplied. If any required dimension is missing, deny.
-  if (!args.scope || !args.scope.tenantId) {
-    return { kind: "deny", reason: "scope_missing" };
-  }
+  const requesterScope = normalizeRequesterScope(args.scope);
+  if (!("scope" in requesterScope)) return { kind: "deny", reason: requesterScope.reason };
   // Abstention tasks: never inject anything (live adapter honors abstention).
   if (args.task.abstention_correct === true) {
     return { kind: "deny", reason: "abstention_task_disallows_injection" };
   }
+  const candidateIssue = scopeInputIssue(args.candidate.scope, true);
+  if (candidateIssue) return { kind: "deny", reason: candidateIssue };
+  const candidateScope = normalizeScopeIdentity(args.candidate.scope ?? {});
+  if (!candidateScope) return { kind: "deny", reason: "candidate_scope_malformed" };
+  const mismatch = scopeMismatchReason(requesterScope.scope, candidateScope);
+  if (mismatch) return { kind: "deny", reason: mismatch };
   // Freshness gate: candidate timestamp must be within maxFreshnessSeconds
   // of the scope's reference time when freshness is configured.
   if (args.scope.maxFreshnessSeconds !== null && args.candidate.timestamp_iso) {
@@ -66,10 +150,6 @@ export function evaluateLivePolicy(args: {
       return { kind: "stale", reason: "candidate_too_old" };
     }
   }
-  // Label-based gating: if a label is specified, only allow matching labels.
-  // The benchmark corpus does not carry labels (per the schema), so the
-  // policy is permissive when a label is provided and the corpus has no
-  // label metadata. This is documented and never claims cross-tenant access.
   return { kind: "allow", reason: "policy_allows" };
 }
 
@@ -80,40 +160,94 @@ class LiveAdapter implements BenchmarkAdapter {
 
   async run(init: BenchmarkAdapterInit): Promise<AdapterResult> {
     const startedAt = init.now ? init.now().getTime() : Date.now();
-    const retrieved = lexicalRank(init.task, init.k);
-    const allowedRetrieved = [];
+    const requesterScope = normalizeRequesterScope(init.scope);
+    if (!("scope" in requesterScope)) {
+      const ignored = init.task.corpus.map((candidate) => ({
+        id: candidate.id,
+        whyMissed: "policy_denied",
+        reasonCode: requesterScope.reason,
+      }));
+      const latencyMs = Math.max(0, (init.now ? init.now().getTime() : Date.now()) - startedAt);
+      return {
+        taskId: init.task.id,
+        adapterName: this.id,
+        status: "ok",
+        retrieved: [],
+        injected: [],
+        ignored,
+        latencyMs,
+        receipt: {
+          adapterName: this.id,
+          adapterVersion: this.version,
+          status: "ok",
+          latencyMs,
+          authorization: {
+            evaluated: true,
+            allowed: false,
+            denialReason: requesterScope.reason,
+          },
+          provenance: {
+            provider: null,
+            providerVersion: null,
+            retrievalPolicyVersion: RETRIEVAL_POLICY_VERSION,
+            configHash: init.configHash,
+            fixtureHash: init.fixtureHash,
+          },
+          metrics: {
+            tokensRetrieval: null,
+            tokensRerank: null,
+            tokensPack: null,
+            tokensJudge: null,
+            contextPackBytes: null,
+            contextPackHash: null,
+          },
+        },
+      };
+    }
+
+    const scopeHash = hashScopeIdentity(requesterScope.scope);
+    const allowedRetrieved: RetrievedItem[] = [];
     const ignored: IgnoredItem[] = [];
+    const authorizedCorpus: CorpusEntry[] = [];
     let deniedCount = 0;
     let staleCount = 0;
-    for (const item of retrieved) {
-      const corpusEntry = init.task.corpus.find((c) => c.id === item.id);
+    for (const candidate of init.task.corpus) {
       const decision = evaluateLivePolicy({
         task: init.task,
         scope: init.scope,
-        candidate: { id: item.id, timestamp_iso: corpusEntry?.timestamp_iso ?? item.timestamp_iso },
+        candidate,
       });
       if (decision.kind === "allow") {
-        allowedRetrieved.push(item);
+        authorizedCorpus.push(candidate);
       } else if (decision.kind === "stale") {
         staleCount += 1;
         ignored.push({
-          id: item.id,
+          id: candidate.id,
           whyMissed: "policy_stale",
           reasonCode: decision.reason,
         });
       } else {
         deniedCount += 1;
         ignored.push({
-          id: item.id,
+          id: candidate.id,
           whyMissed: "policy_denied",
           reasonCode: decision.reason,
         });
       }
     }
-    // All non-retrieved corpus IDs are reported as ignored.
+    const retrieved = lexicalRank({ ...init.task, corpus: authorizedCorpus }, init.k);
+    for (const item of retrieved) {
+      allowedRetrieved.push({
+        ...item,
+        tier: "live",
+        authorizationResult: "allowed",
+        scopeHash,
+      });
+    }
+    // Authorized candidates that did not rank are reported as ignored.
     const retrievedIds = new Set(retrieved.map((r) => r.id));
-    for (const c of init.task.corpus) {
-      if (!retrievedIds.has(c.id) && !ignored.find((i) => i.id === c.id)) {
+    for (const c of authorizedCorpus) {
+      if (!retrievedIds.has(c.id)) {
         ignored.push({
           id: c.id,
           whyMissed: "below_relevance_threshold",
@@ -138,7 +272,7 @@ class LiveAdapter implements BenchmarkAdapter {
         authorization: {
           evaluated: true,
           allowed: deniedCount === 0 && staleCount === 0,
-          scopeHash: init.scope.tenantId + ":" + (init.scope.spaceId ?? "none") + ":" + init.scope.purpose,
+          scopeHash,
         },
         provenance: {
           provider: null,

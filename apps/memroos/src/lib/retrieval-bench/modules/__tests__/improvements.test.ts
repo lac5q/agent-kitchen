@@ -78,6 +78,32 @@ describe("CLI parser + write guard (VAL-RETR-014)", () => {
     }
   });
 
+  it("refuses live CLI runs without a complete safe scope", () => {
+    expect(parseCliArgs(["--adapter", "live"]).reason).toBe("incomplete_live_scope");
+    expect(parseCliArgs([
+      "--adapter", "live",
+      "--scope-tenant", "tenant",
+      "--scope-user", "user",
+      "--scope-agent", "agent",
+      "--scope-space", "space",
+      "--scope-label-visibility", "internal",
+      "--scope-label-policy", "agent_visible",
+      "--scope-purpose", "not-allowlisted",
+      "--scope-belief-stage", "silver_candidate_claim",
+    ]).reason).toBe("invalid_purpose");
+    expect(parseCliArgs([
+      "--adapter", "live",
+      "--scope-tenant", "tenant",
+      "--scope-user", "user",
+      "--scope-agent", "agent",
+      "--scope-space", "space",
+      "--scope-label-visibility", "internal",
+      "--scope-label-policy", "agent_visible",
+      "--scope-purpose", "memory_search",
+      "--scope-belief-stage", "silver_candidate_claim",
+    ]).ok).toBe(true);
+  });
+
   it("armored write guard blocks writes", () => {
     const guard = createWriteGuard(true);
     expect(guard.allow({ path: "/tmp/x.json", reason: "noop" })).toBe(false);

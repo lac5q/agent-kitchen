@@ -10,10 +10,27 @@ import {
   loadDataset,
 } from "../runner";
 import { canonicalOutputPath } from "../redaction";
+import { hashScopeIdentity, normalizeScopeIdentity } from "@/lib/msiq/scope-identity";
 
 const FIXTURES_DIR = path.resolve(
   "/Users/lcalderon/github/memroos/evals/comparative-retrieval/fixtures",
 );
+
+const LIVE_SCOPE = {
+  tenantId: "benchmark-tenant",
+  userId: "benchmark-user",
+  agentId: "benchmark-agent",
+  spaceId: "benchmark-space",
+  label: {
+    visibility: "internal" as const,
+    policy: "agent_visible" as const,
+    domain: "benchmark",
+    sensitivity: null,
+  },
+  purpose: "memory_search" as const,
+  beliefStage: "silver_candidate_claim" as const,
+  maxFreshnessSeconds: null,
+};
 
 describe("runBenchmark smoke (VAL-RETR-001)", () => {
   it("loads exactly 25 synthetic tasks with the lexical adapter", async () => {
@@ -102,22 +119,78 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       seed: 0,
       bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
-      scope: {
-        tenantId: "tenant-x",
-        userId: null,
-        agentId: null,
-        spaceId: null,
-        label: null,
-        purpose: "memory_search",
-        beliefStage: null,
-        maxFreshnessSeconds: null,
-      },
+      scope: LIVE_SCOPE,
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     for (const t of r.report.tasks) {
       expect(t.receipt.authorization.evaluated).toBe(true);
     }
+  });
+
+  it("never reinjects foreign or missing-scope fanout candidates for live", async () => {
+    const normalized = normalizeScopeIdentity(LIVE_SCOPE);
+    if (!normalized) throw new Error("expected complete live test scope");
+    const foreignScopeHash = hashScopeIdentity({
+      ...normalized,
+      tenantId: "foreign-tenant",
+    });
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "live",
+      limit: 1,
+      k: 3,
+      seed: 0,
+      bypassCliParser: true,
+      fixturesDir: FIXTURES_DIR,
+      scope: LIVE_SCOPE,
+      fanoutItemsForTest: [
+        {
+          id: "foreign-fanout",
+          score: 99,
+          text: "foreign candidate",
+          tier: "live",
+          source: "fanout",
+          authorizationResult: "allowed",
+          whyEntered: "test",
+          scopeHash: foreignScopeHash,
+          rankPosition: 1,
+        },
+        {
+          id: "missing-scope-fanout",
+          score: 98,
+          text: "missing scope candidate",
+          tier: "live",
+          source: "fanout",
+          authorizationResult: "allowed",
+          whyEntered: "test",
+          rankPosition: 2,
+        },
+        {
+          id: "forged-matching-hash-fanout",
+          score: 97,
+          text: "forged matching hash candidate",
+          tier: "live",
+          source: "fanout",
+          authorizationResult: "allowed",
+          whyEntered: "test",
+          scopeHash: hashScopeIdentity(normalized),
+          rankPosition: 3,
+        },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const task = r.report.tasks[0];
+    expect(task.receipt.authorization.scopeHash).toMatch(/^sha256:/);
+    expect(task.injectedCount).toBeGreaterThan(0);
+    expect(r.pipeline?.perTaskStageRecords.get(task.taskId)?.some(
+      (record) =>
+        record.stage === "denied" &&
+        record.ids.includes("foreign-fanout") &&
+        record.ids.includes("missing-scope-fanout") &&
+        record.ids.includes("forged-matching-hash-fanout"),
+    )).toBe(true);
   });
 
   it("reports an explicit error for unknown adapters", async () => {

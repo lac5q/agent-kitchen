@@ -13,14 +13,29 @@ import {
 import { registerAdapter, getAdapter, listAdapters, resetAdapterRegistry } from "../adapters";
 import type { AdapterScope, NormalizedTask } from "../schema";
 
+const MATCHING_SCOPE = {
+  tenantId: "benchmark-tenant",
+  userId: "benchmark-user",
+  agentId: "benchmark-agent",
+  spaceId: "benchmark-space",
+  label: {
+    visibility: "internal" as const,
+    policy: "agent_visible" as const,
+    domain: "benchmark",
+    sensitivity: null,
+  },
+  purpose: "memory_search" as const,
+  beliefStage: "silver_candidate_claim" as const,
+};
+
 function makeTask(overrides: Partial<NormalizedTask> = {}): NormalizedTask {
   return {
     id: "task-1",
     dataset: "memroos_public_synthetic",
     task_type: "single_hop",
     corpus: [
-      { id: "mem-1", text: "The team decided to use Qdrant Cloud for vector search." },
-      { id: "mem-2", text: "Local Qdrant is not added to docker compose." },
+      { id: "mem-1", text: "The team decided to use Qdrant Cloud for vector search.", scope: MATCHING_SCOPE },
+      { id: "mem-2", text: "Local Qdrant is not added to docker compose.", scope: MATCHING_SCOPE },
     ],
     question: "Which vector store did the team choose?",
     expected_answer: "Qdrant Cloud",
@@ -39,13 +54,7 @@ function makeTask(overrides: Partial<NormalizedTask> = {}): NormalizedTask {
 
 function defaultScope(overrides: Partial<AdapterScope> = {}): AdapterScope {
   return {
-    tenantId: "default-tenant",
-    userId: null,
-    agentId: null,
-    spaceId: null,
-    label: null,
-    purpose: "memory_search",
-    beliefStage: null,
+    ...MATCHING_SCOPE,
     maxFreshnessSeconds: null,
     ...overrides,
   };
@@ -123,14 +132,41 @@ describe("no-memory adapter (VAL-RETR-006)", () => {
 });
 
 describe("live adapter (VAL-RETR-007)", () => {
-  it("denies all candidates when scope.tenantId is missing", () => {
+  it("denies all candidates when requester scope is incomplete", async () => {
     const task = makeTask();
-    const decision = evaluateLivePolicy({
+    const result = await liveAdapter.run({
       task,
       scope: defaultScope({ tenantId: "" }),
-      candidate: { id: "mem-1" },
+      k: 3,
+      seed: 0,
+      rerankEnabled: false,
+      judgeEnabled: false,
+      configHash: "cfg",
+      fixtureHash: "fix",
+      retrievalPolicyVersion: "v1",
     });
-    expect(decision.kind).toBe("deny");
+    expect(result.retrieved).toEqual([]);
+    expect(result.injected).toEqual([]);
+    expect(result.ignored.every((item) => item.reasonCode === "incomplete_scope")).toBe(true);
+    expect(result.receipt.authorization.denialReason).toBe("incomplete_scope");
+  });
+
+  it("fails closed with invalid_purpose without retrieving candidates", async () => {
+    const task = makeTask();
+    const result = await liveAdapter.run({
+      task,
+      scope: defaultScope({ purpose: "not-allowlisted" as AdapterScope["purpose"] }),
+      k: 3,
+      seed: 0,
+      rerankEnabled: false,
+      judgeEnabled: false,
+      configHash: "cfg",
+      fixtureHash: "fix",
+      retrievalPolicyVersion: "v1",
+    });
+    expect(result.retrieved).toEqual([]);
+    expect(result.injected).toEqual([]);
+    expect(result.ignored.every((item) => item.reasonCode === "invalid_purpose")).toBe(true);
   });
 
   it("denies injection on abstention tasks", () => {
@@ -138,7 +174,7 @@ describe("live adapter (VAL-RETR-007)", () => {
     const decision = evaluateLivePolicy({
       task,
       scope: defaultScope(),
-      candidate: { id: "mem-1" },
+      candidate: task.corpus[0],
     });
     expect(decision.kind).toBe("deny");
   });
@@ -149,16 +185,50 @@ describe("live adapter (VAL-RETR-007)", () => {
     const decision = evaluateLivePolicy({
       task,
       scope: defaultScope({ maxFreshnessSeconds: 60 }),
-      candidate: { id: "mem-1", timestamp_iso: old },
+      candidate: { ...task.corpus[0], timestamp_iso: old },
     });
     expect(decision.kind).toBe("stale");
   });
 
-  it("records allowed retrieval with a scopeHash on the receipt", async () => {
+  it("requires complete matching candidate scope metadata", () => {
+    const task = makeTask();
+    const cases = [
+      ["tenant_mismatch", { tenantId: "foreign-tenant" }],
+      ["user_mismatch", { userId: "foreign-user" }],
+      ["agent_mismatch", { agentId: "foreign-agent" }],
+      ["space_mismatch", { spaceId: "foreign-space" }],
+      ["label_mismatch", { label: { ...MATCHING_SCOPE.label, policy: "sealed" as const } }],
+      ["purpose_mismatch", { purpose: "recall" as const }],
+      ["belief_stage_mismatch", { beliefStage: "gold_claim" as const }],
+    ] as const;
+    for (const [reason, override] of cases) {
+      const decision = evaluateLivePolicy({
+        task,
+        scope: defaultScope(),
+        candidate: { ...task.corpus[0], scope: { ...MATCHING_SCOPE, ...override } },
+      });
+      expect(decision).toEqual({ kind: "deny", reason });
+    }
+    expect(evaluateLivePolicy({
+      task,
+      scope: defaultScope(),
+      candidate: { id: "missing-scope" },
+    })).toEqual({ kind: "deny", reason: "candidate_scope_missing" });
+    expect(evaluateLivePolicy({
+      task,
+      scope: defaultScope(),
+      candidate: {
+        ...task.corpus[0],
+        scope: { ...MATCHING_SCOPE, label: { ...MATCHING_SCOPE.label, visibility: "not-a-label" } },
+      },
+    })).toEqual({ kind: "deny", reason: "candidate_scope_malformed" });
+  });
+
+  it("records a nonreversible scope hash and matching authorization", async () => {
     const task = makeTask();
     const result = await liveAdapter.run({
       task,
-      scope: defaultScope({ tenantId: "tenant-x", spaceId: "space-y" }),
+      scope: defaultScope(),
       k: 3,
       seed: 0,
       rerankEnabled: false,
@@ -169,7 +239,10 @@ describe("live adapter (VAL-RETR-007)", () => {
     });
     expect(result.status).toBe("ok");
     expect(result.receipt.authorization.evaluated).toBe(true);
-    expect(result.receipt.authorization.scopeHash).toContain("tenant-x");
+    expect(result.receipt.authorization.scopeHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(result.receipt.authorization.scopeHash).not.toContain(MATCHING_SCOPE.tenantId);
+    expect(result.retrieved.length).toBeGreaterThan(0);
+    expect(result.retrieved.every((item) => item.scopeHash === result.receipt.authorization.scopeHash)).toBe(true);
   });
 });
 

@@ -14,6 +14,8 @@
  * appear in these types — only IDs, hashes, classifications, and metadata.
  */
 
+import type { ScopeIdentityInput } from "@/lib/msiq/scope-identity";
+
 // ============================================================================
 // Task types (normalized, JSON-Schema compatible with schema.json)
 // ============================================================================
@@ -66,6 +68,12 @@ export interface CorpusEntry {
   session_id?: string;
   speaker?: string;
   entity_refs?: string[];
+  /**
+   * Candidate authorization identity. It is optional for generic benchmark
+   * fixtures, but the live adapter requires it to be complete and identical
+   * to the requester scope before a candidate can be retrieved.
+   */
+  scope?: ScopeIdentityInput;
 }
 
 export interface SessionTurn {
@@ -122,20 +130,7 @@ export interface NormalizedTask {
 // Authorization context (VAL-RETR-007 live retrieval authorization gating)
 // ============================================================================
 
-export interface AdapterScope {
-  tenantId: string;
-  userId: string | null;
-  agentId: string | null;
-  spaceId: string | null;
-  label: string | null;
-  purpose:
-    | "recall"
-    | "memory_search"
-    | "context-pack"
-    | "multi-search"
-    | "summary"
-    | "evidence-bundle";
-  beliefStage: string | null;
+export interface AdapterScope extends ScopeIdentityInput {
   maxFreshnessSeconds: number | null;
 }
 

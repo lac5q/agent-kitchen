@@ -115,6 +115,33 @@ describe("retrieval-bench fixture validation (VAL-RETR-002)", () => {
     }
   });
 
+  it("rejects malformed candidate scope metadata when provided", () => {
+    const r = validateTask(
+      makeTask({
+        corpus: [
+          {
+            id: "mem-1",
+            text: "x",
+            scope: {
+              tenantId: "tenant",
+              userId: "user",
+              agentId: "agent",
+              spaceId: "space",
+              label: { visibility: "internal", policy: "agent_visible" },
+              purpose: "not-allowlisted",
+              beliefStage: "silver_candidate_claim",
+            },
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.reason === "candidate_scope_invalid")).toBe(true);
+    }
+  });
+
   it("rejects invalid temporal_direction enum", () => {
     const r = validateTask(
       makeTask({

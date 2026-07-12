@@ -30,7 +30,9 @@
  *
  * CLI flags:
  *   --dataset, --adapter, --limit, --k, --seed, --no-write,
- *   --json, --scope-tenant, --scope-space, --scope-purpose,
+ *   --json, --scope-tenant, --scope-user, --scope-agent, --scope-space,
+ *   --scope-label-visibility, --scope-label-policy, --scope-label-domain,
+ *   --scope-label-sensitivity, --scope-purpose, --scope-belief-stage,
  *   --rerank, --judge, --output-dir
  *
  * The strict parser in `modules/cli-parser.ts` rejects malformed
@@ -184,8 +186,15 @@ function parseArgs(argv) {
       json: c.json,
       noWrite: c.noWrite,
       scopeTenant: c.scopeTenant,
+      scopeUser: c.scopeUser,
+      scopeAgent: c.scopeAgent,
       scopeSpace: c.scopeSpace,
+      scopeLabelVisibility: c.scopeLabelVisibility,
+      scopeLabelPolicy: c.scopeLabelPolicy,
+      scopeLabelDomain: c.scopeLabelDomain,
+      scopeLabelSensitivity: c.scopeLabelSensitivity,
       scopePurpose: c.scopePurpose,
+      scopeBeliefStage: c.scopeBeliefStage,
       k: c.k,
       seed: c.seed,
       rerank: c.rerank,
@@ -202,8 +211,15 @@ function parseArgs(argv) {
     else if (argv[i] === "--json") args.json = true;
     else if (argv[i] === "--no-write") args.noWrite = true;
     else if (argv[i] === "--scope-tenant") args.scopeTenant = argv[++i];
+    else if (argv[i] === "--scope-user") args.scopeUser = argv[++i];
+    else if (argv[i] === "--scope-agent") args.scopeAgent = argv[++i];
     else if (argv[i] === "--scope-space") args.scopeSpace = argv[++i];
+    else if (argv[i] === "--scope-label-visibility") args.scopeLabelVisibility = argv[++i];
+    else if (argv[i] === "--scope-label-policy") args.scopeLabelPolicy = argv[++i];
+    else if (argv[i] === "--scope-label-domain") args.scopeLabelDomain = argv[++i];
+    else if (argv[i] === "--scope-label-sensitivity") args.scopeLabelSensitivity = argv[++i];
     else if (argv[i] === "--scope-purpose") args.scopePurpose = argv[++i];
+    else if (argv[i] === "--scope-belief-stage") args.scopeBeliefStage = argv[++i];
     else if (argv[i] === "--k") args.k = parseInt(argv[++i], 10);
     else if (argv[i] === "--seed") args.seed = parseInt(argv[++i], 10);
     else if (argv[i] === "--rerank") args.rerank = true;
@@ -396,12 +412,19 @@ async function run(argv = process.argv.slice(2)) {
   // Build the optional scope from CLI flags.
   const scope = {
     tenantId: args.scopeTenant ?? "default-tenant",
-    userId: null,
-    agentId: null,
+    userId: args.scopeUser ?? null,
+    agentId: args.scopeAgent ?? null,
     spaceId: args.scopeSpace ?? null,
-    label: null,
+    label: args.scopeLabelVisibility && args.scopeLabelPolicy
+      ? {
+          visibility: args.scopeLabelVisibility,
+          policy: args.scopeLabelPolicy,
+          domain: args.scopeLabelDomain ?? null,
+          sensitivity: args.scopeLabelSensitivity ?? null,
+        }
+      : null,
     purpose: args.scopePurpose ?? "memory_search",
-    beliefStage: null,
+    beliefStage: args.scopeBeliefStage ?? null,
     maxFreshnessSeconds: null,
   };
 
