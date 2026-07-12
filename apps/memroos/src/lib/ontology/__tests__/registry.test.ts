@@ -285,9 +285,47 @@ describe("ontology registry validation", () => {
     const base = mod.registerDomainPack(db, {
       id: "base", namespace: "base", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_base", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_base"] },
       ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-      types: [packType(ontology, "base.record")], actor: "operator",
+      types: [packType(ontology, "base.record", { aliases: ["base.record-alias"] })], actor: "operator",
     });
     mod.transitionDomainPack(db, { packId: base.id, toState: "approved", actor: "operator" });
+    const packCountBeforeCoreImpersonation = db.prepare(`SELECT COUNT(*) AS count FROM ontology_packs`).get() as { count: number };
+    const auditCountBeforeCoreImpersonation = db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_pack_registered'`).get() as { count: number };
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "core-impersonating-type", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_core_impersonating_type", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_core_impersonating_type"] },
+      ontology: base.ontology,
+      types: [{
+        id: "core-impersonating-type.child",
+        semantics: {},
+        extends: { kind: "core", id: "base.record", ontologyId: base.ontology.id, ontologyVersion: base.ontology.version, ontologyContentHash: base.ontology.contentHash },
+      }],
+      actor: "operator",
+    })).toThrow(/exact parent ontology coordinates/);
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "core-impersonating-alias", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_core_impersonating_alias", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_core_impersonating_alias"] },
+      ontology: base.ontology,
+      dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH }],
+      types: [{
+        id: "core-impersonating-alias.child",
+        semantics: {},
+        extends: { kind: "core", id: "base.record-alias", ontologyId: base.ontology.id, ontologyVersion: base.ontology.version, ontologyContentHash: base.ontology.contentHash },
+      }],
+      actor: "operator",
+    })).toThrow(/exact parent ontology coordinates/);
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "core-alias", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_core_alias", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_core_alias"] },
+      ontology: base.ontology,
+      types: [{
+        id: "core-alias.child",
+        semantics: {},
+        extends: { kind: "core", id: "thing", ontologyId: base.ontology.id, ontologyVersion: base.ontology.version, ontologyContentHash: base.ontology.contentHash },
+      }],
+      actor: "operator",
+    })).toThrow(/exact parent ontology coordinates/);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_packs`).get()).toEqual(packCountBeforeCoreImpersonation);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_pack_registered'`).get()).toEqual(auditCountBeforeCoreImpersonation);
     expect(() => mod.registerDomainPack(db, {
       namespace: "invalid.extension", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
       provenanceSummary: { sourceId: "src_invalid_extension", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_invalid_extension"] },
@@ -309,12 +347,12 @@ describe("ontology registry validation", () => {
       types: [{
         id: "compatible.child",
         semantics: {},
-        extends: { kind: "dependency", id: "base.record", namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH },
+        extends: { kind: "dependency", id: "base.record-alias", namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH },
       }],
-      relationships: [{ from: "compatible.child", to: "base.record", type: "is_a" }],
+      relationships: [{ from: "compatible.child", to: "base.record-alias", type: "is_a" }],
       actor: "operator",
     });
-    expect(child.relationships).toEqual([{ from: "compatible.child", to: "base.record", type: "is_a" }]);
+    expect(child.relationships).toEqual([{ from: "compatible.child", to: "base.record-alias", type: "is_a" }]);
     expect(() => mod.registerDomainPack(db, {
       namespace: "child", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_child", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_child"] }, ontology: base.ontology,
       dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: `sha256:${"b".repeat(64)}` }],

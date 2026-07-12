@@ -256,6 +256,127 @@ describe("ontology registry route", () => {
     expect(JSON.stringify(await fetched.json())).not.toContain(sentinel);
   });
 
+  it("rejects pack-core impersonation atomically while accepting approved hash-pinned dependencies", async () => {
+    const canonical = await ensureCanonical();
+    const ontology = {
+      id: canonical.ontology.ontologyId,
+      version: canonical.ontology.version,
+      contentHash: canonical.ontology.contentHash,
+    };
+    const baseResponse = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "register_pack",
+        namespace: "route.base",
+        owner: "ops",
+        version: "1.0.0",
+        sourceHash: SOURCE_HASH,
+        provenanceSummary: {
+          sourceId: "src_route_base",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_route_base"],
+        },
+        ontology,
+        types: [{
+          id: "route.base.record",
+          aliases: ["route.base.record-alias"],
+          semantics: {},
+          extends: {
+            kind: "core",
+            id: "entity",
+            ontologyId: ontology.id,
+            ontologyVersion: ontology.version,
+            ontologyContentHash: ontology.contentHash,
+          },
+        }],
+        actor: "operator",
+      }),
+    }));
+    expect(baseResponse.status).toBe(200);
+    const base = await baseResponse.json() as { pack: { id: string } };
+    const approval = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({ action: "transition_pack", packId: base.pack.id, toState: "approved", actor: "operator" }),
+    }));
+    expect(approval.status).toBe(200);
+    const db = (await import("@/lib/db")).getDb();
+    const beforePacks = db.prepare(`SELECT COUNT(*) AS count FROM ontology_packs`).get() as { count: number };
+    const beforeAudits = db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_pack_registered'`).get() as { count: number };
+
+    const impersonation = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "register_pack",
+        namespace: "route.impersonation",
+        owner: "ops",
+        version: "1.0.0",
+        sourceHash: SOURCE_HASH,
+        provenanceSummary: {
+          sourceId: "src_route_impersonation",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_route_impersonation"],
+        },
+        ontology,
+        dependencies: [{ namespace: "route.base", version: "1.0.0", sourceHash: SOURCE_HASH }],
+        types: [{
+          id: "route.impersonation.child",
+          semantics: {},
+          extends: {
+            kind: "core",
+            id: "route.base.record-alias",
+            ontologyId: ontology.id,
+            ontologyVersion: ontology.version,
+            ontologyContentHash: ontology.contentHash,
+          },
+        }],
+        actor: "operator",
+      }),
+    }));
+    expect(impersonation.status).toBe(400);
+    expect(await impersonation.json()).toMatchObject({ ok: false, code: "incompatible" });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_packs`).get()).toEqual(beforePacks);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_pack_registered'`).get()).toEqual(beforeAudits);
+
+    const dependencyExtension = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "register_pack",
+        namespace: "route.dependency",
+        owner: "ops",
+        version: "1.0.0",
+        sourceHash: SOURCE_HASH,
+        provenanceSummary: {
+          sourceId: "src_route_dependency",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_route_dependency"],
+        },
+        ontology,
+        dependencies: [{ namespace: "route.base", version: "1.0.0", sourceHash: SOURCE_HASH }],
+        types: [{
+          id: "route.dependency.child",
+          semantics: {},
+          extends: {
+            kind: "dependency",
+            id: "route.base.record-alias",
+            namespace: "route.base",
+            version: "1.0.0",
+            sourceHash: SOURCE_HASH,
+          },
+        }],
+        relationships: [{ from: "route.dependency.child", to: "route.base.record-alias", type: "is_a" }],
+        actor: "operator",
+      }),
+    }));
+    expect(dependencyExtension.status).toBe(200);
+    expect(await dependencyExtension.json()).toMatchObject({
+      ok: true,
+      pack: { relationships: [{ from: "route.dependency.child", to: "route.base.record-alias", type: "is_a" }] },
+    });
+  });
+
   it("revokes changed source candidates through the authenticated route", async () => {
     const extracted = await ontologyRoute.POST(operatorRequest("/api/ontology", {
       method: "POST",

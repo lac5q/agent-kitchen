@@ -577,7 +577,7 @@ function assertPackExtension(
   extension: unknown,
   ontology: OntologyDiscovery,
   dependencies: PackDependency[],
-  parentIds: Set<string>,
+  canonicalCoreDefinitionIds: Set<string>,
   dependencyDefinitionIds: Set<string>
 ): asserts extension is PackTypeExtension {
   if (!extension || typeof extension !== "object" || Array.isArray(extension)) {
@@ -585,7 +585,7 @@ function assertPackExtension(
   }
   const value = extension as Record<string, unknown>;
   if (value.kind === "core") {
-    if (typeof value.id !== "string" || !parentIds.has(value.id)
+    if (typeof value.id !== "string" || !canonicalCoreDefinitionIds.has(value.id)
       || value.ontologyId !== ontology.ontologyId || value.ontologyVersion !== ontology.version
       || value.ontologyContentHash !== ontology.contentHash) {
       throw new OntologyRegistryError("Pack core extension must bind the exact parent ontology coordinates", "incompatible");
@@ -611,6 +611,10 @@ function assertPackTypes(
   dependencies: PackDependency[]
 ): OntologyRelationship[] {
   if (!Array.isArray(pack.types) || pack.types.length === 0) throw new OntologyRegistryError("types must be a non-empty array", "invalid");
+  // Only definition IDs published by the parent ontology can be declared as
+  // core parents. The broader reserved set below intentionally includes
+  // aliases and pack identifiers solely for collision and edge validation.
+  const canonicalCoreDefinitionIds = new Set(ontology.definitions.map((definition) => definition.id));
   const reservedIdentifiers = new Set(ontology.definitions.flatMap((definition) => [definition.id, ...(definition.aliases ?? [])]));
   const existingRows = allPackRows(db);
   const dependencyDefinitionIds = new Set<string>();
@@ -633,7 +637,7 @@ function assertPackTypes(
     }
     if (reservedIdentifiers.has(id) || seen.has(id)) throw new OntologyRegistryError(`Pack type collides with an existing definition or alias: ${id}`, "conflict");
     if (!definition.semantics || typeof definition.semantics !== "object" || Array.isArray(definition.semantics)) throw new OntologyRegistryError(`Pack type ${id} requires semantics`, "invalid");
-    assertPackExtension(definition.extends, ontology, dependencies, reservedIdentifiers, dependencyDefinitionIds);
+    assertPackExtension(definition.extends, ontology, dependencies, canonicalCoreDefinitionIds, dependencyDefinitionIds);
     seen.add(id);
     packTypeIds.add(id);
     for (const alias of definition.aliases ?? []) {
