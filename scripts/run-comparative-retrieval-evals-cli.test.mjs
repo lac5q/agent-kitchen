@@ -17,7 +17,7 @@ import { describe, it, before, after } from "node:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import crypto from "node:crypto";
 
 const SCRIPT = path.resolve("scripts/run-comparative-retrieval-evals.mjs");
@@ -163,6 +163,7 @@ function runRunnerWithIsolatedDb(args, label) {
   const fixturesDir = path.resolve("evals/comparative-retrieval/fixtures").replace(/\\/g, "/");
   const benchPath = path.resolve("apps/memroos/src/lib/retrieval-bench/index.ts").replace(/\\/g, "/");
   const dbModulePath = path.resolve("apps/memroos/src/lib/db.ts").replace(/\\/g, "/");
+  const auditChainPath = path.resolve("apps/memroos/src/lib/retrieval-bench/modules/audit-chain.ts").replace(/\\/g, "/");
   const helper = `
     import { register } from "node:module";
     import path from "node:path";
@@ -171,30 +172,53 @@ function runRunnerWithIsolatedDb(args, label) {
     register(path.join(__dirname, "ts-loader.mjs"), pathToFileURL(__dirname));
     const bench = await import(${JSON.stringify(benchPath)});
     const dbModule = await import(${JSON.stringify(dbModulePath)});
-    const runnerArgs = ${JSON.stringify(args)};
+    const auditChain = await import(${JSON.stringify(auditChainPath)});
+    const {
+      injectPublicationAuditFailureForTest,
+      ...runnerArgs
+    } = ${JSON.stringify(args)};
+    let publicationAuditAttempts = 0;
+    if (injectPublicationAuditFailureForTest) {
+      auditChain.setBenchAuditSink(({ eventType }) => {
+        if (eventType === "retrieval_bench.publication") {
+          publicationAuditAttempts += 1;
+          return {
+            ok: false,
+            status: "persistence_failed",
+            reason: "injected_publication_audit_failure",
+          };
+        }
+        return null;
+      });
+    }
     if (runnerArgs.tenantId) {
       dbModule.getDb().prepare(
         "INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)"
       ).run(runnerArgs.tenantId, "Isolated benchmark tenant");
     }
-    const r = await bench.runBenchmark({
-      dataset: "memroos_public_synthetic",
-      adapter: "lexical",
-      limit: 2,
-      k: 3,
-      seed: 0,
-      fixturesDir: ${JSON.stringify(fixturesDir)},
-      withAudit: true,
-      bypassCliParser: true,
-      cliCommand: { noWrite: false, outputDir: "/tmp/bench-isolated-output", configOverrides: {} },
-      ...runnerArgs,
-    });
-    console.log("RESULT:" + JSON.stringify({
-      ok: r.ok,
-      publicationGate: r.ok ? r.publicationGate : null,
-      contamination: r.ok ? r.contamination : null,
-      auditPersistence: r.ok ? r.auditPersistence : null,
-    }));
+    try {
+      const r = await bench.runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter: "lexical",
+        limit: 2,
+        k: 3,
+        seed: 0,
+        fixturesDir: ${JSON.stringify(fixturesDir)},
+        withAudit: true,
+        bypassCliParser: true,
+        cliCommand: { noWrite: false, outputDir: "/tmp/bench-isolated-output", configOverrides: {} },
+        ...runnerArgs,
+      });
+      console.log("RESULT:" + JSON.stringify({
+        ok: r.ok,
+        publicationGate: r.ok ? r.publicationGate : null,
+        contamination: r.ok ? r.contamination : null,
+        auditPersistence: r.ok ? r.auditPersistence : null,
+        publicationAuditAttempts,
+      }));
+    } finally {
+      auditChain.resetBenchAuditSink();
+    }
   `;
   const helperPath = path.join(
     os.tmpdir(),
@@ -215,6 +239,68 @@ function runRunnerWithIsolatedDb(args, label) {
     const match = result.stdout.match(/RESULT:(.+?)(?:\n|$)/);
     assert.ok(match, "isolated runner RESULT line must be present: " + result.stdout);
     return { result: JSON.parse(match[1]), dbPath };
+  } finally {
+    fs.unlinkSync(helperPath);
+  }
+}
+
+/**
+ * Exercise the exported production CLI entry point in a fresh process while
+ * failing only the final publication audit write. Other audit events fall
+ * through to the temporary SQLite database.
+ */
+function runCliWithPublicationAuditFailure(outputDir, label) {
+  const dbPath = tempDbPath(label);
+  const auditChainPath = path.resolve(
+    "apps/memroos/src/lib/retrieval-bench/modules/audit-chain.ts",
+  ).replace(/\\/g, "/");
+  const helper = `
+    import { register } from "node:module";
+    import path from "node:path";
+    import { pathToFileURL } from "node:url";
+    const scriptsDir = ${JSON.stringify(path.resolve("scripts"))};
+    register(path.join(scriptsDir, "ts-loader.mjs"), pathToFileURL(scriptsDir));
+    const auditChain = await import(${JSON.stringify(auditChainPath)});
+    auditChain.setBenchAuditSink(({ eventType }) => {
+      if (eventType === "retrieval_bench.publication") {
+        return {
+          ok: false,
+          status: "persistence_failed",
+          reason: "injected_publication_audit_failure",
+        };
+      }
+      return null;
+    });
+    const cli = await import(${JSON.stringify(pathToFileURL(path.resolve(SCRIPT)).href)});
+    await cli.run([
+      "--dataset", "memroos_public_synthetic",
+      "--limit", "2",
+      "--output-dir", ${JSON.stringify(outputDir)},
+      "--json",
+    ]);
+  `;
+  const helperPath = path.join(
+    os.tmpdir(),
+    "bench-publication-failure-cli-" + Date.now() + "-" + Math.random().toString(36).slice(2) + ".mjs",
+  );
+  fs.writeFileSync(helperPath, helper);
+  try {
+    const result = spawnSync(
+      NODE_22,
+      ["--experimental-strip-types", helperPath],
+      {
+        env: { ...process.env, SQLITE_DB_PATH: dbPath },
+        encoding: "utf8",
+        timeout: 60000,
+      },
+    );
+    return {
+      status: result.status,
+      stdout: result.stdout || "",
+      stderr: result.stderr || "",
+      error: result.error,
+      dbPath,
+    };
   } finally {
     fs.unlinkSync(helperPath);
   }
@@ -340,6 +426,100 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
     assert.equal(metadata.status, j.publicationGate.status);
     assert.equal(metadata.decisionHash, j.publicationGate.decisionHash);
     assert.deepEqual(metadata.caveats, j.publicationGate.caveats);
+  });
+
+  it("fails closed when only the final publication audit write fails", () => {
+    const runner = runRunnerWithIsolatedDb(
+      { injectPublicationAuditFailureForTest: true },
+      "publication-audit-runner",
+    );
+    assert.equal(runner.result.ok, true, "the benchmark calculation should complete");
+    assert.equal(
+      runner.result.publicationAuditAttempts,
+      1,
+      "the publication audit must be attempted exactly once",
+    );
+    assert.equal(runner.result.auditPersistence.allRequiredPersisted, false);
+    assert.equal(runner.result.auditPersistence.publication.ok, false);
+    assert.equal(
+      runner.result.auditPersistence.publication.reason,
+      "injected_publication_audit_failure",
+    );
+    assert.equal(runner.result.publicationGate.ok, false);
+    assert.equal(runner.result.publicationGate.status, "blocked_for_publication");
+    assert.ok(
+      runner.result.publicationGate.caveats.includes(
+        "audit_persistence_failed:injected_publication_audit_failure",
+      ),
+      "the returned gate must disclose only a non-sensitive audit-persistence caveat",
+    );
+
+    const runnerAudit = readBenchAuditRowCount(runner.dbPath);
+    assert.ok(runnerAudit, "prior audit stages must have persisted to temporary SQLite");
+    const runnerAuditTypes = Object.fromEntries(
+      runnerAudit.rows.reduce((counts, row) => {
+        counts.set(row.event_type, (counts.get(row.event_type) ?? 0) + 1);
+        return counts;
+      }, new Map()).entries(),
+    );
+    assert.equal(runnerAuditTypes["retrieval_bench.run"], 1);
+    assert.equal(runnerAuditTypes["retrieval_bench.receipt"], 2);
+    assert.equal(runnerAuditTypes["retrieval_bench.contamination"], 1);
+    assert.equal(runnerAuditTypes["retrieval_bench.replay"], 1);
+    assert.equal(
+      runnerAuditTypes["retrieval_bench.publication"] ?? 0,
+      0,
+      "the failed final publication write must not create a partial row",
+    );
+
+    const outputDir = path.join(
+      os.tmpdir(),
+      "bench-publication-audit-output-" + Date.now() + "-" + Math.random().toString(36).slice(2),
+    );
+    const beforeOutput = snapshotDir(outputDir);
+    const cli = runCliWithPublicationAuditFailure(outputDir, "publication-audit-cli");
+    assert.equal(
+      cli.status,
+      3,
+      "the governed CLI must exit with its blocked-publication status: " + cli.stderr,
+    );
+    const cliResult = JSON.parse(cli.stdout);
+    assert.equal(cliResult.publicationGate.ok, false);
+    assert.equal(cliResult.publicationGate.status, "blocked_for_publication");
+    assert.equal(cliResult.auditPersistence.allRequiredPersisted, false);
+    assert.ok(
+      cliResult.publicationGate.caveats.includes(
+        "audit_persistence_failed:injected_publication_audit_failure",
+      ),
+    );
+    assert.deepEqual(
+      snapshotDir(outputDir),
+      beforeOutput,
+      "a blocked final audit must not create or modify the result artifact",
+    );
+
+    const cliAudit = readBenchAuditRowCount(cli.dbPath);
+    assert.ok(cliAudit, "CLI prior audit stages must persist to temporary SQLite");
+    assert.equal(
+      cliAudit.rows.filter((row) => row.event_type === "retrieval_bench.run").length,
+      1,
+    );
+    assert.equal(
+      cliAudit.rows.filter((row) => row.event_type === "retrieval_bench.receipt").length,
+      2,
+    );
+    assert.equal(
+      cliAudit.rows.filter((row) => row.event_type === "retrieval_bench.contamination").length,
+      1,
+    );
+    assert.equal(
+      cliAudit.rows.filter((row) => row.event_type === "retrieval_bench.replay").length,
+      1,
+    );
+    assert.equal(
+      cliAudit.rows.filter((row) => row.event_type === "retrieval_bench.publication").length,
+      0,
+    );
   });
 
   it("deterministic reruns: configHash / fixtureHash / aggregate identical", () => {

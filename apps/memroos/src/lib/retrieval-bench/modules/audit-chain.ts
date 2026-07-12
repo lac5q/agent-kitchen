@@ -53,10 +53,11 @@ export type BenchAuditOutcome =
     };
 
 /**
- * Test seam: when set, audit writers call this hook instead of touching
- * the SQLite singleton. The hook must return a typed outcome so the
- * runner can surface failures end-to-end. When `null`, writers always
- * attempt a real SQLite insert (and any failure becomes a typed error).
+ * Test seam: when set, audit writers call this hook before touching the
+ * SQLite singleton. A typed outcome overrides the write; `null` falls
+ * through to the real SQLite insert, allowing one-stage fault injection.
+ * When no sink is configured, writers always attempt a real SQLite insert
+ * (and any failure becomes a typed error).
  */
 export type BenchAuditSink = (
   args: {
@@ -66,7 +67,7 @@ export type BenchAuditSink = (
     reason?: string;
     metadataJson: Record<string, unknown>;
   },
-) => BenchAuditOutcome;
+) => BenchAuditOutcome | null;
 
 let activeSink: BenchAuditSink | null = null;
 
@@ -141,7 +142,14 @@ function writeThrough({
   const sink = activeSink;
   if (sink) {
     try {
-      return sink({ eventType, entityType, entityId, reason, metadataJson });
+      const sinkOutcome = sink({
+        eventType,
+        entityType,
+        entityId,
+        reason,
+        metadataJson,
+      });
+      if (sinkOutcome) return sinkOutcome;
     } catch (err) {
       return {
         ok: false,

@@ -914,10 +914,10 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
         },
       ];
 
-  // 18) Calculate the sole final publication decision before recording it.
-  // The gate sees contamination plus every pre-publication audit outcome, so
-  // its immutable payload is exactly what the publication audit persists.
-  const publicationGate = evaluatePublicationGate({
+  // 18) Calculate a provisional publication decision from the outcomes that
+  // precede the final publication write. This is the sole payload persisted
+  // by the publication audit event. It cannot include its own outcome yet.
+  const provisionalPublicationGate = evaluatePublicationGate({
     report,
     provenance: reportProvenance,
     receiptVerifications,
@@ -929,15 +929,15 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     },
   });
 
-  // 19) Persist the already-final publication decision exactly once.
+  // 19) Attempt to persist that provisional decision exactly once.
   const publicationOutcome = withAudit
     ? recordBenchPublication({
         runId,
         tenantId,
         actorId,
-        decisionHash: publicationGate.decisionHash,
-        status: publicationGate.status,
-        caveats: publicationGate.caveats,
+        decisionHash: provisionalPublicationGate.decisionHash,
+        status: provisionalPublicationGate.status,
+        caveats: provisionalPublicationGate.caveats,
         configHash,
         fixtureHash,
         skipWrite,
@@ -968,6 +968,24 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     allRequiredPersisted: strongest.ok,
     anySkippedNoWrite,
   };
+
+  // 21) Reconcile the returned decision against every required audit
+  // outcome, including the final publication write. A failed or skipped
+  // final write cannot amend its already-attempted immutable audit row, so
+  // the returned decision fails closed with a persistence caveat instead.
+  // When the write succeeds this recomputes the same decision and hash that
+  // were persisted above.
+  const publicationGate = evaluatePublicationGate({
+    report,
+    provenance: reportProvenance,
+    receiptVerifications,
+    contamination,
+    auditPersistence: {
+      ok: strongest.ok,
+      reasons: strongest.reasons,
+      skippedNoWrite: anySkippedNoWrite,
+    },
+  });
 
   const failureSummary = summarizeFailures(results);
 

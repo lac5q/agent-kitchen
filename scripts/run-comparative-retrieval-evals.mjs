@@ -490,24 +490,22 @@ async function run(argv = process.argv.slice(2)) {
       tasks: report.tasks,
     };
 
-    if (!args.noWrite) {
-      // Honor the shared WriteGuard — refuse to write any result file when
-      // --no-write is armed. The CLI flag is the canonical no-write signal
-      // that the runner uses for SQLite audit persistence.
-      if (outcome.auditPersistence && outcome.auditPersistence.anySkippedNoWrite) {
-        // The runner enforced skipWrite on every audit write. The CLI
-        // therefore never produces a result file when --no-write is set.
-        if (!args.json) {
-          console.log("--no-write armed: skipped result file write (write guard enforced)");
-        }
-      } else {
-        fs.mkdirSync(resultsDir, { recursive: true });
-        const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
-        fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
-        if (!args.json) {
-          console.log("Wrote " + path.relative(repoRoot, outFile));
-        }
+    const publicationReady =
+      outcome.publicationGate?.ok === true &&
+      outcome.auditPersistence?.allRequiredPersisted === true;
+    if (!args.noWrite && publicationReady) {
+      fs.mkdirSync(resultsDir, { recursive: true });
+      const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
+      fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
+      if (!args.json) {
+        console.log("Wrote " + path.relative(repoRoot, outFile));
       }
+    } else if (!args.json) {
+      console.log(
+        args.noWrite
+          ? "--no-write armed: skipped result file write (write guard enforced)"
+          : "publication blocked: skipped result file write (audit persistence incomplete)",
+      );
     }
 
     if (args.json) {
@@ -580,5 +578,6 @@ export {
   legacyLexicalAdapter as lexicalAdapter,
   loadFixturesSync as loadFixtures,
   legacyNoMemoryAdapter as noMemoryAdapter,
+  run,
   scoreTask,
 };
