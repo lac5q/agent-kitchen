@@ -60,6 +60,31 @@ export interface HilEditValidationError {
   detail: unknown;
 }
 
+export interface OrchestrationPlanValidationResult {
+  ok: boolean;
+  status: string;
+  planHash?: string | null;
+  normalizedGraph?: Record<string, unknown> | null;
+  validationReceipt?: Record<string, unknown>;
+}
+
+export interface OrchestrationRunOperationResult {
+  ok: boolean;
+  success: boolean;
+  runId?: string;
+  status: string;
+  reason?: string;
+  evidenceBundleHash?: string | null;
+  evidenceVerified?: boolean;
+  rollbackHandles?: Array<Record<string, string>>;
+}
+
+export interface OrchestrationEvidenceResult {
+  ok: boolean;
+  status?: string;
+  bundle?: Record<string, unknown> | null;
+}
+
 function serviceUrl(): string {
   return (process.env.ORCHESTRATION_SERVICE_URL || "http://localhost:3210").replace(/\/$/, "");
 }
@@ -97,6 +122,53 @@ export async function postOrchestrationTask(input: OrchestrationTaskInput): Prom
     body: JSON.stringify(input),
   });
   return parseServiceResponse<OrchestrationRouteResult>(response, "Orchestration service unavailable");
+}
+
+export async function validateOrchestrationPlan(input: Record<string, unknown>): Promise<OrchestrationPlanValidationResult> {
+  const response = await fetch(`${serviceUrl()}/plans/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseServiceResponse<OrchestrationPlanValidationResult>(response, "Orchestration plan validation unavailable");
+}
+
+export async function executeOrchestrationPlan(input: Record<string, unknown>): Promise<OrchestrationRunOperationResult> {
+  const response = await fetch(`${serviceUrl()}/plans/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseServiceResponse<OrchestrationRunOperationResult>(response, "Orchestration execution unavailable");
+}
+
+export async function resumeOrchestrationRun(
+  runId: string,
+  input: Record<string, unknown>
+): Promise<OrchestrationRunOperationResult> {
+  const response = await fetch(`${serviceUrl()}/runs/${encodeURIComponent(runId)}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseServiceResponse<OrchestrationRunOperationResult>(response, "Orchestration resume unavailable");
+}
+
+export async function rollbackOrchestrationRun(
+  runId: string,
+  input: Record<string, unknown>
+): Promise<OrchestrationRunOperationResult> {
+  const response = await fetch(`${serviceUrl()}/runs/${encodeURIComponent(runId)}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseServiceResponse<OrchestrationRunOperationResult>(response, "Orchestration rollback unavailable");
+}
+
+export async function getOrchestrationRunEvidence(runId: string): Promise<OrchestrationEvidenceResult> {
+  const response = await fetch(`${serviceUrl()}/runs/${encodeURIComponent(runId)}/evidence`);
+  return parseServiceResponse<OrchestrationEvidenceResult>(response, "Orchestration evidence unavailable");
 }
 
 export async function listOrchestrationHil(): Promise<{ ok: boolean; decisions: OrchestrationHilDecision[] }> {

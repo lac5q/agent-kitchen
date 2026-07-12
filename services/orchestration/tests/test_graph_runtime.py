@@ -97,6 +97,27 @@ class LangGraphRuntimeTest(unittest.TestCase):
             resumed = runtime.resume("run-hil-edit-1", "approve")
             self.assertEqual(resumed["status"], "dispatched")
 
+    def test_multihop_graph_loops_and_exposes_rollback_compensation_node(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = LangGraphRuntime(os.path.join(tmp, "orchestration.db"))
+
+            result = runtime.start(
+                {
+                    "runId": "run-graph-multihop",
+                    "taskSummary": "Two hop graph task",
+                    "selectedAgentId": "agent-graph",
+                    "requiresApproval": False,
+                    "hops": [{"id": "a"}, {"id": "b"}],
+                    "currentHopIndex": 0,
+                }
+            )
+
+            self.assertEqual(result["status"], "dispatched")
+            with runtime._compiled() as compiled:
+                self.assertIn("rollback_compensation", compiled.nodes)
+                dispatch_node = compiled.nodes.get("dispatch")
+                self.assertIsNotNone(dispatch_node)
+
     # ORCH-08: dispatch node retries up to max_attempts before exhausting the retry budget.
     # Tests that LangGraph RetryPolicy on the dispatch node causes re-execution before giving up.
     def test_dispatch_retry_policy(self):

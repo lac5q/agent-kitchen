@@ -189,6 +189,20 @@ export const AUDIT_EVENT_TYPES = {
   ORCH_FEDERATION_MERGE: "orch.federation.merge",
   /** Untrusted content was detected and dispositioned (omitted/quarantined) per policy. */
   ORCH_INJECTION_DETECTED: "orch.injection.detected",
+  /** Multi-hop plan graph validated before execution. */
+  ORCH_PLAN_VALIDATED: "orch.plan.validated",
+  /** Per-step fresh policy/identity/freshness/dependency/input/verification gate. */
+  ORCH_STEP_GATE: "orch.step.gate",
+  /** Step side effect committed with hashes and rollback boundary metadata. */
+  ORCH_STEP_COMMITTED: "orch.step.committed",
+  /** Ambiguous remote commit was reconciled before any compensating mutation. */
+  ORCH_COMMIT_RECONCILED: "orch.commit.reconciled",
+  /** Compensation or rollback recovery event appended to run evidence. */
+  ORCH_RECOVERY_APPENDED: "orch.recovery.appended",
+  /** Rollback handle was consumed, denied, expired, or diverged. */
+  ORCH_ROLLBACK_HANDLE: "orch.rollback.handle",
+  /** Tamper-evident orchestration evidence bundle produced or verified. */
+  ORCH_EVIDENCE_BUNDLE: "orch.evidence.bundle",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -243,6 +257,8 @@ export const ENTITY_TYPES = {
   FEDERATION_OUTCOME: "federation_outcome",
   /** Federation merged pack (deterministic dedupe + rank + provenance). */
   FEDERATION_PACK: "federation_pack",
+  /** Multi-hop orchestration run, step, recovery, rollback, or evidence bundle. */
+  ORCHESTRATION_RUN: "orchestration_run",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

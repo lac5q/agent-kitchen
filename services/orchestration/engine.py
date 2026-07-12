@@ -13,6 +13,23 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+try:
+    from .multihop import (
+        build_evidence_bundle as build_multihop_evidence_bundle,
+        execute_multihop_plan as execute_multihop_plan_payload,
+        resume_multihop_plan as resume_multihop_plan_payload,
+        rollback_with_handle as rollback_multihop_with_handle,
+        validate_plan as validate_multihop_plan_payload,
+    )
+except ImportError:  # Allows direct imports from services/orchestration tests.
+    from multihop import (
+        build_evidence_bundle as build_multihop_evidence_bundle,
+        execute_multihop_plan as execute_multihop_plan_payload,
+        resume_multihop_plan as resume_multihop_plan_payload,
+        rollback_with_handle as rollback_multihop_with_handle,
+        validate_plan as validate_multihop_plan_payload,
+    )
+
 BOUNDARY = "LangGraph chooses policy; Memroos/A2A owns transport"
 ACTIVE_STATUSES = {"active", "busy"}
 
@@ -101,6 +118,11 @@ class OrchestrationStore:
         for col_ddl in [
             "ALTER TABLE orchestration_runs ADD COLUMN rollback_reason TEXT",
             "ALTER TABLE orchestration_runs ADD COLUMN rolled_back_at TEXT",
+            "ALTER TABLE orchestration_runs ADD COLUMN plan_hash TEXT",
+            "ALTER TABLE orchestration_runs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default-tenant'",
+            "ALTER TABLE orchestration_runs ADD COLUMN space_id TEXT NOT NULL DEFAULT 'default-space'",
+            "ALTER TABLE orchestration_lineage ADD COLUMN previous_event_hash TEXT",
+            "ALTER TABLE orchestration_lineage ADD COLUMN event_hash TEXT",
         ]:
             try:
                 self.conn.execute(col_ddl)
@@ -119,14 +141,18 @@ class OrchestrationStore:
         selected_agent_id: str | None,
         status: str,
         retry_limit: int,
+        plan_hash: str | None = None,
+        tenant_id: str = "default-tenant",
+        space_id: str = "default-space",
     ) -> None:
         timestamp = now_iso()
         self.conn.execute(
             """
             INSERT INTO orchestration_runs (
               run_id, correlation_id, task_summary, required_capability,
-              selected_agent_id, status, retry_limit, attempts, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+              selected_agent_id, status, retry_limit, attempts, created_at, updated_at,
+              plan_hash, tenant_id, space_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -138,6 +164,9 @@ class OrchestrationStore:
                 retry_limit,
                 timestamp,
                 timestamp,
+                plan_hash,
+                tenant_id,
+                space_id,
             ),
         )
         self.conn.commit()
@@ -206,23 +235,83 @@ class OrchestrationStore:
         The returned id is used as forward_hop_id in paired compensation_pending rows
         (ORCH-09: declarative compensation, not Python closures).
         """
+        previous = self.conn.execute(
+            """
+            SELECT event_hash FROM orchestration_lineage
+            WHERE run_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+        previous_hash = previous["event_hash"] if previous else None
+        detail_json = json.dumps(detail or {}, sort_keys=True)
+        created_at = now_iso()
         cursor = self.conn.execute(
             """
             INSERT INTO orchestration_lineage (
-              correlation_id, run_id, hop_type, agent_id, detail_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+              correlation_id, run_id, hop_type, agent_id, detail_json, created_at,
+              previous_event_hash, event_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
             """,
             (
                 correlation_id,
                 run_id,
                 hop_type,
                 agent_id,
-                json.dumps(detail or {}, sort_keys=True),
-                now_iso(),
+                detail_json,
+                created_at,
+                previous_hash,
             ),
         )
+        row_id = cursor.lastrowid
+        event_hash = self._compute_lineage_event_hash(
+            row_id=row_id,
+            correlation_id=correlation_id,
+            run_id=run_id,
+            hop_type=hop_type,
+            agent_id=agent_id,
+            detail_json=detail_json,
+            created_at=created_at,
+            previous_event_hash=previous_hash,
+        )
+        self.conn.execute(
+            "UPDATE orchestration_lineage SET event_hash = ? WHERE id = ?",
+            (event_hash, row_id),
+        )
         self.conn.commit()
-        return cursor.lastrowid
+        return row_id
+
+    def _compute_lineage_event_hash(
+        self,
+        *,
+        row_id: int,
+        correlation_id: str,
+        run_id: str,
+        hop_type: str,
+        agent_id: str | None,
+        detail_json: str,
+        created_at: str,
+        previous_event_hash: str | None,
+    ) -> str:
+        try:
+            detail = json.loads(detail_json or "{}")
+        except Exception:
+            detail = {}
+        payload = {
+            "id": row_id,
+            "correlation_id": correlation_id,
+            "run_id": run_id,
+            "hop_type": hop_type,
+            "agent_id": agent_id,
+            "detail": detail,
+            "created_at": created_at,
+            "previous_event_hash": previous_event_hash,
+        }
+        import hashlib
+
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def list_lineage(self, correlation_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -249,23 +338,26 @@ class OrchestrationStore:
         return [dict(row) for row in rows]
 
     def update_lineage_hop_type(self, row_id: int, *, hop_type: str, detail: dict[str, Any] | None = None) -> None:
-        """Update an existing lineage row's hop_type (and optionally detail_json).
+        """Append a lineage transition for a prior row without rewriting history.
 
-        Used to transition compensation_pending → compensation_done or compensation_skipped.
+        Older recovery code called this method to mutate compensation_pending rows.
+        ORCH-FOLLOWUP-01 requires recovery evidence to be append-only, so the
+        method now records a transition event linked to the original row.
         """
-        self.conn.execute(
-            """
-            UPDATE orchestration_lineage
-            SET hop_type = ?, detail_json = COALESCE(?, detail_json)
-            WHERE id = ?
-            """,
-            (
-                hop_type,
-                json.dumps(detail, sort_keys=True) if detail is not None else None,
-                row_id,
-            ),
+        row = self.conn.execute(
+            "SELECT * FROM orchestration_lineage WHERE id = ?",
+            (row_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown orchestration lineage row: {row_id}")
+        merged_detail = {"transitioned_from_row_id": row_id, **(detail or {})}
+        self.append_lineage(
+            correlation_id=row["correlation_id"],
+            run_id=row["run_id"],
+            hop_type=hop_type,
+            agent_id=row["agent_id"],
+            detail=merged_detail,
         )
-        self.conn.commit()
 
     def create_hil_decision(
         self,
@@ -600,11 +692,14 @@ class OrchestrationEngine:
             # Without actual agent registry access, we use the safe-default: compensation_skipped.
             # Agents implementing compensation will be dispatched via requiredCapability="compensate".
             # For now, record compensation_skipped with the documented reason (RESEARCH.md Anti-Patterns).
-            self.store.update_lineage_hop_type(
-                row_id,
+            self.store.append_lineage(
+                correlation_id=correlation_id,
+                run_id=run_id,
                 hop_type="compensation_skipped",
+                agent_id=agent_id,
                 detail={
                     "forward_hop_id": forward_hop_id,
+                    "pending_row_id": row_id,
                     "reason": "agent_no_compensate_capability",
                     "agent_id": agent_id,
                 },
@@ -628,6 +723,21 @@ class OrchestrationEngine:
             compensated_str = "no hops to compensate"
         rollback_reason = f"failed at hop {hop_n}, {compensated_str}"
         self.store.update_run_rollback(run_id, rollback_reason=rollback_reason)
+
+    def validate_multihop_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return validate_multihop_plan_payload(payload.get("plan") if isinstance(payload, dict) else None)
+
+    def execute_multihop_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return execute_multihop_plan_payload(self.store, payload)
+
+    def resume_multihop_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return resume_multihop_plan_payload(self.store, payload)
+
+    def rollback_multihop(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return rollback_multihop_with_handle(self.store, payload)
+
+    def get_multihop_evidence(self, run_id: str) -> dict[str, Any]:
+        return build_multihop_evidence_bundle(self.store, run_id)
 
     def _result(
         self,

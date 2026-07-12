@@ -37,6 +37,9 @@ export interface TaskEvidenceBundleInput {
   residualRisks?: JsonList;
   replayHandle?: string | null;
   rollbackHandle?: string | null;
+  orchestrationRunId?: string | null;
+  orchestrationPlanHash?: string | null;
+  orchestrationBundleHash?: string | null;
 }
 
 export interface TaskEvidenceBundle extends Required<Omit<TaskEvidenceBundleInput, "id">> {
@@ -70,11 +73,13 @@ export function upsertTaskEvidenceBundle(
        id, task_id, tenant_id, status, plan_json, context_json, permissions_json,
        tools_json, actions_json, verification_json, memories_json, sources_json,
        assumptions_json, residual_risks_json, replay_handle, rollback_handle,
+       orchestration_run_id, orchestration_plan_hash, orchestration_bundle_hash,
        created_at, updated_at
      ) VALUES (
        @id, @taskId, @tenantId, @status, @planJson, @contextJson, @permissionsJson,
        @toolsJson, @actionsJson, @verificationJson, @memoriesJson, @sourcesJson,
        @assumptionsJson, @residualRisksJson, @replayHandle, @rollbackHandle,
+       @orchestrationRunId, @orchestrationPlanHash, @orchestrationBundleHash,
        @createdAt, @updatedAt
      )
      ON CONFLICT(id) DO UPDATE SET
@@ -93,6 +98,9 @@ export function upsertTaskEvidenceBundle(
        residual_risks_json = excluded.residual_risks_json,
        replay_handle = excluded.replay_handle,
        rollback_handle = excluded.rollback_handle,
+       orchestration_run_id = excluded.orchestration_run_id,
+       orchestration_plan_hash = excluded.orchestration_plan_hash,
+       orchestration_bundle_hash = excluded.orchestration_bundle_hash,
        updated_at = excluded.updated_at`
   ).run({
     id,
@@ -111,6 +119,9 @@ export function upsertTaskEvidenceBundle(
     residualRisksJson: stringifyList(input.residualRisks),
     replayHandle: input.replayHandle ?? null,
     rollbackHandle: input.rollbackHandle ?? null,
+    orchestrationRunId: input.orchestrationRunId ?? null,
+    orchestrationPlanHash: input.orchestrationPlanHash ?? null,
+    orchestrationBundleHash: input.orchestrationBundleHash ?? null,
     createdAt: now,
     updatedAt: now,
   });
@@ -164,6 +175,9 @@ function mapTaskEvidenceBundle(row: Record<string, unknown>): TaskEvidenceBundle
     residualRisks: parseList(row.residual_risks_json),
     replayHandle: typeof row.replay_handle === "string" ? row.replay_handle : null,
     rollbackHandle: typeof row.rollback_handle === "string" ? row.rollback_handle : null,
+    orchestrationRunId: typeof row.orchestration_run_id === "string" ? row.orchestration_run_id : null,
+    orchestrationPlanHash: typeof row.orchestration_plan_hash === "string" ? row.orchestration_plan_hash : null,
+    orchestrationBundleHash: typeof row.orchestration_bundle_hash === "string" ? row.orchestration_bundle_hash : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };

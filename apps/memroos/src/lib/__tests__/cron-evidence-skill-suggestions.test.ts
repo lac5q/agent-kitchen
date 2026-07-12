@@ -58,10 +58,16 @@ describe("v5 cron health, evidence bundles, and skill suggestions", () => {
       memories: ["memory:approved:1"],
       residualRisks: ["public smoke still pending"],
       status: "verified",
+      orchestrationRunId: "orch-run-1",
+      orchestrationPlanHash: "plan-hash-1",
+      orchestrationBundleHash: "bundle-hash-1",
     });
 
     expect(bundle.status).toBe("verified");
     expect(bundle.tools).toEqual([{ name: "npm test", status: "passed" }]);
+    expect(bundle.orchestrationRunId).toBe("orch-run-1");
+    expect(bundle.orchestrationPlanHash).toBe("plan-hash-1");
+    expect(bundle.orchestrationBundleHash).toBe("bundle-hash-1");
     expect(listTaskEvidenceBundles(db, "task-123")).toHaveLength(1);
   });
 

@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 20;
+export const CURRENT_SCHEMA_VERSION = 21;
 
 type SchemaMigration = {
   version: number;
@@ -184,6 +184,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 20,
     name: 'orch-msiq-adapter-and-federation',
     up: applyOrchMsiqAdapterAndFederationSchema,
+  },
+  {
+    version: 21,
+    name: 'orch-multihop-evidence-bundle-links',
+    up: applyOrchMultihopEvidenceBundleSchema,
   },
 ];
 
@@ -1646,6 +1651,30 @@ function applyOrchMsiqAdapterAndFederationSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS federation_merges_pack
       ON federation_merges(tenant_id, pack_hash);
+  `);
+}
+
+function applyOrchMultihopEvidenceBundleSchema(db: Database.Database): void {
+  // ORCH-FOLLOWUP-01 / VAL-ORCH-012..020:
+  // Link generic task evidence bundles to deterministic multi-hop orchestration
+  // evidence without storing raw action payloads. These fields are hashes/IDs
+  // only, so existing bundle redaction and outbound filtering remain intact.
+  for (const statement of [
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_run_id TEXT",
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_plan_hash TEXT",
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_bundle_hash TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS task_evidence_bundles_orchestration_run
+      ON task_evidence_bundles(tenant_id, orchestration_run_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS task_evidence_bundles_orchestration_hash
+      ON task_evidence_bundles(tenant_id, orchestration_bundle_hash);
   `);
 }
 
