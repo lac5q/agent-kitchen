@@ -111,8 +111,8 @@ function readBenchAuditRowCount(dbPath) {
         db.pragma("wal_checkpoint(FULL)");
       }
       const rows = db.prepare(
-        "SELECT event_type, COUNT(*) AS n FROM audit_entries " +
-        "WHERE event_type LIKE 'retrieval_bench.%' GROUP BY event_type"
+        "SELECT event_type, tenant_id, actor_id, reason, metadata_json FROM audit_entries " +
+        "WHERE event_type LIKE 'retrieval_bench.%' ORDER BY created_at, id"
       ).all();
       const total = db.prepare(
         "SELECT COUNT(*) AS n FROM audit_entries " +
@@ -154,6 +154,72 @@ function runCliWithIsolatedDb(args, label) {
   return { ...result, dbPath };
 }
 
+/**
+ * Exercise the production runner directly in a fresh Node process so the
+ * SQLite singleton is constructed against an isolated database.
+ */
+function runRunnerWithIsolatedDb(args, label) {
+  const dbPath = tempDbPath(label);
+  const fixturesDir = path.resolve("evals/comparative-retrieval/fixtures").replace(/\\/g, "/");
+  const benchPath = path.resolve("apps/memroos/src/lib/retrieval-bench/index.ts").replace(/\\/g, "/");
+  const dbModulePath = path.resolve("apps/memroos/src/lib/db.ts").replace(/\\/g, "/");
+  const helper = `
+    import { register } from "node:module";
+    import path from "node:path";
+    import { pathToFileURL } from "node:url";
+    const __dirname = ${JSON.stringify(path.resolve("scripts"))};
+    register(path.join(__dirname, "ts-loader.mjs"), pathToFileURL(__dirname));
+    const bench = await import(${JSON.stringify(benchPath)});
+    const dbModule = await import(${JSON.stringify(dbModulePath)});
+    const runnerArgs = ${JSON.stringify(args)};
+    if (runnerArgs.tenantId) {
+      dbModule.getDb().prepare(
+        "INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)"
+      ).run(runnerArgs.tenantId, "Isolated benchmark tenant");
+    }
+    const r = await bench.runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 2,
+      k: 3,
+      seed: 0,
+      fixturesDir: ${JSON.stringify(fixturesDir)},
+      withAudit: true,
+      bypassCliParser: true,
+      cliCommand: { noWrite: false, outputDir: "/tmp/bench-isolated-output", configOverrides: {} },
+      ...runnerArgs,
+    });
+    console.log("RESULT:" + JSON.stringify({
+      ok: r.ok,
+      publicationGate: r.ok ? r.publicationGate : null,
+      contamination: r.ok ? r.contamination : null,
+      auditPersistence: r.ok ? r.auditPersistence : null,
+    }));
+  `;
+  const helperPath = path.join(
+    os.tmpdir(),
+    "bench-isolated-runner-" + Date.now() + "-" + Math.random().toString(36).slice(2) + ".mjs",
+  );
+  fs.writeFileSync(helperPath, helper);
+  try {
+    const result = spawnSync(
+      NODE_22,
+      ["--experimental-strip-types", helperPath],
+      {
+        env: { ...process.env, SQLITE_DB_PATH: dbPath },
+        encoding: "utf8",
+        timeout: 60000,
+      },
+    );
+    assert.equal(result.status, 0, "isolated runner must succeed: " + result.stderr + result.stdout);
+    const match = result.stdout.match(/RESULT:(.+?)(?:\n|$)/);
+    assert.ok(match, "isolated runner RESULT line must be present: " + result.stdout);
+    return { result: JSON.parse(match[1]), dbPath };
+  } finally {
+    fs.unlinkSync(helperPath);
+  }
+}
+
 describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
   let resultsDir;
   let beforeSnapshot;
@@ -189,8 +255,8 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
       j.publicationGate.caveats.some((c) => c.includes("audit_persistence_skipped_no_write")),
       "caveat must mention skipped-no-write audit state, got: " + JSON.stringify(j.publicationGate.caveats),
     );
-    assert.ok(j.contamination, "contamination probe must be present");
-    assert.equal(j.contamination.ok, false, "foreign-run contamination probe must trigger");
+    assert.ok(j.contamination, "contamination validation must be present");
+    assert.equal(j.contamination.ok, true, "current-run artifacts must remain clean");
     assert.ok(j.replayHandle, "replay handle must be present");
     assert.ok(j.replayHandle.fingerprint.startsWith("sha256:"));
     assert.ok(j.auditPersistence, "audit persistence summary must be present");
@@ -242,28 +308,38 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
       "--limit", "3",
       "--json",
     ], "persist-audit");
-    // Publication is blocked by the foreign-run contamination probe (the
-    // runner intentionally probes a foreign runId to assert contamination
-    // detection). The audit chain itself MUST still be persisted.
-    assert.equal(r.status, 3, "publication-blocked exit code expected (got " + r.status + "): " + r.stderr);
+    assert.equal(r.status, 0, "clean run must be ready for publication (got " + r.status + "): " + r.stderr);
     const auditCount = readBenchAuditRowCount(r.dbPath);
     assert.ok(auditCount, "audit row count must be readable for the isolated DB");
-    const byType = Object.fromEntries(auditCount.rows.map((x) => [x.event_type, x.n]));
+    const byType = Object.fromEntries(
+      auditCount.rows.reduce((counts, row) => {
+        counts.set(row.event_type, (counts.get(row.event_type) ?? 0) + 1);
+        return counts;
+      }, new Map()).entries(),
+    );
     // Run-level + per-task receipts + publication + replay + contamination.
     assert.ok(byType["retrieval_bench.run"] >= 1, "run-level audit row must exist: " + JSON.stringify(byType));
     assert.equal(byType["retrieval_bench.receipt"], 3, "one receipt per task must exist");
-    assert.ok(byType["retrieval_bench.publication"] >= 1, "publication audit row must exist");
+    assert.equal(
+      byType["retrieval_bench.publication"],
+      1,
+      "exactly one final publication audit row must exist",
+    );
     assert.ok(byType["retrieval_bench.replay"] >= 1, "replay audit row must exist");
     assert.ok(byType["retrieval_bench.contamination"] >= 1, "contamination audit row must exist");
     const j = JSON.parse(r.stdout);
     assert.equal(j.auditPersistence.allRequiredPersisted, true, "every required audit must be persisted");
     assert.equal(j.auditPersistence.anySkippedNoWrite, false, "no skips allowed in audit chain");
-    // Publication MUST be blocked by the contamination probe (foreign-run).
-    assert.equal(j.publicationGate.ok, false, "publication MUST be blocked by contamination probe");
-    assert.ok(
-      j.publicationGate.caveats.some((c) => c.includes("contamination_failed")),
-      "caveat must mention contamination_failed, got: " + JSON.stringify(j.publicationGate.caveats),
-    );
+    assert.equal(j.contamination.ok, true, "normal-run artifacts must be clean");
+    assert.equal(j.publicationGate.ok, true, "clean normal run must be ready for publication");
+    assert.equal(j.publicationGate.status, "ready_for_publication");
+    const publication = auditCount.rows.find((row) => row.event_type === "retrieval_bench.publication");
+    assert.ok(publication, "exactly one publication audit row must exist");
+    const metadata = JSON.parse(publication.metadata_json);
+    assert.equal(publication.reason, j.publicationGate.status);
+    assert.equal(metadata.status, j.publicationGate.status);
+    assert.equal(metadata.decisionHash, j.publicationGate.decisionHash);
+    assert.deepEqual(metadata.caveats, j.publicationGate.caveats);
   });
 
   it("deterministic reruns: configHash / fixtureHash / aggregate identical", () => {
@@ -403,30 +479,98 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
     }
   });
 
-  it("contamination failure blocks publication before report emission (foreign-run probe)", () => {
-    // The runner runs a foreign-run contamination probe against every
-    // run. The probe's expected mismatch makes `foreignCheck.ok` false
-    // and MUST block publication with an explicit caveat, even when
-    // audit persistence succeeded.
-    const r = runCliWithIsolatedDb([
-      "--dataset", "memroos_public_synthetic",
-      "--limit", "2",
-      "--json",
-    ], "contamination");
-    // Exit code 3 = blocked publication; contamination failure causes it.
-    assert.equal(r.status, 3, "publication-blocked exit code expected (got " + r.status + "): " + r.stderr);
-    const j = JSON.parse(r.stdout);
-    assert.ok(j.contamination, "contamination probe must be present");
-    assert.equal(j.contamination.ok, false, "foreign-run contamination probe MUST trigger");
-    assert.equal(j.publicationGate.ok, false, "publication MUST be blocked when contamination probe fails");
-    assert.ok(
-      j.publicationGate.caveats.some((c) => c.includes("contamination_failed")),
-      "caveat must mention contamination_failed, got: " + JSON.stringify(j.publicationGate.caveats),
+  it("isolated SQLite preserves caller scope and blocks only injected foreign artifacts", () => {
+    const clean = runRunnerWithIsolatedDb(
+      {
+        tenantId: "bench-tenant-a",
+        actorId: "benchmark-actor-a",
+        scope: {
+          tenantId: "bench-tenant-a",
+          userId: null,
+          agentId: null,
+          spaceId: "bench-space-a",
+          label: null,
+          purpose: "memory_search",
+          beliefStage: null,
+          maxFreshnessSeconds: null,
+        },
+      },
+      "scoped-clean",
     );
-    // And the audit persistence state must STILL reflect successful persistence
-    // because contamination failure is independent of audit persistence.
-    assert.equal(j.auditPersistence.allRequiredPersisted, true, "audit chain must still verify cleanly");
-    assert.equal(j.auditPersistence.anySkippedNoWrite, false, "no skips allowed in audit chain");
+    assert.equal(clean.result.ok, true);
+    assert.equal(clean.result.contamination.ok, true);
+    assert.equal(
+      clean.result.publicationGate.ok,
+      true,
+      "clean scoped publication gate: " + JSON.stringify(clean.result.publicationGate),
+    );
+    assert.equal(clean.result.publicationGate.status, "ready_for_publication");
+    const cleanAudit = readBenchAuditRowCount(clean.dbPath);
+    assert.ok(cleanAudit);
+    assert.ok(cleanAudit.rows.length > 0);
+    assert.deepEqual(
+      new Set(cleanAudit.rows.map((row) => row.tenant_id)),
+      new Set(["bench-tenant-a"]),
+    );
+    assert.deepEqual(
+      new Set(cleanAudit.rows.map((row) => row.actor_id)),
+      new Set(["benchmark-actor-a"]),
+    );
+    for (const row of cleanAudit.rows) {
+      const metadata = JSON.parse(row.metadata_json);
+      assert.equal(metadata.tenantId, "bench-tenant-a");
+      assert.equal(metadata.actorId, "benchmark-actor-a");
+    }
+    const cleanPublication = cleanAudit.rows.find(
+      (row) => row.event_type === "retrieval_bench.publication",
+    );
+    assert.equal(
+      cleanAudit.rows.filter((row) => row.event_type === "retrieval_bench.publication").length,
+      1,
+      "clean run must persist the final publication gate exactly once",
+    );
+    assert.ok(cleanPublication);
+    const cleanPublicationMetadata = JSON.parse(cleanPublication.metadata_json);
+    assert.equal(cleanPublication.reason, clean.result.publicationGate.status);
+    assert.equal(cleanPublicationMetadata.status, clean.result.publicationGate.status);
+    assert.equal(cleanPublicationMetadata.decisionHash, clean.result.publicationGate.decisionHash);
+    assert.deepEqual(cleanPublicationMetadata.caveats, clean.result.publicationGate.caveats);
+
+    const foreign = runRunnerWithIsolatedDb(
+      {
+        tenantId: "bench-tenant-b",
+        actorId: "benchmark-actor-b",
+        scope: {
+          tenantId: "bench-tenant-b",
+          userId: null,
+          agentId: null,
+          spaceId: "bench-space-b",
+          label: null,
+          purpose: "memory_search",
+          beliefStage: null,
+          maxFreshnessSeconds: null,
+        },
+        injectedArtifactTagsForTest: [
+          {
+            runId: "foreign-run",
+            lane: "foreign-lane",
+            dataset: "foreign-dataset",
+            adapter: "foreign-adapter",
+            tenantId: "foreign-tenant",
+            scope: "foreign-space",
+          },
+        ],
+      },
+      "scoped-foreign",
+    );
+    assert.equal(foreign.result.ok, true);
+    assert.equal(foreign.result.contamination.ok, false);
+    assert.equal(foreign.result.publicationGate.ok, false);
+    assert.equal(foreign.result.publicationGate.status, "blocked_for_publication");
+    assert.ok(
+      foreign.result.publicationGate.caveats.some((c) => c.startsWith("contamination_failed:")),
+      "foreign artifact must produce a contamination caveat",
+    );
   });
 
   it("CLI surface text report contains all required sections", () => {

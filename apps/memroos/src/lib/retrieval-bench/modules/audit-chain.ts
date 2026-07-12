@@ -107,6 +107,8 @@ export interface RetrievalBenchAuditContext {
 function baseMetadata(ctx: RetrievalBenchAuditContext): Record<string, unknown> {
   return {
     runId: ctx.runId,
+    tenantId: ctx.tenantId ?? "default-tenant",
+    actorId: ctx.actorId ?? "system:retrieval_bench",
     configHash: ctx.configHash,
     fixtureHash: ctx.fixtureHash,
     chainDomain: RETRIEVAL_BENCH_CHAIN_DOMAIN,

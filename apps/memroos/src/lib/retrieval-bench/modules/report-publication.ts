@@ -53,6 +53,22 @@ export interface PublicationGateInput {
   report: AggregateReport;
   provenance: ReportProvenance;
   receiptVerifications: ReceiptVerificationReceipt[];
+  /**
+   * Isolation validation computed from artifacts produced by this run.
+   * A rejected foreign test artifact is a failed contamination result, not
+   * a separate synthetic probe the production runner must fabricate.
+   */
+  contamination?: { ok: boolean; reason?: string };
+  /**
+   * Required audit outcomes that are known before the publication decision is
+   * evaluated. Publication persistence itself happens exactly once after this
+   * final decision has been calculated.
+   */
+  auditPersistence?: {
+    ok: boolean;
+    reasons?: string[];
+    skippedNoWrite?: boolean;
+  };
   /** Optional sensitive-content sentinel scan results. */
   sentinelScan?: { ok: boolean; violations: number };
 }
@@ -119,7 +135,30 @@ export function evaluatePublicationGate(input: PublicationGateInput): Publicatio
     }
   }
 
-  // 3) Provider/source/task runs must not be partial.
+  // 3) Every artifact must belong to the current run's isolation scope.
+  if (input.contamination && !input.contamination.ok) {
+    ok = false;
+    caveats.push(
+      "contamination_failed:" + (input.contamination.reason ?? "unknown"),
+    );
+  }
+
+  // 4) Required evidence persistence must complete before the sole final
+  // publication decision. This prevents later caller-side gate mutation.
+  if (input.auditPersistence && !input.auditPersistence.ok) {
+    ok = false;
+    const reasons = input.auditPersistence.reasons ?? [];
+    caveats.push(
+      "audit_persistence_failed:" +
+        (reasons.length > 0 ? reasons.join("|") : "unknown"),
+    );
+  }
+  if (input.auditPersistence?.skippedNoWrite) {
+    ok = false;
+    caveats.push("audit_persistence_skipped_no_write");
+  }
+
+  // 5) Provider/source/task runs must not be partial.
   if (input.report.aggregate.failedTaskCount > 0) {
     // Allow failed tasks if the report explicitly marks the run incomplete.
     // We don't have a top-level status, so partial is inferred here.
@@ -127,13 +166,13 @@ export function evaluatePublicationGate(input: PublicationGateInput): Publicatio
     caveats.push("failed_tasks_present:count=" + input.report.aggregate.failedTaskCount);
   }
 
-  // 4) Sentinel scan must be clean if supplied.
+  // 6) Sentinel scan must be clean if supplied.
   if (input.sentinelScan && !input.sentinelScan.ok) {
     ok = false;
     caveats.push("sentinel_scan_failed:violations=" + input.sentinelScan.violations);
   }
 
-  // 5) Run metadata fields must be consistent (replayability, VAL-RETR-029).
+  // 7) Run metadata fields must be consistent (replayability, VAL-RETR-029).
   const r = input.report;
   if (r.configHash !== input.provenance.configHash) {
     ok = false;
