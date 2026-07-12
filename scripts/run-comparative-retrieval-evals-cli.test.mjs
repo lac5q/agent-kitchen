@@ -315,17 +315,18 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
     beforeSnapshot = snapshotDir(resultsDir);
   });
 
-  it("CLI smoke: --limit 25 --no-write --json completes with blocked publication", () => {
+  it("CLI smoke: clean synthetic lexical --no-write evaluation exits zero with blocked publication", () => {
     // --no-write means no audit rows are persisted, so the publication
-    // gate MUST be blocked (unverified receipts). Exit code 3 signals
-    // blocked publication to CI deterministically.
+    // gate MUST be blocked (unverified receipts). That publication state
+    // must not turn an otherwise clean local evaluation into a failed CLI
+    // command.
     const r = runCliWithIsolatedDb([
       "--dataset", "memroos_public_synthetic",
       "--limit", "25",
       "--no-write",
       "--json",
     ], "smoke");
-    assert.equal(r.status, 3, "publication-blocked exit code expected (got " + r.status + "): " + r.stderr);
+    assert.equal(r.status, 0, "clean no-write evaluation must exit zero (got " + r.status + "): " + r.stderr);
     const j = JSON.parse(r.stdout);
     assert.equal(j.dataset, "memroos_public_synthetic");
     assert.equal(j.adapter, "lexical");
@@ -361,7 +362,7 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
       "--no-write",
       "--json",
     ], "snapshot");
-    assert.notEqual(r.status, 0, "exit code must be non-zero because publication is blocked");
+    assert.equal(r.status, 0, "clean no-write evaluation must exit zero");
     const afterSnapshot = snapshotDir(resultsDir);
     const d = diffSnapshot(beforeSnapshot, afterSnapshot);
     assert.equal(d.added.length, 0, "no files should be added: " + d.added.join(","));
@@ -386,6 +387,58 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
     // readBenchAuditRowCount returns null when the file is absent.
     const auditCount = readBenchAuditRowCount(r.dbPath);
     assert.equal(auditCount, null, "audit rows must not exist when --no-write is armed");
+  });
+
+  it("no-memory control exits zero with no injected items and no SQLite writes", () => {
+    const beforeNoMemory = snapshotDir(resultsDir);
+    const r = runCliWithIsolatedDb([
+      "--dataset", "memroos_public_synthetic",
+      "--adapter", "no-memory",
+      "--limit", "5",
+      "--no-write",
+      "--json",
+    ], "no-memory-control");
+    assert.equal(r.status, 0, "clean no-memory control must exit zero: " + r.stderr);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.publicationGate.status, "blocked_for_publication");
+    assert.equal(j.auditPersistence.allRequiredPersisted, false);
+    assert.equal(j.auditPersistence.anySkippedNoWrite, true);
+    assert.equal(j.aggregate.failedTaskCount, 0);
+    for (const task of j.tasks) {
+      assert.equal(task.injectedCount, 0, "no-memory must inject nothing");
+      assert.equal(task.answerSupportedByRetrievedSource, false);
+    }
+    assert.equal(
+      fs.existsSync(r.dbPath),
+      false,
+      "clean no-memory control must not create an audit database",
+    );
+    assert.deepEqual(
+      snapshotDir(resultsDir),
+      beforeNoMemory,
+      "clean no-memory control must not create or modify result artifacts",
+    );
+  });
+
+  it("substantive no-write evaluation failures remain non-zero and write nothing", () => {
+    const r = runCliWithIsolatedDb([
+      "--dataset", "memroos_public_synthetic",
+      "--adapter", "mem0",
+      "--limit", "2",
+      "--no-write",
+      "--json",
+    ], "no-write-failure");
+    assert.equal(r.status, 3, "unavailable adapter must remain a non-zero evaluation failure");
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.publicationGate.status, "blocked_for_publication");
+    assert.ok(j.aggregate.failedTaskCount > 0, "unavailable adapter must fail benchmark tasks");
+    assert.equal(j.auditPersistence.allRequiredPersisted, false);
+    assert.equal(j.auditPersistence.anySkippedNoWrite, true);
+    assert.equal(
+      fs.existsSync(r.dbPath),
+      false,
+      "failed no-write evaluation must not create an audit database",
+    );
   });
 
   it("normal run persists the full retrieval_bench audit chain (isolated DB inspection)", () => {
@@ -759,7 +812,7 @@ describe("comparative retrieval CLI (VAL-RETR-001, 014, 026, 028, 030)", () => {
       "--limit", "5",
       "--no-write",
     ], "text-report");
-    assert.notEqual(r.status, 0, "exit code must be non-zero because publication is blocked under --no-write");
+    assert.equal(r.status, 0, "clean no-write text report must exit zero");
     const text = r.stdout;
     assert.ok(text.includes("precision@k"), "text report must include precision@k");
     assert.ok(text.includes("recall@k"), "text report must include recall@k");

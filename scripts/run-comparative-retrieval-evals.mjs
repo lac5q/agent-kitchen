@@ -514,9 +514,22 @@ async function run(argv = process.argv.slice(2)) {
       console.log(renderTextReport(args, result));
     }
 
-    // Surface a non-zero exit code when publication is blocked so CI can
-    // catch it deterministically.
-    if (outcome.publicationGate && !outcome.publicationGate.ok) {
+    // Publication eligibility is deliberately stricter than evaluation
+    // completion. A clean --no-write evaluation has no durable audit proof,
+    // so its publication gate remains blocked, but the requested local
+    // evaluation completed successfully and must be usable as a smoke/control
+    // command. Substantive evaluation failures still exit non-zero.
+    const cleanNoWriteEvaluation =
+      args.noWrite === true &&
+      outcome.failureSummary?.failedTaskCount === 0 &&
+      outcome.contamination?.ok === true &&
+      outcome.auditPersistence?.allRequiredPersisted === false &&
+      outcome.auditPersistence?.anySkippedNoWrite === true;
+    if (
+      outcome.publicationGate &&
+      !outcome.publicationGate.ok &&
+      !cleanNoWriteEvaluation
+    ) {
       process.exit(3);
     }
     return result;
