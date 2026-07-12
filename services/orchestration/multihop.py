@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import uuid
@@ -38,6 +39,8 @@ NON_SUCCESS_STATUSES = {
     "changed_plan_denied",
     "missing_receipt",
     "evidence_tampered",
+    "federation_proof_denied",
+    "federation_proof_unavailable",
 }
 RECOVERY_STATUSES = {
     "checkpoint_paused",
@@ -49,6 +52,7 @@ RECOVERY_STATUSES = {
 }
 SAFE_REDACT_KEYS = ("summary", "payload", "secret", "token", "body", "content", "raw", "outcome")
 ROLLBACK_SECRET = os.environ.get("ORCHESTRATION_ROLLBACK_HANDLE_SECRET", "memroos-local-rollback-handle-v1")
+FEDERATION_PROOF_SECRET = os.environ.get("ORCHESTRATION_FEDERATION_PROOF_SECRET")
 
 
 def _now() -> str:
@@ -114,6 +118,50 @@ def _boolish(value: Any) -> bool:
     if isinstance(value, str):
         return value.lower() in {"true", "yes", "1", "allow", "passed", "fresh"}
     return bool(value)
+
+
+def _federation_proof(plan: dict[str, Any], payload: dict[str, Any]) -> tuple[dict[str, str] | None, str | None]:
+    """Accept only the signed, safe reference envelope emitted by the TS
+    bridge. Caller-provided federation hashes without a valid signature are
+    never used as orchestration authority."""
+    raw = payload.get("federationProof") or payload.get("federation_proof")
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict) or not FEDERATION_PROOF_SECRET:
+        return None, "federation_proof_unavailable"
+    required = ("artifactId", "artifactHash", "federationRunId", "packHash", "policyHash", "ontologyHash", "tenantId", "spaceId", "signature")
+    if any(not _string(raw.get(key)) for key in required):
+        return None, "federation_proof_denied"
+    reference = {key: str(raw[key]) for key in required if key != "signature"}
+    canonical = _canonical({key: reference[key] for key in sorted(reference)})
+    expected = hmac.new(FEDERATION_PROOF_SECRET.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, str(raw["signature"])):
+        return None, "federation_proof_denied"
+    scope = _scope_from(plan, {})
+    if reference["tenantId"] != scope["tenantId"] or reference["spaceId"] != scope["spaceId"]:
+        return None, "federation_proof_denied"
+    return {
+        **reference,
+        "proofHash": _sha256(reference),
+    }, None
+
+
+def _federation_detail(graph: dict[str, Any]) -> dict[str, str]:
+    proof = graph.get("federationProof")
+    if not isinstance(proof, dict):
+        return {}
+    return {
+        "federationArtifactId": str(proof.get("artifactId")),
+        "federationProofHash": str(proof.get("proofHash")),
+        "federationRunId": str(proof.get("federationRunId")),
+        "federationPackHash": str(proof.get("packHash")),
+        "federationPolicyHash": str(proof.get("policyHash")),
+        "federationOntologyHash": str(proof.get("ontologyHash")),
+    }
+
+
+def _bound_plan_hash(plan_hash: str, proof: dict[str, str] | None) -> str:
+    return _sha256({"planHash": plan_hash, "federationProofHash": proof["proofHash"]}) if proof else plan_hash
 
 
 def _redact_detail(value: Any) -> Any:
@@ -471,6 +519,20 @@ def _completed_step_ids(store: Any, run_id: str) -> set[str]:
     return completed
 
 
+def _federation_detail_for_run(store: Any, run_id: str) -> dict[str, str]:
+    for row in _lineage_rows(store, run_id):
+        if row.get("hop_type") != "plan_validated":
+            continue
+        detail = _parse_detail(row)
+        if detail.get("federationProofHash"):
+            return {
+                key: str(detail[key])
+                for key in ("federationArtifactId", "federationProofHash", "federationRunId", "federationPackHash", "federationPolicyHash", "federationOntologyHash")
+                if detail.get(key) is not None
+            }
+    return {}
+
+
 def _committed_steps(store: Any, run_id: str) -> list[dict[str, Any]]:
     committed: list[dict[str, Any]] = []
     for row in _lineage_rows(store, run_id):
@@ -641,6 +703,7 @@ def _append_checkpoint(store: Any, run: dict[str, Any], plan_hash: str, step: di
         "lastStepId": step["id"],
         "completedStepIds": sorted(completed),
         "expiresAt": checkpoint_expires,
+        **_federation_detail(step.get("_graph") or {}),
     }
     checkpoint_hash = _sha256(checkpoint_payload)
     store.append_lineage(
@@ -668,7 +731,7 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
         correlation_id=run["correlation_id"],
         run_id=run["run_id"],
         hop_type="rollback_started",
-        detail={"reason": reason, "committedStepIds": reverse_committed, "failedStepId": failed_step_id},
+        detail={"reason": reason, "committedStepIds": reverse_committed, "failedStepId": failed_step_id, **_federation_detail(graph)},
     )
 
     compensation_failed = False
@@ -680,14 +743,14 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
                 correlation_id=run["correlation_id"],
                 run_id=run["run_id"],
                 hop_type="compensation_skipped",
-                detail={"stepId": step_id, "reason": "read_only"},
+                detail={"stepId": step_id, "reason": "read_only", **_federation_detail(graph)},
             )
     if failed_step_id:
         store.append_lineage(
             correlation_id=run["correlation_id"],
             run_id=run["run_id"],
             hop_type="compensation_skipped",
-            detail={"stepId": failed_step_id, "reason": "uncommitted"},
+            detail={"stepId": failed_step_id, "reason": "uncommitted", **_federation_detail(graph)},
         )
 
     for step_id in reverse_committed:
@@ -699,7 +762,7 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
                 correlation_id=run["correlation_id"],
                 run_id=run["run_id"],
                 hop_type="compensation_replayed",
-                detail={"stepId": step_id, "reason": "already_compensated"},
+                detail={"stepId": step_id, "reason": "already_compensated", **_federation_detail(graph)},
             )
             continue
         store.append_lineage(
@@ -713,6 +776,7 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
                 "actionHash": step["actionHash"],
                 "decision": "allow",
                 "authorization": "original_scope_hash",
+                **_federation_detail(graph),
             },
         )
         if step.get("simulate", {}).get("compensationOutcome") == "failed":
@@ -735,6 +799,7 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
                 "originalScopeHash": step["scopeHash"],
                 "originalInputHash": step["inputHash"],
                 "reversalId": f"comp:{run['run_id']}:{step_id}",
+                **_federation_detail(graph),
             },
         )
     final_status = "compensation_failed" if compensation_failed else "compensated"
@@ -742,7 +807,7 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
         correlation_id=run["correlation_id"],
         run_id=run["run_id"],
         hop_type="rollback_complete",
-        detail={"status": final_status, "reason": reason},
+        detail={"status": final_status, "reason": reason, **_federation_detail(graph)},
     )
     return final_status
 
@@ -752,11 +817,14 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
     plan_hash = graph["planHash"] if "planHash" in graph else _sha256({k: v for k, v in graph.items() if k != "executionSteps"})
     crash_after = _string(payload.get("crashAfterStepId") or payload.get("crash_after_step_id"))
     rollback_handles: list[dict[str, str]] = []
+    for step in graph.get("executionSteps") or []:
+        step["_graph"] = graph
 
     for step in _ordered_steps(graph):
         if step["id"] in completed:
             continue
         gate_receipt = _evaluate_gate(step, run, completed)
+        gate_receipt.update(_federation_detail(graph))
         store.append_lineage(
             correlation_id=run["correlation_id"],
             run_id=run["run_id"],
@@ -778,6 +846,7 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
                 "inputHash": step["inputHash"],
                 "actionHash": step["actionHash"],
                 "sideEffectDeclared": step["sideEffect"]["declared"],
+                **_federation_detail(graph),
             },
         )
         outcome = step.get("simulate", {}).get("outcome") or ("committed" if step["sideEffect"]["declared"] else "read")
@@ -804,6 +873,7 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
                     "resourceId": step["sideEffect"].get("resourceId"),
                     "idempotencyKey": f"idem:{run['run_id']}:{step['id']}",
                     "lookupBeforeMutation": True,
+                    **_federation_detail(graph),
                 },
             )
             lookup = step.get("simulate", {}).get("commitLookup") or ("committed" if outcome == "timeout_after_commit" else "unknown")
@@ -811,7 +881,7 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
                 correlation_id=run["correlation_id"],
                 run_id=run["run_id"],
                 hop_type="commit_reconciled" if lookup != "unknown" else "commit_unresolved",
-                detail={"stepId": step["id"], "lookupResult": lookup, "mutationAttemptedBeforeLookup": False},
+                detail={"stepId": step["id"], "lookupResult": lookup, "mutationAttemptedBeforeLookup": False, **_federation_detail(graph)},
             )
             if lookup == "committed":
                 outcome = "committed"
@@ -838,6 +908,7 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
                     "commitReceiptHash": _sha256({"runId": run["run_id"], "stepId": step["id"], "actionHash": step["actionHash"]}),
                     "rollbackHandleHash": handle_hash,
                     "rollbackHandleMetadata": rollback_payload,
+                    **_federation_detail(graph),
                 },
             )
         else:
@@ -845,7 +916,7 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
                 correlation_id=run["correlation_id"],
                 run_id=run["run_id"],
                 hop_type="step_read_completed",
-                detail={"stepId": step["id"], "readOnly": True},
+                detail={"stepId": step["id"], "readOnly": True, **_federation_detail(graph)},
             )
         completed.add(step["id"])
         _append_checkpoint(store, run, plan_hash, step, completed)
@@ -866,12 +937,24 @@ def _continue_plan(store: Any, run: dict[str, Any], graph: dict[str, Any], *, pa
 
 def execute_multihop_plan(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
     plan = payload.get("plan") if isinstance(payload, dict) else None
+    if not isinstance(plan, dict):
+        return {"ok": False, "success": False, "status": "plan_invalid"}
+    federation_proof, federation_error = _federation_proof(plan, payload)
+    if federation_error:
+        return {
+            "ok": False,
+            "success": False,
+            "status": federation_error,
+            "reason": federation_error,
+        }
     validation = validate_plan(plan)
     if not validation["ok"]:
         return {**validation, "ok": False, "success": False, "status": "plan_invalid"}
 
     graph = validation["normalizedGraph"]
-    graph["planHash"] = validation["planHash"]
+    graph["planHash"] = _bound_plan_hash(validation["planHash"], federation_proof)
+    if federation_proof:
+        graph["federationProof"] = federation_proof
     run_id = _string(payload.get("runId") or plan.get("runId") or plan.get("run_id")) or f"run_{uuid.uuid4().hex}"
     correlation_id = _string(payload.get("correlationId") or plan.get("correlationId") or plan.get("correlation_id")) or f"corr_{uuid.uuid4().hex}"
     tenant_id = graph.get("tenantId") or "default-tenant"
@@ -884,7 +967,7 @@ def execute_multihop_plan(store: Any, payload: dict[str, Any]) -> dict[str, Any]
         selected_agent_id=None,
         status="running",
         retry_limit=1,
-        plan_hash=validation["planHash"],
+        plan_hash=graph["planHash"],
         tenant_id=tenant_id,
         space_id=space_id,
     )
@@ -894,9 +977,11 @@ def execute_multihop_plan(store: Any, payload: dict[str, Any]) -> dict[str, Any]
         run_id=run_id,
         hop_type="plan_validated",
         detail={
-            "planHash": validation["planHash"],
+            "planHash": graph["planHash"],
+            "basePlanHash": validation["planHash"],
             "normalizedGraph": {k: v for k, v in graph.items() if k != "executionSteps"},
             "validationReceipt": validation["validationReceipt"],
+            **_federation_detail(graph),
         },
     )
     return _continue_plan(store, run, graph, payload=payload, resume=False)
@@ -914,16 +999,22 @@ def resume_multihop_plan(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
     run = store.get_run(run_id)
     if not run:
         return {"ok": False, "success": False, "status": "missing_receipt", "reason": "run not found"}
-    validation = validate_plan(payload.get("plan"))
+    plan = payload.get("plan")
+    federation_proof, federation_error = _federation_proof(plan if isinstance(plan, dict) else {}, payload)
+    if federation_error:
+        store.append_lineage(correlation_id=run["correlation_id"], run_id=run_id, hop_type="resume_denied", detail={"status": federation_error, "reason": federation_error})
+        return _finalize(store, run, federation_error, federation_error)
+    validation = validate_plan(plan)
     if not validation["ok"]:
         store.append_lineage(correlation_id=run["correlation_id"], run_id=run_id, hop_type="resume_denied", detail={"status": "plan_invalid", "errors": validation["validationReceipt"]["errors"]})
         return _finalize(store, run, "plan_invalid", "resume_plan_invalid")
-    if validation["planHash"] != run.get("plan_hash"):
+    bound_plan_hash = _bound_plan_hash(validation["planHash"], federation_proof)
+    if bound_plan_hash != run.get("plan_hash"):
         store.append_lineage(
             correlation_id=run["correlation_id"],
             run_id=run_id,
             hop_type="resume_denied",
-            detail={"status": "changed_plan_denied", "expectedPlanHash": run.get("plan_hash"), "actualPlanHash": validation["planHash"]},
+            detail={"status": "changed_plan_denied", "expectedPlanHash": run.get("plan_hash"), "actualPlanHash": bound_plan_hash},
         )
         return _finalize(store, run, "changed_plan_denied", "plan_hash_mismatch")
     chain = verify_lineage_chain(store, run_id)
@@ -940,13 +1031,15 @@ def resume_multihop_plan(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
         store.append_lineage(correlation_id=run["correlation_id"], run_id=run_id, hop_type="resume_denied", detail={"status": "checkpoint_expired", "checkpointHash": checkpoint_detail.get("checkpointHash")})
         return _finalize(store, run, "checkpoint_expired", "checkpoint_expired")
     graph = validation["normalizedGraph"]
-    graph["planHash"] = validation["planHash"]
+    graph["planHash"] = bound_plan_hash
+    if federation_proof:
+        graph["federationProof"] = federation_proof
     completed = sorted(_completed_step_ids(store, run_id))
     store.append_lineage(
         correlation_id=run["correlation_id"],
         run_id=run_id,
         hop_type="resume_reconciled",
-        detail={"planHash": validation["planHash"], "completedStepIds": completed, "checkpointHash": checkpoint_detail.get("checkpointHash")},
+        detail={"planHash": bound_plan_hash, "completedStepIds": completed, "checkpointHash": checkpoint_detail.get("checkpointHash"), **_federation_detail(graph)},
     )
     if len(completed) == len(graph.get("executionSteps") or []):
         return _result_payload(store, run_id, run.get("status") or SUCCESS_STATUS, run.get("status") == SUCCESS_STATUS, "resume_idempotent")
@@ -974,21 +1067,22 @@ def rollback_with_handle(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
     if not run:
         return {"ok": False, "success": False, "status": "missing_receipt", "reason": "run not found"}
     handle_hash = _sha256(handle)
+    federation_detail = _federation_detail_for_run(store, run["run_id"])
     request_tenant = _string(payload.get("tenantId") or payload.get("tenant_id") or parsed.get("tenantId"))
     request_space = _string(payload.get("spaceId") or payload.get("space_id") or parsed.get("spaceId"))
     if request_tenant != parsed.get("tenantId") or request_space != parsed.get("spaceId"):
-        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_scope_denied", "handleHash": handle_hash})
+        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_scope_denied", "handleHash": handle_hash, **federation_detail})
         return _finalize(store, run, "rollback_scope_denied", "foreign_scope")
     expires_at = _parse_time(str(parsed.get("expiresAt")))
     if expires_at and expires_at < datetime.now(timezone.utc):
-        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_handle_expired", "handleHash": handle_hash})
+        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_handle_expired", "handleHash": handle_hash, **federation_detail})
         return _finalize(store, run, "rollback_handle_expired", "handle_expired")
     if _handle_consumed(store, run["run_id"], handle_hash):
-        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_handle_consumed", "handleHash": handle_hash})
+        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "rollback_handle_consumed", "handleHash": handle_hash, **federation_detail})
         return _finalize(store, run, "rollback_handle_consumed", "handle_already_consumed")
     committed = [detail for detail in _committed_steps(store, run["run_id"]) if detail.get("rollbackHandleHash") == handle_hash]
     if not committed:
-        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "missing_receipt", "handleHash": handle_hash})
+        store.append_lineage(correlation_id=run["correlation_id"], run_id=run["run_id"], hop_type="rollback_denied", detail={"status": "missing_receipt", "handleHash": handle_hash, **federation_detail})
         return _finalize(store, run, "missing_receipt", "rollback_receipt_missing")
     current_version = _string(payload.get("currentResourceVersion") or payload.get("current_resource_version") or parsed.get("resourceVersion"))
     if current_version != parsed.get("resourceVersion"):
@@ -1003,6 +1097,7 @@ def rollback_with_handle(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
                 "expectedVersion": parsed.get("resourceVersion"),
                 "actualVersion": current_version,
                 "residualDivergence": True,
+                **federation_detail,
             },
         )
         return _finalize(store, run, "rollback_diverged", "resource_version_diverged")
@@ -1016,13 +1111,14 @@ def rollback_with_handle(store: Any, payload: dict[str, Any]) -> dict[str, Any]:
             "resourceId": parsed.get("resourceId"),
             "resourceVersion": parsed.get("resourceVersion"),
             "boundaryHash": parsed.get("boundaryHash"),
+            **federation_detail,
         },
     )
     store.append_lineage(
         correlation_id=run["correlation_id"],
         run_id=run["run_id"],
         hop_type="rollback_handle_consumed",
-        detail={"handleHash": handle_hash, "consumedAt": _now(), "stepId": parsed.get("stepId")},
+        detail={"handleHash": handle_hash, "consumedAt": _now(), "stepId": parsed.get("stepId"), **federation_detail},
     )
     return _finalize(store, run, "rollback_completed", "rollback_boundary_restored", {"recovery": True})
 
@@ -1067,6 +1163,7 @@ def build_evidence_bundle(store: Any, run_id: str) -> dict[str, Any]:
             "taskSummaryHash": _sha256(str(run.get("task_summary") or "")),
         },
         "events": events,
+        "federationProof": _federation_detail_for_run(store, run_id) or None,
         "residualRisks": [event["detail"] for event in events if event["hopType"] in {"rollback_divergence", "commit_unresolved", "compensation_failed"}],
     }
     bundle_hash = _sha256(bundle_core)

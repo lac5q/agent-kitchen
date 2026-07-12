@@ -12,6 +12,10 @@ import {
   type RemoveEmbeddingResult,
 } from "./embedding-lifecycle";
 import type { CanonicalDerivative, CanonicalMemoryIdentity } from "./canonical";
+import {
+  invalidateFederationArtifactsForCanonical,
+  invalidateFederationArtifactsForSource,
+} from "../federation/action-bridge";
 
 export interface ErasureStoreOutcome {
   storeId: string;
@@ -64,6 +68,7 @@ export const KNOWN_STORES = [
   "vault",
   "message",
   "salience",
+  "federation",
 ] as const;
 
 export type KnownStore = (typeof KNOWN_STORES)[number];
@@ -449,6 +454,38 @@ function makePlaceholderAdapter(storeId: KnownStore): ErasureStoreAdapter {
 for (const storeId of ["graph", "fts", "cache", "context", "candidates", "platform", "message", "salience"] as const) {
   registerErasureStoreAdapter(makePlaceholderAdapter(storeId));
 }
+
+/** Federation action proofs are erasure derivatives. Invalidation is a
+ * tombstone-only transition: historical orchestration evidence remains
+ * immutable while future bridge resolution becomes unavailable. */
+registerErasureStoreAdapter({
+  storeId: "federation",
+  async erase(db, tenantId, identity, opts) {
+    if (!tableExists(db, "federation_action_derivatives")) {
+      return { status: "zero_match", reason: "federation_derivative_table_missing" };
+    }
+    const active = db.prepare(
+      `SELECT COUNT(*) AS count FROM federation_action_derivatives
+       WHERE tenant_id = ? AND (canonical_id = ? OR source_id = ?) AND status = 'active'`
+    ).get(tenantId, identity.id, identity.id) as { count: number };
+    if (active.count === 0) return { status: "zero_match", reason: "no_active_federation_derivative" };
+    const canonical = invalidateFederationArtifactsForCanonical(db, {
+      tenantId,
+      canonicalId: identity.id,
+      erasureId: opts.erasureId,
+    });
+    const source = invalidateFederationArtifactsForSource(db, {
+      tenantId,
+      sourceId: identity.id,
+      erasureId: opts.erasureId,
+    });
+    return {
+      status: "tombstoned",
+      reason: "federation_action_artifacts_invalidated",
+      metadata: { artifact_count: canonical.artifacts + source.artifacts, erasure_id: opts.erasureId },
+    };
+  },
+});
 
 /**
  * Vault erasure adapter: vault rows are tombstoned (never physically removed)

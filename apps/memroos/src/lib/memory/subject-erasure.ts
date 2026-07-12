@@ -140,7 +140,7 @@ const SUBJECT_FIELD_ALIASES: Record<string, string[]> = {
   name: ["name", "subjectName", "subject_name", "displayName", "display_name"],
 };
 
-const KNOWN_STORES = ["message", "vector", "graph", "fts", "qmd", "cache", "context", "candidates", "platform", "embeddings", "vault", "salience"];
+const KNOWN_STORES = ["message", "vector", "graph", "fts", "qmd", "cache", "context", "candidates", "platform", "embeddings", "vault", "salience", "federation"];
 
 function toIso(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
@@ -253,6 +253,12 @@ function tableExists(db: Database.Database, table: string): boolean {
 function derivativeInventory(db: Database.Database, record: RetentionRecordRow): SubjectDerivativeInventory[] {
   const recordScope = parseJsonObject(record.scope_json);
   const canonicalHash = record.content_hash ?? sha256Hex(stableJson({ tenantId: record.tenant_id, recordType: record.record_type, recordId: record.record_id }));
+  const canonicalId =
+    typeof recordScope.canonicalId === "string" && recordScope.canonicalId.trim()
+      ? recordScope.canonicalId.trim()
+      : typeof recordScope.canonicalMemoryId === "string" && recordScope.canonicalMemoryId.trim()
+        ? recordScope.canonicalMemoryId.trim()
+        : `canon-${canonicalHash.slice(0, 16)}`;
   const derivatives = new Map<string, SubjectDerivativeInventory>();
   const add = (storeId: string, action: SubjectDerivativeInventory["action"], reason: string, metadata?: Record<string, unknown>) => {
     derivatives.set(storeId, {
@@ -296,6 +302,14 @@ function derivativeInventory(db: Database.Database, record: RetentionRecordRow):
     for (const artifact of artifactRows) {
       add("vault", "tombstone", "raw_vault_projection", { artifact_id_hash: hashValue(artifact.id) });
     }
+  }
+
+  if (tableExists(db, "federation_action_derivatives")) {
+    const federation = db.prepare(
+      `SELECT 1 FROM federation_action_derivatives
+       WHERE tenant_id = ? AND canonical_id = ? AND status = 'active' LIMIT 1`
+    ).get(record.tenant_id, canonicalId);
+    if (federation) add("federation", "tombstone", "federation_action_proof_derivative");
   }
 
   for (const storeId of KNOWN_STORES) {

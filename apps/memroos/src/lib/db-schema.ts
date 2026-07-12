@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 26;
+export const CURRENT_SCHEMA_VERSION = 27;
 
 type SchemaMigration = {
   version: number;
@@ -215,6 +215,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 26,
     name: 'ontology-migration-snapshot-closure',
     up: applyOntologyMigrationSnapshotClosureSchema,
+  },
+  {
+    version: 27,
+    name: 'federation-action-proof-continuity',
+    up: applyFederationActionProofContinuitySchema,
   },
 ];
 
@@ -2094,6 +2099,68 @@ function applyOntologySourceLifecycleValiditySchema(db: Database.Database): void
       // Additive migration replay.
     }
   }
+}
+
+function applyFederationActionProofContinuitySchema(db: Database.Database): void {
+  // A bridge receipt is application-controlled proof that a persisted,
+  // bounded federation merge may start a multi-hop action. It deliberately
+  // stores only identifiers, hashes, and safe decisions, never result text.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS federation_action_artifacts (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      space_id                   TEXT NOT NULL,
+      federation_run_id          TEXT NOT NULL,
+      pack_hash                  TEXT NOT NULL,
+      pack_bytes                 INTEGER NOT NULL,
+      pack_item_count            INTEGER NOT NULL,
+      bound_status               TEXT NOT NULL
+                                 CHECK(bound_status IN ('bounded','partial_bounded')),
+      scope_hash                 TEXT NOT NULL,
+      policy_hash                TEXT NOT NULL,
+      ontology_hash              TEXT NOT NULL,
+      ontology_refs_json         TEXT NOT NULL DEFAULT '[]',
+      source_ids_json            TEXT NOT NULL DEFAULT '[]',
+      outcome_ids_json           TEXT NOT NULL DEFAULT '[]',
+      artifact_hash              TEXT NOT NULL,
+      status                     TEXT NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','invalidated','unavailable','denied')),
+      invalidation_reason        TEXT,
+      invalidated_at             TEXT,
+      orchestration_run_id       TEXT,
+      orchestration_plan_hash    TEXT,
+      orchestration_bundle_hash  TEXT,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id, pack_hash)
+    );
+    CREATE INDEX IF NOT EXISTS federation_action_artifacts_scope
+      ON federation_action_artifacts(tenant_id, space_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS federation_action_artifacts_run
+      ON federation_action_artifacts(tenant_id, federation_run_id, pack_hash);
+
+    -- One row per canonical source result makes source or subject erasure
+    -- discoverable without ever persisting source payloads.
+    CREATE TABLE IF NOT EXISTS federation_action_derivatives (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      artifact_id                TEXT NOT NULL
+                                 REFERENCES federation_action_artifacts(id) ON DELETE CASCADE,
+      canonical_id               TEXT NOT NULL,
+      canonical_hash             TEXT NOT NULL,
+      source_id                  TEXT NOT NULL,
+      status                     TEXT NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','invalidated')),
+      invalidated_at             TEXT,
+      erasure_id                 TEXT,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, artifact_id, canonical_hash, source_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_action_derivatives_canonical
+      ON federation_action_derivatives(tenant_id, canonical_id, status);
+    CREATE INDEX IF NOT EXISTS federation_action_derivatives_source
+      ON federation_action_derivatives(tenant_id, source_id, status);
+  `);
 }
 
 function applyOntologyMigrationSnapshotClosureSchema(db: Database.Database): void {

@@ -1,4 +1,6 @@
 import json
+import hashlib
+import hmac
 import os
 import sqlite3
 import tempfile
@@ -9,6 +11,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine import OrchestrationEngine, OrchestrationStore
+import multihop
 
 
 def make_step(
@@ -289,6 +292,54 @@ class MultihopOrchestrationTest(unittest.TestCase):
         self.assertFalse(bundle["run"]["success"])
         self.assertEqual(bundle["run"]["status"], "step_failed")
         self.assertTrue(bundle["verification"]["valid"])
+
+    def test_signed_federation_proof_is_bound_to_steps_checkpoints_recovery_and_evidence(self):
+        secret = "federation-test-secret"
+        previous_secret = multihop.FEDERATION_PROOF_SECRET
+        multihop.FEDERATION_PROOF_SECRET = secret
+        try:
+            plan = make_plan([make_step("a"), make_step("b", deps=["a"], outcome="failed_before_commit")])
+            reference = {
+                "artifactId": "artifact-1",
+                "artifactHash": "sha256:artifact",
+                "federationRunId": "federation-run-1",
+                "packHash": "sha256:pack",
+                "policyHash": "sha256:policy",
+                "ontologyHash": "sha256:ontology",
+                "tenantId": "tenant-a",
+                "spaceId": "space-a",
+            }
+            signature = hmac.new(
+                secret.encode("utf-8"),
+                json.dumps({key: reference[key] for key in sorted(reference)}, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            forged = self.engine.execute_multihop_plan({
+                "plan": plan,
+                "runId": "forged-federation-run",
+                "federationProof": {**reference, "signature": "forged"},
+            })
+            self.assertEqual(forged["status"], "federation_proof_denied")
+            self.assertEqual(self.store.conn.execute("SELECT COUNT(*) FROM orchestration_runs WHERE run_id = 'forged-federation-run'").fetchone()[0], 0)
+
+            result = self.engine.execute_multihop_plan({
+                "plan": plan,
+                "runId": "federation-run",
+                "federationProof": {**reference, "signature": signature},
+            })
+            self.assertEqual(result["status"], "step_failed")
+            rows = self.lineage("federation-run")
+            bound = [self.detail(row) for row in rows if row["hop_type"] in {
+                "plan_validated", "step_gate", "step_action_invoked", "checkpoint_saved",
+                "compensation_gate", "compensation_committed", "rollback_complete",
+            }]
+            self.assertGreater(len(bound), 0)
+            self.assertTrue(all(row.get("federationProofHash") for row in bound))
+            evidence = self.engine.get_multihop_evidence("federation-run")["bundle"]
+            self.assertTrue(evidence["verification"]["valid"])
+            self.assertIn("sha256:pack", json.dumps(evidence))
+        finally:
+            multihop.FEDERATION_PROOF_SECRET = previous_secret
 
 
 if __name__ == "__main__":

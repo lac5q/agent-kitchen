@@ -79,12 +79,14 @@ class MultihopExecuteRequest(BaseModel):
     runId: Optional[str] = None
     correlationId: Optional[str] = None
     crashAfterStepId: Optional[str] = None
+    federationProof: Optional[dict[str, Any]] = None
 
 
 class MultihopResumeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     plan: Optional[dict[str, Any]] = None
+    federationProof: Optional[dict[str, Any]] = None
 
 
 class MultihopRollbackRequest(BaseModel):
