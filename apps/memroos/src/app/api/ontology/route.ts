@@ -10,6 +10,7 @@ import {
   registerDomainPack,
   transitionDomainPack,
   updateOntologyProjection,
+  OntologyRegistryError,
   type DomainPackInput,
   type PackLifecycleState,
   type PublishOntologyInput,
@@ -33,6 +34,13 @@ function asOptionalString(value: unknown): string | undefined {
 }
 
 export const dynamic = "force-dynamic";
+
+function safeOntologyError(error: unknown): { error: string; code: string } {
+  if (error instanceof OntologyRegistryError) {
+    return { error: "ontology request rejected", code: error.code };
+  }
+  return { error: "ontology request rejected", code: "invalid" };
+}
 
 export async function POST(request: Request): Promise<Response> {
   if (!authorizeRegistryWrite(request)) return registryWriteUnauthorizedResponse();
@@ -189,9 +197,9 @@ export async function POST(request: Request): Promise<Response> {
       }) });
     }
 
-    return Response.json({ ok: false, error: `unsupported action: ${action}` }, { status: 400 });
+    return Response.json({ ok: false, error: "ontology request rejected", code: "invalid" }, { status: 400 });
   } catch (error) {
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return Response.json({ ok: false, ...safeOntologyError(error) }, { status: 400 });
   }
 }
 
@@ -226,6 +234,7 @@ export function GET(request: Request): Response {
     });
     return Response.json({ ok: ontology.globallyActive, ontology });
   } catch (error) {
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    const safe = safeOntologyError(error);
+    return Response.json({ ok: false, ...safe }, { status: safe.code === "not_found" ? 404 : 400 });
   }
 }

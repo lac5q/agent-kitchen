@@ -2,6 +2,13 @@ import { createHash, randomUUID } from "crypto";
 import type Database from "better-sqlite3";
 
 import { commitAuditAtomic } from "@/lib/skills/skill-audit-atomic";
+import {
+  isSha256Hash,
+  normalizePackProvenance,
+  scrubLegacyPackProvenance,
+  type PackProvenanceSummary,
+  type PackTypeExtension,
+} from "@/lib/ontology/pack-contract";
 
 export const UPPER_ONTOLOGY_ID = "memroos.upper";
 export const ONTOLOGY_PROJECTIONS = ["git", "sqlite", "frontmatter", "graph", "generated_graph"] as const;
@@ -15,6 +22,7 @@ export interface OntologyDefinition {
   id: string;
   aliases?: string[];
   semantics: Record<string, unknown>;
+  extends?: PackTypeExtension;
 }
 
 export interface OntologyRelationship {
@@ -113,6 +121,7 @@ export interface DomainPackInput {
   };
   dependencies?: PackDependency[];
   types: OntologyDefinition[];
+  relationships?: OntologyRelationship[];
   actor: string;
 }
 
@@ -122,10 +131,11 @@ export interface DomainPack {
   owner: string;
   version: string;
   sourceHash: string;
-  provenanceSummary: Record<string, unknown>;
+  provenanceSummary: PackProvenanceSummary | Record<string, never>;
   ontology: { id: string; version: string; contentHash: string };
   dependencies: PackDependency[];
   types: OntologyDefinition[];
+  relationships: OntologyRelationship[];
   lifecycleState: PackLifecycleState;
   createdBy: string;
   createdAt: string;
@@ -347,37 +357,12 @@ function validatedProjections(input: ProjectionInput[], expectedHash: string): P
   return normalized;
 }
 
-function safeProvenanceSummary(value: Record<string, unknown>): Record<string, unknown> {
-  const allowedKeys = new Set([
-    "origin",
-    "revision",
-    "uri",
-    "importedAt",
-    "sourceId",
-    "repository",
-    "path",
-    "license",
-    "externalRef",
-  ]);
-  const seen = new WeakSet<object>();
-  const inspect = (candidate: unknown): void => {
-    if (candidate === null || ["string", "number", "boolean"].includes(typeof candidate)) return;
-    if (Array.isArray(candidate)) {
-      for (const nested of candidate) inspect(nested);
-      return;
-    }
-    if (typeof candidate !== "object") {
-      throw new OntologyRegistryError("provenanceSummary values must be JSON-safe", "invalid");
-    }
-    if (seen.has(candidate)) throw new OntologyRegistryError("provenanceSummary cannot contain cyclic values", "invalid");
-    seen.add(candidate);
-    for (const [key, nested] of Object.entries(candidate)) {
-      if (!allowedKeys.has(key)) throw new OntologyRegistryError(`provenanceSummary cannot contain ${key}`, "invalid");
-      inspect(nested);
-    }
-  };
-  inspect(value);
-  return value;
+function safeProvenanceSummary(value: unknown): PackProvenanceSummary {
+  try {
+    return normalizePackProvenance(value);
+  } catch {
+    throw new OntologyRegistryError("pack provenance must use the normalized safe contract", "invalid");
+  }
 }
 
 export function publishOntologyVersion(db: Database.Database, input: PublishOntologyInput): OntologyVersion {
@@ -584,35 +569,126 @@ function namespaceIsValid(namespace: string): boolean {
   return /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(namespace);
 }
 
-function assertPackTypes(db: Database.Database, pack: DomainPackInput, ontology: OntologyDiscovery): void {
+function packIdentifierIsValid(identifier: string): boolean {
+  return /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$/.test(identifier);
+}
+
+function assertPackExtension(
+  extension: unknown,
+  ontology: OntologyDiscovery,
+  dependencies: PackDependency[],
+  parentIds: Set<string>,
+  dependencyDefinitionIds: Set<string>
+): asserts extension is PackTypeExtension {
+  if (!extension || typeof extension !== "object" || Array.isArray(extension)) {
+    throw new OntologyRegistryError("Pack type must declare a parent extension", "incompatible");
+  }
+  const value = extension as Record<string, unknown>;
+  if (value.kind === "core") {
+    if (typeof value.id !== "string" || !parentIds.has(value.id)
+      || value.ontologyId !== ontology.ontologyId || value.ontologyVersion !== ontology.version
+      || value.ontologyContentHash !== ontology.contentHash) {
+      throw new OntologyRegistryError("Pack core extension must bind the exact parent ontology coordinates", "incompatible");
+    }
+    return;
+  }
+  if (value.kind === "dependency") {
+    const dependency = dependencies.find((candidate) =>
+      candidate.namespace === value.namespace && candidate.version === value.version && candidate.sourceHash === value.sourceHash
+    );
+    if (!dependency || typeof value.id !== "string" || !dependencyDefinitionIds.has(value.id)) {
+      throw new OntologyRegistryError("Pack dependency extension must bind an approved exact dependency coordinate", "incompatible");
+    }
+    return;
+  }
+  throw new OntologyRegistryError("Pack extension kind is invalid", "invalid");
+}
+
+function assertPackTypes(
+  db: Database.Database,
+  pack: DomainPackInput,
+  ontology: OntologyDiscovery,
+  dependencies: PackDependency[]
+): OntologyRelationship[] {
   if (!Array.isArray(pack.types) || pack.types.length === 0) throw new OntologyRegistryError("types must be a non-empty array", "invalid");
   const reservedIdentifiers = new Set(ontology.definitions.flatMap((definition) => [definition.id, ...(definition.aliases ?? [])]));
-  for (const row of allPackRows(db)) {
+  const existingRows = allPackRows(db);
+  const dependencyDefinitionIds = new Set<string>();
+  for (const row of existingRows) {
     for (const definition of parseJson<OntologyDefinition[]>(row.types_json)) {
       reservedIdentifiers.add(definition.id);
       for (const alias of definition.aliases ?? []) reservedIdentifiers.add(alias);
+      if (dependencies.some((dependency) => dependency.namespace === row.namespace && dependency.version === row.version)) {
+        dependencyDefinitionIds.add(definition.id);
+        for (const alias of definition.aliases ?? []) dependencyDefinitionIds.add(alias);
+      }
     }
   }
   const seen = new Set<string>();
+  const packTypeIds = new Set<string>();
   for (const definition of pack.types) {
     const id = nonEmpty(definition.id, "type.id");
-    if (!id.startsWith(`${pack.namespace}.`)) throw new OntologyRegistryError(`Pack type must be fully qualified by ${pack.namespace}: ${id}`, "invalid");
+    if (!packIdentifierIsValid(id) || !id.startsWith(`${pack.namespace}.`)) {
+      throw new OntologyRegistryError("Pack type must use a valid namespace-qualified identifier", "invalid");
+    }
     if (reservedIdentifiers.has(id) || seen.has(id)) throw new OntologyRegistryError(`Pack type collides with an existing definition or alias: ${id}`, "conflict");
     if (!definition.semantics || typeof definition.semantics !== "object" || Array.isArray(definition.semantics)) throw new OntologyRegistryError(`Pack type ${id} requires semantics`, "invalid");
+    assertPackExtension(definition.extends, ontology, dependencies, reservedIdentifiers, dependencyDefinitionIds);
     seen.add(id);
+    packTypeIds.add(id);
     for (const alias of definition.aliases ?? []) {
+      if (typeof alias !== "string" || !packIdentifierIsValid(alias)) {
+        throw new OntologyRegistryError("Pack alias must use a valid namespace-qualified identifier", "invalid");
+      }
       if (reservedIdentifiers.has(alias) || seen.has(alias)) throw new OntologyRegistryError(`Pack alias shadows an existing definition or alias: ${alias}`, "conflict");
       seen.add(alias);
     }
   }
+  const relationships = pack.relationships ?? pack.types.map((definition) => ({
+    from: definition.id,
+    to: definition.extends!.id,
+    type: "is_a",
+  }));
+  if (!Array.isArray(relationships)) throw new OntologyRegistryError("relationships must be an array", "invalid");
+  const permittedParents = new Set<string>([
+    ...reservedIdentifiers,
+    ...dependencies.flatMap((dependency) => existingRows
+      .filter((row) => row.namespace === dependency.namespace && row.version === dependency.version)
+      .flatMap((row) => parseJson<OntologyDefinition[]>(row.types_json).flatMap((definition) => [definition.id, ...(definition.aliases ?? [])]))),
+  ]);
+  const relationKeys = new Set<string>();
+  for (const relationship of relationships) {
+    if (!relationship || typeof relationship !== "object"
+      || typeof relationship.from !== "string" || typeof relationship.to !== "string" || typeof relationship.type !== "string") {
+      throw new OntologyRegistryError("Pack relationship is invalid", "invalid");
+    }
+    if (!packTypeIds.has(relationship.from) || (!packTypeIds.has(relationship.to) && !permittedParents.has(relationship.to))) {
+      throw new OntologyRegistryError("Pack relationship endpoints must be local types or approved inherited definitions", "incompatible");
+    }
+    if (relationship.type !== "is_a") throw new OntologyRegistryError("Pack relationship type is incompatible", "incompatible");
+    const definition = pack.types.find((candidate) => candidate.id === relationship.from)!;
+    if (definition.extends!.id !== relationship.to) {
+      throw new OntologyRegistryError("Pack relationship must preserve the declared inherited parent", "incompatible");
+    }
+    const key = stableJson(relationship);
+    if (relationKeys.has(key)) throw new OntologyRegistryError("Duplicate pack relationship", "conflict");
+    relationKeys.add(key);
+  }
+  for (const definition of pack.types) {
+    if (!relationships.some((relationship) => relationship.from === definition.id && relationship.to === definition.extends!.id && relationship.type === "is_a")) {
+      throw new OntologyRegistryError("Every pack type must preserve its inherited is_a relationship", "incompatible");
+    }
+  }
+  return relationships;
 }
 
 function toPack(row: Record<string, string>): DomainPack {
   return {
     id: row.id, namespace: row.namespace, owner: row.owner, version: row.version, sourceHash: row.source_hash,
-    provenanceSummary: parseJson<Record<string, unknown>>(row.provenance_summary_json),
+    provenanceSummary: scrubLegacyPackProvenance(parseJson<unknown>(row.provenance_summary_json)),
     ontology: { id: row.ontology_id, version: row.ontology_version, contentHash: row.ontology_content_hash },
     dependencies: parseJson<PackDependency[]>(row.dependencies_json), types: parseJson<OntologyDefinition[]>(row.types_json),
+    relationships: parseJson<OntologyRelationship[]>(row.relationships_json ?? "[]"),
     lifecycleState: row.lifecycle_state as PackLifecycleState, createdBy: row.created_by, createdAt: row.created_at,
     approvedAt: row.approved_at ?? null, deprecatedAt: row.deprecated_at ?? null, deprecatedReason: row.deprecated_reason ?? null,
     retiredAt: row.retired_at ?? null, replacementPackId: row.replacement_pack_id ?? null,
@@ -656,19 +732,26 @@ export function registerDomainPack(db: Database.Database, input: DomainPackInput
   const actor = nonEmpty(input.actor, "actor");
   const version = nonEmpty(input.version, "version");
   parseSemver(version);
-  if (!/^sha256:[a-f0-9]{64}$/.test(input.sourceHash)) throw new OntologyRegistryError("sourceHash must be a sha256 hash", "invalid");
+  if (!isSha256Hash(input.sourceHash)) throw new OntologyRegistryError("sourceHash must be a sha256 hash", "invalid");
   const summary = safeProvenanceSummary(input.provenanceSummary ?? {});
+  if (!input.ontology || typeof input.ontology !== "object" || Array.isArray(input.ontology)) {
+    throw new OntologyRegistryError("ontology coordinates are required", "invalid");
+  }
   const ontology = discoverOntology(db, { ontologyId: input.ontology.id, version: input.ontology.version });
   if (!ontology.globallyActive) throw new OntologyRegistryError("Domain packs require a globally active parent ontology", "not_active");
   if (ontology.contentHash !== input.ontology.contentHash) throw new OntologyRegistryError("Domain pack parent hash does not match ontology version", "invalid");
-  assertPackTypes(db, { ...input, namespace }, ontology);
   const dependencies = input.dependencies ?? [];
+  if (!Array.isArray(dependencies)) throw new OntologyRegistryError("dependencies must be an array", "invalid");
   const dependencyCoordinates = new Set<string>();
   for (const dependency of dependencies) {
+    if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) {
+      throw new OntologyRegistryError("dependency is invalid", "invalid");
+    }
     const dependencyNamespace = nonEmpty(dependency.namespace, "dependency.namespace");
+    if (!namespaceIsValid(dependencyNamespace)) throw new OntologyRegistryError("dependency.namespace must be a valid namespace", "invalid");
     const dependencyVersion = nonEmpty(dependency.version, "dependency.version");
     parseSemver(dependencyVersion);
-    if (!/^sha256:[a-f0-9]{64}$/.test(dependency.sourceHash)) throw new OntologyRegistryError("dependency.sourceHash must be a sha256 hash", "invalid");
+    if (!isSha256Hash(dependency.sourceHash)) throw new OntologyRegistryError("dependency.sourceHash must be a sha256 hash", "invalid");
     const coordinate = `${dependencyNamespace}@${dependencyVersion}`;
     if (dependencyNamespace === namespace && dependencyVersion === version) {
       throw new OntologyRegistryError(`Domain pack cannot depend on itself: ${coordinate}`, "conflict");
@@ -680,21 +763,22 @@ export function registerDomainPack(db: Database.Database, input: DomainPackInput
     if (row.lifecycle_state !== "approved") throw new OntologyRegistryError(`Dependency must be approved, found ${row.lifecycle_state}: ${coordinate}`, "lifecycle");
     if (row.source_hash !== dependency.sourceHash) throw new OntologyRegistryError(`Dependency source hash is stale: ${coordinate}`, "invalid");
   }
+  const relationships = assertPackTypes(db, { ...input, namespace }, ontology, dependencies);
   const id = input.id ?? `ontpack_${randomUUID()}`;
   assertNoPackDependencyCycle(db, { id, namespace, version }, dependencies);
   if (db.prepare(`SELECT 1 FROM ontology_packs WHERE namespace = ? AND version = ?`).get(namespace, version)) throw new OntologyRegistryError(`Pack already exists: ${namespace}@${version}`, "conflict");
   const pack: DomainPack = {
     id, namespace, owner, version, sourceHash: input.sourceHash, provenanceSummary: summary,
     ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-    dependencies, types: input.types, lifecycleState: "draft", createdBy: actor, createdAt: new Date().toISOString(),
+    dependencies, types: input.types, relationships, lifecycleState: "draft", createdBy: actor, createdAt: new Date().toISOString(),
     approvedAt: null, deprecatedAt: null, deprecatedReason: null, retiredAt: null, replacementPackId: null,
   };
   const commit = commitAuditAtomic(db, {
     actor, eventType: "ontology_pack_registered", entityType: "ontology_pack", entityId: pack.id,
     metadata: { pack_id: pack.id, namespace: pack.namespace, version: pack.version, source_hash: pack.sourceHash, ontology_id: pack.ontology.id, ontology_version: pack.ontology.version, ontology_content_hash: pack.ontology.contentHash, dependency_count: pack.dependencies.length, type_count: pack.types.length },
     body: () => {
-      db.prepare(`INSERT INTO ontology_packs (id, namespace, owner, version, source_hash, provenance_summary_json, ontology_id, ontology_version, ontology_content_hash, types_json, dependencies_json, lifecycle_state, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`)
-        .run(pack.id, pack.namespace, pack.owner, pack.version, pack.sourceHash, stableJson(pack.provenanceSummary), pack.ontology.id, pack.ontology.version, pack.ontology.contentHash, stableJson(pack.types), stableJson(pack.dependencies), pack.createdBy, pack.createdAt);
+      db.prepare(`INSERT INTO ontology_packs (id, namespace, owner, version, source_hash, provenance_summary_json, ontology_id, ontology_version, ontology_content_hash, types_json, relationships_json, dependencies_json, lifecycle_state, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`)
+        .run(pack.id, pack.namespace, pack.owner, pack.version, pack.sourceHash, stableJson(pack.provenanceSummary), pack.ontology.id, pack.ontology.version, pack.ontology.contentHash, stableJson(pack.types), stableJson(pack.relationships), stableJson(pack.dependencies), pack.createdBy, pack.createdAt);
       return pack;
     },
   });

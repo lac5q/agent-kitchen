@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 
 import { initBehavioralJobSchema } from './seal/behavioral-schema';
 import { assertNotDefaultInternalApiKey } from './internal-api-key';
+import { scrubLegacyPackProvenance } from './ontology/pack-contract';
 
 const LABEL_TABLES = [
   "messages",
@@ -64,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 23;
+export const CURRENT_SCHEMA_VERSION = 24;
 
 type SchemaMigration = {
   version: number;
@@ -199,6 +200,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 23,
     name: 'ontology-candidates-seal-aliases-migrations',
     up: applyOntologyCandidateGovernanceSchema,
+  },
+  {
+    version: 24,
+    name: 'ontology-registry-pack-publication-hardening',
+    up: applyOntologyRegistryPackHardeningSchema,
   },
 ];
 
@@ -1802,6 +1808,48 @@ function applyOntologyRegistrySchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS ontology_pack_lifecycle_audit_pack
       ON ontology_pack_lifecycle_audit(pack_id, transitioned_at DESC);
   `);
+}
+
+function applyOntologyRegistryPackHardeningSchema(db: Database.Database): void {
+  // Published definitions are append-only. Registry pointers and projection
+  // mirrors intentionally remain mutable so successor publication and
+  // reconciliation continue to work.
+  try {
+    db.exec(`ALTER TABLE ontology_packs ADD COLUMN relationships_json TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // Column already exists when this migration is replayed.
+  }
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS ontology_versions_no_update
+      BEFORE UPDATE ON ontology_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'published ontology versions are immutable');
+    END;
+    CREATE TRIGGER IF NOT EXISTS ontology_versions_no_delete
+      BEFORE DELETE ON ontology_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'published ontology versions are immutable');
+    END;
+  `);
+
+  // Earlier releases accepted a free-form JSON object. Upgrade rows to the
+  // same non-content-bearing form used for all new registrations. A malformed
+  // or unsafe legacy value is deliberately reduced to an empty object instead
+  // of preserving unbounded source material.
+  const rows = db.prepare(`SELECT id, provenance_summary_json FROM ontology_packs`).all() as Array<{
+    id: string;
+    provenance_summary_json: string;
+  }>;
+  const update = db.prepare(`UPDATE ontology_packs SET provenance_summary_json = ? WHERE id = ?`);
+  for (const row of rows) {
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(row.provenance_summary_json);
+    } catch {
+      // Unsafe malformed metadata is scrubbed below.
+    }
+    update.run(JSON.stringify(scrubLegacyPackProvenance(raw)), row.id);
+  }
 }
 
 function applyOntologyCandidateGovernanceSchema(db: Database.Database): void {

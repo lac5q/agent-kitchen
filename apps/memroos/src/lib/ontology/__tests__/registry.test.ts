@@ -61,6 +61,25 @@ function nextDocument(mod: Awaited<ReturnType<typeof registry>>, parent: { versi
   };
 }
 
+function packType(
+  ontology: { ontologyId?: string; id?: string; version: string; contentHash: string },
+  id: string,
+  options: { aliases?: string[]; semantics?: Record<string, unknown> } = {}
+) {
+  return {
+    id,
+    aliases: options.aliases,
+    semantics: options.semantics ?? {},
+    extends: {
+      kind: "core" as const,
+      id: "entity",
+      ontologyId: ontology.ontologyId ?? ontology.id,
+      ontologyVersion: ontology.version,
+      ontologyContentHash: ontology.contentHash,
+    },
+  };
+}
+
 describe("ontology registry validation", () => {
   it("VAL-ONTO-001 creates one canonical active upper ontology with stable hashes and strict version lookup", async () => {
     const { mod, ontology } = await canonical();
@@ -173,9 +192,9 @@ describe("ontology registry validation", () => {
     const sentinel = "RAW-PACK-SOURCE-MUST-NOT-PERSIST";
     const pack = mod.registerDomainPack(db, {
       namespace: "finance.ops", owner: "finance", version: "1.0.0", sourceHash: SOURCE_HASH,
-      provenanceSummary: { origin: "git", revision: "abc123" },
+      provenanceSummary: { sourceId: "src_pack", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_pack"] },
       ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-      types: [{ id: "finance.ops.invoice", semantics: { kind: "entity" } }],
+      types: [packType(ontology, "finance.ops.invoice", { semantics: { kind: "entity" } })],
       actor: "operator",
       ...( { source: sentinel } as Record<string, unknown>),
     } as never);
@@ -185,93 +204,182 @@ describe("ontology registry validation", () => {
     expect(audit.metadata_json).not.toContain(sentinel);
     expect(() => mod.registerDomainPack(db, {
       namespace: "nested", owner: "finance", version: "1.0.0", sourceHash: SOURCE_HASH,
-      provenanceSummary: { origin: [{ externalRef: { payload: sentinel } }] },
-      ontology: pack.ontology, types: [{ id: "nested.record", semantics: {} }], actor: "operator",
-    })).toThrow(/provenanceSummary cannot contain payload/);
+      provenanceSummary: { sourceId: "src_nested", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_nested"], nested: { payload: sentinel } },
+      ontology: pack.ontology, types: [packType(pack.ontology, "nested.record")], actor: "operator",
+    })).toThrow(/normalized safe contract/);
     expect(() => mod.registerDomainPack(db, {
       namespace: "annotated", owner: "finance", version: "1.0.0", sourceHash: SOURCE_HASH,
       provenanceSummary: { note: sentinel },
-      ontology: pack.ontology, types: [{ id: "annotated.record", semantics: {} }], actor: "operator",
-    })).toThrow(/provenanceSummary cannot contain note/);
+      ontology: pack.ontology, types: [packType(pack.ontology, "annotated.record")], actor: "operator",
+    })).toThrow(/normalized safe contract/);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "not valid!", owner: "finance", version: "1.0.1", sourceHash: SOURCE_HASH, provenanceSummary: {},
-      ontology: pack.ontology, types: [{ id: "not valid!.invoice", semantics: {} }], actor: "operator",
+      namespace: "not valid!", owner: "finance", version: "1.0.1", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_invalid", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_invalid"] },
+      ontology: pack.ontology, types: [packType(pack.ontology, "not valid!.invoice")], actor: "operator",
     })).toThrow(/namespace/);
+  });
+
+  it("hardens every provenance nesting shape and scrubs unsafe legacy rows during the additive upgrade", async () => {
+    const { mod, ontology } = await canonical();
+    const sentinel = "RAW-PACK-PROVENANCE-MUST-NOT-SURVIVE";
+    const valid = {
+      namespace: "safe", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
+      types: [packType(ontology, "safe.record")], actor: "operator",
+    };
+    for (const provenanceSummary of [
+      { sourceId: "src_safe", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_safe"], payload: sentinel },
+      { sourceId: "src_safe", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: [{ payload: sentinel }] },
+      { sourceId: "src_safe", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_safe"], source: { payload: sentinel } },
+    ]) {
+      expect(() => mod.registerDomainPack(db, { ...valid, provenanceSummary })).toThrow(/normalized safe contract/);
+    }
+    db.prepare(`INSERT INTO ontology_packs (id, namespace, owner, version, source_hash, provenance_summary_json, ontology_id, ontology_version, ontology_content_hash, types_json, relationships_json, dependencies_json, lifecycle_state, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`)
+      .run("legacy-pack", "legacy", "ops", "1.0.0", SOURCE_HASH, JSON.stringify({ source: sentinel, nested: { payload: sentinel } }), ontology.ontologyId, ontology.version, ontology.contentHash, "[]", "[]", "[]", "operator", new Date().toISOString());
+    db.pragma("user_version = 23");
+    const { initSchema } = await import("@/lib/db-schema");
+    initSchema(db);
+    const stored = db.prepare(`SELECT provenance_summary_json FROM ontology_packs WHERE id = 'legacy-pack'`).get() as { provenance_summary_json: string };
+    expect(stored.provenance_summary_json).toBe("{}");
+    expect(JSON.stringify(mod.getDomainPack(db, "legacy-pack"))).not.toContain(sentinel);
+  });
+
+  it("makes published ontology rows immutable in SQLite while preserving successor publication and registry pointers", async () => {
+    const { mod, ontology } = await canonical();
+    const original = JSON.stringify(mod.discoverOntology(db));
+    expect(() => db.prepare(`UPDATE ontology_versions SET content_hash = ? WHERE ontology_id = ? AND version = ?`)
+      .run(SOURCE_HASH, ontology.ontologyId, ontology.version)).toThrow(/immutable/);
+    expect(() => db.prepare(`DELETE FROM ontology_versions WHERE ontology_id = ? AND version = ?`)
+      .run(ontology.ontologyId, ontology.version)).toThrow(/immutable/);
+    expect(JSON.stringify(mod.discoverOntology(db))).toBe(original);
+    const successor = nextDocument(mod, ontology);
+    const successorHash = mod.canonicalContentHash(successor);
+    const published = mod.publishOntologyVersion(db, {
+      ...successor, actor: "operator", suppliedHash: successorHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: successorHash })),
+    });
+    expect(published.version).toBe("1.1.0");
+    expect(mod.discoverOntology(db).version).toBe("1.1.0");
+  });
+
+  it("fails pack registration atomically when its required audit evidence cannot persist", async () => {
+    const { mod, ontology } = await canonical();
+    db.exec(`
+      CREATE TRIGGER reject_pack_audit
+      BEFORE INSERT ON audit_entries
+      WHEN NEW.event_type = 'ontology_pack_registered'
+      BEGIN SELECT RAISE(ABORT, 'audit rejection'); END;
+    `);
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "atomic", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_atomic", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_atomic"] },
+      ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
+      types: [packType(ontology, "atomic.record")],
+      actor: "operator",
+    })).toThrow(/audit/);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_packs WHERE namespace = 'atomic'`).get()).toMatchObject({ count: 0 });
   });
 
   it("VAL-ONTO-007 validates pack dependencies, fully qualified type collisions, and dependency cycles", async () => {
     const { mod, ontology } = await canonical();
     const base = mod.registerDomainPack(db, {
-      id: "base", namespace: "base", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {},
+      id: "base", namespace: "base", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_base", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_base"] },
       ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-      types: [{ id: "base.record", semantics: {} }], actor: "operator",
+      types: [packType(ontology, "base.record")], actor: "operator",
     });
     mod.transitionDomainPack(db, { packId: base.id, toState: "approved", actor: "operator" });
     expect(() => mod.registerDomainPack(db, {
-      namespace: "child", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
+      namespace: "invalid.extension", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_invalid_extension", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_invalid_extension"] },
+      ontology: base.ontology,
+      dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH }],
+      types: [{
+        id: "invalid.extension.child",
+        semantics: {},
+        extends: { kind: "dependency", id: "base.missing", namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH },
+      }],
+      relationships: [{ from: "invalid.extension.child", to: "base.missing", type: "is_a" }],
+      actor: "operator",
+    })).toThrow(/exact dependency coordinate/);
+    const child = mod.registerDomainPack(db, {
+      namespace: "compatible", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_compatible", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_compatible"] },
+      ontology: base.ontology,
+      dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH }],
+      types: [{
+        id: "compatible.child",
+        semantics: {},
+        extends: { kind: "dependency", id: "base.record", namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH },
+      }],
+      relationships: [{ from: "compatible.child", to: "base.record", type: "is_a" }],
+      actor: "operator",
+    });
+    expect(child.relationships).toEqual([{ from: "compatible.child", to: "base.record", type: "is_a" }]);
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "child", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_child", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_child"] }, ontology: base.ontology,
       dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: `sha256:${"b".repeat(64)}` }],
-      types: [{ id: "child.record", semantics: {} }], actor: "operator",
+      types: [packType(base.ontology, "child.record")], actor: "operator",
     })).toThrow(/source hash is stale/);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "missing", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
+      namespace: "missing", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_missing", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_missing"] }, ontology: base.ontology,
       dependencies: [{ namespace: "absent", version: "1.0.0", sourceHash: SOURCE_HASH }],
-      types: [{ id: "missing.record", semantics: {} }], actor: "operator",
+      types: [packType(base.ontology, "missing.record")], actor: "operator",
     })).toThrow(/does not exist/);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "self", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
+      namespace: "self", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_self", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_self"] }, ontology: base.ontology,
       dependencies: [{ namespace: "self", version: "1.0.0", sourceHash: SOURCE_HASH }],
-      types: [{ id: "self.record", semantics: {} }], actor: "operator",
+      types: [packType(base.ontology, "self.record")], actor: "operator",
     })).toThrow(/cannot depend on itself/);
     mod.transitionDomainPack(db, { packId: base.id, toState: "deprecated", actor: "operator", reason: "stale" });
     expect(() => mod.registerDomainPack(db, {
-      namespace: "deprecated", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
+      namespace: "deprecated", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_deprecated", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_deprecated"] }, ontology: base.ontology,
       dependencies: [{ namespace: "base", version: "1.0.0", sourceHash: SOURCE_HASH }],
-      types: [{ id: "deprecated.record", semantics: {} }], actor: "operator",
+      types: [packType(base.ontology, "deprecated.record")], actor: "operator",
     })).toThrow(/found deprecated/);
     db.prepare(`UPDATE ontology_packs SET lifecycle_state = 'approved' WHERE id = ?`).run(base.id);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "child", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
-      types: [{ id: "entity", semantics: {} }], actor: "operator",
-    })).toThrow(/fully qualified/);
+      namespace: "child", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_shadow", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_shadow"] }, ontology: base.ontology,
+      types: [packType(base.ontology, "entity")], actor: "operator",
+    })).toThrow(/namespace-qualified/);
     db.prepare(`INSERT INTO ontology_packs (id, namespace, owner, version, source_hash, provenance_summary_json, ontology_id, ontology_version, ontology_content_hash, types_json, dependencies_json, lifecycle_state, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`)
       .run("cycle-existing", "cycle.existing", "ops", "1.0.0", SOURCE_HASH, "{}", base.ontology.id, base.ontology.version, base.ontology.contentHash, "[]", JSON.stringify([{ namespace: "cycle.future", version: "1.0.0", sourceHash: SOURCE_HASH }]), "operator", new Date().toISOString());
     expect(() => mod.registerDomainPack(db, {
-      id: "cycle-future", namespace: "cycle.future", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: base.ontology,
+      id: "cycle-future", namespace: "cycle.future", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_cycle", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_cycle"] }, ontology: base.ontology,
       dependencies: [{ namespace: "cycle.existing", version: "1.0.0", sourceHash: SOURCE_HASH }],
-      types: [{ id: "cycle.future.record", semantics: {} }], actor: "operator",
+      types: [packType(base.ontology, "cycle.future.record")], actor: "operator",
     })).toThrow(/cycle/);
   });
 
   it("VAL-ONTO-010 rejects types and aliases that shadow existing domain packs across namespaces", async () => {
     const { mod, ontology } = await canonical();
     const existing = mod.registerDomainPack(db, {
-      namespace: "finance", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {},
+      namespace: "finance", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_finance", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_finance"] },
       ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-      types: [{ id: "finance.invoice", aliases: ["legal.case", "invoice"], semantics: {} }], actor: "operator",
+      types: [packType(ontology, "finance.invoice", { aliases: ["finance.case", "finance.invoice-alias"] })], actor: "operator",
     });
     expect(() => mod.registerDomainPack(db, {
-      namespace: "legal", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: existing.ontology,
-      types: [{ id: "legal.case", semantics: {} }], actor: "operator",
+      namespace: "legal", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_legal", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_legal"] }, ontology: existing.ontology,
+      types: [packType(existing.ontology, "legal.case", { aliases: ["finance.case"] })], actor: "operator",
     })).toThrow(/existing definition or alias/);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "legal", owner: "ops", version: "1.0.1", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: existing.ontology,
-      types: [{ id: "legal.record", aliases: ["finance.invoice"], semantics: {} }], actor: "operator",
+      namespace: "legal", owner: "ops", version: "1.0.1", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_legal2", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_legal2"] }, ontology: existing.ontology,
+      types: [packType(existing.ontology, "legal.record", { aliases: ["finance.invoice"] })], actor: "operator",
     })).toThrow(/existing definition or alias/);
     expect(() => mod.registerDomainPack(db, {
-      namespace: "legal", owner: "ops", version: "1.0.2", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: existing.ontology,
-      types: [{ id: "legal.invoice", aliases: ["invoice"], semantics: {} }], actor: "operator",
+      namespace: "legal", owner: "ops", version: "1.0.2", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_legal3", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_legal3"] }, ontology: existing.ontology,
+      types: [packType(existing.ontology, "legal.invoice", { aliases: ["finance.invoice-alias"] })], actor: "operator",
     })).toThrow(/existing definition or alias/);
   });
 
   it("VAL-ONTO-008 enforces pack lifecycle transitions, authoritative write eligibility, and historical readability", async () => {
     const { mod, ontology } = await canonical();
     const replacement = mod.registerDomainPack(db, {
-      namespace: "replacement", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
-      types: [{ id: "replacement.record", semantics: {} }], actor: "operator",
+      namespace: "replacement", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_replacement", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_replacement"] }, ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
+      types: [packType(ontology, "replacement.record")], actor: "operator",
     });
     const pack = mod.registerDomainPack(db, {
-      namespace: "lifecycle", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: {}, ontology: replacement.ontology,
-      types: [{ id: "lifecycle.record", semantics: {} }], actor: "operator",
+      namespace: "lifecycle", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH, provenanceSummary: { sourceId: "src_lifecycle", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_lifecycle"] }, ontology: replacement.ontology,
+      types: [packType(replacement.ontology, "lifecycle.record")], actor: "operator",
     });
     expect(() => mod.assertPackAuthoritative(db, pack.id)).toThrow(/not approved/);
     mod.transitionDomainPack(db, { packId: replacement.id, toState: "approved", actor: "operator" });

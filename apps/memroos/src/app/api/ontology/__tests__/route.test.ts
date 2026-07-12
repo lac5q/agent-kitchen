@@ -87,7 +87,8 @@ describe("ontology registry route", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({
       ok: false,
-      error: expect.stringContaining("Unknown ontology version"),
+      error: "ontology request rejected",
+      code: "not_found",
     });
   });
 
@@ -143,13 +144,28 @@ describe("ontology registry route", () => {
         version: "1.0.0",
         sourceHash: SOURCE_HASH,
         source: sentinel,
-        provenanceSummary: { origin: "git", revision: "abc123" },
+        provenanceSummary: {
+          sourceId: "src_finance_pack",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_finance_pack"],
+        },
         ontology: {
           id: canonical.ontology.ontologyId,
           version: canonical.ontology.version,
           contentHash: canonical.ontology.contentHash,
         },
-        types: [{ id: "finance.ops.invoice", semantics: { kind: "entity" } }],
+        types: [{
+          id: "finance.ops.invoice",
+          semantics: { kind: "entity" },
+          extends: {
+            kind: "core",
+            id: "entity",
+            ontologyId: canonical.ontology.ontologyId,
+            ontologyVersion: canonical.ontology.version,
+            ontologyContentHash: canonical.ontology.contentHash,
+          },
+        }],
         actor: "operator",
       }),
     }));
@@ -169,5 +185,74 @@ describe("ontology registry route", () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain(sentinel);
+  });
+
+  it("redacts pack provenance from POST, GET, and invalid mutation errors", async () => {
+    const canonical = await ensureCanonical();
+    const sentinel = "RAW-PROVENANCE-ROUTE-SENTINEL";
+    const base = {
+      action: "register_pack",
+      namespace: "redacted.pack",
+      owner: "finance",
+      version: "1.0.0",
+      sourceHash: SOURCE_HASH,
+      ontology: {
+        id: canonical.ontology.ontologyId,
+        version: canonical.ontology.version,
+        contentHash: canonical.ontology.contentHash,
+      },
+      types: [{
+        id: "redacted.pack.invoice",
+        semantics: {},
+        extends: {
+          kind: "core",
+          id: "entity",
+          ontologyId: canonical.ontology.ontologyId,
+          ontologyVersion: canonical.ontology.version,
+          ontologyContentHash: canonical.ontology.contentHash,
+        },
+      }],
+      actor: "operator",
+    };
+    const rejected = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        ...base,
+        provenanceSummary: {
+          sourceId: "src_redacted",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_redacted"],
+          nested: { payload: sentinel },
+        },
+      }),
+    }));
+    expect(rejected.status).toBe(400);
+    expect(JSON.stringify(await rejected.json())).not.toContain(sentinel);
+
+    const created = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        ...base,
+        provenanceSummary: {
+          sourceId: "src_redacted",
+          classification: "internal",
+          importedAt: "2026-07-12T00:00:00Z",
+          references: ["ref_redacted"],
+        },
+      }),
+    }));
+    const body = await created.json() as { ok: boolean; pack: { id: string; provenanceSummary: unknown } };
+    expect(body.ok).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(sentinel);
+    expect(body.pack.provenanceSummary).toEqual({
+      sourceId: "src_redacted",
+      classification: "internal",
+      importedAt: "2026-07-12T00:00:00Z",
+      references: ["ref_redacted"],
+    });
+
+    const fetched = ontologyRoute.GET(operatorRequest(`/api/ontology?packId=${body.pack.id}`));
+    expect(JSON.stringify(await fetched.json())).not.toContain(sentinel);
   });
 });
