@@ -1,0 +1,137 @@
+import { getDb } from "@/lib/db";
+import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
+import {
+  bindOntologyProvenance,
+  discoverOntology,
+  ensureCanonicalUpperOntology,
+  getDomainPack,
+  getOntologyProvenanceBinding,
+  publishOntologyVersion,
+  registerDomainPack,
+  transitionDomainPack,
+  updateOntologyProjection,
+  type DomainPackInput,
+  type PackLifecycleState,
+  type PublishOntologyInput,
+} from "@/lib/ontology/registry";
+
+function asObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("request body must be an object");
+  return value as Record<string, unknown>;
+}
+
+function asString(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`);
+  return value.trim();
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request): Promise<Response> {
+  if (!authorizeRegistryWrite(request)) return registryWriteUnauthorizedResponse();
+  try {
+    const body = asObject(await request.json());
+    const action = asString(body.action, "action");
+    const db = getDb();
+
+    if (action === "ensure_canonical") {
+      return Response.json({ ok: true, ontology: ensureCanonicalUpperOntology(db, asOptionalString(body.actor) ?? "system") });
+    }
+
+    if (action === "publish") {
+      const ontology = publishOntologyVersion(db, {
+        ...body,
+        id: asString(body.id, "id"),
+        version: asString(body.version, "version"),
+        definitions: body.definitions as PublishOntologyInput["definitions"],
+        relationships: body.relationships as PublishOntologyInput["relationships"],
+        projections: body.projections as PublishOntologyInput["projections"],
+        actor: asString(body.actor, "actor"),
+        suppliedHash: asOptionalString(body.suppliedHash),
+        parent: body.parent as PublishOntologyInput["parent"],
+      });
+      return Response.json({ ok: true, ontology });
+    }
+
+    if (action === "reconcile_projection") {
+      const reconciliation = updateOntologyProjection(db, {
+        ontologyId: asString(body.ontologyId, "ontologyId"),
+        version: asString(body.version, "version"),
+        projection: asString(body.projection, "projection") as PublishOntologyInput["projections"][number]["projection"],
+        contentHash: asString(body.contentHash, "contentHash"),
+        status: asString(body.status, "status") as "current" | "stale" | "divergent" | "failed",
+        actor: asString(body.actor, "actor"),
+      });
+      return Response.json({ ok: reconciliation.every((entry) => entry.current), reconciliation });
+    }
+
+    if (action === "bind_provenance") {
+      const binding = bindOntologyProvenance(db, {
+        recordType: asString(body.recordType, "recordType"),
+        recordId: asString(body.recordId, "recordId"),
+        ontologyId: asString(body.ontologyId, "ontologyId"),
+        ontologyVersion: asString(body.ontologyVersion, "ontologyVersion"),
+        ontologyContentHash: asString(body.ontologyContentHash, "ontologyContentHash"),
+        actor: asString(body.actor, "actor"),
+      });
+      return Response.json({ ok: true, binding });
+    }
+
+    if (action === "register_pack") {
+      const pack = registerDomainPack(db, {
+        ...body,
+        namespace: asString(body.namespace, "namespace"),
+        owner: asString(body.owner, "owner"),
+        version: asString(body.version, "version"),
+        sourceHash: asString(body.sourceHash, "sourceHash"),
+        provenanceSummary: asObject(body.provenanceSummary),
+        ontology: asObject(body.ontology) as DomainPackInput["ontology"],
+        dependencies: (body.dependencies ?? []) as DomainPackInput["dependencies"],
+        types: body.types as DomainPackInput["types"],
+        actor: asString(body.actor, "actor"),
+      });
+      return Response.json({ ok: true, pack });
+    }
+
+    if (action === "transition_pack") {
+      const pack = transitionDomainPack(db, {
+        packId: asString(body.packId, "packId"),
+        toState: asString(body.toState, "toState") as PackLifecycleState,
+        actor: asString(body.actor, "actor"),
+        reason: asOptionalString(body.reason),
+        replacementPackId: asOptionalString(body.replacementPackId),
+      });
+      return Response.json({ ok: true, pack });
+    }
+
+    return Response.json({ ok: false, error: `unsupported action: ${action}` }, { status: 400 });
+  } catch (error) {
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+  }
+}
+
+export function GET(request: Request): Response {
+  if (!authorizeRegistryWrite(request)) return registryWriteUnauthorizedResponse();
+  try {
+    const url = new URL(request.url);
+    const db = getDb();
+    const recordType = url.searchParams.get("recordType");
+    const recordId = url.searchParams.get("recordId");
+    if (recordType && recordId) {
+      return Response.json({ ok: true, binding: getOntologyProvenanceBinding(db, recordType, recordId) });
+    }
+    const packId = url.searchParams.get("packId");
+    if (packId) return Response.json({ ok: true, pack: getDomainPack(db, packId) });
+    const ontology = discoverOntology(db, {
+      ontologyId: url.searchParams.get("ontologyId") ?? undefined,
+      version: url.searchParams.get("version") ?? undefined,
+    });
+    return Response.json({ ok: ontology.globallyActive, ontology });
+  } catch (error) {
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+  }
+}

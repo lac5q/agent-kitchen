@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = 22;
 
 type SchemaMigration = {
   version: number;
@@ -189,6 +189,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 21,
     name: 'orch-multihop-evidence-bundle-links',
     up: applyOrchMultihopEvidenceBundleSchema,
+  },
+  {
+    version: 22,
+    name: 'ontology-registry-versioning-packs',
+    up: applyOntologyRegistrySchema,
   },
 ];
 
@@ -1675,6 +1680,122 @@ function applyOrchMultihopEvidenceBundleSchema(db: Database.Database): void {
       ON task_evidence_bundles(tenant_id, orchestration_run_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS task_evidence_bundles_orchestration_hash
       ON task_evidence_bundles(tenant_id, orchestration_bundle_hash);
+  `);
+}
+
+function applyOntologyRegistrySchema(db: Database.Database): void {
+  // ONTO-REGISTRY-01: canonical ontology publication, projection reconciliation,
+  // immutable provenance bindings, and governed domain-pack lifecycle state.
+  // Every statement is CREATE IF NOT EXISTS so the migration is additive and
+  // remains safe when initialization is invoked more than once.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_registry (
+      ontology_id             TEXT PRIMARY KEY,
+      active_version          TEXT NOT NULL,
+      active_content_hash     TEXT NOT NULL,
+      updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_versions (
+      ontology_id             TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      content_hash            TEXT NOT NULL,
+      parent_ontology_id      TEXT,
+      parent_version          TEXT,
+      parent_content_hash     TEXT,
+      definitions_json        TEXT NOT NULL,
+      relationships_json      TEXT NOT NULL,
+      published_by            TEXT NOT NULL,
+      published_at            TEXT NOT NULL,
+      PRIMARY KEY (ontology_id, version),
+      UNIQUE (ontology_id, content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_versions_published
+      ON ontology_versions(ontology_id, published_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_projection_mirrors (
+      ontology_id             TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      projection              TEXT NOT NULL
+                              CHECK(projection IN ('git','sqlite','frontmatter','graph','generated_graph')),
+      content_hash            TEXT NOT NULL,
+      status                  TEXT NOT NULL
+                              CHECK(status IN ('current','stale','divergent','failed')),
+      updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (ontology_id, version, projection),
+      FOREIGN KEY (ontology_id, version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_projection_mirrors_status
+      ON ontology_projection_mirrors(ontology_id, version, status);
+
+    CREATE TABLE IF NOT EXISTS ontology_provenance_bindings (
+      id                      TEXT PRIMARY KEY,
+      record_type             TEXT NOT NULL,
+      record_id               TEXT NOT NULL,
+      ontology_id             TEXT NOT NULL,
+      ontology_version        TEXT NOT NULL,
+      ontology_content_hash   TEXT NOT NULL,
+      bound_by                TEXT NOT NULL,
+      bound_at                TEXT NOT NULL,
+      UNIQUE (record_type, record_id),
+      FOREIGN KEY (ontology_id, ontology_version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_provenance_bindings_ontology
+      ON ontology_provenance_bindings(ontology_id, ontology_version, bound_at DESC);
+
+    CREATE TRIGGER IF NOT EXISTS ontology_provenance_bindings_no_update
+      BEFORE UPDATE ON ontology_provenance_bindings
+    BEGIN
+      SELECT RAISE(ABORT, 'ontology provenance bindings are immutable');
+    END;
+    CREATE TRIGGER IF NOT EXISTS ontology_provenance_bindings_no_delete
+      BEFORE DELETE ON ontology_provenance_bindings
+    BEGIN
+      SELECT RAISE(ABORT, 'ontology provenance bindings are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS ontology_packs (
+      id                      TEXT PRIMARY KEY,
+      namespace               TEXT NOT NULL,
+      owner                   TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      source_hash             TEXT NOT NULL,
+      provenance_summary_json TEXT NOT NULL,
+      ontology_id             TEXT NOT NULL,
+      ontology_version        TEXT NOT NULL,
+      ontology_content_hash   TEXT NOT NULL,
+      types_json              TEXT NOT NULL,
+      dependencies_json       TEXT NOT NULL,
+      lifecycle_state         TEXT NOT NULL DEFAULT 'draft'
+                              CHECK(lifecycle_state IN ('draft','approved','deprecated','retired')),
+      created_by              TEXT NOT NULL,
+      created_at              TEXT NOT NULL,
+      approved_at             TEXT,
+      deprecated_at           TEXT,
+      deprecated_reason       TEXT,
+      retired_at              TEXT,
+      replacement_pack_id     TEXT,
+      UNIQUE (namespace, version),
+      FOREIGN KEY (ontology_id, ontology_version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_packs_state
+      ON ontology_packs(lifecycle_state, namespace, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_pack_lifecycle_audit (
+      id                      TEXT PRIMARY KEY,
+      pack_id                 TEXT NOT NULL REFERENCES ontology_packs(id),
+      from_state              TEXT NOT NULL,
+      to_state                TEXT NOT NULL,
+      actor                   TEXT NOT NULL,
+      reason                  TEXT,
+      replacement_pack_id     TEXT,
+      transitioned_at         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ontology_pack_lifecycle_audit_pack
+      ON ontology_pack_lifecycle_audit(pack_id, transitioned_at DESC);
   `);
 }
 
