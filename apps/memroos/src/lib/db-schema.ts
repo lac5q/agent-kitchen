@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 18;
+export const CURRENT_SCHEMA_VERSION = 19;
 
 type SchemaMigration = {
   version: number;
@@ -174,6 +174,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 18,
     name: 'memory-consolidation-vault-dsar-offboarding-tombstones',
     up: applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema,
+  },
+  {
+    version: 19,
+    name: 'memory-embedding-provenance-and-lifecycle',
+    up: applyMemoryEmbeddingProvenanceSchema,
   },
 ];
 
@@ -1415,6 +1420,51 @@ function applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema(db: Databa
       ON memory_tombstones(tenant_id, subject_hash, created_at DESC);
     CREATE INDEX IF NOT EXISTS memory_tombstones_canonical
       ON memory_tombstones(tenant_id, canonical_id, created_at DESC);
+  `);
+}
+
+function applyMemoryEmbeddingProvenanceSchema(db: Database.Database): void {
+  // MEMLIFE-03..04: embedding provenance + lifecycle. Embedding lifecycle is
+  // provenance-linked (canonical id + model version + source) and removability is
+  // wired to erasure. Additive, idempotent (uses try/catch + IF NOT EXISTS).
+
+  // memory_embedding_provenance: one row per registered embedding projection
+  // (local message_embeddings, external vector adapter rows, etc.). Used by the
+  // erasure coordinator to discover and remove every vector derivative, and to
+  // track stale/degraded provider state honestly.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_embedding_provenance (
+      id                 TEXT PRIMARY KEY,
+      tenant_id          TEXT NOT NULL DEFAULT 'default-tenant',
+      canonical_id       TEXT NOT NULL,
+      store_id           TEXT NOT NULL,
+      adapter_kind       TEXT NOT NULL DEFAULT 'local'
+                         CHECK(adapter_kind IN ('local','external','cache','snapshot')),
+      source_hash        TEXT NOT NULL,
+      model_id           TEXT NOT NULL,
+      model_version      TEXT,
+      dimensionality     INTEGER NOT NULL DEFAULT 0,
+      provenance         TEXT NOT NULL,
+      lifecycle_state    TEXT NOT NULL DEFAULT 'active'
+                         CHECK(lifecycle_state IN ('active','stale','degraded','removed','tombstoned')),
+      removability       TEXT NOT NULL DEFAULT 'erasable'
+                         CHECK(removability IN ('erasable','retained','deferred')),
+      external_ref       TEXT,
+      last_refreshed_at  TEXT,
+      metadata_json      TEXT NOT NULL DEFAULT '{}',
+      erasure_id         TEXT,
+      removed_at         TEXT,
+      created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_tenant_canonical
+      ON memory_embedding_provenance(tenant_id, canonical_id);
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_store
+      ON memory_embedding_provenance(tenant_id, store_id, lifecycle_state);
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_lifecycle
+      ON memory_embedding_provenance(tenant_id, lifecycle_state, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_embedding_provenance_dedupe
+      ON memory_embedding_provenance(tenant_id, canonical_id, store_id, model_id, adapter_kind);
   `);
 }
 

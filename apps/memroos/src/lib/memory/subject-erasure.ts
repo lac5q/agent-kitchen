@@ -730,36 +730,43 @@ export async function executeSubjectErasurePlan(
     planHash: input.planHash,
   };
 
-  db.prepare(
-    `UPDATE memory_subject_erasure_plans
-     SET status = ?, executed_by = ?, executed_at = ?, result_json = ?, updated_at = ?
-     WHERE tenant_id = ? AND id = ?`
-  ).run(status, input.actorId, now, stableJson(result), now, tenantId, input.planId);
+  // Wrap the final commit trio (UPDATE plan status, write result, audit) in
+  // db.transaction so a partial commit cannot leave the plan row out of sync
+  // with its result_json or audit chain. Individual target erasures ran in
+  // their own coordinator transactions; this transaction covers only the
+  // subject-level commit so it remains a single atomic unit.
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE memory_subject_erasure_plans
+       SET status = ?, executed_by = ?, executed_at = ?, result_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND id = ?`
+    ).run(status, input.actorId, now, stableJson(result), now, tenantId, input.planId);
 
-  writeAuditEntry(
-    {
-      tenant_id: tenantId,
-      actor_id: input.actorId,
-      actor_role: "operator",
-      event_type: AUDIT_EVENT_TYPES.MEMORY_SUBJECT_ERASURE_EXECUTED,
-      entity_type: ENTITY_TYPES.MEMORY_SUBJECT_ERASURE,
-      entity_id: `subject_erasure_plan:${input.planId}`,
-      reason: status === "completed" ? "subject_erasure_completed" : `subject_erasure_${status}`,
-      metadata_json: {
-        plan_id: input.planId,
-        plan_hash: input.planHash,
-        scope_hash: row.scope_hash,
-        subject_hash: row.subject_hash,
-        erased,
-        blocked: heldBlockers.length,
-        failed,
-        status,
-        held_record_ids: heldBlockers.map((target) => target.recordId),
+    writeAuditEntry(
+      {
+        tenant_id: tenantId,
+        actor_id: input.actorId,
+        actor_role: "operator",
+        event_type: AUDIT_EVENT_TYPES.MEMORY_SUBJECT_ERASURE_EXECUTED,
+        entity_type: ENTITY_TYPES.MEMORY_SUBJECT_ERASURE,
+        entity_id: `subject_erasure_plan:${input.planId}`,
+        reason: status === "completed" ? "subject_erasure_completed" : `subject_erasure_${status}`,
+        metadata_json: {
+          plan_id: input.planId,
+          plan_hash: input.planHash,
+          scope_hash: row.scope_hash,
+          subject_hash: row.subject_hash,
+          erased,
+          blocked: heldBlockers.length,
+          failed,
+          status,
+          held_record_ids: heldBlockers.map((target) => target.recordId),
+        },
+        created_at: now,
       },
-      created_at: now,
-    },
-    db
-  );
+      db
+    );
+  })();
 
   return result;
 }

@@ -166,6 +166,9 @@ export const AUDIT_EVENT_TYPES = {
   MEMORY_OFFBOARDING_PENDING: "memory.offboarding.pending",
   /** Tombstone written for a completed erasure preserving chain continuity without payload. */
   MEMORY_TOMBSTONE_WRITTEN: "memory.tombstone.written",
+  /** A single-record erasure completed across all registered derivatives. Used by the
+   *  erasure coordinator; subject erasure uses MEMORY_SUBJECT_ERASURE_EXECUTED. */
+  MEMORY_ERASURE_COMPLETED: "memory.erasure.completed",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -208,6 +211,8 @@ export const ENTITY_TYPES = {
   MEMORY_OFFBOARDING: "memory_offboarding",
   /** A scoped, non-sensitive erasure tombstone pointer. */
   MEMORY_TOMBSTONE: "memory_tombstone",
+  /** Embedding provenance row linked to a canonical memory identity (model_version, removability, lifecycle state). */
+  MEMORY_EMBEDDING: "memory_embedding",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
