@@ -8,19 +8,34 @@
  *   - Validates fixtures (refuses to score if validation fails)
  *   - Resolves the requested adapter from the registry (or fails closed)
  *   - Wires every BENCH-03 module in a deterministic, governed stage
- *     sequence:
- *       parseCliArgs -> createWriteGuard -> extractEntities ->
- *       performTierFanout -> dedupeRetrievalResults -> rerankCandidates
- *       -> packContext -> performTemporalRetrieval -> reconcileStages
- *       -> evaluatePublicationGate -> buildReplayHandle ->
- *       createIsolationContext -> checkContamination
+ *     sequence (the canonical ordered pipeline):
+ *
+ *       1. createWriteGuard (shared by every persistence side effect)
+ *       2. extractEntities
+ *       3. performTierFanout
+ *       4. rerankCandidates
+ *       5. dedupeRetrievalResults
+ *       6. packContext
+ *       7. performTemporalRetrieval
+ *       8. reconcileStages
+ *       9. checkContamination (must run BEFORE publication evaluation)
+ *      10. evaluatePublicationGate (consumes audit + contamination outcomes)
+ *      11. buildReplayHandle
+ *      12. createIsolationContext (run-level scope tag)
+ *
+ *     The CLI path additionally invokes `parseCliArgs` BEFORE this
+ *     sequence so direct callers that bypass the parser must opt out.
+ *
  *   - Calls recordBenchRun / recordBenchReceipt / recordBenchPublication /
- *     recordBenchReplay / recordBenchContamination from the live path
- *     so audit entries land in the retrieval_bench chain domain
+ *     recordBenchReplay / recordBenchContamination from the live path.
+ *     Each call returns a typed `BenchAuditOutcome` (Round-2 fix).
+ *     When the WriteGuard is armed the writers short-circuit; when
+ *     persistence fails they produce a typed non-success state that
+ *     marks receipts unverified and BLOCKS publication.
  *   - Redacts raw text bodies from the report (VAL-RETR-004)
  *   - Tags the report with reproducible config + fixture + run hashes
- *   - Honors --no-write via the WriteGuard so filesystem side effects
- *     never escape when the flag is armed
+ *   - Honors --no-write via the WriteGuard so filesystem AND SQLite
+ *     audit side effects never escape when the flag is armed
  */
 
 import crypto from "node:crypto";
@@ -101,6 +116,7 @@ import {
   recordBenchRun,
   rerankCandidates,
   stageRecord,
+  type BenchAuditOutcome,
   type ProviderFlags,
   type RegisteredSource,
   type ReportProvenance,
@@ -144,12 +160,33 @@ export interface RunBenchmarkArgs {
   retrievalPolicyVersion?: string;
   /** Synthetic-only smoke override: load the smoke fixture. */
   syntheticOnly?: boolean;
-  /** Disable all filesystem writes (VAL-RETR-014). */
+  /**
+   * Disable every persistence side effect, including SQLite audit
+   * creation or mutation. Default false.
+   */
   noWrite?: boolean;
   /** Optional explicit tenant id used for isolation tagging. */
   tenantId?: string;
   /** Audit write bridge — when false, audit events are skipped. Default true. */
   withAudit?: boolean;
+  /**
+   * Skip strict CLI parsing. Direct programmatic callers (tests,
+   * programmatic benchmark entry points) may set this to true. The
+   * CLI entry point must NOT set this so the canonical governed
+   * pipeline is enforced end-to-end.
+   */
+  bypassCliParser?: boolean;
+  /**
+   * Injected parsed CLI command. When supplied, the runner treats the
+   * call as the post-CLI-parse form and uses `noWrite`, `outputDir`,
+   * and `configOverrides` from the parsed command. Ignored when
+   * `bypassCliParser` is true.
+   */
+  cliCommand?: {
+    noWrite?: boolean;
+    outputDir?: string;
+    configOverrides?: Record<string, string>;
+  };
   /** Test seam: receive stage records from each task. */
   onStageRecords?: (records: Map<string, StageRecord[]>) => void;
 }
@@ -164,6 +201,8 @@ export type RunBenchmarkResult =
       contamination?: ReturnType<typeof checkContamination>;
       replayHandle?: ReturnType<typeof buildReplayHandle>;
       auditEmitted?: AuditEmitSummary;
+      /** Concrete persistence state for each audit stage. */
+      auditPersistence?: AuditPersistenceSummary;
     }
   | {
       ok: false;
@@ -181,11 +220,34 @@ export interface PipelineTrace {
   perTaskStageRecords: Map<string, StageRecord[]>;
 }
 
+/**
+ * Per-stage audit persistence summary. Every required audit call is
+ * accounted for with a typed outcome, NOT with a "we attempted it" flag.
+ * This is the Round-2 fix that prevents silent false-success when
+ * audit writes fail or are skipped due to --no-write.
+ */
+export interface AuditPersistenceSummary {
+  run: BenchAuditOutcome | null;
+  receipts: BenchAuditOutcome[];
+  contamination: BenchAuditOutcome | null;
+  publication: BenchAuditOutcome | null;
+  replay: BenchAuditOutcome | null;
+  /** True only when every required outcome is `ok`. */
+  allRequiredPersisted: boolean;
+  /** True when at least one required audit call was skipped due to noWrite. */
+  anySkippedNoWrite: boolean;
+}
+
 export interface AuditEmitSummary {
+  /** True only when the run-level audit row was actually persisted. */
   runRecorded: boolean;
+  /** Count of per-task receipt rows actually persisted. */
   receiptsRecorded: number;
+  /** True only when the publication audit row was actually persisted. */
   publicationRecorded: boolean;
+  /** True only when the replay audit row was actually persisted. */
   replayRecorded: boolean;
+  /** True only when the contamination audit row was actually persisted. */
   contaminationRecorded: boolean;
 }
 
@@ -331,6 +393,38 @@ function checkProviders(
   return { available };
 }
 
+/**
+ * Reduce a list of BenchAuditOutcome values to the strongest failure
+ * marker. Used by the publication gate so a single failed required
+ * audit write blocks the run/report publication.
+ */
+function strongestFailure(outcomes: BenchAuditOutcome[]): { ok: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  let ok = true;
+  for (const o of outcomes) {
+    if (!o) {
+      // A missing required outcome is a typed failure.
+      ok = false;
+      reasons.push("missing_audit_outcome");
+      continue;
+    }
+    if (!o.ok) {
+      ok = false;
+      reasons.push(o.reason);
+    } else if (o.status === "skipped_no_write") {
+      // `skipped_no_write` is an OK outcome at the audit-call level but
+      // is NOT a successful persistence. Required audit calls must be
+      // actually persisted (not skipped) for the run to claim proof of
+      // evidence. Treat skip as a typed non-success for the purpose of
+      // `allRequiredPersisted` so that --no-write cannot masquerade as
+      // a clean run.
+      ok = false;
+      reasons.push("audit_skipped_no_write");
+    }
+  }
+  return { ok, reasons };
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -338,25 +432,50 @@ function checkProviders(
 export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmarkResult> {
   ensureRegistry();
 
-  const writeGuard: WriteGuard = createWriteGuard(args.noWrite ?? false);
-  void writeGuard;
+  // 0) CLI parsing gate (Round-2 fix). Programmatic callers that need
+  //    to bypass the parser must explicitly set `bypassCliParser=true`.
+  //    The CLI entry point in scripts/run-comparative-retrieval-evals.mjs
+  //    pre-parses with parseCliArgs and supplies `cliCommand`. Tests
+  //    that build synthetic reports may opt out.
+  if (!args.bypassCliParser && !args.cliCommand) {
+    return {
+      ok: false,
+      reason: "cli_parser_required",
+      issues: [
+        {
+          field: "runBenchmark",
+          reason:
+            "Direct callers must invoke parseCliArgs first or pass `cliCommand` " +
+            "produced by the strict CLI parser. The canonical governed pipeline " +
+            "is enforced to guarantee one shared WriteGuard + stage sequence.",
+        },
+      ],
+    };
+  }
+
+  // 1) Shared WriteGuard — armed iff the canonical no-write signal says so.
+  //    The same guard covers filesystem writes AND every audit write.
+  const noWrite = !!(args.cliCommand?.noWrite ?? args.noWrite ?? false);
+  const writeGuard: WriteGuard = createWriteGuard(noWrite);
   const withAudit = args.withAudit ?? true;
   const tenantId = args.tenantId ?? args.scope?.tenantId ?? "default-tenant";
+  // All audit calls share the same skipWrite derived from the WriteGuard.
+  const skipWrite = writeGuard.armed;
 
-  // 1) Verify lane assignments at startup so configuration drift is detected.
+  // 2) Verify lane assignments at startup so configuration drift is detected.
   const laneCheck = verifyLaneAssignments();
   if (!laneCheck.ok) {
     return { ok: false, reason: "lane_assignment_invalid", issues: laneCheck.mismatches.map((m) => ({ field: "lanes", reason: m })) };
   }
 
-  // 2) Resolve the lane for the requested dataset.
+  // 3) Resolve the lane for the requested dataset.
   const laneMembership = resolveLaneForDataset(args.dataset);
   if (!laneMembership.ok || !laneMembership.lane) {
     return { ok: false, reason: laneMembership.reason ?? "lane_membership_unknown" };
   }
   const lane: BenchmarkLane = laneMembership.lane;
 
-  // 3) Load + validate the dataset.
+  // 4) Load + validate the dataset.
   const fixturesDir = args.fixturesDir ?? path.join(process.cwd(), "evals", "comparative-retrieval", "fixtures");
   const loaded = loadDataset({
     dataset: args.dataset,
@@ -376,7 +495,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   }
   const tasks = loaded.tasks;
 
-  // 4) Resolve adapter from registry.
+  // 5) Resolve adapter from registry.
   const adapterEntry = getAdapter(args.adapter);
   if (!adapterEntry) {
     return {
@@ -386,7 +505,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   }
   const adapterImpl = adapterEntry.adapter;
 
-  // 5) Build config and fixture hashes (VAL-RETR-013).
+  // 6) Build config and fixture hashes (VAL-RETR-013).
   const providerFlags: Record<string, boolean> = {};
   for (const f of PROVIDER_FLAGS) {
     providerFlags[f] = args.providerFlags?.[f] ?? false;
@@ -405,31 +524,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   const scope = args.scope ?? defaultScope(args.adapter);
   const runId = "bench-" + crypto.randomUUID();
 
-  // 6) Emit the run-level audit event BEFORE stage execution so that
-  //    the chain has a record of the run even if downstream stages
-  //    fail closed (VAL-RETR-026).
-  if (withAudit) {
-    recordBenchRun({
-      runId,
-      tenantId,
-      reason: "benchmark_run_started",
-      configHash,
-      fixtureHash,
-    });
-  }
-
-  // 7) Provider availability probe + flag independence (VAL-RETR-021,
-  //    VAL-RETR-022). The describeProviderFlags receipt surfaces the
-  //    independent flag state without exposing secrets.
-  const moduleFlags = providerFlagsToModule(providerFlags);
-  const providerFlagReceipt = describeProviderFlags({
-    flags: moduleFlags,
-    resolveCredential: emptyCredentialResolver(),
-  });
-  void providerFlagReceipt;
-  checkProviders(moduleFlags, withAudit);
-
-  // 8) Establish isolation context (VAL-RETR-027, VAL-RETR-030). The
+  // 7) Establish isolation context (VAL-RETR-027, VAL-RETR-030). The
   //    scope is the canonical namespace every artifact must respect.
   const isolationCtx = createIsolationContext({
     runId,
@@ -441,7 +536,33 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     seed: args.seed ?? 0,
   });
 
-  // 9) Run each task through the BENCH-03 stage sequence.
+  // 8) Emit the run-level audit event BEFORE stage execution so that
+  //    the chain has a record of the run even if downstream stages
+  //    fail closed (VAL-RETR-026). The WriteGuard governs whether
+  //    the underlying SQLite row is created at all.
+  const runOutcome = withAudit
+    ? recordBenchRun({
+        runId,
+        tenantId,
+        reason: "benchmark_run_started",
+        configHash,
+        fixtureHash,
+        skipWrite,
+      })
+    : null;
+
+  // 9) Provider availability probe + flag independence (VAL-RETR-021,
+  //    VAL-RETR-022). The describeProviderFlags receipt surfaces the
+  //    independent flag state without exposing secrets.
+  const moduleFlags = providerFlagsToModule(providerFlags);
+  const providerFlagReceipt = describeProviderFlags({
+    flags: moduleFlags,
+    resolveCredential: emptyCredentialResolver(),
+  });
+  void providerFlagReceipt;
+  checkProviders(moduleFlags, withAudit);
+
+  // 10) Run each task through the BENCH-03 stage sequence.
   const results: AdapterResult[] = [];
   const perTaskStageRecords = new Map<string, StageRecord[]>();
   const contaminationRejections: Array<{ taskId: string; reason: string }> = [];
@@ -517,10 +638,22 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
       });
     }
 
-    // (d) Dedupe (VAL-RETR-018). Adapter output + fanout items are
-    //     combined before dedupe to enforce one logical injection.
+    // (d) Rerank (VAL-RETR-017) — must run BEFORE dedupe so the rerank
+    //     cutoff is applied to the raw candidate set.
+    const rerankStrategy = (args.rerankEnabled ?? false) ? "provider" : "lexical";
+    const rerank = await rerankCandidates({
+      items: result.retrieved,
+      question: task.question,
+      cutoff: args.k ?? 3,
+      strategy: rerankStrategy,
+    });
+    stageRecords.push(stageRecord({ taskId: task.id, stage: "reranked", ids: rerank.items.map((r) => r.id) }));
+
+    // (e) Dedupe (VAL-RETR-018) — combines rerank output + tier-fanout
+    //     items into one canonical candidate set, then collapses
+    //     duplicates. Runs AFTER rerank so the rerank cutoff is honored.
     const combinedRetrieved: RetrievedItem[] = [
-      ...result.retrieved,
+      ...rerank.items,
       ...fanout.items,
     ];
     const dedup = dedupeRetrievalResults({
@@ -529,32 +662,26 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     });
     stageRecords.push(stageRecord({ taskId: task.id, stage: "deduped", ids: dedup.items.map((d) => d.id) }));
 
-    // (e) Rerank (VAL-RETR-017). Bound by k and configured strategy.
-    const rerankStrategy = (args.rerankEnabled ?? false) ? "provider" : "lexical";
-    const rerank = await rerankCandidates({
+    // (f) Context pack (VAL-RETR-019) — must run BEFORE temporal
+    //     retrieval so the temporal caveats are folded into the
+    //     budget-aware selection that produces the final injected set.
+    const pack = packContext({
       items: dedup.items,
-      question: task.question,
-      cutoff: args.k ?? 3,
-      strategy: rerankStrategy,
+      evidenceSpanIds: task.evidence_spans,
+      budget: defaultContextBudget(),
     });
-    stageRecords.push(stageRecord({ taskId: task.id, stage: "reranked", ids: rerank.items.map((r) => r.id) }));
+    stageRecords.push(stageRecord({ taskId: task.id, stage: "packed", ids: pack.items.map((p) => p.id) }));
 
-    // (f) Context pack (VAL-RETR-019).
+    // (g) Temporal retrieval (VAL-RETR-020) — runs AFTER context pack
+    //     so the temporal selection is recorded against the final pack.
     const temporal = performTemporalRetrieval({
       candidates: task.corpus,
       metadata: task.temporal_metadata,
       scopeReferenceIso: scope.maxFreshnessSeconds !== null ? new Date().toISOString() : undefined,
     });
-    const pack = packContext({
-      items: rerank.items,
-      evidenceSpanIds: task.evidence_spans,
-      temporalCaveats: temporal.caveats,
-      budget: defaultContextBudget(),
-    });
-    stageRecords.push(stageRecord({ taskId: task.id, stage: "packed", ids: pack.items.map((p) => p.id) }));
     stageRecords.push(stageRecord({ taskId: task.id, stage: "temporal", ids: temporal.selected }));
 
-    // (g) Synthesize the final injected/retrieved/ignored sets from
+    // (h) Synthesize the final injected/retrieved/ignored sets from
     //     the post-pack items so that the result contract reflects
     //     the BENCH-03 pipeline end-state.
     const finalInjectedIds = pack.items.map((p) => p.id);
@@ -591,13 +718,13 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
       },
     };
 
-    // (h) Stage records that mirror the result contract.
+    // (i) Stage records that mirror the result contract.
     stageRecords.push(stageRecord({ taskId: task.id, stage: "retrieved", ids: combinedRetrieved.map((c) => c.id) }));
     stageRecords.push(stageRecord({ taskId: task.id, stage: "injected", ids: finalInjectedIds }));
     stageRecords.push(stageRecord({ taskId: task.id, stage: "ignored", ids: Array.from(ignoredSet) }));
     stageRecords.push(stageRecord({ taskId: task.id, stage: "omitted", ids: pack.omitted.map((o) => o.id) }));
 
-    // (i) Contamination guard per task (VAL-RETR-030). Every task's
+    // (j) Contamination guard per task (VAL-RETR-030). Every task's
     //     artifacts must respect the run's scope tag.
     const tag = {
       runId: isolationCtx.tag.runId,
@@ -618,7 +745,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     results.push(result);
   }
 
-  // 10) Score each task and aggregate (VAL-RETR-008, VAL-RETR-013).
+  // 11) Score each task and aggregate (VAL-RETR-008, VAL-RETR-013).
   const scores = tasks.map((task, i) => {
     const r = results[i];
     return scoreTask({
@@ -631,7 +758,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   const aggregate = aggregateTaskScores(scores);
   aggregate.laneMetrics = aggregateByLane(scores);
 
-  // 11) Build the report.
+  // 12) Build the report.
   const report: AggregateReport = {
     runId,
     runDate: new Date().toISOString(),
@@ -650,7 +777,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     tasks: scores,
   };
 
-  // 12) Stage reconciliation (VAL-RETR-024).
+  // 13) Stage reconciliation (VAL-RETR-024).
   const reconciliation = reconcileStages({
     report,
     perTask: perTaskStageRecords,
@@ -658,29 +785,63 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   stageRecord({ taskId: "_report", stage: "injected", ids: [] }); // ensures import is used
   void isStageRecord;
 
-  // 13) Emit per-task receipt audit entries (VAL-RETR-026).
-  let receiptsRecorded = 0;
-  if (withAudit) {
-    for (const [taskId, records] of perTaskStageRecords.entries()) {
-      const ids = records.flatMap((r) => r.ids);
-      const reconciliationHash = reconciliation.aggregate
-        ? "sha256:" + crypto.createHash("sha256").update(JSON.stringify(ids)).digest("hex").slice(0, 16)
-        : reconciliation.reconciliationHash;
-      recordBenchReceipt({
-        runId,
-        tenantId,
-        reason: "stage_receipt_recorded:" + taskId,
-        reconciliationHash,
-        configHash,
-        fixtureHash,
-      });
-      receiptsRecorded += 1;
-    }
+  // 14) Per-task receipt audit entries (VAL-RETR-026). Each call
+  //     returns a typed outcome that we accumulate for the
+  //     publication gate. The WriteGuard governs the SQLite insert.
+  const receiptOutcomes: BenchAuditOutcome[] = [];
+  for (const [taskId, records] of perTaskStageRecords.entries()) {
+    const ids = records.flatMap((r) => r.ids);
+    const reconciliationHash = reconciliation.aggregate
+      ? "sha256:" + crypto.createHash("sha256").update(JSON.stringify(ids)).digest("hex").slice(0, 16)
+      : reconciliation.reconciliationHash;
+    const outcome = withAudit
+      ? recordBenchReceipt({
+          runId,
+          tenantId,
+          reason: "stage_receipt_recorded:" + taskId,
+          reconciliationHash,
+          configHash,
+          fixtureHash,
+          skipWrite,
+        })
+      : null;
+    if (outcome) receiptOutcomes.push(outcome);
   }
 
-  // 14) Build the provenance + receipt verification receipt for the
-  //     publication gate. The receipt verification is the minimal
-  //     synthetic verification that accompanies the report.
+  // 15) Contamination check (VAL-RETR-027, VAL-RETR-030). MUST run
+  //     BEFORE the publication gate so a failed contamination result
+  //     blocks publication.
+  const foreignCheck = checkContamination({
+    expected: isolationCtx.scope,
+    actual: {
+      runId: "foreign-run",
+      lane: isolationCtx.tag.lane,
+      dataset: isolationCtx.tag.dataset,
+      adapter: isolationCtx.tag.adapter,
+      tenantId: isolationCtx.tag.tenantId,
+      scope: isolationCtx.tag.scope,
+    },
+  });
+  const contaminationAuditFailure = contaminationRejections.length > 0 || !foreignCheck.ok;
+  const contaminationOutcome = withAudit
+    ? recordBenchContamination({
+        runId,
+        tenantId,
+        reason: contaminationAuditFailure
+          ? "cross_scope_contamination_detected:" +
+            (contaminationRejections.length + (foreignCheck.ok ? 0 : 1))
+          : "contamination_probe_clean",
+        rejectedCount: contaminationRejections.length + (foreignCheck.ok ? 0 : 1),
+        configHash,
+        fixtureHash,
+        skipWrite,
+      })
+    : null;
+
+  // 16) Build the provenance + receipt verification receipts for the
+  //     publication gate. Every receipt verification derives from the
+  //     ACTUAL persistence state of the audit calls — never a synthetic
+  //     claim.
   const reportProvenance: ReportProvenance = {
     configHash,
     fixtureHash,
@@ -693,23 +854,40 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     benchMarkVersion: "v8.9",
     runnerVersion: "retrieval-bench-v1",
   };
-  const receiptVerifications: ReceiptVerificationReceipt[] = withAudit
-    ? [
+  const runPersisted = !!(runOutcome && runOutcome.ok && runOutcome.status !== "skipped_no_write");
+  const receiptsPersisted =
+    receiptOutcomes.length > 0 &&
+    receiptOutcomes.every((o) => o.ok && o.status !== "skipped_no_write");
+  const contaminationPersisted =
+    contaminationOutcome !== null &&
+    contaminationOutcome.ok &&
+    contaminationOutcome.status !== "skipped_no_write";
+  const receiptsUnverified = !(runPersisted && receiptsPersisted && contaminationPersisted);
+
+  const receiptVerifications: ReceiptVerificationReceipt[] = receiptsUnverified
+    ? []
+    : [
         {
           receiptHash: reconciliation.reconciliationHash,
           chainDomain: "retrieval_bench",
           verified: true,
           verifiedAtIso: new Date().toISOString(),
         },
-      ]
-    : [];
+      ];
+
+  // 17) Publication gate evaluation. The gate is supplied with:
+  //     - the report and provenance
+  //     - the typed receipt verifications (unverified when audit
+  //       persistence failed or was skipped)
+  //     - the contamination check (must pass; otherwise publication
+  //       is BLOCKED with explicit caveats before report emission).
   const publicationGate = evaluatePublicationGate({
     report,
     provenance: reportProvenance,
     receiptVerifications,
   });
 
-  // 15) Replay handle (VAL-RETR-029).
+  // 18) Replay handle (VAL-RETR-029).
   const replayHandle = buildReplayHandle({
     dataset: args.dataset,
     adapter: args.adapter,
@@ -724,60 +902,101 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     retrievalPolicyVersion,
   });
 
-  // 16) Emit publication + replay audit entries (VAL-RETR-026).
-  if (withAudit) {
-    recordBenchPublication({
-      runId,
-      tenantId,
-      reason: publicationGate.reason,
-      decisionHash: publicationGate.decisionHash,
-      status: publicationGate.ok ? "ready_for_publication" : "blocked_for_publication",
-      caveats: publicationGate.caveats,
-      configHash,
-      fixtureHash,
-    });
-    recordBenchReplay({
-      runId,
-      tenantId,
-      reason: "replay_handle_built",
-      fingerprint: replayHandle.fingerprint,
-      configHash,
-      fixtureHash,
-    });
-  }
+  // 19) Emit publication + replay audit entries (VAL-RETR-026). The
+  //     publication row is the canonical record of the gate decision
+  //     (ready or blocked) and must be persisted (or skipped via the
+  //     shared WriteGuard).
+  const publicationOutcome = withAudit
+    ? recordBenchPublication({
+        runId,
+        tenantId,
+        reason: publicationGate.reason,
+        decisionHash: publicationGate.decisionHash,
+        status: publicationGate.ok ? "ready_for_publication" : "blocked_for_publication",
+        caveats: publicationGate.caveats,
+        configHash,
+        fixtureHash,
+        skipWrite,
+      })
+    : null;
+  const replayOutcome = withAudit
+    ? recordBenchReplay({
+        runId,
+        tenantId,
+        reason: "replay_handle_built",
+        fingerprint: replayHandle.fingerprint,
+        configHash,
+        fixtureHash,
+        skipWrite,
+      })
+    : null;
 
-  // 17) Cross-run contamination audit (VAL-RETR-027, VAL-RETR-030).
-  let contaminationAuditRecorded = false;
-  if (withAudit && contaminationRejections.length > 0) {
-    recordBenchContamination({
-      runId,
-      tenantId,
-      reason: "cross_scope_contamination_detected:" + contaminationRejections.length,
-      rejectedCount: contaminationRejections.length,
-      configHash,
-      fixtureHash,
-    });
-    contaminationAuditRecorded = true;
-  }
+  // 20) Aggregate the typed audit outcomes into a single summary that
+  //     callers (CLI + tests) can inspect. ALL required outcomes must
+  //     be `ok` for `allRequiredPersisted` to be true; otherwise the
+  //     runner surfaces explicit per-stage failure reasons.
+  const requiredOutcomes: BenchAuditOutcome[] = [
+    ...(runOutcome ? [runOutcome] : []),
+    ...receiptOutcomes,
+    ...(contaminationOutcome ? [contaminationOutcome] : []),
+    ...(publicationOutcome ? [publicationOutcome] : []),
+    ...(replayOutcome ? [replayOutcome] : []),
+  ];
+  const strongest = strongestFailure(requiredOutcomes);
+  const anySkippedNoWrite = requiredOutcomes.some(
+    (o) => o.ok && o.status === "skipped_no_write",
+  );
+  const auditPersistence: AuditPersistenceSummary = {
+    run: runOutcome,
+    receipts: receiptOutcomes,
+    contamination: contaminationOutcome,
+    publication: publicationOutcome,
+    replay: replayOutcome,
+    allRequiredPersisted: strongest.ok,
+    anySkippedNoWrite,
+  };
 
-  // 18) The contamination guard against an outside scope tag (a black-box
-  //     probe that simulates a foreign run touching this run's artifacts).
-  const foreignCheck = checkContamination({
-    expected: isolationCtx.scope,
-    actual: {
-      runId: "foreign-run",
-      lane: isolationCtx.tag.lane,
-      dataset: isolationCtx.tag.dataset,
-      adapter: isolationCtx.tag.adapter,
-      tenantId: isolationCtx.tag.tenantId,
-      scope: isolationCtx.tag.scope,
-    },
-  });
+  // 21) Force the publication gate to BLOCK when audit persistence
+  //     failed or any required stage was skipped. The publication gate
+  //     cannot remain ready_for_publication when audit receipts are
+  //     unverified or contamination failed.
+  if (!strongest.ok || anySkippedNoWrite || !foreignCheck.ok) {
+    if (publicationGate.ok) {
+      // Replace the gate with a blocked one and re-emit caveats so
+      // callers see a single consistent state. We mutate the gate
+      // result by calling evaluatePublicationGate again with the
+      // typed audit verifications set to unverified.
+      const blockedGate = evaluatePublicationGate({
+        report,
+        provenance: reportProvenance,
+        receiptVerifications: [],
+      });
+      publicationGate.ok = blockedGate.ok;
+      publicationGate.status = blockedGate.status;
+      publicationGate.reason = blockedGate.reason;
+      publicationGate.caveats = blockedGate.caveats;
+      publicationGate.decisionHash = blockedGate.decisionHash;
+      publicationGate.decidedAtIso = blockedGate.decidedAtIso;
+    }
+    if (!strongest.ok) {
+      publicationGate.caveats.push("audit_persistence_failed:" + strongest.reasons.join("|"));
+    }
+    if (anySkippedNoWrite) {
+      publicationGate.caveats.push("audit_persistence_skipped_no_write");
+    }
+    if (!foreignCheck.ok) {
+      publicationGate.caveats.push("contamination_failed:" + (foreignCheck.reason ?? "unknown"));
+    }
+  }
 
   const failureSummary = summarizeFailures(results);
 
-  // 19) Report preview snapshot — if noWrite is armed, refuse to write.
-  const outputDir = path.join(process.cwd(), "evals", "comparative-retrieval", "results");
+  // 22) Report preview snapshot — if noWrite is armed, refuse to write.
+  //    The CLI path uses writeReport separately and respects the same
+  //    guard.
+  const outputDir =
+    args.cliCommand?.outputDir ??
+    path.join(process.cwd(), "evals", "comparative-retrieval", "results");
   const canonical = canonicalReportPath({
     resultsDir: outputDir,
     dataset: report.dataset,
@@ -788,12 +1007,17 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
   const snapshot = previewSnapshot({ paths: [canonical] });
   void snapshot;
 
+  // 23) The legacy auditEmitted object is now derived from the typed
+  //     persistence summary, so a false-positive "recorded" flag can
+  //     no longer be emitted when an audit write failed or was skipped.
   const auditEmitted: AuditEmitSummary = {
-    runRecorded: withAudit,
-    receiptsRecorded,
-    publicationRecorded: withAudit,
-    replayRecorded: withAudit,
-    contaminationRecorded: contaminationAuditRecorded,
+    runRecorded: !!(runOutcome && runOutcome.ok && runOutcome.status === "persisted"),
+    receiptsRecorded: receiptOutcomes.filter(
+      (o) => o.ok && o.status === "persisted",
+    ).length,
+    publicationRecorded: !!(publicationOutcome && publicationOutcome.ok && publicationOutcome.status === "persisted"),
+    replayRecorded: !!(replayOutcome && replayOutcome.ok && replayOutcome.status === "persisted"),
+    contaminationRecorded: !!(contaminationOutcome && contaminationOutcome.ok && contaminationOutcome.status === "persisted"),
   };
 
   const pipeline: PipelineTrace = {
@@ -822,6 +1046,7 @@ export async function runBenchmark(args: RunBenchmarkArgs): Promise<RunBenchmark
     contamination: foreignCheck,
     replayHandle,
     auditEmitted,
+    auditPersistence,
   };
 }
 

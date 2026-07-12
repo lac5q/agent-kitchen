@@ -338,6 +338,32 @@ function renderTextReport(args, result) {
     lines.push("");
     lines.push(`fingerprint:             ${result.replayHandle.fingerprint}`);
   }
+  if (result.auditPersistence) {
+    lines.push("");
+    lines.push("## Audit Persistence");
+    lines.push("");
+    lines.push(`all_required_persisted: ${result.auditPersistence.allRequiredPersisted}`);
+    lines.push(`any_skipped_no_write:   ${result.auditPersistence.anySkippedNoWrite}`);
+    const run = result.auditPersistence.run;
+    if (run) {
+      lines.push(`run:                    ok=${run.ok} status=${run.status}${run.reason ? " reason=" + run.reason : ""}`);
+    }
+    const pub = result.auditPersistence.publication;
+    if (pub) {
+      lines.push(`publication:            ok=${pub.ok} status=${pub.status}${pub.reason ? " reason=" + pub.reason : ""}`);
+    }
+    const replay = result.auditPersistence.replay;
+    if (replay) {
+      lines.push(`replay:                 ok=${replay.ok} status=${replay.status}`);
+    }
+    const cont = result.auditPersistence.contamination;
+    if (cont) {
+      lines.push(`contamination:          ok=${cont.ok} status=${cont.status} reason=${cont.reason ?? ""}`);
+    }
+    const failed = (result.auditPersistence.receipts || []).filter((o) => !o.ok);
+    lines.push(`receipts_total:         ${(result.auditPersistence.receipts || []).length}`);
+    lines.push(`receipts_failed:        ${failed.length}`);
+  }
   lines.push("");
   lines.push("## Midbrain Comparison Caveat");
   lines.push("");
@@ -398,6 +424,11 @@ async function run(argv = process.argv.slice(2)) {
         noWrite: !!args.noWrite,
         tenantId: scope.tenantId,
         withAudit: true,
+        cliCommand: {
+          noWrite: !!args.noWrite,
+          outputDir: args.outputDir,
+          configOverrides: {},
+        },
       });
     } catch (err) {
       console.error("runBenchmark failed: " + (err && err.message ? err.message : String(err)));
@@ -445,15 +476,37 @@ async function run(argv = process.argv.slice(2)) {
       contamination: outcome.contamination,
       replayHandle: outcome.replayHandle ? { fingerprint: outcome.replayHandle.fingerprint } : null,
       auditEmitted: outcome.auditEmitted,
+      auditPersistence: outcome.auditPersistence
+        ? {
+            run: outcome.auditPersistence.run,
+            receipts: outcome.auditPersistence.receipts,
+            contamination: outcome.auditPersistence.contamination,
+            publication: outcome.auditPersistence.publication,
+            replay: outcome.auditPersistence.replay,
+            allRequiredPersisted: outcome.auditPersistence.allRequiredPersisted,
+            anySkippedNoWrite: outcome.auditPersistence.anySkippedNoWrite,
+          }
+        : null,
       tasks: report.tasks,
     };
 
     if (!args.noWrite) {
-      fs.mkdirSync(resultsDir, { recursive: true });
-      const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
-      fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
-      if (!args.json) {
-        console.log("Wrote " + path.relative(repoRoot, outFile));
+      // Honor the shared WriteGuard — refuse to write any result file when
+      // --no-write is armed. The CLI flag is the canonical no-write signal
+      // that the runner uses for SQLite audit persistence.
+      if (outcome.auditPersistence && outcome.auditPersistence.anySkippedNoWrite) {
+        // The runner enforced skipWrite on every audit write. The CLI
+        // therefore never produces a result file when --no-write is set.
+        if (!args.json) {
+          console.log("--no-write armed: skipped result file write (write guard enforced)");
+        }
+      } else {
+        fs.mkdirSync(resultsDir, { recursive: true });
+        const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
+        fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
+        if (!args.json) {
+          console.log("Wrote " + path.relative(repoRoot, outFile));
+        }
       }
     }
 

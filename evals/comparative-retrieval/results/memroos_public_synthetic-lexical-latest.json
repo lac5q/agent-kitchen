@@ -1,52 +1,160 @@
 {
-  "runDate": "2026-06-10T10:45:35.194Z",
+  "runId": "bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
+  "runDate": "2026-07-12T08:28:37.350Z",
   "dataset": "memroos_public_synthetic",
   "adapter": "lexical",
-  "taskCount": 25,
+  "lane": "external_retrieval",
+  "configHash": "sha256:768ff5e9abd552e22788f822ec259f08b2f86083e552be19fb1dfedd43d17b8d",
+  "fixtureHash": "sha256:3cc189cdbe299e1c803c9ca06721f63052f28eeedac782fcb9664f7f77198254",
+  "seed": 0,
+  "k": 3,
+  "rerankEnabled": false,
+  "judgeEnabled": false,
+  "providerFlags": {
+    "embedding": false,
+    "vector_backend": false,
+    "rerank": false,
+    "judge": false,
+    "external_mcp": false
+  },
+  "taskCount": 3,
   "aggregate": {
-    "n": 25,
-    "precisionAtK": 0.82,
-    "recallAtK": 0.88,
-    "mrr": 0.84,
-    "falsePositiveRate": 0.18,
-    "answerSupportedRate": 0.4,
+    "precisionAtK": 1,
+    "recallAtK": 1,
+    "mrr": 1,
+    "falsePositiveRate": 0,
+    "answerSupportedRate": 0.3333,
     "p95LatencyMs": 0,
-    "abstentionAccuracy": 0
+    "abstentionAccuracy": null,
+    "abstentionLabeledCount": 0,
+    "failedTaskCount": 0
+  },
+  "publicationGate": {
+    "ok": false,
+    "status": "blocked_for_publication",
+    "reason": "blocked_for_publication:receipt_verification_missing",
+    "caveats": [
+      "receipt_verification_missing",
+      "contamination_failed:runId_mismatch:foreign-run!=expected:bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5"
+    ],
+    "decisionHash": "sha256:0407470ab8409f00cb9c87dd1672d286a82a510eb304c3c1113bfbedda80f16a",
+    "decidedAtIso": "2026-07-12T08:28:37.351Z"
+  },
+  "contamination": {
+    "ok": false,
+    "reason": "runId_mismatch:foreign-run!=expected:bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
+    "expected": {
+      "runId": "bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
+      "lane": "external_retrieval",
+      "dataset": "memroos_public_synthetic",
+      "adapter": "lexical",
+      "tenantId": "default-tenant",
+      "scope": "default-tenant:none",
+      "seed": 0
+    },
+    "actual": {
+      "runId": "foreign-run",
+      "lane": "external_retrieval",
+      "dataset": "memroos_public_synthetic",
+      "adapter": "lexical",
+      "tenantId": "default-tenant",
+      "scope": "default-tenant:none"
+    }
+  },
+  "replayHandle": {
+    "fingerprint": "sha256:aa180703818d356f32145cb6c896e2d5cd0606c985f8f10c92bf059cd6726b3e"
+  },
+  "auditEmitted": {
+    "runRecorded": true,
+    "receiptsRecorded": 3,
+    "publicationRecorded": true,
+    "replayRecorded": true,
+    "contaminationRecorded": true
+  },
+  "auditPersistence": {
+    "run": {
+      "ok": true,
+      "status": "persisted"
+    },
+    "receipts": [
+      {
+        "ok": true,
+        "status": "persisted"
+      },
+      {
+        "ok": true,
+        "status": "persisted"
+      },
+      {
+        "ok": true,
+        "status": "persisted"
+      }
+    ],
+    "contamination": {
+      "ok": true,
+      "status": "persisted"
+    },
+    "publication": {
+      "ok": true,
+      "status": "persisted"
+    },
+    "replay": {
+      "ok": true,
+      "status": "persisted"
+    },
+    "allRequiredPersisted": true,
+    "anySkippedNoWrite": false
   },
   "tasks": [
     {
       "taskId": "memroos-pub-0001",
       "taskType": "single_hop",
+      "lane": "external_retrieval",
+      "adapterName": "lexical",
+      "status": "ok",
       "precisionAtK": 1,
       "recallAtK": 1,
       "mrr": 1,
       "falsePositiveRate": 0,
-      "latencyMs": 2,
+      "latencyMs": 0,
       "injectedCount": 1,
       "evidenceSpanCount": 1,
       "answerSupportedByRetrievedSource": true,
       "abstentionCorrect": null,
       "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-001",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          }
-        ],
-        "injected": [
-          "mem-001"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
+        "adapterName": "lexical",
+        "adapterVersion": "lexical-v1",
+        "status": "ok",
+        "latencyMs": 0,
+        "authorization": {
+          "evaluated": false,
+          "allowed": true
+        },
+        "provenance": {
+          "provider": null,
+          "providerVersion": null,
+          "retrievalPolicyVersion": "retrieval-v1",
+          "configHash": "sha256:768ff5e9abd552e22788f822ec259f08b2f86083e552be19fb1dfedd43d17b8d",
+          "fixtureHash": "sha256:3cc189cdbe299e1c803c9ca06721f63052f28eeedac782fcb9664f7f77198254"
+        },
+        "metrics": {
+          "tokensRetrieval": null,
+          "tokensRerank": null,
+          "tokensPack": null,
+          "tokensJudge": null,
+          "contextPackBytes": 119,
+          "contextPackHash": "sha256:d79101909f6802fd29263977fbf074b998a88c7d755e76384073f4bf9a864e50"
+        }
+      },
+      "corpusHash": "sha256:3aafd3859ae0c9db4ccb7638f44ac956878a958f7b64bd8c441b9a90440e216a",
+      "taskHash": "sha256:c88aca72c88f53283a4bade991d9ad68fbfd437d8196c69497576ab816a15473"
     },
     {
       "taskId": "memroos-pub-0002",
       "taskType": "temporal_reasoning",
+      "lane": "external_retrieval",
+      "adapterName": "lexical",
+      "status": "ok",
       "precisionAtK": 1,
       "recallAtK": 1,
       "mrr": 1,
@@ -57,35 +165,39 @@
       "answerSupportedByRetrievedSource": false,
       "abstentionCorrect": null,
       "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-002",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          },
-          {
-            "id": "mem-003",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          }
-        ],
-        "injected": [
-          "mem-002",
-          "mem-003"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
+        "adapterName": "lexical",
+        "adapterVersion": "lexical-v1",
+        "status": "ok",
+        "latencyMs": 0,
+        "authorization": {
+          "evaluated": false,
+          "allowed": true
+        },
+        "provenance": {
+          "provider": null,
+          "providerVersion": null,
+          "retrievalPolicyVersion": "retrieval-v1",
+          "configHash": "sha256:768ff5e9abd552e22788f822ec259f08b2f86083e552be19fb1dfedd43d17b8d",
+          "fixtureHash": "sha256:3cc189cdbe299e1c803c9ca06721f63052f28eeedac782fcb9664f7f77198254"
+        },
+        "metrics": {
+          "tokensRetrieval": null,
+          "tokensRerank": null,
+          "tokensPack": null,
+          "tokensJudge": null,
+          "contextPackBytes": 190,
+          "contextPackHash": "sha256:bb19ecc3f5db9e7678c2391c7056d630404f3596426ed8c07141cf7ddf66af1a"
+        }
+      },
+      "corpusHash": "sha256:457ae69c61b3f747cdbb232a75a8754b71cec842be7eb164f568e96e5dea19dc",
+      "taskHash": "sha256:507cae780fe9561c1a759fdeb54f54ce1405afdb889888840f1eb4fda34a2aec"
     },
     {
       "taskId": "memroos-pub-0003",
       "taskType": "multi_hop",
+      "lane": "external_retrieval",
+      "adapterName": "lexical",
+      "status": "ok",
       "precisionAtK": 1,
       "recallAtK": 1,
       "mrr": 1,
@@ -96,763 +208,32 @@
       "answerSupportedByRetrievedSource": false,
       "abstentionCorrect": null,
       "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-004",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          },
-          {
-            "id": "mem-005",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          }
-        ],
-        "injected": [
-          "mem-004",
-          "mem-005"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0004",
-      "taskType": "abstention",
-      "precisionAtK": 0,
-      "recallAtK": 0,
-      "mrr": 0,
-      "falsePositiveRate": 1,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 0,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": false,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-006",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          }
-        ],
-        "injected": [
-          "mem-006"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0005",
-      "taskType": "entity_state",
-      "precisionAtK": 0.5,
-      "recallAtK": 1,
-      "mrr": 0.5,
-      "falsePositiveRate": 0.5,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-007",
-            "score": 6,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 6"
-          },
-          {
-            "id": "mem-008",
-            "score": 3,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 3"
-          }
-        ],
-        "injected": [
-          "mem-007",
-          "mem-008"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0006",
-      "taskType": "event_summary",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-009",
-            "score": 3,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 3"
-          }
-        ],
-        "injected": [
-          "mem-009"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0007",
-      "taskType": "single_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-010",
-            "score": 7,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 7"
-          }
-        ],
-        "injected": [
-          "mem-010"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0008",
-      "taskType": "multi_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 2,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-012",
-            "score": 8,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 8"
-          },
-          {
-            "id": "mem-011",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-012",
-          "mem-011"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0009",
-      "taskType": "temporal_reasoning",
-      "precisionAtK": 0.5,
-      "recallAtK": 1,
-      "mrr": 0.5,
-      "falsePositiveRate": 0.5,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-013",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          },
-          {
-            "id": "mem-014",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-013",
-          "mem-014"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0010",
-      "taskType": "single_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-015",
-            "score": 3,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 3"
-          }
-        ],
-        "injected": [
-          "mem-015"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0011",
-      "taskType": "entity_state",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-016",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-016"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0012",
-      "taskType": "abstention",
-      "precisionAtK": 0,
-      "recallAtK": 0,
-      "mrr": 0,
-      "falsePositiveRate": 1,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 0,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": false,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-017",
-            "score": 5,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 5"
-          }
-        ],
-        "injected": [
-          "mem-017"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0013",
-      "taskType": "multi_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 2,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-019",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          },
-          {
-            "id": "mem-018",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-019",
-          "mem-018"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0014",
-      "taskType": "event_summary",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-020",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          }
-        ],
-        "injected": [
-          "mem-020"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0015",
-      "taskType": "single_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-021",
-            "score": 5,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 5"
-          }
-        ],
-        "injected": [
-          "mem-021"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0016",
-      "taskType": "temporal_reasoning",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 2,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-022",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          },
-          {
-            "id": "mem-023",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-022",
-          "mem-023"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0017",
-      "taskType": "single_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-024",
-            "score": 7,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 7"
-          }
-        ],
-        "injected": [
-          "mem-024"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0018",
-      "taskType": "entity_state",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-025",
-            "score": 5,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 5"
-          }
-        ],
-        "injected": [
-          "mem-025"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0019",
-      "taskType": "multi_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 2,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-026",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          },
-          {
-            "id": "mem-027",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          }
-        ],
-        "injected": [
-          "mem-026",
-          "mem-027"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0020",
-      "taskType": "abstention",
-      "precisionAtK": 0,
-      "recallAtK": 0,
-      "mrr": 0,
-      "falsePositiveRate": 1,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 0,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": false,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-028",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-028"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0021",
-      "taskType": "event_summary",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-029",
-            "score": 3,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 3"
-          }
-        ],
-        "injected": [
-          "mem-029"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0022",
-      "taskType": "temporal_reasoning",
-      "precisionAtK": 0.5,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0.5,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-031",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          },
-          {
-            "id": "mem-030",
-            "score": 1,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 1"
-          }
-        ],
-        "injected": [
-          "mem-031",
-          "mem-030"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0023",
-      "taskType": "single_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": true,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-032",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-032"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0024",
-      "taskType": "multi_hop",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 2,
-      "evidenceSpanCount": 2,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-034",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          },
-          {
-            "id": "mem-033",
-            "score": 2,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 2"
-          }
-        ],
-        "injected": [
-          "mem-034",
-          "mem-033"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
-    },
-    {
-      "taskId": "memroos-pub-0025",
-      "taskType": "entity_state",
-      "precisionAtK": 1,
-      "recallAtK": 1,
-      "mrr": 1,
-      "falsePositiveRate": 0,
-      "latencyMs": 0,
-      "injectedCount": 1,
-      "evidenceSpanCount": 1,
-      "answerSupportedByRetrievedSource": false,
-      "abstentionCorrect": null,
-      "receipt": {
-        "retrieved": [
-          {
-            "id": "mem-035",
-            "score": 4,
-            "tier": "lexical",
-            "source": "corpus",
-            "authorizationResult": "allowed",
-            "whyEntered": "term overlap score 4"
-          }
-        ],
-        "injected": [
-          "mem-035"
-        ],
-        "ignored": [],
-        "adapterName": "lexical"
-      }
+        "adapterName": "lexical",
+        "adapterVersion": "lexical-v1",
+        "status": "ok",
+        "latencyMs": 0,
+        "authorization": {
+          "evaluated": false,
+          "allowed": true
+        },
+        "provenance": {
+          "provider": null,
+          "providerVersion": null,
+          "retrievalPolicyVersion": "retrieval-v1",
+          "configHash": "sha256:768ff5e9abd552e22788f822ec259f08b2f86083e552be19fb1dfedd43d17b8d",
+          "fixtureHash": "sha256:3cc189cdbe299e1c803c9ca06721f63052f28eeedac782fcb9664f7f77198254"
+        },
+        "metrics": {
+          "tokensRetrieval": null,
+          "tokensRerank": null,
+          "tokensPack": null,
+          "tokensJudge": null,
+          "contextPackBytes": 190,
+          "contextPackHash": "sha256:5b1fcfe957467d9937f2cd6ea7d62cfb96eef1978f7e8e953baf865ca2ee833d"
+        }
+      },
+      "corpusHash": "sha256:740b25108914c843b3bf054eba3ae25735c96a1db818d7c494d55d55b8208a8a",
+      "taskHash": "sha256:95256f4616d7747878b090cdaf51faab1fc26219bfb12eae25cfc49e222f7c73"
     }
   ]
 }

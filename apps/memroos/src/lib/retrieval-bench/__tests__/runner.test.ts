@@ -23,6 +23,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 25,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
@@ -44,6 +45,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     const b = await runBenchmark({
@@ -52,6 +54,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     if (!a.ok || !b.ok) throw new Error("runs failed");
@@ -66,6 +69,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
@@ -80,6 +84,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
@@ -95,6 +100,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
       scope: {
         tenantId: "tenant-x",
@@ -118,6 +124,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
     const r = await runBenchmark({
       dataset: "memroos_public_synthetic",
       adapter: "unicorn-adapter" as never,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(false);
@@ -130,6 +137,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
     const r = await runBenchmark({
       dataset: "longmemeval_v2",
       adapter: "lexical",
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(false);
@@ -145,6 +153,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 10,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     const b = await runBenchmark({
@@ -153,6 +162,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 10,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     if (!a.ok || !b.ok) throw new Error("runs failed");
@@ -171,6 +181,7 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
       limit: 5,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
@@ -188,6 +199,7 @@ describe("writeReport + renderTextReport", () => {
       limit: 3,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
@@ -208,6 +220,7 @@ describe("writeReport + renderTextReport", () => {
       limit: 3,
       k: 3,
       seed: 0,
+      bypassCliParser: true,
       fixturesDir: FIXTURES_DIR,
     });
     expect(r.ok).toBe(true);
