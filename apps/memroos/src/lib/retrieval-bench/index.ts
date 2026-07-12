@@ -1,7 +1,7 @@
 /**
  * Public surface of the comparative retrieval benchmark module.
  *
- * Implements BENCH-01..03 + RETRIEVAL-01 (core):
+ * Implements BENCH-01..03 + RETRIEVAL-01:
  *   - VAL-RETR-001 synthetic fixture smoke run
  *   - VAL-RETR-002 normalized fixture validation
  *   - VAL-RETR-003 dataset adapter provenance (LoCoMo/LongMemEval/synthetic)
@@ -15,6 +15,7 @@
  *   - VAL-RETR-011 conservative answer/abstention scoring
  *   - VAL-RETR-012 honest latency/token/context metrics
  *   - VAL-RETR-013 reproducible aggregate reports
+ *   - VAL-RETR-014..030 deterministic improvements + receipts
  */
 
 export * from "./schema";
@@ -24,6 +25,7 @@ export * from "./metrics";
 export * from "./lanes";
 export * from "./failure";
 export * from "./runner";
+export * from "./modules";
 
 export {
   lexicalAdapter,

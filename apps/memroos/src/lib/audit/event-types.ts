@@ -203,6 +203,18 @@ export const AUDIT_EVENT_TYPES = {
   ORCH_ROLLBACK_HANDLE: "orch.rollback.handle",
   /** Tamper-evident orchestration evidence bundle produced or verified. */
   ORCH_EVIDENCE_BUNDLE: "orch.evidence.bundle",
+
+  // Retrieval benchmark v8.9 (BENCH-03 + RETRIEVAL-01 continued)
+  /** A retrieval benchmark run was emitted. */
+  RETRIEVAL_BENCH_RUN: "retrieval_bench.run",
+  /** Stage receipt (retrieved/reranked/deduped/packed/etc.) was reconciled. */
+  RETRIEVAL_BENCH_RECEIPT: "retrieval_bench.receipt",
+  /** A benchmark publication gate decision was taken (ready_for_publication or blocked). */
+  RETRIEVAL_BENCH_PUBLICATION: "retrieval_bench.publication",
+  /** A benchmark report was replayed against the recorded config. */
+  RETRIEVAL_BENCH_REPLAY: "retrieval_bench.replay",
+  /** A cross-lane / cross-run contamination guard was triggered. */
+  RETRIEVAL_BENCH_CONTAMINATION: "retrieval_bench.contamination",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -259,6 +271,8 @@ export const ENTITY_TYPES = {
   FEDERATION_PACK: "federation_pack",
   /** Multi-hop orchestration run, step, recovery, rollback, or evidence bundle. */
   ORCHESTRATION_RUN: "orchestration_run",
+  /** A retrieval benchmark run, stage receipt, publication gate, replay, or contamination event. */
+  RETRIEVAL_BENCH: "retrieval_bench",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
