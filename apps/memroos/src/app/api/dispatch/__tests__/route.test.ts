@@ -14,6 +14,13 @@ vi.mock("@/lib/security-policy", () => ({
   checkDispatchPolicy: vi.fn(() => ({ allowed: true })),
 }));
 vi.mock("@/lib/dispatch/adapter-factory", () => ({ selectAdapter: vi.fn() }));
+vi.mock("@/lib/dispatch/skill-lookup", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dispatch/skill-lookup")>();
+  return { ...actual, lookupSkillContract: vi.fn() };
+});
+vi.mock("@/lib/skills/skill-sync-governance", () => ({
+  getAgentVersionPin: vi.fn(),
+}));
 
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
@@ -23,6 +30,8 @@ const { scanContent } = await import("@/lib/content-scanner");
 const { scanIrisPreflight } = await import("@/lib/iris-scanner");
 const { checkDispatchPolicy } = await import("@/lib/security-policy");
 const { selectAdapter } = await import("@/lib/dispatch/adapter-factory");
+const { lookupSkillContract } = await import("@/lib/dispatch/skill-lookup");
+const { getAgentVersionPin } = await import("@/lib/skills/skill-sync-governance");
 
 const mockGetDb = vi.mocked(getDb);
 const mockAuthenticateAgentHeaders = vi.mocked(authenticateAgentHeaders);
@@ -33,6 +42,8 @@ const mockScanContent = vi.mocked(scanContent);
 const mockScanIrisPreflight = vi.mocked(scanIrisPreflight);
 const mockCheckDispatchPolicy = vi.mocked(checkDispatchPolicy);
 const mockSelectAdapter = vi.mocked(selectAdapter);
+const mockLookupSkillContract = vi.mocked(lookupSkillContract);
+const mockGetAgentVersionPin = vi.mocked(getAgentVersionPin);
 
 function makeDb() {
   const stmtMock = {
@@ -86,6 +97,8 @@ beforeEach(() => {
   mockScanContent.mockReturnValue({ blocked: false, matches: [], cleanContent: "Draft blog post" });
   mockCheckDispatchPolicy.mockReturnValue({ allowed: true });
   mockSelectAdapter.mockReturnValue(hivePollStub as any);
+  mockLookupSkillContract.mockReturnValue(null);
+  mockGetAgentVersionPin.mockReturnValue(null);
 });
 
 function makeRequest(body: object) {
@@ -304,6 +317,81 @@ describe("POST /api/dispatch", () => {
 
     expect(res.status).toBe(200);
     expect(mockCheckDispatchPolicy).toHaveBeenCalledWith("agent:sophia", expect.anything());
+  });
+
+  it("403 SKILL_GOVERNANCE_DENIED — same-hash pinned version drift denies before adapter invocation", async () => {
+    const pinnedStatement = {
+      run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }),
+      get: vi.fn().mockReturnValue({ source_harness: "claude" }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    mockGetDb.mockReturnValue({ prepare: vi.fn().mockReturnValue(pinnedStatement) } as any);
+    mockGetAgentVersionPin.mockReturnValue({
+      id: 1,
+      agent_id: "memroos",
+      skill_name: "review-pr",
+      skill_id: 42,
+      current_version: "1.0.0",
+      current_content_hash: "a".repeat(64),
+      prior_version: null,
+      prior_content_hash: null,
+      prior_skill_id: null,
+      actor: "operator",
+      created_at: "2026-07-12T00:00:00Z",
+      updated_at: "2026-07-12T00:00:00Z",
+      rolled_back_at: null,
+      rolled_back_by: null,
+      last_rollback_event_id: null,
+    });
+    mockLookupSkillContract.mockReturnValue({
+      kind: "hit",
+      skill: {
+        id: 42,
+        name: "review-pr",
+        source_harness: "claude",
+        version: "2.0.0",
+        risk_tier: "low",
+        dispatch_status: "enabled",
+        completeness_pct: 100,
+        trust_level: "unsigned",
+        signature: null,
+        content_hash: "a".repeat(64),
+      },
+    });
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Review the pull request",
+      skill_name: "review-pr",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body).toMatchObject({
+      ok: false,
+      code: "SKILL_GOVERNANCE_DENIED",
+      detail: {
+        skill_governance: {
+          mode: "governed",
+          denied_skill: "review-pr",
+        },
+      },
+    });
+    expect(body.error).toMatch(/Pinned skill identity mismatch/i);
+    expect(JSON.stringify(body)).not.toContain("raw skill body");
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actor: "memroos",
+      action: "policy_denied",
+      target: "dispatch",
+      severity: "high",
+    }));
+    const auditPayload = mockWriteAuditLog.mock.calls.at(-1)?.[1];
+    expect(JSON.parse(String(auditPayload?.detail))).toMatchObject({
+      code: "SKILL_GOVERNANCE_DENIED",
+      skill_name: "review-pr",
+    });
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
+    expect(hivePollStub.dispatch).not.toHaveBeenCalled();
   });
 
   it("502 ADAPTER_REJECTED — adapter returns accepted:false", async () => {

@@ -249,8 +249,9 @@ export function lookupSkillContract(
   // content_hash), the pinned contract wins over the unpinned latest
   // row. The registry row at the pinned source_harness must:
   //   - exist,
-  //   - match the pinned content_hash (drift between pin and registry
-  //     fails closed — the pin names a specific contract),
+  //   - match the pinned version and content_hash (drift between pin and
+  //     registry fails closed, including a same-body reimport under a new
+  //     version, because the pin names a specific immutable contract),
   //   - pass every other governance gate (enabled, complete, lifecycle,
   //     trust).
   //
@@ -276,6 +277,16 @@ export function lookupSkillContract(
         reason: `Pinned skill '${name}' for agent '${pinned.agent_id}' has no registry row in harness '${pinned.source_harness}'`,
         dispatch_status: null,
         trust_level: null,
+      };
+    }
+    if (pinnedRow.version !== pinned.current_version) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: `Pinned version mismatch for agent '${pinned.agent_id}'`,
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: (pinnedRow.trust_level ?? null) as TrustLevel | null,
       };
     }
     const registryHash = (pinnedRow.content_hash ?? "").toLowerCase();

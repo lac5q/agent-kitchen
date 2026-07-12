@@ -10,7 +10,12 @@ import { checkDispatchPolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
-import { lookupSkillContract, buildSkillEvidence, parseTrustLevel } from "@/lib/dispatch/skill-lookup";
+import {
+  lookupSkillContract,
+  buildSkillEvidence,
+  parseTrustLevel,
+  type SkillLookupResult,
+} from "@/lib/dispatch/skill-lookup";
 import { getAgentVersionPin } from "@/lib/skills/skill-sync-governance";
 import {
   extractMemoryLabelSnapshot,
@@ -329,13 +334,36 @@ export async function POST(req: NextRequest | Request) {
       }
     }
   }
-  const skillContract = lookupSkillContract(db, skillName, {
+  let skillContract: SkillLookupResult | null = lookupSkillContract(db, skillName, {
     minTrustLevel,
     requireSigned,
     sourceHarness: parsed.data.source_harness ?? null,
     version: parsed.data.skill_version ?? null,
     pinned,
   });
+  // A pin is an immutable artifact identity, not a harness preference. Keep
+  // this route-level guard in addition to the lookup's SQL-bound checks so a
+  // future lookup implementation cannot turn version or hash drift into an
+  // adapter invocation.
+  if (
+    pinned &&
+    skillContract?.kind === "hit" &&
+    (
+      skillContract.skill.source_harness !== pinned.source_harness ||
+      skillContract.skill.version !== pinned.current_version ||
+      (skillContract.skill.content_hash ?? "").toLowerCase() !==
+        pinned.current_content_hash.toLowerCase()
+    )
+  ) {
+    skillContract = {
+      kind: "denied",
+      skill_name: skillName ?? "",
+      source_harness: pinned.source_harness,
+      reason: `Pinned skill identity mismatch for agent '${pinned.agent_id}'`,
+      dispatch_status: skillContract.skill.dispatch_status,
+      trust_level: skillContract.skill.trust_level,
+    };
+  }
   const skillEvidence = buildSkillEvidence(skillContract, minTrustLevel);
 
   // Ambiguity denial: same-name skills from multiple harnesses cannot be

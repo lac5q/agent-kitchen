@@ -4,8 +4,9 @@
  * tests for the dispatch lookup's pinned branch.
  *
  * Covers:
- *   - A valid pin overrides the unpinned latest row.
- *   - A pin whose hash does not match the registry row fails closed.
+ *   - A valid pin overrides the unpinned latest row only on an exact
+ *     harness, version, and hash identity match.
+ *   - A pin whose version or hash does not match the registry row fails closed.
  *   - A pin whose registry row is non-dispatchable fails closed.
  *   - When a pin is provided the source_harness binding is taken from
  *     the pin so the same-name ambiguity check is bypassed.
@@ -117,7 +118,7 @@ function insertSkillRow(overrides: {
 }
 
 describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
-  it("pinned version+hash wins and the registry row is used as the selected skill", async () => {
+  it("dispatches only when the pinned version and hash exactly match the selected registry skill", async () => {
     const { lookupSkillContract } = await import("../skill-lookup");
     // Two harness rows sharing the name; the pin binds to one of them.
     const pinnedId = insertSkillRow({
@@ -145,7 +146,37 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     if (result && result.kind === "hit") {
       expect(result.skill.id).toBe(pinnedId);
       expect(result.skill.source_harness).toBe("claude");
+      expect(result.skill.version).toBe("1.0.0");
       expect(result.skill.content_hash).toBe(PINNED_HASH);
+    }
+  });
+
+  it("denies same-hash version drift caused by an unchanged-content reimport", async () => {
+    const { lookupSkillContract } = await import("../skill-lookup");
+    insertSkillRow({
+      name: "same-hash-version-drift",
+      source_harness: "claude",
+      version: "2.0.0",
+      content_hash: PINNED_HASH,
+    });
+
+    const result = lookupSkillContract(db, "same-hash-version-drift", {
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: "denied",
+      skill_name: "same-hash-version-drift",
+      source_harness: "claude",
+    });
+    if (result?.kind === "denied") {
+      expect(result.reason).toMatch(/version mismatch/i);
+      expect(result.reason).not.toContain(PINNED_BODY);
     }
   });
 
@@ -167,6 +198,35 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     expect(result?.kind).toBe("denied");
     if (result && result.kind === "denied") {
       expect(result.reason).toMatch(/Pin(hash|ned).*mismatch/i);
+    }
+  });
+
+  it("denies combined version and content-hash drift", async () => {
+    const { lookupSkillContract } = await import("../skill-lookup");
+    insertSkillRow({
+      name: "combined-identity-drift",
+      source_harness: "claude",
+      version: "2.0.0",
+      content_hash: "b".repeat(64),
+    });
+
+    const result = lookupSkillContract(db, "combined-identity-drift", {
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: "denied",
+      skill_name: "combined-identity-drift",
+      source_harness: "claude",
+    });
+    if (result?.kind === "denied") {
+      expect(result.reason).toMatch(/version mismatch/i);
+      expect(result.reason).not.toContain(PINNED_BODY);
     }
   });
 
