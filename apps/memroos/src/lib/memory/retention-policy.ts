@@ -156,7 +156,7 @@ export function stableJson(value: unknown): string {
       .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 
 export function sha256Hex(value: string): string {

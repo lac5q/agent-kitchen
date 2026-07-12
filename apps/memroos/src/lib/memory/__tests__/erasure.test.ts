@@ -84,13 +84,18 @@ describe("Erasure Coordinator", () => {
   it("VAL-MEM-016: Erasure authorization fails closed on wrong scope", async () => {
     const identity = buildCanonicalIdentity("test content", "test_type", "ingress/test", "vector", { tenantId: "tenant1" });
     
-    await expect(
-      coordinateErasure(db, identity, {
+    let err: Error | undefined;
+    try {
+      await coordinateErasure(db, identity, {
         tenantId: "tenant1",
         actorId: "actor1",
-        scope: {} // Empty scope fails closed
-      })
-    ).rejects.toThrow("missing scope");
+        scope: {}
+      });
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err).toBeDefined();
+    expect(err?.message).toContain("missing scope");
   });
 
   it("VAL-MEM-017: Erasure retries converge once without resurrection", async () => {
