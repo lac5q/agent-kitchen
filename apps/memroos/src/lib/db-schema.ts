@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 17;
+export const CURRENT_SCHEMA_VERSION = 18;
 
 type SchemaMigration = {
   version: number;
@@ -169,6 +169,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 17,
     name: 'memory-subject-erasure-decay',
     up: applyMemorySubjectErasureDecaySchema,
+  },
+  {
+    version: 18,
+    name: 'memory-consolidation-vault-dsar-offboarding-tombstones',
+    up: applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema,
   },
 ];
 
@@ -1259,6 +1264,157 @@ function applyMemorySubjectErasureDecaySchema(db: Database.Database): void {
       ON memory_decay_receipts(tenant_id, record_type, record_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS memory_decay_receipts_run
       ON memory_decay_receipts(run_key, created_at DESC);
+  `);
+}
+
+function applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema(db: Database.Database): void {
+  // MEMLIFE-05: consolidation lineage, raw vault durability ledger, DSAR export/delete,
+  // offboarding pending erasure, and chain-safe tombstones that preserve continuity
+  // without payload. Additive, idempotent (uses try/catch + IF NOT EXISTS).
+
+  db.exec(`
+    -- Consolidation lineage: one canonical summary derived from a vault-locked batch.
+    CREATE TABLE IF NOT EXISTS memory_consolidation_summaries (
+      id                       TEXT PRIMARY KEY,
+      tenant_id                TEXT NOT NULL DEFAULT 'default-tenant',
+      ontology_type            TEXT NOT NULL,
+      scope_hash               TEXT NOT NULL,
+      scope_json               TEXT NOT NULL DEFAULT '{}',
+      summary_type             TEXT NOT NULL CHECK(summary_type IN ('pattern','contradiction','summary','episodic_summary')),
+      summary_content          TEXT NOT NULL,
+      content_hash             TEXT NOT NULL,
+      source_count             INTEGER NOT NULL DEFAULT 0,
+      source_ids_json          TEXT NOT NULL DEFAULT '[]',
+      source_vault_artifact_id TEXT NOT NULL,
+      source_vault_hash        TEXT NOT NULL,
+      classification_json      TEXT NOT NULL DEFAULT '{}',
+      model_id                 TEXT,
+      model_version             TEXT,
+      run_id                   TEXT NOT NULL,
+      run_key                  TEXT NOT NULL,
+      lineage_hash             TEXT NOT NULL,
+      status                   TEXT NOT NULL DEFAULT 'active'
+                               CHECK(status IN ('active','superseded','rolled_back','failed')),
+      superseded_by            TEXT,
+      policy_id                TEXT,
+      policy_version           TEXT,
+      created_by               TEXT NOT NULL,
+      created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, lineage_hash)
+    );
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_tenant
+      ON memory_consolidation_summaries(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_run
+      ON memory_consolidation_summaries(run_key, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_source_vault
+      ON memory_consolidation_summaries(tenant_id, source_vault_artifact_id);
+
+    -- Raw vault durability ledger: tracks writes, integrity verify results, and durability
+    -- state transitions for replay-safe tenant reads.
+    CREATE TABLE IF NOT EXISTS memory_vault_durability (
+      id                  TEXT PRIMARY KEY,
+      tenant_id           TEXT NOT NULL DEFAULT 'default-tenant',
+      artifact_id         TEXT NOT NULL,
+      artifact_uri        TEXT NOT NULL,
+      content_hash        TEXT NOT NULL,
+      classification_json TEXT NOT NULL DEFAULT '{}',
+      label_version       INTEGER NOT NULL DEFAULT 1,
+      write_state         TEXT NOT NULL DEFAULT 'pending'
+                          CHECK(write_state IN ('pending','complete','failed','orphaned','replayed')),
+      replay_state        TEXT NOT NULL DEFAULT 'pending'
+                          CHECK(replay_state IN ('pending','complete','failed','mismatch')),
+      retention_until     TEXT,
+      failure_reason      TEXT,
+      created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, artifact_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_vault_durability_tenant
+      ON memory_vault_durability(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_vault_durability_state
+      ON memory_vault_durability(tenant_id, write_state, replay_state);
+
+    -- DSAR requests: identity-verified subject export/delete that delegates to the
+    -- existing subject erasure coordinator. Receipts reference the original request
+    -- identity (no raw payload).
+    CREATE TABLE IF NOT EXISTS memory_dsar_requests (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      request_type         TEXT NOT NULL CHECK(request_type IN ('export','delete')),
+      subject_hash         TEXT NOT NULL,
+      selector_hashes_json TEXT NOT NULL DEFAULT '{}',
+      verification_method  TEXT NOT NULL,
+      verification_hash    TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      scope_hash           TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'pending'
+                           CHECK(status IN ('pending','verified','exported','deleted','failed','denied','ambiguous')),
+      plan_id              TEXT,
+      result_json          TEXT NOT NULL DEFAULT '{}',
+      denial_reason        TEXT,
+      manifest_hash        TEXT,
+      manifest_artifact_id TEXT,
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      completed_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_dsar_requests_tenant
+      ON memory_dsar_requests(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_dsar_requests_subject
+      ON memory_dsar_requests(tenant_id, subject_hash, created_at DESC);
+
+    -- Offboarding pending erasure: a scoped, honest pending MEMLIFE review that does NOT
+    -- claim erasure complete. Idempotent: repeated offboarding for the same subject
+    -- returns the same review ID.
+    CREATE TABLE IF NOT EXISTS memory_offboarding_reviews (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash          TEXT NOT NULL,
+      user_id               TEXT,
+      review_kind           TEXT NOT NULL DEFAULT 'pending_erasure'
+                            CHECK(review_kind IN ('pending_erasure','cancelled')),
+      status                TEXT NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','in_progress','completed','cancelled','failed')),
+      revoked_credentials   INTEGER NOT NULL DEFAULT 0,
+      revoked_agents        INTEGER NOT NULL DEFAULT 0,
+      pending_plan_id       TEXT,
+      sla_seconds           INTEGER NOT NULL DEFAULT 86400,
+      sla_deadline          TEXT NOT NULL,
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      completed_at          TEXT,
+      UNIQUE(tenant_id, subject_hash, review_kind)
+    );
+    CREATE INDEX IF NOT EXISTS memory_offboarding_reviews_subject
+      ON memory_offboarding_reviews(tenant_id, subject_hash);
+
+    -- Tombstones: scoped, non-sensitive pointers for completed erasure that preserve
+    -- audit-chain continuity without storing payload. Append-only by convention;
+    -- chain-verifiable via entryHash stored in audit metadata.
+    CREATE TABLE IF NOT EXISTS memory_tombstones (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash               TEXT NOT NULL,
+      canonical_id               TEXT NOT NULL,
+      record_type                TEXT NOT NULL,
+      record_id                  TEXT NOT NULL,
+      record_id_hash             TEXT NOT NULL,
+      derivative_inventory_hash  TEXT NOT NULL,
+      policy_id                  TEXT,
+      policy_version             TEXT,
+      erasure_id                 TEXT NOT NULL,
+      scope_hash                 TEXT NOT NULL,
+      outcome                    TEXT NOT NULL DEFAULT 'erased'
+                                 CHECK(outcome IN ('erased','blocked','failed','partial')),
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, erasure_id, canonical_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_tombstones_tenant
+      ON memory_tombstones(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_tombstones_subject
+      ON memory_tombstones(tenant_id, subject_hash, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_tombstones_canonical
+      ON memory_tombstones(tenant_id, canonical_id, created_at DESC);
   `);
 }
 

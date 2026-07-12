@@ -146,6 +146,26 @@ export const AUDIT_EVENT_TYPES = {
   MEMORY_SUBJECT_ERASURE_EXECUTED: "memory.subject_erasure.executed",
   /** Episodic decay run completed with per-record skip/decay receipts. */
   MEMORY_DECAY_RUN: "memory.decay.run",
+
+  // Memory lifecycle v8.7 MEMLIFE-05: consolidation, vault, DSAR, offboarding, tombstones
+  /** A consolidation cycle has begun for a scoped batch (success, failed, or skipped). */
+  MEMORY_CONSOLIDATION_RUN: "memory.consolidation.run",
+  /** A consolidation cycle wrote a new ontology summary after raw-vault integrity verification. */
+  MEMORY_CONSOLIDATION_SUMMARY: "memory.consolidation.summary",
+  /** Raw vault write succeeded with integrity hash and classification. */
+  MEMORY_VAULT_WRITE: "memory.vault.write",
+  /** Raw vault replay completed and the artifact hash matched the persisted record. */
+  MEMORY_VAULT_REPLAY: "memory.vault.replay",
+  /** Raw vault durability failure (db/file/rename/key/hash fault). */
+  MEMORY_VAULT_FAILURE: "memory.vault.failure",
+  /** Subject export (DSAR) request identity-verified and manifest produced. */
+  MEMORY_SUBJECT_EXPORT: "memory.subject.export",
+  /** Subject delete (DSAR) request identity-verified and erasure plan/status produced. */
+  MEMORY_SUBJECT_DELETE: "memory.subject.delete",
+  /** Offboarding triggered a pending MEMLIFE review (does not claim erasure complete). */
+  MEMORY_OFFBOARDING_PENDING: "memory.offboarding.pending",
+  /** Tombstone written for a completed erasure preserving chain continuity without payload. */
+  MEMORY_TOMBSTONE_WRITTEN: "memory.tombstone.written",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -178,6 +198,16 @@ export const ENTITY_TYPES = {
   MEMORY_SUBJECT_ERASURE: "memory_subject_erasure",
   /** A scheduled episodic memory decay run. */
   MEMORY_DECAY: "memory_decay",
+  /** A memory consolidation cycle (episodic -> summary via raw vault). */
+  MEMORY_CONSOLIDATION: "memory_consolidation",
+  /** A memory raw vault artifact (write, replay, classification, durability). */
+  MEMORY_VAULT: "memory_vault",
+  /** A subject data export / delete (DSAR) request. */
+  MEMORY_DSAR: "memory_dsar",
+  /** An offboarding-triggered pending MEMLIFE review. */
+  MEMORY_OFFBOARDING: "memory_offboarding",
+  /** A scoped, non-sensitive erasure tombstone pointer. */
+  MEMORY_TOMBSTONE: "memory_tombstone",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
