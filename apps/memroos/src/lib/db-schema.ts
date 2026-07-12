@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 16;
+export const CURRENT_SCHEMA_VERSION = 17;
 
 type SchemaMigration = {
   version: number;
@@ -164,6 +164,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 16,
     name: 'memory-retention-expiry-and-holds',
     up: applyMemoryRetentionLifecycleSchema,
+  },
+  {
+    version: 17,
+    name: 'memory-subject-erasure-decay',
+    up: applyMemorySubjectErasureDecaySchema,
   },
 ];
 
@@ -1143,6 +1148,117 @@ function applyMemoryRetentionLifecycleSchema(db: Database.Database): void {
       ON memory_retention_receipts(tenant_id, record_type, record_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS memory_retention_receipts_run
       ON memory_retention_receipts(run_key, created_at DESC);
+  `);
+}
+
+
+function applyMemorySubjectErasureDecaySchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_erasure_reports (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      canonical_id         TEXT NOT NULL,
+      status               TEXT NOT NULL
+                           CHECK(status IN ('completed','failed','pending','incomplete')),
+      store_outcomes_json  TEXT NOT NULL DEFAULT '[]',
+      actor_id             TEXT NOT NULL,
+      scope_hash           TEXT NOT NULL,
+      started_at           TEXT NOT NULL,
+      completed_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_erasure_reports_tenant
+      ON memory_erasure_reports(tenant_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_erasure_reports_canonical
+      ON memory_erasure_reports(tenant_id, canonical_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_subject_erasure_plans (
+      id                       TEXT PRIMARY KEY,
+      tenant_id                TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash             TEXT NOT NULL,
+      selector_hashes_json     TEXT NOT NULL DEFAULT '{}',
+      status                   TEXT NOT NULL DEFAULT 'planned'
+                               CHECK(status IN ('planned','approved','executing','completed','incomplete','blocked','failed','denied','ambiguous')),
+      scope_json               TEXT NOT NULL DEFAULT '{}',
+      scope_hash               TEXT NOT NULL,
+      matched_records_json     TEXT NOT NULL DEFAULT '[]',
+      excluded_records_json    TEXT NOT NULL DEFAULT '[]',
+      coverage_json            TEXT NOT NULL DEFAULT '[]',
+      holds_json               TEXT NOT NULL DEFAULT '[]',
+      policy_json              TEXT NOT NULL DEFAULT '{}',
+      estimated_effects_json   TEXT NOT NULL DEFAULT '{}',
+      plan_hash                TEXT NOT NULL,
+      source_version_hash      TEXT NOT NULL,
+      created_by               TEXT NOT NULL,
+      created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      reviewed_by              TEXT,
+      reviewed_at              TEXT,
+      executed_by              TEXT,
+      executed_at              TEXT,
+      result_json              TEXT,
+      updated_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, plan_hash)
+    );
+    CREATE INDEX IF NOT EXISTS memory_subject_erasure_plans_tenant_status
+      ON memory_subject_erasure_plans(tenant_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_subject_erasure_plans_subject
+      ON memory_subject_erasure_plans(tenant_id, subject_hash, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_erasure_tombstones (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_plan_id            TEXT REFERENCES memory_subject_erasure_plans(id) ON DELETE SET NULL,
+      canonical_id               TEXT NOT NULL,
+      record_type                TEXT NOT NULL,
+      record_id                  TEXT NOT NULL,
+      derivative_inventory_json  TEXT NOT NULL DEFAULT '[]',
+      policy_json                TEXT NOT NULL DEFAULT '{}',
+      outcome                    TEXT NOT NULL CHECK(outcome IN ('erased','blocked','failed')),
+      erasure_id                 TEXT NOT NULL,
+      scope_hash                 TEXT NOT NULL,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, subject_plan_id, canonical_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_erasure_tombstones_tenant
+      ON memory_erasure_tombstones(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_erasure_tombstones_canonical
+      ON memory_erasure_tombstones(tenant_id, canonical_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_decay_runs (
+      run_key             TEXT PRIMARY KEY,
+      tenant_id           TEXT NOT NULL DEFAULT 'default-tenant',
+      cycle_id            TEXT NOT NULL,
+      status              TEXT NOT NULL CHECK(status IN ('completed','lease_held','failed')),
+      scope_json          TEXT NOT NULL DEFAULT '{}',
+      scope_hash          TEXT NOT NULL,
+      actor_id            TEXT NOT NULL,
+      scheduled_for       TEXT NOT NULL,
+      started_at          TEXT NOT NULL,
+      completed_at        TEXT,
+      summary_json        TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS memory_decay_runs_tenant
+      ON memory_decay_runs(tenant_id, scheduled_for DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_decay_receipts (
+      id                 TEXT PRIMARY KEY,
+      tenant_id          TEXT NOT NULL DEFAULT 'default-tenant',
+      run_key            TEXT NOT NULL,
+      cycle_id           TEXT NOT NULL,
+      record_type        TEXT NOT NULL,
+      record_id          TEXT NOT NULL,
+      decision           TEXT NOT NULL CHECK(decision IN ('decayed','skipped')),
+      reason             TEXT NOT NULL,
+      before_score       REAL,
+      after_score        REAL,
+      scope_hash         TEXT NOT NULL,
+      metadata_json      TEXT NOT NULL DEFAULT '{}',
+      created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(run_key, record_type, record_id, decision, reason)
+    );
+    CREATE INDEX IF NOT EXISTS memory_decay_receipts_record
+      ON memory_decay_receipts(tenant_id, record_type, record_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_decay_receipts_run
+      ON memory_decay_receipts(run_key, created_at DESC);
   `);
 }
 

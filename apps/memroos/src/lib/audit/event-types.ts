@@ -138,6 +138,14 @@ export const AUDIT_EVENT_TYPES = {
   MEMORY_RETENTION_EXPIRY_RUN: "memory.retention.expiry_run",
   /** Legal hold created, updated, released, or expired. */
   MEMORY_LEGAL_HOLD: "memory.legal_hold",
+  /** Subject erasure plan created with reviewable non-sensitive coverage. */
+  MEMORY_SUBJECT_ERASURE_PLANNED: "memory.subject_erasure.planned",
+  /** Subject erasure plan approved by an operator for the exact current hash. */
+  MEMORY_SUBJECT_ERASURE_APPROVED: "memory.subject_erasure.approved",
+  /** Subject erasure execution completed, blocked, incomplete, or failed. */
+  MEMORY_SUBJECT_ERASURE_EXECUTED: "memory.subject_erasure.executed",
+  /** Episodic decay run completed with per-record skip/decay receipts. */
+  MEMORY_DECAY_RUN: "memory.decay.run",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -166,6 +174,10 @@ export const ENTITY_TYPES = {
   MEMORY_RETENTION: "memory_retention",
   /** A legal hold over memory lifecycle records. */
   MEMORY_LEGAL_HOLD: "memory_legal_hold",
+  /** A reviewed subject erasure plan/execution record. */
+  MEMORY_SUBJECT_ERASURE: "memory_subject_erasure",
+  /** A scheduled episodic memory decay run. */
+  MEMORY_DECAY: "memory_decay",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

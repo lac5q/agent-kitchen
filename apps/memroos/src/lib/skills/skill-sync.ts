@@ -42,6 +42,8 @@ import {
 import path from "path";
 import type Database from "better-sqlite3";
 
+import { buildSkillAuditEntry } from "@/lib/audit/skill-chain";
+
 import { computeContentHash } from "@/lib/skills/registry";
 
 // ---------------------------------------------------------------------------
@@ -500,9 +502,6 @@ function writeAuditEntry(
   try {
     if (entry.eventType.startsWith("skill.")) {
       try {
-        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
-          buildSkillAuditEntry: (db: any, input: any) => any;
-        };
         const built = buildSkillAuditEntry(db, {
           tenantId: "default-tenant",
           actorId: entry.actor,
@@ -531,7 +530,7 @@ function writeAuditEntry(
           built.created_at
         );
         return built.id;
-      } catch (e) {
+      } catch {
         try {
           const exists = db
             .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_entries'`)

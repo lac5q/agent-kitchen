@@ -1,6 +1,15 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
-import { stableJson } from "./retention-policy";
+
+
+interface QmdUpdateRow {
+  id: string;
+  target_path: string;
+  source_hash: string;
+  status: QmdUpdateState["status"];
+  freshness_timestamp: string;
+  last_success_timestamp?: string | null;
+}
 
 export interface QmdUpdateState {
   id: string;
@@ -52,9 +61,9 @@ export function finalizeQmdUpdate(
 ): QmdUpdateState {
   const currentNow = (now ?? new Date()).toISOString();
   
-  let existing;
+  let existing: QmdUpdateRow | undefined;
   try {
-    existing = db.prepare(`SELECT * FROM memory_qmd_updates WHERE id = ?`).get(updateId) as any;
+    existing = db.prepare(`SELECT * FROM memory_qmd_updates WHERE id = ?`).get(updateId) as QmdUpdateRow | undefined;
   } catch(e) {
     if (!String(e).includes("no such table")) {
       throw e;
@@ -73,7 +82,7 @@ export function finalizeQmdUpdate(
     sourceHash: existing.source_hash,
     status: outcome,
     freshnessTimestamp: currentNow,
-    lastSuccessTimestamp: outcome === "success" ? currentNow : existing.last_success_timestamp
+    lastSuccessTimestamp: outcome === "success" ? currentNow : existing.last_success_timestamp ?? undefined
   };
   
   try {

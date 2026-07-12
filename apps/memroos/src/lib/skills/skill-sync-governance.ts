@@ -39,6 +39,8 @@
 import { createHash, randomUUID } from "crypto";
 import type Database from "better-sqlite3";
 
+import { buildSkillAuditEntry } from "@/lib/audit/skill-chain";
+
 // ---------------------------------------------------------------------------
 // Types — proposals
 // ---------------------------------------------------------------------------
@@ -406,9 +408,6 @@ function writeAuditEntry(
     // VAL-039: use chained audit for skill domain events
     if (entry.eventType.startsWith("skill.")) {
       try {
-        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
-          buildSkillAuditEntry: (db: any, input: any) => any;
-        };
         const built = buildSkillAuditEntry(db, {
           tenantId: "default-tenant",
           actorId: entry.actor,
@@ -437,7 +436,7 @@ function writeAuditEntry(
           built.created_at
         );
         return built.id;
-      } catch (e) {
+      } catch {
         // If chained build fails, fall back to plain insert below
         // but if audit_entries exists, propagate error for atomicity unless it's missing hash chain table issue
         try {

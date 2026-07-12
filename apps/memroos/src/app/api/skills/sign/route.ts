@@ -23,6 +23,9 @@
  * Auth: operator key or loopback (same gate as the import route).
  */
 
+import { randomUUID } from "crypto";
+
+import { buildSkillAuditEntry } from "@/lib/audit/skill-chain";
 import { getDb } from "@/lib/db";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import {
@@ -201,9 +204,6 @@ export async function POST(request: Request) {
 
       // Audit receipt for signing — IDs/hashes/classifications/reasons only (no raw secrets)
       try {
-        const { buildSkillAuditEntry } = require("@/lib/audit/skill-chain") as {
-          buildSkillAuditEntry: (db: any, input: any) => any;
-        };
         const built = buildSkillAuditEntry(db, {
           tenantId: "default-tenant",
           actorId: record.signed_by,
@@ -239,7 +239,6 @@ export async function POST(request: Request) {
         );
       } catch {
         // fallback plain audit if chain builder unavailable
-        const { randomUUID } = require("crypto");
         db.prepare(
           `INSERT INTO audit_entries
             (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at)

@@ -436,7 +436,7 @@ export function updateQuarantineRecord(
 ): QuarantineRecord {
   const existing = loadRowBySkillId(db, skillId);
   const fromStage = (existing?.stage as QuarantineStage | undefined) ?? null;
-  const actor = (params as any)._actor ?? params.approvedBy ?? "system";
+  const actor = params._actor ?? params.approvedBy ?? "system";
   const now = new Date().toISOString();
 
   const txn = db.transaction(() => {

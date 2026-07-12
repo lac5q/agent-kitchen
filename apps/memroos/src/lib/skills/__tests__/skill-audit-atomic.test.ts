@@ -46,8 +46,8 @@ afterEach(() => {
 });
 
 describe("VAL-SKILL-038 audit-atomic mutations", () => {
-  it("commits body + audit row in single transaction", () => {
-    const { commitAuditAtomic } = require("@/lib/skills/skill-audit-atomic") as typeof import("@/lib/skills/skill-audit-atomic");
+  it("commits body + audit row in single transaction", async () => {
+    const { commitAuditAtomic } = await import("@/lib/skills/skill-audit-atomic");
 
     const result = commitAuditAtomic(db, {
       actor: "operator",

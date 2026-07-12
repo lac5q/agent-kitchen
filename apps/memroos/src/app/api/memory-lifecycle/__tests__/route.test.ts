@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "@/lib/db";
 import { POST as expiryPost } from "../expiry/route";
+import { POST as decayPost } from "../decay/route";
 import { POST as holdsPost } from "../legal-holds/route";
 import { POST as retentionPost } from "../retention/route";
+import { POST as subjectErasurePost } from "../subject-erasure/route";
 
 const TMP_ROOT = path.join(os.tmpdir(), `memory-lifecycle-route-${crypto.randomUUID()}`);
 
@@ -109,5 +111,104 @@ describe("memory lifecycle API routes", () => {
     const expiredJson = (await expiredRun.json()) as { summary: { held: number; expired: number } };
     expect(expiredJson.summary.held).toBe(0);
     expect(expiredJson.summary.expired).toBe(1);
+  });
+
+
+  it("supports subject-erasure plan review, execution, and protected decay via API", async () => {
+    const policyResponse = await retentionPost(
+      jsonRequest({
+        action: "create_policy",
+        id: "policy-subject-route",
+        name: "subject route policy",
+        ontologyType: "memory.note",
+        securityLabel: { visibility: "internal" },
+        purpose: "recall",
+        scope: { tenantId: "default-tenant", project: "alpha" },
+        durationDays: 365,
+        actorId: "operator",
+      })
+    );
+    expect(policyResponse.status).toBe(200);
+
+    const { getDb } = await import("@/lib/db");
+    const db = getDb();
+    const messageId = db
+      .prepare(
+        `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+         VALUES(?,?,?,?,?,?,?,?)`
+      )
+      .run("route-subject-session", "alpha", "agent", "user", "ROUTE_SUBJECT_SECRET", "2026-01-01T00:00:00.000Z", "internal", "indexable")
+      .lastInsertRowid as number;
+    db.prepare("INSERT INTO memory_salience(message_id, tier, salience_score, last_decay_at) VALUES (?, 'mid', 1.0, ?)").run(
+      messageId,
+      "2026-01-01T00:00:00.000Z"
+    );
+
+    const registerResponse = await retentionPost(
+      jsonRequest({
+        action: "register_record",
+        recordType: "message",
+        recordId: String(messageId),
+        ontologyType: "memory.note",
+        securityLabel: { visibility: "internal" },
+        purpose: "recall",
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha", subjectId: "route-subject", decayProtected: true },
+        actorId: "operator",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+    );
+    expect(registerResponse.status).toBe(200);
+
+    const decayResponse = await decayPost(
+      jsonRequest({
+        runKey: "route-decay-protected",
+        actorId: "system",
+        now: "2026-01-02T00:00:00.000Z",
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      })
+    );
+    expect(decayResponse.status).toBe(200);
+    const decayJson = (await decayResponse.json()) as { summary: { skippedProtected: number; decayed: number } };
+    expect(decayJson.summary.skippedProtected).toBe(1);
+    expect(decayJson.summary.decayed).toBe(0);
+
+    const planResponse = await subjectErasurePost(
+      jsonRequest({
+        action: "create_plan",
+        id: "route-subject-plan",
+        subject: { subjectId: "route-subject" },
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+        actorId: "operator",
+        now: "2026-01-02T00:05:00.000Z",
+      })
+    );
+    expect(planResponse.status).toBe(200);
+    const planJson = (await planResponse.json()) as { plan: { planHash: string; matchedRecords: Array<{ recordId: string }> } };
+    expect(planJson.plan.matchedRecords).toHaveLength(1);
+
+    const approveResponse = await subjectErasurePost(
+      jsonRequest({
+        action: "approve_plan",
+        planId: "route-subject-plan",
+        planHash: planJson.plan.planHash,
+        actorId: "reviewer",
+        now: "2026-01-02T00:10:00.000Z",
+      })
+    );
+    expect(approveResponse.status).toBe(200);
+
+    const executeResponse = await subjectErasurePost(
+      jsonRequest({
+        action: "execute_plan",
+        planId: "route-subject-plan",
+        planHash: planJson.plan.planHash,
+        actorId: "operator",
+        now: "2026-01-02T00:15:00.000Z",
+      })
+    );
+    expect(executeResponse.status).toBe(200);
+    const executeJson = (await executeResponse.json()) as { status: string; erased: number };
+    expect(executeJson).toMatchObject({ status: "completed", erased: 1 });
+    expect(db.prepare("SELECT content FROM messages WHERE id = ?").get(messageId)).toMatchObject({ content: "[erased]" });
   });
 });
