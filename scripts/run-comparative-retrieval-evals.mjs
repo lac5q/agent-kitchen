@@ -4,20 +4,39 @@
  *
  * MemroOS Comparative Retrieval Benchmark runner (Lane 2).
  *
- * Implements BENCH-01..03 + RETRIEVAL-01 (core): synthetic fixture smoke,
- * normalized fixture validation, dataset adapter provenance, licensed
- * data non-distribution, shared result contract, lexical/no-memory
- * controls, live retrieval authorization gating, benchmark lane
- * separation, provider/adapter failure handling, ranked-ID metrics,
- * conservative answer/abstention scoring, honest latency/token/context
- * metrics, and reproducible aggregate reports.
+ * Implements BENCH-01..03 + RETRIEVAL-01 (core):
+ *   - VAL-RETR-001 synthetic fixture smoke run
+ *   - VAL-RETR-002 normalized fixture validation
+ *   - VAL-RETR-003 dataset adapter provenance
+ *   - VAL-RETR-004 licensed data non-distribution
+ *   - VAL-RETR-005 shared result contract
+ *   - VAL-RETR-006 lexical/no-memory control validity
+ *   - VAL-RETR-007 live retrieval authorization gating
+ *   - VAL-RETR-008 benchmark lane separation
+ *   - VAL-RETR-009 provider/adapter failure handling
+ *   - VAL-RETR-010 ranked-ID metrics
+ *   - VAL-RETR-011 conservative answer/abstention scoring
+ *   - VAL-RETR-012 honest latency/token/context metrics
+ *   - VAL-RETR-013 reproducible aggregate reports
+ *   - VAL-RETR-014..030 deterministic improvements + receipts
  *
- * The benchmark harness is implemented as a TypeScript module at
- * `apps/memroos/src/lib/retrieval-bench/`. This .mjs runner loads that
- * module via Node 22's `--experimental-strip-types` plus a small
- * `scripts/ts-loader.mjs` resolver. The legacy `lexical` / `no-memory`
- * helpers (`scoreTask`, `isExpectedAnswerSupported`) re-export the new
- * TypeScript implementation so existing tests keep working.
+ * The runner delegates to the production TypeScript retrieval-bench
+ * module at `apps/memroos/src/lib/retrieval-bench/index.ts`, which
+ * wires every BENCH-03 stage (entity extraction, tier fanout,
+ * rerank, dedupe, context packing, temporal retrieval, stage
+ * reconciliation, publication gate, replay handle, isolation /
+ * contamination guard) and emits audit entries to the
+ * `retrieval_bench` chain domain.
+ *
+ * CLI flags:
+ *   --dataset, --adapter, --limit, --k, --seed, --no-write,
+ *   --json, --scope-tenant, --scope-space, --scope-purpose,
+ *   --rerank, --judge, --output-dir
+ *
+ * The strict parser in `modules/cli-parser.ts` rejects malformed
+ * flags. The write guard refuses all filesystem writes when
+ * `--no-write` is set. The report publication gate refuses
+ * publication when receipts / provenance are missing.
  */
 
 import fs from "node:fs";
@@ -31,8 +50,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const fixturesDir = path.join(repoRoot, "evals", "comparative-retrieval", "fixtures");
 const resultsDir = path.join(repoRoot, "evals", "comparative-retrieval", "results");
 
-// Register the local TS resolver so .ts imports resolve correctly when
-// the runner loads the retrieval-bench module under strip-types.
+// Register the local TS resolver so .ts + @/* alias imports resolve
+// correctly under Node 22's --experimental-strip-types.
 register(path.join(__dirname, "ts-loader.mjs"), pathToFileURL(__dirname));
 
 // Load the TypeScript module via createRequire (Node 22.22+ supports
@@ -43,6 +62,10 @@ const benchModulePath = path.join(
   "apps/memroos/src/lib/retrieval-bench/index.ts",
 );
 const bench = requireFromHere(benchModulePath);
+
+// ===========================================================================
+// Re-exports for the existing test suite
+// ===========================================================================
 
 // Legacy aliases preserved for the existing test suite
 // (scripts/run-comparative-retrieval-evals.test.mjs imports these).
@@ -138,7 +161,39 @@ function scoreTask(task, retrieval) {
   };
 }
 
+// ===========================================================================
+// Strict CLI parsing — uses the BENCH-03 strict parser when available
+// ===========================================================================
+
 function parseArgs(argv) {
+  // Prefer the production strict parser. When unavailable (older builds)
+  // we fall back to a minimal permissive parser so the smoke path stays
+  // runnable.
+  if (bench.parseCliArgs) {
+    const r = bench.parseCliArgs(argv);
+    if (!r.ok) {
+      console.error("Invalid CLI args: " + r.reason);
+      process.exit(2);
+    }
+    const c = r.command;
+    return {
+      dataset: c.dataset,
+      adapter: c.adapter,
+      limit: c.limit,
+      adapterShort: c.adapter,
+      json: c.json,
+      noWrite: c.noWrite,
+      scopeTenant: c.scopeTenant,
+      scopeSpace: c.scopeSpace,
+      scopePurpose: c.scopePurpose,
+      k: c.k,
+      seed: c.seed,
+      rerank: c.rerank,
+      judge: c.judge,
+      outputDir: c.outputDir,
+      strict: true,
+    };
+  }
   const args = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--dataset") args.dataset = argv[++i];
@@ -154,8 +209,12 @@ function parseArgs(argv) {
     else if (argv[i] === "--rerank") args.rerank = true;
     else if (argv[i] === "--judge") args.judge = true;
   }
-  return args;
+  return { ...args, strict: false };
 }
+
+// ===========================================================================
+// Legacy adapters (kept for the legacy test suite)
+// ===========================================================================
 
 function legacyLexicalAdapter(task, k = 3) {
   const start = Date.now();
@@ -221,25 +280,63 @@ function loadFixturesSync(dataset, limit) {
   return limit && Number.isFinite(limit) ? tasks.slice(0, limit) : tasks;
 }
 
-function renderTextReport(args, aggregate, taskScores) {
+// ===========================================================================
+// Text report renderer
+// ===========================================================================
+
+function renderTextReport(args, result) {
   const lines = [];
   lines.push("# MemroOS Comparative Retrieval Benchmark");
   lines.push("");
-  lines.push(`Run date:   ${new Date().toISOString()}`);
-  lines.push(`Dataset:    ${args.dataset}`);
-  lines.push(`Adapter:    ${args.adapter}`);
-  lines.push(`Tasks:      ${taskScores.length}`);
+  lines.push(`Run ID:        ${result.runId ?? "n/a"}`);
+  lines.push(`Run date:      ${result.runDate ?? new Date().toISOString()}`);
+  lines.push(`Dataset:       ${args.dataset}`);
+  lines.push(`Adapter:       ${args.adapter}`);
+  lines.push(`Tasks:         ${result.taskCount ?? 0}`);
+  if (result.aggregate) {
+    lines.push(`Lane:          ${result.lane ?? "external_retrieval"}`);
+    lines.push(`Config hash:   ${result.configHash ?? "n/a"}`);
+    lines.push(`Fixture hash:  ${result.fixtureHash ?? "n/a"}`);
+  }
   lines.push("");
   lines.push("## Aggregate Scores");
   lines.push("");
-  lines.push(`precision@k:              ${aggregate.precisionAtK}`);
-  lines.push(`recall@k:                 ${aggregate.recallAtK}`);
-  lines.push(`MRR:                      ${aggregate.mrr}`);
-  lines.push(`false_positive_rate:      ${aggregate.falsePositiveRate}`);
-  lines.push(`answer_support_rate:      ${aggregate.answerSupportedRate}`);
-  lines.push(`p95_latency_ms:           ${aggregate.p95LatencyMs}`);
-  if (aggregate.abstentionAccuracy !== null) {
-    lines.push(`abstention_accuracy:      ${aggregate.abstentionAccuracy} (labeled=${aggregate.abstentionLabeledCount})`);
+  if (result.aggregate) {
+    const a = result.aggregate;
+    lines.push(`precision@k:              ${a.precisionAtK}`);
+    lines.push(`recall@k:                 ${a.recallAtK}`);
+    lines.push(`MRR:                      ${a.mrr}`);
+    lines.push(`false_positive_rate:      ${a.falsePositiveRate}`);
+    lines.push(`answer_support_rate:      ${a.answerSupportedRate}`);
+    lines.push(`p95_latency_ms:           ${a.p95LatencyMs}`);
+    if (a.abstentionAccuracy !== null && a.abstentionAccuracy !== undefined) {
+      lines.push(`abstention_accuracy:      ${a.abstentionAccuracy} (labeled=${a.abstentionLabeledCount})`);
+    }
+  }
+  if (result.publicationGate) {
+    lines.push("");
+    lines.push("## Publication Gate");
+    lines.push("");
+    lines.push(`status:                  ${result.publicationGate.status}`);
+    lines.push(`reason:                  ${result.publicationGate.reason}`);
+    if (result.publicationGate.caveats && result.publicationGate.caveats.length > 0) {
+      lines.push(`caveats:                 ${result.publicationGate.caveats.join("; ")}`);
+    }
+  }
+  if (result.contamination) {
+    lines.push("");
+    lines.push("## Contamination Probe");
+    lines.push("");
+    lines.push(`ok:                      ${result.contamination.ok}`);
+    if (!result.contamination.ok) {
+      lines.push(`reason:                  ${result.contamination.reason}`);
+    }
+  }
+  if (result.replayHandle) {
+    lines.push("");
+    lines.push("## Replay Handle");
+    lines.push("");
+    lines.push(`fingerprint:             ${result.replayHandle.fingerprint}`);
   }
   lines.push("");
   lines.push("## Midbrain Comparison Caveat");
@@ -260,29 +357,134 @@ function renderTextReport(args, aggregate, taskScores) {
   return lines.join("\n");
 }
 
+// ===========================================================================
+// Main entry — production path uses runBenchmark
+// ===========================================================================
+
 async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const dataset = args.dataset ?? "memroos_public_synthetic";
   const adapter = args.adapter ?? "lexical";
-  const limit = args.limit ?? Infinity;
+  const limit = args.limit ?? null;
 
+  // Build the optional scope from CLI flags.
+  const scope = {
+    tenantId: args.scopeTenant ?? "default-tenant",
+    userId: null,
+    agentId: null,
+    spaceId: args.scopeSpace ?? null,
+    label: null,
+    purpose: args.scopePurpose ?? "memory_search",
+    beliefStage: null,
+    maxFreshnessSeconds: null,
+  };
+
+  // For the synthetic dataset we invoke the production runner so every
+  // BENCH-03 stage, audit call, and publication gate is exercised on the
+  // live CLI path (the scrutiny-synthesis requirement).
+  if (bench.runBenchmark) {
+    let outcome;
+    try {
+      outcome = await bench.runBenchmark({
+        dataset,
+        adapter,
+        limit: typeof limit === "number" ? limit : undefined,
+        k: args.k ?? 3,
+        seed: args.seed ?? 0,
+        fixturesDir,
+        scope,
+        rerankEnabled: !!args.rerank,
+        judgeEnabled: !!args.judge,
+        noWrite: !!args.noWrite,
+        tenantId: scope.tenantId,
+        withAudit: true,
+      });
+    } catch (err) {
+      console.error("runBenchmark failed: " + (err && err.message ? err.message : String(err)));
+      process.exit(2);
+    }
+
+    if (!outcome.ok) {
+      const errorResult = {
+        ok: false,
+        reason: outcome.reason,
+        issues: outcome.issues,
+      };
+      console.log(JSON.stringify(errorResult, null, 2));
+      process.exit(2);
+      return errorResult;
+    }
+
+    const report = outcome.report;
+    const result = {
+      runId: report.runId,
+      runDate: report.runDate,
+      dataset: report.dataset,
+      adapter: report.adapter,
+      lane: report.lane,
+      configHash: report.configHash,
+      fixtureHash: report.fixtureHash,
+      seed: report.seed,
+      k: report.k,
+      rerankEnabled: report.rerankEnabled,
+      judgeEnabled: report.judgeEnabled,
+      providerFlags: report.providerFlags,
+      taskCount: report.taskCount,
+      aggregate: {
+        precisionAtK: report.aggregate.precisionAtK,
+        recallAtK: report.aggregate.recallAtK,
+        mrr: report.aggregate.mrr,
+        falsePositiveRate: report.aggregate.falsePositiveRate,
+        answerSupportedRate: report.aggregate.answerSupportedRate,
+        p95LatencyMs: report.aggregate.p95LatencyMs,
+        abstentionAccuracy: report.aggregate.abstentionAccuracy,
+        abstentionLabeledCount: report.aggregate.abstentionLabeledCount,
+        failedTaskCount: report.aggregate.failedTaskCount,
+      },
+      publicationGate: outcome.publicationGate,
+      contamination: outcome.contamination,
+      replayHandle: outcome.replayHandle ? { fingerprint: outcome.replayHandle.fingerprint } : null,
+      auditEmitted: outcome.auditEmitted,
+      tasks: report.tasks,
+    };
+
+    if (!args.noWrite) {
+      fs.mkdirSync(resultsDir, { recursive: true });
+      const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
+      fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
+      if (!args.json) {
+        console.log("Wrote " + path.relative(repoRoot, outFile));
+      }
+    }
+
+    if (args.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(renderTextReport(args, result));
+    }
+
+    // Surface a non-zero exit code when publication is blocked so CI can
+    // catch it deterministically.
+    if (outcome.publicationGate && !outcome.publicationGate.ok) {
+      process.exit(3);
+    }
+    return result;
+  }
+
+  // Legacy fallback path (used when the TS module is unavailable).
   if (adapter !== "lexical" && adapter !== "no-memory") {
     console.error(
       "Adapter '" + adapter + "' requires the TypeScript retrieval-bench module.",
     );
     process.exit(2);
   }
-
   const tasks = loadFixturesSync(dataset, limit);
   const legacyAdapter = selectLegacyAdapter(adapter);
-
   const taskScores = tasks.map((task) => {
-    const retrieval = legacyAdapter(task);
+    const retrieval = legacyAdapter(task, args.k ?? 3);
     return scoreTask(task, retrieval);
   });
-
   const aggregate = bench.aggregateTaskScores(taskScores);
-
   const result = {
     runDate: new Date().toISOString(),
     dataset,
@@ -300,7 +502,6 @@ async function run(argv = process.argv.slice(2)) {
     },
     tasks: taskScores,
   };
-
   if (!args.noWrite) {
     fs.mkdirSync(resultsDir, { recursive: true });
     const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
@@ -309,13 +510,11 @@ async function run(argv = process.argv.slice(2)) {
       console.log("Wrote " + path.relative(repoRoot, outFile));
     }
   }
-
   if (args.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log(renderTextReport(args, result.aggregate, taskScores));
+    console.log(renderTextReport(args, result));
   }
-
   return result;
 }
 

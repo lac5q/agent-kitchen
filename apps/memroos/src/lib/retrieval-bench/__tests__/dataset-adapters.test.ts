@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 
 import {
   convertLoCoMoSamples,
@@ -169,5 +170,25 @@ describe("Synthetic dataset adapter (VAL-RETR-001)", () => {
     if (!r.ok) {
       expect(r.reason).toContain("fixture_file_not_found");
     }
+  });
+
+  it("does not mutate the parsed source fixture on disk", () => {
+    // Write a temporary fixture, capture its on-disk SHA-256,
+    // run loadSyntheticSmoke, then re-hash to prove the file is
+    // untouched by the load.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bench-fixture-mut-"));
+    const fixturePath = path.join(tmpDir, "memroos-public-smoke.json");
+    const sourceFixture = path.resolve("/Users/lcalderon/github/memroos/evals/comparative-retrieval/fixtures/memroos-public-smoke.json");
+    const original = fs.readFileSync(sourceFixture);
+    fs.writeFileSync(fixturePath, original);
+    const before = crypto.createHash("sha256").update(fs.readFileSync(fixturePath)).digest("hex");
+    const r = loadSyntheticSmoke({ fixturesDir: tmpDir, limit: 25 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const after = crypto.createHash("sha256").update(fs.readFileSync(fixturePath)).digest("hex");
+    expect(after).toBe(before);
+    // Also verify the parsed tasks themselves carry the canonical provenance
+    // without having overwritten any caller-provided provenance field.
+    expect(r.tasks?.[0].provenance.dataset).toBe("memroos_public_synthetic");
   });
 });

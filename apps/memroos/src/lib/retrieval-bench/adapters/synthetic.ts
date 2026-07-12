@@ -8,7 +8,10 @@
  *
  * The adapter:
  *   - Loads the JSON fixture from disk (caller-local)
- *   - Annotates each task with the canonical provenance block
+ *   - Deep-clones each parsed task so downstream provenance stamping
+ *     NEVER mutates the source fixture on disk or the parsed JSON
+ *     (VAL-RETR-001 fixture immutability)
+ *   - Annotates each cloned task with the canonical provenance block
  *   - Returns a structured error (not an exception) on missing file,
  *     malformed JSON, or non-array content
  */
@@ -34,9 +37,32 @@ export interface SyntheticAdapterResult {
 }
 
 /**
+ * Structural deep-clone for parsed JSON. Handles plain objects, arrays,
+ * primitives, and `null`. Does not attempt to clone functions, dates, or
+ * other non-JSON-native types because the synthetic fixture contains
+ * only JSON-safe primitives.
+ */
+function deepCloneJson<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value.map((v) => deepCloneJson(v)) as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = deepCloneJson(v);
+  }
+  return out as unknown as T;
+}
+
+/**
  * Load the synthetic smoke fixture with optional limit. The adapter
  * stamps each task with the canonical provenance block so downstream
  * runners see consistent metadata.
+ *
+ * IMPORTANT: Each parsed task is deep-cloned before stamping so the
+ * synthetic adapter never mutates its source fixture (VAL-RETR-001
+ * fixture immutability + the "Synthetic adapters never mutate parsed
+ * source fixtures" expectation).
  */
 export function loadSyntheticSmoke(args: SyntheticAdapterInit): SyntheticAdapterResult {
   const fixturePath = path.join(
@@ -61,15 +87,15 @@ export function loadSyntheticSmoke(args: SyntheticAdapterInit): SyntheticAdapter
   const provenance: DatasetProvenance = {
     ...DATASET_PROVENANCE.memroos_public_synthetic,
   };
-  // Attach the provenance to every task so consumers see consistent
-  // metadata without having to derive it from the dataset id.
+  // Deep-clone each task BEFORE stamping so we never mutate the parsed
+  // source fixture. Each cloned task receives a fresh provenance block.
   const stamped: NormalizedTask[] = raw.map((t) => {
     if (typeof t !== "object" || t === null) {
       return t as NormalizedTask;
     }
-    const task = t as Record<string, unknown>;
+    const task = deepCloneJson(t as Record<string, unknown>);
     if (!task.provenance) {
-      task.provenance = provenance;
+      task.provenance = { ...provenance };
     }
     if (!task.license) task.license = provenance.sourceLicense;
     if (!task.citation) task.citation = provenance.sourceCitation;
@@ -101,6 +127,5 @@ export function hashSyntheticSmoke(tasks: NormalizedTask[]): string {
       evidence_count: (t.evidence_spans ?? []).length,
     })),
   );
-  // (crypto imported at top)
   return "sha256:" + crypto.createHash("sha256").update(canonical).digest("hex");
 }
