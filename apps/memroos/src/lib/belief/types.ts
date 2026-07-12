@@ -96,4 +96,12 @@ export interface PromotionReceiptSummary {
   previousEntryHash: string | null;
   entryHash: string;
   createdAt: string;
+  ontology?: {
+    ontologyId: string;
+    ontologyVersion: string;
+    ontologyContentHash: string;
+    namespace: string;
+    canonicalId: string;
+    aliasMigrationPath: unknown[];
+  };
 }

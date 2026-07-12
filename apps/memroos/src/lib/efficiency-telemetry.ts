@@ -41,6 +41,14 @@ export interface RetrievalTracePayload {
   }>;
   beliefStageCounts?: Record<BeliefStage, number>;
   recollectionTiming?: MemoryRecallTiming;
+  ontology?: {
+    ontologyId: string;
+    ontologyVersion: string;
+    ontologyContentHash: string;
+    namespace: string;
+    canonicalId: string;
+    aliasMigrationPath: unknown[];
+  };
 }
 
 export interface SourceReadPayload {

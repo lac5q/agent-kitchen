@@ -417,6 +417,7 @@ interface DecisionRowInput {
   metadata: Record<string, unknown>;
   createdAt: string;
   previousEntryHash: string | null;
+  ontology?: PromotionReceiptSummary["ontology"];
 }
 
 function writeDecisionRow(db: Database.Database, row: DecisionRowInput): PromotionReceiptSummary {
@@ -432,6 +433,7 @@ function writeDecisionRow(db: Database.Database, row: DecisionRowInput): Promoti
     fromStage: row.fromStage,
     toStage: row.toStage,
     previousEntryHash: row.previousEntryHash,
+    ontology: row.ontology ?? null,
     ...row.metadata,
   };
   const entryHash = hashJson({
@@ -486,6 +488,7 @@ function writeDecisionRow(db: Database.Database, row: DecisionRowInput): Promoti
     previousEntryHash: row.previousEntryHash,
     entryHash,
     createdAt: row.createdAt,
+    ontology: row.ontology,
   };
 }
 
@@ -538,6 +541,7 @@ export interface AdmitOptions {
   now?: Date;
   /** Operator-reviewed bypass for items previously queued in this tenant. */
   reviewedQueueId?: string | null;
+  ontology?: PromotionReceiptSummary["ontology"];
 }
 
 export function canAdmitToGold(
@@ -647,6 +651,7 @@ export function canAdmitToGold(
     checks,
     actor,
     createdAt: nowIso(),
+    ontology: options.ontology,
   });
 }
 
@@ -801,6 +806,7 @@ interface AdmittedArgs {
   checks: PromotionChecks;
   actor: MemoryUseActor;
   createdAt: string;
+  ontology?: PromotionReceiptSummary["ontology"];
 }
 
 function writeAdmittedReceipt(args: AdmittedArgs): AdmissionDecision {
@@ -838,6 +844,7 @@ function writeAdmittedReceipt(args: AdmittedArgs): AdmissionDecision {
       actorRole: args.actor.role,
       reason: "admitted via deterministic check pass",
       metadata: checksMetadata(args.checks),
+      ontology: args.ontology,
       createdAt: args.createdAt,
       previousEntryHash,
     });
@@ -879,6 +886,7 @@ export interface PromoteArgs {
   config?: BeliefPromotionConfig;
   /** Optional reviewed-queue bypass for an explicit operator approval. */
   reviewedQueueId?: string | null;
+  ontologyContext?: PromotionReceiptSummary["ontology"];
 }
 
 export function promoteCandidate(
@@ -890,6 +898,7 @@ export function promoteCandidate(
     category: args.category,
     config: args.config,
     reviewedQueueId: args.reviewedQueueId ?? null,
+    ontology: args.ontologyContext,
   });
 }
 

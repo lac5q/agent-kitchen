@@ -115,6 +115,8 @@ export interface PolicyRequest {
    * field — preserving the Phase 128 byte-identical contract.
    */
   dimensions?: PolicyRequestDimensions;
+  /** Required for ontology-sensitive calls, IDs and hashes only. */
+  ontologyContext?: PolicyReceipt["ontology"];
 }
 
 export interface PolicyEvaluation {
@@ -169,6 +171,7 @@ export function buildReceipt(
     actorRole: collapseAuditRole(actor?.role),
     tenantId: actor?.tenantId ?? "default-tenant",
     createdAt: nowIso(),
+    ontology: req.ontologyContext,
   };
 }
 

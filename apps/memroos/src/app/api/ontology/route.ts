@@ -14,6 +14,9 @@ import {
   type PackLifecycleState,
   type PublishOntologyInput,
 } from "@/lib/ontology/registry";
+import { decideOntologyCandidate, extractOntologyCandidate, getOntologyCandidate, promoteOntologyCandidate, registerOntologyPolicyContext } from "@/lib/ontology/candidates";
+import { registerOntologyAlias, resolveOntologyAlias, transitionOntologyAlias } from "@/lib/ontology/aliases";
+import { approveOntologyMigration, executeOntologyMigration, planOntologyMigration } from "@/lib/ontology/migrations";
 
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("request body must be an object");
@@ -108,6 +111,84 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ ok: true, pack });
     }
 
+    if (action === "extract_candidate") {
+      return Response.json({ ok: true, candidate: extractOntologyCandidate(db, {
+        ...body, tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        sourceId: asString(body.sourceId, "sourceId"), sourceHash: asString(body.sourceHash, "sourceHash"),
+        sourceSpans: body.sourceSpans as string[], extractorId: asString(body.extractorId, "extractorId"),
+        extractorVersion: asString(body.extractorVersion, "extractorVersion"), candidateKind: asString(body.candidateKind, "candidateKind") as "type" | "relationship" | "alias",
+        namespace: asString(body.namespace, "namespace"), proposed: asObject(body.proposed), confidenceLabel: asString(body.confidenceLabel, "confidenceLabel") as "low" | "medium" | "high",
+        confidenceScore: body.confidenceScore as number, actor: asString(body.actor, "actor"),
+      }) });
+    }
+
+    if (action === "decide_candidate") {
+      return Response.json({ ok: true, candidate: decideOntologyCandidate(db, {
+        candidateId: asString(body.candidateId, "candidateId"), tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        decision: asString(body.decision, "decision") as "approve" | "reject" | "defer" | "supersede" | "invalidate",
+        reviewerId: asString(body.reviewerId, "reviewerId"), reason: asString(body.reason, "reason"), supersededBy: asOptionalString(body.supersededBy),
+      }) });
+    }
+
+    if (action === "promote_candidate") {
+      return Response.json({ ok: true, promotion: promoteOntologyCandidate(db, {
+        candidateId: asString(body.candidateId, "candidateId"), tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        sealProposalId: asString(body.sealProposalId, "sealProposalId"), sealDecisionId: asString(body.sealDecisionId, "sealDecisionId"),
+        ontologyId: asString(body.ontologyId, "ontologyId"), ontologyVersion: asString(body.ontologyVersion, "ontologyVersion"),
+        ontologyContentHash: asString(body.ontologyContentHash, "ontologyContentHash"), namespace: asString(body.namespace, "namespace"),
+        policyContextHash: asString(body.policyContextHash, "policyContextHash"), reviewerId: asString(body.reviewerId, "reviewerId"),
+        idempotencyKey: asString(body.idempotencyKey, "idempotencyKey"), expiresAt: asString(body.expiresAt, "expiresAt"),
+      }) });
+    }
+
+    if (action === "register_policy_context") {
+      registerOntologyPolicyContext(db, {
+        tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        contextHash: asString(body.contextHash, "contextHash"), policyVersion: asString(body.policyVersion, "policyVersion"),
+        actor: asString(body.actor, "actor"), expiresAt: asString(body.expiresAt, "expiresAt"),
+      });
+      return Response.json({ ok: true });
+    }
+
+    if (action === "register_alias") {
+      return Response.json({ ok: true, alias: registerOntologyAlias(db, {
+        ontologyId: asString(body.ontologyId, "ontologyId"), ontologyVersion: asString(body.ontologyVersion, "ontologyVersion"),
+        ontologyContentHash: asString(body.ontologyContentHash, "ontologyContentHash"), namespace: asString(body.namespace, "namespace"),
+        alias: asString(body.alias, "alias"), canonicalId: asString(body.canonicalId, "canonicalId"),
+        actor: asString(body.actor, "actor"), reason: asString(body.reason, "reason"),
+      }) });
+    }
+
+    if (action === "transition_alias") {
+      return Response.json({ ok: true, alias: transitionOntologyAlias(db, {
+        aliasId: asString(body.aliasId, "aliasId"), action: asString(body.aliasAction, "aliasAction") as "redirect" | "deprecate" | "restore" | "remove",
+        canonicalId: asOptionalString(body.canonicalId), actor: asString(body.actor, "actor"), reason: asString(body.reason, "reason"),
+      }) });
+    }
+
+    if (action === "plan_migration") {
+      return Response.json({ ok: true, plan: planOntologyMigration(db, {
+        tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        source: asObject(body.source) as { ontologyId: string; version: string; hash: string },
+        target: asObject(body.target) as { ontologyId: string; version: string; hash: string },
+        mappings: asObject(body.mappings) as Record<string, string[]>, actor: asString(body.actor, "actor"),
+      }) });
+    }
+
+    if (action === "approve_migration") {
+      return Response.json({ ok: true, plan: approveOntologyMigration(db, {
+        planId: asString(body.planId, "planId"), tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        planHash: asString(body.planHash, "planHash"), actor: asString(body.actor, "actor"),
+      }) });
+    }
+
+    if (action === "execute_migration") {
+      return Response.json({ ok: true, ...executeOntologyMigration(db, {
+        planId: asString(body.planId, "planId"), tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
+        actor: asString(body.actor, "actor"), records: body.records as Array<{ recordType: string; recordId: string; sourceType: string }>,
+      }) });
+    }
+
     return Response.json({ ok: false, error: `unsupported action: ${action}` }, { status: 400 });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 });
@@ -123,6 +204,19 @@ export function GET(request: Request): Response {
     const recordId = url.searchParams.get("recordId");
     if (recordType && recordId) {
       return Response.json({ ok: true, binding: getOntologyProvenanceBinding(db, recordType, recordId) });
+    }
+    const candidateId = url.searchParams.get("candidateId");
+    const tenantId = url.searchParams.get("tenantId");
+    const spaceId = url.searchParams.get("spaceId");
+    if (candidateId && tenantId && spaceId) return Response.json({ ok: true, candidate: getOntologyCandidate(db, candidateId, tenantId, spaceId) });
+    const alias = url.searchParams.get("alias");
+    const namespace = url.searchParams.get("namespace");
+    if (alias && namespace) {
+      return Response.json({ ok: true, resolution: resolveOntologyAlias(db, {
+        ontologyId: url.searchParams.get("ontologyId") ?? "memroos.upper",
+        ontologyVersion: asString(url.searchParams.get("version") ?? "", "version"),
+        namespace, submitted: alias,
+      }) });
     }
     const packId = url.searchParams.get("packId");
     if (packId) return Response.json({ ok: true, pack: getDomainPack(db, packId) });

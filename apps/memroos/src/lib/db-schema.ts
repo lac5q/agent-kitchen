@@ -64,7 +64,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 22;
+export const CURRENT_SCHEMA_VERSION = 23;
 
 type SchemaMigration = {
   version: number;
@@ -194,6 +194,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 22,
     name: 'ontology-registry-versioning-packs',
     up: applyOntologyRegistrySchema,
+  },
+  {
+    version: 23,
+    name: 'ontology-candidates-seal-aliases-migrations',
+    up: applyOntologyCandidateGovernanceSchema,
   },
 ];
 
@@ -1796,6 +1801,185 @@ function applyOntologyRegistrySchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS ontology_pack_lifecycle_audit_pack
       ON ontology_pack_lifecycle_audit(pack_id, transitioned_at DESC);
+  `);
+}
+
+function applyOntologyCandidateGovernanceSchema(db: Database.Database): void {
+  // ONTO-04..06: all extracted ontology material is an auditable observation
+  // until a separately governed promotion commits it. These tables intentionally
+  // retain hashes, IDs, and normalized coordinates only, never source content.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_candidates (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      source_spans_json     TEXT NOT NULL DEFAULT '[]',
+      extractor_id          TEXT NOT NULL,
+      extractor_version     TEXT NOT NULL,
+      candidate_kind        TEXT NOT NULL CHECK(candidate_kind IN ('type','relationship','alias')),
+      namespace             TEXT NOT NULL,
+      proposed_json         TEXT NOT NULL,
+      confidence_label      TEXT NOT NULL CHECK(confidence_label IN ('low','medium','high')),
+      confidence_score      REAL NOT NULL CHECK(confidence_score >= 0 AND confidence_score <= 1),
+      evidence_hash         TEXT NOT NULL,
+      original_json         TEXT NOT NULL,
+      status                TEXT NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','approved','rejected','deferred','superseded','invalidated','promoted')),
+      invalidated_at        TEXT,
+      superseded_by         TEXT,
+      created_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, source_hash, extractor_id, extractor_version, evidence_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_candidates_scope
+      ON ontology_candidates(tenant_id, space_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ontology_candidates_source
+      ON ontology_candidates(tenant_id, space_id, source_id, source_hash);
+
+    CREATE TABLE IF NOT EXISTS ontology_candidate_decisions (
+      id                    TEXT PRIMARY KEY,
+      candidate_id          TEXT NOT NULL REFERENCES ontology_candidates(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      decision              TEXT NOT NULL CHECK(decision IN ('approve','reject','defer','supersede','invalidate')),
+      reviewer_id           TEXT NOT NULL,
+      reason                TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      evidence_hash         TEXT NOT NULL,
+      confidence_label      TEXT NOT NULL,
+      confidence_score      REAL NOT NULL,
+      original_json         TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ontology_candidate_decisions_candidate
+      ON ontology_candidate_decisions(candidate_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_promotions (
+      id                    TEXT PRIMARY KEY,
+      candidate_id          TEXT NOT NULL REFERENCES ontology_candidates(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      seal_proposal_id      TEXT NOT NULL,
+      seal_decision_id      TEXT NOT NULL,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      policy_context_hash   TEXT NOT NULL,
+      idempotency_key       TEXT NOT NULL,
+      promoted_by           TEXT NOT NULL,
+      promoted_at           TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, idempotency_key),
+      UNIQUE(candidate_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_policy_contexts (
+      context_hash          TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      policy_version        TEXT NOT NULL,
+      registered_by         TEXT NOT NULL,
+      expires_at            TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_canonical_definitions (
+      id                    TEXT PRIMARY KEY,
+      promotion_id          TEXT NOT NULL UNIQUE REFERENCES ontology_promotions(id),
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      canonical_id          TEXT NOT NULL,
+      definition_json       TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(ontology_id, ontology_version, canonical_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_aliases (
+      id                    TEXT PRIMARY KEY,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      alias                 TEXT NOT NULL,
+      canonical_id          TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('active','redirected','deprecated','removed')),
+      prior_target          TEXT,
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      updated_by            TEXT,
+      updated_at            TEXT,
+      reason                TEXT,
+      UNIQUE(ontology_id, ontology_version, namespace, alias)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_aliases_lookup
+      ON ontology_aliases(ontology_id, ontology_version, alias, status);
+
+    CREATE TABLE IF NOT EXISTS ontology_alias_lifecycle_audit (
+      id                    TEXT PRIMARY KEY,
+      alias_id              TEXT NOT NULL REFERENCES ontology_aliases(id),
+      action                TEXT NOT NULL CHECK(action IN ('add','redirect','deprecate','restore','remove')),
+      prior_target          TEXT,
+      next_target           TEXT,
+      actor                 TEXT NOT NULL,
+      reason                TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_migration_plans (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      target_ontology_id    TEXT NOT NULL,
+      target_version        TEXT NOT NULL,
+      target_hash           TEXT NOT NULL,
+      mappings_json         TEXT NOT NULL,
+      scope_hash            TEXT NOT NULL,
+      plan_hash             TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('planned','approved','executing','incomplete','completed','rejected')),
+      created_by            TEXT NOT NULL,
+      approved_by           TEXT,
+      approved_at           TEXT,
+      created_at            TEXT NOT NULL,
+      updated_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, plan_hash)
+    );
+    CREATE TABLE IF NOT EXISTS ontology_migration_checkpoints (
+      id                    TEXT PRIMARY KEY,
+      plan_id               TEXT NOT NULL REFERENCES ontology_migration_plans(id),
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      source_type           TEXT NOT NULL,
+      target_type           TEXT,
+      outcome               TEXT NOT NULL CHECK(outcome IN ('migrated','ambiguous','unsupported','skipped')),
+      reason                TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(plan_id, record_type, record_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_versioned_records (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      qualified_type        TEXT NOT NULL,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      legacy_type           TEXT,
+      mapping_path_json     TEXT NOT NULL DEFAULT '[]',
+      created_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, record_type, record_id, ontology_content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_versioned_records_lookup
+      ON ontology_versioned_records(tenant_id, space_id, record_type, record_id);
   `);
 }
 

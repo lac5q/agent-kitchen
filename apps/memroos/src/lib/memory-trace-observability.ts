@@ -37,6 +37,14 @@ export interface RecollectionTraceReceipt {
     reason: IgnoredRecollectionCandidate["reason"];
     score: number;
   }>;
+  ontology?: {
+    ontologyId: string;
+    ontologyVersion: string;
+    ontologyContentHash: string;
+    namespace: string;
+    canonicalId: string;
+    aliasMigrationPath: unknown[];
+  };
 }
 
 export interface MemoryTraceInput {
@@ -123,6 +131,7 @@ function recollectionPayload(receipt: RecollectionTraceReceipt | undefined): Par
     })),
     beliefStageCounts: beliefStageCounts(receipt),
     recollectionTiming: receipt.timing,
+    ontology: receipt.ontology,
   };
 }
 

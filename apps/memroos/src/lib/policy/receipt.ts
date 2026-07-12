@@ -61,6 +61,14 @@ export interface PolicyReceipt {
   actorRole: PolicyAuditActorRole;
   tenantId: string;
   createdAt: string;
+  ontology?: {
+    ontologyId: string;
+    ontologyVersion: string;
+    ontologyContentHash: string;
+    namespace: string;
+    canonicalId: string;
+    aliasMigrationPath: unknown[];
+  };
 }
 
 /**
@@ -93,6 +101,7 @@ export function emitPolicyReceipt(
       outcome: receipt.outcome,
       reason: receipt.reason,
       detail: receipt.detail ?? {},
+      ontology: receipt.ontology ?? null,
     };
 
     writeAuditEntry(
