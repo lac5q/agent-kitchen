@@ -32,6 +32,7 @@
 import type Database from "better-sqlite3";
 
 import {
+  computeContentHash,
   TRUST_LEVEL_ORDER,
   trustLevelRank,
   type TrustLevel,
@@ -123,6 +124,7 @@ interface SkillRow {
   signature: string | null;
   version: string | null;
   content_hash: string | null;
+  raw_body?: string | null;
   // SKILLTRUST-05: lifecycle_state column (v14 migration). Optional in the
   // type because better-sqlite3 returns the row as a property bag -- legacy
   // DBs that pre-date v14 simply omit this key entirely.
@@ -159,6 +161,24 @@ export interface SkillLookupOptions {
     current_content_hash: string;
     skill_id?: number | null;
   } | null;
+}
+
+/**
+ * A governed signed or pinned artifact must still bind to its persisted body
+ * at dispatch time. This intentionally happens after SQL eligibility but
+ * before a hit is returned, and only returns a typed denial, never the body
+ * or either digest. Legacy unsigned rows retain their explicit policy mode,
+ * while any signed/verified or pinned selection fails closed on missing or
+ * mismatched body provenance.
+ */
+function hasIntactArtifactBody(row: SkillRow, required: boolean): boolean {
+  if (!required) return true;
+  // Legacy migrations and isolated schema fixtures do not expose raw_body.
+  // They cannot be body-reverified, but do not become a false tamper finding.
+  // Current schema rows always select this column and therefore fail closed.
+  if (row.raw_body === undefined) return true;
+  if (typeof row.raw_body !== "string" || !row.content_hash) return false;
+  return computeContentHash(row.raw_body) === row.content_hash;
 }
 
 /**
@@ -242,7 +262,7 @@ export function lookupSkillContract(
       .prepare<[string, string], SkillRow>(
         `SELECT id, name, source_harness, risk_tier, dispatch_status,
                 completeness_pct, trust_level, signature, version,
-                content_hash, lifecycle_state
+                content_hash, raw_body, lifecycle_state
            FROM skill_registry
           WHERE name = ? AND source_harness = ?
           LIMIT 1`
@@ -322,6 +342,16 @@ export function lookupSkillContract(
         trust_level: pinnedRowTrust,
       };
     }
+    if (!hasIntactArtifactBody(pinnedRow, true)) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: pinned.source_harness,
+        reason: "Pinned skill artifact integrity verification failed",
+        dispatch_status: pinnedRow.dispatch_status,
+        trust_level: pinnedRowTrust,
+      };
+    }
     // Pinned hit. The summary carries the pinned identity so the
     // evidence is identical to a non-pinned hit — only the selection
     // path differs.
@@ -382,7 +412,7 @@ export function lookupSkillContract(
   const lifecyclePredicate =
     " AND (lifecycle_state IS NULL OR lifecycle_state = 'enabled')";
   const buildEnabledSql = (includeVersion: boolean, includeLifecycle: boolean) => {
-    const versionExtra = includeVersion ? ", version, content_hash, lifecycle_state" : "";
+    const versionExtra = includeVersion ? ", version, content_hash, raw_body, lifecycle_state" : "";
     const lifecycleExtra = includeLifecycle ? ", lifecycle_state" : "";
     const lifecycleWhere = includeLifecycle ? lifecyclePredicate : "";
     return `SELECT id, name, source_harness, risk_tier, dispatch_status,
@@ -448,6 +478,16 @@ export function lookupSkillContract(
     }
     // A valid, enabled, complete contract found -- return safe summary only
     const rowTrust = (enabledRow.trust_level ?? "unsigned") as TrustLevel;
+    if (!hasIntactArtifactBody(enabledRow, Boolean(enabledRow.signature) || rowTrust !== "unsigned")) {
+      return {
+        kind: "denied",
+        skill_name: name,
+        source_harness: enabledRow.source_harness,
+        reason: "Skill artifact integrity verification failed",
+        dispatch_status: enabledRow.dispatch_status,
+        trust_level: rowTrust,
+      };
+    }
     if (minTrustLevel && trustLevelRank(rowTrust) < trustLevelRank(minTrustLevel)) {
       // Enabled+complete but trust tier too low -- fail-closed denial.
       return {

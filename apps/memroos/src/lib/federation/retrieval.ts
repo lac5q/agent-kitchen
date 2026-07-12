@@ -59,6 +59,9 @@ export interface FederationSourceOutcome {
   payloadHash: string | null;
   scopeHash: string;
   metadata: Record<string, unknown>;
+  /** Required persistence for this receipt succeeded in both the source
+   * outcome ledger and audit chain. A false value makes the run incomplete. */
+  receiptPersisted?: boolean;
 }
 
 export interface FederationCandidateResult {
@@ -112,6 +115,7 @@ export async function executeFederationRun(
 ): Promise<
   | { kind: "ok"; run: FederationRunResult }
   | { kind: "budget_rejected"; reason: string; field: keyof FederationBudgetConfig }
+  | { kind: "receipt_failed"; reason: "required_source_receipt_persistence_failed" }
 > {
   const budgetDecision = validateFederationBudget(init.budget);
   if (budgetDecision.kind !== "allowed") {
@@ -282,6 +286,12 @@ export async function executeFederationRun(
   }
   const successCount = outcomes.filter((o) => o.outcome === "success").length;
   const totalResultCount = outcomes.reduce((n, o) => n + o.resultCount, 0);
+  if (outcomes.some((outcome) => outcome.receiptPersisted === false)) {
+    return {
+      kind: "receipt_failed",
+      reason: "required_source_receipt_persistence_failed",
+    };
+  }
   return {
     kind: "ok",
     run: {
@@ -340,6 +350,7 @@ function recordSourceOutcome(args: {
 }): FederationSourceOutcome {
   const outcomeId = "out-" + crypto.randomUUID();
   const createdAt = new Date().toISOString();
+  let receiptPersisted = true;
   try {
     args.db.prepare(
       "INSERT INTO federation_source_outcomes (id, tenant_id, federation_run_id, source_id, outcome, reason_code, policy_decision, policy_version, result_count, result_bytes, duration_ms, request_hash, response_hash, payload_hash, scope_hash, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -363,7 +374,7 @@ function recordSourceOutcome(args: {
       createdAt,
     );
   } catch {
-    // ignore
+    receiptPersisted = false;
   }
   try {
     writeAuditEntry(
@@ -396,7 +407,7 @@ function recordSourceOutcome(args: {
       args.db,
     );
   } catch {
-    // ignore
+    receiptPersisted = false;
   }
   return {
     outcomeId,
@@ -416,5 +427,6 @@ function recordSourceOutcome(args: {
     payloadHash: args.payloadHash,
     scopeHash: args.scopeHash,
     metadata: args.metadata,
+    receiptPersisted,
   };
 }

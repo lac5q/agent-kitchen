@@ -8,6 +8,7 @@ import {
   attachPendingPlanToReview,
   completeOffboardingReview,
   listTombstones,
+  OffboardingReviewCompletionError,
   triggerOffboardingPendingErasure,
   verifyTombstoneContinuity,
   writeTombstoneForErasure,
@@ -80,6 +81,15 @@ describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
     database
       .prepare(`INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash, created_at) VALUES (?, ?, ?, ?)`)
       .run("agt_offboard_1", "agt_prefix_1", "hash2", "2026-01-01T00:00:00.000Z");
+    const skillId = database
+      .prepare(`INSERT INTO skill_registry (name, source_harness, raw_body, imported_by) VALUES (?, ?, ?, ?)`)
+      .run("offboard-skill", "local", "governed body", "operator").lastInsertRowid as number;
+    database
+      .prepare(`INSERT INTO skill_version_pins (agent_id, skill_name, skill_id, current_version, current_content_hash, actor) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run("agt_offboard_1", "offboard-skill", skillId, "1.0.0", "hash", "operator");
+    database
+      .prepare(`INSERT INTO skill_dependencies (skill_id, dependent_agent_id, skill_version, registered_by) VALUES (?, ?, ?, ?)`)
+      .run(skillId, "agt_offboard_1", "1.0.0", "operator");
     database
       .prepare(`INSERT INTO messages (session_id, project, agent_id, role, content, timestamp, visibility, policy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run("sess-1", "alpha", "usr_offboard_1", "user", "leaver content", "2026-01-01T00:00:00.000Z", "internal", "indexable");
@@ -91,7 +101,7 @@ describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
       scope: { tenantId: "default-tenant", purpose: "recall" },
       actorId: "admin",
     });
-    expect(receipt.revokedCredentials).toBe(1);
+    expect(receipt.revokedCredentials).toBe(2);
     expect(receipt.revokedAgents).toBe(1);
     expect(receipt.status).toBe("pending");
 
@@ -100,9 +110,11 @@ describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
     const agent = database.prepare("SELECT deregistered_at, status FROM registered_agents WHERE id = ?").get("agt_offboard_1") as { deregistered_at: string | null; status: string };
     expect(agent.deregistered_at).toBeTruthy();
     expect(agent.status).toBe("dormant");
+    expect(database.prepare("SELECT COUNT(*) AS count FROM skill_version_pins WHERE agent_id = ?").get("agt_offboard_1")).toMatchObject({ count: 0 });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM skill_dependencies WHERE dependent_agent_id = ?").get("agt_offboard_1")).toMatchObject({ count: 0 });
   });
 
-  it("attaches a plan and completes the review through the lifecycle", () => {
+  it("does not claim completion until the attached subject erasure plan completed", () => {
     const database = freshDb();
     const receipt = triggerOffboardingPendingErasure(database, {
       tenantId: "default-tenant",
@@ -121,6 +133,28 @@ describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
     expect(attached?.status).toBe("in_progress");
     expect(attached?.pendingPlanId).toBe("suberase_test_plan");
 
+    expect(() => completeOffboardingReview(database, {
+      tenantId: "default-tenant",
+      reviewId: receipt.reviewId,
+      actorId: "admin",
+    })).toThrow(OffboardingReviewCompletionError);
+    expect(database.prepare("SELECT status FROM memory_offboarding_reviews WHERE id = ?").get(receipt.reviewId)).toMatchObject({ status: "in_progress" });
+
+    database.prepare(
+      `INSERT INTO memory_subject_erasure_plans (
+        id, tenant_id, subject_hash, scope_hash, plan_hash, source_version_hash,
+        created_by, status, result_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?)`
+    ).run(
+      "suberase_test_plan",
+      "default-tenant",
+      "subject-hash-3",
+      "scope-hash",
+      "plan-hash",
+      "source-hash",
+      "operator",
+      JSON.stringify({ status: "completed" })
+    );
     const completed = completeOffboardingReview(database, {
       tenantId: "default-tenant",
       reviewId: receipt.reviewId,

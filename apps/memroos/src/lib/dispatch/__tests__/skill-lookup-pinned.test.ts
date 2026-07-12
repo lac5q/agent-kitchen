@@ -19,6 +19,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+const PINNED_BODY = "## Preconditions\nnone";
+const PINNED_HASH = crypto.createHash("sha256").update(PINNED_BODY, "utf8").digest("hex");
+
 const TMP_ROOT = path.join(
   os.tmpdir(),
   `skill-lookup-pinned-${crypto.randomUUID()}`
@@ -96,13 +99,13 @@ function insertSkillRow(overrides: {
       "read_file",
       "verify output",
       "revert",
-      "## Preconditions\nnone",
+      PINNED_BODY,
       overrides.completeness_pct ?? 100,
       "[]",
       "operator",
       new Date().toISOString(),
       "check output",
-      overrides.content_hash ?? "1".repeat(64),
+      overrides.content_hash ?? PINNED_HASH,
       null,
       null,
       null,
@@ -120,13 +123,13 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     const pinnedId = insertSkillRow({
       name: "shared-skill",
       source_harness: "claude",
-      content_hash: "1".repeat(64),
+      content_hash: PINNED_HASH,
       version: "1.0.0",
     });
     insertSkillRow({
       name: "shared-skill",
       source_harness: "codex",
-      content_hash: "2".repeat(64),
+      content_hash: PINNED_HASH,
       version: "2.0.0",
     });
 
@@ -135,14 +138,14 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
         agent_id: "a-1",
         source_harness: "claude",
         current_version: "1.0.0",
-        current_content_hash: "1".repeat(64),
+        current_content_hash: PINNED_HASH,
       },
     });
     expect(result?.kind).toBe("hit");
     if (result && result.kind === "hit") {
       expect(result.skill.id).toBe(pinnedId);
       expect(result.skill.source_harness).toBe("claude");
-      expect(result.skill.content_hash).toBe("1".repeat(64));
+      expect(result.skill.content_hash).toBe(PINNED_HASH);
     }
   });
 
@@ -151,7 +154,7 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     insertSkillRow({
       name: "tamper-pin",
       source_harness: "claude",
-      content_hash: "1".repeat(64),
+      content_hash: PINNED_HASH,
     });
     const result = lookupSkillContract(db, "tamper-pin", {
       pinned: {
@@ -172,7 +175,7 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     insertSkillRow({
       name: "non-dispatchable-pin",
       source_harness: "claude",
-      content_hash: "1".repeat(64),
+      content_hash: PINNED_HASH,
       dispatch_status: "quarantined",
     });
     const result = lookupSkillContract(db, "non-dispatchable-pin", {
@@ -180,7 +183,7 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
         agent_id: "a-1",
         source_harness: "claude",
         current_version: "1.0.0",
-        current_content_hash: "1".repeat(64),
+        current_content_hash: PINNED_HASH,
       },
     });
     expect(result?.kind).toBe("denied");
@@ -210,19 +213,19 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     insertSkillRow({
       name: "ambiguous-pin",
       source_harness: "claude",
-      content_hash: "1".repeat(64),
+      content_hash: PINNED_HASH,
     });
     insertSkillRow({
       name: "ambiguous-pin",
       source_harness: "codex",
-      content_hash: "2".repeat(64),
+      content_hash: PINNED_HASH,
     });
     const result = lookupSkillContract(db, "ambiguous-pin", {
       pinned: {
         agent_id: "a-1",
         source_harness: "codex",
         current_version: "1.0.0",
-        current_content_hash: "2".repeat(64),
+        current_content_hash: PINNED_HASH,
       },
     });
     expect(result?.kind).toBe("hit");

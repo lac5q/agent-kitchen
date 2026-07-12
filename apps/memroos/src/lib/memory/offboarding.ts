@@ -98,6 +98,16 @@ export interface TombstoneContinuityReport {
   reason?: string;
 }
 
+export class OffboardingReviewCompletionError extends Error {
+  constructor(
+    public readonly code: "missing_erasure_plan" | "erasure_incomplete",
+    message: string
+  ) {
+    super(message);
+    this.name = "OffboardingReviewCompletionError";
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -212,9 +222,20 @@ export function triggerOffboardingPendingErasure(
                 `UPDATE registered_agents SET deregistered_at = ?, status = 'dormant', updated_at = ? WHERE id = ? AND deregistered_at IS NULL`
               ).run(createdAt, createdAt, id);
               if (tableExists(db, "agent_api_keys")) {
-                db.prepare(
+                const keyResult = db.prepare(
                   `UPDATE agent_api_keys SET revoked_at = ? WHERE agent_id = ? AND revoked_at IS NULL`
                 ).run(createdAt, id);
+                revokedCredentials += keyResult.changes;
+              }
+              // A deregistered agent may not retain dispatch authority through
+              // a persisted skill pin or dependency edge. Delete these
+              // access-bearing projections atomically with credential
+              // revocation so repeated offboarding converges safely.
+              if (tableExists(db, "skill_version_pins")) {
+                db.prepare(`DELETE FROM skill_version_pins WHERE agent_id = ?`).run(id);
+              }
+              if (tableExists(db, "skill_dependencies")) {
+                db.prepare(`DELETE FROM skill_dependencies WHERE dependent_agent_id = ?`).run(id);
               }
               revokedAgents += 1;
             }
@@ -357,9 +378,10 @@ export function attachPendingPlanToReview(
 }
 
 /**
- * Mark an offboarding review as `completed` (the operator has resolved the
- * pending erasure). Does NOT mutate the underlying erased records; that
- * happens via the subject plan / DSAR pipeline.
+ * Mark an offboarding review as `completed` only after its attached subject
+ * erasure plan completed. This prevents an operator action from claiming that
+ * all eligible derivatives were erased while a hold, adapter failure, or
+ * pending store outcome remains unresolved.
  */
 export function completeOffboardingReview(
   db: Database.Database,
@@ -400,6 +422,48 @@ export function completeOffboardingReview(
       createdAt: row.created_at,
       idempotent: true,
     };
+  }
+  if (!row.pending_plan_id) {
+    throw new OffboardingReviewCompletionError(
+      "missing_erasure_plan",
+      "offboarding review cannot complete without an attached subject erasure plan"
+    );
+  }
+  if (!tableExists(db, "memory_subject_erasure_plans")) {
+    throw new OffboardingReviewCompletionError(
+      "erasure_incomplete",
+      "offboarding review cannot complete because subject erasure state is unavailable"
+    );
+  }
+  const plan = db
+    .prepare(
+      `SELECT status, result_json
+         FROM memory_subject_erasure_plans
+        WHERE tenant_id = ? AND id = ?`
+    )
+    .get(tenantId, row.pending_plan_id) as
+    | { status: string; result_json: string | null }
+    | undefined;
+  if (!plan || plan.status !== "completed") {
+    throw new OffboardingReviewCompletionError(
+      "erasure_incomplete",
+      "offboarding review cannot complete until the attached subject erasure plan is completed"
+    );
+  }
+  try {
+    const result = plan.result_json ? (JSON.parse(plan.result_json) as { status?: unknown }) : null;
+    if (result?.status !== "completed") {
+      throw new OffboardingReviewCompletionError(
+        "erasure_incomplete",
+        "offboarding review cannot complete until all eligible derivative outcomes resolve"
+      );
+    }
+  } catch (error) {
+    if (error instanceof OffboardingReviewCompletionError) throw error;
+    throw new OffboardingReviewCompletionError(
+      "erasure_incomplete",
+      "offboarding review cannot complete because the subject erasure result is unavailable"
+    );
   }
   db.prepare(
     `UPDATE memory_offboarding_reviews SET status = 'completed', completed_at = ? WHERE id = ?`

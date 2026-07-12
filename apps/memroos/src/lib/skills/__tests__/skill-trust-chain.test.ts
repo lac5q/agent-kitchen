@@ -399,7 +399,7 @@ function insertSkillWithTrust(
     verification_checks: "check output",
     rollback_behavior: "no-op",
     evidence_examples: "check output",
-    content_hash: null,
+    content_hash: computeContentHash("## Preconditions\nnone"),
     signature: null,
     signed_by: null,
     imported_by: "operator",
@@ -1029,20 +1029,14 @@ describe("VAL-CROSS-003 post-signature tampering causes dispatch denial", () => 
     // the signing key has not changed and only the content was tampered.
     expect(verifySkillSignature(preHash, stored.signature, signingKey)).toBe(true);
 
-    // VAL-CROSS-003 (2/2): dispatch lookup with the production
-    // surface. The lookupSkillContract SQL gate does not re-verify
-    // signatures (a deliberate design choice to keep the dispatch
-    // hot-path O(1)); the canonical supply-chain signal is the
-    // external verifier call we made above. We additionally assert
-    // that the lookup surface returns a hit (the row is still
-    // enabled+complete+lifecycle=enabled) so the external
-    // verification step is the single source of truth for tampering
-    // detection. This mirrors the production architecture: lookup
-    // returns the row, an external verifier rejects the signature.
+    // VAL-CROSS-003 (2/2): the dispatch lookup itself recomputes the
+    // governed artifact hash before it can return a hit. The adapter path
+    // therefore never receives a body whose stored provenance was tampered.
     const afterTamper = lookupSkillContract(db, skillName, "signed");
     expect(afterTamper).not.toBeNull();
-    expect(afterTamper!.kind).toBe("hit");
-    if (afterTamper!.kind !== "hit") throw new Error("narrow");
+    expect(afterTamper!.kind).toBe("denied");
+    if (afterTamper!.kind !== "denied") throw new Error("narrow");
+    expect(afterTamper!.reason).toMatch(/integrity/i);
     // External re-verification against the ACTUAL raw_body (not the
     // stored content_hash, which was not refreshed during tampering)
     // must fail. This is the supply-chain gate.

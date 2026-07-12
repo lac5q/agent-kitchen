@@ -139,9 +139,9 @@ describe("VAL-SKILL-040 trust migration is idempotent with safe defaults", () =>
   it("complete + enabled + signed skill is dispatchable after migration", async () => {
     const { lookupSkillContract } = await import("@/lib/dispatch/skill-lookup");
     db.prepare(
-      `INSERT INTO skill_registry (name, source_harness, dispatch_status, completeness_pct, raw_body, imported_by, lifecycle_state, signature, trust_level)
-       VALUES ('migration-dispatch', 'claude', 'enabled', 100, 'body', 'op', 'enabled', 'sig-blob', 'signed')`
-    ).run();
+      `INSERT INTO skill_registry (name, source_harness, dispatch_status, completeness_pct, raw_body, content_hash, imported_by, lifecycle_state, signature, trust_level)
+       VALUES ('migration-dispatch', 'claude', 'enabled', 100, 'body', ?, 'op', 'enabled', 'sig-blob', 'signed')`
+    ).run(crypto.createHash("sha256").update("body", "utf8").digest("hex"));
     const result = lookupSkillContract(db, "migration-dispatch");
     expect(result?.kind).toBe("hit");
   });

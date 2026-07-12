@@ -146,4 +146,29 @@ describe("VAL-ORCH-009 -- per-source receipts", () => {
     const r = await executeFederationRun(db, { tenantId: "default-tenant", query: "x", context: okContext(), budget: { sourceCount: 0 }, sources, client: staticClient([{ content: "ok" }]) });
     expect(r.kind).toBe("budget_rejected");
   });
+
+  it("fails closed when a required source receipt cannot persist", async () => {
+    const sources = makeSources();
+    db.exec(`
+      CREATE TRIGGER reject_federation_receipt
+      BEFORE INSERT ON federation_source_outcomes
+      BEGIN
+        SELECT RAISE(FAIL, 'receipt persistence unavailable');
+      END;
+    `);
+
+    const r = await executeFederationRun(db, {
+      tenantId: "default-tenant",
+      query: "x",
+      context: okContext(),
+      budget: okBudget(),
+      sources,
+      client: staticClient([{ content: "ok" }]),
+    });
+
+    expect(r).toEqual({
+      kind: "receipt_failed",
+      reason: "required_source_receipt_persistence_failed",
+    });
+  });
 });
