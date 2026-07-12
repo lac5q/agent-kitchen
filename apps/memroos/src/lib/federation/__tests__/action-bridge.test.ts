@@ -55,6 +55,11 @@ beforeEach(async () => {
       (id, tenant_id, federation_run_id, pack_hash, pack_bytes, pack_item_count, contributing_source_ids, contributing_outcome_ids, dedupe_metadata_json, rank_metadata_json, budget_metadata_json, bound_status, scope_hash)
      VALUES ('merge-1', 'tenant-a', 'federation-run-1', 'sha256:pack', 64, 1, '["source-1"]', '["outcome-1"]', '{}', '{}', '{}', 'bounded', 'sha256:scope')`
   ).run();
+  db.prepare(
+    `INSERT INTO federation_merged_coordinates
+      (id, tenant_id, federation_run_id, pack_hash, canonical_id, canonical_hash, source_id)
+     VALUES ('coordinate-1', 'tenant-a', 'federation-run-1', 'sha256:pack', 'canonical-42', 'sha256:canonical-42', 'source-1')`
+  ).run();
 });
 
 afterEach(() => {
@@ -112,15 +117,77 @@ describe("federation action proof continuity", () => {
     );
   });
 
-  it("invalidates future use as an erasure derivative without changing historical proof rows", async () => {
-    const { persistFederationActionArtifact, registerFederationActionDerivatives, resolveFederationActionProof } = await bridge();
+  it("atomically writes only admitted coordinate derivatives with its artifact", async () => {
+    const { persistFederationActionArtifact } = await bridge();
+    db.exec(`
+      CREATE TRIGGER fail_federation_derivative_insert
+      BEFORE INSERT ON federation_action_derivatives
+      BEGIN
+        SELECT RAISE(FAIL, 'derivative persistence unavailable');
+      END;
+    `);
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "persistence_failed",
+      reason: "federation_artifact_persistence_failed",
+    }));
+    expect(db.prepare("SELECT COUNT(*) AS count FROM federation_action_artifacts").get()).toEqual({ count: 0 });
+  });
+
+  it("rejects missing or tampered ledger coordinates before creation or reuse", async () => {
+    const { persistFederationActionArtifact, resolveFederationActionProof } = await bridge();
+    db.prepare("DELETE FROM federation_merged_coordinates").run();
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "federation_coordinate_ledger_unavailable",
+    }));
+    db.prepare(
+      `INSERT INTO federation_sources
+        (id, tenant_id, source_handle, source_kind, space_id, purpose, allowed_operations_json, trust_level, enabled, has_expiry, transport, descriptor_json, registration_hash, created_by)
+       VALUES ('source-2', 'tenant-a', 'memory-b', 'memory', 'space-a', 'orchestration', '["search"]', 'trusted', 1, 0, 'local', '{}', 'sha256:registration-2', 'operator')`
+    ).run();
+    db.prepare(
+      `INSERT INTO federation_merged_coordinates
+        (id, tenant_id, federation_run_id, pack_hash, canonical_id, canonical_hash, source_id)
+       VALUES ('coordinate-foreign', 'tenant-a', 'federation-run-1', 'sha256:pack', 'canonical-42', 'sha256:canonical-42', 'source-2')`
+    ).run();
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "federation_coordinate_ledger_unavailable",
+    }));
+    db.prepare("DELETE FROM federation_merged_coordinates").run();
+    db.prepare(
+      `INSERT INTO federation_merged_coordinates
+        (id, tenant_id, federation_run_id, pack_hash, canonical_id, canonical_hash, source_id)
+       VALUES ('coordinate-2', 'tenant-a', 'federation-run-1', 'sha256:pack', 'canonical-42', 'sha256:canonical-42', 'source-1')`
+    ).run();
     const created = persistFederationActionArtifact(db, input);
     if (created.status !== "ready") throw new Error(created.reason);
-    expect(registerFederationActionDerivatives(db, {
+    db.prepare("UPDATE federation_merged_coordinates SET canonical_id = 'forged-canonical'").run();
+    expect(resolveFederationActionProof(db, {
       tenantId: "tenant-a",
+      spaceId: "space-a",
       artifactId: created.artifact.id,
-      derivatives: [{ canonicalId: "canonical-42", canonicalHash: "sha256:canonical-42", sourceId: "source-1" }],
-    }).status).toBe("ready");
+    })).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "federation_coordinate_ledger_unavailable",
+    }));
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "denied",
+      reason: "federation_artifact_mismatch",
+    }));
+  });
+
+  it("invalidates future use as an erasure derivative without changing historical proof rows", async () => {
+    const { persistFederationActionArtifact, resolveFederationActionProof } = await bridge();
+    const created = persistFederationActionArtifact(db, input);
+    if (created.status !== "ready") throw new Error(created.reason);
+    expect(db.prepare(
+      "SELECT canonical_id, canonical_hash, source_id FROM federation_action_derivatives WHERE artifact_id = ?"
+    ).all(created.artifact.id)).toEqual([{
+      canonical_id: "canonical-42",
+      canonical_hash: "sha256:canonical-42",
+      source_id: "source-1",
+    }]);
     const before = db.prepare("SELECT artifact_hash FROM federation_action_artifacts WHERE id = ?").get(created.artifact.id) as { artifact_hash: string };
     const { coordinateErasure } = await import("@/lib/memory/erasure");
     const report = await coordinateErasure(db, {
@@ -143,14 +210,9 @@ describe("federation action proof continuity", () => {
   });
 
   it("treats approved source erasure as a typed future-use denial", async () => {
-    const { persistFederationActionArtifact, registerFederationActionDerivatives, resolveFederationActionProof } = await bridge();
+    const { persistFederationActionArtifact, resolveFederationActionProof } = await bridge();
     const created = persistFederationActionArtifact(db, input);
     if (created.status !== "ready") throw new Error(created.reason);
-    registerFederationActionDerivatives(db, {
-      tenantId: "tenant-a",
-      artifactId: created.artifact.id,
-      derivatives: [{ canonicalId: "canonical-42", canonicalHash: "sha256:canonical-42", sourceId: "source-1" }],
-    });
     const { coordinateErasure } = await import("@/lib/memory/erasure");
     const report = await coordinateErasure(db, {
       id: "source-1",

@@ -56,6 +56,12 @@ type OutcomeRow = {
   scope_hash: string;
 };
 
+type AdmittedMergedCoordinate = {
+  canonicalId: string;
+  canonicalHash: string;
+  sourceId: string;
+};
+
 function required(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -68,6 +74,39 @@ function parseIds(raw: string): string[] | null {
   } catch {
     return null;
   }
+}
+
+function admittedMergedCoordinates(
+  db: Database.Database,
+  input: FederationActionBridgeInput,
+  expectedCount: number,
+): AdmittedMergedCoordinate[] | null {
+  try {
+    const rows = db.prepare(
+      `SELECT canonical_id, canonical_hash, source_id
+         FROM federation_merged_coordinates
+        WHERE tenant_id = ? AND federation_run_id = ? AND pack_hash = ?
+        ORDER BY canonical_hash ASC, source_id ASC`
+    ).all(input.tenantId, input.federationRunId, input.packHash) as Array<{
+      canonical_id: string;
+      canonical_hash: string;
+      source_id: string;
+    }>;
+    if (expectedCount <= 0 || rows.length !== expectedCount) return null;
+    const coordinates = rows.map((row) => ({
+      canonicalId: required(row.canonical_id) ?? "",
+      canonicalHash: required(row.canonical_hash) ?? "",
+      sourceId: required(row.source_id) ?? "",
+    }));
+    if (coordinates.some((coordinate) => !coordinate.canonicalId || !coordinate.canonicalHash || !coordinate.sourceId)) return null;
+    return coordinates;
+  } catch {
+    return null;
+  }
+}
+
+function coordinateLedgerHash(coordinates: AdmittedMergedCoordinate[]): string {
+  return sha256(coordinates);
 }
 
 function canonical(value: unknown): string {
@@ -180,6 +219,43 @@ function artifactFromRow(row: Record<string, unknown>): FederationActionArtifact
   };
 }
 
+function artifactHasActiveCoordinateLedger(
+  db: Database.Database,
+  artifact: FederationActionArtifact,
+): boolean {
+  const merge = findMerge(db, {
+    tenantId: artifact.tenantId,
+    spaceId: artifact.spaceId,
+    federationRunId: artifact.federationRunId,
+    packHash: artifact.packHash,
+    ontologyRecords: [],
+  });
+  if (!merge) return false;
+  const coordinates = admittedMergedCoordinates(db, {
+    tenantId: artifact.tenantId,
+    spaceId: artifact.spaceId,
+    federationRunId: artifact.federationRunId,
+    packHash: artifact.packHash,
+    ontologyRecords: [],
+  }, merge.pack_item_count);
+  const ledgerRow = db.prepare("SELECT coordinate_ledger_hash FROM federation_action_artifacts WHERE id = ?")
+    .get(artifact.id) as { coordinate_ledger_hash?: unknown } | undefined;
+  const persistedHash = required(ledgerRow?.coordinate_ledger_hash);
+  if (!coordinates || !persistedHash || persistedHash !== coordinateLedgerHash(coordinates)) return false;
+  const derivatives = db.prepare(
+    `SELECT canonical_id, canonical_hash, source_id
+       FROM federation_action_derivatives
+      WHERE tenant_id = ? AND artifact_id = ? AND status = 'active'
+      ORDER BY canonical_hash ASC, source_id ASC`
+  ).all(artifact.tenantId, artifact.id) as Array<{ canonical_id: string; canonical_hash: string; source_id: string }>;
+  if (derivatives.length !== coordinates.length) return false;
+  return derivatives.every((derivative, index) =>
+    derivative.canonical_id === coordinates[index]?.canonicalId
+    && derivative.canonical_hash === coordinates[index]?.canonicalHash
+    && derivative.source_id === coordinates[index]?.sourceId
+  );
+}
+
 /**
  * Resolve and persist an application-controlled federation action receipt.
  * Caller hashes are deliberately not accepted. Every hash below is derived
@@ -200,6 +276,10 @@ export function persistFederationActionArtifact(
   const sourceIds = parseIds(merge.contributing_source_ids);
   const outcomeIds = parseIds(merge.contributing_outcome_ids);
   if (!sourceIds || !outcomeIds) return { status: "unavailable", reason: "federation_merge_malformed" };
+  const coordinates = admittedMergedCoordinates(db, input, merge.pack_item_count);
+  if (!coordinates || coordinates.some((coordinate) => !sourceIds.includes(coordinate.sourceId))) {
+    return { status: "unavailable", reason: "federation_coordinate_ledger_unavailable" };
+  }
   const outcomes = loadOutcomes(db, input, outcomeIds, sourceIds, merge.scope_hash);
   if (!outcomes) return { status: "unavailable", reason: "federation_outcome_or_source_unavailable" };
   const ontology = resolveOntology(db, input);
@@ -224,6 +304,7 @@ export function persistFederationActionArtifact(
     derivativeId: item.derivativeId,
   }));
   const ontologyHash = sha256(ontologyRefs);
+  const admittedCoordinateLedgerHash = coordinateLedgerHash(coordinates);
   const artifactHash = sha256({
     tenantId: input.tenantId,
     spaceId: input.spaceId,
@@ -237,6 +318,7 @@ export function persistFederationActionArtifact(
     outcomeIds,
     policyHash,
     ontologyHash,
+    admittedCoordinateLedgerHash,
   });
   let existing: Record<string, unknown> | undefined;
   try {
@@ -249,7 +331,12 @@ export function persistFederationActionArtifact(
   }
   if (existing) {
     if (existing.status !== "active") return { status: "unavailable", reason: "federation_artifact_invalidated" };
-    if (String(existing.space_id) !== input.spaceId || String(existing.artifact_hash) !== artifactHash) {
+    if (
+      String(existing.space_id) !== input.spaceId
+      || String(existing.artifact_hash) !== artifactHash
+      || String(existing.coordinate_ledger_hash ?? "") !== admittedCoordinateLedgerHash
+      || !artifactHasActiveCoordinateLedger(db, artifactFromRow(existing))
+    ) {
       return { status: "denied", reason: "federation_artifact_mismatch" };
     }
     return { status: "ready", artifact: artifactFromRow(existing) };
@@ -262,14 +349,30 @@ export function persistFederationActionArtifact(
         `INSERT INTO federation_action_artifacts
           (id, tenant_id, space_id, federation_run_id, pack_hash, pack_bytes, pack_item_count,
            bound_status, scope_hash, policy_hash, ontology_hash, ontology_refs_json,
-           source_ids_json, outcome_ids_json, artifact_hash, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
+           source_ids_json, outcome_ids_json, artifact_hash, coordinate_ledger_hash, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
       ).run(
         id, input.tenantId, input.spaceId, input.federationRunId, merge.pack_hash, merge.pack_bytes,
         merge.pack_item_count, merge.bound_status, merge.scope_hash, policyHash, ontologyHash,
-        canonical(ontologyRefs), canonical(sourceIds), canonical(outcomeIds), artifactHash,
+        canonical(ontologyRefs), canonical(sourceIds), canonical(outcomeIds), artifactHash, admittedCoordinateLedgerHash,
         new Date().toISOString(), new Date().toISOString(),
       );
+      const insertDerivative = db.prepare(
+        `INSERT INTO federation_action_derivatives
+          (id, tenant_id, artifact_id, canonical_id, canonical_hash, source_id, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`
+      );
+      for (const coordinate of coordinates) {
+        insertDerivative.run(
+          `federation_derivative_${crypto.randomUUID()}`,
+          input.tenantId,
+          id,
+          coordinate.canonicalId,
+          coordinate.canonicalHash,
+          coordinate.sourceId,
+          new Date().toISOString(),
+        );
+      }
     })();
   } catch {
     return { status: "persistence_failed", reason: "federation_artifact_persistence_failed" };
@@ -295,6 +398,10 @@ export function resolveFederationActionProof(
   if (!sourceIds || sourceIds.some((sourceId) => !sourceIsCurrent(db, input.tenantId, input.spaceId, sourceId))) {
     return { status: "unavailable", reason: "federation_source_unavailable" };
   }
+  const artifact = artifactFromRow(row);
+  if (!artifactHasActiveCoordinateLedger(db, artifact)) {
+    return { status: "unavailable", reason: "federation_coordinate_ledger_unavailable" };
+  }
   let ontologyRefs: Array<{ recordType: string; recordId: string }>;
   try {
     ontologyRefs = JSON.parse(String(row.ontology_refs_json)) as Array<{ recordType: string; recordId: string }>;
@@ -315,59 +422,7 @@ export function resolveFederationActionProof(
   ) {
     return { status: "unavailable", reason: "ontology_context_unavailable" };
   }
-  return { status: "ready", artifact: artifactFromRow(row) };
-}
-
-/** Register only the safe canonical/source coordinates of results that made
- * the persisted pack. This is the erasure traversal index, not a payload
- * store. Callers must already hold the application-controlled artifact. */
-export function registerFederationActionDerivatives(
-  db: Database.Database,
-  input: {
-    tenantId: string;
-    artifactId: string;
-    derivatives: Array<{ canonicalId: string; canonicalHash: string; sourceId: string }>;
-  },
-): FederationActionBridgeResult {
-  const artifact = db.prepare(
-    `SELECT * FROM federation_action_artifacts WHERE id = ? AND tenant_id = ? AND status = 'active'`
-  ).get(input.artifactId, input.tenantId) as Record<string, unknown> | undefined;
-  if (!artifact) return { status: "unavailable", reason: "federation_artifact_unavailable" };
-  const sourceIds = parseIds(String(artifact.source_ids_json));
-  if (!sourceIds || !Array.isArray(input.derivatives) || input.derivatives.length === 0) {
-    return { status: "denied", reason: "federation_derivative_input_invalid" };
-  }
-  if (input.derivatives.some((item) =>
-    !required(item.canonicalId)
-    || !required(item.canonicalHash)
-    || !sourceIds.includes(item.sourceId)
-  )) {
-    return { status: "denied", reason: "federation_derivative_scope_invalid" };
-  }
-  try {
-    const insert = db.prepare(
-      `INSERT INTO federation_action_derivatives
-        (id, tenant_id, artifact_id, canonical_id, canonical_hash, source_id, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
-       ON CONFLICT(tenant_id, artifact_id, canonical_hash, source_id) DO NOTHING`
-    );
-    db.transaction(() => {
-      for (const derivative of input.derivatives) {
-        insert.run(
-          `federation_derivative_${crypto.randomUUID()}`,
-          input.tenantId,
-          input.artifactId,
-          derivative.canonicalId,
-          derivative.canonicalHash,
-          derivative.sourceId,
-          new Date().toISOString(),
-        );
-      }
-    })();
-  } catch {
-    return { status: "persistence_failed", reason: "federation_derivative_persistence_failed" };
-  }
-  return { status: "ready", artifact: artifactFromRow(artifact) };
+  return { status: "ready", artifact };
 }
 
 /** Invalidate only future bridge use. It never edits orchestration lineage or

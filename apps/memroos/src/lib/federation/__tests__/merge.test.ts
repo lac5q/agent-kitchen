@@ -108,8 +108,14 @@ describe("VAL-ORCH-010 -- mergeFederatedPack", () => {
 
   it("persists pack hash + contributing source ids to federation_merges + audit", () => {
     const a = makeOutcome({ outcomeId: "A", sourceId: "src-1", sourceHandle: "alpha" });
+    db.prepare(
+      `INSERT INTO federation_sources
+        (id, tenant_id, source_handle, source_kind, purpose, allowed_operations_json, trust_level, enabled, has_expiry, transport, descriptor_json, registration_hash, created_by)
+       VALUES ('src-1', 'default-tenant', 'alpha', 'memory', 'orchestration', '["search"]', 'trusted', 1, 0, 'local', '{}', 'sha256:registration', 'test')`
+    ).run();
     const items = new Map<string, Array<{ id: string; content: string; score: number; canonicalHash: string }>>();
-    items.set("A", [{ id: "i1", content: "c", score: 0.9, canonicalHash: "sha256:h1" }]);
+    const payloadSentinel = "never-persist-this-federated-payload";
+    items.set("A", [{ id: "i1", content: payloadSentinel, score: 0.9, canonicalHash: "sha256:h1" }]);
     const r = mergeFederatedPack(db, {
       tenantId: "default-tenant", federationRunId: "run-4", outcomes: [a],
       scopeHash: "sha256:scope", budget: { maxItems: 10, maxBytes: 10000, hopCount: 1 }, itemsByOutcome: items,
@@ -118,6 +124,15 @@ describe("VAL-ORCH-010 -- mergeFederatedPack", () => {
     expect(r.contributingSourceIds).toContain("src-1");
     const rows = db.prepare("SELECT pack_hash FROM federation_merges WHERE pack_hash = ?").all(r.packHash) as Array<{ pack_hash: string }>;
     expect(rows.length).toBe(1);
+    const coordinates = db.prepare(
+      "SELECT canonical_id, canonical_hash, source_id FROM federation_merged_coordinates WHERE pack_hash = ?"
+    ).all(r.packHash);
+    expect(coordinates).toEqual([{
+      canonical_id: "i1",
+      canonical_hash: "sha256:h1",
+      source_id: "src-1",
+    }]);
+    expect(JSON.stringify(coordinates)).not.toContain(payloadSentinel);
     const audits = db.prepare("SELECT event_type FROM audit_entries WHERE event_type = ?").all("orch.federation.merge") as Array<{ event_type: string }>;
     expect(audits.length).toBeGreaterThanOrEqual(1);
   });

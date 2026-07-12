@@ -14,6 +14,7 @@ import { writeAuditEntry } from "@/lib/audit/write";
 import type { FederationSourceOutcome } from "./retrieval";
 
 export interface MergedItem {
+  canonicalId: string;
   canonicalHash: string;
   sourceId: string;
   sourceHandle: string;
@@ -23,6 +24,12 @@ export interface MergedItem {
   rank: number;
   contributingOutcomeIds: string[];
   duplicateCount: number;
+}
+
+export interface AdmittedMergedCoordinate {
+  canonicalId: string;
+  canonicalHash: string;
+  sourceId: string;
 }
 
 export interface FederationMergeInit {
@@ -35,7 +42,7 @@ export interface FederationMergeInit {
     maxBytes: number;
     hopCount: number;
   };
-  itemsByOutcome?: Map<string, Array<{ id: string; content: string; score: number; canonicalHash: string }>>;
+  itemsByOutcome?: Map<string, Array<{ id: string; canonicalId?: string; content: string; score: number; canonicalHash: string }>>;
 }
 
 export interface FederationMergeResult {
@@ -94,6 +101,7 @@ export function mergeFederatedPack(
         break;
       }
       dedupeKey.set(it.canonicalHash, {
+        canonicalId: it.canonicalId ?? it.id,
         canonicalHash: it.canonicalHash,
         sourceId: outcome.sourceId,
         sourceHandle: outcome.sourceHandle,
@@ -142,25 +150,50 @@ export function mergeFederatedPack(
   };
   const contributingSourceIds = [...new Set(ranked.map((it) => it.sourceId))];
   const contributingOutcomeIds = [...new Set(ranked.flatMap((it) => it.contributingOutcomeIds))];
+  const admittedCoordinates: AdmittedMergedCoordinate[] = ranked.map((item) => ({
+    canonicalId: item.canonicalId,
+    canonicalHash: item.canonicalHash,
+    sourceId: item.sourceId,
+  }));
   try {
-    db.prepare(
-      "INSERT INTO federation_merges (id, tenant_id, federation_run_id, pack_hash, pack_bytes, pack_item_count, contributing_source_ids, contributing_outcome_ids, dedupe_metadata_json, rank_metadata_json, budget_metadata_json, bound_status, scope_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(
-      "pack-" + crypto.randomUUID(),
-      init.tenantId,
-      init.federationRunId,
-      packHash,
-      packBytes,
-      ranked.length,
-      stableJson(contributingSourceIds),
-      stableJson(contributingOutcomeIds),
-      stableJson(dedupeMetadata),
-      stableJson(rankMetadata),
-      stableJson(budgetMetadata),
-      boundStatus,
-      init.scopeHash,
-      new Date().toISOString(),
-    );
+    db.transaction(() => {
+      const mergeId = "pack-" + crypto.randomUUID();
+      db.prepare(
+        "INSERT INTO federation_merges (id, tenant_id, federation_run_id, pack_hash, pack_bytes, pack_item_count, contributing_source_ids, contributing_outcome_ids, dedupe_metadata_json, rank_metadata_json, budget_metadata_json, bound_status, scope_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        mergeId,
+        init.tenantId,
+        init.federationRunId,
+        packHash,
+        packBytes,
+        ranked.length,
+        stableJson(contributingSourceIds),
+        stableJson(contributingOutcomeIds),
+        stableJson(dedupeMetadata),
+        stableJson(rankMetadata),
+        stableJson(budgetMetadata),
+        boundStatus,
+        init.scopeHash,
+        new Date().toISOString(),
+      );
+      const insertCoordinate = db.prepare(
+        `INSERT INTO federation_merged_coordinates
+          (id, tenant_id, federation_run_id, pack_hash, canonical_id, canonical_hash, source_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const coordinate of admittedCoordinates) {
+        insertCoordinate.run(
+          "federation-coordinate-" + crypto.randomUUID(),
+          init.tenantId,
+          init.federationRunId,
+          packHash,
+          coordinate.canonicalId,
+          coordinate.canonicalHash,
+          coordinate.sourceId,
+          new Date().toISOString(),
+        );
+      }
+    })();
   } catch {
     // ignore
   }

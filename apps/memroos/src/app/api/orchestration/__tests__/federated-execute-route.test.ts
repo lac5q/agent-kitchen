@@ -39,9 +39,9 @@ describe("POST /api/orchestration/federated/execute", () => {
     vi.unstubAllEnvs();
   });
 
-  it("denies before proxy invocation when the persisted bridge is unavailable", async () => {
+  it("denies before proxy invocation when the admitted coordinate ledger is unavailable", async () => {
     vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
-    persist.mockReturnValue({ status: "unavailable", reason: "federation_merge_unavailable" });
+    persist.mockReturnValue({ status: "unavailable", reason: "federation_coordinate_ledger_unavailable" });
     const { POST } = await import("../federated/execute/route");
     const response = await POST(request({
       plan,
@@ -52,7 +52,7 @@ describe("POST /api/orchestration/federated/execute", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("forwards only a server-signed safe proof reference to Python", async () => {
+  it("forwards only a server-signed safe proof reference to Python and never route derivatives", async () => {
     vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
     vi.stubEnv("ORCHESTRATION_FEDERATION_PROOF_SECRET", "bridge-secret");
     persist.mockReturnValue({ status: "ready", artifact });
@@ -68,10 +68,22 @@ describe("POST /api/orchestration/federated/execute", () => {
         packHash: "sha256:pack",
         ontologyRecords: [{ recordType: "message", recordId: "42" }],
         forgedProofHash: "sha256:attacker",
+        derivatives: [{
+          canonicalId: "caller-controlled-canonical",
+          canonicalHash: "sha256:caller-controlled",
+          sourceId: "source-1",
+        }],
       },
     }, { authorization: "Bearer operator-secret" }));
 
     expect(response.status).toBe(200);
+    expect(persist).toHaveBeenCalledWith({}, {
+      tenantId: "tenant-a",
+      spaceId: "space-a",
+      federationRunId: "fed-run-1",
+      packHash: "sha256:pack",
+      ontologyRecords: [{ recordType: "message", recordId: "42" }],
+    });
     const outbound = execute.mock.calls[0][0];
     expect(outbound.federationProof).toMatchObject({
       artifactId: "artifact-1",
@@ -81,5 +93,6 @@ describe("POST /api/orchestration/federated/execute", () => {
       signature: expect.any(String),
     });
     expect(outbound.federationProof.forgedProofHash).toBeUndefined();
+    expect(outbound.federationProof.derivatives).toBeUndefined();
   });
 });

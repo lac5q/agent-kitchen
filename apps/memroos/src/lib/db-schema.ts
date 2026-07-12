@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 28;
+export const CURRENT_SCHEMA_VERSION = 29;
 
 type SchemaMigration = {
   version: number;
@@ -225,6 +225,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 28,
     name: 'ontology-required-context-persistence',
     up: applyOntologyRequiredContextPersistenceSchema,
+  },
+  {
+    version: 29,
+    name: 'federation-admitted-coordinate-ledger',
+    up: applyFederationAdmittedCoordinateLedgerSchema,
   },
 ];
 
@@ -2166,6 +2171,32 @@ function applyFederationActionProofContinuitySchema(db: Database.Database): void
     CREATE INDEX IF NOT EXISTS federation_action_derivatives_source
       ON federation_action_derivatives(tenant_id, source_id, status);
   `);
+}
+
+function applyFederationAdmittedCoordinateLedgerSchema(db: Database.Database): void {
+  // This ledger contains only the server-derived canonical hash and source
+  // coordinates admitted to a persisted merge. It deliberately excludes every
+  // candidate payload, content identifier, score, and route-supplied value.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS federation_merged_coordinates (
+      id                TEXT PRIMARY KEY,
+      tenant_id         TEXT NOT NULL DEFAULT 'default-tenant',
+      federation_run_id TEXT NOT NULL,
+      pack_hash         TEXT NOT NULL,
+      canonical_id      TEXT NOT NULL,
+      canonical_hash    TEXT NOT NULL,
+      source_id         TEXT NOT NULL REFERENCES federation_sources(id) ON DELETE CASCADE,
+      created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id, pack_hash, canonical_hash, source_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_merged_coordinates_merge
+      ON federation_merged_coordinates(tenant_id, federation_run_id, pack_hash);
+  `);
+  try {
+    db.exec("ALTER TABLE federation_action_artifacts ADD COLUMN coordinate_ledger_hash TEXT");
+  } catch {
+    // Existing databases already carrying the additive column are safe to re-run.
+  }
 }
 
 function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {
