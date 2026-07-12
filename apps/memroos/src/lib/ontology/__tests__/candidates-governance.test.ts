@@ -108,11 +108,69 @@ describe("ontology candidate governance", () => {
 
   it("VAL-ONTO-024 links safe ontology coordinates into policy receipts", async () => {
     const { ontology, migrations, candidates } = await setup();
-    const plan = migrations.planOntologyMigration(db, { tenantId: "tenant-a", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, mappings: { legacy: ["memory"] }, actor: "operator" });
+    const plan = migrations.planOntologyMigration(db, { tenantId: "default-tenant", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, mappings: { legacy: ["memory"] }, actor: "operator" });
     migrations.approveOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, planHash: plan.planHash, actor: "operator" });
     migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator", records: [{ recordType: "memory", recordId: "m1", sourceType: "legacy" }] });
-    const context = candidates.ontologyReceiptContext(db, { tenantId: "tenant-a", spaceId: "space-a", recordType: "memory", recordId: "m1" });
+    const context = candidates.ontologyReceiptContext(db, { tenantId: "default-tenant", spaceId: "space-a", recordType: "memory", recordId: "m1" });
     const policy = await import("@/lib/policy/engine");
     expect(policy.buildReceipt({ domain: "knowledge", action: "read", ontologyContext: context as never }, { outcome: "allow", reason: "safe", ruleMatched: "test" }).ontology).toMatchObject({ ontologyId: ontology.ontologyId, canonicalId: "memory" });
+    const evaluation = policy.evaluatePolicy({
+      domain: "knowledge",
+      action: "read",
+      actor: { id: "operator", role: "operator", tenantId: "default-tenant" },
+      ontologyReference: { tenantId: "default-tenant", spaceId: "space-a", recordType: "memory", recordId: "m1" },
+    }, db);
+    expect(evaluation.receipt.ontology).toMatchObject({ canonicalId: "memory", sourceId: `migration:${plan.id}` });
+    expect(() => policy.evaluatePolicy({
+      domain: "knowledge",
+      action: "read",
+      actor: { id: "operator", role: "operator", tenantId: "default-tenant" },
+      ontologyContext: context as never,
+    }, db)).toThrow(/caller-supplied/);
+  });
+
+  it("revokes all candidate-derived authority on source change while retaining safe historic rows", async () => {
+    const { ontology, candidates, aliases } = await setup();
+    const candidate = candidates.extractOntologyCandidate(db, extraction());
+    candidates.decideOntologyCandidate(db, { candidateId: candidate.id, tenantId: candidate.tenantId, spaceId: candidate.spaceId, decision: "approve", reviewerId: "operator", reason: "reviewed" });
+    const promotion = candidates.promoteOntologyCandidate(db, {
+      candidateId: candidate.id, tenantId: candidate.tenantId, spaceId: candidate.spaceId,
+      ...seedPromotionContext(candidate.id, candidate.tenantId, candidates),
+      ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash,
+      namespace: "finance", policyContextHash: policyHash, reviewerId: "operator", idempotencyKey: "source-revocation",
+    });
+    const alias = aliases.registerOntologyAlias(db, {
+      ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash,
+      namespace: "finance", alias: "invoice", canonicalId: "finance.invoice", actor: "operator", reason: "compatibility",
+    });
+    const validity = await import("../validity");
+    expect(validity.revokeOntologySource(db, {
+      tenantId: candidate.tenantId, spaceId: candidate.spaceId, sourceId: candidate.sourceId, sourceHash: candidate.sourceHash,
+      actor: "operator", reason: "source_changed",
+    })).toMatchObject({ reason: "source_changed" });
+    expect(candidates.getOntologyCandidate(db, candidate.id, candidate.tenantId, candidate.spaceId).status).toBe("invalidated");
+    expect(() => aliases.resolveOntologyAlias(db, {
+      ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, namespace: "finance", submitted: "invoice",
+    })).toThrow(/revoked|unverified/);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_derivative_validity WHERE status = 'revoked' AND derivative_id IN (?, ?, ?)`)
+      .get(candidate.id, promotion.id, alias.id)).toMatchObject({ count: 3 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_candidate_decisions WHERE candidate_id = ?`).get(candidate.id))
+      .toMatchObject({ count: 1 });
+  });
+
+  it("fails atomically when a required source-revocation receipt cannot persist", async () => {
+    const { candidates } = await setup();
+    const candidate = candidates.extractOntologyCandidate(db, extraction());
+    const validity = await import("../validity");
+    db.exec(`CREATE TRIGGER deny_ontology_revocation_audit BEFORE INSERT ON audit_entries
+      WHEN NEW.event_type = 'ontology_source_revoked' BEGIN SELECT RAISE(ABORT, 'fault'); END;`);
+    expect(() => validity.revokeOntologySource(db, {
+      tenantId: candidate.tenantId, spaceId: candidate.spaceId, sourceId: candidate.sourceId, sourceHash: candidate.sourceHash,
+      actor: "operator", reason: "source_erased",
+    })).toThrow(/audit|fault/);
+    expect(db.prepare(`SELECT status FROM ontology_source_lifecycle WHERE tenant_id = ? AND space_id = ? AND source_id = ? AND source_hash = ?`)
+      .get(candidate.tenantId, candidate.spaceId, candidate.sourceId, candidate.sourceHash)).toMatchObject({ status: "active" });
+    expect(db.prepare(`SELECT status FROM ontology_derivative_validity WHERE derivative_type = 'candidate' AND derivative_id = ?`)
+      .get(candidate.id)).toMatchObject({ status: "authoritative" });
   });
 });

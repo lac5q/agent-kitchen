@@ -14,6 +14,7 @@ import {
   type RetentionScope,
 } from "./retention-policy";
 import type { CanonicalDerivative, CanonicalMemoryIdentity } from "./canonical";
+import { revokeOntologyDerivativesForErasedRecord } from "../ontology/validity";
 
 export type SubjectPlanStatus =
   | "planned"
@@ -699,6 +700,12 @@ export async function executeSubjectErasurePlan(
       storeOutcomes.push({ canonicalId: target.canonicalId, outcomes: report.storeOutcomes });
       if (report.status === "failed") failed += 1;
       erasePayloadForTarget(db, tenantId, target, input.planId, now);
+      revokeOntologyDerivativesForErasedRecord(db, {
+        tenantId,
+        recordType: target.recordType,
+        recordId: target.recordId,
+        actor: input.actorId,
+      });
       erased += 1;
     } catch (err) {
       failed += 1;

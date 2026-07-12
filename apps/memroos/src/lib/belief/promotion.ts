@@ -44,6 +44,7 @@ import {
 } from "./types";
 import type { BeliefPromotionConfig } from "./config";
 import { DEFAULT_BELIEF_PROMOTION_CONFIG } from "./config";
+import { resolveOntologyValidity } from "../ontology/validity";
 
 // ---------------------------------------------------------------------------
 // Stable hash helpers (mirror agent-checkpoints.ts)
@@ -887,18 +888,30 @@ export interface PromoteArgs {
   /** Optional reviewed-queue bypass for an explicit operator approval. */
   reviewedQueueId?: string | null;
   ontologyContext?: PromotionReceiptSummary["ontology"];
+  ontologyReference?: {
+    tenantId: string;
+    spaceId: string;
+    recordType: string;
+    recordId: string;
+  };
 }
 
 export function promoteCandidate(
   db: Database.Database,
   args: { candidateId: string; tenantId: string } & PromoteArgs
 ): AdmissionDecision {
+  if (args.ontologyContext && !args.ontologyReference) {
+    throw new Error("caller-supplied ontology context is not accepted");
+  }
+  const ontology = args.ontologyReference
+    ? resolveOntologyValidity(db, args.ontologyReference)
+    : undefined;
   return canAdmitToGold(db, args.tenantId, args.candidateId, {
     actor: args.actor,
     category: args.category,
     config: args.config,
     reviewedQueueId: args.reviewedQueueId ?? null,
-    ontology: args.ontologyContext,
+    ontology,
   });
 }
 

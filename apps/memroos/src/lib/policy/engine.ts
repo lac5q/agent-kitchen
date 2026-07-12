@@ -48,10 +48,12 @@ import {
 } from "./dimensions";
 import {
   emitPolicyReceipt,
+  emitRequiredPolicyReceipt,
   type PolicyDomain,
   type PolicyOutcome,
   type PolicyReceipt,
 } from "./receipt";
+import { resolveOntologyValidity } from "@/lib/ontology/validity";
 
 /**
  * Shape of the dimension rules in the manifest. The manifest is JSON, so
@@ -117,6 +119,16 @@ export interface PolicyRequest {
   dimensions?: PolicyRequestDimensions;
   /** Required for ontology-sensitive calls, IDs and hashes only. */
   ontologyContext?: PolicyReceipt["ontology"];
+  /**
+   * Server-resolved coordinates for an ontology-sensitive request. Callers
+   * never supply authoritative ontology hashes or status.
+   */
+  ontologyReference?: {
+    tenantId: string;
+    spaceId: string;
+    recordType: string;
+    recordId: string;
+  };
 }
 
 export interface PolicyEvaluation {
@@ -263,6 +275,7 @@ export interface KnowledgeRequestMeta {
   actor?: PolicyRequestActor;
   /** ids / tool name / tenant / context ids only — never content. */
   metadata?: Record<string, unknown>;
+  ontologyContext?: PolicyReceipt["ontology"];
 }
 
 /**
@@ -283,6 +296,7 @@ export function evaluateKnowledgePolicy(
     domain: "knowledge",
     action: meta.action,
     actor: meta.actor,
+    ontologyContext: meta.ontologyContext,
   };
 
   const receipt = buildReceipt(req, {
@@ -292,7 +306,13 @@ export function evaluateKnowledgePolicy(
     detail: meta.metadata,
   });
 
-  if (db) emitPolicyReceipt(db, receipt);
+  if (db) {
+    if (meta.ontologyContext) {
+      emitRequiredPolicyReceipt(db, receipt);
+    } else {
+      emitPolicyReceipt(db, receipt);
+    }
+  }
 
   // Touch `actorId` / `actorRole` / `tenantId` only via the receipt — explicit
   // discard so this function remains obviously minimal.
@@ -321,6 +341,18 @@ export function evaluatePolicy(
 ): PolicyEvaluation {
   if (!req.domain) throw new Error("evaluatePolicy: domain is required");
   if (!req.action) throw new Error("evaluatePolicy: action is required");
+  if (req.ontologyContext && !req.ontologyReference) {
+    throw new Error("evaluatePolicy: caller-supplied ontology context is not accepted");
+  }
+  if (req.ontologyReference && !db) {
+    throw new Error("evaluatePolicy: ontology-sensitive decisions require persistence");
+  }
+  if (req.ontologyReference) {
+    req = {
+      ...req,
+      ontologyContext: resolveOntologyValidity(db!, req.ontologyReference),
+    };
+  }
 
   let evaluation: PolicyEvaluation;
 
@@ -343,6 +375,7 @@ export function evaluatePolicy(
         action: req.action,
         actor: req.actor,
         metadata: undefined,
+        ontologyContext: req.ontologyContext,
       },
       db
     );
@@ -355,7 +388,13 @@ export function evaluatePolicy(
   // identical for every Phase 128 caller (no dimensions supplied).
   evaluation = applyDimensionTightening(evaluation, req);
 
-  if (db) emitPolicyReceipt(db, evaluation.receipt);
+  if (db) {
+    if (req.ontologyReference) {
+      emitRequiredPolicyReceipt(db, evaluation.receipt);
+    } else {
+      emitPolicyReceipt(db, evaluation.receipt);
+    }
+  }
 
   return evaluation;
 }

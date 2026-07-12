@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { commitAuditAtomic } from "@/lib/skills/skill-audit-atomic";
 import { OntologyGovernanceError } from "./candidates";
 import { discoverOntology } from "./registry";
+import { registerOntologyDerivative, registerOntologySource } from "./validity";
 
 export interface OntologyMigrationPlan {
   id: string;
@@ -68,11 +69,14 @@ export function executeOntologyMigration(db: Database.Database, input: { planId:
   const row = db.prepare(`SELECT * FROM ontology_migration_plans WHERE id = ? AND tenant_id = ? AND space_id = ?`).get(input.planId, input.tenantId, input.spaceId) as Record<string, string> | undefined;
   if (!row) throw new OntologyGovernanceError("migration plan not found in authorized scope", "not_found");
   const plan = planFrom(row);
+  const source = discoverOntology(db, { ontologyId: plan.source.ontologyId, version: plan.source.version });
   const target = discoverOntology(db, { ontologyId: plan.target.ontologyId, version: plan.target.version });
   if (plan.status !== "approved" && plan.status !== "incomplete") throw new OntologyGovernanceError("migration must be approved before execution", "conflict");
-  if (!target.globallyActive || target.contentHash !== plan.target.hash) throw new OntologyGovernanceError("target ontology is unavailable", "unavailable");
+  if (!source.globallyActive || source.contentHash !== plan.source.hash || !target.globallyActive || target.contentHash !== plan.target.hash) throw new OntologyGovernanceError("migration source or target ontology is unavailable", "unavailable");
   let migrated = 0; let reviewRequired = 0; const now = new Date().toISOString();
   const result = commitAuditAtomic(db, { actor: clean(input.actor, "actor"), eventType: "ontology_migration_executed", entityType: "ontology_migration_plan", entityId: plan.id, metadata: { plan_id: plan.id, plan_hash: plan.planHash, record_count: input.records.length, source_hash: plan.source.hash, target_hash: plan.target.hash }, body: () => {
+    const lifecycleSource = { tenantId: plan.tenantId, spaceId: plan.spaceId, sourceId: `migration:${plan.id}`, sourceHash: plan.source.hash };
+    registerOntologySource(db, { ...lifecycleSource, actor: input.actor, reasonCode: "migration_source_verified" });
     db.prepare(`UPDATE ontology_migration_plans SET status = 'executing', updated_at = ? WHERE id = ?`).run(now, plan.id);
     for (const record of input.records) {
       const prior = db.prepare(`SELECT 1 FROM ontology_migration_checkpoints WHERE plan_id = ? AND record_type = ? AND record_id = ?`).get(plan.id, record.recordType, record.recordId);
@@ -86,8 +90,13 @@ export function executeOntologyMigration(db: Database.Database, input: { planId:
       const reason = targetType ? "single_supported_mapping" : targets.length > 1 ? "multiple_target_mappings" : "no_supported_mapping";
       db.prepare(`INSERT INTO ontology_migration_checkpoints (id, plan_id, record_type, record_id, source_type, target_type, outcome, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(`ontmigchk_${randomUUID()}`, plan.id, record.recordType, record.recordId, record.sourceType, targetType, outcome, reason, now);
       if (!targetType) { reviewRequired += 1; continue; }
-      db.prepare(`INSERT OR IGNORE INTO ontology_versioned_records (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version, ontology_content_hash, legacy_type, mapping_path_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(`ontrecord_${randomUUID()}`, plan.tenantId, plan.spaceId, record.recordType, record.recordId, targetType, target.ontologyId, target.version, target.contentHash, record.sourceType, stable([digest(record.sourceType), targetType]), now);
-      migrated += 1;
+      const versionedRecordId = `ontrecord_${randomUUID()}`;
+      const inserted = db.prepare(`INSERT OR IGNORE INTO ontology_versioned_records (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version, ontology_content_hash, legacy_type, mapping_path_json, created_at, source_id, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(versionedRecordId, plan.tenantId, plan.spaceId, record.recordType, record.recordId, targetType, target.ontologyId, target.version, target.contentHash, record.sourceType, stable([digest(record.sourceType), targetType]), now, lifecycleSource.sourceId, lifecycleSource.sourceHash);
+      if (inserted.changes === 1) {
+        registerOntologyDerivative(db, { ...lifecycleSource, derivativeType: "versioned_record", derivativeId: versionedRecordId });
+        migrated += 1;
+      }
     }
     const status = reviewRequired ? "incomplete" : "completed";
     db.prepare(`UPDATE ontology_migration_plans SET status = ?, updated_at = ? WHERE id = ?`).run(status, now, plan.id);

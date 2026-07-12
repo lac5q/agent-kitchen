@@ -18,6 +18,7 @@ import {
 import { decideOntologyCandidate, extractOntologyCandidate, getOntologyCandidate, promoteOntologyCandidate, registerOntologyPolicyContext } from "@/lib/ontology/candidates";
 import { registerOntologyAlias, resolveOntologyAlias, transitionOntologyAlias } from "@/lib/ontology/aliases";
 import { approveOntologyMigration, executeOntologyMigration, planOntologyMigration } from "@/lib/ontology/migrations";
+import { revokeOntologySource } from "@/lib/ontology/validity";
 
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("request body must be an object");
@@ -128,6 +129,22 @@ export async function POST(request: Request): Promise<Response> {
         namespace: asString(body.namespace, "namespace"), proposed: asObject(body.proposed), confidenceLabel: asString(body.confidenceLabel, "confidenceLabel") as "low" | "medium" | "high",
         confidenceScore: body.confidenceScore as number, actor: asString(body.actor, "actor"),
       }) });
+    }
+
+    if (action === "revoke_source") {
+      const reason = asString(body.reason, "reason");
+      if (reason !== "source_changed" && reason !== "source_erased") throw new Error("reason is invalid");
+      return Response.json({
+        ok: true,
+        revocation: revokeOntologySource(db, {
+          tenantId: asString(body.tenantId, "tenantId"),
+          spaceId: asString(body.spaceId, "spaceId"),
+          sourceId: asString(body.sourceId, "sourceId"),
+          sourceHash: asString(body.sourceHash, "sourceHash"),
+          actor: asString(body.actor, "actor"),
+          reason,
+        }),
+      });
     }
 
     if (action === "decide_candidate") {

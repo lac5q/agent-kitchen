@@ -255,4 +255,43 @@ describe("ontology registry route", () => {
     const fetched = ontologyRoute.GET(operatorRequest(`/api/ontology?packId=${body.pack.id}`));
     expect(JSON.stringify(await fetched.json())).not.toContain(sentinel);
   });
+
+  it("revokes changed source candidates through the authenticated route", async () => {
+    const extracted = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "extract_candidate",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        sourceId: "route-source",
+        sourceHash: SOURCE_HASH,
+        sourceSpans: ["span:1"],
+        extractorId: "route-extractor",
+        extractorVersion: "1.0.0",
+        candidateKind: "type",
+        namespace: "finance",
+        proposed: { id: "finance.invoice", semantics: { kind: "entity" } },
+        confidenceLabel: "high",
+        confidenceScore: 0.9,
+        actor: "operator",
+      }),
+    }));
+    const candidate = await extracted.json() as { candidate: { id: string } };
+    const revoked = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "revoke_source",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        sourceId: "route-source",
+        sourceHash: SOURCE_HASH,
+        actor: "operator",
+        reason: "source_erased",
+      }),
+    }));
+    expect(revoked.status).toBe(200);
+    expect(await revoked.json()).toMatchObject({ ok: true, revocation: { reason: "source_erased" } });
+    const persisted = ontologyRoute.GET(operatorRequest(`/api/ontology?candidateId=${candidate.candidate.id}&tenantId=route-tenant&spaceId=route-space`));
+    expect(await persisted.json()).toMatchObject({ candidate: { status: "invalidated" } });
+  });
 });

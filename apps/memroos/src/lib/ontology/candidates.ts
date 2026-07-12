@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 
 import { commitAuditAtomic } from "@/lib/skills/skill-audit-atomic";
 import { discoverOntology } from "./registry";
+import { assertCandidateAuthoritative, registerOntologyDerivative, registerOntologySource, resolveOntologyValidity } from "./validity";
 
 type CandidateStatus = "pending" | "approved" | "rejected" | "deferred" | "superseded" | "invalidated" | "promoted";
 type CandidateDecision = "approve" | "reject" | "defer" | "supersede" | "invalidate";
@@ -148,9 +149,19 @@ export function extractOntologyCandidate(db: Database.Database, input: ExtractCa
     actor, eventType: "ontology_candidate_extracted", entityType: "ontology_candidate", entityId: candidate.id,
     metadata: { candidate_id: candidate.id, tenant_id: tenantId, space_id: spaceId, source_id: sourceId, source_hash: sourceHash, extractor_id: extractorId, extractor_version: extractorVersion, evidence_hash: evidenceHash, candidate_kind: candidate.candidateKind, namespace, confidence_label: candidate.confidenceLabel, confidence_score: candidate.confidenceScore },
     body: () => {
-      db.prepare(`UPDATE ontology_candidates SET status = 'invalidated', invalidated_at = ? WHERE tenant_id = ? AND space_id = ? AND source_id = ? AND source_hash <> ? AND status IN ('pending','approved','deferred')`).run(candidate.createdAt, tenantId, spaceId, sourceId, sourceHash);
+      const now = candidate.createdAt;
+      // A different verified hash for the same source atomically revokes
+      // every prior authoritative derivative before the new observation is
+      // admitted. Historical candidate/decision evidence remains immutable.
+      db.prepare(`UPDATE ontology_source_lifecycle SET status = 'changed', updated_at = ?, updated_by = ?, reason_code = 'source_changed' WHERE tenant_id = ? AND space_id = ? AND source_id = ? AND source_hash <> ? AND status = 'active'`)
+        .run(now, actor, tenantId, spaceId, sourceId, sourceHash);
+      db.prepare(`UPDATE ontology_derivative_validity SET status = 'revoked', revocation_reason = 'source_changed', revoked_at = ? WHERE tenant_id = ? AND space_id = ? AND source_id = ? AND source_hash <> ? AND status = 'authoritative'`)
+        .run(now, tenantId, spaceId, sourceId, sourceHash);
+      db.prepare(`UPDATE ontology_candidates SET status = 'invalidated', invalidated_at = ? WHERE tenant_id = ? AND space_id = ? AND source_id = ? AND source_hash <> ? AND status IN ('pending','approved','deferred','promoted')`).run(candidate.createdAt, tenantId, spaceId, sourceId, sourceHash);
+      registerOntologySource(db, { tenantId, spaceId, sourceId, sourceHash, actor, reasonCode: "source_verified" });
       db.prepare(`INSERT INTO ontology_candidates (id, tenant_id, space_id, source_id, source_hash, source_spans_json, extractor_id, extractor_version, candidate_kind, namespace, proposed_json, confidence_label, confidence_score, evidence_hash, original_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`)
         .run(candidate.id, tenantId, spaceId, sourceId, sourceHash, stable(candidate.sourceSpans), extractorId, extractorVersion, candidate.candidateKind, namespace, stable(candidate.proposed), candidate.confidenceLabel, candidate.confidenceScore, evidenceHash, stable(candidate), candidate.createdAt);
+      registerOntologyDerivative(db, { tenantId, spaceId, sourceId, sourceHash, derivativeType: "candidate", derivativeId: candidate.id });
       return candidate;
     },
   });
@@ -196,6 +207,7 @@ export function promoteOntologyCandidate(db: Database.Database, input: { candida
     return promotionFrom(prior);
   }
   if (candidate.status !== "approved" || candidate.namespace !== input.namespace) throw new OntologyGovernanceError("approved candidate and namespace are required for promotion", "conflict");
+  assertCandidateAuthoritative(db, { tenantId: candidate.tenantId, spaceId: candidate.spaceId, candidateId: candidate.id });
   let ontology;
   try { ontology = discoverOntology(db, { ontologyId: input.ontologyId, version: input.ontologyVersion }); } catch (error) { throw new OntologyGovernanceError(error instanceof Error ? error.message : "ontology unavailable", "unavailable"); }
   if (!ontology.globallyActive || ontology.contentHash !== input.ontologyContentHash) throw new OntologyGovernanceError("ontology is unavailable or inconsistent", "unavailable");
@@ -214,7 +226,11 @@ export function promoteOntologyCandidate(db: Database.Database, input: { candida
     metadata: { promotion_id: promotion.id, candidate_id: candidate.id, tenant_id: candidate.tenantId, space_id: candidate.spaceId, seal_proposal_id: promotion.sealProposalId, seal_decision_id: promotion.sealDecisionId, ontology_id: promotion.ontologyId, ontology_version: promotion.ontologyVersion, ontology_content_hash: promotion.ontologyContentHash, namespace: promotion.namespace, policy_context_hash: promotion.policyContextHash, evidence_hash: candidate.evidenceHash },
     body: () => {
       db.prepare(`INSERT INTO ontology_promotions (id, candidate_id, tenant_id, space_id, seal_proposal_id, seal_decision_id, ontology_id, ontology_version, ontology_content_hash, namespace, policy_context_hash, idempotency_key, promoted_by, promoted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(promotion.id, promotion.candidateId, promotion.tenantId, promotion.spaceId, promotion.sealProposalId, promotion.sealDecisionId, promotion.ontologyId, promotion.ontologyVersion, promotion.ontologyContentHash, promotion.namespace, promotion.policyContextHash, promotion.idempotencyKey, promotion.promotedBy, promotion.promotedAt);
-      db.prepare(`INSERT INTO ontology_canonical_definitions (id, promotion_id, ontology_id, ontology_version, ontology_content_hash, namespace, canonical_id, definition_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(`ontdef_${randomUUID()}`, promotion.id, promotion.ontologyId, promotion.ontologyVersion, promotion.ontologyContentHash, promotion.namespace, canonicalId, stable(candidate.proposed), promotion.promotedAt);
+      const canonicalDefinitionId = `ontdef_${randomUUID()}`;
+      db.prepare(`INSERT INTO ontology_canonical_definitions (id, promotion_id, ontology_id, ontology_version, ontology_content_hash, namespace, canonical_id, definition_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(canonicalDefinitionId, promotion.id, promotion.ontologyId, promotion.ontologyVersion, promotion.ontologyContentHash, promotion.namespace, canonicalId, stable(candidate.proposed), promotion.promotedAt);
+      const source = { tenantId: candidate.tenantId, spaceId: candidate.spaceId, sourceId: candidate.sourceId, sourceHash: candidate.sourceHash };
+      registerOntologyDerivative(db, { ...source, derivativeType: "promotion", derivativeId: promotion.id });
+      registerOntologyDerivative(db, { ...source, derivativeType: "canonical_definition", derivativeId: canonicalDefinitionId });
       db.prepare(`UPDATE ontology_candidates SET status = 'promoted' WHERE id = ?`).run(candidate.id);
       return promotion;
     },
@@ -230,7 +246,5 @@ export function getOntologyCandidate(db: Database.Database, candidateId: string,
 }
 
 export function ontologyReceiptContext(db: Database.Database, input: { tenantId: string; spaceId: string; recordType: string; recordId: string }): Record<string, unknown> {
-  const row = db.prepare(`SELECT * FROM ontology_versioned_records WHERE tenant_id = ? AND space_id = ? AND record_type = ? AND record_id = ? ORDER BY created_at DESC LIMIT 1`).get(input.tenantId, input.spaceId, input.recordType, input.recordId) as Record<string, string> | undefined;
-  if (!row) throw new OntologyGovernanceError("ontology receipt context is unavailable", "unavailable");
-  return { ontologyId: row.ontology_id, ontologyVersion: row.ontology_version, ontologyContentHash: row.ontology_content_hash, namespace: row.qualified_type.split(".").slice(0, -1).join("."), canonicalId: row.qualified_type, aliasMigrationPath: JSON.parse(row.mapping_path_json) };
+  return resolveOntologyValidity(db, input);
 }

@@ -124,3 +124,35 @@ export function emitPolicyReceipt(
     // with event_type = AUDIT_EVENT_TYPES.POLICY_DECISION.
   }
 }
+
+/** Ontology-sensitive callers use this strict variant. It intentionally
+ * propagates persistence failures so they cannot continue without a receipt. */
+export function emitRequiredPolicyReceipt(
+  db: Database.Database,
+  receipt: PolicyReceipt
+): void {
+  const entityId = `policy_decision:${receipt.domain}:${receipt.action}`;
+  writeAuditEntry(
+    {
+      tenant_id: receipt.tenantId,
+      actor_id: receipt.actorId,
+      actor_role: receipt.actorRole,
+      event_type: AUDIT_EVENT_TYPES.POLICY_DECISION,
+      entity_type: ENTITY_TYPES.POLICY_DECISION,
+      entity_id: entityId,
+      reason: receipt.reason,
+      metadata_json: {
+        policyVersion: receipt.policyVersion,
+        domain: receipt.domain,
+        action: receipt.action,
+        ruleMatched: receipt.ruleMatched,
+        outcome: receipt.outcome,
+        reason: receipt.reason,
+        detail: receipt.detail ?? {},
+        ontology: receipt.ontology ?? null,
+      },
+      created_at: receipt.createdAt,
+    },
+    db
+  );
+}

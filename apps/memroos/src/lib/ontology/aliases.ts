@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { commitAuditAtomic } from "@/lib/skills/skill-audit-atomic";
 import { discoverOntology } from "./registry";
 import { OntologyGovernanceError } from "./candidates";
+import { registerOntologyDerivative, sourceForCanonicalDefinition } from "./validity";
 
 export interface OntologyAlias {
   id: string;
@@ -37,6 +38,13 @@ export function registerOntologyAlias(db: Database.Database, input: { ontologyId
   const fields = ["namespace", "alias", "canonicalId", "actor", "reason"] as const;
   for (const field of fields) clean(input[field], field);
   if (!ontology.globallyActive || ontology.contentHash !== input.ontologyContentHash || !input.canonicalId.startsWith(`${input.namespace}.`) || !canonicalExists(db, ontology, input.namespace, input.canonicalId)) throw new OntologyGovernanceError("alias requires a current authoritative canonical target", "unavailable");
+  const source = sourceForCanonicalDefinition(db, {
+    ontologyId: ontology.ontologyId,
+    ontologyVersion: ontology.version,
+    namespace: input.namespace,
+    canonicalId: input.canonicalId,
+  });
+  if (!source) throw new OntologyGovernanceError("alias canonical source is revoked or unverified", "unavailable");
   const row = db.prepare(`SELECT * FROM ontology_aliases WHERE ontology_id = ? AND ontology_version = ? AND namespace = ? AND alias = ?`).get(ontology.ontologyId, ontology.version, input.namespace, input.alias) as Record<string, string> | undefined;
   if (row) {
     const existing = rowToAlias(row);
@@ -49,6 +57,7 @@ export function registerOntologyAlias(db: Database.Database, input: { ontologyId
     metadata: { alias_id: alias.id, ontology_id: alias.ontologyId, ontology_version: alias.ontologyVersion, ontology_content_hash: alias.ontologyContentHash, namespace: alias.namespace, alias: alias.alias, canonical_id: alias.canonicalId, action: "add" },
     body: () => {
       db.prepare(`INSERT INTO ontology_aliases (id, ontology_id, ontology_version, ontology_content_hash, namespace, alias, canonical_id, status, created_by, created_at, reason) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`).run(alias.id, alias.ontologyId, alias.ontologyVersion, alias.ontologyContentHash, alias.namespace, alias.alias, alias.canonicalId, input.actor, new Date().toISOString(), input.reason);
+      registerOntologyDerivative(db, { ...source, derivativeType: "alias", derivativeId: alias.id });
       db.prepare(`INSERT INTO ontology_alias_lifecycle_audit (id, alias_id, action, prior_target, next_target, actor, reason, ontology_content_hash, created_at) VALUES (?, ?, 'add', NULL, ?, ?, ?, ?, ?)`).run(`ontaliasaudit_${randomUUID()}`, alias.id, alias.canonicalId, input.actor, input.reason, alias.ontologyContentHash, new Date().toISOString());
       return alias;
     },
@@ -60,7 +69,18 @@ export function resolveOntologyAlias(db: Database.Database, input: { ontologyId:
   if (!ontology.globallyActive) throw new OntologyGovernanceError("ontology is unavailable for alias resolution", "unavailable");
   const rows = db.prepare(`SELECT * FROM ontology_aliases WHERE ontology_id = ? AND ontology_version = ? AND namespace = ? AND alias = ? AND status = 'active'`).all(ontology.ontologyId, ontology.version, input.namespace, input.submitted) as Array<Record<string, string>>;
   if (rows.length > 1) throw new OntologyGovernanceError("alias mapping is ambiguous", "conflict");
-  if (rows.length === 1) return { canonicalId: rows[0].canonical_id, aliasId: rows[0].id, submitted: input.submitted };
+  if (rows.length === 1) {
+    const source = sourceForCanonicalDefinition(db, {
+      ontologyId: ontology.ontologyId,
+      ontologyVersion: ontology.version,
+      namespace: input.namespace,
+      canonicalId: rows[0].canonical_id,
+    });
+    if (!source || !db.prepare(`SELECT 1 FROM ontology_derivative_validity WHERE derivative_type = 'alias' AND derivative_id = ? AND status = 'authoritative'`).get(rows[0].id)) {
+      throw new OntologyGovernanceError("alias is revoked or unverified", "unavailable");
+    }
+    return { canonicalId: rows[0].canonical_id, aliasId: rows[0].id, submitted: input.submitted };
+  }
   const canonical = db.prepare(`SELECT canonical_id FROM ontology_canonical_definitions WHERE ontology_id = ? AND ontology_version = ? AND namespace = ? AND canonical_id = ?`).get(ontology.ontologyId, ontology.version, input.namespace, input.submitted) as { canonical_id: string } | undefined;
   if (!canonical && !ontology.definitions.some((definition) => definition.id === input.submitted)) throw new OntologyGovernanceError("unknown alias or canonical type", "not_found");
   return { canonicalId: canonical?.canonical_id ?? input.submitted, aliasId: null, submitted: input.submitted };

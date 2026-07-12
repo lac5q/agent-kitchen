@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 24;
+export const CURRENT_SCHEMA_VERSION = 25;
 
 type SchemaMigration = {
   version: number;
@@ -205,6 +205,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 24,
     name: 'ontology-registry-pack-publication-hardening',
     up: applyOntologyRegistryPackHardeningSchema,
+  },
+  {
+    version: 25,
+    name: 'ontology-source-lifecycle-and-validity',
+    up: applyOntologySourceLifecycleValiditySchema,
   },
 ];
 
@@ -2029,6 +2034,61 @@ function applyOntologyCandidateGovernanceSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS ontology_versioned_records_lookup
       ON ontology_versioned_records(tenant_id, space_id, record_type, record_id);
   `);
+}
+
+function applyOntologySourceLifecycleValiditySchema(db: Database.Database): void {
+  // Source material is the single authority for every derived ontology row.
+  // The lifecycle and derivative tables deliberately retain only scoped IDs,
+  // hashes, status, and reasons so historical evidence remains safe after a
+  // source changes or is erased.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_source_lifecycle (
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('active','changed','erased','revoked')),
+      updated_at            TEXT NOT NULL,
+      updated_by            TEXT NOT NULL,
+      reason_code           TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, space_id, source_id, source_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_source_lifecycle_current
+      ON ontology_source_lifecycle(tenant_id, space_id, source_id, status, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_derivative_validity (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      derivative_type       TEXT NOT NULL CHECK(derivative_type IN ('candidate','promotion','canonical_definition','alias','versioned_record','provenance_binding')),
+      derivative_id         TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('authoritative','revoked')),
+      revocation_reason     TEXT,
+      created_at            TEXT NOT NULL,
+      revoked_at            TEXT,
+      UNIQUE(derivative_type, derivative_id)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_derivative_validity_source
+      ON ontology_derivative_validity(tenant_id, space_id, source_id, source_hash, status);
+    CREATE INDEX IF NOT EXISTS ontology_derivative_validity_lookup
+      ON ontology_derivative_validity(tenant_id, space_id, derivative_type, derivative_id, status);
+  `);
+
+  // Versioned records created before this migration do not carry a verifiable
+  // source lifecycle. They intentionally remain unavailable to
+  // ontology-sensitive operations until a governed migration recreates them.
+  for (const statement of [
+    "ALTER TABLE ontology_versioned_records ADD COLUMN source_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN source_hash TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Additive migration replay.
+    }
+  }
 }
 
 function applyCurrentSchema(db: Database.Database): void {

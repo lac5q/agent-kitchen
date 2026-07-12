@@ -191,4 +191,43 @@ describe("subject erasure planning and execution", () => {
     const tombstones = database.prepare("SELECT COUNT(*) AS count FROM memory_erasure_tombstones WHERE subject_plan_id = ?").get("plan-mixed") as { count: number };
     expect(tombstones.count).toBe(1);
   });
+
+  it("revokes a versioned ontology record during approved subject erasure", async () => {
+    const database = freshDb();
+    const messageId = seedMessage(database, "ONTOLOGY_ERASURE_SECRET", "subject-ontology");
+    const registry = await import("@/lib/ontology/registry");
+    const migrations = await import("@/lib/ontology/migrations");
+    const ontology = registry.ensureCanonicalUpperOntology(database, "operator");
+    const migration = migrations.planOntologyMigration(database, {
+      tenantId: "default-tenant",
+      spaceId: "erasure-space",
+      source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
+      target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
+      mappings: { legacy_message: ["memory"] },
+      actor: "operator",
+    });
+    migrations.approveOntologyMigration(database, {
+      planId: migration.id, tenantId: migration.tenantId, spaceId: migration.spaceId, planHash: migration.planHash, actor: "operator",
+    });
+    migrations.executeOntologyMigration(database, {
+      planId: migration.id, tenantId: migration.tenantId, spaceId: migration.spaceId, actor: "operator",
+      records: [{ recordType: "message", recordId: String(messageId), sourceType: "legacy_message" }],
+    });
+    const plan = createSubjectErasurePlan(database, {
+      id: "plan-ontology",
+      subject: { subjectId: "subject-ontology" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      actorId: "operator",
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    approveSubjectErasurePlan(database, {
+      planId: "plan-ontology", planHash: plan.plan!.planHash, actorId: "reviewer", now: new Date("2026-01-02T00:10:00.000Z"),
+    });
+    await executeSubjectErasurePlan(database, {
+      planId: "plan-ontology", planHash: plan.plan!.planHash, actorId: "operator", now: new Date("2026-01-02T00:20:00.000Z"),
+    });
+
+    expect(database.prepare(`SELECT status FROM ontology_derivative_validity WHERE derivative_type = 'versioned_record'`).get())
+      .toMatchObject({ status: "revoked" });
+  });
 });
