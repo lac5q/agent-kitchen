@@ -11,6 +11,8 @@ import path from "path";
 import { executeFederationRun, type FederationSourceClient, type FederationCandidateResult } from "../retrieval";
 import type { FederationSourceRow } from "../source-registry";
 import { registerFederationSource } from "../source-registry";
+import { ensureCanonicalUpperOntology } from "@/lib/ontology/registry";
+import { revokeOntologySource } from "@/lib/ontology/validity";
 
 let db: import("better-sqlite3").Database;
 let closeDb: () => void;
@@ -25,8 +27,50 @@ beforeEach(async () => {
   const { initSchema } = await import("@/lib/db-schema");
   db = getDb();
   initSchema(db);
+  const ontology = ensureCanonicalUpperOntology(db, "operator");
+  seedOntologyContext("alpha", ontology);
+  seedOntologyContext("beta", ontology);
   closeDb = close;
 });
+
+function ontologyReference(sourceHandle: string) {
+  return {
+    tenantId: "default-tenant",
+    spaceId: "space-1",
+    recordType: "federation_source",
+    recordId: sourceHandle,
+  };
+}
+
+function seedOntologyContext(
+  sourceHandle: string,
+  ontology: { ontologyId: string; version: string; contentHash: string },
+) {
+  const reference = ontologyReference(sourceHandle);
+  const sourceId = `source:${sourceHandle}`;
+  const sourceHash = `sha256:${sourceHandle.padEnd(64, "a").slice(0, 64)}`;
+  const derivativeId = `record:${sourceHandle}`;
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO ontology_versioned_records
+      (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version,
+       ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+     VALUES (?, ?, ?, ?, ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+  ).run(
+    derivativeId, reference.tenantId, reference.spaceId, reference.recordType, reference.recordId,
+    ontology.ontologyId, ontology.version, ontology.contentHash, now, sourceId, sourceHash,
+  );
+  db.prepare(
+    `INSERT INTO ontology_source_lifecycle
+      (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+     VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+  ).run(reference.tenantId, reference.spaceId, sourceId, sourceHash, now);
+  db.prepare(
+    `INSERT INTO ontology_derivative_validity
+      (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+  ).run(`valid:${derivativeId}`, reference.tenantId, reference.spaceId, sourceId, sourceHash, derivativeId, now);
+}
 
 afterEach(() => {
   closeDb();
@@ -37,10 +81,12 @@ function makeSources(): FederationSourceRow[] {
   const a = registerFederationSource(db, {
     tenantId: "default-tenant", sourceHandle: "alpha", sourceKind: "memory",
     purpose: "memory_search", allowedOperations: ["search"], transport: "inproc", createdBy: "u",
+    spaceId: "space-1", ontologyReference: ontologyReference("alpha"),
   });
   const b = registerFederationSource(db, {
     tenantId: "default-tenant", sourceHandle: "beta", sourceKind: "knowledge",
     purpose: "memory_search", allowedOperations: ["search"], transport: "mcp_http", createdBy: "u",
+    spaceId: "space-1", ontologyReference: ontologyReference("beta"),
   });
   if (a.kind !== "registered" || b.kind !== "registered") throw new Error("setup failed");
   return [a.source, b.source];
@@ -131,18 +177,35 @@ describe("VAL-ORCH-009 -- per-source receipts", () => {
     expect(r.run.outcomes.some((o) => o.outcome === "injection")).toBe(true);
   });
 
-  it("denies ontology-tagged retrieval candidates with missing or forged server coordinates", async () => {
+  it("denies a revoked persisted source context before policy or client fetch", async () => {
     const sources = makeSources();
+    if (!sources[0].ontologyContext) throw new Error("missing context");
+    revokeOntologySource(db, {
+      tenantId: "default-tenant",
+      spaceId: "space-1",
+      sourceId: sources[0].ontologyContext.sourceId,
+      sourceHash: sources[0].ontologyContext.sourceHash,
+      actor: "operator",
+      reason: "source_changed",
+    });
+    const fetch = vi.fn(async () => ({
+      kind: "ok" as const,
+      results: [],
+    }));
     const r = await executeFederationRun(db, {
       tenantId: "default-tenant", query: "x", context: okContext(), budget: okBudget(), sources,
-      client: staticClient([{ content: "must not inject", metadata: { ontologyReference: { tenantId: "default-tenant" } } }]),
+      client: { fetch },
     });
     if (r.kind !== "ok") throw new Error("not ok");
     expect(r.run.outcomes).toContainEqual(expect.objectContaining({
       outcome: "denied",
       reasonCode: "ontology_context_unavailable",
-      metadata: expect.objectContaining({ ontology_blocked: 1 }),
+      metadata: expect.objectContaining({
+        ontology_record_type: "federation_source",
+        ontology_record_id: "alpha",
+      }),
     }));
+    expect(fetch.mock.calls.map(([input]) => input.source.id)).not.toContain(sources[0].id);
   });
 
   it("maps client timeout/malformed/failed to typed outcomes", async () => {

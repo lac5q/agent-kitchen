@@ -12,9 +12,34 @@ import type Database from "better-sqlite3";
 
 import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from "@/lib/audit/event-types";
 import { writeAuditEntry } from "@/lib/audit/write";
+import {
+  resolveOntologyValidity,
+  type OntologyValidityContext,
+} from "@/lib/ontology/validity";
+
 export type FederationSourceKind = "memory" | "knowledge" | "mcp";
 export type FederationSourceTransport = "local" | "inproc" | "memory" | "mcp_stdio" | "mcp_http";
 export type FederationSourceTrust = "registered" | "trusted" | "revoked" | "unknown";
+
+export interface OntologyContextReference {
+  tenantId: string;
+  spaceId: string;
+  recordType: string;
+  recordId: string;
+}
+
+export interface PersistedOntologyContext {
+  recordType: string;
+  recordId: string;
+  ontologyId: string;
+  ontologyVersion: string;
+  ontologyContentHash: string;
+  canonicalId: string;
+  sourceId: string;
+  sourceHash: string;
+  derivativeId: string;
+}
+
 export interface FederationSourceInput {
   tenantId: string;
   sourceHandle: string;
@@ -30,6 +55,9 @@ export interface FederationSourceInput {
   transport: FederationSourceTransport;
   descriptor?: Record<string, unknown>;
   createdBy: string;
+  /** Coordinates only. Authoritative context is resolved and persisted by
+   * this registry, never accepted from a caller. */
+  ontologyReference?: OntologyContextReference;
 }
 export interface FederationSourceRow {
   id: string;
@@ -46,6 +74,7 @@ export interface FederationSourceRow {
   expiresAt: string | null;
   transport: FederationSourceTransport;
   descriptor: Record<string, unknown>;
+  ontologyContext: PersistedOntologyContext | null;
   registrationHash: string;
   lastHealthAt: string | null;
   createdBy: string;
@@ -56,7 +85,7 @@ export interface FederationSourceRow {
 export type FederationSourceEligibility =
   | { kind: "eligible"; source: FederationSourceRow }
   | { kind: "omitted"; reason: string };
-function hashSource(input: FederationSourceInput): string {
+function hashSource(input: FederationSourceInput, ontologyContext: PersistedOntologyContext): string {
   const canonical = stableJson({
     tenantId: input.tenantId,
     sourceHandle: input.sourceHandle,
@@ -67,8 +96,76 @@ function hashSource(input: FederationSourceInput): string {
     allowedOperations: [...input.allowedOperations].sort(),
     trustLevel: input.trustLevel ?? "registered",
     transport: input.transport,
+    ontologyContext,
   });
   return "sha256:" + crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+function requiredString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolveRequiredOntologyContext(
+  db: Database.Database,
+  input: FederationSourceInput,
+): PersistedOntologyContext | null {
+  const recordType = requiredString(input.ontologyReference?.recordType);
+  const recordId = requiredString(input.ontologyReference?.recordId);
+  if (
+    !recordType
+    || !recordId
+    || !input.spaceId
+    || input.ontologyReference?.tenantId !== input.tenantId
+    || input.ontologyReference?.spaceId !== input.spaceId
+  ) return null;
+  try {
+    const context = resolveOntologyValidity(db, {
+      tenantId: input.tenantId,
+      spaceId: input.spaceId,
+      recordType,
+      recordId,
+    });
+    return persistedOntologyContext(recordType, recordId, context);
+  } catch {
+    return null;
+  }
+}
+
+function persistedOntologyContext(
+  recordType: string,
+  recordId: string,
+  context: OntologyValidityContext,
+): PersistedOntologyContext {
+  return {
+    recordType,
+    recordId,
+    ontologyId: context.ontologyId,
+    ontologyVersion: context.ontologyVersion,
+    ontologyContentHash: context.ontologyContentHash,
+    canonicalId: context.canonicalId,
+    sourceId: context.sourceId,
+    sourceHash: context.sourceHash,
+    derivativeId: context.derivativeId,
+  };
+}
+
+function parseOntologyContext(row: Record<string, unknown>): PersistedOntologyContext | null {
+  const recordType = requiredString(row.ontology_record_type);
+  const recordId = requiredString(row.ontology_record_id);
+  const ontologyId = requiredString(row.ontology_id);
+  const ontologyVersion = requiredString(row.ontology_version);
+  const ontologyContentHash = requiredString(row.ontology_content_hash);
+  const canonicalId = requiredString(row.ontology_canonical_id);
+  const sourceId = requiredString(row.ontology_source_id);
+  const sourceHash = requiredString(row.ontology_source_hash);
+  const derivativeId = requiredString(row.ontology_derivative_id);
+  if (!recordType || !recordId || !ontologyId || !ontologyVersion || !ontologyContentHash || !canonicalId || !sourceId || !sourceHash || !derivativeId) {
+    return null;
+  }
+  return {
+    recordType, recordId, ontologyId, ontologyVersion, ontologyContentHash,
+    canonicalId, sourceId, sourceHash, derivativeId,
+  };
 }
 
 function stableJson(value: unknown): string {
@@ -101,8 +198,12 @@ export function registerFederationSource(
     return { kind: "denied", reason: "allowedOperations must be non-empty" };
   }
   if (!input.purpose) return { kind: "denied", reason: "purpose required" };
+  const ontologyContext = resolveRequiredOntologyContext(db, input);
+  if (!ontologyContext) {
+    return { kind: "denied", reason: "ontology_context_unavailable" };
+  }
 
-  const registrationHash = hashSource(input);
+  const registrationHash = hashSource(input, ontologyContext);
   const now = new Date().toISOString();
   const existing = db
     .prepare("SELECT id FROM federation_sources WHERE tenant_id = ? AND source_handle = ? AND source_kind = ?")
@@ -111,7 +212,7 @@ export function registerFederationSource(
   let newId = "";
   if (existing) {
     db.prepare(
-      "UPDATE federation_sources SET space_id = ?, purpose = ?, label_policy_json = ?, allowed_operations_json = ?, trust_level = ?, enabled = ?, has_expiry = ?, expires_at = ?, transport = ?, descriptor_json = ?, registration_hash = ?, updated_at = ? WHERE id = ?"
+      "UPDATE federation_sources SET space_id = ?, purpose = ?, label_policy_json = ?, allowed_operations_json = ?, trust_level = ?, enabled = ?, has_expiry = ?, expires_at = ?, transport = ?, descriptor_json = ?, ontology_record_type = ?, ontology_record_id = ?, ontology_id = ?, ontology_version = ?, ontology_content_hash = ?, ontology_canonical_id = ?, ontology_source_id = ?, ontology_source_hash = ?, ontology_derivative_id = ?, registration_hash = ?, updated_at = ? WHERE id = ?"
     ).run(
       input.spaceId ?? null,
       input.purpose,
@@ -123,6 +224,15 @@ export function registerFederationSource(
       input.expiresAt ?? null,
       input.transport,
       JSON.stringify(input.descriptor ?? {}),
+      ontologyContext.recordType,
+      ontologyContext.recordId,
+      ontologyContext.ontologyId,
+      ontologyContext.ontologyVersion,
+      ontologyContext.ontologyContentHash,
+      ontologyContext.canonicalId,
+      ontologyContext.sourceId,
+      ontologyContext.sourceHash,
+      ontologyContext.derivativeId,
       registrationHash,
       now,
       existing.id,
@@ -130,7 +240,7 @@ export function registerFederationSource(
   } else {
     newId = "fedsrc-" + crypto.randomUUID();
     db.prepare(
-      "INSERT INTO federation_sources (id, tenant_id, source_handle, source_kind, space_id, purpose, label_policy_json, allowed_operations_json, trust_level, enabled, has_expiry, expires_at, transport, descriptor_json, registration_hash, last_health_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)"
+      "INSERT INTO federation_sources (id, tenant_id, source_handle, source_kind, space_id, purpose, label_policy_json, allowed_operations_json, trust_level, enabled, has_expiry, expires_at, transport, descriptor_json, ontology_record_type, ontology_record_id, ontology_id, ontology_version, ontology_content_hash, ontology_canonical_id, ontology_source_id, ontology_source_hash, ontology_derivative_id, registration_hash, last_health_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)"
     ).run(
       newId,
       input.tenantId,
@@ -146,6 +256,15 @@ export function registerFederationSource(
       input.expiresAt ?? null,
       input.transport,
       JSON.stringify(input.descriptor ?? {}),
+      ontologyContext.recordType,
+      ontologyContext.recordId,
+      ontologyContext.ontologyId,
+      ontologyContext.ontologyVersion,
+      ontologyContext.ontologyContentHash,
+      ontologyContext.canonicalId,
+      ontologyContext.sourceId,
+      ontologyContext.sourceHash,
+      ontologyContext.derivativeId,
       registrationHash,
       input.createdBy,
       now,
@@ -169,6 +288,9 @@ export function registerFederationSource(
           trust_level: input.trustLevel ?? "registered",
           enabled: input.enabled === false ? 0 : 1,
           registration_hash: registrationHash,
+          ontology_record_type: ontologyContext.recordType,
+          ontology_record_id: ontologyContext.recordId,
+          ontology_derivative_id: ontologyContext.derivativeId,
         },
       },
       db,
@@ -194,6 +316,7 @@ export function registerFederationSource(
       expiresAt: input.expiresAt ?? null,
       transport: input.transport,
       descriptor: input.descriptor ?? {},
+      ontologyContext,
       registrationHash,
       lastHealthAt: null,
       createdBy: input.createdBy,
@@ -201,6 +324,35 @@ export function registerFederationSource(
       updatedAt: now,
     },
   };
+}
+
+/** Re-resolve persisted source coordinates before a federation source can
+ * reach policy, fetch, or injection handling. */
+export function resolveFederationSourceOntologyContext(
+  db: Database.Database,
+  source: FederationSourceRow,
+): OntologyValidityContext | null {
+  const persisted = source.ontologyContext;
+  if (!persisted || !source.spaceId) return null;
+  try {
+    const context = resolveOntologyValidity(db, {
+      tenantId: source.tenantId,
+      spaceId: source.spaceId,
+      recordType: persisted.recordType,
+      recordId: persisted.recordId,
+    });
+    return context.ontologyId === persisted.ontologyId
+      && context.ontologyVersion === persisted.ontologyVersion
+      && context.ontologyContentHash === persisted.ontologyContentHash
+      && context.canonicalId === persisted.canonicalId
+      && context.sourceId === persisted.sourceId
+      && context.sourceHash === persisted.sourceHash
+      && context.derivativeId === persisted.derivativeId
+      ? context
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function getFederationSource(
@@ -281,6 +433,7 @@ function parseSourceRow(row: Record<string, unknown>): FederationSourceRow {
     expiresAt: row.expires_at == null ? null : String(row.expires_at),
     transport: row.transport as FederationSourceTransport,
     descriptor: safeRecord(row.descriptor_json),
+    ontologyContext: parseOntologyContext(row),
     registrationHash: String(row.registration_hash),
     lastHealthAt: row.last_health_at == null ? null : String(row.last_health_at),
     createdBy: String(row.created_by),

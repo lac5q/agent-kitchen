@@ -44,7 +44,10 @@ import {
 } from "./types";
 import type { BeliefPromotionConfig } from "./config";
 import { DEFAULT_BELIEF_PROMOTION_CONFIG } from "./config";
-import { resolveOntologyValidity } from "../ontology/validity";
+import {
+  resolveOntologyValidity,
+  type OntologyValidityContext,
+} from "../ontology/validity";
 
 // ---------------------------------------------------------------------------
 // Stable hash helpers (mirror agent-checkpoints.ts)
@@ -166,6 +169,76 @@ function parseJsonRecord(raw: string | null | undefined): Record<string, unknown
     return {};
   }
   return {};
+}
+
+function queueField(row: Record<string, unknown>, field: string): string | null {
+  const value = row[field];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolveQueuedOntologyContext(
+  db: Database.Database,
+  row: Record<string, unknown>,
+  tenantId: string,
+): QueueOntologyContext | null {
+  const recordType = queueField(row, "ontology_record_type");
+  const recordId = queueField(row, "ontology_record_id");
+  const ontologyId = queueField(row, "ontology_id");
+  const ontologyVersion = queueField(row, "ontology_version");
+  const ontologyContentHash = queueField(row, "ontology_content_hash");
+  const canonicalId = queueField(row, "ontology_canonical_id");
+  const sourceId = queueField(row, "ontology_source_id");
+  const sourceHash = queueField(row, "ontology_source_hash");
+  const derivativeId = queueField(row, "ontology_derivative_id");
+  const spaceId = queueField(row, "ontology_space_id") ?? "default";
+  if (!recordType || !recordId || !ontologyId || !ontologyVersion || !ontologyContentHash || !canonicalId || !sourceId || !sourceHash || !derivativeId) {
+    return null;
+  }
+  const reference = { tenantId, spaceId, recordType, recordId };
+  try {
+    const context = resolveOntologyValidity(db, reference);
+    if (
+      context.ontologyId !== ontologyId
+      || context.ontologyVersion !== ontologyVersion
+      || context.ontologyContentHash !== ontologyContentHash
+      || context.canonicalId !== canonicalId
+      || context.sourceId !== sourceId
+      || context.sourceHash !== sourceHash
+      || context.derivativeId !== derivativeId
+    ) {
+      return null;
+    }
+    return { reference, context };
+  } catch {
+    return null;
+  }
+}
+
+function resolveCandidateReviewOntologyContext(
+  db: Database.Database,
+  tenantId: string,
+  candidateId: string,
+): QueueOntologyContext | null {
+  const rows = db.prepare(
+    `SELECT space_id, record_type, record_id
+       FROM ontology_versioned_records
+      WHERE tenant_id = ? AND record_type = 'belief_candidate' AND record_id = ?
+      ORDER BY created_at DESC
+      LIMIT 2`
+  ).all(tenantId, candidateId) as Array<{ space_id: string; record_type: string; record_id: string }>;
+  if (rows.length !== 1) return null;
+  const row = rows[0];
+  const reference = {
+    tenantId,
+    spaceId: row.space_id,
+    recordType: row.record_type,
+    recordId: row.record_id,
+  };
+  try {
+    return { reference, context: resolveOntologyValidity(db, reference) };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -543,6 +616,19 @@ export interface AdmitOptions {
   /** Operator-reviewed bypass for items previously queued in this tenant. */
   reviewedQueueId?: string | null;
   ontology?: PromotionReceiptSummary["ontology"];
+  ontologyReference?: OntologyContextReference;
+}
+
+interface OntologyContextReference {
+  tenantId: string;
+  spaceId: string;
+  recordType: string;
+  recordId: string;
+}
+
+interface QueueOntologyContext {
+  reference: OntologyContextReference;
+  context: OntologyValidityContext;
 }
 
 export function canAdmitToGold(
@@ -555,6 +641,7 @@ export function canAdmitToGold(
   const now = options.now ?? new Date();
   const category = normalizeCategory(options.category);
   const candidate = readCandidate(db, candidateId, tenantId);
+  let ontology = options.ontology;
 
   if (candidate.belief_stage === "gold_operational_truth") {
     // No-op: already promoted. Return admitted w/ existing most-recent receipt.
@@ -603,8 +690,12 @@ export function canAdmitToGold(
   // (including engineering and operational) sends to review.
   const isUnlistedSensitive = !!sensitiveLabel
     && !config.highStakesCategories.has(category);
+  const reviewOntology = isUnlistedSensitive || isHighStakes
+    ? resolveCandidateReviewOntologyContext(db, tenantId, candidateId)
+    : null;
 
   if (isUnlistedSensitive && sensitiveLabel) {
+    if (!reviewOntology) throw new Error("ontology context is required for belief review");
     return writeQueuedReceipt({
       db,
       tenantId,
@@ -615,11 +706,14 @@ export function canAdmitToGold(
       sensitiveLabel,
       actor,
       createdAt: nowIso(),
+      ontology: reviewOntology.context,
+      ontologyReference: reviewOntology.reference,
     });
   }
   if (isHighStakes) {
     // review-required override: caller can pass a reviewed queue id to bypass
     if (!options.reviewedQueueId) {
+      if (!reviewOntology) throw new Error("ontology context is required for belief review");
       return writeQueuedReceipt({
         db,
         tenantId,
@@ -630,18 +724,27 @@ export function canAdmitToGold(
         sensitiveLabel: null,
         actor,
         createdAt: nowIso(),
+        ontology: reviewOntology.context,
+        ontologyReference: reviewOntology.reference,
       });
     }
     // Operator-approved queue: continue to admit below
     const queueItem = db
-      .prepare<[string, string], { id: string; status: string; resolved_by: string | null }>(
-        `SELECT id, status, resolved_by FROM belief_review_queue
+      .prepare<[string, string], Record<string, unknown>>(
+        `SELECT * FROM belief_review_queue
           WHERE id = ? AND tenant_id = ?`
       )
       .get(options.reviewedQueueId, tenantId);
-    if (!queueItem || queueItem.status !== "approved") {
+    if (
+      !queueItem
+      || queueField(queueItem, "status") !== "approved"
+      || queueField(queueItem, "candidate_id") !== candidateId
+    ) {
       throw new Error("reviewedQueueId provided but queue item is not approved");
     }
+    const queueOntology = resolveQueuedOntologyContext(db, queueItem, tenantId);
+    if (!queueOntology) throw new Error("reviewedQueueId ontology context is unavailable");
+    ontology = queueOntology.context;
   }
 
   return writeAdmittedReceipt({
@@ -652,7 +755,7 @@ export function canAdmitToGold(
     checks,
     actor,
     createdAt: nowIso(),
-    ontology: options.ontology,
+    ontology,
   });
 }
 
@@ -732,9 +835,16 @@ interface QueuedArgs {
   sensitiveLabel: string | null;
   actor: MemoryUseActor;
   createdAt: string;
+  ontology?: PromotionReceiptSummary["ontology"];
+  ontologyReference?: OntologyContextReference;
 }
 
 function writeQueuedReceipt(args: QueuedArgs): AdmissionDecision {
+  const ontologyReference = args.ontologyReference;
+  const ontology = args.ontology;
+  if (!ontology || !ontologyReference) {
+    throw new Error("ontology context is required for belief review");
+  }
   const previousEntryHash = latestDecisionEntryHash(args.db, args.tenantId);
   const decisionId = crypto.randomUUID();
   const queueId = crypto.randomUUID();
@@ -742,9 +852,18 @@ function writeQueuedReceipt(args: QueuedArgs): AdmissionDecision {
   return args.db.transaction(() => {
     args.db.prepare(
       `INSERT INTO belief_review_queue
-         (id, tenant_id, candidate_id, category, status, opened_by, opened_at)
-       VALUES (?, ?, ?, ?, 'open', ?, ?)`
-    ).run(queueId, args.tenantId, args.candidate.id, args.category, args.actor.id, args.createdAt);
+         (id, tenant_id, candidate_id, category, status, opened_by, opened_at,
+          ontology_record_type, ontology_record_id, ontology_space_id, ontology_id, ontology_version,
+          ontology_content_hash, ontology_canonical_id, ontology_source_id,
+          ontology_source_hash, ontology_derivative_id)
+       VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      queueId, args.tenantId, args.candidate.id, args.category, args.actor.id, args.createdAt,
+      ontologyReference.recordType, ontologyReference.recordId, ontologyReference.spaceId, ontology.ontologyId,
+      ontology.ontologyVersion, ontology.ontologyContentHash,
+      ontology.canonicalId, ontology.sourceId, ontology.sourceHash,
+      ontology.derivativeId,
+    );
 
     const receipt = writeDecisionRow(args.db, {
       decisionId,
@@ -764,6 +883,7 @@ function writeQueuedReceipt(args: QueuedArgs): AdmissionDecision {
       }),
       createdAt: args.createdAt,
       previousEntryHash,
+      ontology,
     });
 
     writeAuditEntry(
@@ -782,6 +902,9 @@ function writeQueuedReceipt(args: QueuedArgs): AdmissionDecision {
           decision_id: decisionId,
           queue_id: queueId,
           sensitive_label: args.sensitiveLabel,
+          ontology_record_type: ontologyReference.recordType,
+          ontology_record_id: ontologyReference.recordId,
+          ontology_derivative_id: ontology.derivativeId,
         },
         created_at: args.createdAt,
       },
@@ -888,12 +1011,7 @@ export interface PromoteArgs {
   /** Optional reviewed-queue bypass for an explicit operator approval. */
   reviewedQueueId?: string | null;
   ontologyContext?: PromotionReceiptSummary["ontology"];
-  ontologyReference?: {
-    tenantId: string;
-    spaceId: string;
-    recordType: string;
-    recordId: string;
-  };
+  ontologyReference?: OntologyContextReference;
 }
 
 export function promoteCandidate(
@@ -912,6 +1030,7 @@ export function promoteCandidate(
     config: args.config,
     reviewedQueueId: args.reviewedQueueId ?? null,
     ontology,
+    ontologyReference: args.ontologyReference,
   });
 }
 
@@ -1045,7 +1164,13 @@ export function demoteCandidate(
 
 export function enqueueForReview(
   db: Database.Database,
-  args: { candidateId: string; tenantId: string; category?: ClaimCategory | string; actor?: AdmitActor }
+  args: {
+    candidateId: string;
+    tenantId: string;
+    category?: ClaimCategory | string;
+    actor?: AdmitActor;
+    ontologyReference?: OntologyContextReference;
+  }
 ): { queueId: string; decisionId: string } {
   const candidate = readCandidate(db, args.candidateId, args.tenantId);
   const actor: AdmitActor = args.actor ?? {
@@ -1058,12 +1183,23 @@ export function enqueueForReview(
   const previousEntryHash = latestDecisionEntryHash(db, args.tenantId);
   const decisionId = crypto.randomUUID();
   const queueId = crypto.randomUUID();
+  const resolvedOntology = resolveCandidateReviewOntologyContext(db, args.tenantId, args.candidateId);
+  if (!resolvedOntology) throw new Error("ontology context is unavailable for belief review");
+  const { reference: ontologyReference, context: ontology } = resolvedOntology;
   return db.transaction(() => {
     db.prepare(
       `INSERT INTO belief_review_queue
-         (id, tenant_id, candidate_id, category, status, opened_by, opened_at)
-       VALUES (?, ?, ?, ?, 'open', ?, ?)`
-    ).run(queueId, args.tenantId, args.candidateId, category, actor.id, createdAt);
+         (id, tenant_id, candidate_id, category, status, opened_by, opened_at,
+          ontology_record_type, ontology_record_id, ontology_space_id, ontology_id, ontology_version,
+          ontology_content_hash, ontology_canonical_id, ontology_source_id,
+          ontology_source_hash, ontology_derivative_id)
+       VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      queueId, args.tenantId, args.candidateId, category, actor.id, createdAt,
+      ontologyReference.recordType, ontologyReference.recordId, ontologyReference.spaceId, ontology.ontologyId,
+      ontology.ontologyVersion, ontology.ontologyContentHash, ontology.canonicalId,
+      ontology.sourceId, ontology.sourceHash, ontology.derivativeId,
+    );
 
     const receipt = writeDecisionRow(db, {
       decisionId,
@@ -1079,6 +1215,7 @@ export function enqueueForReview(
       metadata: { queueId, manual: true },
       createdAt,
       previousEntryHash,
+      ontology,
     });
 
     writeAuditEntry(
@@ -1093,6 +1230,9 @@ export function enqueueForReview(
         metadata_json: {
           candidate_id: args.candidateId,
           decision_id: decisionId,
+          ontology_record_type: ontologyReference.recordType,
+          ontology_record_id: ontologyReference.recordId,
+          ontology_derivative_id: ontology.derivativeId,
         },
         created_at: createdAt,
       },
@@ -1125,14 +1265,20 @@ export function resolveReview(
   args: ResolveReviewArgs
 ): ResolveReviewResult {
   const queue = db
-    .prepare<[string, string], { id: string; candidate_id: string; category: string; status: string }>(
-      `SELECT id, candidate_id, category, status FROM belief_review_queue
+    .prepare<[string, string], Record<string, unknown>>(
+      `SELECT * FROM belief_review_queue
         WHERE id = ? AND tenant_id = ?`
     )
     .get(args.queueId, args.tenantId);
   if (!queue) throw new Error(`review queue item not found: ${args.queueId}`);
-  if (queue.status !== "open") {
-    throw new Error(`review queue item already ${queue.status}`);
+  const queueStatus = queueField(queue, "status");
+  const queueCandidateId = queueField(queue, "candidate_id");
+  const queueCategory = queueField(queue, "category");
+  if (!queueStatus || !queueCandidateId || !queueCategory) {
+    throw new Error("review queue item is malformed");
+  }
+  if (queueStatus !== "open") {
+    throw new Error(`review queue item already ${queueStatus}`);
   }
   if (args.resolution !== "approved" && args.resolution !== "rejected") {
     throw new Error(`invalid resolution: ${String(args.resolution)}`);
@@ -1141,7 +1287,7 @@ export function resolveReview(
 
   const previousEntryHash = latestDecisionEntryHash(db, args.tenantId);
   const decisionId = crypto.randomUUID();
-  const candidate = readCandidate(db, queue.candidate_id, args.tenantId);
+  const candidate = readCandidate(db, queueCandidateId, args.tenantId);
 
   if (args.resolution === "approved") {
     return db.transaction((): ResolveReviewResult => {
@@ -1154,8 +1300,8 @@ export function resolveReview(
           WHERE id = ?`
       ).run(args.operatorId, args.note ?? null, createdAt, args.queueId);
 
-      const category = normalizeCategory(args.category ?? queue.category);
-      const admission = canAdmitToGold(db, args.tenantId, queue.candidate_id, {
+      const category = normalizeCategory(args.category ?? queueCategory);
+      const admission = canAdmitToGold(db, args.tenantId, queueCandidateId, {
         actor: { id: args.operatorId, role: "operator", tenantId: args.tenantId },
         category,
         config: args.config,
@@ -1171,7 +1317,7 @@ export function resolveReview(
       // Record the review approval decision row (separate from the admission row).
       const receipt = writeDecisionRow(db, {
         decisionId,
-        candidateId: queue.candidate_id,
+        candidateId: queueCandidateId,
         tenantId: args.tenantId,
         category,
         decisionType: "review_approved",
@@ -1187,6 +1333,7 @@ export function resolveReview(
         },
         createdAt,
         previousEntryHash,
+        ontology: admission.receipt.ontology,
       });
 
       writeAuditEntry(
@@ -1199,9 +1346,10 @@ export function resolveReview(
           entity_id: `belief_review_item:${args.queueId}`,
           reason: "review_approved",
           metadata_json: {
-            candidate_id: queue.candidate_id,
+            candidate_id: queueCandidateId,
             decision_id: decisionId,
             note: args.note ?? null,
+            ontology_derivative_id: admission.receipt.ontology?.derivativeId ?? null,
           },
           created_at: createdAt,
         },
@@ -1225,12 +1373,12 @@ export function resolveReview(
 
     db.prepare(
       `UPDATE agent_memory_candidates SET status = 'rejected' WHERE id = ?`
-    ).run(queue.candidate_id);
+    ).run(queueCandidateId);
 
-    const category = normalizeCategory(args.category ?? queue.category);
+    const category = normalizeCategory(args.category ?? queueCategory);
     const receipt = writeDecisionRow(db, {
       decisionId,
-      candidateId: queue.candidate_id,
+      candidateId: queueCandidateId,
       tenantId: args.tenantId,
       category,
       decisionType: "review_rejected",
@@ -1254,7 +1402,7 @@ export function resolveReview(
         entity_id: `belief_review_item:${args.queueId}`,
         reason: "review_rejected",
         metadata_json: {
-          candidate_id: queue.candidate_id,
+          candidate_id: queueCandidateId,
           decision_id: decisionId,
           note: args.note ?? null,
         },

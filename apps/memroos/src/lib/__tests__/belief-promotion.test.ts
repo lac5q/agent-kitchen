@@ -15,6 +15,8 @@ import {
 } from "../belief/promotion";
 import type { ClaimCategory } from "../belief/types";
 import { DEFAULT_BELIEF_PROMOTION_CONFIG } from "../belief/config";
+import { ensureCanonicalUpperOntology } from "../ontology/registry";
+import { revokeOntologySource } from "../ontology/validity";
 
 const TENANT = "default-tenant";
 
@@ -31,6 +33,7 @@ interface Fixture {
 function freshDb(): Database.Database {
   const db = new Database(":memory:");
   initSchema(db);
+  ensureCanonicalUpperOntology(db, "operator");
   // Make sure the default tenant exists -- the schema seeds it, but be defensive.
   db.prepare(`INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)`).run(TENANT, "Default");
   return db;
@@ -101,7 +104,6 @@ function insertFixture(
     capturedAt,
     capturedAt
   );
-
   const candidateId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO agent_memory_candidates
@@ -119,6 +121,7 @@ function insertFixture(
     JSON.stringify(metadata),
     capturedAt
   );
+  seedBeliefReviewOntology(db, candidateId);
 
   return {
     captureId,
@@ -129,6 +132,34 @@ function insertFixture(
     metadata,
     category: overrides.category ?? "unclassified",
   };
+}
+
+function seedBeliefReviewOntology(target: Database.Database, candidateId: string) {
+  const ontology = ensureCanonicalUpperOntology(target, "operator");
+  const spaceId = "belief-review-space";
+  const sourceId = `belief-source:${candidateId}`;
+  const sourceHash = `sha256:${"a".repeat(64)}`;
+  const derivativeId = `belief-record:${candidateId}`;
+  const now = new Date().toISOString();
+  target.prepare(
+    `INSERT INTO ontology_versioned_records
+      (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version,
+       ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+     VALUES (?, ?, ?, 'belief_candidate', ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+  ).run(
+    derivativeId, TENANT, spaceId, candidateId, ontology.ontologyId, ontology.version,
+    ontology.contentHash, now, sourceId, sourceHash,
+  );
+  target.prepare(
+    `INSERT INTO ontology_source_lifecycle
+      (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+     VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+  ).run(TENANT, spaceId, sourceId, sourceHash, now);
+  target.prepare(
+    `INSERT INTO ontology_derivative_validity
+      (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+  ).run(`valid:${derivativeId}`, TENANT, spaceId, sourceId, sourceHash, derivativeId, now);
 }
 
 function sha256(value: string): string {
@@ -721,6 +752,56 @@ describe("belief promotion pipeline", () => {
       .get(queueId) as { status: string; category: string };
     expect(row.status).toBe("open");
     expect(row.category).toBe("operational");
+  });
+
+  it("revalidates queued ontology context transactionally and cannot promote after revocation", () => {
+    const fixture = insertFixture(db, {
+      category: "pricing",
+      memoryType: "runbook",
+      content: "A governed pricing review requires source continuity.",
+    });
+    const queued = promoteCandidate(db, {
+      candidateId: fixture.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected review queue item");
+    const stored = db.prepare(
+      `SELECT ontology_source_id, ontology_source_hash, ontology_record_type, ontology_record_id
+         FROM belief_review_queue WHERE id = ?`
+    ).get(queued.queueId) as {
+      ontology_source_id: string;
+      ontology_source_hash: string;
+      ontology_record_type: string;
+      ontology_record_id: string;
+    };
+    expect(stored).toMatchObject({
+      ontology_record_type: "belief_candidate",
+      ontology_record_id: fixture.candidateId,
+    });
+
+    revokeOntologySource(db, {
+      tenantId: TENANT,
+      spaceId: "belief-review-space",
+      sourceId: stored.ontology_source_id,
+      sourceHash: stored.ontology_source_hash,
+      actor: "operator-2",
+      reason: "source_changed",
+    });
+
+    expect(() => resolveReview(db, {
+      queueId: queued.queueId,
+      tenantId: TENANT,
+      resolution: "approved",
+      operatorId: "operator-2",
+      category: "pricing",
+    })).toThrow("ontology context is unavailable");
+    expect(db.prepare(`SELECT status FROM belief_review_queue WHERE id = ?`).get(queued.queueId))
+      .toEqual({ status: "open" });
+    expect(db.prepare(`SELECT belief_stage FROM agent_memory_candidates WHERE id = ?`).get(fixture.candidateId))
+      .toEqual({ belief_stage: "silver_candidate_claim" });
   });
 
   // -------------------------------------------------------------------------

@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 27;
+export const CURRENT_SCHEMA_VERSION = 28;
 
 type SchemaMigration = {
   version: number;
@@ -220,6 +220,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 27,
     name: 'federation-action-proof-continuity',
     up: applyFederationActionProofContinuitySchema,
+  },
+  {
+    version: 28,
+    name: 'ontology-required-context-persistence',
+    up: applyOntologyRequiredContextPersistenceSchema,
   },
 ];
 
@@ -2160,6 +2165,46 @@ function applyFederationActionProofContinuitySchema(db: Database.Database): void
       ON federation_action_derivatives(tenant_id, canonical_id, status);
     CREATE INDEX IF NOT EXISTS federation_action_derivatives_source
       ON federation_action_derivatives(tenant_id, source_id, status);
+  `);
+}
+
+function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {
+  // Ontology-sensitive sources and queued belief reviews retain only
+  // server-verified coordinates. The source lifecycle is re-resolved at use
+  // time, so a later revocation or ontology change denies use before policy,
+  // context injection, or belief promotion.
+  for (const statement of [
+    "ALTER TABLE federation_sources ADD COLUMN ontology_record_type TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_record_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_version TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_content_hash TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_canonical_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_source_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_source_hash TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_derivative_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_record_type TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_record_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_space_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_version TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_content_hash TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_canonical_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_source_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_source_hash TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_derivative_id TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // The migration is additive and safe to replay.
+    }
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS federation_sources_ontology_context
+      ON federation_sources(tenant_id, space_id, ontology_record_type, ontology_record_id);
+    CREATE INDEX IF NOT EXISTS belief_review_queue_ontology_context
+      ON belief_review_queue(tenant_id, status, ontology_record_type, ontology_record_id);
   `);
 }
 

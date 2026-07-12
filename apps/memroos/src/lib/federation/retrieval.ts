@@ -15,6 +15,7 @@ import { writeAuditEntry } from "@/lib/audit/write";
 import { detectInjection, type InjectionPolicyMode } from "@/lib/msiq/injection-detector";
 import {
   resolveEligibleSources,
+  resolveFederationSourceOntologyContext,
   type FederationSourceRow,
 } from "./source-registry";
 import {
@@ -29,7 +30,6 @@ import {
   type FederationPolicyContext,
   type FederationPolicyDecision,
 } from "./policy-evaluator";
-import { resolveOntologyValidity } from "@/lib/ontology/validity";
 
 export type FederationSourceOutcomeKind =
   | "success"
@@ -73,23 +73,6 @@ export interface FederationCandidateResult {
   score: number;
   observedAt: string;
   metadata?: Record<string, unknown>;
-}
-
-type OntologyReference = {
-  tenantId: string;
-  spaceId: string;
-  recordType: string;
-  recordId: string;
-};
-
-function ontologyReference(value: unknown): OntologyReference | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const tenantId = typeof record.tenantId === "string" ? record.tenantId.trim() : "";
-  const spaceId = typeof record.spaceId === "string" ? record.spaceId.trim() : "";
-  const recordType = typeof record.recordType === "string" ? record.recordType.trim() : "";
-  const recordId = typeof record.recordId === "string" ? record.recordId.trim() : "";
-  return tenantId && spaceId && recordType && recordId ? { tenantId, spaceId, recordType, recordId } : null;
 }
 
 export interface FederationSourceClient {
@@ -166,6 +149,30 @@ export async function executeFederationRun(
     }
     const source = entry.source;
     const started = (init.now ? init.now() : new Date()).getTime();
+    const ontology = resolveFederationSourceOntologyContext(db, source);
+    if (!ontology) {
+      outcomes.push(recordSourceOutcome({
+        db,
+        tenantId: init.tenantId,
+        federationRunId,
+        source,
+        outcome: "denied",
+        reasonCode: "ontology_context_unavailable",
+        policyDecision: { kind: "deny", reason: "ontology_context_unavailable", policyVersion: FEDERATION_POLICY_VERSION },
+        resultCount: 0,
+        resultBytes: 0,
+        durationMs: 0,
+        requestHash: null,
+        responseHash: null,
+        payloadHash: null,
+        scopeHash: init.context.scopeHash,
+        metadata: {
+          ontology_record_type: source.ontologyContext?.recordType ?? null,
+          ontology_record_id: source.ontologyContext?.recordId ?? null,
+        },
+      }));
+      continue;
+    }
     const startBudget = tracker.startSource(source.id);
     if (!startBudget.ok) {
       outcomes.push(recordSourceOutcome({
@@ -183,7 +190,11 @@ export async function executeFederationRun(
         responseHash: null,
         payloadHash: null,
         scopeHash: init.context.scopeHash,
-        metadata: { budget_rejected: true },
+        metadata: {
+          budget_rejected: true,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
@@ -207,7 +218,11 @@ export async function executeFederationRun(
         responseHash: null,
         payloadHash: null,
         scopeHash: init.context.scopeHash,
-        metadata: { policy_version: policyDecision.policyVersion },
+        metadata: {
+          policy_version: policyDecision.policyVersion,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
@@ -229,7 +244,11 @@ export async function executeFederationRun(
         db, tenantId: init.tenantId, federationRunId, source,
         outcome: "timeout", reasonCode: fetchResult.reason, policyDecision,
         resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash: null, payloadHash: null,
-        scopeHash: init.context.scopeHash, metadata: { policy_version: policyDecision.policyVersion },
+        scopeHash: init.context.scopeHash, metadata: {
+          policy_version: policyDecision.policyVersion,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
@@ -238,7 +257,11 @@ export async function executeFederationRun(
         db, tenantId: init.tenantId, federationRunId, source,
         outcome: "malformed", reasonCode: fetchResult.reason, policyDecision,
         resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash: null, payloadHash: null,
-        scopeHash: init.context.scopeHash, metadata: { policy_version: policyDecision.policyVersion },
+        scopeHash: init.context.scopeHash, metadata: {
+          policy_version: policyDecision.policyVersion,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
@@ -247,7 +270,11 @@ export async function executeFederationRun(
         db, tenantId: init.tenantId, federationRunId, source,
         outcome: "failed", reasonCode: fetchResult.reason, policyDecision,
         resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash: null, payloadHash: null,
-        scopeHash: init.context.scopeHash, metadata: { policy_version: policyDecision.policyVersion },
+        scopeHash: init.context.scopeHash, metadata: {
+          policy_version: policyDecision.policyVersion,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
@@ -257,26 +284,19 @@ export async function executeFederationRun(
         db, tenantId: init.tenantId, federationRunId, source,
         outcome: "empty", reasonCode: "no_results", policyDecision,
         resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash, payloadHash: null,
-        scopeHash: init.context.scopeHash, metadata: { policy_version: policyDecision.policyVersion },
+        scopeHash: init.context.scopeHash, metadata: {
+          policy_version: policyDecision.policyVersion,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
       continue;
     }
     let allowedCount = 0;
     let allowedBytes = 0;
     let injectionBlocked = 0;
-    let ontologyBlocked = 0;
     const payloadHash = sha256String(stableJson(fetchResult.results));
     for (const candidate of fetchResult.results) {
-      if (candidate.metadata && Object.prototype.hasOwnProperty.call(candidate.metadata, "ontologyReference")) {
-        const reference = ontologyReference(candidate.metadata.ontologyReference);
-        try {
-          if (!reference || reference.tenantId !== init.tenantId) throw new Error("ontology reference unavailable");
-          resolveOntologyValidity(db, reference);
-        } catch {
-          ontologyBlocked += 1;
-          continue;
-        }
-      }
       const injection = detectInjection(candidate.content, injectionMode);
       if (injection.disposition.kind === "omitted" || injection.disposition.kind === "quarantined") {
         injectionBlocked += 1;
@@ -288,14 +308,7 @@ export async function executeFederationRun(
       allowedCount += 1;
       allowedBytes += size;
     }
-    if (ontologyBlocked > 0 && allowedCount === 0) {
-      outcomes.push(recordSourceOutcome({
-        db, tenantId: init.tenantId, federationRunId, source,
-        outcome: "denied", reasonCode: "ontology_context_unavailable", policyDecision,
-        resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash, payloadHash,
-        scopeHash: init.context.scopeHash, metadata: { ontology_blocked: ontologyBlocked },
-      }));
-    } else if (injectionBlocked > 0) {
+    if (injectionBlocked > 0) {
       outcomes.push(recordSourceOutcome({
         db: db, tenantId: init.tenantId, federationRunId: federationRunId, source: source,
         outcome: allowedCount === 0 ? "injection" : "success",
@@ -308,7 +321,11 @@ export async function executeFederationRun(
         responseHash: responseHash,
         payloadHash: payloadHash,
         scopeHash: init.context.scopeHash,
-        metadata: { injection_blocked: injectionBlocked, ontology_blocked: ontologyBlocked },
+        metadata: {
+          injection_blocked: injectionBlocked,
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
     } else {
       outcomes.push(recordSourceOutcome({
@@ -316,7 +333,10 @@ export async function executeFederationRun(
         outcome: "success", reasonCode: "ok", policyDecision: policyDecision,
         resultCount: allowedCount, resultBytes: allowedBytes,
         durationMs: durationMs, requestHash: requestHash, responseHash: responseHash, payloadHash: payloadHash,
-        scopeHash: init.context.scopeHash, metadata: { ontology_blocked: ontologyBlocked },
+        scopeHash: init.context.scopeHash, metadata: {
+          ontology_canonical_id: ontology.canonicalId,
+          ontology_derivative_id: ontology.derivativeId,
+        },
       }));
     }
   }

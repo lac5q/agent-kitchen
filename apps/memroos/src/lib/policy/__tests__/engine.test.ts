@@ -244,4 +244,19 @@ describe("policy engine — knowledge domain (declarative pass-through)", () => 
     expect(evaluation.memoryUse).toBeUndefined();
     expect(evaluation.capability).toBeUndefined();
   });
+
+  it("rejects caller-supplied ontology context for public knowledge policy evaluation", () => {
+    expect(() => evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent" },
+      ontologyContext: {
+        ontologyId: "forged",
+        ontologyVersion: "1.0.0",
+        ontologyContentHash: "sha256:forged",
+        namespace: "forged",
+        canonicalId: "forged",
+        aliasMigrationPath: [],
+      },
+    }, db)).toThrow("caller-supplied ontology context is not accepted");
+  });
 });

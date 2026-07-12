@@ -8,10 +8,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { registerFederationSource, listFederationSources, resolveEligibleSources } from "../source-registry";
+import { ensureCanonicalUpperOntology } from "@/lib/ontology/registry";
+import { revokeOntologySource } from "@/lib/ontology/validity";
 
 let db: import("better-sqlite3").Database;
 let closeDb: () => void;
 let TEST_DB_DIR: string;
+let ontologyReference: { tenantId: string; spaceId: string; recordType: string; recordId: string };
 
 beforeEach(async () => {
   TEST_DB_DIR = path.join(os.tmpdir(), "federation-registry-" + crypto.randomUUID());
@@ -22,6 +25,14 @@ beforeEach(async () => {
   const { initSchema } = await import("@/lib/db-schema");
   db = getDb();
   initSchema(db);
+  const ontology = ensureCanonicalUpperOntology(db, "operator");
+  ontologyReference = {
+    tenantId: "default-tenant",
+    spaceId: "space-1",
+    recordType: "federation_source",
+    recordId: "memory-alpha",
+  };
+  seedOntologyContext(db, ontology, ontologyReference);
   closeDb = close;
 });
 
@@ -41,8 +52,39 @@ function okInput(overrides: Partial<Parameters<typeof registerFederationSource>[
     trustLevel: "registered" as const,
     transport: "inproc" as const,
     createdBy: "operator-1",
+    ontologyReference,
     ...overrides,
   };
+}
+
+function seedOntologyContext(
+  target: import("better-sqlite3").Database,
+  ontology: { ontologyId: string; version: string; contentHash: string },
+  reference: { tenantId: string; spaceId: string; recordType: string; recordId: string },
+) {
+  const sourceId = `source:${reference.recordType}:${reference.recordId}`;
+  const sourceHash = `sha256:${"a".repeat(64)}`;
+  const derivativeId = `record:${reference.recordType}:${reference.recordId}`;
+  const now = new Date().toISOString();
+  target.prepare(
+    `INSERT INTO ontology_versioned_records
+      (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version,
+       ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+     VALUES (?, ?, ?, ?, ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+  ).run(
+    derivativeId, reference.tenantId, reference.spaceId, reference.recordType, reference.recordId,
+    ontology.ontologyId, ontology.version, ontology.contentHash, now, sourceId, sourceHash,
+  );
+  target.prepare(
+    `INSERT INTO ontology_source_lifecycle
+      (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+     VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+  ).run(reference.tenantId, reference.spaceId, sourceId, sourceHash, now);
+  target.prepare(
+    `INSERT INTO ontology_derivative_validity
+      (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+  ).run(`valid:${derivativeId}`, reference.tenantId, reference.spaceId, sourceId, sourceHash, derivativeId, now);
 }
 
 describe("VAL-ORCH-006 -- explicit registration", () => {
@@ -63,6 +105,43 @@ describe("VAL-ORCH-006 -- explicit registration", () => {
     expect(r2.kind).toBe("denied");
     const r3 = registerFederationSource(db, okInput({ sourceKind: "invalid" as "memory" }));
     expect(r3.kind).toBe("denied");
+  });
+
+  it("denies absent, forged, and foreign ontology context coordinates", () => {
+    expect(registerFederationSource(db, okInput({ ontologyReference: undefined })).kind).toBe("denied");
+    expect(registerFederationSource(db, okInput({
+      ontologyReference: { ...ontologyReference, recordId: "forged" },
+    })).kind).toBe("denied");
+    expect(registerFederationSource(db, okInput({
+      ontologyReference: { ...ontologyReference, tenantId: "other-tenant" },
+    })).kind).toBe("denied");
+  });
+
+  it("persists verified coordinates and rejects a revoked ontology source", () => {
+    const registered = registerFederationSource(db, okInput());
+    expect(registered).toMatchObject({
+      kind: "registered",
+      source: {
+        ontologyContext: expect.objectContaining({
+          recordType: ontologyReference.recordType,
+          recordId: ontologyReference.recordId,
+          canonicalId: "memory",
+        }),
+      },
+    });
+    if (registered.kind !== "registered" || !registered.source.ontologyContext) throw new Error("registration failed");
+    revokeOntologySource(db, {
+      tenantId: ontologyReference.tenantId,
+      spaceId: ontologyReference.spaceId,
+      sourceId: registered.source.ontologyContext.sourceId,
+      sourceHash: registered.source.ontologyContext.sourceHash,
+      actor: "operator",
+      reason: "source_changed",
+    });
+    expect(registerFederationSource(db, okInput({ sourceHandle: "after-revocation" }))).toEqual({
+      kind: "denied",
+      reason: "ontology_context_unavailable",
+    });
   });
 
   it("upserts on conflict (tenant, handle, kind)", () => {

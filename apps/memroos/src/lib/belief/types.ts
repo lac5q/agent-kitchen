@@ -103,5 +103,8 @@ export interface PromotionReceiptSummary {
     namespace: string;
     canonicalId: string;
     aliasMigrationPath: unknown[];
+    sourceId: string;
+    sourceHash: string;
+    derivativeId: string;
   };
 }

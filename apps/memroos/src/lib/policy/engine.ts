@@ -275,7 +275,9 @@ export interface KnowledgeRequestMeta {
   actor?: PolicyRequestActor;
   /** ids / tool name / tenant / context ids only — never content. */
   metadata?: Record<string, unknown>;
+  /** Server-resolved from persisted ontology coordinates only. */
   ontologyContext?: PolicyReceipt["ontology"];
+  ontologyReference?: PolicyRequest["ontologyReference"];
 }
 
 /**
@@ -287,6 +289,22 @@ export interface KnowledgeRequestMeta {
 export function evaluateKnowledgePolicy(
   meta: KnowledgeRequestMeta,
   db?: Database.Database
+): PolicyEvaluation {
+  if (meta.ontologyContext && !meta.ontologyReference) {
+    throw new Error("evaluateKnowledgePolicy: caller-supplied ontology context is not accepted");
+  }
+  if (meta.ontologyReference && !db) {
+    throw new Error("evaluateKnowledgePolicy: ontology-sensitive decisions require persistence");
+  }
+  const ontologyContext = meta.ontologyReference
+    ? resolveOntologyValidity(db!, meta.ontologyReference)
+    : undefined;
+  return evaluateKnowledgePolicyResolved({ ...meta, ontologyContext }, db);
+}
+
+function evaluateKnowledgePolicyResolved(
+  meta: KnowledgeRequestMeta,
+  db?: Database.Database,
 ): PolicyEvaluation {
   const actorId = meta.actor?.id ?? "system";
   const actorRole = collapseAuditRole(meta.actor?.role);
@@ -370,7 +388,7 @@ export function evaluatePolicy(
     if (!req.actor) {
       throw new Error("evaluatePolicy: knowledge domain requires an actor");
     }
-    return evaluateKnowledgePolicy(
+    return evaluateKnowledgePolicyResolved(
       {
         action: req.action,
         actor: req.actor,
