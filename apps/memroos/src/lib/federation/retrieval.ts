@@ -29,6 +29,7 @@ import {
   type FederationPolicyContext,
   type FederationPolicyDecision,
 } from "./policy-evaluator";
+import { resolveOntologyValidity } from "@/lib/ontology/validity";
 
 export type FederationSourceOutcomeKind =
   | "success"
@@ -72,6 +73,23 @@ export interface FederationCandidateResult {
   score: number;
   observedAt: string;
   metadata?: Record<string, unknown>;
+}
+
+type OntologyReference = {
+  tenantId: string;
+  spaceId: string;
+  recordType: string;
+  recordId: string;
+};
+
+function ontologyReference(value: unknown): OntologyReference | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const tenantId = typeof record.tenantId === "string" ? record.tenantId.trim() : "";
+  const spaceId = typeof record.spaceId === "string" ? record.spaceId.trim() : "";
+  const recordType = typeof record.recordType === "string" ? record.recordType.trim() : "";
+  const recordId = typeof record.recordId === "string" ? record.recordId.trim() : "";
+  return tenantId && spaceId && recordType && recordId ? { tenantId, spaceId, recordType, recordId } : null;
 }
 
 export interface FederationSourceClient {
@@ -246,8 +264,19 @@ export async function executeFederationRun(
     let allowedCount = 0;
     let allowedBytes = 0;
     let injectionBlocked = 0;
+    let ontologyBlocked = 0;
     const payloadHash = sha256String(stableJson(fetchResult.results));
     for (const candidate of fetchResult.results) {
+      if (candidate.metadata && Object.prototype.hasOwnProperty.call(candidate.metadata, "ontologyReference")) {
+        const reference = ontologyReference(candidate.metadata.ontologyReference);
+        try {
+          if (!reference || reference.tenantId !== init.tenantId) throw new Error("ontology reference unavailable");
+          resolveOntologyValidity(db, reference);
+        } catch {
+          ontologyBlocked += 1;
+          continue;
+        }
+      }
       const injection = detectInjection(candidate.content, injectionMode);
       if (injection.disposition.kind === "omitted" || injection.disposition.kind === "quarantined") {
         injectionBlocked += 1;
@@ -259,7 +288,14 @@ export async function executeFederationRun(
       allowedCount += 1;
       allowedBytes += size;
     }
-    if (injectionBlocked > 0) {
+    if (ontologyBlocked > 0 && allowedCount === 0) {
+      outcomes.push(recordSourceOutcome({
+        db, tenantId: init.tenantId, federationRunId, source,
+        outcome: "denied", reasonCode: "ontology_context_unavailable", policyDecision,
+        resultCount: 0, resultBytes: 0, durationMs, requestHash, responseHash, payloadHash,
+        scopeHash: init.context.scopeHash, metadata: { ontology_blocked: ontologyBlocked },
+      }));
+    } else if (injectionBlocked > 0) {
       outcomes.push(recordSourceOutcome({
         db: db, tenantId: init.tenantId, federationRunId: federationRunId, source: source,
         outcome: allowedCount === 0 ? "injection" : "success",
@@ -272,7 +308,7 @@ export async function executeFederationRun(
         responseHash: responseHash,
         payloadHash: payloadHash,
         scopeHash: init.context.scopeHash,
-        metadata: { injection_blocked: injectionBlocked },
+        metadata: { injection_blocked: injectionBlocked, ontology_blocked: ontologyBlocked },
       }));
     } else {
       outcomes.push(recordSourceOutcome({
@@ -280,7 +316,7 @@ export async function executeFederationRun(
         outcome: "success", reasonCode: "ok", policyDecision: policyDecision,
         resultCount: allowedCount, resultBytes: allowedBytes,
         durationMs: durationMs, requestHash: requestHash, responseHash: responseHash, payloadHash: payloadHash,
-        scopeHash: init.context.scopeHash, metadata: {},
+        scopeHash: init.context.scopeHash, metadata: { ontology_blocked: ontologyBlocked },
       }));
     }
   }

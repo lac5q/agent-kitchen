@@ -60,7 +60,7 @@ function okContext() {
   };
 }
 
-function staticClient(results: Array<{ content: string; score?: number; fail?: "timeout" | "malformed" | "failed" }>): FederationSourceClient {
+function staticClient(results: Array<{ content: string; score?: number; fail?: "timeout" | "malformed" | "failed"; metadata?: Record<string, unknown> }>): FederationSourceClient {
   return {
     fetch: async () => {
       if (results.length === 1 && results[0].fail) {
@@ -75,6 +75,7 @@ function staticClient(results: Array<{ content: string; score?: number; fail?: "
         canonicalHash: "sha256:" + r.content.length.toString(16),
         score: r.score ?? 1,
         observedAt: new Date().toISOString(),
+        metadata: r.metadata,
       })) };
     },
   };
@@ -128,6 +129,20 @@ describe("VAL-ORCH-009 -- per-source receipts", () => {
     });
     if (r.kind !== "ok") throw new Error("not ok");
     expect(r.run.outcomes.some((o) => o.outcome === "injection")).toBe(true);
+  });
+
+  it("denies ontology-tagged retrieval candidates with missing or forged server coordinates", async () => {
+    const sources = makeSources();
+    const r = await executeFederationRun(db, {
+      tenantId: "default-tenant", query: "x", context: okContext(), budget: okBudget(), sources,
+      client: staticClient([{ content: "must not inject", metadata: { ontologyReference: { tenantId: "default-tenant" } } }]),
+    });
+    if (r.kind !== "ok") throw new Error("not ok");
+    expect(r.run.outcomes).toContainEqual(expect.objectContaining({
+      outcome: "denied",
+      reasonCode: "ontology_context_unavailable",
+      metadata: expect.objectContaining({ ontology_blocked: 1 }),
+    }));
   });
 
   it("maps client timeout/malformed/failed to typed outcomes", async () => {
