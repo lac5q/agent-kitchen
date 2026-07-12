@@ -294,4 +294,24 @@ describe("ontology registry route", () => {
     const persisted = ontologyRoute.GET(operatorRequest(`/api/ontology?candidateId=${candidate.candidate.id}&tenantId=route-tenant&spaceId=route-space`));
     expect(await persisted.json()).toMatchObject({ candidate: { status: "invalidated" } });
   });
+
+  it("rejects caller-authoritative migration execution record subsets", async () => {
+    const response = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "execute_migration",
+        planId: "forged-plan",
+        tenantId: "tenant-a",
+        spaceId: "space-a",
+        actor: "operator",
+        records: [{ recordType: "memory", recordId: "forged", sourceType: "legacy" }],
+      }),
+    }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: "ontology request rejected",
+      code: "invalid",
+    });
+  });
 });

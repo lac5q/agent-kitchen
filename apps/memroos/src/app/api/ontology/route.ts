@@ -208,9 +208,10 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     if (action === "execute_migration") {
+      if (Object.prototype.hasOwnProperty.call(body, "records")) throw new Error("migration execution inventory is server-derived");
       return Response.json({ ok: true, ...executeOntologyMigration(db, {
         planId: asString(body.planId, "planId"), tenantId: asString(body.tenantId, "tenantId"), spaceId: asString(body.spaceId, "spaceId"),
-        actor: asString(body.actor, "actor"), records: body.records as Array<{ recordType: string; recordId: string; sourceType: string }>,
+        actor: asString(body.actor, "actor"),
       }) });
     }
 

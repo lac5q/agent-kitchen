@@ -34,6 +34,44 @@ async function setup() {
   return { registry, ontology, candidates: await import("../candidates"), aliases: await import("../aliases"), migrations: await import("../migrations") };
 }
 
+function migrationTarget(registry: typeof import("../registry"), source: { ontologyId: string; version: string; contentHash: string }) {
+  const document = {
+    id: source.ontologyId,
+    version: "1.1.0",
+    definitions: [...registry.CORE_VOCABULARY, { id: "migration.target", semantics: { kind: "entity" } }],
+    relationships: [
+      { from: "agent", to: "entity", type: "is_a" },
+      { from: "memory", to: "entity", type: "is_a" },
+      { from: "provenance", to: "entity", type: "is_a" },
+      { from: "policy", to: "entity", type: "is_a" },
+      { from: "migration.target", to: "entity", type: "is_a" },
+    ],
+    parent: source,
+  };
+  const hash = registry.canonicalContentHash(document);
+  return registry.publishOntologyVersion(db, {
+    ...document,
+    actor: "operator",
+    suppliedHash: hash,
+    projections: registry.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: hash })),
+  });
+}
+
+function seedMigrationSource(
+  source: { ontologyId: string; version: string; contentHash: string },
+  input: { tenantId: string; spaceId: string; recordType: string; recordId: string; sourceType: string }
+) {
+  const sourceId = `source:${input.recordType}:${input.recordId}`;
+  const sourceLifecycleHash = `sha256:${"d".repeat(64)}`;
+  const id = `source-record:${input.recordType}:${input.recordId}`;
+  db.prepare(`INSERT INTO ontology_versioned_records (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version, ontology_content_hash, legacy_type, mapping_path_json, created_at, source_id, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)`)
+    .run(id, input.tenantId, input.spaceId, input.recordType, input.recordId, input.sourceType, source.ontologyId, source.version, source.contentHash, input.sourceType, new Date().toISOString(), sourceId, sourceLifecycleHash);
+  db.prepare(`INSERT INTO ontology_source_lifecycle (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code) VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`)
+    .run(input.tenantId, input.spaceId, sourceId, sourceLifecycleHash, new Date().toISOString());
+  db.prepare(`INSERT INTO ontology_derivative_validity (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at) VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`)
+    .run(`valid:${id}`, input.tenantId, input.spaceId, sourceId, sourceLifecycleHash, id, new Date().toISOString());
+}
+
 function extraction() {
   return {
     tenantId: "tenant-a", spaceId: "space-a", sourceId: "source-1", sourceHash, sourceSpans: ["span:1"],
@@ -95,22 +133,34 @@ describe("ontology candidate governance", () => {
   });
 
   it("VAL-ONTO-019..025 plans approved additive migrations and fails closed for ambiguous mappings", async () => {
-    const { ontology, migrations, candidates } = await setup();
-    const plan = migrations.planOntologyMigration(db, { tenantId: "tenant-a", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, mappings: { legacy_invoice: ["memory"], ambiguous: ["memory", "entity"] }, actor: "operator" });
-    expect(() => migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator", records: [] })).toThrow(/approved/);
+    const { registry, ontology, migrations, candidates } = await setup();
+    const target = migrationTarget(registry, ontology);
+    seedMigrationSource(ontology, { tenantId: "tenant-a", spaceId: "space-a", recordType: "knowledge", recordId: "r1", sourceType: "legacy_invoice" });
+    seedMigrationSource(ontology, { tenantId: "tenant-a", spaceId: "space-a", recordType: "knowledge", recordId: "r2", sourceType: "ambiguous" });
+    const plan = migrations.planOntologyMigration(db, { tenantId: "tenant-a", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: target.ontologyId, version: target.version, hash: target.contentHash }, mappings: { legacy_invoice: ["memory"], ambiguous: ["memory", "entity"] }, actor: "operator" });
+    expect(plan.snapshot).toMatchObject({ inventoryHash: expect.stringMatching(/^sha256:/), itemCount: 2 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_migration_snapshot_items WHERE snapshot_id = ?`).get(plan.snapshot.id)).toMatchObject({ count: 2 });
+    expect(() => migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" })).toThrow(/approved/);
     const approved = migrations.approveOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, planHash: plan.planHash, actor: "operator" });
-    const result = migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator", records: [{ recordType: "knowledge", recordId: "r1", sourceType: "legacy_invoice" }, { recordType: "knowledge", recordId: "r2", sourceType: "ambiguous" }] });
+    const result = migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" });
     expect(approved.status).toBe("approved");
     expect(result).toMatchObject({ migrated: 1, reviewRequired: 1, plan: { status: "incomplete" } });
     expect(db.prepare(`SELECT target_type FROM ontology_migration_checkpoints WHERE record_id = 'r2'`).get()).toMatchObject({ target_type: null });
+    const checkpointAudits = db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_migration_checkpointed'`).get() as { count: number };
+    expect(migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" }))
+      .toMatchObject({ migrated: 1, reviewRequired: 1, plan: { status: "incomplete" } });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = 'ontology_migration_checkpointed'`).get()).toEqual(checkpointAudits);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versioned_records WHERE migration_snapshot_id = ?`).get(plan.snapshot.id)).toMatchObject({ count: 1 });
     expect(candidates.ontologyReceiptContext(db, { tenantId: "tenant-a", spaceId: "space-a", recordType: "knowledge", recordId: "r1" })).toMatchObject({ ontologyId: ontology.ontologyId, canonicalId: "memory" });
   });
 
   it("VAL-ONTO-024 links safe ontology coordinates into policy receipts", async () => {
-    const { ontology, migrations, candidates } = await setup();
-    const plan = migrations.planOntologyMigration(db, { tenantId: "default-tenant", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, mappings: { legacy: ["memory"] }, actor: "operator" });
+    const { registry, ontology, migrations, candidates } = await setup();
+    const target = migrationTarget(registry, ontology);
+    seedMigrationSource(ontology, { tenantId: "default-tenant", spaceId: "space-a", recordType: "memory", recordId: "m1", sourceType: "legacy" });
+    const plan = migrations.planOntologyMigration(db, { tenantId: "default-tenant", spaceId: "space-a", source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash }, target: { ontologyId: target.ontologyId, version: target.version, hash: target.contentHash }, mappings: { legacy: ["memory"] }, actor: "operator" });
     migrations.approveOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, planHash: plan.planHash, actor: "operator" });
-    migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator", records: [{ recordType: "memory", recordId: "m1", sourceType: "legacy" }] });
+    migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" });
     const context = candidates.ontologyReceiptContext(db, { tenantId: "default-tenant", spaceId: "space-a", recordType: "memory", recordId: "m1" });
     const policy = await import("@/lib/policy/engine");
     expect(policy.buildReceipt({ domain: "knowledge", action: "read", ontologyContext: context as never }, { outcome: "allow", reason: "safe", ruleMatched: "test" }).ontology).toMatchObject({ ontologyId: ontology.ontologyId, canonicalId: "memory" });
@@ -120,13 +170,32 @@ describe("ontology candidate governance", () => {
       actor: { id: "operator", role: "operator", tenantId: "default-tenant" },
       ontologyReference: { tenantId: "default-tenant", spaceId: "space-a", recordType: "memory", recordId: "m1" },
     }, db);
-    expect(evaluation.receipt.ontology).toMatchObject({ canonicalId: "memory", sourceId: `migration:${plan.id}` });
+    expect(evaluation.receipt.ontology).toMatchObject({ canonicalId: "memory", sourceId: "source:memory:m1" });
     expect(() => policy.evaluatePolicy({
       domain: "knowledge",
       action: "read",
       actor: { id: "operator", role: "operator", tenantId: "default-tenant" },
       ontologyContext: context as never,
     }, db)).toThrow(/caller-supplied/);
+  });
+
+  it("rolls back an item when its checkpoint audit cannot persist", async () => {
+    const { registry, ontology, migrations } = await setup();
+    const target = migrationTarget(registry, ontology);
+    seedMigrationSource(ontology, { tenantId: "tenant-a", spaceId: "space-a", recordType: "knowledge", recordId: "fault-record", sourceType: "legacy" });
+    const plan = migrations.planOntologyMigration(db, {
+      tenantId: "tenant-a", spaceId: "space-a",
+      source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
+      target: { ontologyId: target.ontologyId, version: target.version, hash: target.contentHash },
+      mappings: { legacy: ["memory"] }, actor: "operator",
+    });
+    migrations.approveOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, planHash: plan.planHash, actor: "operator" });
+    db.exec(`CREATE TRIGGER deny_migration_checkpoint_audit BEFORE INSERT ON audit_entries
+      WHEN NEW.event_type = 'ontology_migration_checkpointed' BEGIN SELECT RAISE(ABORT, 'fault'); END;`);
+    expect(() => migrations.executeOntologyMigration(db, { planId: plan.id, tenantId: plan.tenantId, spaceId: plan.spaceId, actor: "operator" }))
+      .toThrow(/audit|fault/);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_migration_checkpoints WHERE plan_id = ?`).get(plan.id)).toMatchObject({ count: 0 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versioned_records WHERE migration_snapshot_id = ?`).get(plan.snapshot.id)).toMatchObject({ count: 0 });
   });
 
   it("revokes all candidate-derived authority on source change while retaining safe historic rows", async () => {

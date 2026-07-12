@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 25;
+export const CURRENT_SCHEMA_VERSION = 26;
 
 type SchemaMigration = {
   version: number;
@@ -210,6 +210,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 25,
     name: 'ontology-source-lifecycle-and-validity',
     up: applyOntologySourceLifecycleValiditySchema,
+  },
+  {
+    version: 26,
+    name: 'ontology-migration-snapshot-closure',
+    up: applyOntologyMigrationSnapshotClosureSchema,
   },
 ];
 
@@ -2089,6 +2094,91 @@ function applyOntologySourceLifecycleValiditySchema(db: Database.Database): void
       // Additive migration replay.
     }
   }
+}
+
+function applyOntologyMigrationSnapshotClosureSchema(db: Database.Database): void {
+  // Migration execution must be derived from a plan-time snapshot, never a
+  // caller-provided execution subset. Snapshot rows carry only scoped
+  // identifiers and ontology/source coordinates, not source content.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_migration_snapshots (
+      id                    TEXT PRIMARY KEY,
+      plan_id               TEXT NOT NULL UNIQUE REFERENCES ontology_migration_plans(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      inventory_hash        TEXT NOT NULL,
+      item_count            INTEGER NOT NULL CHECK(item_count > 0),
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ontology_migration_snapshot_items (
+      id                    TEXT PRIMARY KEY,
+      snapshot_id           TEXT NOT NULL REFERENCES ontology_migration_snapshots(id),
+      ordinal               INTEGER NOT NULL CHECK(ordinal >= 0),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      source_type           TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      source_versioned_record_id TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_lifecycle_hash TEXT NOT NULL,
+      source_record_hash    TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(snapshot_id, ordinal),
+      UNIQUE(snapshot_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_migration_snapshot_items_scope
+      ON ontology_migration_snapshot_items(snapshot_id, tenant_id, space_id, ordinal);
+  `);
+
+  for (const statement of [
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN snapshot_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN snapshot_item_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_ontology_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_version TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_lifecycle_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_record_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN versioned_record_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN migration_snapshot_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN migration_snapshot_item_id TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Additive migration replay.
+    }
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ontology_migration_checkpoints_snapshot_item
+      ON ontology_migration_checkpoints(snapshot_item_id)
+      WHERE snapshot_item_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS ontology_versioned_records_snapshot_item
+      ON ontology_versioned_records(migration_snapshot_item_id)
+      WHERE migration_snapshot_item_id IS NOT NULL;
+
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshots_no_update
+      BEFORE UPDATE ON ontology_migration_snapshots
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshots are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshots_no_delete
+      BEFORE DELETE ON ontology_migration_snapshots
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshots are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshot_items_no_update
+      BEFORE UPDATE ON ontology_migration_snapshot_items
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshot items are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshot_items_no_delete
+      BEFORE DELETE ON ontology_migration_snapshot_items
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshot items are immutable'); END;
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {

@@ -196,23 +196,16 @@ describe("subject erasure planning and execution", () => {
     const database = freshDb();
     const messageId = seedMessage(database, "ONTOLOGY_ERASURE_SECRET", "subject-ontology");
     const registry = await import("@/lib/ontology/registry");
-    const migrations = await import("@/lib/ontology/migrations");
     const ontology = registry.ensureCanonicalUpperOntology(database, "operator");
-    const migration = migrations.planOntologyMigration(database, {
-      tenantId: "default-tenant",
-      spaceId: "erasure-space",
-      source: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
-      target: { ontologyId: ontology.ontologyId, version: ontology.version, hash: ontology.contentHash },
-      mappings: { legacy_message: ["memory"] },
-      actor: "operator",
-    });
-    migrations.approveOntologyMigration(database, {
-      planId: migration.id, tenantId: migration.tenantId, spaceId: migration.spaceId, planHash: migration.planHash, actor: "operator",
-    });
-    migrations.executeOntologyMigration(database, {
-      planId: migration.id, tenantId: migration.tenantId, spaceId: migration.spaceId, actor: "operator",
-      records: [{ recordType: "message", recordId: String(messageId), sourceType: "legacy_message" }],
-    });
+    const sourceId = `subject-source:${messageId}`;
+    const sourceHash = `sha256:${"e".repeat(64)}`;
+    const recordId = `subject-versioned:${messageId}`;
+    database.prepare(`INSERT INTO ontology_source_lifecycle (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code) VALUES ('default-tenant', 'erasure-space', ?, ?, 'active', ?, 'operator', 'test')`)
+      .run(sourceId, sourceHash, new Date().toISOString());
+    database.prepare(`INSERT INTO ontology_versioned_records (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version, ontology_content_hash, legacy_type, mapping_path_json, created_at, source_id, source_hash) VALUES (?, 'default-tenant', 'erasure-space', 'message', ?, 'memory', ?, ?, ?, 'legacy_message', '[]', ?, ?, ?)`)
+      .run(recordId, String(messageId), ontology.ontologyId, ontology.version, ontology.contentHash, new Date().toISOString(), sourceId, sourceHash);
+    database.prepare(`INSERT INTO ontology_derivative_validity (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at) VALUES (?, 'default-tenant', 'erasure-space', ?, ?, 'versioned_record', ?, 'authoritative', ?)`)
+      .run(`subject-valid:${messageId}`, sourceId, sourceHash, recordId, new Date().toISOString());
     const plan = createSubjectErasurePlan(database, {
       id: "plan-ontology",
       subject: { subjectId: "subject-ontology" },
