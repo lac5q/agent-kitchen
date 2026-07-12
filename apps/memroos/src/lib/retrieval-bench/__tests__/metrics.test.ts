@@ -116,6 +116,89 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
     expect(score.precisionAtK).toBe(1);
   });
 
+  it("counts duplicate relevant and irrelevant injected IDs once", () => {
+    const task = makeTask();
+    const result = makeResult({
+      injected: ["mem-1", "mem-1", "mem-2", "mem-2"],
+    });
+    const score = scoreTask({ task, result, k: 4, lane: "external_retrieval" });
+
+    expect(score.injectedCount).toBe(2);
+    expect(score.evidenceSpanCount).toBe(1);
+    expect(score.precisionAtK).toBe(0.5);
+    expect(score.recallAtK).toBe(1);
+    expect(score.falsePositiveRate).toBe(0.5);
+  });
+
+  it("counts duplicate evidence IDs once at the scorer boundary", () => {
+    const task = makeTask({
+      evidence_spans: ["mem-1", "mem-1", "mem-2", "mem-2"],
+    });
+    const result = makeResult({
+      injected: ["mem-1", "mem-1"],
+    });
+    const score = scoreTask({ task, result, k: 2, lane: "external_retrieval" });
+
+    expect(score.injectedCount).toBe(1);
+    expect(score.evidenceSpanCount).toBe(2);
+    expect(score.precisionAtK).toBe(1);
+    expect(score.recallAtK).toBe(0.5);
+    expect(score.falsePositiveRate).toBe(0);
+  });
+
+  it("uses first-occurrence unique retrieved IDs to calculate MRR", () => {
+    const task = makeTask();
+    const result = makeResult({
+      injected: ["mem-1"],
+      retrieved: [
+        { id: "mem-2", score: 1, text: task.corpus[1].text, tier: "lexical", source: "corpus", authorizationResult: "allowed", whyEntered: "ok", rankPosition: 1 },
+        { id: "mem-2", score: 0.9, text: task.corpus[1].text, tier: "lexical", source: "corpus", authorizationResult: "allowed", whyEntered: "duplicate", rankPosition: 2 },
+        { id: "mem-1", score: 0.8, text: task.corpus[0].text, tier: "lexical", source: "corpus", authorizationResult: "allowed", whyEntered: "ok", rankPosition: 3 },
+        { id: "mem-1", score: 0.7, text: task.corpus[0].text, tier: "lexical", source: "corpus", authorizationResult: "allowed", whyEntered: "duplicate", rankPosition: 4 },
+      ],
+    });
+    const score = scoreTask({ task, result, k: 4, lane: "external_retrieval" });
+
+    expect(score.mrr).toBe(0.5);
+  });
+
+  it("bounds task and aggregate ranked metrics despite duplicate scorer inputs", () => {
+    const duplicateScore = scoreTask({
+      task: makeTask({ evidence_spans: ["mem-1", "mem-1"] }),
+      result: makeResult({ injected: ["mem-1", "mem-1", "mem-2", "mem-2"] }),
+      k: 4,
+      lane: "external_retrieval",
+    });
+    const emptyScore = scoreTask({
+      task: makeTask({ id: "task-empty", evidence_spans: [] }),
+      result: makeResult({ taskId: "task-empty", injected: ["mem-2", "mem-2"] }),
+      k: 2,
+      lane: "external_retrieval",
+    });
+    const aggregate = aggregateTaskScores([duplicateScore, emptyScore]);
+
+    for (const score of [duplicateScore, emptyScore]) {
+      for (const metric of [
+        score.precisionAtK,
+        score.recallAtK,
+        score.mrr,
+        score.falsePositiveRate,
+      ]) {
+        expect(metric).toBeGreaterThanOrEqual(0);
+        expect(metric).toBeLessThanOrEqual(1);
+      }
+    }
+    for (const metric of [
+      aggregate.precisionAtK,
+      aggregate.recallAtK,
+      aggregate.mrr,
+      aggregate.falsePositiveRate,
+    ]) {
+      expect(metric).toBeGreaterThanOrEqual(0);
+      expect(metric).toBeLessThanOrEqual(1);
+    }
+  });
+
   it("treats empty evidence_spans + empty injection as recall=1 (vacuous)", () => {
     const task = makeTask({ evidence_spans: [] });
     const result = makeResult({ injected: [] });

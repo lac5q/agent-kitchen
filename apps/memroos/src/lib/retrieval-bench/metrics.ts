@@ -85,15 +85,38 @@ export interface ScoreTaskInput {
   lane: BenchmarkLane;
 }
 
+/**
+ * Score logical benchmark IDs once, preserving the first supplied order.
+ * Fixture validation remains strict, while this scorer boundary tolerates an
+ * adapter that repeats a valid logical ID without allowing it to change a
+ * metric denominator, numerator, or rank.
+ */
+function uniqueIdsInFirstOccurrenceOrder(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids));
+}
+
+function uniqueRetrievedInFirstOccurrenceOrder<T extends { id: string }>(
+  retrieved: readonly T[],
+): T[] {
+  const seenIds = new Set<string>();
+  return retrieved.filter((item) => {
+    if (seenIds.has(item.id)) return false;
+    seenIds.add(item.id);
+    return true;
+  });
+}
+
 export function scoreTask(input: ScoreTaskInput): TaskScore {
   const { task, result } = input;
-  const evidenceSet = new Set(task.evidence_spans ?? []);
-  const injectedSet = new Set(result.injected);
+  const evidenceIds = uniqueIdsInFirstOccurrenceOrder(task.evidence_spans ?? []);
+  const injectedIds = uniqueIdsInFirstOccurrenceOrder(result.injected);
+  const retrieved = uniqueRetrievedInFirstOccurrenceOrder(result.retrieved);
+  const evidenceSet = new Set(evidenceIds);
 
   // precision@k: fraction of injected that are in evidence_spans
-  const truePositives = result.injected.filter((id) => evidenceSet.has(id)).length;
-  const injectedCount = result.injected.length;
-  const evidenceSpanCount = (task.evidence_spans ?? []).length;
+  const truePositives = injectedIds.filter((id) => evidenceSet.has(id)).length;
+  const injectedCount = injectedIds.length;
+  const evidenceSpanCount = evidenceIds.length;
   const precisionAtK = injectedCount > 0 ? truePositives / injectedCount : 0;
 
   // recall@k: fraction of evidence_spans found in injected
@@ -108,15 +131,15 @@ export function scoreTask(input: ScoreTaskInput): TaskScore {
 
   // MRR: reciprocal rank of first relevant result in `retrieved`
   let mrr = 0;
-  for (let i = 0; i < result.retrieved.length; i++) {
-    if (evidenceSet.has(result.retrieved[i].id)) {
+  for (let i = 0; i < retrieved.length; i++) {
+    if (evidenceSet.has(retrieved[i].id)) {
       mrr = 1 / (i + 1);
       break;
     }
   }
 
   // false_positive_rate: injected but not in evidence_spans / injected
-  const falsePositives = result.injected.filter((id) => !evidenceSet.has(id)).length;
+  const falsePositives = injectedIds.filter((id) => !evidenceSet.has(id)).length;
   const falsePositiveRate = injectedCount > 0 ? falsePositives / injectedCount : 0;
 
   // answer support: does any retrieved text contain the expected answer
@@ -124,7 +147,7 @@ export function scoreTask(input: ScoreTaskInput): TaskScore {
   if (task.abstention_correct === true) {
     answerSupported = false; // abstention tasks never claim answer support
   } else if (task.expected_answer.length > 0) {
-    answerSupported = result.retrieved.some((r) => isAnswerSupported(task.expected_answer, r.text));
+    answerSupported = retrieved.some((r) => isAnswerSupported(task.expected_answer, r.text));
   }
 
   // abstention correctness: only meaningful when task is labeled
