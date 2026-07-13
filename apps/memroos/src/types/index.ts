@@ -12,7 +12,8 @@ export type AgentPlatform =
   | "hermes"
   | "openclaw"
   | "chatgpt"
-  | "grok";
+  | "grok"
+  | "droid";
 export type AgentProtocol = "rest" | "a2a" | "ui" | "local";
 
 export interface Agent {

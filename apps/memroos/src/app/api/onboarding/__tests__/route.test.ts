@@ -228,6 +228,7 @@ describe("agent onboarding routes", () => {
     expect(script).toContain("\"pi\": \"stdout\"");
     expect(script).toContain("\"chatgpt\": \"stdout\"");
     expect(script).toContain("\"grok\": \"stdout\"");
+    expect(script).toContain("\"droid\": \"droid\"");
     expect(script).toContain("\"openclaw\": \"openclaw\"");
     expect(script).toContain("\"opencode\": \"opencode\"");
     expect(script).toContain("\"hermes\": \"hermes\"");
@@ -250,7 +251,7 @@ describe("agent onboarding routes", () => {
     expect(rejected.status).toBe(403);
   });
 
-  it.each(["cursor", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi"] as const)(
+  it.each(["cursor", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
       const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();
