@@ -37,7 +37,8 @@ export interface PromotionCheck {
     | "freshness"
     | "policy"
     | "conflict"
-    | "dedupe";
+    | "dedupe"
+    | "ontology";
   pass: boolean;
   evidence: Record<string, unknown>;
 }

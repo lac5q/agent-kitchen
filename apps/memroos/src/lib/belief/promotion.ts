@@ -49,6 +49,36 @@ import {
   type OntologyValidityContext,
 } from "../ontology/validity";
 
+/**
+ * v8.10 round-3 (ONTO-25 follow-up): single helper that resolves the
+ * server-owned ontology context for a belief promotion.
+ *
+ * Fails closed on any of:
+ *   - missing versioned record
+ *   - source revoked / unverified
+ *   - ontology stale / not globally active
+ *
+ * This helper is the SOLE entry point that re-validates a queued or
+ * caller-supplied `OntologyContextReference` at promotion time. Callers
+ * MUST treat its result as authoritative and MUST NOT proceed without it.
+ *
+ * The thrown error uses the deterministic reason
+ * `ontology_context_unavailable` (or `ontology_context_invalidated` when
+ * a queued reference no longer resolves) so that downstream
+ * `admission_denied` decision rows always carry a typed reason.
+ */
+function resolveRequiredBeliefOntologyContext(
+  db: Database.Database,
+  reference: OntologyContextReference,
+  reason: "ontology_context_unavailable" | "ontology_context_invalidated" = "ontology_context_unavailable",
+): OntologyValidityContext {
+  try {
+    return resolveOntologyValidity(db, reference);
+  } catch {
+    throw new Error(reason);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Stable hash helpers (mirror agent-checkpoints.ts)
 // ---------------------------------------------------------------------------
@@ -690,11 +720,86 @@ export function canAdmitToGold(
   // (including engineering and operational) sends to review.
   const isUnlistedSensitive = !!sensitiveLabel
     && !config.highStakesCategories.has(category);
-  const reviewOntology = isUnlistedSensitive || isHighStakes
-    ? resolveCandidateReviewOntologyContext(db, tenantId, candidateId)
-    : null;
+
+  // v8.10 round-3 (ONTO-25 follow-up): ordinary-category admissions are
+  // ALSO ontology-sensitive. Every admit path MUST carry a server-resolved
+  // ontology context. We resolve it through the single helper here, before
+  // any branch below can call writeAdmittedReceipt.
+  //
+  // For high-stakes categories we differentiate between two failure modes:
+  //   - `ontology_context_unavailable` -- the candidate has no ontology
+  //     context at all (e.g. no versioned record, no derivation linkage).
+  //   - `ontology_context_invalidated` -- a context exists but it has been
+  //     revoked between queue and admit. This is the reason we want when
+  //     the queued context becomes unavailable.
+  let resolvedOntology: OntologyValidityContext | null = null;
+  if (isUnlistedSensitive || isHighStakes) {
+    // review-queue path: revalidate at admit time via the helper so a
+    // source revoked between queue and admit fails closed. When the caller
+    // already passed `reviewedQueueId` we report `ontology_context_invalidated`
+    // -- the queue stored a context that no longer resolves. When the
+    // caller did NOT pass a queue id we are queueing fresh, so an absent
+    // context is `ontology_context_unavailable`.
+    let candidateRef: QueueOntologyContext | null = null;
+    try {
+      candidateRef = resolveCandidateReviewOntologyContext(db, tenantId, candidateId);
+    } catch {
+      throw new Error(
+        options.reviewedQueueId ? "ontology_context_invalidated" : "ontology_context_unavailable"
+      );
+    }
+    if (!candidateRef) {
+      throw new Error(
+        options.reviewedQueueId ? "ontology_context_invalidated" : "ontology_context_unavailable"
+      );
+    }
+    resolvedOntology = candidateRef.context;
+  } else if (options.ontologyReference) {
+    // Ordinary-category admit with caller-supplied coordinates: resolve
+    // through the helper. We do NOT fall back to a stored ontology
+    // reference — the caller MUST supply a current one.
+    try {
+      resolvedOntology = resolveRequiredBeliefOntologyContext(
+        db,
+        options.ontologyReference,
+      );
+    } catch {
+      throw new Error("ontology_context_unavailable");
+    }
+  } else if (options.ontology) {
+    // Caller supplied an already-resolved context (from promoteCandidate).
+    // Trust it ONLY if it is structurally complete and the matching
+    // versioned record is still authoritative at admit time. We re-resolve
+    // via the helper using the candidate's own coordinates so we never
+    // accept a forged hash.
+    try {
+      const candidateRef = resolveCandidateReviewOntologyContext(db, tenantId, candidateId);
+      if (!candidateRef) {
+        throw new Error("ontology_context_unavailable");
+      }
+      resolvedOntology = candidateRef.context;
+    } catch {
+      throw new Error("ontology_context_unavailable");
+    }
+  } else {
+    // No ontology provided at all. We need to derive a reference from the
+    // candidate's persisted versioned record (every belief candidate has
+    // exactly one). Failure here is a deny, not an allow.
+    try {
+      const candidateRef = resolveCandidateReviewOntologyContext(db, tenantId, candidateId);
+      if (!candidateRef) {
+        throw new Error("ontology_context_unavailable");
+      }
+      resolvedOntology = candidateRef.context;
+    } catch {
+      throw new Error("ontology_context_unavailable");
+    }
+  }
 
   if (isUnlistedSensitive && sensitiveLabel) {
+    const reviewOntology = resolvedOntology
+      ? { reference: options.ontologyReference ?? requireOntologyReferenceForCandidate(db, tenantId, candidateId), context: resolvedOntology }
+      : null;
     if (!reviewOntology) throw new Error("ontology context is required for belief review");
     return writeQueuedReceipt({
       db,
@@ -713,6 +818,9 @@ export function canAdmitToGold(
   if (isHighStakes) {
     // review-required override: caller can pass a reviewed queue id to bypass
     if (!options.reviewedQueueId) {
+      const reviewOntology = resolvedOntology
+        ? { reference: options.ontologyReference ?? requireOntologyReferenceForCandidate(db, tenantId, candidateId), context: resolvedOntology }
+        : null;
       if (!reviewOntology) throw new Error("ontology context is required for belief review");
       return writeQueuedReceipt({
         db,
@@ -742,10 +850,21 @@ export function canAdmitToGold(
     ) {
       throw new Error("reviewedQueueId provided but queue item is not approved");
     }
+    // v8.10 round-3 (ONTO-25 follow-up): the queued ontology context MUST
+    // be re-validated at admit time using the helper. If the queued
+    // reference is no longer authoritative (e.g. source revoked between
+    // queue and admit), the helper throws `ontology_context_invalidated`
+    // and the transaction rolls back into an `admission_denied` decision row.
     const queueOntology = resolveQueuedOntologyContext(db, queueItem, tenantId);
-    if (!queueOntology) throw new Error("reviewedQueueId ontology context is unavailable");
+    if (!queueOntology) throw new Error("ontology_context_invalidated");
     ontology = queueOntology.context;
   }
+
+  // For non-ontology-sensitive paths we still pass the resolved ontology
+  // through to writeAdmittedReceipt so the receipt carries verifiable
+  // coordinates. The receipt helper will refuse to run without it.
+  if (!ontology) ontology = resolvedOntology ?? undefined;
+  if (!ontology) throw new Error("ontology_context_unavailable");
 
   return writeAdmittedReceipt({
     db,
@@ -757,6 +876,21 @@ export function canAdmitToGold(
     createdAt: nowIso(),
     ontology,
   });
+}
+
+/**
+ * Resolve the canonical ontology reference for a candidate from its persisted
+ * versioned record. Used to backfill the reference shape that the receipt
+ * writers need when the caller only supplied a resolved context.
+ */
+function requireOntologyReferenceForCandidate(
+  db: Database.Database,
+  tenantId: string,
+  candidateId: string,
+): OntologyContextReference {
+  const ref = resolveCandidateReviewOntologyContext(db, tenantId, candidateId);
+  if (!ref) throw new Error("ontology_context_unavailable");
+  return ref.reference;
 }
 
 // ---------------------------------------------------------------------------
@@ -930,10 +1064,27 @@ interface AdmittedArgs {
   checks: PromotionChecks;
   actor: MemoryUseActor;
   createdAt: string;
-  ontology?: PromotionReceiptSummary["ontology"];
+  /**
+   * v8.10 round-3 (ONTO-25 follow-up): REQUIRED for ontology-sensitive
+   * categories (which now include ALL categories via `canAdmitToGold`).
+   * `writeAdmittedReceipt` will refuse to run without a verified
+   * server-owned context and roll the admit transaction back into a
+   * denied decision row.
+   */
+  ontology: PromotionReceiptSummary["ontology"];
 }
 
 function writeAdmittedReceipt(args: AdmittedArgs): AdmissionDecision {
+  // v8.10 round-3 (ONTO-25 follow-up): refuse to run without verified
+  // ontology context. We throw so the caller's transaction rolls back;
+  // the caller is then expected to convert the throw into an
+  // `admission_denied` decision row with reason
+  // `ontology_context_invalidated` (never a promoted receipt).
+  const ontology = args.ontology;
+  if (!ontology || !ontology.ontologyId || !ontology.ontologyContentHash) {
+    throw new Error("ontology_context_unavailable");
+  }
+
   const previousEntryHash = latestDecisionEntryHash(args.db, args.tenantId);
   const decisionId = crypto.randomUUID();
   return args.db.transaction(() => {
@@ -990,6 +1141,7 @@ function writeAdmittedReceipt(args: AdmittedArgs): AdmissionDecision {
           previous_entry_hash: previousEntryHash,
           entry_hash: receipt.entryHash,
           category: args.category,
+          ontology_derivative_id: ontology.derivativeId,
         },
         created_at: args.createdAt,
       },
@@ -1021,17 +1173,123 @@ export function promoteCandidate(
   if (args.ontologyContext && !args.ontologyReference) {
     throw new Error("caller-supplied ontology context is not accepted");
   }
-  const ontology = args.ontologyReference
-    ? resolveOntologyValidity(db, args.ontologyReference)
-    : undefined;
-  return canAdmitToGold(db, args.tenantId, args.candidateId, {
-    actor: args.actor,
-    category: args.category,
-    config: args.config,
-    reviewedQueueId: args.reviewedQueueId ?? null,
-    ontology,
-    ontologyReference: args.ontologyReference,
-  });
+  // v8.10 round-3 (ONTO-25 follow-up): resolve the supplied ontology
+  // reference via the single fail-closed helper. If the reference is
+  // absent / forged / foreign / stale / revoked / unreachable we surface
+  // `ontology_context_unavailable` here; the admission_denied path below
+  // converts it into a proper decision row.
+  let ontology: OntologyValidityContext | undefined;
+  if (args.ontologyReference) {
+    ontology = resolveRequiredBeliefOntologyContext(
+      db,
+      args.ontologyReference,
+    );
+  }
+  try {
+    return canAdmitToGold(db, args.tenantId, args.candidateId, {
+      actor: args.actor,
+      category: args.category,
+      config: args.config,
+      reviewedQueueId: args.reviewedQueueId ?? null,
+      ontology,
+      ontologyReference: args.ontologyReference,
+    });
+  } catch (err) {
+    // If the gate threw because the ontology context was unavailable or
+    // invalidated between queue and admit, convert the failure into an
+    // `admission_denied` decision row with reason
+    // `ontology_context_invalidated`. The transaction has already rolled
+    // back so we MUST NOT promote; we MUST NOT return a promoted receipt.
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      message.includes("ontology_context_unavailable")
+      || message.includes("ontology_context_invalidated")
+    ) {
+      return writeBeliefAdmissionDeniedForOntology(
+        db,
+        args.tenantId,
+        args.candidateId,
+        args.actor,
+        args.category,
+        message.includes("ontology_context_invalidated")
+          ? "ontology_context_invalidated"
+          : "ontology_context_unavailable",
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * Write an `admission_denied` decision row with reason
+ * `ontology_context_invalidated` (or `ontology_context_unavailable`). The
+ * candidate is NOT promoted and there is no gold mutation. This is the
+ * single place where a queued or supplied ontology failure becomes a
+ * permanent audit row; the underlying transaction has already rolled back
+ * the gate's writes by the time we get here.
+ */
+function writeBeliefAdmissionDeniedForOntology(
+  db: Database.Database,
+  tenantId: string,
+  candidateId: string,
+  actor: AdmitActor,
+  category: ClaimCategory | string | undefined,
+  reason: "ontology_context_invalidated" | "ontology_context_unavailable",
+): AdmissionDecision {
+  const normalizedCategory = normalizeCategory(category);
+  const candidate = readCandidate(db, candidateId, tenantId);
+  const actorRole: MemoryUseActor["role"] = actor.role === "operator" || actor.role === "admin"
+    ? actor.role
+    : "system";
+  const createdAt = nowIso();
+  const previousEntryHash = latestDecisionEntryHash(db, tenantId);
+  const decisionId = crypto.randomUUID();
+  return db.transaction(() => {
+    const receipt = writeDecisionRow(db, {
+      decisionId,
+      candidateId,
+      tenantId,
+      category: normalizedCategory,
+      decisionType: "admission_denied",
+      fromStage: candidate.belief_stage,
+      toStage: candidate.belief_stage,
+      actorId: actor.id,
+      actorRole,
+      reason,
+      metadata: {
+        failedCheck: "ontology",
+        ontologyReason: reason,
+      },
+      createdAt,
+      previousEntryHash,
+    });
+    writeAuditEntry(
+      {
+        tenant_id: tenantId,
+        actor_id: actor.id,
+        actor_role: actorRole,
+        event_type: AUDIT_EVENT_TYPES.BELIEF_ADMISSION_DENIED,
+        entity_type: ENTITY_TYPES.AGENT_MEMORY_CANDIDATE,
+        entity_id: `agent_memory_candidate:${candidateId}`,
+        reason,
+        metadata_json: {
+          candidate_id: candidateId,
+          decision_id: decisionId,
+          failed_check: "ontology",
+          ontology_reason: reason,
+        },
+        created_at: createdAt,
+      },
+      db,
+    );
+    return {
+      kind: "denied" as const,
+      reason,
+      failedCheck: "ontology" as const,
+      decisionId,
+      receipt,
+    };
+  })();
 }
 
 export interface DemoteArgs {
@@ -1290,29 +1548,70 @@ export function resolveReview(
   const candidate = readCandidate(db, queueCandidateId, args.tenantId);
 
   if (args.resolution === "approved") {
-    return db.transaction((): ResolveReviewResult => {
-      db.prepare(
-        `UPDATE belief_review_queue
-            SET status = 'approved',
-                resolved_by = ?,
-                resolution_note = ?,
-                resolved_at = ?
-          WHERE id = ?`
-      ).run(args.operatorId, args.note ?? null, createdAt, args.queueId);
+    // v8.10 round-3 (ONTO-25 follow-up): the queued ontology context may
+    // be invalidated between queue and admit. We catch the helper's
+    // throw and convert it into an `admission_denied` decision row with
+    // reason `ontology_context_invalidated` (never a promoted receipt).
+    let admission: AdmissionDecision;
+    try {
+      admission = db.transaction((): AdmissionDecision => {
+        db.prepare(
+          `UPDATE belief_review_queue
+              SET status = 'approved',
+                  resolved_by = ?,
+                  resolution_note = ?,
+                  resolved_at = ?
+            WHERE id = ?`
+        ).run(args.operatorId, args.note ?? null, createdAt, args.queueId);
 
-      const category = normalizeCategory(args.category ?? queueCategory);
-      const admission = canAdmitToGold(db, args.tenantId, queueCandidateId, {
-        actor: { id: args.operatorId, role: "operator", tenantId: args.tenantId },
-        category,
-        config: args.config,
-        reviewedQueueId: args.queueId,
-      });
+        const category = normalizeCategory(args.category ?? queueCategory);
+        const result = canAdmitToGold(db, args.tenantId, queueCandidateId, {
+          actor: { id: args.operatorId, role: "operator", tenantId: args.tenantId },
+          category,
+          config: args.config,
+          reviewedQueueId: args.queueId,
+        });
 
-      if (admission.kind !== "admitted") {
-        throw new Error(
-          `review-approved candidate failed admission gate: ${admission.kind === "denied" ? admission.reason : admission.reason}`
+        if (result.kind !== "admitted") {
+          throw new Error(
+            `review-approved candidate failed admission gate: ${result.kind === "denied" ? result.reason : result.reason}`
+          );
+        }
+        return result;
+      })();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (
+        message.includes("ontology_context_unavailable")
+        || message.includes("ontology_context_invalidated")
+      ) {
+        // The inner transaction has already rolled back. Write an
+        // `admission_denied` decision row with the right reason. The
+        // queue item is left in `open` status because nothing was
+        // committed.
+        const deniedReason: "ontology_context_invalidated" | "ontology_context_unavailable" =
+          message.includes("ontology_context_invalidated")
+            ? "ontology_context_invalidated"
+            : "ontology_context_unavailable";
+        const denied = writeBeliefAdmissionDeniedForOntology(
+          db,
+          args.tenantId,
+          queueCandidateId,
+          { id: args.operatorId, role: "operator", tenantId: args.tenantId },
+          args.category ?? queueCategory,
+          deniedReason,
         );
+        return {
+          resolution: "approved",
+          decisionId: denied.decisionId,
+          admission: denied,
+          receipt: denied.receipt,
+        };
       }
+      throw err;
+    }
+    const category = normalizeCategory(args.category ?? queueCategory);
+    return db.transaction((): ResolveReviewResult => {
 
       // Record the review approval decision row (separate from the admission row).
       const receipt = writeDecisionRow(db, {

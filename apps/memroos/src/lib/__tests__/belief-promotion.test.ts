@@ -313,6 +313,7 @@ describe("belief promotion pipeline", () => {
       new Date().toISOString(),
       new Date().toISOString()
     );
+    const conflictCandidateId = crypto.randomUUID();
     db.prepare(
       `INSERT INTO agent_memory_candidates
          (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status,
@@ -320,7 +321,7 @@ describe("belief promotion pipeline", () => {
        VALUES (?, ?, ?, 'codex', 'decision_intent', ?, ?, 'candidate',
               'silver_candidate_claim', ?, ?)`
     ).run(
-      crypto.randomUUID(),
+      conflictCandidateId,
       TENANT,
       conflictCaptureId,
       f.content,
@@ -332,6 +333,10 @@ describe("belief promotion pipeline", () => {
       }),
       new Date().toISOString()
     );
+    // v8.10 round-3 (ONTO-25 follow-up): ordinary-category promotions are
+    // ontology-sensitive, so the conflict candidate needs a server-resolved
+    // ontology context just like the primary candidate.
+    seedBeliefReviewOntology(db, conflictCandidateId);
 
     // Promote the duplicate-content silver candidate to GOLD first so the
     // conflict check (which fires only when another gold exists at the same
@@ -791,17 +796,37 @@ describe("belief promotion pipeline", () => {
       reason: "source_changed",
     });
 
-    expect(() => resolveReview(db, {
+    // v8.10 round-3 (ONTO-25 follow-up): the admit transaction must roll
+    // back into a denied decision row with reason `ontology_context_invalidated`
+    // and must NEVER return a promoted receipt. resolveReview returns a
+    // denied decision rather than throwing so the audit chain stays consistent.
+    const result = resolveReview(db, {
       queueId: queued.queueId,
       tenantId: TENANT,
       resolution: "approved",
       operatorId: "operator-2",
       category: "pricing",
-    })).toThrow("ontology context is unavailable");
+    });
+    expect(result.admission?.kind).toBe("denied");
+    expect(result.admission?.reason).toBe("ontology_context_invalidated");
+    expect(result.admission?.failedCheck).toBe("ontology");
+
+    // Queue item stays in `open` because the approval transaction rolled back.
     expect(db.prepare(`SELECT status FROM belief_review_queue WHERE id = ?`).get(queued.queueId))
       .toEqual({ status: "open" });
+    // Candidate stays silver — no promoted receipt.
     expect(db.prepare(`SELECT belief_stage FROM agent_memory_candidates WHERE id = ?`).get(fixture.candidateId))
       .toEqual({ belief_stage: "silver_candidate_claim" });
+
+    // The denial is recorded as an admission_denied decision row.
+    const denials = db
+      .prepare(
+        `SELECT decision_type, reason FROM belief_promotion_decisions
+          WHERE candidate_id = ? AND decision_type = 'admission_denied'`
+      )
+      .all(fixture.candidateId) as Array<{ decision_type: string; reason: string }>;
+    expect(denials.length).toBeGreaterThanOrEqual(1);
+    expect(denials[0].reason).toBe("ontology_context_invalidated");
   });
 
   // -------------------------------------------------------------------------
@@ -852,4 +877,132 @@ describe("belief promotion pipeline", () => {
     // CONFIG sanity: high-stakes default present
     expect(DEFAULT_BELIEF_PROMOTION_CONFIG.highStakesCategories.has("pricing")).toBe(true);
   });
+
+  // -------------------------------------------------------------------------
+  // v8.10 round-3 (ONTO-25 follow-up) regressions
+  // -------------------------------------------------------------------------
+
+  it("ordinary_category_requires_ontology_context: ordinary 'operational' admission must carry a verified ontology context", () => {
+    // The candidate has an ontology context seeded by `insertFixture`. The
+    // admission must succeed because the context is verified server-side.
+    const f = insertFixture(db, { category: "operational" });
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(decision.kind).toBe("admitted");
+    if (decision.kind !== "admitted") throw new Error("expected admitted");
+    // The receipt MUST carry ontology coordinates.
+    expect(decision.receipt.ontology).toBeTruthy();
+    expect(decision.receipt.ontology?.ontologyId).toBeTruthy();
+    expect(decision.receipt.ontology?.ontologyContentHash).toBeTruthy();
+  });
+
+  it("ordinary_category_admission_without_ontology_record_is_denied: an ordinary category that lacks ontology context fails closed", () => {
+    // Build a candidate WITHOUT calling seedBeliefReviewOntology so there
+    // is no versioned record to resolve.
+    const captureId = crypto.randomUUID();
+    db.prepare(
+      `INSERT OR IGNORE INTO raw_artifacts (id, tenant_id, source_type, artifact_uri, artifact_path, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(`artifact-no-ont-${captureId}`, TENANT, "test_fixture", `memroos://test/${captureId}`, `/tmp/test/${captureId}`, sha256(captureId));
+    db.prepare(
+      `INSERT INTO agent_session_captures
+         (id, tenant_id, source_agent_id, runtime, project, repo_path, session_id, task_id,
+          status, capture_health, model_route_json, summary, decision_intent_json,
+          sources_json, files_json, commands_json, errors_json, verification_json,
+          metadata_json, raw_artifact_id, capture_hash, captured_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'captured', 'ok', '{}', '', '{}',
+               '[]', '[]', '[]', '[]', '[]', '{}', ?, ?, ?, ?)`
+    ).run(
+      captureId,
+      TENANT,
+      "codex",
+      "test",
+      "memroos",
+      "/repo",
+      "session-no-ont",
+      "task-no-ont",
+      `artifact-no-ont-${captureId}`,
+      sha256(`cap-${captureId}`),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    const candidateId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO agent_memory_candidates
+         (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status,
+          belief_stage, metadata_json, created_at)
+       VALUES (?, ?, ?, 'codex', 'decision_intent', ?, ?, 'candidate',
+              'silver_candidate_claim', ?, ?)`
+    ).run(
+      candidateId,
+      TENANT,
+      captureId,
+      "no-ontology-claim",
+      sha256("no-ontology-claim"),
+      JSON.stringify({ visibility: "internal", policy: "agent_visible" }),
+      new Date().toISOString(),
+    );
+
+    const decision = promoteCandidate(db, {
+      candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    // The transaction must roll back into a denied row, never a promoted receipt.
+    expect(decision.kind).toBe("denied");
+    expect(decision.reason).toBe("ontology_context_unavailable");
+    expect(decision.failedCheck).toBe("ontology");
+    const row = db
+      .prepare(`SELECT belief_stage FROM agent_memory_candidates WHERE id = ?`)
+      .get(candidateId) as { belief_stage: string };
+    expect(row.belief_stage).toBe("silver_candidate_claim");
+  });
+
+  it("caller_supplied_forged_ontology_context_is_rejected: a caller-supplied context without a corresponding reference is rejected", () => {
+    const f = insertFixture(db, { category: "operational" });
+    expect(() => promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+      ontologyContext: {
+        ontologyId: "forged",
+        ontologyVersion: "1.0.0",
+        ontologyContentHash: "sha256:forged",
+        namespace: "forged",
+        canonicalId: "forged",
+        aliasMigrationPath: [],
+      },
+    })).toThrow("caller-supplied ontology context is not accepted");
+  });
+
+  it("writeAdmittedReceipt_persists_ontology_coordinates: the admitted receipt carries verifiable ontology coordinates", () => {
+    // writeAdmittedReceipt is internal; we exercise the gate through
+    // promoteCandidate. The candidate has a valid ontology context seeded
+    // by insertFixture. The admitted receipt MUST carry verifiable
+    // ontology coordinates -- the receipt helper refuses to run without
+    // them.
+    const f = insertFixture(db, { category: "operational" });
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(decision.kind).toBe("admitted");
+    if (decision.kind !== "admitted") throw new Error("expected admitted");
+    // The admitted receipt MUST carry verifiable ontology coordinates.
+    expect(decision.receipt.ontology).toBeTruthy();
+    expect(decision.receipt.ontology?.ontologyId).toBeTruthy();
+    expect(decision.receipt.ontology?.ontologyContentHash).toBeTruthy();
+    expect(decision.receipt.ontology?.sourceId).toBeTruthy();
+    expect(decision.receipt.ontology?.sourceHash).toBeTruthy();
+    expect(decision.receipt.ontology?.derivativeId).toBeTruthy();
+  });
+
 });

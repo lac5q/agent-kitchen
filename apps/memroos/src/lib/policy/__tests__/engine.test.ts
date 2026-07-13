@@ -259,4 +259,182 @@ describe("policy engine — knowledge domain (declarative pass-through)", () => 
       },
     }, db)).toThrow("caller-supplied ontology context is not accepted");
   });
+
+  // ---------------------------------------------------------------------
+  // v8.10 round-3 (ONTO-25 follow-up) regressions
+  // ---------------------------------------------------------------------
+
+  it("resolves server-owned ontology context when caller supplies ontologyReference", async () => {
+    const { ensureCanonicalUpperOntology } = await import("@/lib/ontology/registry");
+    const ontology = ensureCanonicalUpperOntology(db, "operator");
+    // Seed a versioned record that resolves cleanly.
+    const recordId = "knowledge-record-1";
+    db.prepare(
+      `INSERT INTO ontology_versioned_records
+        (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id,
+         ontology_version, ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+       VALUES (?, ?, ?, 'knowledge', ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+    ).run(
+      `versioned-${recordId}`,
+      "default-tenant",
+      "knowledge-space",
+      recordId,
+      ontology.ontologyId,
+      ontology.version,
+      ontology.contentHash,
+      new Date().toISOString(),
+      `source-${recordId}`,
+      `sha256:${"b".repeat(64)}`,
+    );
+    db.prepare(
+      `INSERT INTO ontology_source_lifecycle
+        (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+       VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+    ).run("default-tenant", "knowledge-space", `source-${recordId}`, `sha256:${"b".repeat(64)}`, new Date().toISOString());
+    db.prepare(
+      `INSERT INTO ontology_derivative_validity
+        (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+    ).run(`valid-${recordId}`, "default-tenant", "knowledge-space", `source-${recordId}`, `sha256:${"b".repeat(64)}`, `versioned-${recordId}`, new Date().toISOString());
+
+    const evaluation = evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent", tenantId: "default-tenant" },
+      ontologyReference: {
+        tenantId: "default-tenant",
+        spaceId: "knowledge-space",
+        recordType: "knowledge",
+        recordId,
+      },
+    }, db);
+
+    expect(evaluation.receipt.outcome).toBe("allow");
+    expect(evaluation.receipt.reason).toBe("knowledge_policy_delegated");
+    expect(evaluation.receipt.ontology).toMatchObject({
+      ontologyId: ontology.ontologyId,
+      canonicalId: "memory",
+      sourceId: `source-${recordId}`,
+    });
+  });
+
+  it("rejects a caller-supplied ontology hash even when ontologyReference is also supplied", async () => {
+    const { ensureCanonicalUpperOntology } = await import("@/lib/ontology/registry");
+    const ontology = ensureCanonicalUpperOntology(db, "operator");
+    const recordId = "knowledge-record-2";
+    db.prepare(
+      `INSERT INTO ontology_versioned_records
+        (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id,
+         ontology_version, ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+       VALUES (?, ?, ?, 'knowledge', ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+    ).run(
+      `versioned-${recordId}`,
+      "default-tenant",
+      "knowledge-space-2",
+      recordId,
+      ontology.ontologyId,
+      ontology.version,
+      ontology.contentHash,
+      new Date().toISOString(),
+      `source-${recordId}`,
+      `sha256:${"c".repeat(64)}`,
+    );
+    db.prepare(
+      `INSERT INTO ontology_source_lifecycle
+        (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+       VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+    ).run("default-tenant", "knowledge-space-2", `source-${recordId}`, `sha256:${"c".repeat(64)}`, new Date().toISOString());
+    db.prepare(
+      `INSERT INTO ontology_derivative_validity
+        (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+    ).run(`valid-${recordId}`, "default-tenant", "knowledge-space-2", `source-${recordId}`, `sha256:${"c".repeat(64)}`, `versioned-${recordId}`, new Date().toISOString());
+
+    // Even though ontologyReference is valid, the caller-supplied
+    // ontologyContext (forged hash) must be rejected.
+    expect(() => evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent", tenantId: "default-tenant" },
+      ontologyContext: {
+        ontologyId: "forged",
+        ontologyVersion: "1.0.0",
+        ontologyContentHash: "sha256:forged",
+        namespace: "forged",
+        canonicalId: "forged",
+        aliasMigrationPath: [],
+      },
+      ontologyReference: {
+        tenantId: "default-tenant",
+        spaceId: "knowledge-space-2",
+        recordType: "knowledge",
+        recordId,
+      },
+    }, db)).toThrow("caller-supplied ontology context is not accepted");
+  });
+
+  it("denies when ontologyReference is supplied but the record does not exist", () => {
+    expect(() => evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent", tenantId: "default-tenant" },
+      ontologyReference: {
+        tenantId: "default-tenant",
+        spaceId: "knowledge-space-missing",
+        recordType: "knowledge",
+        recordId: "missing-record",
+      },
+    }, db)).toThrow(/ontology context/i);
+  });
+
+  it("emits a deny receipt (not allow) when receipt persistence fails for an ontology-sensitive knowledge decision", async () => {
+    const { ensureCanonicalUpperOntology } = await import("@/lib/ontology/registry");
+    const ontology = ensureCanonicalUpperOntology(db, "operator");
+    const recordId = "knowledge-record-3";
+    db.prepare(
+      `INSERT INTO ontology_versioned_records
+        (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id,
+         ontology_version, ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+       VALUES (?, ?, ?, 'knowledge', ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+    ).run(
+      `versioned-${recordId}`,
+      "default-tenant",
+      "knowledge-space-3",
+      recordId,
+      ontology.ontologyId,
+      ontology.version,
+      ontology.contentHash,
+      new Date().toISOString(),
+      `source-${recordId}`,
+      `sha256:${"d".repeat(64)}`,
+    );
+    db.prepare(
+      `INSERT INTO ontology_source_lifecycle
+        (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+       VALUES (?, ?, ?, ?, 'active', ?, 'operator', 'test')`
+    ).run("default-tenant", "knowledge-space-3", `source-${recordId}`, `sha256:${"d".repeat(64)}`, new Date().toISOString());
+    db.prepare(
+      `INSERT INTO ontology_derivative_validity
+        (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+    ).run(`valid-${recordId}`, "default-tenant", "knowledge-space-3", `source-${recordId}`, `sha256:${"d".repeat(64)}`, `versioned-${recordId}`, new Date().toISOString());
+
+    // Install a trigger that denies audit_entries inserts for POLICY_DECISION
+    // to simulate a receipt-write failure.
+    db.exec(`CREATE TRIGGER deny_policy_receipt_audit BEFORE INSERT ON audit_entries
+      WHEN NEW.event_type = 'policy.decision' BEGIN SELECT RAISE(ABORT, 'fault-injected'); END;`);
+
+    const evaluation = evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent", tenantId: "default-tenant" },
+      ontologyReference: {
+        tenantId: "default-tenant",
+        spaceId: "knowledge-space-3",
+        recordType: "knowledge",
+        recordId,
+      },
+    }, db);
+
+    expect(evaluation.receipt.outcome).toBe("deny");
+    expect(evaluation.receipt.reason).toBe("ontology_context_unavailable");
+
+    db.exec(`DROP TRIGGER deny_policy_receipt_audit;`);
+  });
 });

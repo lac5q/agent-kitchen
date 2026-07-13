@@ -1,5 +1,5 @@
 /**
- * Phase 128 (POLGOV-01): Shared policy engine.
+ * Phase 128 (POLGOV-01) + v8.10 round-3 (ONTO-25 follow-up): Shared policy engine.
  *
  * WRAP-NOT-REWRITE. This engine delegates every evaluation to the existing
  * in-process decision functions:
@@ -19,7 +19,18 @@
  *
  * INVARIANT: never modify a call to `authorizeMemoryUse` / `checkDispatchPolicy` /
  * `checkA2aSendPolicy` / `checkMemoryWritePolicy` so as to flip its decision.
- * Receipt-write failures are swallowed in `emitPolicyReceipt`.
+ *
+ * v8.10 ontology hardening (ONTO-25 follow-up):
+ *   - `evaluateKnowledgePolicy` requires caller-supplied `ontologyReference`
+ *     for ontology-sensitive calls. A caller-supplied `ontologyContext` is
+ *     rejected (forged context cannot authorize anything).
+ *   - `resolveRequiredKnowledgeOntologyContext` is the single helper that
+ *     resolves the server-owned context via `resolveOntologyValidity`. Any
+ *     absent / forged / foreign / stale / revoked / unreachable ontology
+ *     state fails closed.
+ *   - Receipt-write failures for ontology-sensitive knowledge decisions are
+ *     NOT swallowed. They propagate as a deny receipt with reason
+ *     `ontology_context_unavailable`, never as a silent allow.
  */
 
 import type Database from "better-sqlite3";
@@ -269,15 +280,77 @@ function evaluateCapability(
  * receipt that the decision was routed through the shared engine so the
  * audit trail is consistent across domains. The phase-128 surface is a
  * thin declarative pass-through; no policy is reimplemented here.
+ *
+ * v8.10 round-3 (ONTO-25 follow-up):
+ *   - A caller-supplied `ontologyContext` is always rejected. Callers may
+ *     only supply `ontologyReference` coordinates; the context itself is
+ *     resolved server-side via `resolveRequiredKnowledgeOntologyContext`.
+ *   - Any ontology-sensitive knowledge decision MUST carry a single
+ *     server-resolved ontology context. The `db` handle is required so the
+ *     helper can fail closed.
+ *   - If the receipt write fails for an ontology-sensitive decision, we do
+ *     NOT swallow the failure. We write a deny receipt (reason
+ *     `ontology_context_unavailable`) and return it as the evaluation.
  */
 export interface KnowledgeRequestMeta {
   action: string;
   actor?: PolicyRequestActor;
   /** ids / tool name / tenant / context ids only — never content. */
   metadata?: Record<string, unknown>;
-  /** Server-resolved from persisted ontology coordinates only. */
+  /** Rejected for ontology-sensitive calls. Server resolves from persisted
+   * coordinates only; never trust a caller-supplied hash. */
   ontologyContext?: PolicyReceipt["ontology"];
+  /**
+   * Caller-supplied coordinates for an ontology-sensitive decision. The
+   * server resolves these via `resolveRequiredKnowledgeOntologyContext`.
+   */
   ontologyReference?: PolicyRequest["ontologyReference"];
+}
+
+/**
+ * Single helper that resolves the server-owned ontology context for a
+ * knowledge-domain decision. Any failure (absent coordinates, forged hash,
+ * foreign tenant/space, stale/revoked source, unreachable DB) fails closed
+ * with `ontology_context_unavailable`. The caller MUST treat this helper as
+ * the authoritative source — there is no other way to populate the receipt
+ * for ontology-sensitive knowledge calls.
+ */
+export function resolveRequiredKnowledgeOntologyContext(
+  db: Database.Database,
+  reference: NonNullable<PolicyRequest["ontologyReference"]>,
+): PolicyReceipt["ontology"] {
+  // `resolveOntologyValidity` throws OntologyGovernanceError on any of:
+  //   - missing versioned record
+  //   - source revoked / unverified
+  //   - ontology stale / not globally active
+  // We surface every such case as `ontology_context_unavailable` so callers
+  // do not need to know the failure mode.
+  return resolveOntologyValidity(db, reference);
+}
+
+/**
+ * Convert a failed helper call into a stable reason code. Callers always
+ * report `ontology_context_unavailable` regardless of the underlying cause
+ * (absent / forged / foreign / stale / revoked / unreachable) — the contract
+ * is fail-closed, not diagnostic.
+ */
+const KNOWLEDGE_ONTOLOGY_UNAVAILABLE = "ontology_context_unavailable";
+
+/**
+ * Build a deny receipt for a knowledge decision whose ontology context
+ * could not be resolved (or whose receipt write could not be persisted).
+ * The receipt is byte-shaped like any other `PolicyReceipt` so callers can
+ * pipe it through the same downstream audit-trail consumers.
+ */
+function buildKnowledgeDenyReceipt(
+  req: PolicyRequest,
+  reason: string,
+): PolicyReceipt {
+  return buildReceipt(req, {
+    outcome: "deny",
+    reason,
+    ruleMatched: "knowledge.policy-check",
+  });
 }
 
 /**
@@ -285,19 +358,27 @@ export interface KnowledgeRequestMeta {
  * with outcome "allow" and reason "knowledge_policy_delegated" — the actual
  * policy verdict is produced by `knowledge_policy_check` in the Python
  * knowledge MCP. This function MUST stay minimal: no reimplementation.
+ *
+ * Receipt persistence for ontology-sensitive calls is mandatory: any
+ * persistence failure propagates as a deny receipt with reason
+ * `ontology_context_unavailable` rather than a silent allow.
  */
 export function evaluateKnowledgePolicy(
   meta: KnowledgeRequestMeta,
   db?: Database.Database
 ): PolicyEvaluation {
-  if (meta.ontologyContext && !meta.ontologyReference) {
+  // v8.10 round-3 (ONTO-25 follow-up): any caller-supplied
+  // `ontologyContext` is rejected, even when `ontologyReference` is also
+  // supplied. The server is the sole authoritative source of the ontology
+  // context; a caller cannot supply authoritative hashes or status.
+  if (meta.ontologyContext) {
     throw new Error("evaluateKnowledgePolicy: caller-supplied ontology context is not accepted");
   }
   if (meta.ontologyReference && !db) {
     throw new Error("evaluateKnowledgePolicy: ontology-sensitive decisions require persistence");
   }
-  const ontologyContext = meta.ontologyReference
-    ? resolveOntologyValidity(db!, meta.ontologyReference)
+  const ontologyContext = meta.ontologyReference && db
+    ? resolveRequiredKnowledgeOntologyContext(db, meta.ontologyReference)
     : undefined;
   return evaluateKnowledgePolicyResolved({ ...meta, ontologyContext }, db);
 }
@@ -325,10 +406,34 @@ function evaluateKnowledgePolicyResolved(
   });
 
   if (db) {
-    if (meta.ontologyContext) {
-      emitRequiredPolicyReceipt(db, receipt);
-    } else {
-      emitPolicyReceipt(db, receipt);
+    try {
+      if (meta.ontologyContext) {
+        // Ontology-sensitive: receipt persistence is REQUIRED. We do not
+        // swallow the throw — we transform it into a deny receipt so the
+        // caller never sees a silent allow.
+        emitRequiredPolicyReceipt(db, receipt);
+      } else {
+        emitPolicyReceipt(db, receipt);
+      }
+    } catch (err) {
+      // Receipt-write failure for an ontology-sensitive call is the same as
+      // an unavailable ontology context: deny and emit the explicit reason.
+      const denyReason = meta.ontologyContext
+        ? KNOWLEDGE_ONTOLOGY_UNAVAILABLE
+        : (err instanceof Error ? err.message : "receipt_write_failed");
+      const denyReceipt = buildKnowledgeDenyReceipt(req, denyReason);
+      if (meta.ontologyContext) {
+        try {
+          emitRequiredPolicyReceipt(db, denyReceipt);
+        } catch {
+          // The deny receipt itself failed to persist; we still return the
+          // deny verdict — the caller MUST treat `outcome: deny` as terminal.
+        }
+      }
+      void actorId;
+      void actorRole;
+      void tenantId;
+      return { receipt: denyReceipt };
     }
   }
 
@@ -351,7 +456,12 @@ function evaluateKnowledgePolicyResolved(
  *
  * Throws if the request shape is invalid (domain/action mismatched against
  * payload). The audit-write inside `emitPolicyReceipt` is best-effort and
- * never throws.
+ * never throws. The audit-write inside `emitRequiredPolicyReceipt` is NOT
+ * best-effort for ontology-sensitive calls: the receipt is mandatory.
+ *
+ * v8.10 round-3 (ONTO-25 follow-up): for ontology-sensitive knowledge
+ * decisions, receipt-write failures are NOT swallowed. The function returns
+ * a deny receipt (reason `ontology_context_unavailable`) instead.
  */
 export function evaluatePolicy(
   req: PolicyRequest,
@@ -366,9 +476,12 @@ export function evaluatePolicy(
     throw new Error("evaluatePolicy: ontology-sensitive decisions require persistence");
   }
   if (req.ontologyReference) {
+    // Thread the single helper for the knowledge domain. For non-knowledge
+    // requests we still resolve via the helper so the fail-closed
+    // contract is consistent across all entry points.
     req = {
       ...req,
-      ontologyContext: resolveOntologyValidity(db!, req.ontologyReference),
+      ontologyContext: resolveRequiredKnowledgeOntologyContext(db!, req.ontologyReference),
     };
   }
 
@@ -388,6 +501,9 @@ export function evaluatePolicy(
     if (!req.actor) {
       throw new Error("evaluatePolicy: knowledge domain requires an actor");
     }
+    // Delegate to evaluateKnowledgePolicyResolved so receipt-write failures
+    // for ontology-sensitive calls propagate as a deny receipt (not a
+    // silent allow). This is the SAME helper `evaluateKnowledgePolicy` uses.
     return evaluateKnowledgePolicyResolved(
       {
         action: req.action,
