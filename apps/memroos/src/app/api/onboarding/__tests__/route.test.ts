@@ -226,6 +226,8 @@ describe("agent onboarding routes", () => {
     expect(script).toContain("\"qwen\": \"qwen\"");
     expect(script).toContain("\"zcode\": \"zcode\"");
     expect(script).toContain("\"pi\": \"stdout\"");
+    expect(script).toContain("\"chatgpt\": \"stdout\"");
+    expect(script).toContain("\"grok\": \"stdout\"");
     expect(script).toContain("\"openclaw\": \"openclaw\"");
     expect(script).toContain("\"opencode\": \"opencode\"");
     expect(script).toContain("\"hermes\": \"hermes\"");
