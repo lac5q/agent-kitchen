@@ -21,7 +21,7 @@ async function loadRoutes() {
   return { inviteRoute, registerRoute, scriptRoute, agentsRoute, closeDb: dbModule.closeDb };
 }
 
-describe("agent onboarding routes", () => {
+describe("agent onboarding routes", { tags: ["slow"] }, () => {
   beforeEach(() => {
     fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
     fs.mkdirSync(TEST_DB_DIR, { recursive: true });
