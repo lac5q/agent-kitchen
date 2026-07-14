@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useKnowledge, useGitNexus } from "@/lib/api-client";
 import { CollectionCard } from "@/components/library/collection-card";
 import { CollectionTreemap } from "@/components/library/collection-treemap";
@@ -15,9 +16,13 @@ import { ContextSourcesPanel } from "@/components/library/context-sources-panel"
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Card, PageHeader } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
 export default function LibraryPage() {
+  const search = useSearchParams();
+  const fromWindow = search?.get("from_window") ?? null;
+  const fromWorkspace = search?.get("from_workspace") ?? null;
+  const fromScopeNote = search?.get("from_scope_note") ?? null;
   const { data, isLoading } = useKnowledge();
   const { data: gnData } = useGitNexus();
   const gnRepos = gnData?.repos || [];
@@ -44,6 +49,19 @@ export default function LibraryPage() {
         title="Knowledge"
         hint="Source corpus, collection health, code graph, and memory infrastructure."
       />
+
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="library">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Library has its own sources/index selectors; the originating scope is shown for reference only and is NOT applied."}
+          </div>
+        </Card>
+      )}
 
       {/* Top 10 collection cards — 5 columns on lg */}
       <section>

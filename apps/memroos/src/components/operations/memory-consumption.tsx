@@ -76,18 +76,19 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
   const labels = labelsForWindow(filters.window);
   const writeSeries = valuesForLabels(labels, writes.data?.points);
   const recallSeries = valuesForLabels(labels, recalls.data?.points);
-  // Finding (3): absent series buckets are NOT zero-filled. The chart
-  // receives `[]` when the source returned no points at all so a flat
-  // zero baseline cannot masquerade as measured activity. Per-bucket
-  // nulls map to 0 only inside the SVG path itself (so the chart
-  // shows a visible gap when SOME buckets are missing) and the
+  // Finding (3) — round 3: absent series buckets are NOT zero-filled.
+  // When the source returns no points at all, the chart receives `[]`
+  // so a flat zero baseline cannot masquerade as measured activity.
+  // When the source returns SOME points but is missing intervals,
+  // the missing buckets stay `null` and are forwarded to AreaStack
+  // which renders them as visible gaps (not measured zeros). The
   // `hasAnyPoint` flag plus the explicit empty-state block ensure we
   // never present a numeric zero when nothing was measured.
-  const writeValuesForChart: number[] = writeSeries.hasAnyPoint
-    ? writeSeries.values.map((v) => (v === null ? 0 : v))
+  const writeValuesForChart: (number | null)[] = writeSeries.hasAnyPoint
+    ? writeSeries.values
     : [];
-  const recallValuesForChart: number[] = recallSeries.hasAnyPoint
-    ? recallSeries.values.map((v) => (v === null ? 0 : v))
+  const recallValuesForChart: (number | null)[] = recallSeries.hasAnyPoint
+    ? recallSeries.values
     : [];
   const totalTierCount = memory.data?.tierStats.reduce((sum, tier) => sum + tier.count, 0) ?? 0;
   const highTier = memory.data?.tierStats.find((tier) => tier.tier === "high" || tier.tier === "pinned")?.count ?? 0;
