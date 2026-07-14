@@ -1,10 +1,75 @@
 {
-  "_comment": "Copy to ~/.memroos/context-sources.local.json (never commit). Deep-merged over context-sources.config.json per deployment. Set CONTEXT_SOURCES_LOCAL_CONFIG env var to override the default path for testing.",
+  "_comment": "Copy to ~/.memroos/context-sources.local.json (never commit). Deep-merged over context-sources.config.json. Pair with ~/.memroos/meeting-sources.json + scripts/meet-sync/meet-sync.sh.",
   "sources": [
     {
       "id": "meet-recordings",
       "enabled": true,
-      "_comment": "Circleback.ai provider wired via MEETINGS_INGEST_COMMAND. Set MEETINGS_INGEST_COMMAND=~/.memroos/scripts/circleback-ingest.sh in ~/.memroos/memroos-runtime.env"
+      "sourcePath": "${KNOWLEDGE_BASE_PATH:-$HOME/github/knowledge}/gdrive/meet-recordings",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source google-spark-transcripts",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source google-spark-transcripts --skip-ingest",
+      "qmdCollection": "meet-recordings",
+      "_comment": "Google Meet / Gemini notes. Collection reserved for Drive Meet Recordings — not Circleback."
+    },
+    {
+      "id": "spark",
+      "enabled": true,
+      "sourcePath": "${KNOWLEDGE_BASE_PATH:-$HOME/github/knowledge}/spark-recordings",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source google-spark-transcripts",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source google-spark-transcripts --skip-ingest",
+      "qmdCollection": "spark-recordings",
+      "_comment": "Spark Desktop transcripts. Shares ingest with google-spark-transcripts meet-sync source."
+    },
+    {
+      "id": "meet-recordings-circleback",
+      "enabled": true,
+      "type": "qmd",
+      "requiredTools": ["circleback", "python3"],
+      "envVars": [],
+      "sourcePath": "./data/context/meet-recordings-circleback",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source circleback",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source circleback --skip-ingest",
+      "freshnessThresholdMinutes": 360,
+      "qmdCollection": "meet-recordings-circleback",
+      "safeAnswerPolicy": "source_required"
+    },
+    {
+      "id": "meet-recordings-epilogue",
+      "enabled": true,
+      "type": "qmd",
+      "requiredTools": ["python3", "curl"],
+      "envVars": ["FATHOM_API_KEY"],
+      "sourcePath": "./data/context/meet-recordings-epilogue",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source fathom-epilogue",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source fathom-epilogue --skip-ingest",
+      "freshnessThresholdMinutes": 360,
+      "qmdCollection": "meet-recordings-epilogue",
+      "safeAnswerPolicy": "source_required"
+    },
+    {
+      "id": "meet-recordings-personal",
+      "enabled": true,
+      "type": "qmd",
+      "requiredTools": ["python3", "curl"],
+      "envVars": ["FATHOM_API_KEY"],
+      "sourcePath": "./data/context/meet-recordings-personal",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source fathom-personal",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source fathom-personal --skip-ingest",
+      "freshnessThresholdMinutes": 360,
+      "qmdCollection": "meet-recordings-personal",
+      "safeAnswerPolicy": "source_required"
+    },
+    {
+      "id": "meet-recordings-zoom",
+      "enabled": true,
+      "type": "qmd",
+      "requiredTools": ["python3", "curl"],
+      "envVars": ["ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"],
+      "sourcePath": "./data/context/meet-recordings-zoom",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source zoom",
+      "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source zoom --skip-ingest",
+      "freshnessThresholdMinutes": 1440,
+      "qmdCollection": "meet-recordings-zoom",
+      "safeAnswerPolicy": "source_required"
     }
   ]
 }
