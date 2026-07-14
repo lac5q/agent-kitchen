@@ -75,10 +75,16 @@ export function AdapterStatusPanel({ dateRange }: { dateRange?: { since: string;
                       {adapter.live ? "live" : "not wired"}
                     </span>
                   </td>
-                  <td className="py-1.5 text-right" style={{ color: NOC.muted }}>
-                    {stats?.count ?? 0}
-                  </td>
-                  <td className="py-1.5 text-right" style={{ color: NOC.soft }}>
+
+                  <td className="py-1.5 text-right" style={{ color: NOC.muted }} data-adapter-events={adapter.name}>
+                    {error
+                      ? "—"
+                      : isLoading
+                        ? "—"
+                        : stats
+                          ? String(stats.count)
+                          : "—"}
+                  </td>                  <td className="py-1.5 text-right" style={{ color: NOC.soft }}>
                     {stats?.lastPolled
                       ? new Date(stats.lastPolled).toLocaleString(undefined, {
                           month: "short",

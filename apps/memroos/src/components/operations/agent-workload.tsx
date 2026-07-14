@@ -1,7 +1,9 @@
 "use client";
 
+
 import { HBars } from "@/components/shared/charts";
 import { useAgentPeers, useAgents, useHiveFeed } from "@/lib/api-client";
+import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import {
   Eyebrow,
@@ -11,11 +13,11 @@ import {
   SourceStatusBadge,
 } from "./noc-primitives";
 
-export function AgentWorkload() {
+export function AgentWorkload({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
   const agents = useAgents();
   const hive = useHiveFeed(500);
-  const peers = useAgentPeers(1440);
-  const actions = hive.data?.actions ?? [];
+  const peers = useAgentPeers(1440);  const actions = hive.data?.actions ?? [];
   const agentCounts = new Map<string, number>();
   for (const action of actions) {
     agentCounts.set(action.agent_id, (agentCounts.get(action.agent_id) ?? 0) + 1);
@@ -24,17 +26,25 @@ export function AgentWorkload() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 7)
     .map(([agentId, value]) => ({ label: agentId, value, color: NOC.ink }));
-  const activeCount = agents.data?.agents.filter((a) => a.status === "active").length ?? peers.data?.peers.length ?? 0;
+
+  const agentsOk = !agents.isError && !agents.isLoading && agents.data !== undefined;
+
+  const peersOk = !peers.isError && !peers.isLoading && peers.data !== undefined;
+  const hiveOk = !hive.isError && !hive.isLoading && hive.data !== undefined;
+  const activeCount = agentsOk
+    ? agents.data!.agents.filter((a) => a.status === "active").length
+    : peersOk
+      ? peers.data!.peers.length
+      : null;
   const top = rows[0];
-  const errorCount = actions.filter((a) => a.action_type === "error").length;
+  const errorCount = hiveOk ? actions.filter((a) => a.action_type === "error").length : null;
 
   type LocalStatus =
     | "live"
     | "empty"
     | "degraded"
     | "error";
-  const panelStatus: LocalStatus = hive.isError
-    ? "error"
+  const panelStatus: LocalStatus = hive.isError    ? "error"
     : hive.isLoading
       ? "degraded"
       : rows.length === 0
@@ -51,18 +61,19 @@ export function AgentWorkload() {
   return (
     <NocCard>
       <NocPanelHeader
-        title="Agent workload · last 24h (cumulative)"
-        hint="Live hive actions and active peer state. Hive count reflects a fixed 1440-minute rollup window across all workspaces — workspace and selected filters cannot partition this metric."
+        title={`Agent workload · ${nocWindowLabel(effectiveFilters.window)} context`}
+        // Hive data is a fixed 1440-minute cumulative rollup — window/workspace
+        // selections cannot partition this metric. Disclose that explicitly.
+        hint={`Live hive actions + active peer state. Scope is a fixed 1440-minute cumulative rollup across all workspaces — window=${effectiveFilters.window} and workspace=${effectiveFilters.workspace} filters do not partition this metric.`}
         right={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Mono color={NOC.soft} size={11}>
-              {activeCount} active
+              {activeCount !== null ? `${activeCount} active` : "— active"}
             </Mono>
             <SourceStatusBadge status={panelStatus} />
           </div>
         }
-      />
-      {hive.isError && (
+      />      {hive.isError && (
         <div style={{ fontSize: 12, color: NOC.terra, fontFamily: NOC_FONT_MONO, marginBottom: 8 }}>
           {panelReason}
         </div>
@@ -84,6 +95,7 @@ export function AgentWorkload() {
       ) : (
         <HBars rows={rows} />
       )}
+
       <div
         style={{
           marginTop: 14,
@@ -103,7 +115,7 @@ export function AgentWorkload() {
               marginTop: 4,
             }}
           >
-            <span style={{ fontSize: 12, color: NOC.ink }}>{top?.label ?? "None"}</span>
+            <span style={{ fontSize: 12, color: NOC.ink }}>{top?.label ?? "—"}</span>
             <Mono color={top ? NOC.success : NOC.cold} size={12}>
               {top ? `${top.value} actions` : "no source"}
             </Mono>
@@ -119,8 +131,8 @@ export function AgentWorkload() {
             }}
           >
             <span style={{ fontSize: 12, color: NOC.ink, fontFamily: NOC_FONT_MONO }}>/api/hive</span>
-            <Mono color={errorCount ? NOC.terra : NOC.success} size={12}>
-              {errorCount} errors
+            <Mono color={errorCount === null ? NOC.soft : errorCount ? NOC.terra : NOC.success} size={12}>
+              {errorCount === null ? "—" : `${errorCount} errors`}
             </Mono>
           </div>
         </div>
@@ -136,7 +148,7 @@ export function AgentWorkload() {
           lineHeight: 1.5,
         }}
       >
-        source: {hive.isError ? "hive unavailable" : "sqlite://hive"} · observed at {hive.dataUpdatedAt ?? "—"} · scope: fixed 1440-minute rollup, cumulative across all workspaces
+        source: {hive.isError ? "hive unavailable" : "sqlite://hive"} · observed at {hive.dataUpdatedAt ?? "—"} · scope: fixed 1440-minute cumulative rollup across all workspaces (window={effectiveFilters.window}, workspace={effectiveFilters.workspace} not applied)
       </div>
     </NocCard>
   );

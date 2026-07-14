@@ -1,6 +1,8 @@
+
 "use client";
 
-import { useState } from "react";
+
+import { useState } from "react";import { useSearchParams } from "next/navigation";
 import { useTokenStats, useModelUsage } from "@/lib/api-client";
 import { SavingsChart } from "@/components/ledger/savings-chart";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
@@ -10,9 +12,8 @@ import { ModelRoutingPanel } from "@/components/ledger/model-routing-panel";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
 
-function formatNum(n: number): string {
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";function formatNum(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -27,11 +28,15 @@ const LEDGER_RANGES = [
   { label: "Last 30 days", value: "30", days: 30 },
 ] as const;
 
+
 export default function LedgerPage() {
+  const search = useSearchParams();
+  const fromWindow = search?.get("from_window") ?? null;
+  const fromWorkspace = search?.get("from_workspace") ?? null;
+  const fromScopeNote = search?.get("from_scope_note") ?? null;
   const [rangeDays, setRangeDays] = useState<(typeof LEDGER_RANGES)[number]["value"]>("7");
   const [rangeAnchorIso] = useState(() => new Date().toISOString());
-  const selectedRange = LEDGER_RANGES.find((range) => range.value === rangeDays) ?? LEDGER_RANGES[1];
-  const since = new Date(new Date(rangeAnchorIso).getTime() - selectedRange.days * 24 * 60 * 60 * 1000).toISOString();
+  const selectedRange = LEDGER_RANGES.find((range) => range.value === rangeDays) ?? LEDGER_RANGES[1];  const since = new Date(new Date(rangeAnchorIso).getTime() - selectedRange.days * 24 * 60 * 60 * 1000).toISOString();
   const { data, isLoading: tokenLoading, error: tokenError } = useTokenStats();
   const { data: modelData, isLoading: modelLoading, error: modelError } = useModelUsage(since);
   const [activeTab, setActiveTab] = useState<Tab>("Savings Breakdown");
@@ -71,12 +76,25 @@ export default function LedgerPage() {
   return (
     <TooltipProvider>
     <div className="flex flex-col gap-6">
+
       <PageHeader
         eyebrow="Operations"
         title="Ledger"
         hint="Token savings, model mix, routing quality, and cost analytics across retained work."
       />
 
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="ledger">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Ledger has its own date-range selector; the originating scope is shown for reference and is NOT applied to the data below."}
+          </div>
+        </Card>
+      )}
       <Card className="flex flex-wrap items-center gap-3" pad="sm">
         <label className="text-sm font-semibold" style={{ color: NOC.ink }} htmlFor="ledger-date-range">
           Date range

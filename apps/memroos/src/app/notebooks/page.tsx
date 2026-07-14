@@ -14,8 +14,8 @@ import { ContentViewer } from "@/components/notebooks/content-viewer";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
 
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 const CATEGORY_ORDER: Array<MemoryInventoryCategoryId | "all"> = [
   "all",
   "vector_memory",
@@ -54,10 +54,13 @@ function StatCard({
   );
 }
 
+
 export default function NotebooksPage() {
   const searchParams = useSearchParams();
   const urlSearchQuery = searchParams.get("q")?.trim() ?? "";
-  const [categoryFilter, setCategoryFilter] = useState<MemoryInventoryCategoryId | "all">("all");
+  const fromWindow = searchParams.get("from_window") ?? null;
+  const fromWorkspace = searchParams.get("from_workspace") ?? null;
+  const fromScopeNote = searchParams.get("from_scope_note") ?? null;  const [categoryFilter, setCategoryFilter] = useState<MemoryInventoryCategoryId | "all">("all");
   const [selected, setSelected] = useState<MemoryInventoryRow | null>(null);
   const [searchInput, setSearchInput] = useState(urlSearchQuery);
   const [submittedSearchQuery, setSubmittedSearchQuery] = useState("");
@@ -81,12 +84,24 @@ export default function NotebooksPage() {
   return (
     <TooltipProvider>
     <div className="flex flex-col gap-6">
+
       <PageHeader
         eyebrow="Memory"
         title={<>Memory Inventory <InfoTip text="Counts are split by source-backed category: vector memories, ingested messages, consolidated insights, episodic writes, graph facts, and knowledge files." /></>}
         hint="Source-backed category counts, provenance rows, multi-tier search, and degraded-state inspection."
       />
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="memory">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Memory has its own category + search filters; the originating scope is shown for reference and is NOT applied to the inventory below."}
+          </div>
+        </Card>
+      )}      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Newest inventory row: <span className="font-semibold">{newestRowDate}</span>. Counts cite their owning store, and degraded categories explain missing backend counts.
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">

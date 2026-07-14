@@ -82,54 +82,98 @@ function normalizeMetrics(metrics: OperationsNocEfficiencyMetrics): OperationsNo
   };
 }
 
-function buildCards(metrics: OperationsNocEfficiencyMetrics) {
+
+type CardState = "live" | "gap" | "blocked";
+
+interface CardDescriptor {
+  name: string;
+  value: string;
+  detail: string;
+  state: CardState;
+  hasMeasurement: boolean;
+}
+
+// Build a single efficiency card without ever substituting a fabricated 0
+// for a non-live envelope. A non-live card reports a non-numeric value
+// (`—` / `no data`) and `hasMeasurement: false`.
+function buildCard({
+  name,
+  value,
+  detail,
+  hasMeasurement,
+  reasonIfMissing,
+}: {
+  name: string;
+  value: string;
+  detail: string;
+  hasMeasurement: boolean;
+  reasonIfMissing?: string;
+}): CardDescriptor {
+  if (hasMeasurement) {
+    return { name, value, detail, state: "live", hasMeasurement: true };
+  }
+  return {
+    name,
+    value: "—",
+    detail: reasonIfMissing ?? detail,
+    state: "blocked",
+    hasMeasurement: false,
+  };
+}
+
+function buildCards(metrics: OperationsNocEfficiencyMetrics): CardDescriptor[] {
   return [
-    {
+    buildCard({
       name: "Retrieval calls before useful work",
       value: formatPercent(metrics.retrievalBeforeWorkRate),
       detail:
         metrics.retrievalEvents > 0
           ? `${metrics.retrievalUsedInFirstResponse} of ${metrics.retrievalEvents} retrievals used in first response`
           : "No retrieval trace events",
-      state: metrics.streams.retrieval_trace > 0 ? "live" : "gap",
-    },
-    {
+      hasMeasurement: metrics.streams.retrieval_trace > 0,
+      reasonIfMissing: "Retrieval trace stream missing — value withheld",
+    }),
+    buildCard({
       name: "Same-source re-read count",
       value: plural(metrics.repeatedSourceReads, "reread"),
       detail:
         metrics.sourceReadEvents > 0
           ? `${metrics.sourceReadEvents} source reads in selected window`
           : "No source-read events",
-      state: metrics.streams.source_read > 0 ? "live" : "gap",
-    },
-    {
+      hasMeasurement: metrics.streams.source_read > 0,
+      reasonIfMissing: "Source-read stream missing — value withheld",
+    }),
+    buildCard({
       name: "Raw-context ingest token share",
       value: formatPercent(metrics.rawContextTokenShare),
       detail:
         metrics.tokenLedgerEvents > 0
           ? `${metrics.rawContextTokens} raw of ${metrics.totalTokens} total tokens`
           : "No token ledger events",
-      state: metrics.streams.token_ledger > 0 ? "live" : "gap",
-    },
-    {
+      hasMeasurement: metrics.streams.token_ledger > 0,
+      reasonIfMissing: "Token ledger stream missing — value withheld",
+    }),
+    buildCard({
       name: "Operator re-ask redundancy",
       value: plural(metrics.operatorReasks, "re-ask"),
       detail:
         metrics.operatorQuestions > 0
           ? `${formatPercent(metrics.operatorReaskRate)} of ${metrics.operatorQuestions} questions repeat prior answers`
           : "No operator-question events",
-      state: metrics.streams.operator_question > 0 ? "live" : "gap",
-    },
-    {
+      hasMeasurement: metrics.streams.operator_question > 0,
+      reasonIfMissing: "Operator-question stream missing — value withheld",
+    }),
+    buildCard({
       name: "Rediscovered-fact rate",
       value: plural(metrics.rediscoveredWrites, "rediscovery", "rediscoveries"),
       detail:
         metrics.memoryWrites > 0
           ? `${formatPercent(metrics.rediscoveredFactRate)} of ${metrics.memoryWrites} memory writes rediscovered existing facts`
           : "No memory-write events",
-      state: metrics.streams.memory_write > 0 ? "live" : "gap",
-    },
-    {
+      hasMeasurement: metrics.streams.memory_write > 0,
+      reasonIfMissing: "Memory-write stream missing — value withheld",
+    }),
+    buildCard({
       name: "Recollection decisions",
       value:
         metrics.recollection.totalDecisions > 0
@@ -139,11 +183,11 @@ function buildCards(metrics: OperationsNocEfficiencyMetrics) {
         metrics.recollection.totalDecisions > 0
           ? `${metrics.recollection.beliefStageCounts.gold_operational_truth} gold · ${metrics.recollection.beliefStageCounts.silver_candidate_claim} silver · ${metrics.recollection.policyDeniedCandidates} denied`
           : "No recollection receipts",
-      state: metrics.recollection.totalDecisions > 0 ? "live" : "gap",
-    },
+      hasMeasurement: metrics.recollection.totalDecisions > 0 && metrics.streams.retrieval_trace > 0,
+      reasonIfMissing: "No retrieval traces — recollection decision value withheld",
+    }),
   ];
 }
-
 export function EfficiencySignals({ filters }: { filters?: NocFilters }) {
   const noc = useOperationsNoc(filters);
   const envelope = noc.data?.metrics.efficiency;
@@ -234,22 +278,33 @@ export function EfficiencySignals({ filters }: { filters?: NocFilters }) {
                   gap: 8,
                 }}
               >
+
                 <Eyebrow>{item.name}</Eyebrow>
                 <span
                   style={{
                     fontFamily: NOC_FONT_MONO,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: item.state === "live" ? NOC.success : NOC.terra,
-                    background: item.state === "live" ? NOC.successBg : NOC.peach,
+                    color:
+                      item.state === "live"
+                        ? NOC.success
+                        : item.state === "blocked"
+                          ? NOC.warn
+                          : NOC.terra,
+                    background:
+                      item.state === "live"
+                        ? NOC.successBg
+                        : item.state === "blocked"
+                          ? NOC.warnBg
+                          : NOC.peach,
                     padding: "2px 6px",
                     flexShrink: 0,
                     textTransform: "uppercase",
                   }}
+                  data-card-state={item.state}
                 >
-                  {item.state}
-                </span>
-              </div>
+                  {item.state === "live" ? "live" : "no source"}
+                </span>              </div>
               <div
                 style={{
                   fontFamily: NOC_FONT_MONO,

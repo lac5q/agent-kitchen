@@ -39,16 +39,16 @@ function emptyHiveAndDelegationsMocks() {
 
 describe("Operations NOC truthful scope and source disclosure", () => {
   describe("AgentWorkload", () => {
+
     it("discloses fixed 1440-minute rollup scope and source even when empty", () => {
       emptyHiveAndDelegationsMocks();
-      render(<AgentWorkload />);
+      const { container } = render(<AgentWorkload />);
 
-      expect(screen.getByText(/last 24h/i)).toBeInTheDocument();
+      expect(container.textContent ?? "").toMatch(/last 24 hours/i);
       expect(screen.getAllByText(/cumulative/i)[0]).toBeInTheDocument();
       expect(screen.getAllByText(/1440-minute/i)[0]).toBeInTheDocument();
       expect(screen.getByText(/healthy \/api\/hive/i)).toBeInTheDocument();
     });
-
     it("discloses the error state when hive fails", () => {
       emptyHiveAndDelegationsMocks();
       api.useHiveFeed.mockReturnValue({ data: undefined, isError: true });
@@ -82,13 +82,20 @@ describe("Operations NOC truthful scope and source disclosure", () => {
       expect(screen.getByText(/Waste metrics are live counts/i)).toBeInTheDocument();
     });
 
+
     it("discloses source-failure states instead of fabricating metrics", () => {
       emptyHiveAndDelegationsMocks();
       api.useHiveFeed.mockReturnValue({ data: undefined, isError: true });
-      render(<Waste />);
-      expect(screen.getByText(/Failed to load \/api\/hive/i)).toBeInTheDocument();
-    });
-  });
+      const { container } = render(<Waste />);
+      // The Retries row must render "—" instead of a fabricated numeric zero.
+      const retriesRow = container.querySelector('[data-waste-row="Retries"]');
+      expect(retriesRow).toBeTruthy();
+      expect(retriesRow?.getAttribute("data-waste-state")).toBe("error");
+      // The hive source failure message must be disclosed somewhere on the panel.
+      expect(container.textContent ?? "").toMatch(/Failed to load \/api\/hive/i);
+      // The errored row must NEVER render a numeric "0" placeholder for retries.
+      expect(retriesRow?.textContent ?? "").not.toMatch(/^\s*0\s*$/);
+    });  });
 
   describe("ModelUtility", () => {
     it("discloses selection scope and source for healthy empty models", () => {

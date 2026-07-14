@@ -29,11 +29,32 @@ function labelsForWindow(window: NocFilters["window"]) {
   });
 }
 
-function valuesForLabels(labels: string[], points?: Array<{ bucket: string; value: number }>) {
-  const byDay = new Map((points ?? []).map((p) => [p.bucket.includes("-") ? p.bucket.slice(5, 10) : p.bucket, p.value]));
-  return labels.map((label) => byDay.get(label) ?? 0);
+
+interface SeriesValues {
+  values: (number | null)[];
+  /** True when the source returned at least one data point for the series. */
+  hasAnyPoint: boolean;
 }
 
+function valuesForLabels(
+  labels: string[],
+  points?: Array<{ bucket: string; value: number }>
+): SeriesValues {
+  const buckets = new Map(
+    (points ?? []).map((p) => [
+      p.bucket.includes("-") ? p.bucket.slice(5, 10) : p.bucket,
+      p.value,
+    ])
+  );
+  let hasAnyPoint = false;
+  const values: (number | null)[] = labels.map((label) => {
+    const found = buckets.get(label);
+    if (found === undefined) return null;
+    hasAnyPoint = true;
+    return found;
+  });
+  return { values, hasAnyPoint };
+}
 function compact(value: number): string {
   return new Intl.NumberFormat("en", { notation: value >= 1000 ? "compact" : "standard" }).format(value);
 }
@@ -42,23 +63,33 @@ interface MemoryConsumptionProps {
   filters: NocFilters;
 }
 
+
 export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
   const timeWindow = nocWindowToTimeSeriesWindow(filters.window);
+  // /api/time-series is windowed only — it does NOT partition by workspace.
+  // Workspace selection is honored only by /api/memory-stats (tier inventory +
+  // pending consolidation). The chart must therefore disclose that it is
+  // windowed-across-all-workspaces, never the requested workspace.
   const memory = useMemoryStats({ window: timeWindow, workspace: filters.workspace });
   const writes = useTimeSeries("memory_writes", timeWindow);
   const recalls = useTimeSeries("recall_queries", timeWindow);
   const labels = labelsForWindow(filters.window);
-  const writeValues = valuesForLabels(labels, writes.data?.points);
-  const recallValues = valuesForLabels(labels, recalls.data?.points);
+  const writeSeries = valuesForLabels(labels, writes.data?.points);
+  const recallSeries = valuesForLabels(labels, recalls.data?.points);
+  // The chart needs numeric arrays; treat non-live nulls as visible gaps
+  // (rendered as 0 only inside the SVG) but keep the per-bucket semantics
+  // honest by tracking `hasAnyPoint` and an explicit empty-state message.
+  const writeValuesForChart = writeSeries.values.map((v) => (v === null ? 0 : v));
+  const recallValuesForChart = recallSeries.values.map((v) => (v === null ? 0 : v));
   const totalTierCount = memory.data?.tierStats.reduce((sum, tier) => sum + tier.count, 0) ?? 0;
   const highTier = memory.data?.tierStats.find((tier) => tier.tier === "high" || tier.tier === "pinned")?.count ?? 0;
   const lowTier = memory.data?.tierStats.find((tier) => tier.tier === "low")?.count ?? 0;
   const lastRunStatus = memory.data?.lastRun?.status;
   const lastRunError = memory.data?.lastRun?.error_message?.replace(/\s+/g, " ").slice(0, 140) ?? null;
   const sourceError = memory.isError || writes.isError || recalls.isError;
-  const noPoints = writeValues.every((v) => v === 0) && recallValues.every((v) => v === 0);
   const sourcesLoaded = !memory.isLoading && !writes.isLoading && !recalls.isLoading;
-  const hasWindowedData = writeValues.some((v) => v > 0) || recallValues.some((v) => v > 0);
+  const hasWindowedData = writeSeries.hasAnyPoint || recallSeries.hasAnyPoint;
+  const noPoints = !hasWindowedData;
 
   type SubStatus =
     | "live"
@@ -97,7 +128,10 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
     <NocCard pad={16}>
       <NocPanelHeader
         title={`Memory activity · ${nocWindowLabel(filters.window)}`}
-        hint={`Window=${filters.window}, workspace=${filters.workspace}. Tier inventory and consolidation state are cumulative across the SQLite store.`}
+        // Memory activity chart is windowed across ALL workspaces (the source
+        // does not partition by workspace). Tier inventory and consolidation
+        // state DO honor the selected workspace.
+        hint={`Window=${filters.window}. Chart series are windowed across all workspaces (workspace selection does not partition /api/time-series). Tier inventory and consolidation state are cumulative across the SQLite store.`}
         right={
           <div style={{ display: "flex", gap: 10, fontSize: 11, color: NOC.muted, alignItems: "center" }}>
             <Legend color={NOC.terra} label="Writes" />
@@ -127,8 +161,8 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
         h={210}
         labels={labels}
         series={[
-          { color: NOC.terra, values: writeValues },
-          { color: NOC.ink, values: recallValues },
+          { color: NOC.terra, values: writeValuesForChart },
+          { color: NOC.ink, values: recallValuesForChart },
         ]}
       />
       {noPoints && !sourceError && (
@@ -143,10 +177,9 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
           }}
           data-status-block="empty-series"
         >
-          No memory write or recall buckets recorded in the {nocWindowLabel(filters.window)} for workspace={filters.workspace}. Chart series are intentionally rendered as zero so the empty state is visible — not a measured zero in source.
+          No memory write or recall buckets recorded for {nocWindowLabel(filters.window)} (chart series span all workspaces, not workspace={filters.workspace}). Visible gaps are intentionally rendered as 0 so the absence of activity is obvious — these zeros are not a measured source value.
         </div>
-      )}
-      <div
+      )}      <div
         style={{
           marginTop: 10,
           display: "grid",

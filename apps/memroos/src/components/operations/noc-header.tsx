@@ -4,13 +4,47 @@ import Link from "next/link";
 import type { NocWindow, NocWorkspace } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
-const QUICK_LINKS = [
-  { label: "Ledger", href: "/ledger" },
-  { label: "Memory", href: "/notebooks" },
-  { label: "Dispatch", href: "/dispatch" },
-  { label: "Governance", href: "/audit" },
-];
 
+type Drilldown = {
+  label: string;
+  href: string;
+  // When true, the destination honors the NOC window/workspace via URL
+  // parameters; when false, the destination page has a different scope and
+  // the link only carries the scope as a visible disclosure badge.
+  carriesScope: boolean;
+  scopeNote: string;
+};
+
+const QUICK_LINKS: Drilldown[] = [
+  {
+    label: "Ledger",
+    href: "/ledger",
+    carriesScope: false,
+    scopeNote:
+      "Ledger has its own date-range selector — current NOC window is shown on the destination for reference only.",
+  },
+  {
+    label: "Memory",
+    href: "/notebooks",
+    carriesScope: false,
+    scopeNote:
+      "Memory page has its own filters — current NOC window/workspace is shown on the destination for reference only.",
+  },
+  {
+    label: "Dispatch",
+    href: "/dispatch",
+    carriesScope: false,
+    scopeNote:
+      "Dispatch page has its own filters — current NOC window/workspace is shown on the destination for reference only.",
+  },
+  {
+    label: "Governance",
+    href: "/audit",
+    carriesScope: false,
+    scopeNote:
+      "Audit page has its own filters — current NOC window/workspace is shown on the destination for reference only.",
+  },
+];
 interface NocHeaderProps {
   windowLabel: NocWindow;
   workspace: NocWorkspace;
@@ -98,30 +132,44 @@ export function NocHeader({ windowLabel, workspace, onWindowChange, onWorkspaceC
         </div>
       </div>
       <div style={{ display: "flex", flex: "1 1 420px", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
-        {QUICK_LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            style={{
-              alignItems: "center",
-              background: NOC.paper,
-              border: `1px solid ${NOC.ruleStrong}`,
-              color: NOC.ink,
-              display: "inline-flex",
-              fontFamily: NOC_FONT_MONO,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              minHeight: 30,
-              padding: "4px 9px",
-              textDecoration: "none",
-              textTransform: "uppercase",
-            }}
-          >
-            {link.label}
-          </Link>
-        ))}
-        <label style={{ ...controlStyle, gap: 6 }}>
+
+        {QUICK_LINKS.map((link) => {
+          // Always carry the originating window/workspace in the URL so
+          // downstream pages can disclose or honor the scope. Destinations
+          // that partition by NOC scope can read these params; others
+          // surface them as a visible scope badge.
+          const params = new URLSearchParams();
+          params.set("from_window", windowLabel);
+          params.set("from_workspace", workspace);
+          params.set("from_scope_note", link.scopeNote);
+          const dest = `${link.href}?${params.toString()}`;
+          return (
+            <Link
+              key={link.href}
+              href={dest}
+              data-drilldown={link.label}
+              data-scope-carries={link.carriesScope ? "yes" : "no"}
+              title={link.scopeNote}
+              style={{
+                alignItems: "center",
+                background: NOC.paper,
+                border: `1px solid ${NOC.ruleStrong}`,
+                color: NOC.ink,
+                display: "inline-flex",
+                fontFamily: NOC_FONT_MONO,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                minHeight: 30,
+                padding: "4px 9px",
+                textDecoration: "none",
+                textTransform: "uppercase",
+              }}
+            >
+              {link.label} · {windowLabel}/{workspace}
+            </Link>
+          );
+        })}        <label style={{ ...controlStyle, gap: 6 }}>
           <span>Date</span>
           <select
             aria-label="NOC date range"

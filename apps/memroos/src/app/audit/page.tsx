@@ -1,13 +1,14 @@
 "use client";
 
+
 import { useState, useCallback } from "react";
-import { useAuditEntries, useAuditExportUrl } from "@/lib/api-client";
-import type { AuditEntriesFilter } from "@/lib/api-client";
+import { useSearchParams } from "next/navigation";
+import { useAuditEntries, useAuditExportUrl } from "@/lib/api-client";import type { AuditEntriesFilter } from "@/lib/api-client";
 import { AUDIT_EVENT_TYPES } from "@/lib/audit/event-types";
 import type { AuditEntry } from "@/lib/audit/schema";
 import { Btn, Card, PageHeader, Pill } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
 
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 const ALL_EVENT_TYPES = Object.values(AUDIT_EVENT_TYPES);
 
 function formatTimestamp(ts: string): string {
@@ -46,7 +47,12 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
   );
 }
 
+
 export default function AuditPage() {
+  const search = useSearchParams();
+  const fromWindow = search?.get("from_window") ?? null;
+  const fromWorkspace = search?.get("from_workspace") ?? null;
+  const fromScopeNote = search?.get("from_scope_note") ?? null;
   const [filter, setFilter] = useState<AuditEntriesFilter>({ limit: 50 });
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [allEntries, setAllEntries] = useState<AuditEntry[]>([]);
@@ -55,7 +61,6 @@ export default function AuditPage() {
   const [selectedEventType, setSelectedEventType] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-
   const queryFilter: AuditEntriesFilter = {
     ...filter,
     cursor,
@@ -94,13 +99,25 @@ export default function AuditPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
+
       <PageHeader
         eyebrow="Governance"
         title="Audit Log"
         hint="Immutable decision history: every agent action, SEAL proposal, and eval run."
       />
-      <div className="flex gap-4 flex-wrap">
-        {/* Filter sidebar */}
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="audit">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Audit has its own filters; the originating scope is shown for reference only."}
+          </div>
+        </Card>
+      )}
+      <div className="flex gap-4 flex-wrap">        {/* Filter sidebar */}
         <Card className="w-64 shrink-0 space-y-4" style={{ background: NOC.fog }}>
           <h2 className="text-sm font-semibold" style={{ color: NOC.ink }}>Filters</h2>
 

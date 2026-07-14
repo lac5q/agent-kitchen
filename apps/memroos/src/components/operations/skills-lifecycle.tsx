@@ -1,13 +1,15 @@
+
 "use client";
 
 import { useMemo } from "react";
 
 import { useSealProposals, useSkills } from "@/lib/api-client";
+import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { Mono, PillBtn } from "./noc-primitives";
 
-export function SkillsLifecycle() {
-  const skills = useSkills();
+export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };  const skills = useSkills();
   const seal = useSealProposals("pending");
   const columns = useMemo(() => {
     const details = skills.data?.skillDetails ?? [];
@@ -57,16 +59,30 @@ export function SkillsLifecycle() {
             gap: 10,
           }}
         >
+
           <div style={{ fontWeight: 600, fontSize: 13, color: NOC.ink }}>Skills lifecycle</div>
           <span style={{ fontSize: 11.5, color: NOC.soft }}>
-            {skills.isError ? "failed to load /api/skills" : `${total} total · ${promoted} approved · ${dormant} coverage gaps · ${drifting} drifting`}
+            {skills.isError
+              ? "failed to load /api/skills"
+              : skills.isLoading
+                ? "loading /api/skills"
+                : `${total} total · ${promoted} approved · ${dormant} coverage gaps · ${drifting} drifting`}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             <PillBtn href="/seal">SEAL proposals · {pendingSeal}</PillBtn>
             <PillBtn href="/skills" variant="solid">Promote candidate</PillBtn>
           </div>
         </div>
-
+        <div
+          style={{
+            padding: "8px 16px 0",
+            fontSize: 10.5,
+            color: NOC.soft,
+            fontFamily: NOC_FONT_MONO,
+          }}
+        >
+          Scope: cumulative skill registry snapshot — window={effectiveFilters.window}, workspace={effectiveFilters.workspace} filters do not partition this metric ({nocWindowLabel(effectiveFilters.window)} for context only).
+        </div>
         {/* 4 columns */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
           {columns.map((col, i) => (

@@ -5,8 +5,8 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { METRIC_STATUSES, type MetricEnvelope } from "@/lib/metric-status";
 
+import { METRIC_STATUSES, type MetricEnvelope, type MetricScope } from "@/lib/metric-status";
 const TEST_DIR = path.join(os.tmpdir(), `operations-noc-contract-${crypto.randomUUID()}`);
 const TEST_DB_PATH = path.join(TEST_DIR, "noc.db");
 
@@ -39,21 +39,31 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     vi.resetModules();
   });
 
+
   it("returns metric envelopes for every adapted metric", async () => {
     const { GET } = await loadRoute();
     const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
     const body = await response.json();
 
-    const metricKeys = ["memoryRows", "activeDispatches", "failedWork", "governanceEvents", "enabledSkills", "cronWarnings"];
-    for (const key of metricKeys) {
+    // memoryRows and governanceEvents honor the selected scope; the others
+    // are cumulative / fixed-scope metrics that must advertise their real
+    // scope instead of pretending to honor the filter.
+    const scopeByMetric: Record<string, MetricScope> = {
+      memoryRows: { window: "24h", workspace: "all" },
+      activeDispatches: { window: "all", workspace: "all" },
+      failedWork: { window: "all", workspace: "all" },
+      governanceEvents: { window: "24h", workspace: "all" },
+      enabledSkills: { window: "all", workspace: "all" },
+      cronWarnings: { window: "all", workspace: "all" },
+    };
+    for (const key of Object.keys(scopeByMetric)) {
       expect(isMetricEnvelope(body.metrics[key]), `metrics.${key} should be a metric envelope`).toBe(true);
       const envelope = body.metrics[key] as MetricEnvelope;
       expect(METRIC_STATUSES).toContain(envelope.status);
       expect(typeof envelope.source).toBe("string");
-      expect(envelope.scope).toEqual({ window: "24h", workspace: "all" });
+      expect(envelope.scope).toEqual(scopeByMetric[key]);
     }
   });
-
   it("surfaces degraded status with full source provenance when only some streams are present", async () => {
     const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
     const db = getDb();
@@ -184,6 +194,7 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(env.reason).toBeTruthy();
   });
 
+
   it("memoryRows envelope is live and value is preserved when source is healthy", async () => {
     const { GET, getDb } = await loadRoute();
     const db = getDb();
@@ -209,5 +220,48 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(env.value).toBe(1);
     expect(env.source).toBe("sqlite://messages");
     expect(env.observedAt).toBeTruthy();
+  });
+
+  it("cumulative envelopes advertise window=all workspace=all regardless of request filters", async () => {
+    // The fix exposes fixed/cumulative scope for envelopes whose SQL does
+    // not honor the requested filters, so a remote/local/7d request can
+    // never be misreported as a window-scoped or workspace-scoped value.
+    const { GET } = await loadRoute();
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=7d&workspace=remote")
+    );
+    const body = await response.json();
+    for (const key of ["activeDispatches", "failedWork", "enabledSkills", "cronWarnings"]) {
+      const envelope = body.metrics[key] as MetricEnvelope;
+      expect(envelope.scope).toEqual({ window: "all", workspace: "all" });
+      // Reason must disclose that the requested filter does not apply.
+      expect(String(envelope.reason ?? "")).toMatch(/cumulative|windowed|filter/i);
+    }
+  });
+
+  it("dispatch/governance/observedAt come from their own source tables, not from messages", async () => {
+    // Regression for the "reused observedAt" finding: the dispatch and
+    // governance envelopes must NOT borrow their observedAt from the
+    // messages table. We insert only an audit entry to force the
+    // governance probe to return a real timestamp.
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+
+    const auditTimestamp = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO audit_entries(id, actor_id, actor_role, event_type, entity_type, entity_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run("audit-noc-1", "test-actor", "operator", "noc.test", "test-target", "test-entity", auditTimestamp);    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=all")
+    );
+    const body = await response.json();
+    // The dispatch observedAt must NOT match the messages table. With no
+    // delegations or skills or cron rows, all three should report null.
+    expect(body.metrics.activeDispatches.observedAt).toBeNull();
+    expect(body.metrics.failedWork.observedAt).toBeNull();
+    expect(body.metrics.enabledSkills.observedAt).toBeNull();
+    expect(body.metrics.cronWarnings.observedAt).toBeNull();
+    // Governance observedAt should reflect the audit_entries row we inserted.
+    expect(body.metrics.governanceEvents.observedAt).toBe(auditTimestamp);
   });
 });

@@ -112,6 +112,7 @@ describe("EfficiencySignals", () => {
     expect(screen.queryByText("3.2")).not.toBeInTheDocument();
   });
 
+
   it("renders degraded stream gaps honestly", () => {
     api.useOperationsNoc.mockReturnValue({
       data: {
@@ -145,6 +146,49 @@ describe("EfficiencySignals", () => {
     expect(screen.getByText(/^degraded$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/missing .*raw-context token ledger/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/raw-context ingest token share/i)).toBeInTheDocument();
-    expect(screen.getByText(/no token ledger events/i)).toBeInTheDocument();
+    // Non-live cards must NOT render numeric zeros.
+    expect(screen.queryByText(/^0 reread/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^0 rediscovery/i)).not.toBeInTheDocument();
+  });
+
+  it("does not fabricate numeric values when the envelope value is null", () => {
+    // Source has zero events of every stream; envelope is empty. The card
+    // values must not display "0 reread" / "0 rediscovery" / "0 re-ask"
+    // since there is no successful measurement to prove them.
+    api.useOperationsNoc.mockReturnValue({
+      data: {
+        panels: {
+          efficiency: {
+            status: "empty",
+            source: "efficiency_events",
+            lastUpdated: null,
+            warnings: ["No efficiency telemetry events in the selected window"],
+          },
+        },
+        metrics: {
+          efficiency: {
+            value: null,
+            status: "empty",
+            source: "durable://efficiency_events",
+            observedAt: null,
+            freshnessMs: null,
+            scope: { window: "24h", workspace: "all" },
+            reason: "Healthy source has no efficiency telemetry events in the selected window",
+          },
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const { container } = render(<EfficiencySignals />);
+
+    // Each card whose underlying stream is absent must show "—" and a "no source" badge.
+    const blockedBadges = container.querySelectorAll('[data-card-state="blocked"]');
+    expect(blockedBadges.length).toBeGreaterThan(0);
+    // No card displays a numeric "0" value placeholder.
+    expect(container.textContent).not.toMatch(/\b0 reread/i);
+    expect(container.textContent).not.toMatch(/\b0 re-asks?\b/i);
+    expect(container.textContent).not.toMatch(/\b0 rediscover/i);
   });
 });

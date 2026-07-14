@@ -8,9 +8,11 @@ function modeClass(mode: string): string {
   return "border-sky-500/30 bg-sky-500/10 text-sky-300";
 }
 
+
 export function AgentSecurityModesPanel() {
-  const { data, isLoading } = useSecurityCapabilities();
+  const { data, isLoading, isError, error } = useSecurityCapabilities();
   const agents = data?.agents ?? [];
+  const summaryOk = !isLoading && !isError && data !== undefined;
 
   return (
     <div className="border border-stone-200 bg-white/90 p-4">
@@ -24,7 +26,13 @@ export function AgentSecurityModesPanel() {
         )}
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700">
+          Failed to load /api/agents/security-capabilities.
+          {" "}
+          {error instanceof Error ? error.message : "unknown error"}
+        </div>
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-8">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
         </div>
@@ -33,15 +41,20 @@ export function AgentSecurityModesPanel() {
           <div className="grid grid-cols-2 gap-3">
             <div className="border border-stone-200 bg-white p-3">
               <p className="text-xs text-stone-500">Strict Agents</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-300">{data?.summary.strictAgents ?? 0}</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-300">
+                {summaryOk && data.summary.strictAgents !== undefined
+                  ? data.summary.strictAgents
+                  : "—"}
+              </p>
             </div>
             <div className="border border-stone-200 bg-white p-3">
               <p className="text-xs text-stone-500">Security Caps</p>
               <p className="mt-1 text-2xl font-semibold text-sky-300">
-                {data?.summary.agentsWithSecurityCapabilities ?? 0}
+                {summaryOk && data.summary.agentsWithSecurityCapabilities !== undefined
+                  ? data.summary.agentsWithSecurityCapabilities
+                  : "—"}
               </p>
-            </div>
-            <div className="col-span-2 border border-stone-200 bg-white p-3">
+            </div>            <div className="col-span-2 border border-stone-200 bg-white p-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-500">Policies</p>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">

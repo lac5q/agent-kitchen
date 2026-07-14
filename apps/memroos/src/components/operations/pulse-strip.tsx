@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
-import { Spark } from "@/components/shared/charts";
+
+import { useMemo, useState } from "react";import { Spark } from "@/components/shared/charts";
 import {
   useDelegations,
   useHiveFeed,
   useModelUsage,
   useOperationsNoc,
 } from "@/lib/api-client";
-import { describeMetricEnvelope, type MetricEnvelope } from "@/lib/metric-status";
-import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
+
+import { describeMetricEnvelope, metricEnvelope, type MetricEnvelope } from "@/lib/metric-status";import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { nocWindowToSinceIso, type NocFilters } from "@/lib/noc-filters";
 import {
   Eyebrow,
@@ -53,13 +53,24 @@ interface PulseStripProps {
   filters: NocFilters;
 }
 
+
+function computeFreshnessMs(observedAt: string | null, nowMs: number): number | null {
+  if (!observedAt) return null;
+  const parsed = Date.parse(observedAt);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, nowMs - parsed);
+}
+
 export function PulseStrip({ filters }: PulseStripProps) {
+
   const since = useMemo(() => nocWindowToSinceIso(filters.window), [filters.window]);
-  const noc = useOperationsNoc(filters);
-  const hive = useHiveFeed(200);
+  // Capture "now" once when filters change so Date.now() is not invoked
+  // during the modelTokensEnvelope memo body. useState initializer is the
+  // canonical pattern for reading current time on first render.
+  const [nowMs] = useState(() => Date.now());
+  const noc = useOperationsNoc(filters);  const hive = useHiveFeed(200);
   const delegations = useDelegations(200);
   const modelUsage = useModelUsage(since);
-
   const metrics = noc.data?.metrics;
   const envelopes = {
     memoryRows: metrics?.memoryRows,
@@ -69,20 +80,89 @@ export function PulseStrip({ filters }: PulseStripProps) {
     enabledSkills: metrics?.enabledSkills,
     cronWarnings: metrics?.cronWarnings,
   };
-  const modelUsageError = modelUsage.isError;
-  const modelUsageEmpty = !modelUsage.isLoading && (modelUsage.data?.usage.models.length ?? 0) === 0;
-  const tokenTotal = modelUsage.data?.usage.total
-    ? modelUsage.data.usage.total.inputTokens +
-      modelUsage.data.usage.total.inputTokens +
-      modelUsage.data.usage.total.outputTokens +
-      modelUsage.data.usage.total.cacheRead
-    : null;
+
+
+  const modelUsageEmpty = !modelUsage.isLoading && (modelUsage.data?.usage.models.length ?? 0) === 0;  const totalUsage = modelUsage.data?.usage.total;
+  const tokenTotal =
+    totalUsage && (totalUsage.inputTokens + totalUsage.outputTokens + totalUsage.cacheRead) > 0
+      ? totalUsage.inputTokens + totalUsage.outputTokens + totalUsage.cacheRead
+      : null;
+
+
+
+
+  // Build a truthful envelope from /api/model-usage so this card reconciles
+  // with the API instead of always rendering an em dash. Freshness is
+  // computed via a pure helper (no Date.now() inside the memoized body).
+  const modelTokensEnvelope: MetricEnvelope<number> = useMemo(() => {
+    const ts = modelUsage.data?.timestamp ?? null;
+    const freshnessMs = computeFreshnessMs(ts, nowMs);
+    if (modelUsage.isError) {
+      return metricEnvelope<number>({        value: null,
+        status: "error",
+        source: "/api/model-usage",
+        observedAt: null,
+        freshnessMs: null,
+        scope: { window: filters.window, workspace: filters.workspace },
+        reason:
+          modelUsage.error instanceof Error
+            ? `Failed to load /api/model-usage: ${modelUsage.error.message}`
+            : "Failed to load /api/model-usage",
+      });
+    }
+    if (modelUsage.isLoading || !modelUsage.data) {
+      return metricEnvelope<number>({
+        value: null,
+        status: "blocked",
+        source: "/api/model-usage",
+        observedAt: null,
+        freshnessMs: null,
+        scope: { window: filters.window, workspace: filters.workspace },
+        reason: "Loading /api/model-usage",
+      });
+    }
+    const usage = modelUsage.data.usage;
+    const sum = usage.total.inputTokens + usage.total.outputTokens + usage.total.cacheRead;
+    if (modelUsageEmpty || sum === 0) {
+      return metricEnvelope<number>({
+        value: null,
+        status: "empty",
+        source: "/api/model-usage",
+
+        observedAt: ts,
+        freshnessMs,
+        scope: { window: filters.window, workspace: filters.workspace },
+        reason: `Healthy /api/model-usage returned no token usage in ${filters.window}`,
+      });
+    }
+    return metricEnvelope<number>({
+      value: sum,
+      status: "live",
+      source: "/api/model-usage",
+      observedAt: ts,
+      freshnessMs,      scope: { window: filters.window, workspace: filters.workspace },
+      reason: `Sum of input+output+cacheRead tokens from /api/model-usage since=${since}`,
+    });
+
+  }, [
+    modelUsage,
+    modelUsageEmpty,
+    nowMs,
+    filters.window,
+    filters.workspace,
+    since,
+  ]);
 
   // Pull observed time from hive/delegations for spark context only.
-  const actions = hive.data?.actions ?? [];
-  const delegationRows = delegations.data?.delegations ?? [];
+  const actions = hive.data?.actions ?? [];  const delegationRows = delegations.data?.delegations ?? [];
   const errorSpark = actions.slice(0, 12).reverse().map((a) => (a.action_type === "error" ? 1 : 0));
   const dispatchSpark = delegationRows.slice(0, 12).reverse().map((d) => (d.status === "active" ? 2 : 1));
+  const modelTokensSpark = (() => {
+    const series = modelUsage.data?.usage.models.slice(0, 12).map((m) => m.totalTokens) ?? [];
+    if (series.length >= 2) return series;
+    if (tokenTotal !== null) return [0, tokenTotal];
+    return [];
+  })();
 
   const cards: Array<{
     label: string;
@@ -115,16 +195,10 @@ export function PulseStrip({ filters }: PulseStripProps) {
     },
     {
       label: `Model tokens · ${filters.window}`,
-      env: undefined,
-      color: modelUsageError ? NOC.terra : NOC.success,
-      spark: (modelUsage.data?.usage.models.slice(0, 12).map((m) => m.totalTokens) ?? []).length >= 2
-        ? modelUsage.data!.usage.models.slice(0, 12).map((m) => m.totalTokens)
-        : [0, tokenTotal ?? 0],
-      subline: modelUsageError
-        ? "Failed to load /api/model-usage"
-        : modelUsageEmpty
-          ? "No Claude usage records found in the selected window"
-          : `from /api/model-usage?since=${since}`,
+      env: modelTokensEnvelope,
+      color: modelTokensEnvelope.status === "live" ? NOC.success : NOC.terra,
+      spark: modelTokensSpark,
+      subline: `from /api/model-usage?since=${since}`,
     },
     {
       label: "Savings baseline",
@@ -141,7 +215,6 @@ export function PulseStrip({ filters }: PulseStripProps) {
       subline: "Failed hive delegations counted across all tenants",
     },
   ];
-
   return (
     <div style={{ padding: "0 28px 14px" }}>
       <div

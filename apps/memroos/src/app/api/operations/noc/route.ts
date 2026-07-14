@@ -175,6 +175,7 @@ function safeLatest(
   }
 }
 
+
 function envelopeFromScalar(
   result: { ok: boolean; value: number; error: string | null },
   source: string,
@@ -187,6 +188,9 @@ function envelopeFromScalar(
     latestAt: options.latestAt,
     freshnessMs: options.freshnessMs ?? null,
   });
+  // Caller-supplied reasons (e.g. cumulative-scope disclosures) win over
+  // the generic classification reason so the envelope can advertise its
+  // actual semantics regardless of the row count.
   return metricEnvelope({
     value: result.ok ? result.value : null,
     status: classification.status,
@@ -194,10 +198,11 @@ function envelopeFromScalar(
     observedAt: options.latestAt,
     freshnessMs: classification.freshnessMs,
     scope,
-    reason: result.ok ? classification.reason : result.error ?? classification.reason,
+    reason: !result.ok
+      ? result.error ?? classification.reason
+      : options.reason ?? classification.reason,
   });
 }
-
 function workspaceClause(workspace: NocWorkspace) {
   if (workspace === "local") {
     return "AND m.agent_id IN ('codex','claude','claude-code','gemini','hermes','memroos','openclaw','qwen')";
@@ -604,40 +609,70 @@ async function buildNocResponse(request: Request) {
   const memoryIteration = buildMemoryIterationSnapshot(db, localFootprint);
   const operatorLoadStatus = readOperatorLoadReport(findRepoRoot(process.cwd()));
 
+
   const lastMessage = safeLatest(
     db,
     `SELECT MAX(timestamp) AS value FROM messages m WHERE m.timestamp >= ? ${ws}`,
     [since]
   );
 
+  // Independent latest-timestamp probes for each metric so observedAt
+  // reflects the source's own freshness, not a reused message-table value.
+  const latestHive = safeLatest(
+    db,
+    "SELECT MAX(updated_at) AS value FROM hive_delegations"
+  );
+  const latestGovernance = safeLatest(
+    db,
+    "SELECT MAX(created_at) AS value FROM audit_entries WHERE created_at >= ?",
+    [since]
+  );
+  const latestSkills = safeLatest(
+    db,
+    "SELECT MAX(updated_at) AS value FROM skill_registry WHERE dispatch_status = 'enabled'"
+  );
+  const latestCron = safeLatest(
+    db,
+    "SELECT MAX(COALESCE(last_failure_at, updated_at)) AS value FROM cron_health_jobs WHERE status = 'active' AND (warning IS NOT NULL OR last_failure_at IS NOT NULL)"
+  );
+
+  // Selected-scope envelopes (window + workspace applied in the SQL).
   const memoryRowsEnvelope = envelopeFromScalar(memoryRows, "sqlite://messages", scope, {
     latestAt: lastMessage.ok ? lastMessage.latestAt : null,
     reason: lastMessage.ok
       ? "Direct memory rows counted from SQLite messages for the selected window and workspace"
       : lastMessage.error ?? "Failed to query SQLite messages",
   });
-  const activeDispatchesEnvelope = envelopeFromScalar(activeDispatches, "sqlite://hive_delegations", scope, {
-    latestAt: lastMessage.ok ? lastMessage.latestAt : null,
-    reason: "Active, pending, or paused hive delegations counted across all tenants",
-  });
-  const failedWorkEnvelope = envelopeFromScalar(failedWork, "sqlite://hive_delegations", scope, {
-    latestAt: lastMessage.ok ? lastMessage.latestAt : null,
-    reason: "Failed hive delegations counted across all tenants",
-  });
   const governanceEventsEnvelope = envelopeFromScalar(governanceEvents, "sqlite://audit_entries", scope, {
-    latestAt: lastMessage.ok ? lastMessage.latestAt : null,
+    latestAt: latestGovernance.ok ? latestGovernance.latestAt : null,
     reason: "Audit entries created within the selected window",
   });
-  const enabledSkillsEnvelope = envelopeFromScalar(enabledSkills, "sqlite://skill_registry", scope, {
-    latestAt: null,
-    reason: "Skills with dispatch_status='enabled' (cumulative, not scoped to the selected window)",
+
+  // Cumulative/fixed-scope envelopes (window/workspace NOT applied in the SQL).
+  // Each envelope advertises its real scope so the UI/API cannot be misled.
+  const dispatchScope: MetricScope = { window: "all", workspace: "all" };
+  const skillsScope: MetricScope = { window: "all", workspace: "all" };
+  const cronScope: MetricScope = { window: "all", workspace: "all" };
+  const activeDispatchesEnvelope = envelopeFromScalar(activeDispatches, "sqlite://hive_delegations", dispatchScope, {
+    latestAt: latestHive.ok ? latestHive.latestAt : null,
+    reason:
+      "Active, pending, or paused hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply).",
   });
-  const cronWarningsEnvelope = envelopeFromScalar(cronWarnings, "sqlite://cron_health_jobs", scope, {
-    latestAt: null,
-    reason: "Active cron jobs with warnings or last_failure_at set (current snapshot, not windowed)",
+  const failedWorkEnvelope = envelopeFromScalar(failedWork, "sqlite://hive_delegations", dispatchScope, {
+    latestAt: latestHive.ok ? latestHive.latestAt : null,
+    reason:
+      "Failed hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply).",
   });
-  const localFootprintEnvelope = metricEnvelope({
-    value: localFootprint.totalBytes,
+  const enabledSkillsEnvelope = envelopeFromScalar(enabledSkills, "sqlite://skill_registry", skillsScope, {
+    latestAt: latestSkills.ok ? latestSkills.latestAt : null,
+    reason: "Skills with dispatch_status='enabled' (cumulative, not scoped to the selected window).",
+  });
+  const cronWarningsEnvelope = envelopeFromScalar(cronWarnings, "sqlite://cron_health_jobs", cronScope, {
+    latestAt: latestCron.ok ? latestCron.latestAt : null,
+
+    reason: "Active cron jobs with warnings or last_failure_at set (current snapshot, not windowed).",
+  });
+  const localFootprintEnvelope = metricEnvelope({    value: localFootprint.totalBytes,
     status: localFootprint.pressure === "critical" ? "degraded" : "live",
     source: "local://footprint-inventory",
     observedAt: localFootprint.generatedAt,
@@ -674,15 +709,16 @@ async function buildNocResponse(request: Request) {
       findings: [],
       gitSha: null,
     },
+
     panels: {
       pulse: panelFromEnvelope(memoryRowsEnvelope, activeDispatchesEnvelope, lastMessage),
       memory: panelFromEnvelope(memoryRowsEnvelope, null, lastMessage),
-      dispatch: panelFromEnvelope(activeDispatchesEnvelope, null, { ok: true, latestAt: null, error: null }),
-      governance: panelFromEnvelope(governanceEventsEnvelope, null, { ok: true, latestAt: null, error: null }),
-      skills: panelFromEnvelope(enabledSkillsEnvelope, null, { ok: true, latestAt: null, error: null }),
-      cron: panelFromEnvelope(cronWarningsEnvelope, null, { ok: true, latestAt: null, error: null }),
-      localFootprint: panel(
-        localFootprint.pressure === "critical" ? "degraded" : "live",
+      dispatch: panelFromEnvelope(activeDispatchesEnvelope, null, latestHive),
+      governance: panelFromEnvelope(governanceEventsEnvelope, null, latestGovernance),
+      skills: panelFromEnvelope(enabledSkillsEnvelope, null, latestSkills),
+
+      cron: panelFromEnvelope(cronWarningsEnvelope, null, latestCron),
+      localFootprint: panel(        localFootprint.pressure === "critical" ? "degraded" : "live",
         "local footprint inventory",
         localFootprint.generatedAt,
         localFootprint.warnings

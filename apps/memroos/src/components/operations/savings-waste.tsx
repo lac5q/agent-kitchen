@@ -1,8 +1,10 @@
+
 "use client";
 
 import { useState } from "react";
 import { Spark } from "@/components/shared/charts";
 import { useDelegations, useHiveFeed, useModelUsage, useSkills } from "@/lib/api-client";
+import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import {
   Eyebrow,
@@ -12,10 +14,10 @@ import {
   SourceStatusBadge,
 } from "./noc-primitives";
 
-export function Savings() {
+export function Savings({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
   const [since24h] = useState(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-  const modelUsage = useModelUsage(since24h);
-  const requests = modelUsage.data?.usage.total.requests ?? 0;
+  const modelUsage = useModelUsage(since24h);  const requests = modelUsage.data?.usage.total.requests ?? 0;
   const tokenTotal = modelUsage.data?.usage.total
     ? modelUsage.data.usage.total.inputTokens +
       modelUsage.data.usage.total.outputTokens +
@@ -25,12 +27,12 @@ export function Savings() {
 
   return (
     <NocCard>
+
       <NocPanelHeader
         title="Savings source"
-        hint="Baseline savings are explicitly withheld until retained-memory baseline telemetry exists."
+        hint={`Baseline savings are explicitly withheld until retained-memory baseline telemetry exists. Token sparkline reflects the last ${nocWindowLabel(effectiveFilters.window)} from /api/model-usage (window=${effectiveFilters.window}, workspace=${effectiveFilters.workspace} not applied to model telemetry).`}
         right={<SourceStatusBadge status="blocked" label="baseline blocked" />}
-      />
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }} data-status-block="savings-blocked">
+      />      <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }} data-status-block="savings-blocked">
         <div
           style={{
             width: 80,
@@ -112,14 +114,24 @@ export function Savings() {
   );
 }
 
-export function Waste() {
+
+
+export function Waste({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
   const hive = useHiveFeed(200);
   const delegations = useDelegations(200);
-  const skills = useSkills();
-  const retries = hive.data?.actions.filter((a) => a.action_type === "error").length ?? 0;
-  const blocks = delegations.data?.delegations.filter((d) => d.status === "failed" || d.status === "canceled").length ?? 0;
-  const duplicateSkills = skills.data?.skillBudget.duplicateSkills.length ?? 0;
-  const coldReads = skills.data?.coverageGaps.length ?? 0;
+  const skills = useSkills();  // Per-source measurement booleans so we never coerce an absent source
+  // into a numeric zero. Each row is rendered independently against its
+  // own source state.
+  const hiveOk = !hive.isError && !hive.isLoading && hive.data !== undefined;
+  const delegationsOk = !delegations.isError && !delegations.isLoading && delegations.data !== undefined;
+  const skillsOk = !skills.isError && !skills.isLoading && skills.data !== undefined;
+  const retries = hiveOk ? hive.data!.actions.filter((a) => a.action_type === "error").length : null;
+  const blocks = delegationsOk
+    ? delegations.data!.delegations.filter((d) => d.status === "failed" || d.status === "canceled").length
+    : null;
+  const duplicateSkills = skillsOk ? skills.data!.skillBudget.duplicateSkills.length : null;
+  const coldReads = skillsOk ? skills.data!.coverageGaps.length : null;
 
   type LocalStatus = "live" | "empty" | "degraded" | "error";
   const sourceFailed = hive.isError || delegations.isError || skills.isError;
@@ -127,40 +139,101 @@ export function Waste() {
     ? "error"
     : hive.isLoading || delegations.isLoading || skills.isLoading
       ? "degraded"
-      : retries + blocks + duplicateSkills + coldReads === 0
+      : (retries ?? 0) + (blocks ?? 0) + (duplicateSkills ?? 0) + (coldReads ?? 0) === 0
         ? "empty"
         : "live";
 
   const rows = [
-    { label: "Retries", value: String(retries), sub: "hive errors", color: retries ? NOC.terra : NOC.success },
-    { label: "Blocks", value: String(blocks), sub: "failed dispatches", color: blocks ? NOC.warn : NOC.success },
-    { label: "Duplicate skills", value: String(duplicateSkills), sub: "skill budget", color: duplicateSkills ? NOC.terra : NOC.success },
-    { label: "Coverage gaps", value: String(coldReads), sub: "skill telemetry", color: coldReads ? NOC.warn : NOC.success },
+    {
+      label: "Retries",
+      sub: "hive errors",
+      value: retries,
+      ok: hiveOk,
+      loading: hive.isLoading,
+      errored: hive.isError,
+      errorMsg: hive.error instanceof Error ? hive.error.message : "Failed to load /api/hive",
+      source: "/api/hive",
+    },
+    {
+      label: "Blocks",
+      sub: "failed dispatches",
+      value: blocks,
+      ok: delegationsOk,
+      loading: delegations.isLoading,
+      errored: delegations.isError,
+      errorMsg: delegations.error instanceof Error ? delegations.error.message : "Failed to load /api/delegations",
+      source: "/api/delegations",
+    },
+    {
+      label: "Duplicate skills",
+      sub: "skill budget",
+      value: duplicateSkills,
+      ok: skillsOk,
+      loading: skills.isLoading,
+      errored: skills.isError,
+      errorMsg: skills.error instanceof Error ? skills.error.message : "Failed to load /api/skills",
+      source: "/api/skills (skill budget)",
+    },
+    {
+      label: "Coverage gaps",
+      sub: "skill telemetry",
+      value: coldReads,
+      ok: skillsOk,
+      loading: skills.isLoading,
+      errored: skills.isError,
+      errorMsg: skills.error instanceof Error ? skills.error.message : "Failed to load /api/skills",
+      source: "/api/skills (coverage gaps)",
+    },
   ];
+
+  function colorFor(value: number | null, errored: boolean, loading: boolean) {
+    if (errored) return NOC.terra;
+    if (loading) return NOC.soft;
+    if (value === null) return NOC.soft;
+    return value > 0 ? NOC.terra : NOC.success;
+  }
+
+  function rowState(value: number | null, errored: boolean, loading: boolean): "live" | "blocked" | "error" | "loading" {
+    if (errored) return "error";
+    if (loading) return "loading";
+    if (value === null) return "blocked";
+    return "live";
+  }
 
   return (
     <NocCard>
+
       <NocPanelHeader
         title="Waste"
-        hint="Retries, blocks, duplicate skills, cold-tier reads — counts are live from hive + skill budget feeds."
+        hint={`Retries, blocks, duplicate skills, cold-tier reads — cumulative snapshot across all workspaces. window=${effectiveFilters.window} and workspace=${effectiveFilters.workspace} filters do not partition these metrics (${nocWindowLabel(effectiveFilters.window)} for context only). Each row renders independently against its own source; failed sources render as non-live instead of a successful zero.`}
         right={<SourceStatusBadge status={panelStatus} />}
-      />
-      <div
+      />      <div
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: 10,
         }}
       >
-        {rows.map(({ label, value, sub, color }) => (
-          <div key={label}>
-            <Eyebrow>{label}</Eyebrow>
-            <Mono size={20} color={color}>
-              {value}
-            </Mono>
-            <div style={{ fontSize: 11, color: NOC.soft }}>{sub}</div>
-          </div>
-        ))}
+        {rows.map(({ label, sub, value, ok, loading, errored, errorMsg, source }) => {
+          const state = rowState(value, errored, loading);
+          return (
+            <div key={label} data-waste-row={label} data-waste-state={state}>
+              <Eyebrow>{label}</Eyebrow>
+              <Mono size={20} color={colorFor(value, errored, loading)}>
+                {state === "live" && value !== null ? String(value) : "—"}
+              </Mono>
+              <div style={{ fontSize: 11, color: NOC.soft }}>
+                {state === "live"
+                  ? `${value === 0 ? "measured zero" : "measured"} · ${sub}`
+                  : state === "error"
+                    ? `source failed · ${source} (${errorMsg})`
+                    : state === "loading"
+                      ? `loading · ${source}`
+                      : `no measurement · ${source}`}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div
         style={{
@@ -183,10 +256,14 @@ export function Waste() {
           }}
         >
           {sourceFailed
-            ? hive.isError
-              ? "Failed to load /api/hive. "
-              : "" + (delegations.isError ? "Failed to load /api/delegations. " : "") + (skills.isError ? "Failed to load /api/skills. " : "")
-            : "Waste metrics are live counts from hive, delegations, and skill budget telemetry."}
+            ? [
+                hive.isError ? "Failed to load /api/hive." : null,
+                delegations.isError ? "Failed to load /api/delegations." : null,
+                skills.isError ? "Failed to load /api/skills." : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : "Waste metrics are live counts from hive, delegations, and skill budget telemetry. Rows rendered as “—” indicate the corresponding source is not currently providing a measurement."}
         </div>
       </div>
     </NocCard>

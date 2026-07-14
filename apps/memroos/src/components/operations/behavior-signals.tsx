@@ -1,7 +1,9 @@
 "use client";
 
+
 import { useState } from "react";
 import { useEscalations, useMemoryStats, useModelRoutingDashboard, useSecurityReport, useSkills } from "@/lib/api-client";
+import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { PillBtn, severityColor } from "./noc-primitives";
 import type { SignalSeverity } from "./noc-primitives";
@@ -14,8 +16,8 @@ interface LiveSignal {
   href: string;
 }
 
-export function BehaviorSignals() {
-  const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
+export function BehaviorSignals({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };  const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
   const security = useSecurityReport(20);
   const escalations = useEscalations({ status: "all", limit: 20 });
   const skills = useSkills();
