@@ -19,6 +19,8 @@ const ONBOARDING_PLATFORMS: AgentPlatform[] = [
   "pi",
   "chatgpt",
   "codex",
+  "grok",
+  "droid",
 ];
 
 interface AgentRegistrationFormProps {

@@ -66,6 +66,38 @@ class TaskFailureRequest(BaseModel):
     error: Optional[str] = None
 
 
+class MultihopPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan: Optional[dict[str, Any]] = None
+
+
+class MultihopExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan: Optional[dict[str, Any]] = None
+    runId: Optional[str] = None
+    correlationId: Optional[str] = None
+    crashAfterStepId: Optional[str] = None
+    federationProof: Optional[dict[str, Any]] = None
+
+
+class MultihopResumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan: Optional[dict[str, Any]] = None
+    federationProof: Optional[dict[str, Any]] = None
+
+
+class MultihopRollbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    handle: str
+    tenantId: Optional[str] = None
+    spaceId: Optional[str] = None
+    currentResourceVersion: Optional[str] = None
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"ok": "true", "service": "orchestration"}
@@ -165,6 +197,58 @@ def edit_hil(
         raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        engine.store.close()
+
+
+@app.post("/plans/validate")
+def validate_multihop_plan(request: MultihopPlanRequest) -> dict[str, Any]:
+    engine = get_engine()
+    try:
+        return engine.validate_multihop_plan(request.model_dump())
+    finally:
+        engine.store.close()
+
+
+@app.post("/plans/execute")
+def execute_multihop_plan(request: MultihopExecuteRequest) -> dict[str, Any]:
+    engine = get_engine()
+    try:
+        return engine.execute_multihop_plan(request.model_dump())
+    finally:
+        engine.store.close()
+
+
+@app.post("/runs/{run_id}/resume")
+def resume_multihop_plan(run_id: str, request: MultihopResumeRequest) -> dict[str, Any]:
+    engine = get_engine()
+    try:
+        payload = request.model_dump()
+        payload["runId"] = run_id
+        return engine.resume_multihop_plan(payload)
+    finally:
+        engine.store.close()
+
+
+@app.post("/runs/{run_id}/rollback")
+def rollback_multihop_run(run_id: str, request: MultihopRollbackRequest) -> dict[str, Any]:
+    engine = get_engine()
+    try:
+        payload = request.model_dump()
+        payload["runId"] = run_id
+        return engine.rollback_multihop(payload)
+    finally:
+        engine.store.close()
+
+
+@app.get("/runs/{run_id}/evidence")
+def get_multihop_evidence(run_id: str) -> dict[str, Any]:
+    engine = get_engine()
+    try:
+        result = engine.get_multihop_evidence(run_id)
+        if not result.get("bundle"):
+            raise HTTPException(status_code=404, detail="run not found")
+        return result
     finally:
         engine.store.close()
 

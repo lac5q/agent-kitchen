@@ -9,6 +9,34 @@ import { publishSkill, searchListings, submitReview, recordDownload, deprecateSk
 function setupDb(): Database.Database {
   const db = new Database(":memory:");
   db.exec(`
+    CREATE TABLE skill_registry (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      owner TEXT,
+      source_harness TEXT NOT NULL DEFAULT 'claude',
+      risk_tier TEXT,
+      dispatch_status TEXT NOT NULL DEFAULT 'enabled',
+      version TEXT,
+      preconditions TEXT,
+      allowed_tools TEXT,
+      verification_checks TEXT,
+      rollback_behavior TEXT,
+      raw_body TEXT NOT NULL DEFAULT '',
+      completeness_pct INTEGER NOT NULL DEFAULT 100,
+      missing_fields_json TEXT NOT NULL DEFAULT '[]',
+      imported_by TEXT NOT NULL DEFAULT 'operator',
+      imported_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      evidence_examples TEXT,
+      content_hash TEXT,
+      signature TEXT,
+      signed_by TEXT,
+      signed_at TEXT,
+      trust_level TEXT NOT NULL DEFAULT 'unsigned',
+      public_key_fingerprint TEXT,
+      lifecycle_state TEXT NOT NULL DEFAULT 'enabled',
+      UNIQUE(name, source_harness)
+    );
     CREATE TABLE skill_marketplace (
       id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, name TEXT NOT NULL,
       description TEXT NOT NULL, author TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]',
@@ -26,6 +54,12 @@ function setupDb(): Database.Database {
   return db;
 }
 
+function registerSkill(db: Database.Database, name: string, version: string = '1.0.0'): void {
+  db.prepare(
+    `INSERT INTO skill_registry (name, source_harness, dispatch_status, raw_body, imported_by, version) VALUES (?, 'claude', 'enabled', ?, 'operator', ?)`
+  ).run(name, `body-${name}`, version);
+}
+
 describe("marketplace", () => {
   let db: Database.Database;
 
@@ -34,6 +68,7 @@ describe("marketplace", () => {
   });
 
   it("publishes a skill", () => {
+    registerSkill(db, "skill-1");
     const result = publishSkill(db, {
       skillId: "skill-1",
       name: "Test Skill",
@@ -48,6 +83,8 @@ describe("marketplace", () => {
   });
 
   it("searches listings by query", () => {
+    registerSkill(db, "s1");
+    registerSkill(db, "s2");
     publishSkill(db, { skillId: "s1", name: "Alpha", description: "First skill", author: "a", tags: [], category: "cat", changelog: "" });
     publishSkill(db, { skillId: "s2", name: "Beta", description: "Second skill", author: "a", tags: [], category: "cat", changelog: "" });
 
@@ -57,6 +94,7 @@ describe("marketplace", () => {
   });
 
   it("submits a review and updates rating", () => {
+    registerSkill(db, "s1");
     const pub = publishSkill(db, { skillId: "s1", name: "Skill", description: "Desc", author: "a", tags: [], category: "cat", changelog: "" });
 
     const review = submitReview(db, pub.listingId!, { reviewer: "user1", rating: 5, text: "Great!", verified: true });
@@ -68,6 +106,7 @@ describe("marketplace", () => {
   });
 
   it("records downloads", () => {
+    registerSkill(db, "s1");
     const pub = publishSkill(db, { skillId: "s1", name: "Skill", description: "Desc", author: "a", tags: [], category: "cat", changelog: "" });
     recordDownload(db, pub.listingId!);
 
@@ -76,6 +115,7 @@ describe("marketplace", () => {
   });
 
   it("deprecates a skill", () => {
+    registerSkill(db, "s1");
     const pub = publishSkill(db, { skillId: "s1", name: "Skill", description: "Desc", author: "a", tags: [], category: "cat", changelog: "" });
     deprecateSkill(db, pub.listingId!, "Outdated");
 

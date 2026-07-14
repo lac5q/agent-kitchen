@@ -438,6 +438,34 @@ export const PROPOSAL_TYPES = {
     },
   },
 
+  ontology_promotion: {
+    type: "ontology_promotion",
+    label: "Ontology promotion",
+    description: "Promotes an approved ontology candidate only after complete evidence and governed review.",
+    buildDraft: ({ traceId, runId, agentId, baselineW, baselineLayers }) => ({
+      traceId,
+      runId,
+      agentId,
+      diff: {
+        kind: "ontology_promotion",
+        candidateId: null,
+        ontologyId: null,
+        ontologyVersion: null,
+        ontologyContentHash: null,
+        namespace: null,
+        policyContextHash: null,
+        expiry: null,
+        note: "A candidate remains non-authoritative until an operator-approved SEAL promotion.",
+      },
+      rationale: `Composite W ${baselineW.toFixed(3)} identified a governed ontology candidate for operator review.`,
+      forecastWDelta: 0,
+      baselineW,
+      baselineRunId: runId,
+      baselineLayers,
+    }),
+    applyShadow: (diff) => ({ applied: true, pendingGovernedCommit: true, diff }),
+  },
+
   /**
    * Adds a new example to the golden set when a memory miss is observed.
    * After operator approval the example is appended to the golden set file

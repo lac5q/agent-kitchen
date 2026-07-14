@@ -155,4 +155,37 @@ describe("agent context packet", () => {
     expect(result.ledger.tasks).toEqual([]);
     db.close();
   });
+
+  it("denies ontology-tagged context when server-derived coordinates are missing", () => {
+    const db = seedDb();
+    db.prepare(
+      `INSERT INTO agent_session_captures
+       (id, source_agent_id, runtime, session_id, task_id, capture_hash, captured_at)
+       VALUES ('ontology-capture', 'agent-alpha', 'codex', 'ontology-session', ?, 'sha256:capture', '2026-07-06T11:00:00Z')`
+    ).run(GOAL_ID);
+    db.prepare(
+      `INSERT INTO agent_memory_candidates
+       (id, capture_id, agent_id, memory_type, content, content_hash, status, metadata_json, belief_stage)
+       VALUES ('ontology-missing', 'ontology-capture', 'agent-alpha', 'task_state', 'not-injected', 'sha256:context', 'candidate', ?, 'silver_candidate_claim')`
+    ).run(JSON.stringify({ goalId: GOAL_ID, ontologyReference: { tenantId: "default-tenant" } }));
+
+    const result = buildAgentContextPacket(db, {
+      goalId: GOAL_ID,
+      actorAgentId: "agent-alpha",
+      now: () => FIXED_NOW,
+    });
+
+    expect(result.packet.memories).toContainEqual(expect.objectContaining({
+      id: "ontology-missing",
+      authorization: "denied",
+    }));
+    expect(result.packet.receipts).toContainEqual(expect.objectContaining({
+      source: "ontology_validity",
+      status: "denied",
+      reason: "ontology_context_unavailable",
+    }));
+    expect(db.prepare(`SELECT reason FROM audit_entries WHERE entity_id = 'ontology_context_candidate:ontology-missing'`).get())
+      .toMatchObject({ reason: "ontology_context_unavailable" });
+    db.close();
+  });
 });

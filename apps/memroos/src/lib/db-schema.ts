@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 
 import { initBehavioralJobSchema } from './seal/behavioral-schema';
 import { assertNotDefaultInternalApiKey } from './internal-api-key';
+import { scrubLegacyPackProvenance } from './ontology/pack-contract';
 
 const LABEL_TABLES = [
   "messages",
@@ -64,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 29;
 
 type SchemaMigration = {
   version: number;
@@ -99,6 +100,136 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 3,
     name: 'belief-stage-promotion',
     up: applyBeliefStagePromotionSchema,
+  },
+  {
+    version: 4,
+    name: 'spaces-and-team-scale-access',
+    up: applySpacesAndTeamScaleAccessSchema,
+  },
+  {
+    version: 5,
+    name: 'identity-lifecycle-and-owner-gates',
+    up: applyIdentityLifecycleAndOwnerGatesSchema,
+  },
+  {
+    version: 6,
+    name: 'active-workspace',
+    up: applyActiveWorkspaceSchema,
+  },
+  {
+    version: 7,
+    name: 'write-rules-and-document-directory',
+    up: applyWriteRulesAndDocumentDirectorySchema,
+  },
+  {
+    version: 8,
+    name: 'shared-space-toggle',
+    up: applySharedSpaceSchema,
+  },
+  {
+    version: 9,
+    name: 'per-space-cache-invalidation-surface',
+    up: applySpaceCacheSchema,
+  },
+  {
+    version: 10,
+    name: 'save-artifact-gate-auto-readme',
+    up: applyArtifactGateSchema,
+  },
+  {
+    version: 11,
+    name: 'skill-trust-chain-enhanced-contracts',
+    up: applySkillTrustChainSchema,
+  },
+  {
+    version: 12,
+    name: 'skill-sync-governance-pins-proposals',
+    up: applySkillSyncGovernanceSchema,
+  },
+  {
+    version: 13,
+    name: 'skill-sync-engine-state-table',
+    up: applySkillSyncEngineSchema,
+  },
+  {
+    version: 14,
+    name: 'skill-lifecycle-states-and-dependencies',
+    up: applySkillLifecycleSchema,
+  },
+  {
+    version: 15,
+    name: 'skill-pin-idempotency-keys',
+    up: applySkillPinIdempotencySchema,
+  },
+  {
+    version: 16,
+    name: 'memory-retention-expiry-and-holds',
+    up: applyMemoryRetentionLifecycleSchema,
+  },
+  {
+    version: 17,
+    name: 'memory-subject-erasure-decay',
+    up: applyMemorySubjectErasureDecaySchema,
+  },
+  {
+    version: 18,
+    name: 'memory-consolidation-vault-dsar-offboarding-tombstones',
+    up: applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema,
+  },
+  {
+    version: 19,
+    name: 'memory-embedding-provenance-and-lifecycle',
+    up: applyMemoryEmbeddingProvenanceSchema,
+  },
+  {
+    version: 20,
+    name: 'orch-msiq-adapter-and-federation',
+    up: applyOrchMsiqAdapterAndFederationSchema,
+  },
+  {
+    version: 21,
+    name: 'orch-multihop-evidence-bundle-links',
+    up: applyOrchMultihopEvidenceBundleSchema,
+  },
+  {
+    version: 22,
+    name: 'ontology-registry-versioning-packs',
+    up: applyOntologyRegistrySchema,
+  },
+  {
+    version: 23,
+    name: 'ontology-candidates-seal-aliases-migrations',
+    up: applyOntologyCandidateGovernanceSchema,
+  },
+  {
+    version: 24,
+    name: 'ontology-registry-pack-publication-hardening',
+    up: applyOntologyRegistryPackHardeningSchema,
+  },
+  {
+    version: 25,
+    name: 'ontology-source-lifecycle-and-validity',
+    up: applyOntologySourceLifecycleValiditySchema,
+  },
+  {
+    version: 26,
+    name: 'ontology-migration-snapshot-closure',
+    up: applyOntologyMigrationSnapshotClosureSchema,
+  },
+  {
+    version: 27,
+    name: 'federation-action-proof-continuity',
+    up: applyFederationActionProofContinuitySchema,
+  },
+  {
+    version: 28,
+    name: 'ontology-required-context-persistence',
+    up: applyOntologyRequiredContextPersistenceSchema,
+  },
+  {
+    version: 29,
+    name: 'federation-admitted-coordinate-ledger',
+    up: applyFederationAdmittedCoordinateLedgerSchema,
   },
 ];
 
@@ -255,6 +386,1942 @@ function applyBeliefStagePromotionSchema(db: Database.Database): void {
   // is enforced at the column level; existing rows simply inherit it.
   // No data loss: a candidate only ever moves bronze -> silver -> gold
   // through the promotion pipeline, never via the default.
+}
+
+function applySpacesAndTeamScaleAccessSchema(db: Database.Database): void {
+  // Phase 130 / TEAMSCALE-01: spaces + space_members + messages.space_id.
+  //
+  // Spaces are the team-scale scoping unit. Each space belongs to a tenant,
+  // and humans/agents become members. The messages.space_id column is the
+  // row-level scope on the conversation store; existing rows remain valid
+  // because the column is nullable, and `filterBySpace` falls back to the
+  // legacy `project` column for backward compatibility.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS spaces (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant'
+                           REFERENCES tenants(id) ON DELETE CASCADE,
+      name                 TEXT NOT NULL,
+      default_labels_json  TEXT NOT NULL DEFAULT '{}',
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS spaces_tenant ON spaces(tenant_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS spaces_tenant_name ON spaces(tenant_id, name);
+
+    CREATE TABLE IF NOT EXISTS space_members (
+      space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      member_id   TEXT NOT NULL,
+      member_type TEXT NOT NULL CHECK(member_type IN ('human', 'agent')),
+      role        TEXT NOT NULL DEFAULT 'member',
+      created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (space_id, member_id)
+    );
+    CREATE INDEX IF NOT EXISTS space_members_member ON space_members(member_id);
+  `);
+
+  // Additive: nullable space_id on messages. Existing rows stay NULL;
+  // filterBySpace falls back to project-name matching when space_id is null.
+  try {
+    db.exec('ALTER TABLE messages ADD COLUMN space_id TEXT REFERENCES spaces(id) ON DELETE SET NULL');
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS messages_space ON messages(space_id)');
+  } catch {
+    // Index already exists -- safe to ignore.
+  }
+}
+
+function applyIdentityLifecycleAndOwnerGatesSchema(db: Database.Database): void {
+  // Phase 131 / TEAMSCALE-02..06: identity lifecycle + delegation + NOC + owner gates.
+  //
+  // This migration is purely additive. It creates:
+  //   - agent_owners: nullable ownership linkage on registered_agents so the
+  //     lifecycle code can identify "orphaned" agents (live key, owner gone).
+  //   - owner_gate_approvals: standing + per-use approval grants on assets.
+  // Both tables are referenced from new code in src/lib/identity/*. The
+  // migration is idempotent (CREATE TABLE IF NOT EXISTS / try/catch on
+  // ALTER) so it is safe to re-run on already-migrated databases.
+
+  // Additive: nullable owner_id on registered_agents. Existing rows stay NULL.
+  try {
+    db.exec("ALTER TABLE registered_agents ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+
+  db.exec(`
+    -- owner_gate_approvals: standing or per-use grants from an asset owner.
+    --   approval_mode = 'standing'   -> allows any agent (agent_id NULL)
+    --   approval_mode = 'per_use'    -> scoped to a specific agent_id
+    -- Both modes honor revoked_at: a row with revoked_at NOT NULL is inactive.
+    CREATE TABLE IF NOT EXISTS owner_gate_approvals (
+      id            INTEGER PRIMARY KEY,
+      tenant_id     TEXT    NOT NULL DEFAULT 'default-tenant'
+                    REFERENCES tenants(id) ON DELETE CASCADE,
+      owner_id      TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset_type    TEXT    NOT NULL,
+      asset_id      TEXT    NOT NULL,
+      approval_mode TEXT    NOT NULL
+                    CHECK(approval_mode IN ('standing','per_use')),
+      agent_id      TEXT    REFERENCES registered_agents(id) ON DELETE CASCADE,
+      created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      revoked_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_asset
+      ON owner_gate_approvals(asset_type, asset_id, revoked_at);
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_owner
+      ON owner_gate_approvals(owner_id, revoked_at);
+    CREATE INDEX IF NOT EXISTS owner_gate_approvals_agent
+      ON owner_gate_approvals(agent_id, revoked_at);
+  `);
+}
+
+function applyActiveWorkspaceSchema(db: Database.Database): void {
+  // Phase 137 / WORKLOAD-01..05: single-load workspace foundation.
+  //
+  // One row per "load workspace" event. The "active" workspace is the row
+  // with cleared_at IS NULL (only one is allowed at a time -- loadWorkspace
+  // marks the previous row cleared before inserting a new one). Headless
+  // runs surface via is_headless=1 so downstream tooling can distinguish
+  // automatic loads from interactive ones.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS active_workspace (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      loaded_by   TEXT NOT NULL,
+      loaded_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      is_headless INTEGER NOT NULL DEFAULT 0,
+      cleared_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS active_workspace_active
+      ON active_workspace(cleared_at) WHERE cleared_at IS NULL;
+    CREATE INDEX IF NOT EXISTS active_workspace_space
+      ON active_workspace(space_id, loaded_at DESC);
+  `);
+}
+
+function applyWriteRulesAndDocumentDirectorySchema(db: Database.Database): void {
+  // Phase 138 / WRITERULES-01..06: operator-visible write rules + document directory.
+  //
+  // write_rules: per-space routing rules that map a data_type to a target
+  // document. When an agent writes memory, resolveWriteTarget consults these
+  // rules to decide where the write lands. fallback_rule='reject' blocks
+  // unmatched writes; 'default_doc' routes them to a configured fallback.
+  //
+  // document_directory: per-space catalog of named documents with optional
+  // resource_id pointers and human-readable purposes. Entries are the
+  // targets referenced by write_rules.target_document.
+  //
+  // Both tables use optimistic locking via a version column that is
+  // incremented on every update. All mutations write to audit_entries for
+  // the run ledger.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS write_rules (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      data_type     TEXT NOT NULL,
+      target_document TEXT NOT NULL,
+      fallback_rule TEXT NOT NULL DEFAULT 'reject' CHECK(fallback_rule IN ('reject','default_doc')),
+      version       INTEGER NOT NULL DEFAULT 1,
+      created_by    TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at    TEXT,
+      updated_by    TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS write_rules_space_type ON write_rules(space_id, data_type);
+    CREATE INDEX IF NOT EXISTS write_rules_space ON write_rules(space_id);
+
+    CREATE TABLE IF NOT EXISTS document_directory (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      purpose       TEXT,
+      resource_id   TEXT,
+      version       INTEGER NOT NULL DEFAULT 1,
+      created_by    TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at    TEXT,
+      updated_by    TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS document_directory_space_name ON document_directory(space_id, name);
+    CREATE INDEX IF NOT EXISTS document_directory_space ON document_directory(space_id);
+  `);
+}
+
+function applySharedSpaceSchema(db: Database.Database): void {
+  // Phase 139 / SHAREDRO-01..03: is_shared read-only toggle on spaces.
+  //
+  // A space with is_shared=1 is treated as read-only for writes
+  // (assertWritableSpace throws) and records a policy receipt for every
+  // read (assertReadableSpace writes an audit_entries row). Both columns
+  // are additive and idempotent: re-running the migration on an
+  // already-migrated database is a no-op.
+  try {
+    db.exec("ALTER TABLE spaces ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+  try {
+    db.exec("ALTER TABLE spaces ADD COLUMN shared_reason TEXT");
+  } catch {
+    // Column already exists -- additive migration is safe to re-run.
+  }
+}
+
+function applySpaceCacheSchema(db: Database.Database): void {
+  // Phase 140 / CACHEADMIN-01..05: per-space cache + invalidation surface.
+  //
+  // Tracks per-resource cache state for each space and records
+  // invalidation events in audit_entries for operator visibility.
+  // All DDL is idempotent (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS space_cache_state (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      space_id        TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      resource_id     TEXT NOT NULL,
+      last_fetched    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      cached_size     INTEGER NOT NULL DEFAULT 0,
+      retrieval_count INTEGER NOT NULL DEFAULT 0,
+      invalidated_at  TEXT,
+      UNIQUE(space_id, resource_id)
+    );
+    CREATE INDEX IF NOT EXISTS space_cache_state_space ON space_cache_state(space_id);
+  `);
+}
+
+function applyArtifactGateSchema(db: Database.Database): void {
+  // Phase 141 / ARTGATE-01..03: save-artifact gate + auto-README update.
+  //
+  // space_artifact_settings holds per-space artifact-save metadata:
+  //   - auto_readme_update: toggle for the auto-README-update behavior
+  //     (default 1 = enabled). When enabled, saveArtifact updates the
+  //     last_artifact_* pointer columns after a successful save.
+  //   - last_artifact_resource_id / name / saved_at: the most recent
+  //     artifact saved into this space, surfaced for README auto-update.
+  //   - updated_by / updated_at: provenance for the last settings mutation.
+  // All DDL is idempotent (CREATE TABLE IF NOT EXISTS).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS space_artifact_settings (
+      space_id              TEXT PRIMARY KEY REFERENCES spaces(id) ON DELETE CASCADE,
+      auto_readme_update    INTEGER NOT NULL DEFAULT 1,
+      last_artifact_resource_id TEXT,
+      last_artifact_name    TEXT,
+      last_artifact_saved_at TEXT,
+      updated_by            TEXT,
+      updated_at            TEXT
+    );
+  `);
+}
+
+// Phase 148 / SKILLTRUST-01..02: Enhanced contracts + content hashing/signing.
+//
+// Migration v11 adds the `evidence_examples` column (SKILLTRUST-01) and the
+// content_hash / signature / signed_by / signed_at / trust_level /
+// public_key_fingerprint columns (SKILLTRUST-02). It also backfills existing
+// v10 rows so dispatch remains fail-closed — any row that predates the
+// evidence_examples column has `completeness_pct` lowered from 100 to 91
+// (one field short) and `evidence_examples` appended to its
+// `missing_fields_json` list. This keeps the SQL gate authoritative — a
+// legacy complete skill without evidence_examples must score below 100 and
+// be denied by lookupSkillContract. All migrations are additive and
+// idempotent (try/catch swallows duplicate-column errors).
+function applySkillTrustChainSchema(db: Database.Database): void {
+  for (const statement of [
+    "ALTER TABLE skill_registry ADD COLUMN evidence_examples TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN content_hash TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signature TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signed_by TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN signed_at TEXT",
+    "ALTER TABLE skill_registry ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'unsigned'",
+    "ALTER TABLE skill_registry ADD COLUMN public_key_fingerprint TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+
+  // SKILLTRUST-01 backfill: existing v10 rows whose evidence_examples column
+  // was just added with the DEFAULT '' must regress below 100% completeness so
+  // dispatch remains fail-closed. We touch only rows where evidence_examples
+  // is empty or whitespace-only and completeness_pct was 100. Other rows are
+  // left untouched.
+  const rows = db
+    .prepare(
+      `SELECT id, completeness_pct, missing_fields_json
+         FROM skill_registry
+        WHERE evidence_examples IS NULL OR trim(evidence_examples) = ''`
+    )
+    .all() as Array<{
+      id: number;
+      completeness_pct: number;
+      missing_fields_json: string | null;
+    }>;
+
+  if (rows.length > 0) {
+    const update = db.prepare(
+      `UPDATE skill_registry
+          SET completeness_pct = ?,
+              missing_fields_json = ?
+        WHERE id = ?`
+    );
+
+    for (const row of rows) {
+      let missingFields: string[];
+      try {
+        const parsed = JSON.parse(row.missing_fields_json ?? "[]");
+        missingFields = Array.isArray(parsed)
+          ? parsed.filter((field): field is string => typeof field === "string")
+          : [];
+      } catch {
+        missingFields = [];
+      }
+
+      if (!missingFields.includes("evidence_examples")) {
+        missingFields.push("evidence_examples");
+      }
+
+      const completenessPct = row.completeness_pct >= 100 ? 91 : row.completeness_pct;
+      update.run(completenessPct, JSON.stringify(missingFields), row.id);
+    }
+  }
+
+  // SKILLTRUST-03 quarantine pipeline: rebuild skill_registry so the
+  // dispatch_status CHECK constraint accepts 'quarantined'. SQLite cannot
+  // ALTER a CHECK in place, so we follow the same pattern used for
+  // hive_delegations: CREATE TABLE _new, INSERT SELECT, DROP, RENAME.
+  // Guarded by a meta flag so subsequent migrations are no-ops.
+  // VAL-SKILL-040: Fix idempotent guard and make DROP FK-safe.
+  const quarantineCheckMigrated = db
+    .prepare(
+      `SELECT value FROM meta WHERE key = 'skill_registry_quarantine_check_v1'`
+    )
+    .get() as { value: string } | undefined;
+
+  if (!quarantineCheckMigrated) {
+    // Additional idempotency: if sqlite_master already contains the quarantined CHECK, skip rebuild.
+    const registrySql = db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'skill_registry'`)
+      .get() as { sql: string } | undefined;
+    const alreadyHasQuarantined = registrySql?.sql?.includes("'quarantined'") ?? false;
+
+    if (!alreadyHasQuarantined) {
+      const columns = db
+        .prepare(`PRAGMA table_info(skill_registry)`)
+        .all() as Array<{ name: string }>;
+      const columnNames = columns.map((c) => c.name);
+
+      // Defensive: skip if the new column set is missing (e.g. partial
+      // migration on a test DB that hasn't applied v11 yet).
+      const required = [
+        "id",
+        "name",
+        "description",
+        "owner",
+        "source_harness",
+        "risk_tier",
+        "dispatch_status",
+        "version",
+        "preconditions",
+        "allowed_tools",
+        "verification_checks",
+        "rollback_behavior",
+        "raw_body",
+        "completeness_pct",
+        "missing_fields_json",
+        "imported_by",
+        "imported_at",
+        "evidence_examples",
+        "content_hash",
+        "signature",
+        "signed_by",
+        "signed_at",
+        "trust_level",
+        "public_key_fingerprint",
+      ];
+      const missing = required.filter((col) => !columnNames.includes(col));
+
+      if (missing.length === 0) {
+        const quotedColumns = required.map((c) => `"${c}"`).join(", ");
+
+        // VAL-SKILL-040: FK-safe rebuild. Disable foreign_keys during DROP/RENAME
+        // so child tables (skill_quarantine, pins, etc.) that may exist on rerun
+        // do not cause SQLITE_CONSTRAINT. Re-enable afterwards. The meta flag
+        // ensures this path is only taken once, but defensively handle reruns.
+        const fkWasOn = db.prepare(`PRAGMA foreign_keys`).get() as unknown as number;
+        try {
+          db.exec(`PRAGMA foreign_keys = OFF`);
+          db.exec(`
+            CREATE TABLE skill_registry_new (
+              id                  INTEGER PRIMARY KEY,
+              name                TEXT    NOT NULL,
+              description         TEXT,
+              owner               TEXT,
+              source_harness      TEXT    NOT NULL,
+              risk_tier           TEXT,
+              dispatch_status     TEXT    NOT NULL DEFAULT 'incomplete'
+                                  CHECK(dispatch_status IN ('enabled','disabled','incomplete','review','quarantined')),
+              version             TEXT,
+              preconditions       TEXT,
+              allowed_tools       TEXT,
+              verification_checks TEXT,
+              rollback_behavior   TEXT,
+              raw_body            TEXT    NOT NULL DEFAULT '',
+              completeness_pct    INTEGER NOT NULL DEFAULT 0,
+              missing_fields_json TEXT    NOT NULL DEFAULT '[]',
+              imported_by         TEXT    NOT NULL,
+              imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+              evidence_examples   TEXT,
+              content_hash        TEXT,
+              signature           TEXT,
+              signed_by           TEXT,
+              signed_at           TEXT,
+              trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
+                                  CHECK(trust_level IN ('unsigned','signed','verified')),
+              public_key_fingerprint TEXT,
+              UNIQUE(name, source_harness)
+            );
+            CREATE INDEX IF NOT EXISTS skill_registry_source_status
+              ON skill_registry(source_harness, dispatch_status);
+            CREATE INDEX IF NOT EXISTS skill_registry_dispatch
+              ON skill_registry(dispatch_status, imported_at DESC);
+            CREATE INDEX IF NOT EXISTS skill_registry_imported
+              ON skill_registry(imported_at DESC);
+
+            INSERT INTO skill_registry_new (${quotedColumns})
+              SELECT ${quotedColumns} FROM skill_registry;
+            DROP TABLE skill_registry;
+            ALTER TABLE skill_registry_new RENAME TO skill_registry;
+          `);
+        } finally {
+          if (fkWasOn) {
+            db.exec(`PRAGMA foreign_keys = ON`);
+          }
+        }
+      }
+    }
+
+    db.prepare(
+      `INSERT OR REPLACE INTO meta(key,value) VALUES('skill_registry_quarantine_check_v1','1')`
+    ).run();
+  }
+
+  // SKILLTRUST-03 quarantine lane: skill_quarantine table persists every
+  // stage transition for imported skills. The table is keyed on skill_id
+  // (FK to skill_registry.id) and stores the full audit trail: scanner
+  // output, eval score, approval decision, rejection reason, and the
+  // operator who signed off. Approval status follows three values:
+  // pending -> approved | rejected.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_quarantine (
+      id                INTEGER PRIMARY KEY,
+      skill_id          INTEGER NOT NULL UNIQUE
+                        REFERENCES skill_registry(id) ON DELETE CASCADE,
+      stage             TEXT    NOT NULL DEFAULT 'imported'
+                        CHECK(stage IN (
+                          'imported','scanning','eval_sandbox',
+                          'pending_approval','enabled','rejected'
+                        )),
+      scanner_result    TEXT    NOT NULL DEFAULT '{}',
+      eval_score        REAL,
+      approval_status   TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(approval_status IN ('pending','approved','rejected')),
+      approved_by       TEXT,
+      approved_at       TEXT,
+      rejection_reason  TEXT,
+      created_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS skill_quarantine_stage
+      ON skill_quarantine(stage, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS skill_quarantine_approval
+      ON skill_quarantine(approval_status, updated_at DESC);
+  `);
+}
+
+function applySkillSyncGovernanceSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_import_proposals (
+      id                    TEXT    PRIMARY KEY,
+      source_harness        TEXT    NOT NULL,
+      skill_name            TEXT    NOT NULL,
+      skill_identity        TEXT    NOT NULL,
+      current_content_hash  TEXT,
+      detected_content_hash TEXT    NOT NULL,
+      prior_content_hash    TEXT,
+      prior_version         TEXT,
+      version               TEXT,
+      diff_summary          TEXT    NOT NULL DEFAULT '',
+      diff_payload          TEXT    NOT NULL DEFAULT '{}',
+      status                TEXT    NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','approved','rejected')),
+      proposed_by           TEXT    NOT NULL,
+      proposed_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      decided_by            TEXT,
+      decided_at            TEXT,
+      decision_reason       TEXT,
+      affected_skill_id     INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(source_harness, skill_name, detected_content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS skill_import_proposals_status
+      ON skill_import_proposals(status);
+    CREATE INDEX IF NOT EXISTS skill_import_proposals_harness_name
+      ON skill_import_proposals(source_harness, skill_name);
+
+    CREATE TABLE IF NOT EXISTS skill_version_pins (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id              TEXT    NOT NULL REFERENCES registered_agents(id) ON DELETE CASCADE,
+      skill_name            TEXT    NOT NULL,
+      skill_id              INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      current_version       TEXT    NOT NULL,
+      current_content_hash  TEXT    NOT NULL,
+      prior_version         TEXT,
+      prior_content_hash    TEXT,
+      prior_skill_id        INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      actor                 TEXT    NOT NULL,
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      rolled_back_at        TEXT,
+      rolled_back_by        TEXT,
+      last_rollback_event_id TEXT,
+      UNIQUE(agent_id, skill_name)
+    );
+    CREATE INDEX IF NOT EXISTS skill_version_pins_agent
+      ON skill_version_pins(agent_id);
+  `);
+}
+
+// Phase 149 / SKILLTRUST-04 — Governed cross-harness sync engine.
+//
+// skill_sync_state is the per-(skill_name, source_harness) observability
+// + proposal ledger for the auto-sync engine. A row tracks:
+//   - the last_synced_hash (the hash that has been approved and applied to
+//     the registry),
+//   - a pending_proposal_id (UUID) plus the detected hash/version/diff that
+//     are waiting for operator action,
+//   - a version_pinned_to (TEXT) — when set, no new drift proposals are
+//     created for this (skill_name, source_harness),
+//   - last_check_at (timestamp of the most recent scan),
+//   - prior_* fields for one-step rollback to the version that was current
+//     immediately before the most recent approved proposal.
+//
+// All sync operations are additive and idempotent: re-running a check with
+// no changes does not duplicate a pending proposal, and re-running a check
+// with the same detected hash while a proposal is already pending returns
+// the existing row. The table is the source of truth for "is this skill
+// drifted?" — callers can derive drift=true when pending_proposal_id is set
+// AND last_synced_hash != pending_detected_hash.
+function applySkillSyncEngineSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_sync_state (
+      skill_name                TEXT    NOT NULL,
+      source_harness            TEXT    NOT NULL,
+      last_synced_hash          TEXT,
+      pending_proposal_id       TEXT,
+      pending_detected_hash     TEXT,
+      pending_detected_version  TEXT,
+      pending_diff_summary      TEXT    NOT NULL DEFAULT '',
+      pending_diff_payload      TEXT    NOT NULL DEFAULT '{}',
+      pending_proposed_by       TEXT,
+      pending_proposed_at       TEXT,
+      version_pinned_to         TEXT,
+      last_check_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      prior_version             TEXT,
+      prior_content_hash        TEXT,
+      prior_skill_id            INTEGER REFERENCES skill_registry(id) ON DELETE SET NULL,
+      approved_by               TEXT,
+      approved_at               TEXT,
+      rejected_by               TEXT,
+      rejected_at               TEXT,
+      rejection_reason          TEXT,
+      created_at                TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at                TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (skill_name, source_harness)
+    );
+    CREATE INDEX IF NOT EXISTS skill_sync_state_pending
+      ON skill_sync_state(pending_proposal_id) WHERE pending_proposal_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS skill_sync_state_pin
+      ON skill_sync_state(version_pinned_to) WHERE version_pinned_to IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS skill_sync_state_checked
+      ON skill_sync_state(last_check_at DESC);
+  `);
+}
+
+// Phase 150 / SKILLTRUST-05 — Skill Lifecycle Manager.
+//
+// Adds the lifecycle_state column to skill_registry with a CHECK constraint
+// limiting values to draft|enabled|deprecated|retired. Backfills from
+// dispatch_status so existing v13 rows remain dispatchable: rows with
+// dispatch_status='enabled' map to lifecycle_state='enabled', all others
+// map to 'draft'.
+//
+// Two new tables join to skill_registry.id:
+//
+//   skill_dependencies   -- durable ledger of agents that depend on a skill,
+//                            with the skill_version they were last known to
+//                            rely on. Used by transitionLifecycleState() to
+//                            block deprecated -> retired when dependents
+//                            still exist, and by getDependents() to surface
+//                            the dependency graph.
+//
+//   skill_lifecycle_audit -- append-only transition log. Every state change
+//                            records (skill_id, from_state, to_state, actor,
+//                            reason, transitioned_at). The
+//                            audit_entries table also receives a paired
+//                            skill_lifecycle_transitioned row so existing
+//                            audit-trail queries surface lifecycle events.
+//
+// All DDL is idempotent (ALTER wrapped in try/catch; CREATE TABLE IF NOT
+// EXISTS). The migration may be re-run safely on already-migrated DBs.
+function applySkillLifecycleSchema(db: Database.Database): void {
+  // 1. Add lifecycle_state column if missing. The DEFAULT 'draft' is the
+  //    safe initial value for any row that predates the migration. The
+  //    inline CHECK at ALTER time enforces the lifecycle state enum so
+  //    SQLite refuses INSERT/UPDATE values outside the canonical set
+  //    without needing a v11-style table-rebuild.
+  let needsBackfill = false;
+  try {
+    db.exec(
+      "ALTER TABLE skill_registry ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'draft' " +
+      "CHECK(lifecycle_state IN ('draft','enabled','deprecated','retired'))"
+    );
+    needsBackfill = true;
+  } catch {
+    // Column already exists; the backfill below is a no-op because all rows
+    // are already populated.
+  }
+
+  // 2. CHECK constraint: the column-constraint CHECK added in step 1
+  //    is sufficient. The v11-style table-rebuild (CREATE _new, INSERT
+  //    SELECT, DROP, RENAME) is intentionally NOT performed because it
+  //    can desynchronize the skill_quarantine foreign key on databases
+  //    that already ran v11+. The column-constraint CHECK is enforced
+  //    by SQLite at INSERT/UPDATE time regardless of whether the table
+  //    was rebuilt. sqlite_master.sql will surface the lifecycle_state
+  //    column + its inline CHECK constraint alongside the existing
+  //    dispatch_status CHECK on a fresh install.
+  // Note: the meta flag below is intentionally a no-op marker retained
+  // for parity with the v11 quarantine CHECK rebuild so external
+  // tooling that watches `meta` keys continues to see a recorded flag.
+  db.prepare(
+    `INSERT OR IGNORE INTO meta(key,value) VALUES('skill_registry_lifecycle_check_v14','1')`
+  ).run();
+
+  // 3. Backfill lifecycle_state from dispatch_status for legacy rows.
+  //    The DEFAULT 'draft' already handled most rows; this only touches
+  //    rows whose dispatch_status='enabled' so they map to
+  //    lifecycle_state='enabled' and the SQL gate keeps dispatching them.
+  if (needsBackfill) {
+    db.exec(
+      `UPDATE skill_registry
+          SET lifecycle_state = 'enabled'
+        WHERE dispatch_status = 'enabled'
+          AND lifecycle_state = 'draft'`
+    );
+  }
+
+  // 4. New tables — both idempotent so re-running the migration is safe.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_dependencies (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      skill_id              INTEGER NOT NULL
+                            REFERENCES skill_registry(id) ON DELETE CASCADE,
+      dependent_agent_id    TEXT    NOT NULL,
+      skill_version         TEXT    NOT NULL,
+      registered_by         TEXT    NOT NULL,
+      created_at            TEXT    NOT NULL
+                            DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at            TEXT    NOT NULL
+                            DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(skill_id, dependent_agent_id)
+    );
+    CREATE INDEX IF NOT EXISTS skill_dependencies_skill
+      ON skill_dependencies(skill_id);
+    CREATE INDEX IF NOT EXISTS skill_dependencies_agent
+      ON skill_dependencies(dependent_agent_id);
+
+    CREATE TABLE IF NOT EXISTS skill_lifecycle_audit (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      skill_id         INTEGER NOT NULL
+                       REFERENCES skill_registry(id) ON DELETE CASCADE,
+      from_state       TEXT    NOT NULL,
+      to_state         TEXT    NOT NULL,
+      actor            TEXT    NOT NULL,
+      reason           TEXT    NOT NULL DEFAULT '',
+      transitioned_at  TEXT    NOT NULL
+                       DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS skill_lifecycle_audit_skill
+      ON skill_lifecycle_audit(skill_id, transitioned_at DESC);
+    CREATE INDEX IF NOT EXISTS skill_lifecycle_audit_to_state
+      ON skill_lifecycle_audit(to_state, transitioned_at DESC);
+  `);
+}
+
+// Phase 149 (continued) / SKILLTRUST-04 — Pin idempotency keys.
+//
+// VAL-SKILL-030 requires that the same idempotency key produces one
+// logical pin transition. We persist seen idempotency keys in a
+// dedicated table so retries with the same key are recognized as
+// duplicates and the same pin row is returned instead of being
+// recreated (or rotated) under the agent.
+//
+// Each row records:
+//   - id: deterministic key, unique per (agent_id, skill_name, key) tuple
+//   - agent_id / skill_name: the pin target
+//   - pin_id: the VersionPinRow id that was produced on first use
+//   - request_hash: a content hash of the request body fields, so
+//     reusing a key with a different body surfaces as a conflict
+//   - created_at: when the key was first observed
+//
+// The table is keyed on (agent_id, skill_name, idempotency_key) so the
+// first write wins; a UNIQUE constraint surfaces duplicate-key races
+// as SQLite errors so the route can return 409 without rotating the
+// pin.
+function applySkillPinIdempotencySchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_pin_idempotency_keys (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id          TEXT    NOT NULL,
+      skill_name        TEXT    NOT NULL,
+      idempotency_key   TEXT    NOT NULL,
+      pin_id            INTEGER NOT NULL
+                        REFERENCES skill_version_pins(id) ON DELETE CASCADE,
+      request_hash      TEXT    NOT NULL,
+      created_at        TEXT    NOT NULL
+                        DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(agent_id, skill_name, idempotency_key)
+    );
+    CREATE INDEX IF NOT EXISTS skill_pin_idempotency_keys_key
+      ON skill_pin_idempotency_keys(idempotency_key);
+  `);
+}
+
+function applyMemoryRetentionLifecycleSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_retention_policies (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      name                 TEXT NOT NULL,
+      version              TEXT NOT NULL,
+      ontology_type        TEXT NOT NULL,
+      security_label_json  TEXT NOT NULL DEFAULT '{}',
+      purpose              TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      priority             INTEGER NOT NULL DEFAULT 0,
+      duration_days        INTEGER NOT NULL CHECK(duration_days >= 0),
+      action               TEXT NOT NULL DEFAULT 'expire'
+                           CHECK(action IN ('expire','tombstone','review')),
+      enabled              INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, name, version)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_policies_lookup
+      ON memory_retention_policies(tenant_id, enabled, ontology_type, purpose, priority DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_records (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      record_type          TEXT NOT NULL,
+      record_id            TEXT NOT NULL,
+      ontology_type        TEXT NOT NULL,
+      security_label_json  TEXT NOT NULL DEFAULT '{}',
+      purpose              TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      policy_id            TEXT REFERENCES memory_retention_policies(id),
+      policy_version       TEXT,
+      retention_deadline   TEXT,
+      status               TEXT NOT NULL DEFAULT 'active'
+                           CHECK(status IN ('active','expired','policy_unavailable','failed')),
+      content_hash         TEXT,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      expired_at           TEXT,
+      UNIQUE(tenant_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_records_due
+      ON memory_retention_records(tenant_id, status, retention_deadline);
+    CREATE INDEX IF NOT EXISTS memory_retention_records_policy
+      ON memory_retention_records(policy_id, policy_version);
+
+    CREATE TABLE IF NOT EXISTS memory_legal_holds (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      reason_code          TEXT NOT NULL,
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_by           TEXT,
+      updated_at           TEXT,
+      released_by          TEXT,
+      released_at          TEXT,
+      expires_at           TEXT,
+      status               TEXT NOT NULL DEFAULT 'active'
+                           CHECK(status IN ('active','released','expired'))
+    );
+    CREATE INDEX IF NOT EXISTS memory_legal_holds_scope
+      ON memory_legal_holds(tenant_id, status, expires_at);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_expiry_runs (
+      run_key              TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      lease_owner          TEXT NOT NULL,
+      lease_expires_at     TEXT NOT NULL,
+      status               TEXT NOT NULL
+                           CHECK(status IN ('running','completed','failed')),
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      started_at           TEXT NOT NULL,
+      completed_at         TEXT,
+      summary_json         TEXT NOT NULL DEFAULT '{}',
+      error_message        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_expiry_runs_tenant
+      ON memory_retention_expiry_runs(tenant_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_retention_receipts (
+      id                        TEXT PRIMARY KEY,
+      tenant_id                 TEXT NOT NULL DEFAULT 'default-tenant',
+      run_key                   TEXT,
+      record_type               TEXT NOT NULL,
+      record_id                 TEXT NOT NULL,
+      policy_id                 TEXT,
+      policy_version            TEXT,
+      decision                  TEXT NOT NULL
+                                CHECK(decision IN ('active','expired','held','skipped_future','skipped_already_expired','policy_unavailable','conflict','failed','retried')),
+      reason                    TEXT NOT NULL,
+      actor_id                  TEXT NOT NULL,
+      scope_hash                TEXT NOT NULL,
+      derivative_outcomes_json  TEXT NOT NULL DEFAULT '[]',
+      metadata_json             TEXT NOT NULL DEFAULT '{}',
+      created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(run_key, record_type, record_id, decision, reason)
+    );
+    CREATE INDEX IF NOT EXISTS memory_retention_receipts_record
+      ON memory_retention_receipts(tenant_id, record_type, record_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_retention_receipts_run
+      ON memory_retention_receipts(run_key, created_at DESC);
+  `);
+}
+
+
+function applyMemorySubjectErasureDecaySchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_erasure_reports (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      canonical_id         TEXT NOT NULL,
+      status               TEXT NOT NULL
+                           CHECK(status IN ('completed','failed','pending','incomplete')),
+      store_outcomes_json  TEXT NOT NULL DEFAULT '[]',
+      actor_id             TEXT NOT NULL,
+      scope_hash           TEXT NOT NULL,
+      started_at           TEXT NOT NULL,
+      completed_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_erasure_reports_tenant
+      ON memory_erasure_reports(tenant_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_erasure_reports_canonical
+      ON memory_erasure_reports(tenant_id, canonical_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_subject_erasure_plans (
+      id                       TEXT PRIMARY KEY,
+      tenant_id                TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash             TEXT NOT NULL,
+      selector_hashes_json     TEXT NOT NULL DEFAULT '{}',
+      status                   TEXT NOT NULL DEFAULT 'planned'
+                               CHECK(status IN ('planned','approved','executing','completed','incomplete','blocked','failed','denied','ambiguous')),
+      scope_json               TEXT NOT NULL DEFAULT '{}',
+      scope_hash               TEXT NOT NULL,
+      matched_records_json     TEXT NOT NULL DEFAULT '[]',
+      excluded_records_json    TEXT NOT NULL DEFAULT '[]',
+      coverage_json            TEXT NOT NULL DEFAULT '[]',
+      holds_json               TEXT NOT NULL DEFAULT '[]',
+      policy_json              TEXT NOT NULL DEFAULT '{}',
+      estimated_effects_json   TEXT NOT NULL DEFAULT '{}',
+      plan_hash                TEXT NOT NULL,
+      source_version_hash      TEXT NOT NULL,
+      created_by               TEXT NOT NULL,
+      created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      reviewed_by              TEXT,
+      reviewed_at              TEXT,
+      executed_by              TEXT,
+      executed_at              TEXT,
+      result_json              TEXT,
+      updated_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, plan_hash)
+    );
+    CREATE INDEX IF NOT EXISTS memory_subject_erasure_plans_tenant_status
+      ON memory_subject_erasure_plans(tenant_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_subject_erasure_plans_subject
+      ON memory_subject_erasure_plans(tenant_id, subject_hash, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_erasure_tombstones (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_plan_id            TEXT REFERENCES memory_subject_erasure_plans(id) ON DELETE SET NULL,
+      canonical_id               TEXT NOT NULL,
+      record_type                TEXT NOT NULL,
+      record_id                  TEXT NOT NULL,
+      derivative_inventory_json  TEXT NOT NULL DEFAULT '[]',
+      policy_json                TEXT NOT NULL DEFAULT '{}',
+      outcome                    TEXT NOT NULL CHECK(outcome IN ('erased','blocked','failed')),
+      erasure_id                 TEXT NOT NULL,
+      scope_hash                 TEXT NOT NULL,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, subject_plan_id, canonical_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_erasure_tombstones_tenant
+      ON memory_erasure_tombstones(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_erasure_tombstones_canonical
+      ON memory_erasure_tombstones(tenant_id, canonical_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_decay_runs (
+      run_key             TEXT PRIMARY KEY,
+      tenant_id           TEXT NOT NULL DEFAULT 'default-tenant',
+      cycle_id            TEXT NOT NULL,
+      status              TEXT NOT NULL CHECK(status IN ('completed','lease_held','failed')),
+      scope_json          TEXT NOT NULL DEFAULT '{}',
+      scope_hash          TEXT NOT NULL,
+      actor_id            TEXT NOT NULL,
+      scheduled_for       TEXT NOT NULL,
+      started_at          TEXT NOT NULL,
+      completed_at        TEXT,
+      summary_json        TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS memory_decay_runs_tenant
+      ON memory_decay_runs(tenant_id, scheduled_for DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_decay_receipts (
+      id                 TEXT PRIMARY KEY,
+      tenant_id          TEXT NOT NULL DEFAULT 'default-tenant',
+      run_key            TEXT NOT NULL,
+      cycle_id           TEXT NOT NULL,
+      record_type        TEXT NOT NULL,
+      record_id          TEXT NOT NULL,
+      decision           TEXT NOT NULL CHECK(decision IN ('decayed','skipped')),
+      reason             TEXT NOT NULL,
+      before_score       REAL,
+      after_score        REAL,
+      scope_hash         TEXT NOT NULL,
+      metadata_json      TEXT NOT NULL DEFAULT '{}',
+      created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(run_key, record_type, record_id, decision, reason)
+    );
+    CREATE INDEX IF NOT EXISTS memory_decay_receipts_record
+      ON memory_decay_receipts(tenant_id, record_type, record_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_decay_receipts_run
+      ON memory_decay_receipts(run_key, created_at DESC);
+  `);
+}
+
+function applyMemoryConsolidationVaultDsarOffboardingTombstonesSchema(db: Database.Database): void {
+  // MEMLIFE-05: consolidation lineage, raw vault durability ledger, DSAR export/delete,
+  // offboarding pending erasure, and chain-safe tombstones that preserve continuity
+  // without payload. Additive, idempotent (uses try/catch + IF NOT EXISTS).
+
+  db.exec(`
+    -- Consolidation lineage: one canonical summary derived from a vault-locked batch.
+    CREATE TABLE IF NOT EXISTS memory_consolidation_summaries (
+      id                       TEXT PRIMARY KEY,
+      tenant_id                TEXT NOT NULL DEFAULT 'default-tenant',
+      ontology_type            TEXT NOT NULL,
+      scope_hash               TEXT NOT NULL,
+      scope_json               TEXT NOT NULL DEFAULT '{}',
+      summary_type             TEXT NOT NULL CHECK(summary_type IN ('pattern','contradiction','summary','episodic_summary')),
+      summary_content          TEXT NOT NULL,
+      content_hash             TEXT NOT NULL,
+      source_count             INTEGER NOT NULL DEFAULT 0,
+      source_ids_json          TEXT NOT NULL DEFAULT '[]',
+      source_vault_artifact_id TEXT NOT NULL,
+      source_vault_hash        TEXT NOT NULL,
+      classification_json      TEXT NOT NULL DEFAULT '{}',
+      model_id                 TEXT,
+      model_version             TEXT,
+      run_id                   TEXT NOT NULL,
+      run_key                  TEXT NOT NULL,
+      lineage_hash             TEXT NOT NULL,
+      status                   TEXT NOT NULL DEFAULT 'active'
+                               CHECK(status IN ('active','superseded','rolled_back','failed')),
+      superseded_by            TEXT,
+      policy_id                TEXT,
+      policy_version           TEXT,
+      created_by               TEXT NOT NULL,
+      created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, lineage_hash)
+    );
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_tenant
+      ON memory_consolidation_summaries(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_run
+      ON memory_consolidation_summaries(run_key, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_consolidation_summaries_source_vault
+      ON memory_consolidation_summaries(tenant_id, source_vault_artifact_id);
+
+    -- Raw vault durability ledger: tracks writes, integrity verify results, and durability
+    -- state transitions for replay-safe tenant reads.
+    CREATE TABLE IF NOT EXISTS memory_vault_durability (
+      id                  TEXT PRIMARY KEY,
+      tenant_id           TEXT NOT NULL DEFAULT 'default-tenant',
+      artifact_id         TEXT NOT NULL,
+      artifact_uri        TEXT NOT NULL,
+      content_hash        TEXT NOT NULL,
+      classification_json TEXT NOT NULL DEFAULT '{}',
+      label_version       INTEGER NOT NULL DEFAULT 1,
+      write_state         TEXT NOT NULL DEFAULT 'pending'
+                          CHECK(write_state IN ('pending','complete','failed','orphaned','replayed')),
+      replay_state        TEXT NOT NULL DEFAULT 'pending'
+                          CHECK(replay_state IN ('pending','complete','failed','mismatch')),
+      retention_until     TEXT,
+      failure_reason      TEXT,
+      created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, artifact_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_vault_durability_tenant
+      ON memory_vault_durability(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_vault_durability_state
+      ON memory_vault_durability(tenant_id, write_state, replay_state);
+
+    -- DSAR requests: identity-verified subject export/delete that delegates to the
+    -- existing subject erasure coordinator. Receipts reference the original request
+    -- identity (no raw payload).
+    CREATE TABLE IF NOT EXISTS memory_dsar_requests (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      request_type         TEXT NOT NULL CHECK(request_type IN ('export','delete')),
+      subject_hash         TEXT NOT NULL,
+      selector_hashes_json TEXT NOT NULL DEFAULT '{}',
+      verification_method  TEXT NOT NULL,
+      verification_hash    TEXT NOT NULL,
+      scope_json           TEXT NOT NULL DEFAULT '{}',
+      scope_hash           TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'pending'
+                           CHECK(status IN ('pending','verified','exported','deleted','failed','denied','ambiguous')),
+      plan_id              TEXT,
+      result_json          TEXT NOT NULL DEFAULT '{}',
+      denial_reason        TEXT,
+      manifest_hash        TEXT,
+      manifest_artifact_id TEXT,
+      created_by           TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      completed_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS memory_dsar_requests_tenant
+      ON memory_dsar_requests(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_dsar_requests_subject
+      ON memory_dsar_requests(tenant_id, subject_hash, created_at DESC);
+
+    -- Offboarding pending erasure: a scoped, honest pending MEMLIFE review that does NOT
+    -- claim erasure complete. Idempotent: repeated offboarding for the same subject
+    -- returns the same review ID.
+    CREATE TABLE IF NOT EXISTS memory_offboarding_reviews (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash          TEXT NOT NULL,
+      user_id               TEXT,
+      review_kind           TEXT NOT NULL DEFAULT 'pending_erasure'
+                            CHECK(review_kind IN ('pending_erasure','cancelled')),
+      status                TEXT NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','in_progress','completed','cancelled','failed')),
+      revoked_credentials   INTEGER NOT NULL DEFAULT 0,
+      revoked_agents        INTEGER NOT NULL DEFAULT 0,
+      pending_plan_id       TEXT,
+      sla_seconds           INTEGER NOT NULL DEFAULT 86400,
+      sla_deadline          TEXT NOT NULL,
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      completed_at          TEXT,
+      UNIQUE(tenant_id, subject_hash, review_kind)
+    );
+    CREATE INDEX IF NOT EXISTS memory_offboarding_reviews_subject
+      ON memory_offboarding_reviews(tenant_id, subject_hash);
+
+    -- Tombstones: scoped, non-sensitive pointers for completed erasure that preserve
+    -- audit-chain continuity without storing payload. Append-only by convention;
+    -- chain-verifiable via entryHash stored in audit metadata.
+    CREATE TABLE IF NOT EXISTS memory_tombstones (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      subject_hash               TEXT NOT NULL,
+      canonical_id               TEXT NOT NULL,
+      record_type                TEXT NOT NULL,
+      record_id                  TEXT NOT NULL,
+      record_id_hash             TEXT NOT NULL,
+      derivative_inventory_hash  TEXT NOT NULL,
+      policy_id                  TEXT,
+      policy_version             TEXT,
+      erasure_id                 TEXT NOT NULL,
+      scope_hash                 TEXT NOT NULL,
+      outcome                    TEXT NOT NULL DEFAULT 'erased'
+                                 CHECK(outcome IN ('erased','blocked','failed','partial')),
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, erasure_id, canonical_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS memory_tombstones_tenant
+      ON memory_tombstones(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_tombstones_subject
+      ON memory_tombstones(tenant_id, subject_hash, created_at DESC);
+    CREATE INDEX IF NOT EXISTS memory_tombstones_canonical
+      ON memory_tombstones(tenant_id, canonical_id, created_at DESC);
+  `);
+}
+
+function applyMemoryEmbeddingProvenanceSchema(db: Database.Database): void {
+  // MEMLIFE-03..04: embedding provenance + lifecycle. Embedding lifecycle is
+  // provenance-linked (canonical id + model version + source) and removability is
+  // wired to erasure. Additive, idempotent (uses try/catch + IF NOT EXISTS).
+
+  // memory_embedding_provenance: one row per registered embedding projection
+  // (local message_embeddings, external vector adapter rows, etc.). Used by the
+  // erasure coordinator to discover and remove every vector derivative, and to
+  // track stale/degraded provider state honestly.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_embedding_provenance (
+      id                 TEXT PRIMARY KEY,
+      tenant_id          TEXT NOT NULL DEFAULT 'default-tenant',
+      canonical_id       TEXT NOT NULL,
+      store_id           TEXT NOT NULL,
+      adapter_kind       TEXT NOT NULL DEFAULT 'local'
+                         CHECK(adapter_kind IN ('local','external','cache','snapshot')),
+      source_hash        TEXT NOT NULL,
+      model_id           TEXT NOT NULL,
+      model_version      TEXT,
+      dimensionality     INTEGER NOT NULL DEFAULT 0,
+      provenance         TEXT NOT NULL,
+      lifecycle_state    TEXT NOT NULL DEFAULT 'active'
+                         CHECK(lifecycle_state IN ('active','stale','degraded','removed','tombstoned')),
+      removability       TEXT NOT NULL DEFAULT 'erasable'
+                         CHECK(removability IN ('erasable','retained','deferred')),
+      external_ref       TEXT,
+      last_refreshed_at  TEXT,
+      metadata_json      TEXT NOT NULL DEFAULT '{}',
+      erasure_id         TEXT,
+      removed_at         TEXT,
+      created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_tenant_canonical
+      ON memory_embedding_provenance(tenant_id, canonical_id);
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_store
+      ON memory_embedding_provenance(tenant_id, store_id, lifecycle_state);
+    CREATE INDEX IF NOT EXISTS memory_embedding_provenance_lifecycle
+      ON memory_embedding_provenance(tenant_id, lifecycle_state, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_embedding_provenance_dedupe
+      ON memory_embedding_provenance(tenant_id, canonical_id, store_id, model_id, adapter_kind);
+  `);
+}
+
+function applyOrchMsiqAdapterAndFederationSchema(db: Database.Database): void {
+  // MSIQ-04..05 / VAL-ORCH-001..011:
+  //   - msiq_adapter_sessions: self-hosted Microsoft Agent Framework memory
+  //     adapter sessions (no Foundry / paid credentials). Each row is a
+  //     fail-closed session handle used by the adapter for idempotent writes
+  //     and provenance. Holds the negotiated MCP protocol version + tool list.
+  //   - msiq_adapter_idempotency: idempotency-keyed write ledger. Same key
+  //     + same payload hash + same scope => one logical write across
+  //     timeout / replay. Conflict => no overwrite, explicit error.
+  //   - msiq_adapter_operations: per-operation receipts (write/read/search)
+  //     with scope identity, MCP transcript hashes, policy/provenance
+  //     receipts and timing.
+  //   - federation_sources: explicitly registered federated retrieval
+  //     sources. Foreign, disabled, expired, incomplete, or unknown
+  //     sources are never accessed. One row per source identity with
+  //     type, handle, tenant/space/purpose/labels, allowed operations,
+  //     trust and expiry.
+  //   - federation_source_outcomes: per-source receipt ledger. Each row
+  //     records exactly one outcome (success, empty, denied, omitted,
+  //     stale, injection, timeout, malformed, failed) plus the
+  //     per-source policy decision and counts/hashes/timing.
+  //   - federation_merges: deterministic merge ledger with stable pack
+  //     hash, contributing source lineage, dedupe/rank metadata.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS msiq_adapter_sessions (
+      id                    TEXT    PRIMARY KEY,
+      tenant_id             TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_token         TEXT    NOT NULL UNIQUE,
+      actor_id              TEXT    NOT NULL,
+      actor_role            TEXT    NOT NULL,
+      agent_id              TEXT,
+      space_id              TEXT,
+      scope_hash            TEXT    NOT NULL,
+      mcp_protocol_version  TEXT    NOT NULL,
+      tool_manifest_json    TEXT    NOT NULL DEFAULT '[]',
+      capability_flags_json TEXT    NOT NULL DEFAULT '[]',
+      discovery_transcript  TEXT    NOT NULL DEFAULT '[]',
+      status                TEXT    NOT NULL DEFAULT 'active'
+                            CHECK(status IN ('active','closed','expired','revoked','denied')),
+      foundry_blocked       INTEGER NOT NULL DEFAULT 1 CHECK(foundry_blocked IN (0,1)),
+      foundry_only_mode     INTEGER NOT NULL DEFAULT 0 CHECK(foundry_only_mode IN (0,1)),
+      opened_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      closed_at             TEXT,
+      expires_at            TEXT,
+      label_json            TEXT    NOT NULL DEFAULT '{\"visibility\":\"private\",\"policy\":\"agent_visible\"}'
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_sessions_tenant
+      ON msiq_adapter_sessions(tenant_id, status, opened_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_sessions_token
+      ON msiq_adapter_sessions(session_token);
+
+    CREATE TABLE IF NOT EXISTS msiq_adapter_idempotency (
+      id                  TEXT    PRIMARY KEY,
+      tenant_id           TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_id          TEXT    NOT NULL REFERENCES msiq_adapter_sessions(id) ON DELETE CASCADE,
+      idempotency_key     TEXT    NOT NULL,
+      scope_hash          TEXT    NOT NULL,
+      request_payload     TEXT    NOT NULL,
+      request_hash        TEXT    NOT NULL,
+      response_payload    TEXT    NOT NULL,
+      response_hash       TEXT    NOT NULL,
+      canonical_memory_id TEXT,
+      provenance_hash     TEXT,
+      conflict            INTEGER NOT NULL DEFAULT 0 CHECK(conflict IN (0,1)),
+      replay_count        INTEGER NOT NULL DEFAULT 0,
+      created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, idempotency_key, scope_hash)
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_idempotency_session
+      ON msiq_adapter_idempotency(tenant_id, session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_idempotency_key
+      ON msiq_adapter_idempotency(tenant_id, idempotency_key);
+
+    CREATE TABLE IF NOT EXISTS msiq_adapter_operations (
+      id                    TEXT    PRIMARY KEY,
+      tenant_id             TEXT    NOT NULL DEFAULT 'default-tenant',
+      session_id            TEXT    NOT NULL REFERENCES msiq_adapter_sessions(id) ON DELETE CASCADE,
+      operation_kind        TEXT    NOT NULL
+                            CHECK(operation_kind IN ('initialize','tools_list','write','read','search','close')),
+      decision              TEXT    NOT NULL
+                            CHECK(decision IN ('allow','deny','redact','conflict','unavailable','error')),
+      reason_code           TEXT    NOT NULL,
+      tool_name             TEXT,
+      scope_hash            TEXT    NOT NULL,
+      scope_identity_json   TEXT    NOT NULL DEFAULT '{}',
+      request_hash          TEXT,
+      response_hash         TEXT,
+      transcript_hash       TEXT,
+      duration_ms           INTEGER NOT NULL DEFAULT 0,
+      provenance_json       TEXT    NOT NULL DEFAULT '{}',
+      created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS msiq_adapter_operations_session
+      ON msiq_adapter_operations(tenant_id, session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS msiq_adapter_operations_decision
+      ON msiq_adapter_operations(tenant_id, decision, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS federation_sources (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      source_handle            TEXT    NOT NULL,
+      source_kind              TEXT    NOT NULL
+                              CHECK(source_kind IN ('memory','knowledge','mcp')),
+      space_id                 TEXT,
+      purpose                  TEXT    NOT NULL,
+      label_policy_json        TEXT    NOT NULL DEFAULT '{}',
+      allowed_operations_json  TEXT    NOT NULL DEFAULT '[]',
+      trust_level              TEXT    NOT NULL DEFAULT 'registered'
+                              CHECK(trust_level IN ('registered','trusted','revoked','unknown')),
+      enabled                  INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+      has_expiry               INTEGER NOT NULL DEFAULT 0 CHECK(has_expiry IN (0,1)),
+      expires_at               TEXT,
+      transport                TEXT    NOT NULL DEFAULT 'local'
+                              CHECK(transport IN ('local','inproc','memory','mcp_stdio','mcp_http')),
+      descriptor_json          TEXT    NOT NULL DEFAULT '{}',
+      registration_hash        TEXT    NOT NULL,
+      last_health_at           TEXT,
+      created_by               TEXT    NOT NULL,
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, source_handle, source_kind)
+    );
+    CREATE INDEX IF NOT EXISTS federation_sources_tenant_kind
+      ON federation_sources(tenant_id, source_kind, enabled);
+    CREATE INDEX IF NOT EXISTS federation_sources_enabled
+      ON federation_sources(tenant_id, enabled, expires_at);
+
+    CREATE TABLE IF NOT EXISTS federation_source_outcomes (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      federation_run_id        TEXT    NOT NULL,
+      source_id                TEXT    NOT NULL REFERENCES federation_sources(id) ON DELETE CASCADE,
+      outcome                  TEXT    NOT NULL
+                              CHECK(outcome IN ('success','empty','denied','omitted','stale','injection','timeout','malformed','failed')),
+      reason_code              TEXT    NOT NULL,
+      policy_decision          TEXT    NOT NULL,
+      policy_version           TEXT,
+      result_count             INTEGER NOT NULL DEFAULT 0,
+      result_bytes             INTEGER NOT NULL DEFAULT 0,
+      duration_ms              INTEGER NOT NULL DEFAULT 0,
+      request_hash             TEXT,
+      response_hash            TEXT,
+      payload_hash             TEXT,
+      scope_hash               TEXT    NOT NULL,
+      metadata_json            TEXT    NOT NULL DEFAULT '{}',
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS federation_source_outcomes_run
+      ON federation_source_outcomes(tenant_id, federation_run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS federation_source_outcomes_source
+      ON federation_source_outcomes(tenant_id, source_id, outcome, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS federation_merges (
+      id                       TEXT    PRIMARY KEY,
+      tenant_id                TEXT    NOT NULL DEFAULT 'default-tenant',
+      federation_run_id        TEXT    NOT NULL,
+      pack_hash                TEXT    NOT NULL,
+      pack_bytes               INTEGER NOT NULL DEFAULT 0,
+      pack_item_count          INTEGER NOT NULL DEFAULT 0,
+      contributing_source_ids  TEXT    NOT NULL DEFAULT '[]',
+      contributing_outcome_ids TEXT    NOT NULL DEFAULT '[]',
+      dedupe_metadata_json     TEXT    NOT NULL DEFAULT '{}',
+      rank_metadata_json       TEXT    NOT NULL DEFAULT '{}',
+      budget_metadata_json     TEXT    NOT NULL DEFAULT '{}',
+      bound_status             TEXT    NOT NULL DEFAULT 'bounded'
+                              CHECK(bound_status IN ('bounded','partial_bounded','over_budget')),
+      scope_hash               TEXT    NOT NULL,
+      created_at               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_merges_pack
+      ON federation_merges(tenant_id, pack_hash);
+  `);
+}
+
+function applyOrchMultihopEvidenceBundleSchema(db: Database.Database): void {
+  // ORCH-FOLLOWUP-01 / VAL-ORCH-012..020:
+  // Link generic task evidence bundles to deterministic multi-hop orchestration
+  // evidence without storing raw action payloads. These fields are hashes/IDs
+  // only, so existing bundle redaction and outbound filtering remain intact.
+  for (const statement of [
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_run_id TEXT",
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_plan_hash TEXT",
+    "ALTER TABLE task_evidence_bundles ADD COLUMN orchestration_bundle_hash TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Column already exists -- additive migration is safe to re-run.
+    }
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS task_evidence_bundles_orchestration_run
+      ON task_evidence_bundles(tenant_id, orchestration_run_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS task_evidence_bundles_orchestration_hash
+      ON task_evidence_bundles(tenant_id, orchestration_bundle_hash);
+  `);
+}
+
+function applyOntologyRegistrySchema(db: Database.Database): void {
+  // ONTO-REGISTRY-01: canonical ontology publication, projection reconciliation,
+  // immutable provenance bindings, and governed domain-pack lifecycle state.
+  // Every statement is CREATE IF NOT EXISTS so the migration is additive and
+  // remains safe when initialization is invoked more than once.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_registry (
+      ontology_id             TEXT PRIMARY KEY,
+      active_version          TEXT NOT NULL,
+      active_content_hash     TEXT NOT NULL,
+      updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_versions (
+      ontology_id             TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      content_hash            TEXT NOT NULL,
+      parent_ontology_id      TEXT,
+      parent_version          TEXT,
+      parent_content_hash     TEXT,
+      definitions_json        TEXT NOT NULL,
+      relationships_json      TEXT NOT NULL,
+      published_by            TEXT NOT NULL,
+      published_at            TEXT NOT NULL,
+      PRIMARY KEY (ontology_id, version),
+      UNIQUE (ontology_id, content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_versions_published
+      ON ontology_versions(ontology_id, published_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_projection_mirrors (
+      ontology_id             TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      projection              TEXT NOT NULL
+                              CHECK(projection IN ('git','sqlite','frontmatter','graph','generated_graph')),
+      content_hash            TEXT NOT NULL,
+      status                  TEXT NOT NULL
+                              CHECK(status IN ('current','stale','divergent','failed')),
+      updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (ontology_id, version, projection),
+      FOREIGN KEY (ontology_id, version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_projection_mirrors_status
+      ON ontology_projection_mirrors(ontology_id, version, status);
+
+    CREATE TABLE IF NOT EXISTS ontology_provenance_bindings (
+      id                      TEXT PRIMARY KEY,
+      record_type             TEXT NOT NULL,
+      record_id               TEXT NOT NULL,
+      ontology_id             TEXT NOT NULL,
+      ontology_version        TEXT NOT NULL,
+      ontology_content_hash   TEXT NOT NULL,
+      bound_by                TEXT NOT NULL,
+      bound_at                TEXT NOT NULL,
+      UNIQUE (record_type, record_id),
+      FOREIGN KEY (ontology_id, ontology_version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_provenance_bindings_ontology
+      ON ontology_provenance_bindings(ontology_id, ontology_version, bound_at DESC);
+
+    CREATE TRIGGER IF NOT EXISTS ontology_provenance_bindings_no_update
+      BEFORE UPDATE ON ontology_provenance_bindings
+    BEGIN
+      SELECT RAISE(ABORT, 'ontology provenance bindings are immutable');
+    END;
+    CREATE TRIGGER IF NOT EXISTS ontology_provenance_bindings_no_delete
+      BEFORE DELETE ON ontology_provenance_bindings
+    BEGIN
+      SELECT RAISE(ABORT, 'ontology provenance bindings are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS ontology_packs (
+      id                      TEXT PRIMARY KEY,
+      namespace               TEXT NOT NULL,
+      owner                   TEXT NOT NULL,
+      version                 TEXT NOT NULL,
+      source_hash             TEXT NOT NULL,
+      provenance_summary_json TEXT NOT NULL,
+      ontology_id             TEXT NOT NULL,
+      ontology_version        TEXT NOT NULL,
+      ontology_content_hash   TEXT NOT NULL,
+      types_json              TEXT NOT NULL,
+      dependencies_json       TEXT NOT NULL,
+      lifecycle_state         TEXT NOT NULL DEFAULT 'draft'
+                              CHECK(lifecycle_state IN ('draft','approved','deprecated','retired')),
+      created_by              TEXT NOT NULL,
+      created_at              TEXT NOT NULL,
+      approved_at             TEXT,
+      deprecated_at           TEXT,
+      deprecated_reason       TEXT,
+      retired_at              TEXT,
+      replacement_pack_id     TEXT,
+      UNIQUE (namespace, version),
+      FOREIGN KEY (ontology_id, ontology_version)
+        REFERENCES ontology_versions(ontology_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_packs_state
+      ON ontology_packs(lifecycle_state, namespace, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_pack_lifecycle_audit (
+      id                      TEXT PRIMARY KEY,
+      pack_id                 TEXT NOT NULL REFERENCES ontology_packs(id),
+      from_state              TEXT NOT NULL,
+      to_state                TEXT NOT NULL,
+      actor                   TEXT NOT NULL,
+      reason                  TEXT,
+      replacement_pack_id     TEXT,
+      transitioned_at         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ontology_pack_lifecycle_audit_pack
+      ON ontology_pack_lifecycle_audit(pack_id, transitioned_at DESC);
+  `);
+}
+
+function applyOntologyRegistryPackHardeningSchema(db: Database.Database): void {
+  // Published definitions are append-only. Registry pointers and projection
+  // mirrors intentionally remain mutable so successor publication and
+  // reconciliation continue to work.
+  try {
+    db.exec(`ALTER TABLE ontology_packs ADD COLUMN relationships_json TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // Column already exists when this migration is replayed.
+  }
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS ontology_versions_no_update
+      BEFORE UPDATE ON ontology_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'published ontology versions are immutable');
+    END;
+    CREATE TRIGGER IF NOT EXISTS ontology_versions_no_delete
+      BEFORE DELETE ON ontology_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'published ontology versions are immutable');
+    END;
+  `);
+
+  // Earlier releases accepted a free-form JSON object. Upgrade rows to the
+  // same non-content-bearing form used for all new registrations. A malformed
+  // or unsafe legacy value is deliberately reduced to an empty object instead
+  // of preserving unbounded source material.
+  const rows = db.prepare(`SELECT id, provenance_summary_json FROM ontology_packs`).all() as Array<{
+    id: string;
+    provenance_summary_json: string;
+  }>;
+  const update = db.prepare(`UPDATE ontology_packs SET provenance_summary_json = ? WHERE id = ?`);
+  for (const row of rows) {
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(row.provenance_summary_json);
+    } catch {
+      // Unsafe malformed metadata is scrubbed below.
+    }
+    update.run(JSON.stringify(scrubLegacyPackProvenance(raw)), row.id);
+  }
+}
+
+function applyOntologyCandidateGovernanceSchema(db: Database.Database): void {
+  // ONTO-04..06: all extracted ontology material is an auditable observation
+  // until a separately governed promotion commits it. These tables intentionally
+  // retain hashes, IDs, and normalized coordinates only, never source content.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_candidates (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      source_spans_json     TEXT NOT NULL DEFAULT '[]',
+      extractor_id          TEXT NOT NULL,
+      extractor_version     TEXT NOT NULL,
+      candidate_kind        TEXT NOT NULL CHECK(candidate_kind IN ('type','relationship','alias')),
+      namespace             TEXT NOT NULL,
+      proposed_json         TEXT NOT NULL,
+      confidence_label      TEXT NOT NULL CHECK(confidence_label IN ('low','medium','high')),
+      confidence_score      REAL NOT NULL CHECK(confidence_score >= 0 AND confidence_score <= 1),
+      evidence_hash         TEXT NOT NULL,
+      original_json         TEXT NOT NULL,
+      status                TEXT NOT NULL DEFAULT 'pending'
+                            CHECK(status IN ('pending','approved','rejected','deferred','superseded','invalidated','promoted')),
+      invalidated_at        TEXT,
+      superseded_by         TEXT,
+      created_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, source_hash, extractor_id, extractor_version, evidence_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_candidates_scope
+      ON ontology_candidates(tenant_id, space_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ontology_candidates_source
+      ON ontology_candidates(tenant_id, space_id, source_id, source_hash);
+
+    CREATE TABLE IF NOT EXISTS ontology_candidate_decisions (
+      id                    TEXT PRIMARY KEY,
+      candidate_id          TEXT NOT NULL REFERENCES ontology_candidates(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      decision              TEXT NOT NULL CHECK(decision IN ('approve','reject','defer','supersede','invalidate')),
+      reviewer_id           TEXT NOT NULL,
+      reason                TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      evidence_hash         TEXT NOT NULL,
+      confidence_label      TEXT NOT NULL,
+      confidence_score      REAL NOT NULL,
+      original_json         TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ontology_candidate_decisions_candidate
+      ON ontology_candidate_decisions(candidate_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_promotions (
+      id                    TEXT PRIMARY KEY,
+      candidate_id          TEXT NOT NULL REFERENCES ontology_candidates(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      seal_proposal_id      TEXT NOT NULL,
+      seal_decision_id      TEXT NOT NULL,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      policy_context_hash   TEXT NOT NULL,
+      idempotency_key       TEXT NOT NULL,
+      promoted_by           TEXT NOT NULL,
+      promoted_at           TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, idempotency_key),
+      UNIQUE(candidate_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_policy_contexts (
+      context_hash          TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      policy_version        TEXT NOT NULL,
+      registered_by         TEXT NOT NULL,
+      expires_at            TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_canonical_definitions (
+      id                    TEXT PRIMARY KEY,
+      promotion_id          TEXT NOT NULL UNIQUE REFERENCES ontology_promotions(id),
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      canonical_id          TEXT NOT NULL,
+      definition_json       TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(ontology_id, ontology_version, canonical_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_aliases (
+      id                    TEXT PRIMARY KEY,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      namespace             TEXT NOT NULL,
+      alias                 TEXT NOT NULL,
+      canonical_id          TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('active','redirected','deprecated','removed')),
+      prior_target          TEXT,
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      updated_by            TEXT,
+      updated_at            TEXT,
+      reason                TEXT,
+      UNIQUE(ontology_id, ontology_version, namespace, alias)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_aliases_lookup
+      ON ontology_aliases(ontology_id, ontology_version, alias, status);
+
+    CREATE TABLE IF NOT EXISTS ontology_alias_lifecycle_audit (
+      id                    TEXT PRIMARY KEY,
+      alias_id              TEXT NOT NULL REFERENCES ontology_aliases(id),
+      action                TEXT NOT NULL CHECK(action IN ('add','redirect','deprecate','restore','remove')),
+      prior_target          TEXT,
+      next_target           TEXT,
+      actor                 TEXT NOT NULL,
+      reason                TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_migration_plans (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      target_ontology_id    TEXT NOT NULL,
+      target_version        TEXT NOT NULL,
+      target_hash           TEXT NOT NULL,
+      mappings_json         TEXT NOT NULL,
+      scope_hash            TEXT NOT NULL,
+      plan_hash             TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('planned','approved','executing','incomplete','completed','rejected')),
+      created_by            TEXT NOT NULL,
+      approved_by           TEXT,
+      approved_at           TEXT,
+      created_at            TEXT NOT NULL,
+      updated_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, plan_hash)
+    );
+    CREATE TABLE IF NOT EXISTS ontology_migration_checkpoints (
+      id                    TEXT PRIMARY KEY,
+      plan_id               TEXT NOT NULL REFERENCES ontology_migration_plans(id),
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      source_type           TEXT NOT NULL,
+      target_type           TEXT,
+      outcome               TEXT NOT NULL CHECK(outcome IN ('migrated','ambiguous','unsupported','skipped')),
+      reason                TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(plan_id, record_type, record_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ontology_versioned_records (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      qualified_type        TEXT NOT NULL,
+      ontology_id           TEXT NOT NULL,
+      ontology_version      TEXT NOT NULL,
+      ontology_content_hash TEXT NOT NULL,
+      legacy_type           TEXT,
+      mapping_path_json     TEXT NOT NULL DEFAULT '[]',
+      created_at            TEXT NOT NULL,
+      UNIQUE(tenant_id, space_id, record_type, record_id, ontology_content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_versioned_records_lookup
+      ON ontology_versioned_records(tenant_id, space_id, record_type, record_id);
+  `);
+}
+
+function applyOntologySourceLifecycleValiditySchema(db: Database.Database): void {
+  // Source material is the single authority for every derived ontology row.
+  // The lifecycle and derivative tables deliberately retain only scoped IDs,
+  // hashes, status, and reasons so historical evidence remains safe after a
+  // source changes or is erased.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_source_lifecycle (
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('active','changed','erased','revoked')),
+      updated_at            TEXT NOT NULL,
+      updated_by            TEXT NOT NULL,
+      reason_code           TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, space_id, source_id, source_hash)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_source_lifecycle_current
+      ON ontology_source_lifecycle(tenant_id, space_id, source_id, status, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ontology_derivative_validity (
+      id                    TEXT PRIMARY KEY,
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      derivative_type       TEXT NOT NULL CHECK(derivative_type IN ('candidate','promotion','canonical_definition','alias','versioned_record','provenance_binding')),
+      derivative_id         TEXT NOT NULL,
+      status                TEXT NOT NULL CHECK(status IN ('authoritative','revoked')),
+      revocation_reason     TEXT,
+      created_at            TEXT NOT NULL,
+      revoked_at            TEXT,
+      UNIQUE(derivative_type, derivative_id)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_derivative_validity_source
+      ON ontology_derivative_validity(tenant_id, space_id, source_id, source_hash, status);
+    CREATE INDEX IF NOT EXISTS ontology_derivative_validity_lookup
+      ON ontology_derivative_validity(tenant_id, space_id, derivative_type, derivative_id, status);
+  `);
+
+  // Versioned records created before this migration do not carry a verifiable
+  // source lifecycle. They intentionally remain unavailable to
+  // ontology-sensitive operations until a governed migration recreates them.
+  for (const statement of [
+    "ALTER TABLE ontology_versioned_records ADD COLUMN source_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN source_hash TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Additive migration replay.
+    }
+  }
+}
+
+function applyFederationActionProofContinuitySchema(db: Database.Database): void {
+  // A bridge receipt is application-controlled proof that a persisted,
+  // bounded federation merge may start a multi-hop action. It deliberately
+  // stores only identifiers, hashes, and safe decisions, never result text.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS federation_action_artifacts (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      space_id                   TEXT NOT NULL,
+      federation_run_id          TEXT NOT NULL,
+      pack_hash                  TEXT NOT NULL,
+      pack_bytes                 INTEGER NOT NULL,
+      pack_item_count            INTEGER NOT NULL,
+      bound_status               TEXT NOT NULL
+                                 CHECK(bound_status IN ('bounded','partial_bounded')),
+      scope_hash                 TEXT NOT NULL,
+      policy_hash                TEXT NOT NULL,
+      ontology_hash              TEXT NOT NULL,
+      ontology_refs_json         TEXT NOT NULL DEFAULT '[]',
+      source_ids_json            TEXT NOT NULL DEFAULT '[]',
+      outcome_ids_json           TEXT NOT NULL DEFAULT '[]',
+      artifact_hash              TEXT NOT NULL,
+      status                     TEXT NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','invalidated','unavailable','denied')),
+      invalidation_reason        TEXT,
+      invalidated_at             TEXT,
+      orchestration_run_id       TEXT,
+      orchestration_plan_hash    TEXT,
+      orchestration_bundle_hash  TEXT,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      updated_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id, pack_hash)
+    );
+    CREATE INDEX IF NOT EXISTS federation_action_artifacts_scope
+      ON federation_action_artifacts(tenant_id, space_id, status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS federation_action_artifacts_run
+      ON federation_action_artifacts(tenant_id, federation_run_id, pack_hash);
+
+    -- One row per canonical source result makes source or subject erasure
+    -- discoverable without ever persisting source payloads.
+    CREATE TABLE IF NOT EXISTS federation_action_derivatives (
+      id                         TEXT PRIMARY KEY,
+      tenant_id                  TEXT NOT NULL DEFAULT 'default-tenant',
+      artifact_id                TEXT NOT NULL
+                                 REFERENCES federation_action_artifacts(id) ON DELETE CASCADE,
+      canonical_id               TEXT NOT NULL,
+      canonical_hash             TEXT NOT NULL,
+      source_id                  TEXT NOT NULL,
+      status                     TEXT NOT NULL DEFAULT 'active'
+                                 CHECK(status IN ('active','invalidated')),
+      invalidated_at             TEXT,
+      erasure_id                 TEXT,
+      created_at                 TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, artifact_id, canonical_hash, source_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_action_derivatives_canonical
+      ON federation_action_derivatives(tenant_id, canonical_id, status);
+    CREATE INDEX IF NOT EXISTS federation_action_derivatives_source
+      ON federation_action_derivatives(tenant_id, source_id, status);
+  `);
+}
+
+function applyFederationAdmittedCoordinateLedgerSchema(db: Database.Database): void {
+  // This ledger contains only the server-derived canonical hash and source
+  // coordinates admitted to a persisted merge. It deliberately excludes every
+  // candidate payload, content identifier, score, and route-supplied value.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS federation_merged_coordinates (
+      id                TEXT PRIMARY KEY,
+      tenant_id         TEXT NOT NULL DEFAULT 'default-tenant',
+      federation_run_id TEXT NOT NULL,
+      pack_hash         TEXT NOT NULL,
+      canonical_id      TEXT NOT NULL,
+      canonical_hash    TEXT NOT NULL,
+      source_id         TEXT NOT NULL REFERENCES federation_sources(id) ON DELETE CASCADE,
+      created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      UNIQUE(tenant_id, federation_run_id, pack_hash, canonical_hash, source_id)
+    );
+    CREATE INDEX IF NOT EXISTS federation_merged_coordinates_merge
+      ON federation_merged_coordinates(tenant_id, federation_run_id, pack_hash);
+  `);
+  try {
+    db.exec("ALTER TABLE federation_action_artifacts ADD COLUMN coordinate_ledger_hash TEXT");
+  } catch {
+    // Existing databases already carrying the additive column are safe to re-run.
+  }
+}
+
+function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {
+  // Ontology-sensitive sources and queued belief reviews retain only
+  // server-verified coordinates. The source lifecycle is re-resolved at use
+  // time, so a later revocation or ontology change denies use before policy,
+  // context injection, or belief promotion.
+  for (const statement of [
+    "ALTER TABLE federation_sources ADD COLUMN ontology_record_type TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_record_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_version TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_content_hash TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_canonical_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_source_id TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_source_hash TEXT",
+    "ALTER TABLE federation_sources ADD COLUMN ontology_derivative_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_record_type TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_record_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_space_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_version TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_content_hash TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_canonical_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_source_id TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_source_hash TEXT",
+    "ALTER TABLE belief_review_queue ADD COLUMN ontology_derivative_id TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // The migration is additive and safe to replay.
+    }
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS federation_sources_ontology_context
+      ON federation_sources(tenant_id, space_id, ontology_record_type, ontology_record_id);
+    CREATE INDEX IF NOT EXISTS belief_review_queue_ontology_context
+      ON belief_review_queue(tenant_id, status, ontology_record_type, ontology_record_id);
+  `);
+}
+
+function applyOntologyMigrationSnapshotClosureSchema(db: Database.Database): void {
+  // Migration execution must be derived from a plan-time snapshot, never a
+  // caller-provided execution subset. Snapshot rows carry only scoped
+  // identifiers and ontology/source coordinates, not source content.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ontology_migration_snapshots (
+      id                    TEXT PRIMARY KEY,
+      plan_id               TEXT NOT NULL UNIQUE REFERENCES ontology_migration_plans(id),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      inventory_hash        TEXT NOT NULL,
+      item_count            INTEGER NOT NULL CHECK(item_count > 0),
+      created_by            TEXT NOT NULL,
+      created_at            TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ontology_migration_snapshot_items (
+      id                    TEXT PRIMARY KEY,
+      snapshot_id           TEXT NOT NULL REFERENCES ontology_migration_snapshots(id),
+      ordinal               INTEGER NOT NULL CHECK(ordinal >= 0),
+      tenant_id             TEXT NOT NULL,
+      space_id              TEXT NOT NULL,
+      record_type           TEXT NOT NULL,
+      record_id             TEXT NOT NULL,
+      source_type           TEXT NOT NULL,
+      source_ontology_id    TEXT NOT NULL,
+      source_version        TEXT NOT NULL,
+      source_hash           TEXT NOT NULL,
+      source_versioned_record_id TEXT NOT NULL,
+      source_id             TEXT NOT NULL,
+      source_lifecycle_hash TEXT NOT NULL,
+      source_record_hash    TEXT NOT NULL,
+      created_at            TEXT NOT NULL,
+      UNIQUE(snapshot_id, ordinal),
+      UNIQUE(snapshot_id, record_type, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS ontology_migration_snapshot_items_scope
+      ON ontology_migration_snapshot_items(snapshot_id, tenant_id, space_id, ordinal);
+  `);
+
+  for (const statement of [
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN snapshot_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN snapshot_item_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_ontology_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_version TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_id TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_lifecycle_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN source_record_hash TEXT",
+    "ALTER TABLE ontology_migration_checkpoints ADD COLUMN versioned_record_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN migration_snapshot_id TEXT",
+    "ALTER TABLE ontology_versioned_records ADD COLUMN migration_snapshot_item_id TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Additive migration replay.
+    }
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ontology_migration_checkpoints_snapshot_item
+      ON ontology_migration_checkpoints(snapshot_item_id)
+      WHERE snapshot_item_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS ontology_versioned_records_snapshot_item
+      ON ontology_versioned_records(migration_snapshot_item_id)
+      WHERE migration_snapshot_item_id IS NOT NULL;
+
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshots_no_update
+      BEFORE UPDATE ON ontology_migration_snapshots
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshots are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshots_no_delete
+      BEFORE DELETE ON ontology_migration_snapshots
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshots are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshot_items_no_update
+      BEFORE UPDATE ON ontology_migration_snapshot_items
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshot items are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS ontology_migration_snapshot_items_no_delete
+      BEFORE DELETE ON ontology_migration_snapshot_items
+      BEGIN SELECT RAISE(ABORT, 'ontology migration snapshot items are immutable'); END;
+  `);
 }
 
 function applyCurrentSchema(db: Database.Database): void {
@@ -1546,6 +3613,14 @@ function applyCurrentSchema(db: Database.Database): void {
       missing_fields_json TEXT    NOT NULL DEFAULT '[]',
       imported_by         TEXT    NOT NULL,
       imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      evidence_examples   TEXT,
+      content_hash        TEXT,
+      signature           TEXT,
+      signed_by           TEXT,
+      signed_at           TEXT,
+      trust_level         TEXT    NOT NULL DEFAULT 'unsigned'
+                          CHECK(trust_level IN ('unsigned','signed','verified')),
+      public_key_fingerprint TEXT,
       UNIQUE(name, source_harness)
     );
     CREATE INDEX IF NOT EXISTS skill_registry_source_status

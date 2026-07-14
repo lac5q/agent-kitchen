@@ -91,6 +91,19 @@ def build_langgraph(checkpointer: SqliteSaver) -> Any:
         hops = list(state.get("hops") or [])
         return {**state, "status": "dispatched", "currentHopIndex": hop_index + 1, "hops": hops}
 
+    def after_dispatch(state: OrchestrationState) -> str:
+        hops = list(state.get("hops") or [])
+        current = int(state.get("currentHopIndex") or 0)
+        if hops and current < len(hops):
+            return "dispatch"
+        if state.get("rollbackReason") and state.get("rollbackPolicy") == "compensate_and_fail":
+            return "rollback_compensation"
+        return "end"
+
+    def rollback_compensation(state: OrchestrationState) -> OrchestrationState:
+        reason = state.get("rollbackReason") or "rollback_requested"
+        return {**state, "status": "rollback_compensating", "rollbackReason": reason}
+
     graph = StateGraph(OrchestrationState)
     graph.add_node("route_policy", route_policy)
     graph.add_node("approval", approval)
@@ -103,6 +116,7 @@ def build_langgraph(checkpointer: SqliteSaver) -> Any:
         dispatch,
         retry_policy=RetryPolicy(max_attempts=_RETRY_LIMIT, retry_on=[Exception]),
     )
+    graph.add_node("rollback_compensation", rollback_compensation)
     graph.add_edge(START, "route_policy")
     graph.add_conditional_edges(
         "route_policy",
@@ -110,7 +124,12 @@ def build_langgraph(checkpointer: SqliteSaver) -> Any:
         {"approval": "approval", "dispatch": "dispatch"},
     )
     graph.add_edge("approval", END)
-    graph.add_edge("dispatch", END)
+    graph.add_conditional_edges(
+        "dispatch",
+        after_dispatch,
+        {"dispatch": "dispatch", "rollback_compensation": "rollback_compensation", "end": END},
+    )
+    graph.add_edge("rollback_compensation", END)
     return graph.compile(checkpointer=checkpointer)
 
 

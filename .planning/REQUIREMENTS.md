@@ -1,6 +1,6 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-07-06*
+*Updated: 2026-07-14*
 
 ---
 
@@ -16,10 +16,11 @@
 - v7.5 Proactive Recollection Triggering — complete
 - v7.6 Future Spike Queue — complete
 - v8.0 Belief + Provenance Core — complete
-- v8.1 Enterprise Operator Control Plane — planned
-- v8.2 Team-Scale Access + Policy Plane — planned
+- v8.1 Enterprise Operator Control Plane — partial (infra deps)
+- v8.2 Team-Scale Access + Policy Plane — complete
 - v8.3 Agent OS GSD Stack — complete
-- v8.4 Project-Centric Operator UX — planned
+- v8.4 Project-Centric Operator UX — complete
+- v8.5 Agent Fleet Plane — **planned** (Phases 142-147, FLEET-01..26)
 
 ---
 
@@ -166,9 +167,9 @@
 
 *Source: 2026-07-05 Microsoft IQ feature adoption analysis — `content/research/microsoft-iq-feature-adoption-analysis.md` and `content/blog/memroos-vs-microsoft-iq.md`. Constraint: free/open-source only, zero paid services. See ROADMAP.md Backlog item 19. Note: MEMSEC-01..08 already cover labels + retrieval authorization for the memory tiers; MSIQ extends that model to the git-backed knowledge repo and adds ecosystem adapters.*
 
-- [ ] **MSIQ-01**: Knowledge-repo documents (`content/`) carry storage labels in frontmatter — `sensitivity` (public/internal/confidential/restricted), `authoritative` (operator-approved canonical flag), and freshness fields (`verified_at`, `expires_at`) — validated by the knowledge_write gatekeeper, mirroring the shipped MEMSEC-02 label schema so memory and knowledge use one vocabulary.
-- [ ] **MSIQ-02**: `knowledge_search` and `knowledge_read` enforce label-aware authorization per requesting agent identity (extending the MEMSEC-04 retrieval gate to the knowledge repo), with authorization results visible in retrieval receipts; default-open for unlabeled docs so single-operator deployments see no behavior change.
-- [ ] **MSIQ-03**: Retrieval ranking boosts `authoritative: true` documents and demotes expired ones (`expires_at` past), with a scheduled check that flags expired/unverified knowledge instead of relying on manual review.
+- [x] **MSIQ-01**: Knowledge-repo documents (`content/`) carry storage labels in frontmatter — `sensitivity` (public/internal/confidential/restricted), `authoritative` (operator-approved canonical flag), and freshness fields (`verified_at`, `expires_at`) — validated by the knowledge_write gatekeeper, mirroring the shipped MEMSEC-02 label schema so memory and knowledge use one vocabulary.
+- [x] **MSIQ-02**: `knowledge_search` and `knowledge_read` enforce label-aware authorization per requesting agent identity (extending the MEMSEC-04 retrieval gate to the knowledge repo), with authorization results visible in retrieval receipts; default-open for unlabeled docs so single-operator deployments see no behavior change.
+- [x] **MSIQ-03**: Retrieval ranking boosts `authoritative: true` documents and demotes expired ones (`expires_at` past), with a scheduled check that flags expired/unverified knowledge instead of relying on manual review.
 - [ ] **MSIQ-04**: A MemroOS memory adapter plus integration guide for self-hosted Microsoft Agent Framework (MIT) agents connects MAF apps to MemroOS via MCP for durable cross-session memory; no Foundry-hosted (paid) services in any default or documented path.
 - [ ] **MSIQ-05**: A federated retrieval planner fans one query across memory tiers, the knowledge repo, and operator-registered MCP sources, merging ranked results with per-source receipts; scope is capped at local tiers plus explicitly registered free-tier sources — no connector-breadth chase.
 - [ ] **MSIQ-06**: Bounded GraphRAG (MIT) spike compares entity/relationship extraction over `content/` against the existing Graphify-style knowledge-graph plan (Backlog item 6); extraction runs incrementally on write through local models (Ollama) only — no metered LLM APIs, no dependency adoption, no production extraction path without Luis approval.
@@ -199,32 +200,80 @@
 - [x] **GSDSTACK-10**: Hermes, Discord/Telegram, Codex, Claude Code, and future UIs are thin adapters over the same MemRoOS contract: they may create tasks, request context, post proof, request standup/resume, and ask for approvals, but they do not own memory, task state, proof state, policy state, or model-routing decisions.
 - [x] **GSDSTACK-11**: Adapter-triggered sends, writes, destructive actions, and memory persistence run through the first safety slice: secrets/PII scan, destructive-action approval, cost cap, and honest-degradation behavior. Shared/enterprise mode cannot silently fall back to local git corpus pulls or unlogged writes.
 
-## v8.4 Project-Centric Operator UX (Proposed)
+## v8.4 Project-Centric Operator UX (Complete 2026-07-08)
 
 *Source: 2026-07-07 MemClaw (Felo-Inc) competitor gap analysis (`content/research/memclaw-gap-analysis-2026-07-07.md`). Decision: borrow MemClaw's operator-UX primitives — single-load workspace, declarative write rules + document directory, `is_shared` boolean, per-space cache transparency, save-artifact gate — but keep MemroOS governance (MEMSEC labels, belief stages, hash-chained audit) as first-class. MemClaw's hosted Felo API dependency and PPT generation are explicitly rejected per the zero-paid-services and self-host gates.*
 
-- [ ] **WORKLOAD-01**: An operator-facing `/load <space>` (or "load Client X") command primes the Agent Context Packet for the named space and binds it as the active workspace for all subsequent writes, reads, and the NOC/lane surfaces.
-- [ ] **WORKLOAD-02**: When a space is loaded, the active workspace is recorded in the run ledger as an event with actor, space id, and timestamp; the load is replayable from the ledger.
-- [ ] **WORKLOAD-03**: Adapter calls without an active workspace prompt the operator to select one (matches MemClaw's "There is no active project right now — which project do you want to operate on?"); the prompt is a single confirmation, not a recurring permission dialog.
-- [ ] **WORKLOAD-04**: Headless / non-interactive agent runs (no operator present) **fail closed**: no silent default workspace, no last-used-workspace fallback in shared/team mode; the load event references actor="system:headless" and a run-ledger reason.
-- [ ] **WORKLOAD-05**: Cross-space read is allowed but always policy-receipted; the loaded space is the **write target**, not the read universe; reads across spaces are surfaced in the run ledger.
-- [ ] **WRITERULES-01**: Each space has a declarative "Write Rules" table (data type → target document/resource) editable in the operator UI.
-- [ ] **WRITERULES-02**: The agent's memory adapter consults the Write Rules table before routing a save; mismatches are surfaced as receipts, not silently re-routed.
-- [ ] **WRITERULES-03**: Each space has a Document Directory (name + purpose + resource/artifact id) editable in the operator UI; this is the agent's and the operator's shared lookup table.
-- [ ] **WRITERULES-04**: Write Rules + Document Directory changes ship in the run ledger so the agent's view stays in sync with the operator's; stale rules trigger a drift receipt.
-- [ ] **WRITERULES-05**: Operator edits to Write Rules / Document Directory are **versioned + locked**; concurrent agent writes during an edit either wait or fail with a policy receipt (no silent overwrite, no race-condition loss).
-- [ ] **WRITERULES-06**: Write Rules are schema-validated (data type, target document, fallback rule); invalid rules are rejected at edit time with a structured error, not at write time with a silent reroute.
-- [ ] **SHAREDRO-01**: A single boolean `is_shared` flag on a space makes it read-only for all agents (no writes, no README updates, no document creation); the flag is enforced at **both** the retrieval gate (Phase 76, read-side) **and** the write-persistence gate (memory adapter write path, save-artifact path, README-update path, document-creation path), not as a UI-only toggle. The two enforcement points must agree and a single source of truth (the space record) drives both.
-- [ ] **SHAREDRO-02**: The `is_shared` flag is policy-receipted: every read or attempted write produces a receipt that references the flag and the space id, so the audit chain explains why a write was blocked.
-- [ ] **SHAREDRO-03**: Operator UI shows a single "Share read-only" toggle per space; toggling emits a run-ledger event with actor and timestamp; toggling off requires a policy reason.
-- [ ] **CACHEADMIN-01**: Each space exposes its current cache state (per-resource last-fetched timestamp, total cached size, retrieval count) in the operator UI.
-- [ ] **CACHEADMIN-02**: Operator can invalidate a single resource cache or the whole space cache; invalidation emits a run-ledger event.
-- [ ] **CACHEADMIN-03**: Cache invalidation respects MEMSEC labels and the `is_shared` flag; shared read-only spaces expose invalidate-from-source only with a policy receipt.
-- [ ] **CACHEADMIN-04**: Thundering-herd protection: cache invalidation is rate-limited and bounded per space; concurrent invalidations for the same resource coalesce into a single event; an invalidation loop (operator action repeated >N times in <T) emits a rate-limit receipt.
-- [ ] **CACHEADMIN-05**: Invalidation events are queryable from the run ledger (who invalidated what, when, why) and are surfaced in the NOC governance strip.
-- [ ] **ARTGATE-01**: When the agent produces a long-form artifact (report, document, deck) for a loaded space, the operator gets a single "Save to <space>?" prompt — no recurring permission dialog.
-- [ ] **ARTGATE-02**: On save, the agent appends the artifact to the Document Directory (or creates a new document) and emits a run-ledger event with the resource id and belief stage.
-- [ ] **ARTGATE-03**: On save, the agent updates the space README's "Last artifact" pointer in the Document Directory; the operator can disable auto-update per-space; auto-updates are policy-receipted.
+- [x] **WORKLOAD-01**: An operator-facing `/load <space>` (or "load Client X") command primes the Agent Context Packet for the named space and binds it as the active workspace for all subsequent writes, reads, and the NOC/lane surfaces.
+- [x] **WORKLOAD-02**: When a space is loaded, the active workspace is recorded in the run ledger as an event with actor, space id, and timestamp; the load is replayable from the ledger.
+- [x] **WORKLOAD-03**: Adapter calls without an active workspace prompt the operator to select one (matches MemClaw's "There is no active project right now — which project do you want to operate on?"); the prompt is a single confirmation, not a recurring permission dialog.
+- [x] **WORKLOAD-04**: Headless / non-interactive agent runs (no operator present) **fail closed**: no silent default workspace, no last-used-workspace fallback in shared/team mode; the load event references actor="system:headless" and a run-ledger reason.
+- [x] **WORKLOAD-05**: Cross-space read is allowed but always policy-receipted; the loaded space is the **write target**, not the read universe; reads across spaces are surfaced in the run ledger.
+- [x] **WRITERULES-01**: Each space has a declarative "Write Rules" table (data type → target document/resource) editable in the operator UI.
+- [x] **WRITERULES-02**: The agent's memory adapter consults the Write Rules table before routing a save; mismatches are surfaced as receipts, not silently re-routed.
+- [x] **WRITERULES-03**: Each space has a Document Directory (name + purpose + resource/artifact id) editable in the operator UI; this is the agent's and the operator's shared lookup table.
+- [x] **WRITERULES-04**: Write Rules + Document Directory changes ship in the run ledger so the agent's view stays in sync with the operator's; stale rules trigger a drift receipt.
+- [x] **WRITERULES-05**: Operator edits to Write Rules / Document Directory are **versioned + locked**; concurrent agent writes during an edit either wait or fail with a policy receipt (no silent overwrite, no race-condition loss).
+- [x] **WRITERULES-06**: Write Rules are schema-validated (data type, target document, fallback rule); invalid rules are rejected at edit time with a structured error, not at write time with a silent reroute.
+- [x] **SHAREDRO-01**: A single boolean `is_shared` flag on a space makes it read-only for all agents (no writes, no README updates, no document creation); the flag is enforced at **both** the retrieval gate (Phase 76, read-side) **and** the write-persistence gate (memory adapter write path, save-artifact path, README-update path, document-creation path), not as a UI-only toggle. The two enforcement points must agree and a single source of truth (the space record) drives both.
+- [x] **SHAREDRO-02**: The `is_shared` flag is policy-receipted: every read or attempted write produces a receipt that references the flag and the space id, so the audit chain explains why a write was blocked.
+- [x] **SHAREDRO-03**: Operator UI shows a single "Share read-only" toggle per space; toggling emits a run-ledger event with actor and timestamp; toggling off requires a policy reason.
+- [x] **CACHEADMIN-01**: Each space exposes its current cache state (per-resource last-fetched timestamp, total cached size, retrieval count) in the operator UI.
+- [x] **CACHEADMIN-02**: Operator can invalidate a single resource cache or the whole space cache; invalidation emits a run-ledger event.
+- [x] **CACHEADMIN-03**: Cache invalidation respects MEMSEC labels and the `is_shared` flag; shared read-only spaces expose invalidate-from-source only with a policy receipt.
+- [x] **CACHEADMIN-04**: Thundering-herd protection: cache invalidation is rate-limited and bounded per space; concurrent invalidations for the same resource coalesce into a single event; an invalidation loop (operator action repeated >N times in <T) emits a rate-limit receipt.
+- [x] **CACHEADMIN-05**: Invalidation events are queryable from the run ledger (who invalidated what, when, why) and are surfaced in the NOC governance strip.
+- [x] **ARTGATE-01**: When the agent produces a long-form artifact (report, document, deck) for a loaded space, the operator gets a single "Save to <space>?" prompt — no recurring permission dialog.
+- [x] **ARTGATE-02**: On save, the agent appends the artifact to the Document Directory (or creates a new document) and emits a run-ledger event with the resource id and belief stage.
+- [x] **ARTGATE-03**: On save, the agent updates the space README's "Last artifact" pointer in the Document Directory; the operator can disable auto-update per-space; auto-updates are policy-receipted.
+
+## v8.5 Agent Fleet Plane (Proposed / Potential Plan)
+
+*Source: 2026-07-08 Discord #devops "Agent fleet control tooling research". Decision: MemroOS is the top-layer fleet plane that manages agents directly across runtimes; LangGraph is a peer orchestration runtime (already under Orchestration Proxy); Paperclip is a parallel tenant (companies/budgets/board), not the top layer. Rejected: LangGraph-as-control-plane, Archestra default (AGPL), CrewAI ACP (cloud), "Gardner" (no OSS match), cloud-only AgentCore/Foundry/Vertex as substitutes. Scenario S12. Kickoff: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`.*
+
+### Architecture lock + validation
+
+- [ ] **FLEET-01**: Product architecture docs state MemroOS as top fleet plane, LangGraph as peer orchestration runtime, and Paperclip as parallel tenant — in language an operator can quote without reading research dumps.
+- [ ] **FLEET-02**: Independent second-opinion validation of the fleet architecture is filed with provenance `model:` not equal to the authoring model (MiniMax-M3); amend loop opens on reject.
+- [ ] **FLEET-03**: Scenario **S12** (multi-machine Mac + remote Hermes/OpenClaw under one MemroOS operator, Paperclip optional company budgets) is recorded in roadmap backlog and used as phase acceptance context.
+- [ ] **FLEET-04**: Planning research index points at architecture decision, OSS control-plane survey, and Paperclip audit under `content/`.
+
+### Runtime adapter maturity
+
+- [ ] **FLEET-05**: Every target of `scripts/install-agent-integrations.sh` appears in `docs/runtime-adapter-maturity.md` with T1/T2/T3 classification, evidence, and owner.
+- [ ] **FLEET-06**: T1 means shipped + smoke-tested + governance-hook path available; T3 is explicitly stub/unproven (no silent promotion).
+- [ ] **FLEET-07**: Hermes and OpenClaw maturity claims cite real adapter evidence (MemroOS and/or Paperclip `hermes_local` / `hermes_gateway` / `openclaw-gateway`).
+- [ ] **FLEET-08**: Installer target list and maturity matrix cannot silently drift (documented check or CI note).
+
+### LangGraph peer contract
+
+- [ ] **FLEET-09**: `docs/integrations/langgraph.md` documents input/output schema, checkpoint store layout, HIL interrupt protocol, and failure modes.
+- [ ] **FLEET-10**: Ownership split is explicit: MemroOS owns agent identity, memory routing, audit; LangGraph owns graph execution and checkpoints (no StateGraph reimplementation in Next routes).
+- [ ] **FLEET-11**: Checkpoint durability path exists (litestream **or** Postgres checkpointer behind flag) with restore steps written.
+- [ ] **FLEET-12**: One multi-step graph smoke proves interrupt → resume with an operator-visible receipt.
+
+### Pre-execution policy gate
+
+- [x] **FLEET-13**: A pre-execution policy gate evaluates actor/action/purpose/labels **before** tool execution on at least one T1 runtime path.
+- [x] **FLEET-14**: Deny blocks execution and emits a policy receipt (policy version, rule, reason) into audit/run ledger.
+- [x] **FLEET-15**: Headless runs fail closed on the gate (no silent allow / last-used bypass).
+- [x] **FLEET-16**: MEMSEC-08 security regression corpus remains green after gate wiring.
+
+### Paperclip tenant + cost delegation
+
+- [x] **FLEET-17**: `docs/integrations/paperclip.md` states ownership boundaries: Paperclip owns companies/issues/budgets/board; MemroOS owns cross-runtime registry/memory/fleet governance.
+- [x] **FLEET-18**: At least one integration path exists (contract-tested or live): Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue.
+- [x] **FLEET-19**: Fleet cost/budget hard-stop is **delegated to Paperclip** (source of truth documented); MemroOS does not re-implement monthly hard-stop auto-pause.
+- [x] **FLEET-20**: Multi-Paperclip server federation is explicitly out of scope and documented as Paperclip V1 exclusion.
+- [x] **FLEET-21**: Passive Hermes/OpenClaw adapter behavior is documented (runtime must already exist; Paperclip does not provision agent hosts).
+
+### Secrets + HA
+
+- [x] **FLEET-22**: Adapter API keys have a documented secrets path (broker/rotation); secrets never land in git or audit receipts.
+- [x] **FLEET-23**: MemroOS kernel durability path (litestream or Postgres) is documented with one executed restore drill.
+- [x] **FLEET-24**: LangGraph checkpoint durability is aligned with FLEET-11.
+- [x] **FLEET-25**: Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit for 50-host fleets) is documented as **not v8.5**.
+- [x] **FLEET-26**: Auto-provision of new agent hosts on demand remains explicitly out of scope (industry gap; none of Paperclip/LangGraph/Archestra own it cleanly).
 
 ## ONTO Governed Emergent Ontology (Proposed)
 
@@ -241,22 +290,22 @@
 
 *Source: gate logic is currently scattered — MEMSEC retrieval gate, capability policy, knowledge_policy_check, dispatch fail-closed rules. At 100-person scale (many teams, many agents) policy must be one declarative, testable layer. Local/OSS engines only (OPA/Cedar-class or in-repo), zero paid services.*
 
-- [ ] **POLGOV-01**: A single declarative policy layer evaluates retrieval, memory write/promotion, knowledge read/write, skill dispatch, and A2A/tool capability decisions, replacing scattered per-route logic; policies are versioned files in git with review history.
-- [ ] **POLGOV-02**: Every policy decision emits a receipt (policy version, rule matched, allow/deny/redact, reason) that lands in the evidence bundle and audit chain; agents see deny reasons without seeing the withheld content.
-- [ ] **POLGOV-03**: Policies support subject (user/team/agent/role), object (ontology type + labels + belief stage), action, and purpose dimensions — e.g. "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them."
-- [ ] **POLGOV-04**: A shadow/dry-run mode evaluates a proposed policy version against recent live decisions and reports the diff (newly denied / newly allowed) before activation; activation is operator-gated.
-- [ ] **POLGOV-05**: Policy regression tests run in CI: a committed corpus of decision cases (including MEMSEC-08 leak-prevention cases) must produce identical or explicitly-approved-different outcomes on every policy change.
+- [x] **POLGOV-01**: A single declarative policy layer evaluates retrieval, memory write/promotion, knowledge read/write, skill dispatch, and A2A/tool capability decisions, replacing scattered per-route logic; policies are versioned files in git with review history.
+- [x] **POLGOV-02**: Every policy decision emits a receipt (policy version, rule matched, allow/deny/redact, reason) that lands in the evidence bundle and audit chain; agents see deny reasons without seeing the withheld content.
+- [x] **POLGOV-03**: Policies support subject (user/team/agent/role), object (ontology type + labels + belief stage), action, and purpose dimensions — e.g. "GTM agents may read confidential Account claims for purpose=meeting-prep but not export them."
+- [x] **POLGOV-04**: A shadow/dry-run mode evaluates a proposed policy version against recent live decisions and reports the diff (newly denied / newly allowed) before activation; activation is operator-gated.
+- [x] **POLGOV-05**: Policy regression tests run in CI: a committed corpus of decision cases (including MEMSEC-08 leak-prevention cases) must produce identical or explicitly-approved-different outcomes on every policy change.
 
 ## TEAMSCALE Multi-Team Organizational Scale (Proposed)
 
 *Source: ICP is an agentic-heavy company growing to ~100 people (Cordant.ai reference). Current model is single-operator-plus-agents; the ICP needs teams, spaces, and joiner/mover/leaver flows for humans AND their agents.*
 
-- [ ] **TEAMSCALE-01**: Memory and knowledge support team/space scoping (e.g. GTM, Product, Finance) layered on the existing label model: a space defines default labels, membership (humans + agents), and cross-space sharing rules; per-space recall works with no cross-space leakage by default.
-- [ ] **TEAMSCALE-02**: Joiner flow: onboarding a new person (e.g. a fractional seller) provisions their identity, role, space memberships, and a standard agent kit (scoped keys, allowed skills, context pack) in one operator action, with an onboarding receipt listing exactly what was granted.
-- [ ] **TEAMSCALE-03**: Mover/leaver flow: role change or offboarding revokes human and dependent-agent credentials atomically, reassigns owned artifacts, and triggers a MEMLIFE erasure/retention review for their personal data; no orphaned agent identities with live keys.
-- [ ] **TEAMSCALE-04**: Delegation chains are explicit: an agent acting for a user carries the user's identity in a verifiable chain (user → agent → sub-agent), and policy evaluates the weakest link; A2A hops preserve the chain.
-- [ ] **TEAMSCALE-05**: Org-level observability: per-team NOC views of memory growth, promotion queue depth, policy denials, skill usage, and agent activity, so a 100-person org can see which teams' memory is healthy, stale, or leaking effort.
-- [ ] **TEAMSCALE-06**: Relationship-sensitive assets (e.g. investor/warm-intro graphs in the Cordant scenario) support named-owner approval gates: any agent use of the asset requires the owner's standing or per-use approval, enforced by POLGOV and visible in receipts.
+- [x] **TEAMSCALE-01**: Memory and knowledge support team/space scoping (e.g. GTM, Product, Finance) layered on the existing label model: a space defines default labels, membership (humans + agents), and cross-space sharing rules; per-space recall works with no cross-space leakage by default.
+- [x] **TEAMSCALE-02**: Joiner flow: onboarding a new person (e.g. a fractional seller) provisions their identity, role, space memberships, and a standard agent kit (scoped keys, allowed skills, context pack) in one operator action, with an onboarding receipt listing exactly what was granted.
+- [x] **TEAMSCALE-03**: Mover/leaver flow: role change or offboarding revokes human and dependent-agent credentials atomically, reassigns owned artifacts, and triggers a MEMLIFE erasure/retention review for their personal data; no orphaned agent identities with live keys.
+- [x] **TEAMSCALE-04**: Delegation chains are explicit: an agent acting for a user carries the user's identity in a verifiable chain (user → agent → sub-agent), and policy evaluates the weakest link; A2A hops preserve the chain.
+- [x] **TEAMSCALE-05**: Org-level observability: per-team NOC views of memory growth, promotion queue depth, policy denials, skill usage, and agent activity, so a 100-person org can see which teams' memory is healthy, stale, or leaking effort.
+- [x] **TEAMSCALE-06**: Relationship-sensitive assets (e.g. investor/warm-intro graphs in the Cordant scenario) support named-owner approval gates: any agent use of the asset requires the owner's standing or per-use approval, enforced by POLGOV and visible in receipts.
 
 ## SKILLTRUST Skill Trust Chain (Proposed)
 
@@ -429,3 +478,41 @@
 | ARTGATE-01 | 141 | Planned |
 | ARTGATE-02 | 141 | Planned |
 | ARTGATE-03 | 141 | Planned |
+
+---
+
+## v8.11 Unified Meeting Memory
+
+*Added: 2026-07-14 — focused milestone for federated meeting recall + ingest reliability.*
+
+### MEETREL — Meeting Ingest Reliability (Phase 151)
+
+- [x] **MEETREL-01**: Meeting Markdown filenames are idempotent by `recording_id` / `meeting_id` (no `-2` slug-collision duplicates on re-ingest).
+- [x] **MEETREL-02**: Meeting Markdown frontmatter includes `calendar_title`, `share_url`, `meeting_id`, and `source` for Fathom, Circleback, and Zoom.
+- [x] **MEETREL-03**: Public provider templates live under `scripts/meet-sync/providers/`; secrets remain in envFile / 1Password only.
+- [x] **MEETREL-04**: `meet-sync --health` reports freshness, last-run OK, and empty-vs-API WARN (including personal Fathom).
+
+### URECALL — Unified Recall Facade (Phases 152–153)
+
+- [x] **URECALL-01**: Shared resolver searches enabled meeting QMD collections plus knowledge literal and mem0.
+- [x] **URECALL-02**: MCP `memory_recall` is the default agent meeting/memory recall tool.
+- [x] **URECALL-03**: Orientation prefers `memory_recall` over collection-aware `qmd -c` / naive `knowledge_search` for “find the meeting”.
+- [x] **URECALL-04**: `/api/memory/multi-search` includes a QMD meeting lane.
+- [x] **URECALL-05**: Docs and `collections.config.json` list private meeting collections.
+- [x] **URECALL-06**: Regressions prove Monaco Circleback + Fathom Impromptu are findable via `memory_recall` without `-c`.
+
+### Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MEETREL-01 | 151 | Done |
+| MEETREL-02 | 151 | Done |
+| MEETREL-03 | 151 | Done |
+| MEETREL-04 | 151 | Done |
+| URECALL-01 | 152 | Done |
+| URECALL-02 | 152 | Done |
+| URECALL-03 | 152 | Done |
+| URECALL-04 | 153 | Done |
+| URECALL-05 | 153 | Done |
+| URECALL-06 | 153 | Done |
+

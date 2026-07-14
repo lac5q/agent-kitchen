@@ -31,6 +31,12 @@ function seedSalience(tier: string, score: number, backdateDay = '2024-01-01') {
 describe('runDecay', () => {
   beforeEach(() => {
     vi.resetModules();
+    testDb.exec('DELETE FROM memory_decay_receipts');
+    testDb.exec('DELETE FROM memory_decay_runs');
+    testDb.exec('DELETE FROM memory_retention_receipts');
+    testDb.exec('DELETE FROM memory_retention_records');
+    testDb.exec('DELETE FROM memory_legal_holds');
+    testDb.exec('DELETE FROM memory_retention_policies');
     testDb.exec('DELETE FROM memory_salience');
     testDb.exec('DELETE FROM messages');
   });
@@ -96,6 +102,69 @@ describe('runDecay', () => {
 
     const afterSecond = testDb.prepare('SELECT salience_score FROM memory_salience WHERE message_id = ?').get(midId) as { salience_score: number };
     expect(afterSecond.salience_score).toBe(scoreAfterFirst);
+  });
+
+  it('VAL-MEM-023: skips held, protected, exempt, and pinned records while decaying eligible rows', async () => {
+    const heldId = seedSalience('mid', 1.0);
+    const protectedId = seedSalience('mid', 1.0);
+    const exemptId = seedSalience('mid', 1.0);
+    const pinnedId = seedSalience('pinned', 1.0);
+    const eligibleId = seedSalience('mid', 1.0);
+
+    const { createRetentionPolicy, registerRetentionRecord } = await import('@/lib/memory/retention-policy');
+    const { createLegalHold } = await import('@/lib/memory/retention-expiry');
+    createRetentionPolicy(testDb, {
+      id: 'decay-policy',
+      name: 'decay policy',
+      ontologyType: 'memory.note',
+      securityLabel: { visibility: 'internal' },
+      purpose: 'recall',
+      scope: { tenantId: 'default-tenant', project: 'p1' },
+      durationDays: 365,
+      actorId: 'operator',
+    });
+    for (const [id, extraScope] of [
+      [heldId, {}],
+      [protectedId, { decayProtected: true }],
+      [exemptId, { decayExempt: true }],
+      [eligibleId, {}],
+    ] as Array<[number, Record<string, unknown>]>) {
+      registerRetentionRecord(testDb, {
+        recordType: 'message',
+        recordId: String(id),
+        ontologyType: 'memory.note',
+        securityLabel: { visibility: 'internal' },
+        purpose: 'recall',
+        scope: { tenantId: 'default-tenant', purpose: 'recall', project: 'p1', ...extraScope },
+        actorId: 'operator',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        now: new Date('2024-01-01T00:00:00.000Z'),
+      });
+    }
+    createLegalHold(testDb, {
+      id: 'decay-hold',
+      scope: { tenantId: 'default-tenant', recordId: String(heldId) },
+      reasonCode: 'litigation',
+      actorId: 'legal',
+    });
+
+    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    _resetForTest();
+    const summary = runDecay({ runKey: 'decay-protections', now: new Date('2026-01-02T00:00:00.000Z') });
+
+    expect(summary.decayed).toBe(1);
+    expect(summary.skippedHeld).toBe(1);
+    expect(summary.skippedProtected).toBe(1);
+    expect(summary.skippedExempt).toBe(1);
+    expect(summary.skippedPinned).toBe(1);
+    for (const id of [heldId, protectedId, exemptId, pinnedId]) {
+      const row = testDb.prepare('SELECT salience_score FROM memory_salience WHERE message_id = ?').get(id) as { salience_score: number };
+      expect(row.salience_score).toBe(1.0);
+    }
+    const eligible = testDb.prepare('SELECT salience_score FROM memory_salience WHERE message_id = ?').get(eligibleId) as { salience_score: number };
+    expect(eligible.salience_score).toBeLessThan(1.0);
+    const reasons = testDb.prepare('SELECT reason FROM memory_decay_receipts WHERE run_key = ? ORDER BY reason').all('decay-protections') as Array<{ reason: string }>;
+    expect(reasons.map((row) => row.reason)).toEqual(expect.arrayContaining(['active_legal_hold', 'pinned', 'policy_exempt', 'protected', 'tier_mid']));
   });
 
   it('LOG() probe stored module-level and determines SQL variant', async () => {

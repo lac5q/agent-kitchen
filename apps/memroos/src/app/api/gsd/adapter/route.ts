@@ -2,7 +2,15 @@ import type { NextRequest } from "next/server";
 
 import { authenticateAgentHeaders } from "@/lib/agent-registry";
 import { runGsdAdapterSafetyCheck } from "@/lib/gsd/adapter-safety";
-import { executeGsdAdapterAction, type GsdAdapterAction, type GsdAdapterId } from "@/lib/gsd/adapters";
+import {
+  executeGsdAdapterAction,
+  type GsdAdapterAction,
+  type GsdAdapterId,
+} from "@/lib/gsd/adapters";
+import {
+  isGsdAdapterPolicyAllowed,
+  runGsdAdapterPolicyGate,
+} from "@/lib/gsd/adapter-policy-gate";
 import { gsdInputFromJson } from "@/lib/agent-gsd-control";
 import { getDb } from "@/lib/db";
 
@@ -70,6 +78,35 @@ export async function POST(req: NextRequest) {
         action,
         safety,
         honestDegradation: safety.honestDegradation,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 403 }
+    );
+  }
+
+  const policyEvaluation = runGsdAdapterPolicyGate(getDb(), {
+    adapterId,
+    action,
+    actorAgentId: agent.id,
+  });
+
+  if (!isGsdAdapterPolicyAllowed(policyEvaluation)) {
+    const receipt = policyEvaluation.receipt;
+    return Response.json(
+      {
+        ok: false,
+        adapterId,
+        action,
+        policyReceipt: {
+          policyVersion: receipt.policyVersion,
+          domain: receipt.domain,
+          action: receipt.action,
+          ruleMatched: receipt.ruleMatched,
+          outcome: receipt.outcome,
+          reason: receipt.reason,
+          actorId: receipt.actorId,
+          createdAt: receipt.createdAt,
+        },
         timestamp: new Date().toISOString(),
       },
       { status: 403 }

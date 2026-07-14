@@ -10,4 +10,5 @@ export type ProposalType =
   | "agent_instruction_patch"
   | "skill_addition"
   | "tool_routing_update"
-  | "eval_case_addition";
+  | "eval_case_addition"
+  | "ontology_promotion";

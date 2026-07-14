@@ -4,7 +4,7 @@ import type { AgentLocation, AgentPlatform, AgentProtocol, RegisterAgentInput } 
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS = new Set(["cursor", "claude", "codex", "qwen", "pi", "gemini", "opencode", "zcode", "hermes", "openclaw", "chatgpt"]);
+const PLATFORMS = new Set(["cursor", "claude", "codex", "qwen", "pi", "gemini", "opencode", "zcode", "hermes", "openclaw", "chatgpt", "grok", "droid"]);
 const PROTOCOLS = new Set(["rest", "a2a", "ui", "local"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

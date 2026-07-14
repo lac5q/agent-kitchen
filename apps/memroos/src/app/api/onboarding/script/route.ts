@@ -49,7 +49,7 @@ AGENT_ROLE="\${AGENT_ROLE:-\${MEMROOS_AGENT_ROLE:-MemroOS agent}}"
 PLATFORM="\${PLATFORM:-\${MEMROOS_PLATFORM:-}}"
 
 if [[ -z "$PLATFORM" ]]; then
-  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|codex|claude|opencode|zcode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|zcode|openclaw|hermes|none|file:/path]" >&2
+  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|grok|droid|codex|claude|opencode|zcode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|zcode|openclaw|hermes|droid|none|file:/path]" >&2
   exit 2
 fi
 
@@ -279,6 +279,10 @@ def install_hermes():
     merge_hermes_yaml(home / ".hermes" / "config.yaml")
     return True
 
+def install_droid():
+    ok = run_if_available("droid", ["mcp", "add", "--type", "http", "memroos", mcp_url])
+    return ok
+
 def install_codex():
     if run_if_available("codex", ["mcp", "add", "memroos", "--url", mcp_url]):
         return True
@@ -306,6 +310,7 @@ def install_explicit(selected):
         return install_file(selected[5:])
     installers = {
         "codex": install_codex,
+        "droid": install_droid,
         "claude": install_claude,
         "gemini": install_gemini,
         "qwen": install_qwen,
@@ -324,7 +329,9 @@ def install_auto():
     platform_targets = {
         "cursor": "cursor",
         "chatgpt": "stdout",
+        "grok": "stdout",
         "codex": "codex",
+        "droid": "droid",
         "claude": "claude",
         "gemini": "gemini",
         "qwen": "qwen",

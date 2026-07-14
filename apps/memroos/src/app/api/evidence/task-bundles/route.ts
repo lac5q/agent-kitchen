@@ -58,6 +58,9 @@ export async function POST(request: Request) {
     residualRisks: listValue(body.residualRisks),
     replayHandle: typeof body.replayHandle === "string" ? body.replayHandle : null,
     rollbackHandle: typeof body.rollbackHandle === "string" ? body.rollbackHandle : null,
+    orchestrationRunId: typeof body.orchestrationRunId === "string" ? body.orchestrationRunId : null,
+    orchestrationPlanHash: typeof body.orchestrationPlanHash === "string" ? body.orchestrationPlanHash : null,
+    orchestrationBundleHash: typeof body.orchestrationBundleHash === "string" ? body.orchestrationBundleHash : null,
   };
 
   const bundle = upsertTaskEvidenceBundle(getDb(), input);

@@ -30,23 +30,82 @@ Earlier versions only read `content`, missing the research text on
 tool-using turns. Fixed in v2.0 — we now read `reasoning` + `content`
 together for every assistant message.
 
-DETECTION HEURISTIC
--------------------
-A "research without persist" finding fires when:
-- The session contains a `## Comparison` / `## Benchmark` / `## RCA`
-  / `## Analysis` / `## Recommendations` header, OR
-- The session cites an external URL (http:// or https://) outside tool output
-- AND there is no `mcp_memroos_knowledge_write` tool call in the entire session
+DETECTION HEURISTIC (v3.0 — tightened 2026-07-08)
+--------------------------------------------------
+A "research without persist" finding fires when ALL of:
 
-The session is also flagged if the user asked to "save/document/archive/
-file" but no write happened.
+  (1) the session produced a research-grade signal — at least ONE of:
+        - a `## Comparison` / `## Benchmark` / `## RCA` / `## Analysis`
+          / `## Recommendations` header (standalone trigger), OR
+        - >= MIN_URLS_STANDALONE external URLs cited outside tool output
+          (standalone trigger), OR
+        - a save/document/file verb in the user message CORROBORATED by
+          >= MIN_STRUCTURED_CHARS of structured markdown OR one of the two
+          standalone triggers above. (A lone save verb, or a save verb +
+          a single URL, is NOT enough — that path produces the "save
+          money" / "do not preserve API keys" noise.)
+
+  (2) the research was NOT persisted — i.e. none of:
+        - an `mcp_memroos_knowledge_write` tool call, OR
+        - a direct-write fallback (write_file/patch/edit/create_file whose
+          `path` is under the knowledge tree, OR a heredoc/tee/cat> shell
+          write under the knowledge tree), OR
+        - (opt-in, `--git-xref`) a git commit landing in
+          `~/github/knowledge` or `~/github/memroos/content` within
+          +/-GIT_XREF_WINDOW_HOURS of the session mtime.
+
+Structured-chars alone is deliberately NOT a standalone trigger: the
+real corpus has many large coding/operational sessions ("create a
+resume", "why am I seeing this error") whose markdown output exceeds the
+threshold but is not research. It only serves as a save-verb corroboration.
+
+A bare "save/document/file" verb is NO LONGER sufficient on its own.
+Tightening the verb regex instead produced false negatives on the three
+recovered artifacts this detector exists to catch (the verb appeared in
+generic context, not as an imperative), so corroboration is used instead.
+See CHANGELOG (v3.0).
 
 USAGE
 -----
-python3 research-without-persist-detector.py [--full] [--since=<epoch>]
+python3 research-without-persist-detector.py [--full] [--verify-writes] [--git-xref]
 
-Cron calls this daily. First run after install uses --full to scan
-the last 30 days; subsequent runs use --since=<last_run_epoch>.
+Cron calls this daily. The recommended daily invocation is INCREMENTAL
+(no --full): the last-run marker limits the scan to sessions modified
+since the previous run. Use --full only for first-run / ad-hoc full
+sweeps; running --full daily re-reports the entire backlog every day,
+which is the "ratchet" failure mode this version fixes.
+
+CHANGELOG
+---------
+v3.0 (2026-07-08) — tightened heuristics, grounded against the real
+    151-session backlog and the 3 known-real recovered artifacts.
+    - S1 direct-write rescue: write_file/patch/edit/create_file under a
+      KB root, or a heredoc/tee/cat> shell write, counts as a persist.
+      Removes the Vendasta-style fallback-path false positives the old
+      detector always flagged (~26/151 in the 2026-07-05 backlog).
+    - S2 quality gate: standalone research triggers are a research header
+      OR >= MIN_URLS_STANDALONE external URLs. Structured-chars alone is
+      NOT a standalone trigger (the corpus has large coding/operational
+      sessions that would false-positive); it only corroborates a save
+      verb. Drops ~30 one-liner acknowledgments AND ~80 dev/ops sessions
+      that produce lots of markdown but no research.
+    - S3 git cross-reference (opt-in, --git-xref): suppress a session
+      when a knowledge-repo commit landed within +/-24h of its mtime.
+    - S4 save-trigger corroboration: a bare save/document/file verb is
+      NO LONGER sufficient alone; it must be corroborated by an S2 research
+      signal (header OR >= MIN_STRUCTURED_CHARS OR >= MIN_URLS_STANDALONE).
+      Tightening the verb regex instead produced false negatives on the 3
+      recovered artifacts (verb appeared in generic context). Corroboration
+      keeps all 3/3 real misses while dropping ~41 noise sessions ("save
+      money", "reviewable file paths", "do not preserve API keys"). A
+      single URL does NOT corroborate (would re-admit the noise).
+    - main(): prints [full] vs [incremental] scope. The daily cron should
+      run INCREMENTAL; --full is for first-run / ad-hoc sweeps only.
+      Running --full daily is the root cause of the ratchet.
+
+v2.0 — read content + reasoning + tool output for every assistant
+    message (earlier versions missed tool-using turns). Session layout
+    is FLAT *.jsonl files, not directories.
 """
 
 from __future__ import annotations
@@ -66,9 +125,28 @@ SESSIONS_DIR = HOME / ".hermes" / "sessions"
 OUTPUT_DIR = HOME / ".hermes" / "cron" / "output"
 STATE_FILE = OUTPUT_DIR / ".research-without-persist.last-run"
 MEMROOS_KB_DIR = Path(os.environ.get("MEMROOS_ROOT", HOME / "github" / "memroos")) / "content"
+# Direct-write fallback targets (per ~/.hermes/AGENTS.md "Fallback Flow"):
+# agents may write directly under these trees when the MCP is unavailable.
+KB_ROOT_MARKERS = (
+    "github/knowledge",
+    "github/memroos/content",
+    "/knowledge/",
+    "memroos/content",
+)
+# Knowledge repos scanned by the optional --git-xref suppression signal.
+GIT_XREF_REPOS = (HOME / "github" / "knowledge", HOME / "github" / "memroos")
+GIT_XREF_WINDOW_HOURS = 24  # +/- around the session mtime
 LOG_RETENTION_DAYS = 30
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Quality / corroboration thresholds (v3.0). Tuned against the real
+# 151-session backlog + the 3 known-real recovered artifacts so that:
+#   - all 3 real misses survive (no false negatives), and
+#   - save-trigger-verb noise (e.g. "save money", "reviewable file paths",
+#     "do not preserve API keys") is dropped unless corroborated.
+MIN_STRUCTURED_CHARS = 500       # structured markdown chars to count as research
+MIN_URLS_STANDALONE = 8          # URLs alone (no header/structure) => research
 
 # Patterns that signal "research / analysis / durable content"
 RESEARCH_HEADER_RE = re.compile(
@@ -82,6 +160,22 @@ SAVE_TRIGGER_RE = re.compile(
     r"\b(save|document|archive|file|store|preserve|persist|write\s+down|capture|note\s+this)\b",
     re.IGNORECASE,
 )
+# Structured-markdown line marker (headers, bullets, numbered lists, tables,
+# blockquotes). Used to measure how much of the assistant output is real
+# research prose vs. a one-line acknowledgement.
+STRUCTURED_LINE_RE = re.compile(
+    r"^\s*(#{1,6}\s|\|\s|>\s|[-*+]\s|\d+\.\s)", re.MULTILINE
+)
+# Shell idioms that write a file (heredoc / tee / redirect). Used to catch
+# the direct-write fallback path inside `terminal` tool calls.
+SHELL_WRITE_RE = re.compile(
+    r"(cat\s*>|cat\s*>>|\btee\b|<<\s*['\"]?(EOF|PY|SH|HEREDOC)\b)"
+)
+# Tool names that create/modify a file. `str_replace_editor` covers the
+# OpenClaw/Codex-family editor tool.
+FILE_WRITE_TOOL_NAMES = frozenset({
+    "write_file", "patch", "edit", "create_file", "str_replace_editor",
+})
 MEMROOS_WRITE_RE = re.compile(r"mcp_memroos_knowledge_write", re.IGNORECASE)
 MEMROOS_WRITE_TOOL_RE = re.compile(r'"name"\s*:\s*"mcp_memroos_knowledge_write"|"function":\s*{[^}]*"name"\s*:\s*"mcp_memroos_knowledge_write"')
 
@@ -97,9 +191,19 @@ class Finding:
     has_write: bool = False
     user_message_count: int = 0
     assistant_message_count: int = 0
+    # v3.0 audit fields — record WHY a session was or wasn't flagged so the
+    # report stays debuggable after the heuristics got denser.
+    structured_chars: int = 0
+    url_count: int = 0
+    has_save_trigger: bool = False
+    has_research_header: bool = False
+    # Why the session was treated as "already persisted" (empty when it wasn't).
+    persisted_via: str = ""
 
     def is_real(self) -> bool:
-        # Must have research evidence AND no write
+        # Must have research evidence AND no write. "Evidence" here is the
+        # post-v3.0 corroborated research signal, populated by
+        # `classify_session`.
         return bool(self.evidence) and not self.has_write
 
 
@@ -160,9 +264,101 @@ def session_has_memroos_write(messages: list[dict]) -> bool:
     return False
 
 
-def session_has_research_evidence(messages: list[dict]) -> list[str]:
-    """Return list of evidence strings (headers / triggers) suggesting research."""
-    evidence: list[str] = []
+def _iter_tool_calls(messages: list[dict]):
+    """Yield (tool_name, parsed_args_dict) for every assistant tool call."""
+    for msg in messages:
+        if msg.get("role") != "assistant":
+            continue
+        for tc in msg.get("tool_calls") or []:
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function") or {}
+            if not isinstance(fn, dict):
+                continue
+            name = fn.get("name", "")
+            args = fn.get("arguments", "")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (json.JSONDecodeError, ValueError):
+                    args = {}
+            if not isinstance(args, dict):
+                args = {}
+            yield name, args
+
+
+def session_has_direct_write(messages: list[dict]) -> tuple[bool, str]:
+    """Detect the direct-write fallback path (S1).
+
+    Agents that can't reach `mcp_memroos_knowledge_write` may write directly
+    to the knowledge tree via a file-edit tool or a heredoc/tee/cat> shell
+    command. Per ~/.hermes/AGENTS.md this is a legitimate durable persist,
+    so these sessions must NOT be flagged.
+
+    Returns (True, reason) when a fallback write landed under a KB root.
+    """
+    for name, args in _iter_tool_calls(messages):
+        if name in FILE_WRITE_TOOL_NAMES:
+            path = args.get("path") or args.get("file_path") or ""
+            if isinstance(path, str) and any(k in path for k in KB_ROOT_MARKERS):
+                return True, f"direct-write {name}: {path[:80]}"
+        elif name in ("terminal", "bash", "shell"):
+            cmd = args.get("command", "") if isinstance(args, dict) else ""
+            if isinstance(cmd, str) and any(k in cmd for k in KB_ROOT_MARKERS):
+                if SHELL_WRITE_RE.search(cmd):
+                    return True, f"direct-write shell ({name})"
+    return False, ""
+
+
+def git_xref_has_persist(mtime_epoch: float) -> tuple[bool, str]:
+    """Opt-in (S3): did any knowledge-repo commit land near this session?
+
+    Runs `git log --since/--until` +/- GIT_XREF_WINDOW_HOURS around the
+    session mtime. Slow (one git call per session), so only used when the
+    caller passes `--git-xref`. Returns (True, commit summary) on a hit.
+    """
+    import datetime as _dt
+    base = _dt.datetime.fromtimestamp(mtime_epoch, _dt.timezone.utc)
+    since = (base - _dt.timedelta(hours=GIT_XREF_WINDOW_HOURS)).strftime("%Y-%m-%d %H:%M")
+    until = (base + _dt.timedelta(hours=GIT_XREF_WINDOW_HOURS)).strftime("%Y-%m-%d %H:%M")
+    for repo in GIT_XREF_REPOS:
+        if not repo.is_dir():
+            continue
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(repo), "log",
+                 f"--since={since}", f"--until={until}",
+                 "--pretty=format:%h|%s"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if out.returncode == 0 and out.stdout.strip():
+            first = out.stdout.strip().splitlines()[0][:80]
+            return True, f"git commit {repo.name}: {first}"
+    return False, ""
+
+
+def structured_char_count(text: str) -> int:
+    """Count chars on structured-markdown lines (headers/lists/tables/code)."""
+    total = 0
+    for line in text.splitlines():
+        if STRUCTURED_LINE_RE.match(line):
+            total += len(line) + 1
+    return total
+
+
+def classify_research_signal(
+    messages: list[dict],
+) -> tuple[list[str], bool, int, int, bool]:
+    """Compute the v3.0 research signal for a session.
+
+    Returns (evidence_strings, has_header, structured_chars, url_count,
+    has_save_trigger). The evidence list only includes signals that count
+    as research-grade under the tightened rules; a bare save-trigger verb
+    is reported separately via `has_save_trigger` so the caller can apply
+    corroboration.
+    """
     combined_text = ""
     user_text = ""
     for msg in messages:
@@ -171,19 +367,63 @@ def session_has_research_evidence(messages: list[dict]) -> list[str]:
             content = msg.get("content")
             if isinstance(content, str):
                 user_text += "\n" + content
+            elif isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "text":
+                        user_text += "\n" + c.get("text", "")
         elif role == "assistant":
             combined_text += "\n" + get_assistant_text(msg)
-    # Headers
-    for m in RESEARCH_HEADER_RE.finditer(combined_text):
-        evidence.append(f"research header: {m.group(0).strip()[:80]}")
-    # External URL citations
+
+    has_header = bool(RESEARCH_HEADER_RE.search(combined_text))
+    structured = structured_char_count(combined_text)
     urls = URL_CITE_RE.findall(combined_text)
-    if urls:
-        evidence.append(f"external URLs cited: {len(urls)} (e.g. {urls[0][:60]})")
-    # User asked to save/document
-    if SAVE_TRIGGER_RE.search(user_text):
-        evidence.append("user asked to save/document/file")
-    return evidence
+    url_count = len(urls)
+    has_save = bool(SAVE_TRIGGER_RE.search(user_text))
+
+    evidence: list[str] = []
+    # S2 standalone research triggers: a research header OR many external
+    # URLs. Structured-chars alone is NOT a standalone trigger — the
+    # corpus has many large coding/operational sessions ("create a resume",
+    # "why am I seeing this error") whose markdown output exceeds the
+    # threshold but is not research. Structured-chars is used only to
+    # corroborate a save-trigger verb (see corroboration_evidence).
+    if has_header:
+        m = RESEARCH_HEADER_RE.search(combined_text)
+        evidence.append(f"research header: {m.group(0).strip()[:80]}")
+    if url_count >= MIN_URLS_STANDALONE:
+        evidence.append(f"external URLs cited: {url_count} (e.g. {urls[0][:60]})")
+
+    return evidence, has_header, structured, url_count, has_save
+
+
+def corroboration_evidence(
+    base_evidence: list[str],
+    has_save: bool,
+    has_header: bool,
+    structured: int,
+    url_count: int,
+) -> list[str]:
+    """Apply the save-trigger corroboration rule (S4).
+
+    A bare save-trigger verb is only added to the evidence when it is
+    corroborated by EITHER an S2 standalone trigger (header / many URLs,
+    already in `base_evidence`) OR substantial structured output
+    (>= MIN_STRUCTURED_CHARS). A single URL does NOT corroborate — the
+    simulation showed that would keep the "do not preserve API keys" +
+    one-link noise. All three recovered real misses had a header or
+    >= 500 structured chars, so this rule keeps 3/3 while dropping the
+    "save money" / "reviewable file paths" verb noise.
+    """
+    if not has_save:
+        return base_evidence
+    corroborated = bool(base_evidence) or structured >= MIN_STRUCTURED_CHARS
+    if corroborated:
+        if structured >= MIN_STRUCTURED_CHARS and not base_evidence:
+            # Note *why* the save verb was admitted (structure corroborated it).
+            return [f"structured output: {structured} chars",
+                    "user asked to save/document/file"]
+        return base_evidence + ["user asked to save/document/file"]
+    return base_evidence
 
 
 def load_session(path: Path) -> list[dict]:
@@ -205,12 +445,22 @@ def load_session(path: Path) -> list[dict]:
     return messages
 
 
-def scan_sessions(since_epoch: float | None) -> list[Finding]:
+def scan_sessions(
+    since_epoch: float | None,
+    git_xref: bool = False,
+) -> list[Finding]:
     """Scan all Hermes session files for research-without-persist findings.
+
+    Applies the v3.0 tightened heuristics: direct-write rescue (S1),
+    quality gate (S2), optional git cross-reference (S3), and
+    save-trigger corroboration (S4).
 
     Args:
         since_epoch: Unix timestamp cutoff. Files modified before this
             are skipped. None means "scan all files."
+        git_xref: when True, suppress a session if a knowledge-repo git
+            commit landed within +/- GIT_XREF_WINDOW_HOURS of its mtime.
+            Slow (one git call per surviving session); opt-in only.
     """
     findings: list[Finding] = []
     if not SESSIONS_DIR.is_dir():
@@ -225,23 +475,45 @@ def scan_sessions(since_epoch: float | None) -> list[Finding]:
         messages = load_session(session_path)
         if not messages:
             continue
-        has_write = session_has_memroos_write(messages)
-        evidence = session_has_research_evidence(messages)
+
+        # --- persisted? ---------------------------------------------------
+        persisted_via = ""
+        if session_has_memroos_write(messages):
+            continue  # clean: persisted via the MCP primary path
+        direct, reason = session_has_direct_write(messages)
+        if direct:
+            continue  # clean: persisted via the direct-write fallback (S1)
+        if git_xref:
+            hit, g_reason = git_xref_has_persist(mtime)
+            if hit:
+                continue  # clean: a knowledge-repo commit landed nearby (S3)
+
+        # --- research signal (S2) + save corroboration (S4) ---------------
+        base_ev, has_header, structured, url_count, has_save = (
+            classify_research_signal(messages)
+        )
+        evidence = corroboration_evidence(
+            base_ev, has_save, has_header, structured, url_count
+        )
         if not evidence:
-            continue
+            continue  # no research-grade signal; a lone save verb is not enough
+
         user_count = sum(1 for m in messages if m.get("role") == "user")
         assistant_count = sum(1 for m in messages if m.get("role") == "assistant")
-        finding = Finding(
+        findings.append(Finding(
             session_id=session_path.stem,
             session_path=session_path,
-            modified=session_path.stat().st_mtime.__repr__() if False else str(int(mtime)),
+            modified=str(int(mtime)),
             evidence=evidence,
-            has_write=has_write,
+            has_write=False,
             user_message_count=user_count,
             assistant_message_count=assistant_count,
-        )
-        if finding.is_real():
-            findings.append(finding)
+            structured_chars=structured,
+            url_count=url_count,
+            has_save_trigger=has_save,
+            has_research_header=has_header,
+            persisted_via=persisted_via,
+        ))
     return findings
 
 
@@ -290,11 +562,17 @@ def write_report(
     if findings:
         lines.append("## ⚠️ Sessions that produced research without writing to MemroOS")
         lines.append("")
+        lines.append("_v3.0 heuristics: direct-write rescue + structured-output quality gate + "
+                     "save-trigger corroboration. A bare save verb is no longer enough._")
+        lines.append("")
         for f in findings:
             lines.append(f"### `{f.session_id}`")
             lines.append(f"- **Path:** `{f.session_path}`")
             lines.append(f"- **Modified epoch:** {f.modified}")
             lines.append(f"- **User messages:** {f.user_message_count}, Assistant messages: {f.assistant_message_count}")
+            lines.append(f"- **Signal:** header={f.has_research_header}, "
+                         f"structured={f.structured_chars}c, urls={f.url_count}, "
+                         f"save_trigger={f.has_save_trigger}")
             lines.append(f"- **Evidence:**")
             for e in f.evidence:
                 lines.append(f"  - {e}")
@@ -376,6 +654,7 @@ def main() -> int:
     args = sys.argv[1:]
     full = "--full" in args
     verify_writes = "--verify-writes" in args
+    git_xref = "--git-xref" in args
 
     since_epoch: float | None
     if full or verify_writes:
@@ -385,7 +664,7 @@ def main() -> int:
         last = get_last_run_marker()
         since_epoch = last if last > 0 else None
 
-    findings = scan_sessions(since_epoch)
+    findings = scan_sessions(since_epoch, git_xref=git_xref)
     missing_writes: list[dict] = []
     if verify_writes:
         missing_writes = find_missing_writes(since_epoch)
@@ -393,11 +672,13 @@ def main() -> int:
     report = write_report(findings, since_epoch, missing_writes)
 
     total = len(findings) + len(missing_writes)
+    scope = "full" if since_epoch is None else "incremental"
     if total:
-        print(f"⚠️  {len(findings)} session(s) without write + {len(missing_writes)} session(s) with deleted write = {total} total.")
+        print(f"⚠️  [{scope}] {len(findings)} session(s) without write + "
+              f"{len(missing_writes)} session(s) with deleted write = {total} total.")
         print(f"   Report: {report}")
         return 1
-    print(f"✅ Clean — no findings.")
+    print(f"✅ [{scope}] Clean — no findings.")
     print(f"   Report: {report}")
     return 0
 

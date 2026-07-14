@@ -88,6 +88,133 @@ export const AUDIT_EVENT_TYPES = {
   // Knowledge vault access (Phase 125, ENTOPS-03)
   /** Knowledge MCP op (read/write/delete) was centrally audited. Per-tenant hash-chained. */
   KNOWLEDGE_ACCESS: "knowledge.access",
+
+  // Policy engine (Phase 128, POLGOV-01/02)
+  /** A decision (retrieval/memory/knowledge/capability) was evaluated through the shared policy engine. */
+  POLICY_DECISION: "policy.decision",
+
+  // Paperclip tenant integration (Phase 146, FLEET-18)
+  /** A Paperclip activity event was ingested into MemroOS for NOC/audit visibility. */
+  PAPERCLIP_ACTIVITY: "paperclip.activity",
+
+  // Skill governance (Phase 148-150, SKILLTRUST)
+  /** Skill quarantine stage transition. */
+  SKILL_QUARANTINE_TRANSITIONED: "skill.quarantine.transitioned",
+  /** Skill lifecycle state transitioned. */
+  SKILL_LIFECYCLE_TRANSITIONED: "skill_lifecycle_transitioned",
+  /** Skill deprecated notification for dependent. */
+  SKILL_LIFECYCLE_DEPRECATED: "skill_lifecycle_deprecated",
+  /** Skill signed (Ed25519). */
+  SKILL_SIGNED: "skill.signed",
+  /** Skill sync approved. */
+  SKILL_SYNC_APPROVED: "skill.sync.approved",
+  /** Skill sync rejected. */
+  SKILL_SYNC_REJECTED: "skill.sync.rejected",
+  /** Skill sync proposal approved (id-based). */
+  SKILL_SYNC_PROPOSAL_APPROVED: "skill.sync.proposal.approved",
+  /** Skill sync proposal rejected. */
+  SKILL_SYNC_PROPOSAL_REJECTED: "skill.sync.proposal.rejected",
+  /** Skill version pin created. */
+  SKILL_PIN_CREATED: "skill.pin.created",
+  /** Skill version pin updated. */
+  SKILL_PIN_UPDATED: "skill.pin.updated",
+  /** Skill version pin rolled back. */
+  SKILL_PIN_ROLLED_BACK: "skill.pin.rolled_back",
+  /** Skill import proposal approved. */
+  SKILL_PROPOSAL_APPROVED: "skill.proposal.approved",
+  /** Skill import proposal rejected. */
+  SKILL_PROPOSAL_REJECTED: "skill.proposal.rejected",
+  /** Skill sync pinned. */
+  SKILL_SYNC_PINNED: "skill.sync.pinned",
+  /** Skill sync unpinned. */
+  SKILL_SYNC_UNPINNED: "skill.sync.unpinned",
+  /** Skill sync rolled back. */
+  SKILL_SYNC_ROLLED_BACK: "skill.sync.rolled_back",
+
+  // Memory lifecycle (v8.7, MEMLIFE-01..02)
+  /** Retention policy selected, unavailable, or conflicted for a record. */
+  MEMORY_RETENTION_DECISION: "memory.retention.decision",
+  /** Scheduled retention expiry run started, completed, failed, or replayed. */
+  MEMORY_RETENTION_EXPIRY_RUN: "memory.retention.expiry_run",
+  /** Legal hold created, updated, released, or expired. */
+  MEMORY_LEGAL_HOLD: "memory.legal_hold",
+  /** Subject erasure plan created with reviewable non-sensitive coverage. */
+  MEMORY_SUBJECT_ERASURE_PLANNED: "memory.subject_erasure.planned",
+  /** Subject erasure plan approved by an operator for the exact current hash. */
+  MEMORY_SUBJECT_ERASURE_APPROVED: "memory.subject_erasure.approved",
+  /** Subject erasure execution completed, blocked, incomplete, or failed. */
+  MEMORY_SUBJECT_ERASURE_EXECUTED: "memory.subject_erasure.executed",
+  /** Episodic decay run completed with per-record skip/decay receipts. */
+  MEMORY_DECAY_RUN: "memory.decay.run",
+
+  // Memory lifecycle v8.7 MEMLIFE-05: consolidation, vault, DSAR, offboarding, tombstones
+  /** A consolidation cycle has begun for a scoped batch (success, failed, or skipped). */
+  MEMORY_CONSOLIDATION_RUN: "memory.consolidation.run",
+  /** A consolidation cycle wrote a new ontology summary after raw-vault integrity verification. */
+  MEMORY_CONSOLIDATION_SUMMARY: "memory.consolidation.summary",
+  /** Raw vault write succeeded with integrity hash and classification. */
+  MEMORY_VAULT_WRITE: "memory.vault.write",
+  /** Raw vault replay completed and the artifact hash matched the persisted record. */
+  MEMORY_VAULT_REPLAY: "memory.vault.replay",
+  /** Raw vault durability failure (db/file/rename/key/hash fault). */
+  MEMORY_VAULT_FAILURE: "memory.vault.failure",
+  /** Subject export (DSAR) request identity-verified and manifest produced. */
+  MEMORY_SUBJECT_EXPORT: "memory.subject.export",
+  /** Subject delete (DSAR) request identity-verified and erasure plan/status produced. */
+  MEMORY_SUBJECT_DELETE: "memory.subject.delete",
+  /** Offboarding triggered a pending MEMLIFE review (does not claim erasure complete). */
+  MEMORY_OFFBOARDING_PENDING: "memory.offboarding.pending",
+  /** Tombstone written for a completed erasure preserving chain continuity without payload. */
+  MEMORY_TOMBSTONE_WRITTEN: "memory.tombstone.written",
+  /** A single-record erasure completed across all registered derivatives. Used by the
+   *  erasure coordinator; subject erasure uses MEMORY_SUBJECT_ERASURE_EXECUTED. */
+  MEMORY_ERASURE_COMPLETED: "memory.erasure.completed",
+
+  // Orchestration evidence v8.8 / MSIQ-04..05 / ORCH-FOLLOWUP-01
+  /** MSIQ self-hosted Microsoft Agent Framework memory adapter established a session. */
+  ORCH_MSIQ_ADAPTER_SESSION: "orch.msiq.adapter.session",
+  /** MSIQ adapter write/read/search operation completed (success/deny/conflict). */
+  ORCH_MSIQ_ADAPTER_OPERATION: "orch.msiq.adapter.operation",
+  /** MCP protocol/capability validation step result (precedes adapter access). */
+  ORCH_MCP_VALIDATION: "orch.mcp.validation",
+  /** Federation source registered or updated. */
+  ORCH_FEDERATION_SOURCE_REGISTERED: "orch.federation.source.registered",
+  /** Federation budget exceeded (global or per-source). */
+  ORCH_FEDERATION_BUDGET_EXCEEDED: "orch.federation.budget_exceeded",
+  /** Per-source independent policy evaluation outcome recorded. */
+  ORCH_FEDERATION_POLICY_DECISION: "orch.federation.policy.decision",
+  /** Per-source federated retrieval outcome (success/empty/denied/omitted/stale/injection/timeout/malformed/failed). */
+  ORCH_FEDERATION_SOURCE_OUTCOME: "orch.federation.source_outcome",
+  /** Federated merge completed with deterministic pack hash + dedupe/rank metadata. */
+  ORCH_FEDERATION_MERGE: "orch.federation.merge",
+  /** Untrusted content was detected and dispositioned (omitted/quarantined) per policy. */
+  ORCH_INJECTION_DETECTED: "orch.injection.detected",
+  /** Multi-hop plan graph validated before execution. */
+  ORCH_PLAN_VALIDATED: "orch.plan.validated",
+  /** Per-step fresh policy/identity/freshness/dependency/input/verification gate. */
+  ORCH_STEP_GATE: "orch.step.gate",
+  /** Step side effect committed with hashes and rollback boundary metadata. */
+  ORCH_STEP_COMMITTED: "orch.step.committed",
+  /** Ambiguous remote commit was reconciled before any compensating mutation. */
+  ORCH_COMMIT_RECONCILED: "orch.commit.reconciled",
+  /** Compensation or rollback recovery event appended to run evidence. */
+  ORCH_RECOVERY_APPENDED: "orch.recovery.appended",
+  /** Rollback handle was consumed, denied, expired, or diverged. */
+  ORCH_ROLLBACK_HANDLE: "orch.rollback.handle",
+  /** Tamper-evident orchestration evidence bundle produced or verified. */
+  ORCH_EVIDENCE_BUNDLE: "orch.evidence.bundle",
+
+  // Retrieval benchmark v8.9 (BENCH-03 + RETRIEVAL-01 continued)
+  /** A retrieval benchmark run was emitted. */
+  RETRIEVAL_BENCH_RUN: "retrieval_bench.run",
+  /** Stage receipt (retrieved/reranked/deduped/packed/etc.) was reconciled. */
+  RETRIEVAL_BENCH_RECEIPT: "retrieval_bench.receipt",
+  /** A benchmark publication gate decision was taken (ready_for_publication or blocked). */
+  RETRIEVAL_BENCH_PUBLICATION: "retrieval_bench.publication",
+  /** A benchmark report was replayed against the recorded config. */
+  RETRIEVAL_BENCH_REPLAY: "retrieval_bench.replay",
+  /** A cross-lane / cross-run contamination guard was triggered. */
+  RETRIEVAL_BENCH_CONTAMINATION: "retrieval_bench.contamination",
 } as const;
 
 /** Union type of all valid audit event type string values. */
@@ -108,6 +235,44 @@ export const ENTITY_TYPES = {
   COMPLIANCE_CONTROL: "compliance_control",
   /** Per-tenant knowledge vault accessed via the knowledge MCP (Phase 125, ENTOPS-03). */
   KNOWLEDGE_VAULT: "knowledge_vault",
+  /** A shared-policy-engine decision (Phase 128, POLGOV-01/02). */
+  POLICY_DECISION: "policy_decision",
+  /** A Paperclip tenant entity (company, agent, issue, budget) observed via activity ingestion (Phase 146, FLEET-18). */
+  PAPERCLIP: "paperclip",
+  /** A lifecycle retention policy or retention-scoped record. */
+  MEMORY_RETENTION: "memory_retention",
+  /** A legal hold over memory lifecycle records. */
+  MEMORY_LEGAL_HOLD: "memory_legal_hold",
+  /** A reviewed subject erasure plan/execution record. */
+  MEMORY_SUBJECT_ERASURE: "memory_subject_erasure",
+  /** A scheduled episodic memory decay run. */
+  MEMORY_DECAY: "memory_decay",
+  /** A memory consolidation cycle (episodic -> summary via raw vault). */
+  MEMORY_CONSOLIDATION: "memory_consolidation",
+  /** A memory raw vault artifact (write, replay, classification, durability). */
+  MEMORY_VAULT: "memory_vault",
+  /** A subject data export / delete (DSAR) request. */
+  MEMORY_DSAR: "memory_dsar",
+  /** An offboarding-triggered pending MEMLIFE review. */
+  MEMORY_OFFBOARDING: "memory_offboarding",
+  /** A scoped, non-sensitive erasure tombstone pointer. */
+  MEMORY_TOMBSTONE: "memory_tombstone",
+  /** Embedding provenance row linked to a canonical memory identity (model_version, removability, lifecycle state). */
+  MEMORY_EMBEDDING: "memory_embedding",
+  /** MSIQ self-hosted Microsoft Agent Framework memory adapter session. */
+  MSIQ_ADAPTER_SESSION: "msiq_adapter_session",
+  /** Federation source registration (memory/knowledge/MCP, with type, handle, scope, trust, expiry). */
+  FEDERATION_SOURCE: "federation_source",
+  /** Federation budget evaluation record (global + per-source bounds). */
+  FEDERATION_BUDGET: "federation_budget",
+  /** Federation source outcome (per-source decision + receipt metadata). */
+  FEDERATION_OUTCOME: "federation_outcome",
+  /** Federation merged pack (deterministic dedupe + rank + provenance). */
+  FEDERATION_PACK: "federation_pack",
+  /** Multi-hop orchestration run, step, recovery, rollback, or evidence bundle. */
+  ORCHESTRATION_RUN: "orchestration_run",
+  /** A retrieval benchmark run, stage receipt, publication gate, replay, or contamination event. */
+  RETRIEVAL_BENCH: "retrieval_bench",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

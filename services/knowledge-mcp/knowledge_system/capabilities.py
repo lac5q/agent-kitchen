@@ -15,6 +15,7 @@ CORE_TOOLS = [
     "knowledge_manifest",
     "knowledge_search",
     "knowledge_read",
+    "memory_recall",
     "memory_search",
     "memory_save",
 ]
@@ -42,9 +43,10 @@ WORKSPACES = {
     },
     "agent-memory": {
         "description": "Durable agent memory workspace for preferences, lessons, and cross-session facts.",
-        "tools": ["memory_search", "memory_save", "memory_get_all", "memory_health"],
+        "tools": ["memory_recall", "memory_search", "memory_save", "memory_get_all", "memory_health"],
         "resources": [],
         "use_when": [
+            "Need to find a meeting across Circleback/Fathom/Zoom/Google without knowing collection names",
             "Need user or agent preferences",
             "Need to save durable facts after task completion",
             "Need to inspect memory service health",

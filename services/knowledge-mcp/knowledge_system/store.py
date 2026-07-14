@@ -80,26 +80,157 @@ def _validate_frontmatter(content: str) -> tuple[bool, str]:
     """Validate YAML frontmatter for skills and structured docs."""
     if not content.startswith("---"):
         return True, ""  # No frontmatter required
-    
+
     try:
         # Simple frontmatter extraction
         parts = content.split("---", 2)
         if len(parts) < 3:
             return False, "Invalid frontmatter: missing closing ---"
-        
+
         frontmatter = parts[1].strip()
         if not frontmatter:
             return False, "Empty frontmatter"
-        
+
         # Check for required fields in skills
         if "name:" not in frontmatter:
             return False, "Missing 'name' in frontmatter"
         if "description:" not in frontmatter:
             return False, "Missing 'description' in frontmatter"
-        
+
         return True, ""
     except Exception as exc:
         return False, f"Frontmatter validation error: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 130 / MSIQ-01/02/03: knowledge-repo labels
+# ---------------------------------------------------------------------------
+
+VALID_SENSITIVITIES = {"public", "internal", "confidential", "restricted"}
+
+# Roles authorized to read each sensitivity tier.
+_SENSITIVITY_ALLOWED_ROLES: dict[str, set[str]] = {
+    "restricted": {"admin", "operator"},
+    "confidential": {"admin", "operator", "reviewer"},
+    # 'internal' and 'public' (or absent) are default-open -- every role reads.
+}
+
+
+def _split_frontmatter(content: str) -> tuple[str, str]:
+    """Return (frontmatter_block, body). Empty frontmatter if missing."""
+    if not content.startswith("---"):
+        return "", content
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return "", content
+    return parts[1].strip(), parts[2]
+
+
+def _extract_labels(content: str) -> dict:
+    """Parse frontmatter and return a dict of any present labels.
+
+    Recognised keys: sensitivity, authoritative, verified_at, expires_at.
+    Returns {} when no frontmatter exists or no labels are present.
+    """
+    fm, _body = _split_frontmatter(content)
+    if not fm:
+        return {}
+    labels: dict = {}
+    for line in fm.splitlines():
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip().lower()
+        value = value.strip()
+        if key in {"sensitivity", "authoritative", "verified_at", "expires_at"}:
+            labels[key] = value
+    return labels
+
+
+def _coerce_iso_date(value: str) -> str:
+    """Normalise a date-like string to YYYY-MM-DD. Accepts the common ISO variants."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    # Take the leading YYYY-MM-DD portion if a longer datetime is supplied.
+    if len(value) >= 10 and value[4:5] == "-" and value[7:8] == "-":
+        candidate = value[:10]
+        try:
+            # Validate the date is real.
+            datetime.strptime(candidate, "%Y-%m-%d")
+            return candidate
+        except ValueError:
+            return ""
+    return ""
+
+
+def _validate_knowledge_labels(content: str) -> tuple[bool, str]:
+    """Validate label fields in YAML frontmatter for knowledge-repo docs.
+
+    Rules (MSIQ-01):
+      - sensitivity must be one of public/internal/confidential/restricted.
+      - authoritative must parse as a boolean (true/false, case-insensitive).
+      - verified_at must be ISO date (YYYY-MM-DD or full ISO datetime).
+      - expires_at must be ISO date.
+
+    Returns (True, "") when valid OR no frontmatter is present. An empty
+    frontmatter is allowed -- the caller's gate ('require_frontmatter' or
+    path starts with content/) decides whether frontmatter itself is needed.
+
+    Unrecognised keys are ignored (we never want to block a write because of
+    a future label someone added).
+    """
+    fm, _body = _split_frontmatter(content)
+    if not fm:
+        return True, ""
+
+    labels = _extract_labels(content)
+
+    sensitivity = labels.get("sensitivity")
+    if sensitivity is not None:
+        if sensitivity not in VALID_SENSITIVITIES:
+            return (
+                False,
+                f"Invalid sensitivity '{sensitivity}'. "
+                f"Must be one of: {sorted(VALID_SENSITIVITIES)}",
+            )
+
+    authoritative = labels.get("authoritative")
+    if authoritative is not None:
+        if authoritative.lower() not in {"true", "false"}:
+            return (
+                False,
+                f"Invalid authoritative '{authoritative}'. Must be true or false.",
+            )
+
+    for date_key in ("verified_at", "expires_at"):
+        date_value = labels.get(date_key)
+        if date_value is None:
+            continue
+        if not _coerce_iso_date(date_value):
+            return (
+                False,
+                f"Invalid {date_key} '{date_value}'. Must be ISO date (YYYY-MM-DD).",
+            )
+
+    return True, ""
+
+
+def _label_authorized(labels: dict, agent_role: str) -> bool:
+    """Return True if the role can read a doc with these labels.
+
+    Default-open: any doc without a recognised sensitivity is readable by
+    every role. Unknown sensitivity values are treated as default-open too
+    (never silently deny a doc -- we'd rather over-share than lock people
+    out; the write-side validator blocks unknown values).
+    """
+    sensitivity = labels.get("sensitivity")
+    if not sensitivity:
+        return True
+    allowed = _SENSITIVITY_ALLOWED_ROLES.get(sensitivity)
+    if allowed is None:
+        return True
+    return agent_role in allowed
 
 
 def _audit_log(operation: str, path: str, agent_id: str, role: str,
@@ -409,6 +540,7 @@ class KnowledgeStore:
         tenant_id: Optional[str] = None,
         user_id: Optional[str] = None,
         agent_id: Optional[str] = None,
+        agent_role: Optional[str] = None,
     ) -> dict:
         """Read a file by repo-relative path with path traversal protection.
 
@@ -416,6 +548,13 @@ class KnowledgeStore:
         central-audit bridge (POST /api/audit/knowledge with operation=read)
         BEFORE returning. Failure of the POST fails the read (fail-closed).
         The local JSONL audit row is always written (mirror).
+
+        Phase 130 / MSIQ-02: label-aware authorization. After the read, the
+        file's frontmatter labels are extracted. If sensitivity is restricted
+        or confidential and the caller's role is not authorised, the read
+        returns a 'forbidden' dict (the file is NEVER returned to the caller).
+        Unlabeled docs are default-open. `agent_role` resolves from the kwarg,
+        the `MEMROOS_AGENT_ROLE` env var, or defaults to "agent".
         """
         if not self._operator_scope_ok():
             raise PermissionError(
@@ -453,10 +592,35 @@ class KnowledgeStore:
             op_hash=op_hash,
         )
 
+        # Phase 130 / MSIQ-02: label-aware authorization. The audit rows are
+        # already written (the read happened -- denying it from the caller's
+        # perspective does not undo the access record). Filtered docs return
+        # a forbidden dict so the caller can't accidentally echo the content.
+        role = (agent_role or os.environ.get("MEMROOS_AGENT_ROLE") or "agent").strip() or "agent"
+        labels = _extract_labels(text)
+        if not _label_authorized(labels, role):
+            return {
+                "status": "forbidden",
+                "error": (
+                    f"label restriction: sensitivity '{labels.get('sensitivity')}' "
+                    f"requires elevated role"
+                ),
+                "path": path.relative_to(effective).as_posix(),
+                "label_authorized": False,
+                "required_role": (
+                    "admin or operator"
+                    if labels.get("sensitivity") == "restricted"
+                    else "admin, operator, or reviewer"
+                ),
+                "current_role": role,
+            }
+
         return {
             "path": path.relative_to(effective).as_posix(),
             "content": text[:max_chars],
             "truncated": len(text) > max_chars,
+            "label_authorized": True,
+            "labels": labels,
         }
 
     def write_text(
@@ -524,6 +688,20 @@ class KnowledgeStore:
         # Frontmatter validation for skills and structured docs
         if require_frontmatter or normalized_path.startswith("skills/"):
             valid, error = _validate_frontmatter(content)
+            if not valid:
+                return {
+                    "status": "validation_error",
+                    "error": error,
+                    "path": normalized_path,
+                }
+
+        # Knowledge-repo label validation (Phase 130 / MSIQ-01).
+        # Run when frontmatter is required OR the path lives under content/
+        # (the canonical knowledge-repo tree). Restricted/confidential docs
+        # cannot be silently created with garbage labels -- the writer gets a
+        # validation_error and the file is not written.
+        if require_frontmatter or normalized_path.startswith("content/"):
+            valid, error = _validate_knowledge_labels(content)
             if not valid:
                 return {
                     "status": "validation_error",
@@ -870,12 +1048,23 @@ class KnowledgeStore:
         tenant_id: Optional[str] = None,
         user_id: Optional[str] = None,
         agent_id: Optional[str] = None,
+        agent_role: Optional[str] = None,
     ) -> list[dict]:
         """Simple deterministic text search over markdown files in effective root.
 
         Phase 125: also POSTs a `search` audit event in operator mode before
         returning any results (fail-closed). Search results only contain
         path + line + preview -- NEVER file content.
+
+        Phase 130 / MSIQ-02: label-aware filtering and ranking.
+          - Each file's frontmatter labels are read once and cached per scan.
+          - Documents whose sensitivity the caller's role cannot read are
+            silently filtered out (no leak of restricted paths).
+          - Ranking: authoritative=true docs are boosted to the top of the
+            returned list; expired docs (expires_at < today) are demoted to
+            the end with `expired: true` set; docs without verified_at get
+            `unverified: true` set but are not demoted.
+          - `label_authorized: true` is stamped on every returned result.
         """
         if not self._operator_scope_ok():
             return [
@@ -888,6 +1077,27 @@ class KnowledgeStore:
         effective = self.effective_root()
         if not needle:
             return []
+        role = (
+            agent_role or os.environ.get("MEMROOS_AGENT_ROLE") or "agent"
+        ).strip() or "agent"
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        # Pre-pass: file-level labels. Built by walking iter_markdown once
+        # so each file is read at most twice (once for labels, once for
+        # line search -- could be fused later for further perf gains).
+        file_labels: dict[str, dict] = {}
+        for fpath in self.iter_markdown(include_wiki=True):
+            try:
+                rel = fpath.relative_to(effective).as_posix()
+            except ValueError:
+                continue
+            try:
+                raw = fpath.read_text(errors="replace")
+            except OSError:
+                file_labels[rel] = {}
+                continue
+            file_labels[rel] = _extract_labels(raw)
+
         results: list[dict] = []
 
         # Audit bridge (operator mode). The `path` in the audit row is the
@@ -904,6 +1114,11 @@ class KnowledgeStore:
         if audit_block is not None:
             return [audit_block]
 
+        # Collect ALL matching rows (not paginated yet). We need the full
+        # list before ranking authoritative/expired tiers, otherwise the
+        # `limit` cut would distort the sort. We cap at a generous multiplier
+        # so a giant vault can't OOM the search.
+        scan_cap = max(limit * 25, 500)
         for path in self.iter_markdown(include_wiki=True):
             try:
                 lines = path.read_text(errors="replace").splitlines()
@@ -914,22 +1129,44 @@ class KnowledgeStore:
             except ValueError:
                 # Path is outside effective root (shouldn't happen, but be defensive).
                 continue
+            labels = file_labels.get(rel, {})
+            # Phase 130 / MSIQ-02: filter out docs the caller can't read.
+            if not _label_authorized(labels, role):
+                continue
             for idx, line in enumerate(lines, start=1):
                 if needle in line.lower():
-                    results.append(SearchResult(rel, idx, line.strip()[:240]).__dict__)
-                    if len(results) >= limit:
-                        # Local mirror (always) -- best-effort after pagination
-                        _audit_log(
-                            "search",
-                            f"query={query}",
-                            agent_id or "unknown",
-                            "agent",
-                            tenant_id=tenant_id or self._bound_tenant_id or "default-tenant",
-                            user_id=user_id or "",
-                            op_hash=op_hash,
-                        )
-                        return results
-        # Local mirror (always)
+                    row = SearchResult(rel, idx, line.strip()[:240]).__dict__
+                    row["label_authorized"] = True
+                    authoritative = labels.get("authoritative", "").lower() == "true"
+                    if authoritative:
+                        row["authoritative"] = True
+                    if "verified_at" not in labels:
+                        row["unverified"] = True
+                    expires_at = labels.get("expires_at", "")
+                    if expires_at:
+                        row["expires_at"] = expires_at
+                        if expires_at < today:
+                            row["expired"] = True
+                    results.append(row)
+                    if len(results) >= scan_cap:
+                        break
+            if len(results) >= scan_cap:
+                break
+
+        # Phase 130 / MSIQ-03 ranking. Sort key buckets (in ascending order):
+        #   1. expired -> True sorts last
+        #   2. authoritative -> True sorts first
+        # Within the same bucket we keep the original scan order (stable sort).
+        def _sort_key(r: dict) -> tuple:
+            return (
+                1 if r.get("expired") else 0,
+                0 if r.get("authoritative") else 1,
+            )
+
+        results.sort(key=_sort_key)
+        ranked = results[:limit]
+
+        # Local mirror (always) -- one row per query, not per result.
         _audit_log(
             "search",
             f"query={query}",
@@ -939,7 +1176,61 @@ class KnowledgeStore:
             user_id=user_id or "",
             op_hash=op_hash,
         )
-        return results
+        return ranked
+
+    def flag_expired_unverified(self) -> list[dict]:
+        """Scan all markdown files and return expired or unverified docs.
+
+        Phase 130 / MSIQ-03: knowledge-repo freshness sweep. For every doc
+        under the effective root, return a small dict with `path`, `expired`,
+        `unverified`, `expires_at`, `verified_at`, and the full `labels`. Docs
+        that are neither expired nor unverified are excluded from the result
+        list -- callers iterate `flag_expired_unverified()` to find cleanup
+        work, not to enumerate the whole vault.
+
+        Default-open semantics are unchanged: this scan does NOT enforce
+        label authorization (operators use it to find restricted docs that
+        are ALSO expired so they can refresh them).
+        """
+        effective = self.effective_root()
+        out: list[dict] = []
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        for path in self.iter_markdown(include_wiki=True):
+            try:
+                raw = path.read_text(errors="replace")
+            except OSError:
+                continue
+            try:
+                rel = path.relative_to(effective).as_posix()
+            except ValueError:
+                continue
+            labels = _extract_labels(raw)
+            if not labels:
+                continue
+            expires_at = labels.get("expires_at", "")
+            verified_at = labels.get("verified_at", "")
+            expired = bool(expires_at) and expires_at < today
+            unverified = "verified_at" not in labels
+            if not (expired or unverified):
+                continue
+            out.append(
+                {
+                    "path": rel,
+                    "expired": expired,
+                    "unverified": unverified,
+                    "expires_at": expires_at,
+                    "verified_at": verified_at,
+                    "labels": labels,
+                }
+            )
+        # Stable ordering: expired first (most urgent), then unverified.
+        out.sort(
+            key=lambda r: (
+                0 if r.get("expired") else 1,
+                r.get("path", ""),
+            )
+        )
+        return out
 
     def manifest(self) -> dict:
         """Return a compact JSON-safe manifest for agents (tenant-scoped)."""

@@ -54,6 +54,7 @@ function insertSkill(
     rollback_behavior: string;
     imported_by: string;
     imported_at: string;
+    evidence_examples: string;
   }> = {}
 ) {
   const row = {
@@ -62,6 +63,9 @@ function insertSkill(
     risk_tier: overrides.risk_tier ?? "low",
     dispatch_status: overrides.dispatch_status ?? "enabled",
     completeness_pct: overrides.completeness_pct ?? 100,
+    // Phase 150: keep lifecycle_state aligned with dispatch_status so the
+    // v14 SQL gate lets enabled+complete rows through.
+    lifecycle_state: (overrides.dispatch_status ?? "enabled") === "enabled" ? "enabled" : "draft",
     owner: overrides.owner ?? "team-a",
     description: overrides.description ?? "A test skill",
     version: overrides.version ?? "1.0",
@@ -73,6 +77,7 @@ function insertSkill(
     rollback_behavior: overrides.rollback_behavior ?? "no-op",
     imported_by: overrides.imported_by ?? "operator",
     imported_at: overrides.imported_at ?? new Date().toISOString(),
+    evidence_examples: overrides.evidence_examples ?? "check output",
   };
 
   db.prepare(`
@@ -80,12 +85,12 @@ function insertSkill(
       (name, source_harness, risk_tier, dispatch_status, completeness_pct,
        owner, description, version, raw_body, missing_fields_json,
        preconditions, allowed_tools, verification_checks, rollback_behavior,
-       imported_by, imported_at)
+       imported_by, imported_at, evidence_examples, lifecycle_state)
     VALUES
       (@name, @source_harness, @risk_tier, @dispatch_status, @completeness_pct,
        @owner, @description, @version, @raw_body, @missing_fields_json,
        @preconditions, @allowed_tools, @verification_checks, @rollback_behavior,
-       @imported_by, @imported_at)
+       @imported_by, @imported_at, @evidence_examples, @lifecycle_state)
   `).run(row);
 }
 
@@ -250,31 +255,57 @@ describe("lookupSkillContract", () => {
     expect(denied!.kind).toBe("denied");
   });
 
-  it("multi-harness: same skill name enabled in one harness, disabled in another — returns the enabled hit (not non-deterministic)", async () => {
+  it("multi-harness: same skill name enabled in one harness, disabled in another — ambiguous without binding (VAL-SKILL-018)", async () => {
     const { lookupSkillContract } = await getSkillLookup();
     // Same name 'shared-skill' exists in two harnesses with different statuses
     // UNIQUE(name, source_harness) allows this
     insertSkill(db, { name: "shared-skill", source_harness: "openai", dispatch_status: "disabled", completeness_pct: 100 });
     insertSkill(db, { name: "shared-skill", source_harness: "claude", dispatch_status: "enabled", completeness_pct: 100 });
 
+    // Without explicit source_harness, dispatch must refuse to silently pick
+    // a harness. The result is "ambiguous" so the operator can choose.
     const result = lookupSkillContract(db, "shared-skill");
-    // Must find the enabled hit, not non-deterministically return the disabled one
     expect(result).not.toBeNull();
-    expect(result!.kind).toBe("hit");
-    if (result!.kind !== "hit") throw new Error("narrow");
-    expect(result!.skill.source_harness).toBe("claude");
-    expect(result!.skill.dispatch_status).toBe("enabled");
+    expect(result!.kind).toBe("ambiguous");
+    if (result!.kind !== "ambiguous") throw new Error("narrow");
+    expect(result!.candidate_harnesses).toContain("openai");
+    expect(result!.candidate_harnesses).toContain("claude");
+    expect(result!.reason).toMatch(/multiple harnesses/i);
   });
 
-  it("multi-harness: same skill name disabled in all harnesses — returns denial (not a hit)", async () => {
+  it("multi-harness: explicit source_harness binding returns the correct hit (VAL-SKILL-018)", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, { name: "shared-skill", source_harness: "openai", dispatch_status: "disabled", completeness_pct: 100 });
+    insertSkill(db, { name: "shared-skill", source_harness: "claude", dispatch_status: "enabled", completeness_pct: 100 });
+
+    // With explicit source_harness, lookup is constrained to that exact row.
+    const claudeHit = lookupSkillContract(db, "shared-skill", { sourceHarness: "claude" });
+    expect(claudeHit!.kind).toBe("hit");
+    if (claudeHit!.kind !== "hit") throw new Error("narrow");
+    expect(claudeHit!.skill.source_harness).toBe("claude");
+    expect(claudeHit!.skill.dispatch_status).toBe("enabled");
+
+    const openaiDenied = lookupSkillContract(db, "shared-skill", { sourceHarness: "openai" });
+    expect(openaiDenied!.kind).toBe("denied");
+  });
+
+  it("multi-harness: same skill name disabled in all harnesses — ambiguous without binding, denied with binding (VAL-SKILL-018)", async () => {
     const { lookupSkillContract } = await getSkillLookup();
     insertSkill(db, { name: "all-disabled", source_harness: "openai", dispatch_status: "disabled", completeness_pct: 100 });
     insertSkill(db, { name: "all-disabled", source_harness: "claude", dispatch_status: "disabled", completeness_pct: 100 });
 
+    // Without explicit source_harness the result is ambiguous (multiple harnesses).
     const result = lookupSkillContract(db, "all-disabled");
-    expect(result!.kind).toBe("denied");
-    if (result!.kind !== "denied") throw new Error("narrow");
-    expect(result!.reason).toMatch(/disabled/i);
+    expect(result!.kind).toBe("ambiguous");
+    if (result!.kind !== "ambiguous") throw new Error("narrow");
+    expect(result!.candidate_harnesses).toContain("openai");
+    expect(result!.candidate_harnesses).toContain("claude");
+
+    // With explicit binding, the constrained lookup returns denied (disabled).
+    const bound = lookupSkillContract(db, "all-disabled", { sourceHarness: "claude" });
+    expect(bound!.kind).toBe("denied");
+    if (bound!.kind !== "denied") throw new Error("narrow");
+    expect(bound!.reason).toMatch(/disabled/i);
   });
 });
 
@@ -318,5 +349,154 @@ describe("buildSkillEvidence", () => {
     expect(evidence.skill_governance.selected_skill).toBeUndefined();
     expect(evidence.skill_governance.denial_reason).toBeUndefined();
     expect(evidence.skill_governance.mode).toBe("fallback");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SKILLTRUST-01 / VAL-CONTRACT-003..005, 009 — dispatch surface guarantees
+// ---------------------------------------------------------------------------
+
+describe("VAL-CONTRACT-003 — Skill missing evidence_examples is marked incomplete", () => {
+  it("normalizeRegistryEntry sets dispatch_status='incomplete' when evidence_examples is absent", async () => {
+    const { normalizeRegistryEntry, parseSkillMd } = await import("@/lib/skills/registry");
+    const md = `
+---
+name: incomplete-ev
+description: d
+owner: ops
+source_harness: claude
+risk_tier: low
+---
+
+## Preconditions
+- none
+
+## Allowed Tools
+- read_file
+
+## Verification Checks
+- check
+
+## Rollback
+- revert
+`;
+    const parsed = parseSkillMd(md);
+    const entry = normalizeRegistryEntry(parsed, "claude", "operator");
+    expect(entry.dispatch_status).toBe("incomplete");
+    expect(entry.missing_fields).toContain("evidence_examples");
+    expect(entry.completeness_pct).toBeLessThan(100);
+  });
+});
+
+describe("VAL-CONTRACT-004 — Dispatch denied for skill missing evidence_examples", () => {
+  it("returns denied when completeness_pct < 100 (evidence_examples absent)", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    // A skill whose evidence_examples was absent at parse-time will, when
+    // normalized, be marked dispatch_status='incomplete' with completeness_pct<100.
+    insertSkill(db, {
+      name: "missing-ev",
+      dispatch_status: "incomplete",
+      completeness_pct: 91, // 10/11 = 91% — evidence_examples missing
+      evidence_examples: "",
+    });
+    const result = lookupSkillContract(db, "missing-ev");
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe("denied");
+    // The SQL gate enforces completeness_pct = 100, so an incomplete row is denied.
+    if (result!.kind !== "denied") throw new Error("narrow");
+    expect(result.reason).toMatch(/incomplete/i);
+  });
+
+  it("returns denied even when dispatch_status='enabled' but completeness_pct<100 (SQL gate is fail-closed)", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "enabled-but-incomplete",
+      dispatch_status: "enabled",
+      completeness_pct: 91,
+      evidence_examples: "",
+    });
+    const result = lookupSkillContract(db, "enabled-but-incomplete");
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe("denied");
+    // SQL filter on completeness_pct = 100 excludes this row → never returns kind: "hit"
+  });
+});
+
+describe("VAL-CONTRACT-005 — Fully specified skill with evidence_examples is dispatchable", () => {
+  it("returns hit when completeness_pct=100, dispatch_status=enabled, evidence_examples non-empty", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "complete-ev",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      evidence_examples: "- verify output\n- run regression suite",
+    });
+    const result = lookupSkillContract(db, "complete-ev");
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe("hit");
+    if (result!.kind !== "hit") throw new Error("narrow");
+    expect(result.skill.name).toBe("complete-ev");
+    expect(result.skill.completeness_pct).toBe(100);
+  });
+});
+
+describe("VAL-CONTRACT-009 — buildSkillEvidence never leaks evidence_examples body text", () => {
+  it("does NOT include evidence_examples in SkillGovernanceEvidence (hit path)", async () => {
+    const { buildSkillEvidence, lookupSkillContract } = await getSkillLookup();
+    const secretEvidence = "secret operator instructions do not leak this";
+    insertSkill(db, {
+      name: "no-leak-hit",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      evidence_examples: secretEvidence,
+    });
+    const contract = lookupSkillContract(db, "no-leak-hit");
+    expect(contract!.kind).toBe("hit");
+    const evidence = buildSkillEvidence(contract!);
+
+    // The selected_skill must NOT contain evidence_examples
+    const skillKeys = Object.keys(evidence.skill_governance.selected_skill!);
+    expect(skillKeys).not.toContain("evidence_examples");
+
+    // Serialized evidence JSON must not contain the secret text
+    const serialized = JSON.stringify(evidence);
+    expect(serialized).not.toContain(secretEvidence);
+    expect(serialized).not.toContain("evidence_examples");
+  });
+
+  it("does NOT include evidence_examples in SkillGovernanceEvidence (denied path)", async () => {
+    const { buildSkillEvidence, lookupSkillContract } = await getSkillLookup();
+    const secretEvidence = "denied-path secret instructions";
+    insertSkill(db, {
+      name: "no-leak-denied",
+      dispatch_status: "disabled",
+      completeness_pct: 100,
+      evidence_examples: secretEvidence,
+    });
+    const contract = lookupSkillContract(db, "no-leak-denied");
+    expect(contract!.kind).toBe("denied");
+    const evidence = buildSkillEvidence(contract!);
+
+    const serialized = JSON.stringify(evidence);
+    expect(serialized).not.toContain(secretEvidence);
+    expect(serialized).not.toContain("evidence_examples");
+  });
+
+  it("does NOT include evidence_examples in SkillContractSummary (type-level)", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "type-level-summary",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      evidence_examples: "operator-only secret text",
+    });
+    const contract = lookupSkillContract(db, "type-level-summary");
+    expect(contract!.kind).toBe("hit");
+    if (contract!.kind !== "hit") throw new Error("narrow");
+    // SkillContractSummary keys must not include evidence_examples
+    const summaryKeys = Object.keys(contract.skill);
+    expect(summaryKeys).not.toContain("evidence_examples");
+    // And the serialized form must not include the secret
+    expect(JSON.stringify(contract.skill)).not.toContain("operator-only secret text");
   });
 });

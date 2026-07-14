@@ -37,7 +37,8 @@ export interface PromotionCheck {
     | "freshness"
     | "policy"
     | "conflict"
-    | "dedupe";
+    | "dedupe"
+    | "ontology";
   pass: boolean;
   evidence: Record<string, unknown>;
 }
@@ -96,4 +97,15 @@ export interface PromotionReceiptSummary {
   previousEntryHash: string | null;
   entryHash: string;
   createdAt: string;
+  ontology?: {
+    ontologyId: string;
+    ontologyVersion: string;
+    ontologyContentHash: string;
+    namespace: string;
+    canonicalId: string;
+    aliasMigrationPath: unknown[];
+    sourceId: string;
+    sourceHash: string;
+    derivativeId: string;
+  };
 }

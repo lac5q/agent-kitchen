@@ -1,5 +1,8 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
+import { writeAuditEntry } from "@/lib/audit/write";
+import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from "@/lib/audit/event-types";
+import { resolveOntologyValidity } from "@/lib/ontology/validity";
 
 export type AgentContextLane =
   | "research"
@@ -220,6 +223,38 @@ function authorizationFor(metadata: Record<string, unknown>, status: unknown): A
   if (value === "denied" || status === "rejected") return "denied";
   if (value === "redacted") return "redacted";
   return "allowed";
+}
+
+function ontologyReferenceFor(metadata: Record<string, unknown>): {
+  tenantId: string; spaceId: string; recordType: string; recordId: string;
+} | null {
+  const raw = asRecord(metadata.ontologyReference);
+  if (Object.keys(raw).length === 0) return null;
+  const tenantId = asString(raw.tenantId);
+  const spaceId = asString(raw.spaceId);
+  const recordType = asString(raw.recordType);
+  const recordId = asString(raw.recordId);
+  return tenantId && spaceId && recordType && recordId ? { tenantId, spaceId, recordType, recordId } : null;
+}
+
+function persistOntologyInjectionReceipt(
+  db: Database.Database,
+  input: { tenantId: string; actorId: string; candidateId: string; status: "included" | "denied"; reason: string; canonicalId?: string }
+): void {
+  writeAuditEntry({
+    tenant_id: input.tenantId,
+    actor_id: input.actorId,
+    actor_role: "system",
+    event_type: AUDIT_EVENT_TYPES.POLICY_DECISION,
+    entity_type: ENTITY_TYPES.AGENT_MEMORY_CANDIDATE,
+    entity_id: `ontology_context_candidate:${input.candidateId}`,
+    reason: input.reason,
+    metadata_json: {
+      candidate_id: input.candidateId,
+      status: input.status,
+      canonical_id: input.canonicalId ?? null,
+    },
+  }, db);
 }
 
 function statusFor(delegation: Row | null, checkpoint: Row | null): AgentContextGoalStatus {
@@ -549,6 +584,37 @@ export function buildAgentContextPacket(
     ...efficiencyRows.map((row) => `efficiency_events:${String(row.id)}`),
     ...messageRows.map((row) => `agent_context_messages:${String(row.id)}`),
   ].slice(0, 25);
+  const ontologyInjection = new Map<string, { authorized: boolean; reason: string }>();
+  for (const row of candidateRows) {
+    const metadata = asRecord(safeJson(row.metadata_json));
+    const declaresOntology = Object.prototype.hasOwnProperty.call(metadata, "ontologyReference");
+    if (!declaresOntology) continue;
+    const reference = ontologyReferenceFor(metadata);
+    try {
+      if (!reference) throw new Error("missing_or_malformed_ontology_reference");
+      const context = resolveOntologyValidity(db, reference);
+      persistOntologyInjectionReceipt(db, {
+        tenantId,
+        actorId: input.actorAgentId,
+        candidateId: String(row.id),
+        status: "included",
+        reason: "server_resolved_ontology_context",
+        canonicalId: context.canonicalId,
+      });
+      ontologyInjection.set(String(row.id), { authorized: true, reason: "server_resolved_ontology_context" });
+    } catch {
+      // Receipt persistence errors deliberately deny before context material
+      // can be assembled, rather than allowing an unreceipted injection.
+      persistOntologyInjectionReceipt(db, {
+        tenantId,
+        actorId: input.actorAgentId,
+        candidateId: String(row.id),
+        status: "denied",
+        reason: "ontology_context_unavailable",
+      });
+      ontologyInjection.set(String(row.id), { authorized: false, reason: "ontology_context_unavailable" });
+    }
+  }
 
   const packetWithoutHash: Omit<AgentContextPacket, "packetHash"> = {
     packetId: `acp_${crypto.createHash("sha256").update(`${input.goalId}:${input.actorAgentId}:${generatedAt}`).digest("hex").slice(0, 24)}`,
@@ -582,7 +648,8 @@ export function buildAgentContextPacket(
     },
     memories: candidateRows.map((row) => {
       const metadata = asRecord(safeJson(row.metadata_json));
-      const authorization = authorizationFor(metadata, row.status);
+      const ontology = ontologyInjection.get(String(row.id));
+      const authorization = ontology?.authorized === false ? "denied" : authorizationFor(metadata, row.status);
       const isDenied = authorization === "denied";
       return {
         id: String(row.id),
@@ -618,6 +685,12 @@ export function buildAgentContextPacket(
         status: "included" as const,
         reason: `message ${String(row.message_type)} ${String(row.status)}; body omitted`,
         pointer: `agent_context_messages:${String(row.id)}`,
+      })),
+      ...Array.from(ontologyInjection.entries()).map(([candidateId, result]) => ({
+        source: "ontology_validity",
+        status: result.authorized ? "included" as const : "denied" as const,
+        reason: result.reason,
+        pointer: `agent_memory_candidates:${candidateId}`,
       })),
       ...(traceRows.length === 0 ? [{
         source: "agent_memory_traces",

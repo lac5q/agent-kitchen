@@ -88,6 +88,81 @@ class OrchestrationAppTest(unittest.TestCase):
         self.assertEqual(rejected_body["graphState"]["approvalDecision"], "reject")
 
 
+    def test_multihop_plan_validate_execute_resume_rollback_and_evidence_endpoints(self):
+        plan = {
+            "id": "api-plan",
+            "scope": {"tenantId": "tenant-a", "spaceId": "space-a", "purpose": "api"},
+            "budgets": {"maxSteps": 2, "maxCalls": 2, "maxSideEffects": 2},
+            "steps": [
+                {
+                    "id": "a",
+                    "scope": {"tenantId": "tenant-a", "spaceId": "space-a", "purpose": "api"},
+                    "inputHash": "input-a",
+                    "actionHash": "action-a",
+                    "checkpoint": {},
+                    "gate": {
+                        "policyDecision": "allow",
+                        "identity": {"tenantId": "tenant-a", "spaceId": "space-a"},
+                        "freshness": "fresh",
+                        "verification": "passed",
+                    },
+                    "sideEffect": {
+                        "resourceId": "resource-a",
+                        "version": "v1",
+                        "boundary": {"resourceId": "resource-a"},
+                        "compensation": {"verb": "undo"},
+                    },
+                },
+                {
+                    "id": "b",
+                    "dependsOn": ["a"],
+                    "scope": {"tenantId": "tenant-a", "spaceId": "space-a", "purpose": "api"},
+                    "inputHash": "input-b",
+                    "actionHash": "action-b",
+                    "checkpoint": {},
+                    "gate": {
+                        "policyDecision": "allow",
+                        "identity": {"tenantId": "tenant-a", "spaceId": "space-a"},
+                        "freshness": "fresh",
+                        "verification": "passed",
+                    },
+                    "sideEffect": {
+                        "resourceId": "resource-b",
+                        "version": "v1",
+                        "boundary": {"resourceId": "resource-b"},
+                        "compensation": {"verb": "undo"},
+                    },
+                },
+            ],
+        }
+
+        validation = self.client.post("/plans/validate", json={"plan": plan})
+        self.assertEqual(validation.status_code, 200)
+        self.assertTrue(validation.json()["ok"])
+
+        executed = self.client.post(
+            "/plans/execute",
+            json={"plan": plan, "runId": "api-run", "crashAfterStepId": "a"},
+        )
+        self.assertEqual(executed.status_code, 200)
+        self.assertEqual(executed.json()["status"], "checkpoint_paused")
+
+        resumed = self.client.post("/runs/api-run/resume", json={"plan": plan})
+        self.assertEqual(resumed.status_code, 200)
+        self.assertTrue(resumed.json()["success"])
+
+        evidence = self.client.get("/runs/api-run/evidence")
+        self.assertEqual(evidence.status_code, 200)
+        self.assertTrue(evidence.json()["bundle"]["verification"]["valid"])
+
+        handle = resumed.json()["rollbackHandles"][0]["handle"]
+        rollback = self.client.post(
+            "/runs/api-run/rollback",
+            json={"handle": handle, "tenantId": "tenant-a", "spaceId": "space-a", "currentResourceVersion": "v1"},
+        )
+        self.assertEqual(rollback.status_code, 200)
+        self.assertEqual(rollback.json()["status"], "rollback_completed")
+
     # HIL-02: Unknown keys in the edit payload must be rejected with HTTP 422.
     # Tests that HilEditRequest Pydantic model on PATCH /hil/{id}/edit enforces schema.
     def test_hil_edit_validation(self):

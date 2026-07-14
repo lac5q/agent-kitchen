@@ -37,9 +37,10 @@
 - ✅ **v7.6 Future Spike Queue** — Phase 119 (completed 2026-06-27; adoption deferred)
 - ✅ **v8.0 Belief + Provenance Core** — Phases 120-123 (completed 2026-07-06; PROV-01..04 + BELIEF-01..05 shipped, test-verified, Watcher-approved)
 - 🔄 **v8.1 Enterprise Operator Control Plane** — Phases 124-127 (Phases 124-125 complete 2026-07-07; Phases 126-127 have infra deps — IdP / MDM)
-- 🔜 **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (planned 2026-07-06; depends on v8.0 + v8.1)
+- ✅ **v8.2 Team-Scale Access + Policy Plane** — Phases 128-131 (completed 2026-07-07; POLGOV-01..05 + TEAMSCALE-01..06 + MSIQ-01..03 shipped; policy engine with dimensions/shadow/CI, spaces + knowledge labels, identity lifecycle + delegation chains + NOC + owner gates)
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
-- 🔜 **v8.4 Project-Centric Operator UX** — Phases 137-141 (planned 2026-07-07; from MemClaw competitor analysis; closes the operator-UX gap while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit; 22 new requirement IDs: WORKLOAD-01..05, WRITERULES-01..06, SHAREDRO-01..03, CACHEADMIN-01..05, ARTGATE-01..03)
+- ✅ **v8.4 Project-Centric Operator UX** — Phases 137-141 (completed 2026-07-08; MemClaw operator-UX parity: workspace load, write rules, document directory, `is_shared`, cache admin, save-artifact gate; 22 requirement IDs shipped)
+- ✅ **v8.5 Agent Fleet Plane** — Phases 142-147 (completed 2026-07-10; MemroOS as top-layer fleet plane across runtimes, LangGraph as peer orchestration runtime, Paperclip as parallel tenant; FLEET-01..26 shipped; sources: Discord #devops fleet research + Paperclip audit + OSS control-plane survey)
 
 ## Phases
 
@@ -567,10 +568,10 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
 
 One declarative policy engine with decision receipts replacing scattered gate logic, plus teams/spaces and human+agent identity lifecycle for the 100-person agentic-heavy ICP — running on the v8.1 multi-tenant substrate. ICP scenarios: S1, S4, S7 (access half).
 
-- [ ] **Phase 128: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02
-- [ ] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05
-- [ ] **Phase 130: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03
-- [ ] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06
+- [x] **Phase 128: Policy Engine Core + Decision Receipts** — POLGOV-01, POLGOV-02 (completed 2026-07-07; wrap-not-rewrite engine delegates to authorizeMemoryUse + checkDispatchPolicy/checkA2aSendPolicy/checkMemoryWritePolicy, adds versioned manifest + POLICY_DECISION audit receipts; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
+- [x] **Phase 129: Policy Dimensions, Shadow Mode + CI Regression** — POLGOV-03, POLGOV-04, POLGOV-05 (completed 2026-07-07; additive dimension rules (subject/object/action/purpose) that only tighten to deny, shadow mode with proposed manifest replay + operator-gated activation, CI regression corpus with approved-diffs override; MEMSEC-08 byte-identical; GLM-5.2 validator PASS)
+- [x] **Phase 130: Teams/Spaces + Knowledge-Repo Labels** — TEAMSCALE-01, MSIQ-01, MSIQ-02, MSIQ-03 (completed 2026-07-07; spaces + space_members schema with membership and zero cross-space leakage; knowledge frontmatter label validation (sensitivity/authoritative/verified_at/expires_at); label-aware search/read authorization (default-open for unlabeled); ranking boosts authoritative + demotes expired + flag job; GLM-5.2 validator PASS)
+- [x] **Phase 131: Identity Lifecycle + Delegation Chains** — TEAMSCALE-02, TEAMSCALE-03, TEAMSCALE-04, TEAMSCALE-05, TEAMSCALE-06 (completed 2026-07-07; atomic joiner/leaver flows with onboarding/offboarding receipts, scanOrphanedAgents; verifiable delegation chains with weakest-link policy; per-team NOC views; owner-gated assets with standing/per-use approval; GLM-5.2 validator PASS)
 
 ### Phase 128: Policy Engine Core + Decision Receipts
 **Goal**: Retrieval, memory write/promotion, knowledge read/write, skill dispatch, and capability decisions evaluate through one versioned declarative policy layer that emits receipts.
@@ -697,17 +698,134 @@ Source: 2026-07-06 Mark Kashef full-channel transcript audit and prioritization 
 
 ---
 
-## v8.4 Project-Centric Operator UX (Phases 137-141) — PLANNED
+## v8.4 Project-Centric Operator UX (Phases 137-141) — COMPLETE (2026-07-08)
 
 Source: 2026-07-07 MemClaw competitor analysis (`content/research/memclaw-gap-analysis-2026-07-07.md`). MemClaw (Felo-Inc, MIT) ships 6 specific UX patterns today that MemroOS does not yet surface: single-load workspace binding, operator-visible write rules + document directory, `is_shared` boolean read-only flag, per-space cache invalidation transparency, and a save-artifact gate with auto-README update. None of these conflict with the standing gates (zero paid services, MIT-OSS only). Decision: borrow the UX patterns, preserve governance — embed them in MemroOS product, not as portable skills, because each touches shared persistence, schema, and operator surfaces.
 
 **Borrowing rule:** ship MemClaw's operator-UX primitives (workspace load, write rules, document directory, `is_shared`, cache transparency, save gate), but keep MEMSEC labels, belief stages, evidence bundles, and hash-chained audit as first-class. MemroOS is self-hostable; MemClaw's hosted-LiveDoc backend is explicitly rejected per the enterprise review's SOC2 tenancy-collapse finding.
 
-- [ ] **Phase 137: Single-Load Workspace + Auto Context Packet** — WORKLOAD-01, WORKLOAD-02, WORKLOAD-03, WORKLOAD-04, WORKLOAD-05
-- [ ] **Phase 138: Operator-Visible Write Rules + Document Directory** — WRITERULES-01, WRITERULES-02, WRITERULES-03, WRITERULES-04, WRITERULES-05, WRITERULES-06
-- [ ] **Phase 139: is_shared: Single-Boolean Read-Only Toggle** — SHAREDRO-01, SHAREDRO-02, SHAREDRO-03
-- [ ] **Phase 140: Per-Space Cache + Invalidation Surface** — CACHEADMIN-01, CACHEADMIN-02, CACHEADMIN-03, CACHEADMIN-04, CACHEADMIN-05
-- [ ] **Phase 141: Save-Artifact Gate + Auto-README Update** — ARTGATE-01, ARTGATE-02, ARTGATE-03
+**Status note (2026-07-08):** STATE.md reports all 22 requirement IDs (WORKLOAD/WRITERULES/SHAREDRO/CACHEADMIN/ARTGATE) shipped across Phases 137-141. Roadmap checkboxes below remain as historical phase definitions; treat milestone as complete.
+
+- [x] **Phase 137: Single-Load Workspace + Auto Context Packet** — WORKLOAD-01, WORKLOAD-02, WORKLOAD-03, WORKLOAD-04, WORKLOAD-05
+- [x] **Phase 138: Operator-Visible Write Rules + Document Directory** — WRITERULES-01, WRITERULES-02, WRITERULES-03, WRITERULES-04, WRITERULES-05, WRITERULES-06
+- [x] **Phase 139: is_shared: Single-Boolean Read-Only Toggle** — SHAREDRO-01, SHAREDRO-02, SHAREDRO-03
+- [x] **Phase 140: Per-Space Cache + Invalidation Surface** — CACHEADMIN-01, CACHEADMIN-02, CACHEADMIN-03, CACHEADMIN-04, CACHEADMIN-05
+- [x] **Phase 141: Save-Artifact Gate + Auto-README Update** — ARTGATE-01, ARTGATE-02, ARTGATE-03
+
+---
+
+## v8.5 Agent Fleet Plane (Phases 142-147) — COMPLETE (2026-07-10)
+
+Source: 2026-07-08 Discord #devops thread "Agent fleet control tooling research" + deep research package:
+- `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`
+- `content/research/agent-control-planes-2026.md`
+- `content/audits/paperclip-control-plane-audit-2026-07-08.md`
+- `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`
+- `.planning/research/agent-fleet-plane-2026-07-08.md`
+
+**Decision locked for planning:** MemroOS is the top-layer fleet plane (registry + memory + governance + A2A + NOC) that manages agents **directly** across runtimes. LangGraph is a **peer** orchestration runtime under the existing Orchestration Proxy (stateful graphs, checkpoints, HIL) — not a competing control plane and not reimplemented. Paperclip is a **parallel product plane / tenant** (companies, issues, budgets, board UI) that subscribes via adapters/MCP/A2A; it is **not** above MemroOS and does not own the cross-runtime fleet view.
+
+**Rejected alternatives (research-backed):**
+- LangGraph-as-fleet-control-plane (runtime ≠ org/governance plane)
+- "Gardner" / "Gardnr" / "Garden" OSS agent orchestrator (no such project; Vertex Agent Garden / SAP Gardener unrelated)
+- Archestra as default top layer (closest governance cousin; **AGPLv3 + Enterprise** dual license)
+- CrewAI Agent Control Plane (cloud AMP feature; Rules editing Enterprise/Ultra)
+- AWS Bedrock AgentCore / Azure AI Foundry Agent Service / Vertex AI Agent Engine (cloud-only; reference only)
+
+**Scenario this milestone must survive:**
+- **S12 — Multi-machine fleet under one operator:** Mac workstation + remote Hermes/OpenClaw gateways; MemroOS registry/NOC is source of truth for agents; Paperclip company still enforces budgets; LangGraph multi-step HIL works without Paperclip being the top layer.
+
+- [x] **Phase 142: Fleet Architecture Lock + Validation Gate** — FLEET-01, FLEET-02, FLEET-03, FLEET-04
+- [x] **Phase 143: Runtime Adapter Maturity Matrix** — FLEET-05, FLEET-06, FLEET-07, FLEET-08
+- [x] **Phase 144: LangGraph Peer Contract + Checkpoint Durability** — FLEET-09, FLEET-10, FLEET-11, FLEET-12
+- [x] **Phase 145: Pre-Execution Policy Gate (OPA/Rego)** — FLEET-13, FLEET-14, FLEET-15, FLEET-16
+- [x] **Phase 146: Paperclip Tenant Integration + Cost Delegation** — FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
+- [x] **Phase 147: Secrets Broker + Kernel HA Path** — FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
+
+### Phase 142: Fleet Architecture Lock + Validation Gate
+**Goal**: Make the MemroOS-top / LangGraph-peer / Paperclip-tenant decision binding in product docs and GSD, with independent second-opinion model validation (not MiniMax self-validation) and scenario S12 recorded.
+**Milestone**: v8.5
+**Depends on**: Phase 115 (architecture identity), Phase 136 (thin adapters), research package 2026-07-08
+**Requirements**: FLEET-01, FLEET-02, FLEET-03, FLEET-04
+**Success Criteria** (what must be TRUE):
+  1. `docs/architecture.md` links the fleet-plane decision and states the three-layer roles (MemroOS / LangGraph / Paperclip) in one paragraph operators can quote
+  2. An independent validation artifact exists with provenance `model:` **not** MiniMax-M3; reject/amend loop opened if verdict fails
+  3. Scenario S12 is in the roadmap backlog and referenced by FLEET requirements
+  4. Planning index under `.planning/research/agent-fleet-plane-2026-07-08.md` points at all three content artifacts
+**Plans**: 1 potential plan (`.planning/phases/142-fleet-architecture-lock/142-01-PLAN.md`)
+**UI hint**: no (docs + validation)
+
+### Phase 143: Runtime Adapter Maturity Matrix
+**Goal**: Publish honest T1/T2/T3 maturity for every install-agent-integrations target so fleet diagrams stop implying equal readiness.
+**Milestone**: v8.5
+**Depends on**: Phase 142 (decision locked), `scripts/install-agent-integrations.sh`
+**Requirements**: FLEET-05, FLEET-06, FLEET-07, FLEET-08
+**Success Criteria** (what must be TRUE):
+  1. `docs/runtime-adapter-maturity.md` lists every installer target with T1/T2/T3, evidence, and owner
+  2. T1 means shipped + smoke-tested + governance-hook path available; T3 is explicitly stub/unproven
+  3. Installer target list and matrix rows cannot silently drift (documented check or CI note)
+  4. Hermes and OpenClaw maturity claims cite real adapter evidence (MemroOS and/or Paperclip)
+**Plans**: 1 potential plan (`.planning/phases/143-runtime-adapter-maturity/143-01-PLAN.md`)
+**UI hint**: optional maturity badge later; docs-first is enough for phase close
+
+### Phase 144: LangGraph Peer Contract + Checkpoint Durability
+**Goal**: Pin LangGraph as a peer under the Orchestration Proxy — contract + durability — without rebuilding StateGraph inside MemroOS.
+**Milestone**: v8.5
+**Depends on**: Phase 142, existing orchestration proxy / langgraph integration
+**Requirements**: FLEET-09, FLEET-10, FLEET-11, FLEET-12
+**Success Criteria** (what must be TRUE):
+  1. `docs/integrations/langgraph.md` documents input/output schema, checkpoint layout, HIL protocol, and failure modes
+  2. Ownership split is explicit: MemroOS owns agent identity/memory/audit; LangGraph owns graph execution/checkpoints
+  3. Checkpoint durability path exists (litestream **or** Postgres checkpointer behind flag) with restore steps
+  4. One multi-step graph smoke: interrupt → resume with receipt
+**Plans**: 1 potential plan (`.planning/phases/144-langgraph-peer-contract/144-01-PLAN.md`)
+**UI hint**: HIL surfaces already exist; contract is primary deliverable
+
+### Phase 145: Pre-Execution Policy Gate (OPA/Rego) — COMPLETE
+**Goal**: Evaluate policy **before** tool execution on at least one T1 runtime path so governance is not audit-after-the-fact only.
+**Milestone**: v8.5
+**Depends on**: Phase 143 (know T1 adapters), POLGOV plane (receipt shape), Phase 76 retrieval gate patterns
+**Requirements**: FLEET-13, FLEET-14, FLEET-15, FLEET-16
+**Success Criteria** (what must be TRUE):
+  1. Pre-exec gate runs on Hermes (or first T1) tool path with actor/action/purpose/labels input ✅
+  2. Deny blocks execution and emits policy receipt (version + rule + reason) ✅
+  3. Headless runs fail closed (no silent allow) ✅
+  4. MEMSEC-08 regression corpus remains green ✅
+**Plans**: 1 plan + 1 summary (`.planning/phases/145-pre-exec-policy-gate/145-01-PLAN.md`, `145-01-SUMMARY.md`)
+**UI hint**: receipt in NOC governance strip / run ledger
+**Status**: COMPLETE / LOCKED (2026-07-09). Validator: beastmode-validator (GLM-5.2 BYOK) — PASS.
+
+### Phase 146: Paperclip Tenant Integration + Cost Delegation — COMPLETE
+**Goal**: Treat Paperclip as a parallel tenant: contract + minimal integration + budget hard-stop ownership stays in Paperclip.
+**Milestone**: v8.5
+**Depends on**: Phase 142, Paperclip audit (`content/audits/paperclip-control-plane-audit-2026-07-08.md`)
+**Requirements**: FLEET-17, FLEET-18, FLEET-19, FLEET-20, FLEET-21
+**Success Criteria** (what must be TRUE):
+  1. `docs/integrations/paperclip.md` states ownership boundaries and rejects MemroOS re-implementation of board budgets ✅
+  2. At least one live or contract-tested path: Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue ✅
+  3. Cost/budget hard-stop is delegated to Paperclip (documented API/source of truth) ✅
+  4. No multi-Paperclip federation attempted ✅
+  5. Hermes adapter passivity (runtime must already exist) is documented so operators do not expect Paperclip to provision hosts ✅
+**Plans**: 1 plan + 1 summary (`.planning/phases/146-paperclip-tenant-integration/146-01-PLAN.md`, `146-01-SUMMARY.md`)
+**UI hint**: optional NOC tenant strip; contract-first
+**Status**: COMPLETE / LOCKED (2026-07-09). No new runtime deps; MEMSEC-08 regression green; 24 new tests pass.
+
+### Phase 147: Secrets Broker + Kernel HA Path — COMPLETE
+**Goal**: Minimum secrets + HA/durability path so fleet is not permanently single-host SQLite without a restore story.
+**Milestone**: v8.5
+**Depends on**: Phase 144 (checkpoint durability alignment), Phase 146 optional
+**Requirements**: FLEET-22, FLEET-23, FLEET-24, FLEET-25, FLEET-26
+**Success Criteria** (what must be TRUE):
+  1. Secrets path for adapter keys documented (and used for at least one key class); no secrets in git/receipts ✅
+  2. Kernel durability path (litestream or Postgres) documented with one executed restore drill ✅
+  3. LangGraph checkpoint durability aligned with Phase 144 ✅
+  4. Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit) documented as **not v8.5** ✅
+  5. Auto-provision new agent hosts remains explicitly out of scope (industry gap) ✅
+**Plans**: 1 plan + 1 summary + 1 drill log (`.planning/phases/147-secrets-fleet-ha/147-01-PLAN.md`, `147-01-SUMMARY.md`, `restore-drill-log.md`)
+**UI hint**: no
+**Status**: COMPLETE / LOCKED (2026-07-10). No new runtime deps; MEMSEC-08 regression green (25/25); restore drill passed (53 agents, 5301 audit_log, 6341 audit_entries, schema v10, 92 tables, integrity ok). v8.5 milestone COMPLETE — all 26 FLEET requirements shipped across Phases 142-147.
+
+---
 
 ### Phase 137: Single-Load Workspace + Auto Context Packet
 **Goal**: One operator command ("load <space>") primes the Agent Context Packet for that space and binds it as the active workspace for all subsequent writes, reads, and NOC/lane surfaces.
@@ -802,15 +920,20 @@ Priority order (each is a candidate milestone; requirements in `.planning/REQUIR
 2. **P0 — v8.1 Enterprise Operator Control Plane — PLANNED as Phases 124-127 (2026-07-06, from enterprise review).** `ENTOPS-01..08`. Load-proven hosted operator, per-tenant/per-user vaults with central hash-chained audit, operator-stub distribution (no git fallback in shared mode), Day-1 MDM/invite-token onboarding, write-side native-memory enforcement (never auto-trim), and exit/DSAR tooling. Two-SKU shape: Free Solo (local) vs Enterprise (operator-only). Parallelizable with v8.0 Phases 122-123 (different subsystems). Scenarios: S9, S10; substrate for S1/S7.
 3. **P0 — v8.2 Team-Scale Access + Policy Plane — PLANNED as Phases 128-131 (2026-07-06).** `TEAMSCALE-01..06`, `POLGOV-01..05`, `MSIQ-01..03`. Spaces/teams over the shipped label model, joiner/mover/leaver for humans + agents, delegation chains, and one declarative policy engine with decision receipts, shadow mode, and CI policy regression; knowledge-repo labels (MSIQ-01..03) land here so memory and knowledge share one enforcement plane. Scenarios: S1, S4, S7 (access half).
 4. **P0 — v8.3 Agent OS GSD Stack — COMPLETE (Phases 132-136 complete 2026-07-07).** `GSDSTACK-01..11`. Context packet, run ledger, shipcheck, goal/resume/standup, portable skill boundary, skill audit, lane evals, model routing, thin adapters, and safety slice. This is the implementation spine that makes Hermes/Discord/Telegram/Codex/Claude replaceable interfaces over MemRoOS rather than competing OSes. Scenario: S11.
-5. **P1 — v8.4 Project-Centric Operator UX — PLANNED as Phases 137-141 (2026-07-07, from MemClaw competitor analysis).** `WORKLOAD-01..05`, `WRITERULES-01..06`, `SHAREDRO-01..03`, `CACHEADMIN-01..05`, `ARTGATE-01..03`. MemClaw parity for operator UX primitives (single-load workspace, declarative write rules, document directory, `is_shared` boolean, per-space cache transparency, save-artifact gate) while preserving MEMSEC labels, belief stages, evidence bundles, and hash-chained audit. Source: `content/research/memclaw-gap-analysis-2026-07-07.md`. Depends on v8.2 Phases 128-131 (policy engine + spaces) and v8.3 Phases 132-136 (context packet + run ledger).
-6. **P1 — v8.5 Skill Trust Chain** — `SKILLTRUST-01..05` (promotes the governed-skill-contracts and cross-harness auto-sync Later Ideas). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
-7. **P1 — v8.6 Memory Lifecycle + Erasure** — `MEMLIFE-01..05`. Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half). Pull forward if a client or regulatory commitment lands earlier.
-8. **P1 — v8.7 Orchestration Evidence Depth** — Harness Control Plane + evidence governance (prior Backlog item 5), `MSIQ-04..05` (MAF memory adapter, capped federated retrieval planner), `ORCH-FOLLOWUP-01` multi-hop compensation. Task-level Plan-Execute-Verify timelines consuming the receipts produced by v8.0–v8.5 (v8.4 writes into spaces; v8.5 skill trust is the next governance lane).
-9. **P2 — v8.8 Retrieval Quality + External Benchmark Proof** — LoCoMo/LongMemEval lanes (Phase 114 follow-on), embedding upgrade behind flags, LLM recall scoring (prior P2 item 12). Proof lane, not trust lane — sequenced after the governance core so benchmarks measure the governed path.
-10. **P2 — v8.9 Governed Ontology Foundation** — `ONTO-01..06`, plus Knowledge Graph Intelligence (prior Backlog item 6) and the `MSIQ-06` GraphRAG spike output as extraction feeder. Answer to the ontology question: fixed upper ontology in git, namespaced domain packs (a GTM pack instantiates Cordant's Account/Contact/Complexity-Signal/Relationship-Path/Dossier/Meeting-Learning objects), emergent extracted types held at bronze/silver, SEAL-governed promotion with alias-based versioned migrations. Treat ontology like skills: emergent, evaluated, governed, versioned. Scenarios: S3, S5 (typing); unlocks per-type policy in POLGOV.
-11. **P2/P3 — carried forward**: Evaluation + Safety Expansion (prior item 7), Meeting Ingestion Expansion (item 11), Integration Modernization (item 13), commercial/product expansion (item 15; the enterprise review adds the two-SKU decision and Free/Team/Enterprise pricing input — see review §10), deferred hardening sweep (item 16), service navigation/install profiles (item 17).
+5. **P0 — v8.4 Project-Centric Operator UX — COMPLETE (Phases 137-141 complete 2026-07-08).** `WORKLOAD-01..05`, `WRITERULES-01..06`, `SHAREDRO-01..03`, `CACHEADMIN-01..05`, `ARTGATE-01..03`. MemClaw operator-UX parity while preserving MEMSEC/belief/evidence/audit.
+6. **P0 — v8.5 Agent Fleet Plane — PLANNED as Phases 142-147 (2026-07-08, from fleet control tooling research).** `FLEET-01..26`. MemroOS is the top-layer fleet plane across runtimes; LangGraph is a peer orchestration runtime; Paperclip is a parallel tenant for company/budget/board. Closes the "who governs agents on many machines" decision without adopting Archestra (AGPL) or rebuilding LangGraph as a control plane. Scenario: **S12**. Kickoff: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`.
+7. **P1 — v8.6 Skill Trust Chain** — `SKILLTRUST-01..05` (was v8.5; renumbered 2026-07-08 to insert fleet plane). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
+8. **P1 — v8.7 Memory Lifecycle + Erasure** — `MEMLIFE-01..05` (was v8.6). Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half).
+9. **P1 — v8.8 Orchestration Evidence Depth** — (was v8.7). Harness Control Plane + evidence governance, `MSIQ-04..05`, `ORCH-FOLLOWUP-01` multi-hop compensation. Consumes receipts from v8.0–v8.5; fleet plane pre-exec receipts (v8.5 Phase 145) feed this lane.
+10. **P2 — v8.9 Retrieval Quality + External Benchmark Proof** — (was v8.8). LoCoMo/LongMemEval lanes, embedding upgrade behind flags, LLM recall scoring.
+11. **P2 — v8.10 Governed Ontology Foundation** — `ONTO-01..06` (was v8.9). Fixed upper ontology + domain packs + SEAL-governed promotion.
+12. **P1 — v8.11 Unified Meeting Memory — PLANNED as Phases 151-153 (2026-07-14).** `MEETREL-01..04`, `URECALL-01..06`. Idempotent meeting ingest + federated `memory_recall` so agents find Circleback/Fathom/Zoom without knowing collection names. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
+13. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
 
-**Renumbering note (2026-07-07):** the prior "v8.4 Governed Ontology Foundation" entry was renumbered to **v8.9** to make room for the new v8.4 Project-Centric Operator UX. v8.5-v8.7 keep their numbers (P1); v8.8-v8.9 keep their numbers (P2); the previously-numbered item 10 (P2/P3 carried forward) is now item 11. Future renumbers should preserve the chronological-then-priority ordering: shipped (v8.0-v8.3) → next-to-ship (v8.4, P1) → P1 candidates (v8.5-v8.7) → P2 candidates (v8.8-v8.9) → carried-forward (P2/P3, no version).
+**Renumbering note (2026-07-08):** inserted **v8.5 Agent Fleet Plane** after completed v8.4. Prior P1/P2 candidates shift: Skill Trust Chain v8.5→**v8.6**, Memory Lifecycle v8.6→**v8.7**, Orchestration Evidence v8.7→**v8.8**, Retrieval Quality v8.8→**v8.9**, Ontology v8.9→**v8.10**. Earlier 2026-07-07 note (Ontology v8.4→v8.9 for MemClaw UX) is superseded by this ordering for future planning.
+
+**Scenario add (2026-07-08):**
+- **S12 — Multi-machine fleet under one operator:** A human runs agents on a home Mac plus remote Hermes/OpenClaw gateways; MemroOS is the registry/governance source of truth; Paperclip may run a company with budgets; LangGraph handles multi-step HIL; no second control plane is required above MemroOS.
 
 Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays cloud and canonical; no spike-to-adoption without Luis approval; no raw sensitive payloads in any receipt; fail-closed defaults everywhere.
 
@@ -2203,3 +2326,44 @@ Plans:
   6. Crawler-visible proof metrics render actual values before JavaScript runs.
 **Plans**: 1/1 complete
 - [x] 114-01-PLAN.md — Midbrain surfaces, public benchmark caveats, SmartSearch-inspired retrieval roadmap, retrieval receipts, and comparative benchmark plan
+
+---
+
+## v8.11 Unified Meeting Memory (Phases 151–153)
+
+*Added: 2026-07-14*
+
+### Phase 151 — Meeting Ingest Reliability
+
+**Goal:** Stop Fathom title/dupe misses and make every provider write stable, searchable Markdown.
+
+**Requirements:** MEETREL-01, MEETREL-02, MEETREL-03, MEETREL-04
+
+**Success criteria:**
+1. Re-ingest of the same recording/meeting id overwrites one file (no `-2` slug dupes).
+2. Frontmatter carries `calendar_title`, `share_url`, `meeting_id`, `source` for Fathom/Circleback/Zoom.
+3. Public templates under `scripts/meet-sync/providers/`; secrets only in envFile/1Password.
+4. `meet-sync --health` reports freshness, last-run OK, and empty-vs-enabled WARN.
+
+### Phase 152 — Unified Recall Facade
+
+**Goal:** One MCP tool finds meetings across all enabled QMD collections + knowledge + mem0.
+
+**Requirements:** URECALL-01, URECALL-02, URECALL-03
+
+**Success criteria:**
+1. Shared resolver federates enabled meeting collections + knowledge_literal + mem0.
+2. MCP `memory_recall` is registered as a core tool.
+3. Orientation instructs agents to prefer `memory_recall` for “find the meeting”.
+
+### Phase 153 — Operator Surfaces + Proof
+
+**Goal:** Console multi-search + docs + regressions prove Monaco/Fathom findable without `-c`.
+
+**Requirements:** URECALL-04, URECALL-05, URECALL-06
+
+**Success criteria:**
+1. `/api/memory/multi-search` includes a QMD meeting lane.
+2. Docs + `collections.config.json` list private meeting collections.
+3. Regression coverage for Monaco Circleback + Fathom Impromptu via `memory_recall` without `-c`.
+

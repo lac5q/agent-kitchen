@@ -14,7 +14,11 @@ Private operator wiring lives in `~/.memroos/meeting-sources.json` (never commit
 
 1. Provider ingest exports transcripts as dated Markdown
 2. `scripts/meet-sync/meet-sync.sh` indexes **only that source’s** QMD collection(s)
-3. `knowledge_search("meeting about X")` / `qmd query` can search the collection
+3. Agents use MCP **`memory_recall("meeting about X")`** — federates all enabled
+   meeting collections + knowledge + mem0 (no need for `qmd -c` collection names)
+4. Operators can still use `qmd search … -c <collection>` for debugging one source
+
+Public provider templates (no secrets): [`scripts/meet-sync/providers/`](../../scripts/meet-sync/providers/).
 
 Each provider gets its **own** output directory and QMD collection. Do not reuse
 `meet-recordings` for Circleback/Fathom/Zoom — that collection is reserved for
@@ -28,6 +32,9 @@ Google Meet / Gemini notes.
 | Fathom | `data/context/meet-recordings-epilogue` / `-personal` | matching name |
 | Zoom | `data/context/meet-recordings-zoom` | `meet-recordings-zoom` |
 
+Private meeting collections are also listed in [`collections.config.json`](../../collections.config.json)
+with `"private": true` — content stays under local `data/context/` (gitignored).
+
 ## Quick Start
 
 ### Step 1 — Copy the example config
@@ -37,35 +44,23 @@ mkdir -p ~/.memroos
 cp scripts/meet-sync/meeting-sources.example.json ~/.memroos/meeting-sources.json
 ```
 
-Enable the providers you use (`"enabled": true`) and point `ingestCommand` /
-`envFile` at your private scripts and API keys.
+Enable the providers you use (`"enabled": true`) and point `envFile` at API keys.
+Prefer public ingest commands under `scripts/meet-sync/providers/` (example config
+already does for Circleback/Fathom).
 
-### Step 2 — Private ingest scripts
+### Step 2 — Public providers + private secrets
 
-Keep provider CLIs/API keys under `~/.memroos/integrations/` and
-`~/.memroos/agent-keys/` (gitignored). A minimal Circleback example:
+Public transforms/ingest live in `scripts/meet-sync/providers/`:
 
-```bash
-mkdir -p ~/.memroos/integrations
-cat > ~/.memroos/integrations/circleback-ingest.sh << 'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-OUTPUT_DIR="${1:-${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings-circleback}"
-# Prefer --output-dir from meet-sync when provided
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-mkdir -p "$OUTPUT_DIR"
-TMP="$(mktemp)"
-circleback meetings list --json > "$TMP"
-python3 "$HOME/.memroos/integrations/circleback-transform.py" --output-dir "$OUTPUT_DIR" < "$TMP"
-rm -f "$TMP"
-EOF
-chmod +x ~/.memroos/integrations/circleback-ingest.sh
-```
+- `fathom_ingest.sh` / `fathom_transform.py` — idempotent by `recording_id`
+- `circleback_ingest.sh` / `circleback_ingest.py` — idempotent by meeting id
+- `zoom_transform.py` — idempotent by Zoom uuid/id
+
+Frontmatter includes `calendar_title`, `share_url`, `meeting_id`, `source`.
+Secrets stay in `~/.memroos/agent-keys/*.env` or 1Password — never commit them.
+
+Optional: thin-wrap private scripts under `~/.memroos/integrations/` that `exec`
+the public providers so existing LaunchAgents keep working.
 
 ### Step 3 — Enable context-source health overlays
 
@@ -80,21 +75,31 @@ into `~/.memroos/context-sources.local.json`. Prefer meet-sync for index command
 }
 ```
 
-### Step 4 — Run and schedule
+### Step 4 — Run, health, and schedule
 
 ```bash
 ./scripts/meet-sync/meet-sync.sh --dry-run
+./scripts/meet-sync/meet-sync.sh --health
 ./scripts/meet-sync/meet-sync.sh --source circleback
 ./scripts/meet-sync/install-launchd.sh
 ```
 
 Status files: `~/.memroos/logs/meet-sync/<id>.json`.
+`--health` reports freshness, last-run OK, and WARN when an enabled source has
+empty output (personal Fathom often empty).
 
-### Step 5 — Verify
+### Step 5 — Verify recall (preferred)
 
 ```bash
+# Agent path — no collection name required
+# MCP: memory_recall("Monaco Cordant")
+
+# Operator debug — one collection
 qmd collection show meet-recordings-circleback
-qmd search "last meeting" -c meet-recordings-circleback
+qmd search "Monaco" -c meet-recordings-circleback
+
+# Console multi-search includes a qmd meeting lane
+# GET /api/memory/multi-search?q=Monaco
 ```
 
 ---
@@ -131,8 +136,13 @@ readiness policies (`artifactCompleteMarker`) keep working.
 **`meet-sync` says no enabled sources**
 → Edit `~/.memroos/meeting-sources.json` and set `"enabled": true`.
 
+**Agents miss Circleback/Fathom with `knowledge_search` alone**
+→ Expected. Use MCP `memory_recall` (or multi-search `qmd` tier). Private
+collections are outside KNOWLEDGE_ROOT.
+
 **Circleback meetings never searchable under `meet-recordings`**
-→ Expected. Use collection `meet-recordings-circleback`.
+→ Expected. Use collection `meet-recordings-circleback` for debug, or
+`memory_recall` for federation.
 
 **Still seeing `qmd index …` failures**
 → Replace stale LaunchAgents / overlay `indexCommand` values with
@@ -145,3 +155,4 @@ readiness policies (`artifactCompleteMarker`) keep working.
 
 - [`scripts/meet-sync/README.md`](../../scripts/meet-sync/README.md)
 - [`scripts/meet-sync/meeting-sources.example.json`](../../scripts/meet-sync/meeting-sources.example.json)
+- [`scripts/meet-sync/providers/`](../../scripts/meet-sync/providers/)

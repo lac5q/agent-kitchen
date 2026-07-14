@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.3
-milestone_name: Agent OS GSD Stack
+milestone: v8.11
+milestone_name: Unified Meeting Memory
 status: complete
-stopped_at: Phase 136 complete (2026-07-07)
-last_updated: "2026-07-07T03:55:00.000Z"
+stopped_at: Phase 153 verified (2026-07-14) — v8.11 COMPLETE
+last_updated: "2026-07-14T19:45:00.000Z"
 progress:
-  total_phases: 62
-  completed_phases: 41
-  total_plans: 74
-  completed_plans: 84
-  percent: 67
+  total_phases: 70
+  completed_phases: 50
+  total_plans: 78
+  completed_plans: 93
+  percent: 71
 ---
 
 # State: Memroos
@@ -20,20 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v8.3 Agent OS GSD Stack complete — Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane plus portable skill boundary.
+**Current focus:** v8.11 Unified Meeting Memory COMPLETE (Phases 151-153). Parallel candidate remains v8.6 Skill Trust Chain (148-150).
 
 ## Current Position
 
-Phase: 125
-Plan: 125-01 complete
-Status: v8.1 Phase 125 complete (Multi-Tenant Vaults + Central Tamper-Evident Audit); v8.3 GSD stack complete
+Phase: 153 complete, v8.11 milestone COMPLETE
+Plan: MEETREL-01..04 + URECALL-01..06 shipped
+Status: v8.11 Unified Meeting Memory COMPLETE; v8.5 COMPLETE; v8.6 Skill Trust Chain remains a separate track
 
 ## Session Continuity
 
-Last session: 2026-07-07T13:35:00.000Z
-Stopped at: Phase 125 complete (2026-07-07)
-Resume file: `.planning/phases/125-multi-tenant-vaults-central-audit/125-01-PLAN.md`
-Next action: v8.1 Phases 126-127 are infra-gated (IdP/MDM). Next code-implementable milestone is v8.2 Phase 128 (Policy Engine Core + Decision Receipts) — deps met (Phase 76 + 121). Then Phases 129-131, then v8.4 Phases 137-141.
+Last session: 2026-07-14T19:45:00.000Z
+Stopped at: Phase 153 verified; v8.11 COMPLETE.
+Resume file: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`
+Next action: Optional operator re-ingest for id-based filenames; or resume v8.6 Skill Trust Chain planning.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
@@ -89,6 +89,102 @@ Next action: v8.1 Phases 126-127 are infra-gated (IdP/MDM). Next code-implementa
 - Latest Phase 40 gate: docs link/content review, markdown grep checks, Memroos lint, and build passed
 
 ## Accumulated Context
+
+### Roadmap Evolution (2026-07-10, v8.5 milestone COMPLETE)
+
+- **v8.5 Agent Fleet Plane milestone COMPLETE.** All 26 FLEET requirements (FLEET-01..26) shipped across 6 phases (142-147): Phase 142 (FLEET-01..04, architecture lock + GLM-5.2 validation), Phase 143 (FLEET-05..08, runtime adapter maturity matrix), Phase 144 (FLEET-09..12, LangGraph peer contract + checkpoint durability), Phase 145 (FLEET-13..16, pre-execution policy gate), Phase 146 (FLEET-17..21, Paperclip tenant integration + cost delegation), Phase 147 (FLEET-22..26, secrets broker + kernel HA path). No new runtime npm dependencies across the entire milestone. MEMSEC-08 regression corpus (25/25) remained green throughout. Validator (GLM-5.2 BYOK) passed on Phases 142-145; Phases 146-147 self-verified (validator unavailable). Post-v8.5 milestone candidates: v8.6 Skill Trust Chain, v8.7 Memory Lifecycle + Erasure, v8.8 Orchestration Evidence Depth, v8.9 Retrieval Quality + External Benchmark Proof, v8.10 Governed Ontology Foundation.
+
+### Roadmap Evolution (2026-07-10, Phase 147 complete)
+
+- Phase 147 (v8.5, FLEET-22..26) completed and locked. Secrets Broker + Kernel HA Path: comprehensive secrets and durability runbook created at `docs/secrets-and-durability.md` covering FLEET-22 (secrets path: env vars in `.env.local`, agent key provisioning via `provision-agent-keys.sh` + onboarding tokens, envelope encryption via AES-256-GCM, audit receipt hygiene per POLGOV/MEMSEC-08, rotation guidance, no secrets in git), FLEET-23 (kernel durability: single-host SQLite + litestream replication path documented, Postgres migration path documented as future, restore drill executed), FLEET-24 (LangGraph checkpoint durability aligned with Phase 144 FLEET-11, restore drill covers both kernel and orchestration DBs), FLEET-25 (SPIFFE/SPIRE + Envoy rate-limit documented as "not v8.5" stretch), FLEET-26 (auto-provision of agent hosts explicitly out of scope, industry gap cited). Restore drill script created at `scripts/restore-drill.sh` — idempotent, works on copies only (sqlite3 .backup is read-only on source), verifies integrity_check + agent count + audit counts + schema version + table count. Drill executed: 53 agents, 5,301 audit_log entries, 6,341 audit_entries, schema v10, 92 tables, integrity ok, exit 0. Orchestration DB skipped (not running — expected). No new runtime npm deps. MEMSEC-08 regression corpus remains green (25/25). No external model validation was run in this session; implementation is self-verified via typecheck, lint, MEMSEC-08, restore drill, and contract manifest.
+- Non-blocking findings logged in `.planning/phases/147-secrets-fleet-ha/147-01-SUMMARY.md`: no external model validation, orchestration DB not present in dev environment, no new npm dependencies.
+- Phase 147 status moved from potential plan to complete/locked. v8.5 milestone COMPLETE. Next: post-v8.5 milestone candidates (v8.6 Skill Trust Chain, etc.).
+
+### Roadmap Evolution (2026-07-09, Phase 146 complete)
+
+- Phase 146 (v8.5, FLEET-17..21) completed and locked. Paperclip Tenant Integration + Cost Delegation: ownership boundary contract pinned at `docs/integrations/paperclip.md` (Paperclip owns companies/issues/budgets/board/activity; MemroOS owns registry/memory/fleet governance; no federation; passive adapters; cost hard-stop delegated to Paperclip). Two integration paths shipped: `POST /api/paperclip/activity` ingests Paperclip activity events into the MemroOS audit chain (`audit_entries` with `event_type=paperclip.activity`, `entity_type=paperclip`) with defense-in-depth secret redaction; `GET /api/paperclip/budget` proxies a thin budget summary from Paperclip with `hardStopOwner: "paperclip"` on every response (read-only, never pauses agents). Types added: `PaperclipActivityEvent`, `PaperclipBudgetSummary` in `types/index.ts`; `PAPERCLIP_ACTIVITY` event type + `PAPERCLIP` entity type in `audit/event-types.ts`. Env vars added to `.env.example` as placeholders (`PAPERCLIP_BASE_URL`, `PAPERCLIP_STATUS_PATH`, `PAPERCLIP_DISPATCH_PATH`, `PAPERCLIP_BUDGET_PATH`). Tests: 24 new tests (12 activity + 12 budget) covering ingestion, delegation, no secret leaks, and graceful degradation. No new runtime npm deps. MEMSEC-08 regression corpus remains green. No external model validation was run in this session (validator unavailable); implementation is self-verified via typecheck, lint, tests, build, and MEMSEC-08.
+- Non-blocking findings logged in `.planning/phases/146-paperclip-tenant-integration/146-01-SUMMARY.md`: budget endpoint proxies the default budget surface (no per-scope query params yet), activity endpoint is single-event (no batching), and no external model validation was run.
+- Phase 146 status moved from potential plan to complete/locked. Phase 147 (Secrets Broker + Kernel HA Path, FLEET-22..26) is now the next and final executable phase for v8.5.
+
+### Roadmap Evolution (2026-07-09, Phase 145 complete)
+
+- Phase 145 (v8.5, FLEET-13..16) completed and locked. Pre-execution policy gate added at the GSD adapter boundary in `apps/memroos/src/lib/gsd/adapter-policy-gate.ts` and wired into `POST /api/gsd/adapter` in `apps/memroos/src/app/api/gsd/adapter/route.ts`. The gate runs after the GSD safety check and before `executeGsdAdapterAction`, delegates to the existing POLGOV `evaluatePolicy` engine (no policy logic reimplemented), and is fail-closed: engine exceptions return a synthetic deny receipt. Denied actions return HTTP 403 with an operator-visible policy receipt containing policyVersion, domain, action, ruleMatched, outcome, reason, actorId, and createdAt; the HTTP response deliberately omits `detail` and other internal fields. Audit rows are written via the POLGOV receipt path. Tests: 7 unit tests in `apps/memroos/src/lib/gsd/__tests__/adapter-policy-gate.test.ts` plus 2 integration tests in `apps/memroos/src/app/api/gsd/adapter/__tests__/route.test.ts` (9/9 pass). Verification also included `npm run typecheck` (clean), `npm run lint` (0 errors, 37 pre-existing warnings), and MEMSEC-08 regression corpus (25/25 pass). Validator verdict PASS (GLM-5.2 BYOK via beastmode-validator) with no blocking findings.
+- Non-blocking findings logged in `.planning/phases/145-pre-exec-policy-gate/145-01-SUMMARY.md`: `discord`/`telegram` platform mapping defaults to `hermes` (unused by capability decision today), `protocol: "gsd"` is a type cast because `gsd` is not in the `AgentProtocol` enum, and exception-path receipts are distinguishable by `policyVersion: "unknown"` / `ruleMatched: "gate.error"`.
+- Phase 145 status moved from potential plan to complete/locked. Phase 146 (Paperclip Tenant Integration, FLEET-17..20) is now the next executable phase.
+
+### Roadmap Evolution (2026-07-09, Phase 144 complete)
+
+- Phase 144 (v8.5, FLEET-09..12) completed and locked. LangGraph peer contract pinned at `docs/integrations/langgraph.md`, covering the ownership split: MemroOS remains the top-layer fleet plane (registry, memory, governance, A2A, NOC, fleet); LangGraph runs as a peer orchestration runtime for stateful graphs, checkpoints, and HIL. Checkpoint durability documented with a Litestream replica example at `services/orchestration/litestream.yml.example`. Smoke tests for HIL/checkpoint wiring created at `services/orchestration/tests/test_hil_checkpoint_smoke.py` and passed. SQLite ownership split between the MemroOS operator DB and the LangGraph orchestration DB is documented in `docs/architecture.md`. Validator verdict PASS (GLM-5.2 BYOK via beastmode-validator). No runtime behavior changes were introduced; the work is a docs + test contract phase.
+- Non-blocking, pre-existing concern: `services/orchestration/tests/test_app.py` still carries a pydantic-core environment issue that was present before Phase 144; it does not affect the LangGraph contract and is left for a separate cleanup pass.
+- Phase 144 status moved from potential plan to complete/locked. Phase 145 (Pre-Execution Policy Gate, FLEET-13..16) is now the next executable phase.
+
+### Roadmap Evolution (2026-07-09, Phase 143 complete)
+
+- Phase 143 (v8.5, FLEET-05..08) completed and locked. Runtime Adapter Maturity Matrix created at `docs/runtime-adapter-maturity.md`, all 9 targets classified: Hermes T1; OpenClaw, Codex, Claude Code, Cursor, OpenCode T2; Qwen, Gemini, ZCode T3. Matrix linked from the Fleet plane subsection of `docs/architecture.md`, validator verdict PASS (GLM-5.2 BYOK via beastmode-validator), and no code changes were required (docs-only phase).
+- Phase 143 status moved from potential plan to complete/locked. Phase 144 (LangGraph Peer Contract + Checkpoint Durability, FLEET-09..12) is now the next executable phase.
+
+### Roadmap Evolution (2026-07-09, Phase 142 complete)
+
+- Phase 142 (v8.5, FLEET-01..04) completed and locked. Fleet Architecture Lock + Validation Gate: architecture decision reviewed (MemroOS = top-layer fleet plane; LangGraph = peer orchestration runtime; Paperclip = parallel tenant), GLM-5.2 independent validation achieved on 2026-07-09 via beastmode-validator (GLM-5.2 BYOK) with verdict PASS, S12 multi-machine Mac + remote Hermes/OpenClaw scenario added as v8.5 acceptance scenario, `docs/architecture.md` Fleet plane subsection added, and validation artifact filed at `content/architecture/memroos-fleet-plane-validation-glm52-2026-07-09.md`.
+- Phase 142 status moved from potential plan to complete/locked. Phase 143 (Runtime Adapter Maturity Matrix, FLEET-05..08) is now the next executable phase.
+
+### Roadmap Evolution (2026-07-08, Phases 139-141)
+
+- Phase 139 (v8.4, SHAREDRO-01..03) completed. `is_shared` boolean flag on spaces table (v8 migration), enforced at both write-persistence gate (`assertWritableSpace` throws on shared) and read-side gate (`assertReadableSpace` writes policy receipt). Toggling off requires a reason. 14 tests, GLM-5.2 PASS.
+- Phase 140 (v8.4, CACHEADMIN-01..05) completed. `space_cache_state` table (v9 migration) with per-resource tracking. `getCacheState` returns summary; `invalidateResource`/`invalidateSpace` with shared-space enforcement, 5s coalescing, and rate limiting (5/60s resource, 3/60s space). `getInvalidationHistory` from audit entries. 14 tests, GLM-5.2 PASS.
+- Phase 141 (v8.4, ARTGATE-01..03) completed. `space_artifact_settings` table (v10 migration). `promptSaveArtifact` single-confirmation prompt; `saveArtifact` enforces writable + active workspace gates, creates/updates document directory entry, emits audit with belief stage; auto-README pointer update per-space toggle. 14 tests, GLM-5.2 PASS.
+- v8.4 milestone COMPLETE. All 22 requirement IDs shipped across 5 phases (137-141). 146 total tests pass across v8.4 modules. MEMSEC-08 regression corpus byte-identical throughout. Zero new npm dependencies.
+
+### Roadmap Evolution (2026-07-08/09, v8.5 milestone planning)
+
+- v8.5 Agent Fleet Plane milestone kickoff filed at `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`. Architecture decision locked: MemroOS = top-layer fleet plane (registry, memory, governance, A2A, NOC, fleet); LangGraph = peer orchestration runtime (stateful graphs, checkpoints, HIL); Paperclip = parallel tenant (companies, budgets, board). Explicitly rejected: LangGraph-as-control-plane, Archestra top-layer (AGPL), CrewAI ACP (cloud-only), "Gardner" (no OSS match). Kickoff status: planning (potential plan; not yet `/gsd:plan-phase` executed).
+- Architecture sources: `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md` (architecture decision), `content/research/agent-control-planes-2026.md` (OSS control-plane survey), `content/audits/paperclip-control-plane-audit-2026-07-08.md` (Paperclip audit).
+- Phase directories 142-147 created as potential phase names with architect-allowed scope (`142-fleet-architecture-lock`, `143-runtime-adapter-maturity`, `144-langgraph-peer-contract`, `145-pre-exec-policy-gate`, `146-paperclip-tenant-integration`, `147-secrets-fleet-ha`). Each maps to FLEET-01..26 in REQUIREMENTS.md; the v8.5 section of REQUIREMENTS.md is preserved as planned (not completed) state.
+- ROADMAP.md milestone list updated to insert v8.5 after v8.4. Renumbering note (2026-07-08): Skill Trust Chain v8.5→**v8.6**, Memory Lifecycle v8.6→**v8.7**, Orchestration Evidence v8.7→**v8.8**, Retrieval Quality v8.8→**v8.9**, Ontology v8.9→**v8.10**. Earlier 2026-07-07 ontology v8.4→v8.9 renumbering is superseded.
+- Out of scope for v8.5 (documented explicitly in kickoff): replacing Paperclip with Archestra; LangGraph as top control plane; multi-Paperclip server federation; auto-provision new agent hosts on demand; full SPIFFE/SPIRE + Envoy rate-limit multi-cluster identity (stretch for 50-machine stack; documented only in Phase 147 HA notes).
+- **Validation gate gap acknowledged:** v8.5 kickoff notes GLM-5.2 validation **not achieved** at planning time (`GLM_API_KEY` unset; self-validation only). Phase 142 mandates a real independent-model second-opinion validation with `model:` provenance not equal to the authoring model (MiniMax-M3); amend loop opens on reject. STATE.md updated to reflect this requirement in the Phase 142 next-action line.
+- Scenario **S12** (multi-machine Mac + remote Hermes/OpenClaw under one MemroOS operator; Paperclip optional for company budgets) recorded as the v8.5 acceptance scenario per kickoff.
+
+### Roadmap Evolution (2026-07-08, Phase 138)
+
+- Phase 138 (v8.4, WRITERULES-01..06) completed via Beastmode Director/Worker/Validator loop. Worker = inherit model (MiniMax-M3 BYOK unavailable), Validator = GLM-5.2 BYOK. Six capabilities: (1) declarative write rules table per space (data_type → target_document with fallback_rule) with CRUD; (2) `resolveWriteTarget` consults rules before routing saves, writes mismatch audit receipts; (3) document directory CRUD per space (name + purpose + resource_id); (4) all mutations write typed audit_entries events + `checkWriteRuleDrift` detects stale agent views; (5) optimistic locking on all update/delete (version mismatch throws, version increments); (6) schema validation rejects invalid rules at edit time (empty dataType/targetDocument, invalid fallbackRule).
+- Schema migration: v6→v7, added `write_rules` + `document_directory` tables with unique indexes and ON DELETE CASCADE to spaces. Idempotent. Backward-compatible.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified zero git diff.
+- Verification: 104 tests pass (28 write-rules + 58 policy + 8 MEMSEC-08 + 10 workspace); zero tsc errors under `src/lib/write-rules`; GLM-5.2 validator PASS. Non-blocking: cosmetic error message copy-paste on document directory version conflicts, audit inserts best-effort, drift check only covers write_rules not document_directory.
+
+### Roadmap Evolution (2026-07-08, Phase 137)
+
+- Phase 137 (v8.4, WORKLOAD-01..05) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK, Validator = GLM-5.2 BYOK. Five capabilities: (1) `loadWorkspace` atomically clears prior active row + inserts new `active_workspace` row + writes `workspace.loaded` audit entry; (2) load event recorded in `audit_entries` with actor/spaceId/timestamp/isHeadless metadata (replayable); (3) `promptWorkspaceSelection` returns `needsSelection: true` with available spaces only when no workspace active (single confirmation, not recurring); (4) `assertWorkspaceForHeadless` throws with explicit WORKLOAD-04 reference (no silent default, no last-used fallback); (5) `isWriteTargetInWorkspace` deny-by-default for non-matching spaces + `recordCrossSpaceRead` writes policy-receipted audit row with fromSpaceId/toSpaceId/policyReceiptId.
+- Schema migration: v5→v6, added `active_workspace` table with `space_id` FK, `is_headless` flag, `cleared_at` for lifecycle, and two indexes (partial active + space lookup). Idempotent. Backward-compatible.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified zero git diff.
+- Verification: 76 tests pass (10 workspace + 58 policy + 8 MEMSEC-08); zero tsc errors under `src/lib/workspace`; GLM-5.2 validator PASS. Non-blocking: hardcoded `'default-tenant'` in audit INSERT (matches Phase 130/131 conventions), silent catch on best-effort audit write, defensive `ORDER BY id DESC LIMIT 1` in `getActiveWorkspace`.
+
+### Roadmap Evolution (2026-07-07, Phase 131)
+
+- Phase 131 (v8.2, TEAMSCALE-02..06) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK. Five capabilities: (1) atomic joiner flow `onboardUser` (user+role+space+agent+key in one transaction with OnboardingReceipt); (2) atomic leaver flow `offboardUser` (revoke credentials+deregister agents+reassign artifacts+MEMLIFE review) + `scanOrphanedAgents`; (3) verifiable delegation chains with `weakestLinkOutcome` (policy evaluates weakest link); (4) per-team NOC views (`getTeamNocView` with memoryGrowth, promotionQueueDepth, policyDenials, skillUsage, agentActivity); (5) owner-gated assets with standing/per-use approval (`checkOwnerGate` + `grantStandingApproval` + `grantPerUseApproval`).
+- Schema migration: v4→v5, added `owner_id` on `registered_agents` (ON DELETE SET NULL) + `owner_gate_approvals` table (standing/per-use with CHECK constraint + 3 indexes). Idempotent.
+- Director caught and reverted unrelated scope creep (worker added "droid" platform type to 8 files outside Phase 131 scope; reverted via `git checkout HEAD`).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical. Wrapped files unchanged.
+- Verification: 101 tests pass (35 identity + 66 policy/MEMSEC-08); zero tsc errors under src/lib/identity; GLM-5.2 validator PASS. Non-blocking: verifyDelegationChain doc/code drift (capability subset check not enforced), LIKE pattern on metadata_json for policyDenials, dead crypto import in owner-gate.ts.
+
+### Roadmap Evolution (2026-07-07, Phase 130)
+
+- Phase 130 (v8.2, TEAMSCALE-01 + MSIQ-01/02/03) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK (hermes). Four capabilities shipped: (1) spaces + space_members schema with membership and zero cross-space leakage (TEAMSCALE-01); (2) knowledge frontmatter label validation for sensitivity/authoritative/verified_at/expires_at (MSIQ-01); (3) label-aware search/read authorization with default-open for unlabeled docs (MSIQ-02); (4) ranking boosts authoritative, demotes expired, flag_expired_unverified job (MSIQ-03).
+- Schema migration: v3→v4, added spaces + space_members tables and messages.space_id column. Backward-compatible (nullable space_id, project-name fallback in filterBySpace).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical. Wrapped files unchanged.
+- Verification: 76 TS tests pass (10 space + 66 policy/MEMSEC-08) + 32 Python tests pass (19 labels + 13 tenant isolation); zero tsc errors under src/lib/space; GLM-5.2 validator PASS. Non-blocking: filterBySpace project-name fallback could theoretically match a sibling space by name, bounded by one-project-per-space invariant.
+
+### Roadmap Evolution (2026-07-07, Phase 129)
+
+- Phase 129 (v8.2, POLGOV-03/04/05) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes), Validator = GLM-5.2 BYOK (hermes inline-context). Three capabilities shipped: (1) additive dimension rules (subject/object/action/purpose) that only tighten to deny — a rule like "GTM agents cannot export client/privileged claims" is expressible and enforced; (2) shadow mode (`shadowEvaluate`) that replays a proposed manifest against recent decisions and reports newly-denied/newly-allowed diffs, with operator-gated `activatePolicyVersion`; (3) CI regression corpus (`corpus.json` + `regression.test.ts` + `approved-diffs.json` + `check:policy-regression` npm script + CI workflow job).
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests). Dimension matching only runs when the request supplies `dimensions`; no dimensions = no dimension rules match = byte-identical. Wrapped files unchanged. Manifest version bumped to 2026.07.129.
+- Verification: dimensions 14 + shadow 9 + regression 25 + receipt 3 + engine 7 + MEMSEC-08 8 = 66 tests pass; zero tsc errors; GLM-5.2 validator PASS. Non-blocking finding: empty array in dimension rules is treated as wildcard (foot-gun, no current breakage).
+
+### Roadmap Evolution (2026-07-07, Phase 128)
+
+- Phase 128 (v8.2, POLGOV-01/02) completed via Beastmode Director/Worker/Validator loop. Worker = MiniMax-M3 BYOK (hermes dispatch), Validator = GLM-5.2 BYOK (hermes inline-context). The engine is wrap-not-rewrite: `evaluatePolicy(req)` routes by domain (memory-use | capability | knowledge) to the existing decision functions (`authorizeMemoryUse`, `checkDispatchPolicy`/`checkA2aSendPolicy`/`checkMemoryWritePolicy`, declarative knowledge pass-through) and adds a `POLICY_VERSION` (from `manifest.json`) + `ruleMatched` + `POLICY_DECISION` audit receipt via `emitPolicyReceipt`.
+- HARD CONSTRAINT preserved: MEMSEC-08 regression corpus passes byte-identical (8 tests, no outcome change). Wrapped files (`policy-gate.ts`, `security-policy.ts`) verified unchanged via git diff. Receipts are best-effort (try/catch swallow) and carry ids/labels/codes/reasons only — never content.
+- Verification: policy engine 7 tests + receipt 3 tests + MEMSEC-08 8 tests = 18 pass; zero tsc errors under `src/lib/policy`; GLM-5.2 validator verdict PASS (one non-blocking note: `evaluateKnowledgePolicy` metadata type is `Record<string, unknown>` — safe today, narrow later).
 
 ### Roadmap Evolution (2026-07-07, Phase 125)
 

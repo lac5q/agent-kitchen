@@ -10,7 +10,13 @@ import { checkDispatchPolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
-import { lookupSkillContract, buildSkillEvidence } from "@/lib/dispatch/skill-lookup";
+import {
+  lookupSkillContract,
+  buildSkillEvidence,
+  parseTrustLevel,
+  type SkillLookupResult,
+} from "@/lib/dispatch/skill-lookup";
+import { getAgentVersionPin } from "@/lib/skills/skill-sync-governance";
 import {
   extractMemoryLabelSnapshot,
   filterAuthorizedMemoryItems,
@@ -28,6 +34,18 @@ const DispatchBodySchema = z.object({
   input: z.record(z.string(), z.unknown()).optional(),
   priority: z.number().optional(),
   skill_name: z.string().optional(),
+  /**
+   * SKILLTRUST-01 (continued) / VAL-SKILL-018: explicit harness binding for
+   * the requested skill name. When omitted the dispatcher treats the request
+   * as ambiguous and refuses to silently select a harness.
+   */
+  source_harness: z.string().optional(),
+  /**
+   * SKILLTRUST-01 (continued) / VAL-SKILL-017: explicit version binding.
+   * When supplied the dispatcher denies mismatched versions rather than
+   * silently picking a different version.
+   */
+  skill_version: z.string().optional(),
   task_id: z.string().optional(),
   context_id: z.string().optional(),
   from_agent: z.string().optional(),
@@ -235,9 +253,145 @@ export async function POST(req: NextRequest | Request) {
   // Skill governance check (SKILL-03): look up registry before per-agent instruction fallback.
   // Fail closed: incomplete, disabled, or risk-unknown contracts deny dispatch.
   // No skill_name in request → fallback (normal dispatch proceeds unchanged).
+  //
+  // Phase 148 SKILLTRUST-02: optionally enforce a minimum trust tier via
+  // MEMROOS_MIN_SKILL_TRUST_LEVEL env var. Accepted values:
+  //   - 'unsigned' | 'signed' | 'verified' (case-insensitive)
+  //   - unset / unknown → no threshold (backward-compatible fail-open for trust)
+  //
+  // Dispatch policy flag MEMROOS_REQUIRE_SIGNED_SKILLS=true (1/yes/on) restricts
+  // dispatch to signed skills via an extra SQL predicate (VAL-SIGN-008).
   const skillName: string | undefined = parsed.data.skill_name;
-  const skillContract = lookupSkillContract(db, skillName);
-  const skillEvidence = buildSkillEvidence(skillContract);
+  const minTrustLevel = parseTrustLevel(process.env["MEMROOS_MIN_SKILL_TRUST_LEVEL"]);
+  const requireSignedRaw = (process.env["MEMROOS_REQUIRE_SIGNED_SKILLS"] ?? "")
+    .trim()
+    .toLowerCase();
+  const requireSigned =
+    requireSignedRaw === "true" ||
+    requireSignedRaw === "1" ||
+    requireSignedRaw === "yes" ||
+    requireSignedRaw === "on";
+  // SKILLTRUST-04 / VAL-SKILL-031: when the requesting agent has a
+  // version pin for this skill, the pinned (source_harness, version,
+  // content_hash) tuple wins over the unpinned latest row. The pin
+  // lookup happens after auth so an anonymous caller cannot probe
+  // other agents' pins. agent_id prefix is stripped from from_agent
+  // because agent identifiers in the audit chain are stored as
+  // 'agent:<id>'.
+  let pinned: {
+    agent_id: string;
+    source_harness: string;
+    current_version: string;
+    current_content_hash: string;
+    skill_id: number | null;
+  } | null = null;
+  const fromAgentId = from_agent.startsWith("agent:")
+    ? from_agent.slice("agent:".length)
+    : from_agent;
+  if (skillName && fromAgentId) {
+    const agentPin = getAgentVersionPin(db, fromAgentId, skillName);
+    if (agentPin) {
+      // The pin does not store source_harness directly; the registry
+      // row pointed at by skill_id is authoritative for the harness
+      // identity. When skill_id is missing (legacy pin) we fall back
+      // to looking up the row by name. The dispatch lookup will then
+      // verify the pinned content_hash matches the registry row, so a
+      // mismatched or missing row fails closed.
+      let pinHarness: string | null = null;
+      if (agentPin.skill_id !== null) {
+        const regRow = db
+          .prepare<[number], { source_harness: string }>(
+            `SELECT source_harness FROM skill_registry WHERE id = ? LIMIT 1`
+          )
+          .get(agentPin.skill_id);
+        pinHarness = regRow?.source_harness ?? null;
+      }
+      if (!pinHarness) {
+        // Fall back to the most recent enabled+complete row with the
+        // matching name. This is used only to derive source_harness
+        // for the pin override — the dispatch lookup then enforces
+        // the pinned content_hash.
+        const namedRow = db
+          .prepare<[string], { source_harness: string }>(
+            `SELECT source_harness FROM skill_registry
+              WHERE name = ?
+                AND dispatch_status = 'enabled'
+                AND completeness_pct = 100
+              ORDER BY imported_at DESC
+              LIMIT 1`
+          )
+          .get(skillName);
+        pinHarness = namedRow?.source_harness ?? null;
+      }
+      if (pinHarness) {
+        pinned = {
+          agent_id: agentPin.agent_id,
+          source_harness: pinHarness,
+          current_version: agentPin.current_version,
+          current_content_hash: agentPin.current_content_hash,
+          skill_id: agentPin.skill_id,
+        };
+      }
+    }
+  }
+  let skillContract: SkillLookupResult | null = lookupSkillContract(db, skillName, {
+    minTrustLevel,
+    requireSigned,
+    sourceHarness: parsed.data.source_harness ?? null,
+    version: parsed.data.skill_version ?? null,
+    pinned,
+  });
+  // A pin is an immutable artifact identity, not a harness preference. Keep
+  // this route-level guard in addition to the lookup's SQL-bound checks so a
+  // future lookup implementation cannot turn version or hash drift into an
+  // adapter invocation.
+  if (
+    pinned &&
+    skillContract?.kind === "hit" &&
+    (
+      skillContract.skill.source_harness !== pinned.source_harness ||
+      skillContract.skill.version !== pinned.current_version ||
+      (skillContract.skill.content_hash ?? "").toLowerCase() !==
+        pinned.current_content_hash.toLowerCase()
+    )
+  ) {
+    skillContract = {
+      kind: "denied",
+      skill_name: skillName ?? "",
+      source_harness: pinned.source_harness,
+      reason: `Pinned skill identity mismatch for agent '${pinned.agent_id}'`,
+      dispatch_status: skillContract.skill.dispatch_status,
+      trust_level: skillContract.skill.trust_level,
+    };
+  }
+  const skillEvidence = buildSkillEvidence(skillContract, minTrustLevel);
+
+  // Ambiguity denial: same-name skills from multiple harnesses cannot be
+  // silently selected. The caller must supply source_harness to dispatch.
+  // VAL-SKILL-017 / VAL-SKILL-018.
+  if (skillContract?.kind === "ambiguous") {
+    writeAuditLog(db, {
+      actor: from_agent,
+      action: "policy_denied",
+      target: "dispatch",
+      detail: JSON.stringify({
+        code: "SKILL_AMBIGUOUS",
+        skill_name: skillContract.skill_name,
+        reason: skillContract.reason,
+        candidate_harnesses: skillContract.candidate_harnesses,
+      }),
+      severity: "high",
+    });
+    return Response.json(
+      {
+        ok: false,
+        error: `Skill ambiguity: ${skillContract.reason}`,
+        code: "SKILL_AMBIGUOUS",
+        detail: skillEvidence,
+      },
+      { status: 409 }
+    );
+  }
 
   if (skillContract?.kind === "denied") {
     writeAuditLog(db, {
@@ -249,6 +403,8 @@ export async function POST(req: NextRequest | Request) {
         skill_name: skillContract.skill_name,
         reason: skillContract.reason,
         dispatch_status: skillContract.dispatch_status,
+        trust_level: skillContract.trust_level ?? null,
+        required_trust_level: minTrustLevel ?? null,
       }),
       severity: "high",
     });
@@ -294,6 +450,8 @@ export async function POST(req: NextRequest | Request) {
     priority,
     dispatched_at,
     skill_name: skillName,
+    source_harness: parsed.data.source_harness ?? undefined,
+    skill_version: parsed.data.skill_version ?? undefined,
   };
   const result = await adapter.dispatch(task, agent);
 

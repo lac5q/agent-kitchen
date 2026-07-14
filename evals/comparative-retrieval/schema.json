@@ -44,6 +44,28 @@
           "entity_refs": {
             "type": "array",
             "items": { "type": "string" }
+          },
+          "scope": {
+            "type": "object",
+            "required": ["tenantId", "userId", "agentId", "spaceId", "label", "purpose", "beliefStage"],
+            "properties": {
+              "tenantId": { "type": "string", "minLength": 1 },
+              "userId": { "type": "string", "minLength": 1 },
+              "agentId": { "type": "string", "minLength": 1 },
+              "spaceId": { "type": "string", "minLength": 1 },
+              "label": {
+                "type": "object",
+                "required": ["visibility", "policy"],
+                "properties": {
+                  "visibility": { "type": "string", "enum": ["private", "internal", "public_safe", "public_approved"] },
+                  "policy": { "type": "string", "enum": ["indexable", "agent_visible", "requires_redaction", "requires_human_review", "sealed"] },
+                  "domain": { "type": ["string", "null"] },
+                  "sensitivity": { "type": ["string", "null"] }
+                }
+              },
+              "purpose": { "type": "string", "enum": ["recall", "multi-search", "context-pack", "chatgpt-action", "export", "summary", "dispatch", "index-write", "evidence-bundle", "memory_search", "memory-promotion"] },
+              "beliefStage": { "type": "string", "enum": ["silver_candidate_claim", "gold_claim", "revoked", "superseded"] }
+            }
           }
         }
       }

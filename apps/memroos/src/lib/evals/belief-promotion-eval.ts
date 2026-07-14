@@ -16,6 +16,7 @@ import path from "path";
 import type Database from "better-sqlite3";
 
 import { initSchema } from "../db-schema";
+import { ensureCanonicalUpperOntology } from "../ontology/registry";
 import {
   demoteCandidate,
   promoteCandidate,
@@ -131,6 +132,7 @@ const DEFAULT_TENANT = "default-tenant";
 
 function freshDb(database: Database.Database): void {
   initSchema(database);
+  ensureCanonicalUpperOntology(database, "belief-eval");
   database
     .prepare(`INSERT OR IGNORE INTO tenants (id, name) VALUES (?, ?)`)
     .run(DEFAULT_TENANT, "Default");
@@ -227,8 +229,37 @@ function seedPromotionFixture(
     JSON.stringify(metadata),
     capturedAt
   );
+  seedBeliefReviewOntology(db, candidateId);
 
   return { captureId, candidateId, content, metadata, memoryType };
+}
+
+function seedBeliefReviewOntology(db: Database.Database, candidateId: string): void {
+  const ontology = ensureCanonicalUpperOntology(db, "belief-eval");
+  const spaceId = "belief-eval-space";
+  const sourceId = `belief-eval-source:${candidateId}`;
+  const sourceHash = `sha256:${"a".repeat(64)}`;
+  const derivativeId = `belief-eval-record:${candidateId}`;
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO ontology_versioned_records
+      (id, tenant_id, space_id, record_type, record_id, qualified_type, ontology_id, ontology_version,
+       ontology_content_hash, mapping_path_json, created_at, source_id, source_hash)
+     VALUES (?, ?, ?, 'belief_candidate', ?, 'memory', ?, ?, ?, '[]', ?, ?, ?)`
+  ).run(
+    derivativeId, DEFAULT_TENANT, spaceId, candidateId, ontology.ontologyId, ontology.version,
+    ontology.contentHash, now, sourceId, sourceHash,
+  );
+  db.prepare(
+    `INSERT INTO ontology_source_lifecycle
+      (tenant_id, space_id, source_id, source_hash, status, updated_at, updated_by, reason_code)
+     VALUES (?, ?, ?, ?, 'active', ?, 'belief-eval', 'test')`
+  ).run(DEFAULT_TENANT, spaceId, sourceId, sourceHash, now);
+  db.prepare(
+    `INSERT INTO ontology_derivative_validity
+      (id, tenant_id, space_id, source_id, source_hash, derivative_type, derivative_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'versioned_record', ?, 'authoritative', ?)`
+  ).run(`belief-eval-valid:${derivativeId}`, DEFAULT_TENANT, spaceId, sourceId, sourceHash, derivativeId, now);
 }
 
 function asClaims(contentList: Array<{ stage: BeliefStage; content: string }>): Claim[] {

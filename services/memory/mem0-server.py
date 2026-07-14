@@ -9,10 +9,12 @@ import sys
 import yaml
 import json
 import logging
+import logging.handlers
 import traceback
 import shutil
 import sqlite3
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
@@ -25,6 +27,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from provenance import normalize_metadata
 from pii_guard import protect_memory_payload
+import notify as notifier
 try:
     from qdrant_client import QdrantClient
 
@@ -39,21 +42,31 @@ except ImportError:
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-# Main server log
+# Main server log — rotating: 50MB × 5 backups = ~250MB max, never floods disk.
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_DIR / "mem0-server.log")
+        logging.handlers.RotatingFileHandler(
+            LOG_DIR / "mem0-server.log",
+            maxBytes=50 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        ),
     ]
 )
 logger = logging.getLogger("mem0-server")
 
-# Failure log - separate file for errors that need investigation
+# Failure log - separate file for errors that need investigation. Also rotates.
 failure_logger = logging.getLogger("mem0-failures")
 failure_logger.setLevel(logging.ERROR)
-failure_handler = logging.FileHandler(LOG_DIR / "failures.log")
+failure_handler = logging.handlers.RotatingFileHandler(
+    LOG_DIR / "failures.log",
+    maxBytes=50 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
 failure_handler.setFormatter(logging.Formatter(
     '%(asctime)s | %(levelname)s | %(message)s'
 ))
@@ -145,6 +158,161 @@ _qdrant_probe_last: float = 0
 _QDRANT_PROBE_INTERVAL = 60  # seconds between live probes
 
 
+class CircuitBreaker:
+    """
+    In-process circuit breaker. Three states:
+      - CLOSED:  normal operation, requests pass through.
+      - OPEN:    too many failures — fast-fail all requests for a cooldown.
+      - HALF_OPEN: cooldown elapsed — let one request through as a probe.
+
+    On OPEN → notify() (single alert, not per-request).
+    On HALF_OPEN → CLOSE: notify() once with recovery info.
+    Per-request failures during OPEN are silent (no log spam, no notify).
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(
+        self,
+        name: str,
+        failure_threshold: int = 5,
+        window_seconds: float = 120.0,
+        cooldown_seconds: float = 600.0,
+    ):
+        self.name = name
+        self.failure_threshold = failure_threshold
+        self.window_seconds = window_seconds
+        self.cooldown_seconds = cooldown_seconds
+        self.state = self.CLOSED
+        self.failures: list[float] = []  # timestamps within the window
+        self.opened_at: float = 0.0
+        self.last_failure_msg: str = ""
+        self.total_failures: int = 0  # cumulative since open
+        self.queued_during_open: int = 0
+        self._lock = threading.Lock()
+
+    def allow_request(self) -> bool:
+        """Decide whether to let this request through. Updates state."""
+        import time
+        with self._lock:
+            now = time.time()
+            if self.state == self.CLOSED:
+                return True
+            if self.state == self.OPEN:
+                if (now - self.opened_at) >= self.cooldown_seconds:
+                    # Cooldown elapsed — move to half-open, allow one probe.
+                    self.state = self.HALF_OPEN
+                    logger.info(
+                        f"[circuit:{self.name}] cooldown elapsed — "
+                        f"entering HALF_OPEN, one probe request allowed"
+                    )
+                    return True
+                return False
+            # HALF_OPEN: only the first request gets through; others fast-fail
+            # until that one resolves. Implemented by setting back to OPEN on
+            # first probe entry below.
+            return False
+
+    def record_success(self) -> None:
+        """Call after a successful request. May transition HALF_OPEN→CLOSED."""
+        import time
+        with self._lock:
+            if self.state == self.HALF_OPEN:
+                duration = time.time() - self.opened_at
+                logger.info(
+                    f"[circuit:{self.name}] probe succeeded — CLOSED "
+                    f"(was open for {duration:.0f}s, "
+                    f"{self.total_failures} failures, "
+                    f"{self.queued_during_open} queued)"
+                )
+                # Recovery notification — single ping.
+                try:
+                    notifier.notify(
+                        "circuit_recovered",
+                        f"{self.name} recovered after {duration:.0f}s",
+                        details={
+                            "circuit": self.name,
+                            "open_seconds": int(duration),
+                            "failures_during_outage": self.total_failures,
+                            "queued_for_replay": self.queued_during_open,
+                        },
+                    )
+                except Exception:
+                    pass
+                self.state = self.CLOSED
+                self.failures = []
+                self.total_failures = 0
+                self.queued_during_open = 0
+            elif self.state == self.CLOSED:
+                # Normal success — clear recent failures from the window.
+                self.failures = []
+
+    def record_failure(self, exc: Exception | None = None) -> None:
+        """Call after a failed request. May transition CLOSED→OPEN."""
+        import time
+        msg = str(exc) if exc else "unknown"
+        with self._lock:
+            now = time.time()
+            if self.state == self.HALF_OPEN:
+                # Probe failed — back to OPEN, reset cooldown.
+                self.state = self.OPEN
+                self.opened_at = now
+                self.last_failure_msg = msg
+                logger.warning(
+                    f"[circuit:{self.name}] HALF_OPEN probe failed — "
+                    f"back to OPEN for another {self.cooldown_seconds:.0f}s"
+                )
+                return
+            # CLOSED — record and check threshold.
+            self.failures = [
+                t for t in self.failures if (now - t) <= self.window_seconds
+            ]
+            self.failures.append(now)
+            self.last_failure_msg = msg
+            if len(self.failures) >= self.failure_threshold and self.state == self.CLOSED:
+                self.state = self.OPEN
+                self.opened_at = now
+                self.total_failures = len(self.failures)
+                logger.error(
+                    f"[circuit:{self.name}] threshold reached "
+                    f"({len(self.failures)} failures in {self.window_seconds:.0f}s) — "
+                    f"OPEN for {self.cooldown_seconds:.0f}s"
+                )
+                try:
+                    notifier.notify(
+                        "circuit_opened",
+                        f"{self.name} circuit OPEN — fast-failing requests",
+                        details={
+                            "circuit": self.name,
+                            "failures": len(self.failures),
+                            "window_seconds": int(self.window_seconds),
+                            "cooldown_seconds": int(self.cooldown_seconds),
+                            "last_error": msg[:200],
+                            "queued_replay": True,
+                        },
+                    )
+                except Exception:
+                    pass
+
+    def record_queued(self) -> None:
+        """Track that a request was queued for replay while the circuit was open."""
+        with self._lock:
+            self.queued_during_open += 1
+
+
+# Breaker for the Ollama/embedder initialization path. When Ollama is down
+# (or unreachable on the wrong URL), every memory add fails the same way.
+# The breaker prevents 12GB of duplicate traceback logs.
+memory_init_breaker = CircuitBreaker(
+    name="mem0-ollama",
+    failure_threshold=5,
+    window_seconds=120.0,
+    cooldown_seconds=600.0,
+)
+
+
 def reset_memory():
     """Force-recreate the Memory instance. Use after Qdrant comes back."""
     global _memory, _init_error
@@ -167,6 +335,14 @@ def get_memory(force_reset: bool = False):
     if force_reset:
         reset_memory()
 
+    # Circuit breaker fast-path: if we've been failing repeatedly, don't try.
+    if not memory_init_breaker.allow_request():
+        raise RuntimeError(
+            f"mem0-ollama circuit OPEN — request fast-failed "
+            f"(cooldown {memory_init_breaker.cooldown_seconds:.0f}s, "
+            f"last error: {memory_init_breaker.last_failure_msg[:120]})"
+        )
+
     if _memory is None:
         now = time.time()
         if _init_error and (now - _last_init_attempt) < _INIT_COOLDOWN:
@@ -178,10 +354,12 @@ def get_memory(force_reset: bool = False):
             mem0_cfg = build_mem0_config(cfg)
             _memory = Memory.from_config(mem0_cfg)
             _init_error = None
+            memory_init_breaker.record_success()
             logger.info("Mem0 Memory initialized successfully")
         except Exception as e:
             _init_error = e
             _last_init_attempt = now
+            memory_init_breaker.record_failure(e)
             logger.error(f"Failed to initialize Mem0: {e}")
             raise
 
@@ -211,10 +389,12 @@ def get_memory(force_reset: bool = False):
                     mem0_cfg = build_mem0_config(cfg)
                     _memory = Memory.from_config(mem0_cfg)
                     _init_error = None
+                    memory_init_breaker.record_success()
                     logger.info("Mem0 Memory re-initialized after Qdrant reset")
                 except Exception as reinit_err:
                     _init_error = reinit_err
                     _last_init_attempt = time.time()
+                    memory_init_breaker.record_failure(reinit_err)
                     raise
         elif not _qdrant_probe_ok:
             # Last known probe failed — fail fast without touching Ollama
@@ -513,6 +693,8 @@ def add_memory(req: AddMemoryRequest, request: Request):
         is_replay = request.headers.get("x-mem0-queue-replay") == "1"
         if _is_retryable_memory_error(exc) and not is_replay:
             queued = _queue_failed_memory_add(req)
+            if memory_init_breaker.state == CircuitBreaker.OPEN:
+                memory_init_breaker.record_queued()
             return AddMemoryResponse(
                 status="queued",
                 result={

@@ -232,6 +232,15 @@ function getAgentRow(agentId: string, includeDeregistered = false): RegisteredAg
   return row ?? null;
 }
 
+/**
+ * Replaces the capability rows for an agent. VAL-SKILL-021: agent capability
+ * names NEVER become skill_registry rows. This helper only touches the
+ * agent_capabilities table; an agent named like a skill (or with a
+ * capability named like a skill) cannot create, enable, or trust a registry
+ * skill via this path. Skill governance flows through /api/skills/import,
+ * /api/skills/quarantine/*, and /api/skills/pins, never through agent
+ * registration.
+ */
 function replaceCapabilities(agentId: string, capabilities: RegisteredAgentCapability[]): void {
   const db = getDb();
   db.prepare("DELETE FROM agent_capabilities WHERE agent_id = ?").run(agentId);
@@ -256,6 +265,11 @@ function replaceCapabilities(agentId: string, capabilities: RegisteredAgentCapab
 }
 
 export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
+  // VAL-SKILL-021: registerAgent NEVER inserts into skill_registry, never
+  // updates skill_registry.dispatch_status, never touches skill_quarantine
+  // or skill_version_pins. An agent or capability named like a skill cannot
+  // bypass skill governance. Skill flow is exclusively through
+  // /api/skills/import + /api/skills/quarantine/* + /api/skills/pins.
   const db = getDb();
   const timestamp = nowIso();
   const metadata = input.metadata ?? {};

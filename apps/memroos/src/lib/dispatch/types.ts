@@ -11,25 +11,20 @@ export interface DispatchTask {
   dispatched_at: string;
   /** Optional governed skill name for registry-aware dispatch (SKILL-03). */
   skill_name?: string;
-}
-
-/**
- * Extended evidence returned from skill-governed dispatch.
- * Added to DispatchResult.evidence under the key 'skill_governance'.
- */
-export interface SkillGovernanceEvidence {
-  mode: "governed" | "fallback";
-  selected_skill?: {
-    id: number;
-    name: string;
-    source_harness: string;
-    risk_tier: string | null;
-    dispatch_status: string;
-    completeness_pct: number;
-  };
-  denial_reason?: string;
-  denied_skill?: string;
-  denied_dispatch_status?: string | null;
+  /**
+   * SKILLTRUST-01 (continued): explicit harness binding when the requested
+   * skill name is non-empty. When omitted the dispatcher treats the request
+   * as ambiguous (multiple harnesses may share the same name) and refuses
+   * to silently pick one. The caller must supply source_harness to
+   * deterministically bind the named skill to a single registry row.
+   */
+  source_harness?: string;
+  /**
+   * Optional version string for explicit version binding. When supplied the
+   * dispatcher compares it to the registry row version column and denies
+   * mismatches rather than silently picking a different version.
+   */
+  skill_version?: string;
 }
 
 export interface DispatchResult {

@@ -333,6 +333,7 @@ def test_core_tools_stay_small_for_progressive_disclosure():
         "knowledge_manifest",
         "knowledge_search",
         "knowledge_read",
+        "memory_recall",
         "memory_search",
         "memory_save",
     ]

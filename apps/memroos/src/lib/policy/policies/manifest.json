@@ -1,0 +1,47 @@
+{
+  "version": "2026.07.129",
+  "rules": [
+    {
+      "id": "memsec.memory-use",
+      "domain": "memory-use",
+      "description": "MEMSEC label-based memory use gate (sealed/private/review/redact)",
+      "implementation": "memory-gate.authorizeMemoryUse"
+    },
+    {
+      "id": "capability.dispatch",
+      "domain": "capability",
+      "description": "A2A dispatch target must declare dispatch capability and pass network policy",
+      "implementation": "security-policy.checkDispatchPolicy"
+    },
+    {
+      "id": "capability.a2a-send",
+      "domain": "capability",
+      "description": "Caller must declare A2A send capability",
+      "implementation": "security-policy.checkA2aSendPolicy"
+    },
+    {
+      "id": "capability.memory-write",
+      "domain": "capability",
+      "description": "Agent must declare capability to write the given memory tier",
+      "implementation": "security-policy.checkMemoryWritePolicy"
+    },
+    {
+      "id": "knowledge.policy-check",
+      "domain": "knowledge",
+      "description": "Knowledge storage policy compliance for a tool use",
+      "implementation": "knowledge.knowledge_policy_check"
+    },
+    {
+      "id": "gtm.meeting-prep-export-deny",
+      "domain": "memory-use",
+      "description": "GTM agents cannot export client/privileged claims",
+      "implementation": "memsec.authorizeMemoryUse",
+      "dimensions": {
+        "subject": { "team": ["GTM"] },
+        "object": { "domain": ["client"], "sensitivity": ["privileged"] },
+        "purpose": ["export"],
+        "effect": "deny"
+      }
+    }
+  ]
+}
