@@ -57,6 +57,7 @@ from provenance import extract_metadata, normalize_metadata, provenance_label  #
 try:
     from .capabilities import get_capabilities, open_workspace
     from .compiler import compile_wiki
+    from . import memory_recall as memory_recall_mod
     from .store import KnowledgeStore
     from . import tool_attention
 except ImportError:  # pragma: no cover - allows `python knowledge_system/mcp_server.py`
@@ -65,6 +66,7 @@ except ImportError:  # pragma: no cover - allows `python knowledge_system/mcp_se
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from knowledge_system.capabilities import get_capabilities, open_workspace
     from knowledge_system.compiler import compile_wiki
+    from knowledge_system import memory_recall as memory_recall_mod
     from knowledge_system.store import KnowledgeStore
     from knowledge_system import tool_attention
 
@@ -583,6 +585,37 @@ def knowledge_search(
         user_id=_memroos_user_id(user_id),
         agent_id=_memroos_agent_id(),
         agent_role=_memroos_agent_role(agent_role),
+    )
+
+
+@_mcp_tool
+def memory_recall(
+    query: str,
+    limit: int = 10,
+    tenant_id: str = "",
+    user_id: str = "",
+    agent_role: str = "",
+) -> dict:
+    """Unified meeting/memory recall across QMD meeting collections + knowledge + mem0.
+
+    Prefer this over collection-aware `qmd -c` or naive `knowledge_search` when
+    the task is “find the meeting” (Circleback / Fathom / Zoom / Google Meet).
+    Agents do not need to know private collection names.
+    """
+    def _knowledge(**kwargs):
+        return knowledge_search(
+            query=kwargs.get("query", query),
+            limit=kwargs.get("limit", min(limit, 10)),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            agent_role=agent_role,
+        )
+
+    return memory_recall_mod.recall(
+        query,
+        limit=limit,
+        knowledge_search_fn=_knowledge,
+        memory_search_fn=lambda query, limit=5, **_: memory_search(query=query, limit=limit),
     )
 
 
@@ -1362,7 +1395,10 @@ def knowledge_system_orientation() -> str:
     """Prompt that tells an agent how to use the knowledge system safely."""
     return (
         "Use the memroos MCP server as one progressive facade with progressive disclosure. "
-        "Start with core tools: health, manifest, search, read, memory_search, memory_save. "
+        "Start with core tools: health, manifest, search, read, memory_recall, memory_search, memory_save. "
+        "For “find the meeting” / meeting memory, prefer memory_recall — it federates enabled "
+        "meeting QMD collections (Circleback, Fathom, Zoom, Google Meet) plus knowledge literal "
+        "and mem0. Do not guess collection names or rely on qmd -c / naive knowledge_search alone. "
         "If a task needs deeper capability, call knowledge_capabilities or knowledge_open_workspace. "
         "Use knowledge_workspace_call for deep actions like wiki compile. "
         "Available workspaces: wiki, vector, agent-memory, admin, graph, dashboard, ingestion, workflows, skill-packs, integrations, primitives, tool-attention. "

@@ -1,6 +1,6 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-07-08*
+*Updated: 2026-07-14*
 
 ---
 
@@ -478,3 +478,41 @@
 | ARTGATE-01 | 141 | Planned |
 | ARTGATE-02 | 141 | Planned |
 | ARTGATE-03 | 141 | Planned |
+
+---
+
+## v8.11 Unified Meeting Memory
+
+*Added: 2026-07-14 — focused milestone for federated meeting recall + ingest reliability.*
+
+### MEETREL — Meeting Ingest Reliability (Phase 151)
+
+- [x] **MEETREL-01**: Meeting Markdown filenames are idempotent by `recording_id` / `meeting_id` (no `-2` slug-collision duplicates on re-ingest).
+- [x] **MEETREL-02**: Meeting Markdown frontmatter includes `calendar_title`, `share_url`, `meeting_id`, and `source` for Fathom, Circleback, and Zoom.
+- [x] **MEETREL-03**: Public provider templates live under `scripts/meet-sync/providers/`; secrets remain in envFile / 1Password only.
+- [x] **MEETREL-04**: `meet-sync --health` reports freshness, last-run OK, and empty-vs-API WARN (including personal Fathom).
+
+### URECALL — Unified Recall Facade (Phases 152–153)
+
+- [x] **URECALL-01**: Shared resolver searches enabled meeting QMD collections plus knowledge literal and mem0.
+- [x] **URECALL-02**: MCP `memory_recall` is the default agent meeting/memory recall tool.
+- [x] **URECALL-03**: Orientation prefers `memory_recall` over collection-aware `qmd -c` / naive `knowledge_search` for “find the meeting”.
+- [x] **URECALL-04**: `/api/memory/multi-search` includes a QMD meeting lane.
+- [x] **URECALL-05**: Docs and `collections.config.json` list private meeting collections.
+- [x] **URECALL-06**: Regressions prove Monaco Circleback + Fathom Impromptu are findable via `memory_recall` without `-c`.
+
+### Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MEETREL-01 | 151 | Done |
+| MEETREL-02 | 151 | Done |
+| MEETREL-03 | 151 | Done |
+| MEETREL-04 | 151 | Done |
+| URECALL-01 | 152 | Done |
+| URECALL-02 | 152 | Done |
+| URECALL-03 | 152 | Done |
+| URECALL-04 | 153 | Done |
+| URECALL-05 | 153 | Done |
+| URECALL-06 | 153 | Done |
+

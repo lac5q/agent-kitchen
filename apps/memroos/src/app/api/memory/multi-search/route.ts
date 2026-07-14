@@ -1,5 +1,6 @@
 import { CLAUDE_MEMORY_PATH } from "@/lib/constants";
 import { getDb } from "@/lib/db";
+import { searchMeetingCollections } from "@/lib/meeting-qmd-recall";
 import { queryGraphMemory, searchVectorMemory } from "@/lib/memory/backends";
 import {
   extractMemoryLabelSnapshot,
@@ -11,7 +12,7 @@ import type { MemoryEntry } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-type SearchTier = "vector" | "graph" | "episodic";
+type SearchTier = "vector" | "graph" | "episodic" | "qmd";
 
 interface NormalizedMemoryResult {
   id: string;
@@ -154,7 +155,7 @@ export async function GET(request: Request) {
     capability: "memory_search",
   };
 
-  const [vector, graph, episodic]: SearchOutcome[] = await Promise.all([
+  const [vector, graph, episodic, qmd]: SearchOutcome[] = await Promise.all([
     searchVectorMemory(query, limit)
       .then((raw) => ({ tier: "vector" as const, items: normalizeVector(raw, limit) }))
       .catch((error) => ({
@@ -176,9 +177,28 @@ export async function GET(request: Request) {
         items: [] as NormalizedMemoryResult[],
         error: error instanceof Error ? error.message : "Episodic memory unavailable",
       })),
+    searchMeetingCollections(query, limit)
+      .then((outcome) => ({
+        tier: "qmd" as const,
+        items: outcome.hits.map((hit) => ({
+          id: hit.id,
+          tier: "qmd" as const,
+          title: hit.title,
+          content: hit.content,
+          source: `qmd:${hit.collection}`,
+          score: hit.score,
+          metadata: { collection: hit.collection, path: hit.path, ...(hit.metadata as object) },
+        })),
+        error: outcome.error,
+      }))
+      .catch((error) => ({
+        tier: "qmd" as const,
+        items: [] as NormalizedMemoryResult[],
+        error: error instanceof Error ? error.message : "QMD meeting lane unavailable",
+      })),
   ]);
 
-  for (const tier of [vector, graph, episodic]) {
+  for (const tier of [vector, graph, episodic, qmd]) {
     const authorizedItems = filterAuthorizedMemoryItems(
       db,
       tier.items,

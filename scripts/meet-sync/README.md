@@ -8,6 +8,9 @@ Declarative meeting ingestion for MemRoOS: one config, one runner, LaunchAgent i
 2. `meet-sync.sh` ensures a QMD collection, reindexes it, and embeds that collection only
 3. Secrets stay in private `envFile` / 1Password — never in the JSON config
 4. Operator enables sources in `~/.memroos/meeting-sources.json` (copy from example)
+5. Agents recall via MCP `memory_recall` (federated) — not by guessing `qmd -c` names
+
+Public transforms: `providers/` (`fathom_*`, `circleback_*`, `zoom_transform.py`).
 
 ## Quick start
 
@@ -15,10 +18,11 @@ Declarative meeting ingestion for MemRoOS: one config, one runner, LaunchAgent i
 # 1. Private config
 mkdir -p ~/.memroos
 cp scripts/meet-sync/meeting-sources.example.json ~/.memroos/meeting-sources.json
-# edit: set enabled=true for your providers, wire ingestCommand / envFile paths
+# edit: set enabled=true for your providers, wire envFile paths
 
-# 2. Dry-run
+# 2. Dry-run / health
 ./scripts/meet-sync/meet-sync.sh --dry-run
+./scripts/meet-sync/meet-sync.sh --health
 
 # 3. One source
 ./scripts/meet-sync/meet-sync.sh --source circleback

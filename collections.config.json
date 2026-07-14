@@ -11,7 +11,36 @@
     {
       "name": "meet-recordings",
       "category": "business",
-      "basePaths": ["gdrive/meet-recordings", "apple-notes/call-recordings"]
+      "basePaths": ["gdrive/meet-recordings", "apple-notes/call-recordings"],
+      "note": "Google Meet / Gemini notes in knowledge repo"
+    },
+    {
+      "name": "meet-recordings-circleback",
+      "category": "business",
+      "private": true,
+      "basePaths": ["data/context/meet-recordings-circleback"],
+      "note": "Private Circleback — local data/context, not in git"
+    },
+    {
+      "name": "meet-recordings-epilogue",
+      "category": "business",
+      "private": true,
+      "basePaths": ["data/context/meet-recordings-epilogue"],
+      "note": "Private Fathom (work) — local data/context, not in git"
+    },
+    {
+      "name": "meet-recordings-personal",
+      "category": "business",
+      "private": true,
+      "basePaths": ["data/context/meet-recordings-personal"],
+      "note": "Private Fathom (personal) — local data/context, not in git"
+    },
+    {
+      "name": "meet-recordings-zoom",
+      "category": "business",
+      "private": true,
+      "basePaths": ["data/context/meet-recordings-zoom"],
+      "note": "Private Zoom — local data/context, not in git"
     },
     { "name": "llm-wiki", "category": "business" },
     { "name": "mem0-exports", "category": "agents" },

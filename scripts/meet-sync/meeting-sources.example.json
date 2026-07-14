@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy to ~/.memroos/meeting-sources.json (never commit). Secrets stay in envFile / 1Password refs, not here. Runner: scripts/meet-sync/meet-sync.sh",
+  "_comment": "Copy to ~/.memroos/meeting-sources.json (never commit). Secrets stay in envFile / 1Password. Public providers: scripts/meet-sync/providers/",
   "version": 1,
   "defaults": {
     "embed": true,
@@ -13,10 +13,20 @@
       "ingestCommand": "$HOME/github/knowledge/personal-ingestion-transcripts.sh",
       "envFile": null,
       "outputDir": null,
-      "qmdCollections": ["meet-recordings", "spark-recordings"],
-      "schedule": { "hour": 7, "minute": 0 },
+      "qmdCollections": [
+        "meet-recordings",
+        "spark-recordings"
+      ],
+      "schedule": {
+        "hour": 7,
+        "minute": 0
+      },
       "freshnessThresholdMinutes": 180,
-      "requiredTools": ["python3", "gws", "sqlite3"],
+      "requiredTools": [
+        "python3",
+        "gws",
+        "sqlite3"
+      ],
       "envVars": [],
       "_comment": "Google Meet (Gemini notes via gws) + Spark Desktop transcripts. Ingest owns knowledge paths."
     },
@@ -24,13 +34,21 @@
       "id": "circleback",
       "enabled": false,
       "provider": "circleback",
-      "ingestCommand": "$HOME/.memroos/integrations/circleback-ingest.sh",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/providers/circleback_ingest.sh",
       "envFile": null,
       "outputDir": "$HOME/github/memroos/data/context/meet-recordings-circleback",
-      "qmdCollections": ["meet-recordings-circleback"],
-      "schedule": { "hour": 6, "minute": 0 },
+      "qmdCollections": [
+        "meet-recordings-circleback"
+      ],
+      "schedule": {
+        "hour": 6,
+        "minute": 0
+      },
       "freshnessThresholdMinutes": 360,
-      "requiredTools": ["circleback", "python3"],
+      "requiredTools": [
+        "circleback",
+        "python3"
+      ],
       "envVars": [],
       "_comment": "Circleback.ai client meetings. Separate collection from Google Meet."
     },
@@ -38,29 +56,51 @@
       "id": "fathom-epilogue",
       "enabled": false,
       "provider": "fathom",
-      "ingestCommand": "$HOME/.memroos/integrations/fathom-epilogue-ingest.sh",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/providers/fathom_ingest.sh",
       "envFile": "$HOME/.memroos/agent-keys/fathom-epilogue.env",
       "outputDir": "$HOME/github/memroos/data/context/meet-recordings-epilogue",
-      "qmdCollections": ["meet-recordings-epilogue"],
-      "schedule": { "hour": 3, "minute": 0 },
+      "qmdCollections": [
+        "meet-recordings-epilogue"
+      ],
+      "schedule": {
+        "hour": 3,
+        "minute": 0
+      },
       "freshnessThresholdMinutes": 360,
-      "requiredTools": ["curl", "python3", "op"],
-      "envVars": ["FATHOM_API_KEY"],
-      "_comment": "Fathom work account. Wire API key via 1Password in envFile."
+      "requiredTools": [
+        "curl",
+        "python3",
+        "op"
+      ],
+      "envVars": [
+        "FATHOM_API_KEY"
+      ],
+      "_comment": "Fathom work account. Wire API key via 1Password in envFile. Uses public fathom_ingest.sh; envFile supplies FATHOM_API_KEY."
     },
     {
       "id": "fathom-personal",
       "enabled": false,
       "provider": "fathom",
-      "ingestCommand": "$HOME/.memroos/integrations/fathom-personal-ingest.sh",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/providers/fathom_ingest.sh",
       "envFile": "$HOME/.memroos/agent-keys/fathom-personal.env",
       "outputDir": "$HOME/github/memroos/data/context/meet-recordings-personal",
-      "qmdCollections": ["meet-recordings-personal"],
-      "schedule": { "hour": 2, "minute": 0 },
+      "qmdCollections": [
+        "meet-recordings-personal"
+      ],
+      "schedule": {
+        "hour": 2,
+        "minute": 0
+      },
       "freshnessThresholdMinutes": 360,
-      "requiredTools": ["curl", "python3", "op"],
-      "envVars": ["FATHOM_API_KEY"],
-      "_comment": "Fathom personal account."
+      "requiredTools": [
+        "curl",
+        "python3",
+        "op"
+      ],
+      "envVars": [
+        "FATHOM_API_KEY"
+      ],
+      "_comment": "Fathom personal account. Uses public fathom_ingest.sh; envFile supplies FATHOM_API_KEY."
     },
     {
       "id": "zoom",
@@ -69,26 +109,48 @@
       "ingestCommand": "$HOME/.memroos/integrations/zoom-ingest.sh",
       "envFile": "$HOME/.memroos/agent-keys/zoom.env",
       "outputDir": "$HOME/github/memroos/data/context/meet-recordings-zoom",
-      "qmdCollections": ["meet-recordings-zoom"],
-      "schedule": { "hour": 4, "minute": 0 },
+      "qmdCollections": [
+        "meet-recordings-zoom"
+      ],
+      "schedule": {
+        "hour": 4,
+        "minute": 0
+      },
       "freshnessThresholdMinutes": 1440,
-      "requiredTools": ["curl", "python3"],
-      "envVars": ["ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"],
-      "_comment": "Zoom cloud recordings → VTT → markdown."
+      "requiredTools": [
+        "curl",
+        "python3"
+      ],
+      "envVars": [
+        "ZOOM_ACCOUNT_ID",
+        "ZOOM_CLIENT_ID",
+        "ZOOM_CLIENT_SECRET"
+      ],
+      "_comment": "Zoom cloud recordings \u2192 VTT \u2192 markdown."
     },
     {
       "id": "meet-recordings-fathom",
       "enabled": false,
       "provider": "fathom",
-      "ingestCommand": "$HOME/.memroos/integrations/fathom-ingest.sh",
+      "ingestCommand": "$HOME/github/memroos/scripts/meet-sync/providers/fathom_ingest.sh",
       "envFile": "$HOME/.memroos/agent-keys/fathom.env",
       "outputDir": "$HOME/github/memroos/data/context/meet-recordings-fathom",
-      "qmdCollections": ["meet-recordings-fathom"],
-      "schedule": { "hour": 3, "minute": 30 },
+      "qmdCollections": [
+        "meet-recordings-fathom"
+      ],
+      "schedule": {
+        "hour": 3,
+        "minute": 30
+      },
       "freshnessThresholdMinutes": 360,
-      "requiredTools": ["curl", "python3"],
-      "envVars": ["FATHOM_API_KEY"],
-      "_comment": "Generic single-account Fathom stub for public docs. Prefer fathom-epilogue / fathom-personal when multi-account."
+      "requiredTools": [
+        "curl",
+        "python3"
+      ],
+      "envVars": [
+        "FATHOM_API_KEY"
+      ],
+      "_comment": "Generic single-account Fathom stub for public docs. Prefer fathom-epilogue / fathom-personal when multi-account. Uses public fathom_ingest.sh; envFile supplies FATHOM_API_KEY."
     }
   ]
 }

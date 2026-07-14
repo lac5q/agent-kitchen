@@ -927,7 +927,8 @@ Priority order (each is a candidate milestone; requirements in `.planning/REQUIR
 9. **P1 — v8.8 Orchestration Evidence Depth** — (was v8.7). Harness Control Plane + evidence governance, `MSIQ-04..05`, `ORCH-FOLLOWUP-01` multi-hop compensation. Consumes receipts from v8.0–v8.5; fleet plane pre-exec receipts (v8.5 Phase 145) feed this lane.
 10. **P2 — v8.9 Retrieval Quality + External Benchmark Proof** — (was v8.8). LoCoMo/LongMemEval lanes, embedding upgrade behind flags, LLM recall scoring.
 11. **P2 — v8.10 Governed Ontology Foundation** — `ONTO-01..06` (was v8.9). Fixed upper ontology + domain packs + SEAL-governed promotion.
-12. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
+12. **P1 — v8.11 Unified Meeting Memory — PLANNED as Phases 151-153 (2026-07-14).** `MEETREL-01..04`, `URECALL-01..06`. Idempotent meeting ingest + federated `memory_recall` so agents find Circleback/Fathom/Zoom without knowing collection names. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
+13. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
 
 **Renumbering note (2026-07-08):** inserted **v8.5 Agent Fleet Plane** after completed v8.4. Prior P1/P2 candidates shift: Skill Trust Chain v8.5→**v8.6**, Memory Lifecycle v8.6→**v8.7**, Orchestration Evidence v8.7→**v8.8**, Retrieval Quality v8.8→**v8.9**, Ontology v8.9→**v8.10**. Earlier 2026-07-07 note (Ontology v8.4→v8.9 for MemClaw UX) is superseded by this ordering for future planning.
 
@@ -2325,3 +2326,44 @@ Plans:
   6. Crawler-visible proof metrics render actual values before JavaScript runs.
 **Plans**: 1/1 complete
 - [x] 114-01-PLAN.md — Midbrain surfaces, public benchmark caveats, SmartSearch-inspired retrieval roadmap, retrieval receipts, and comparative benchmark plan
+
+---
+
+## v8.11 Unified Meeting Memory (Phases 151–153)
+
+*Added: 2026-07-14*
+
+### Phase 151 — Meeting Ingest Reliability
+
+**Goal:** Stop Fathom title/dupe misses and make every provider write stable, searchable Markdown.
+
+**Requirements:** MEETREL-01, MEETREL-02, MEETREL-03, MEETREL-04
+
+**Success criteria:**
+1. Re-ingest of the same recording/meeting id overwrites one file (no `-2` slug dupes).
+2. Frontmatter carries `calendar_title`, `share_url`, `meeting_id`, `source` for Fathom/Circleback/Zoom.
+3. Public templates under `scripts/meet-sync/providers/`; secrets only in envFile/1Password.
+4. `meet-sync --health` reports freshness, last-run OK, and empty-vs-enabled WARN.
+
+### Phase 152 — Unified Recall Facade
+
+**Goal:** One MCP tool finds meetings across all enabled QMD collections + knowledge + mem0.
+
+**Requirements:** URECALL-01, URECALL-02, URECALL-03
+
+**Success criteria:**
+1. Shared resolver federates enabled meeting collections + knowledge_literal + mem0.
+2. MCP `memory_recall` is registered as a core tool.
+3. Orientation instructs agents to prefer `memory_recall` for “find the meeting”.
+
+### Phase 153 — Operator Surfaces + Proof
+
+**Goal:** Console multi-search + docs + regressions prove Monaco/Fathom findable without `-c`.
+
+**Requirements:** URECALL-04, URECALL-05, URECALL-06
+
+**Success criteria:**
+1. `/api/memory/multi-search` includes a QMD meeting lane.
+2. Docs + `collections.config.json` list private meeting collections.
+3. Regression coverage for Monaco Circleback + Fathom Impromptu via `memory_recall` without `-c`.
+

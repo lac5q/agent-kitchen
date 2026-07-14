@@ -2,6 +2,20 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
+## Current Position: v8.11 Unified Meeting Memory (Completed 2026-07-14)
+
+**Scope:**
+
+1. Harden meeting ingest (idempotent IDs, frontmatter, public providers, health).
+2. Ship federated MCP `memory_recall` so agents do not need Circleback vs Fathom collection names.
+3. Add multi-search QMD lane, docs, and Monaco/Fathom regressions.
+
+**Phases:** 151–153 — complete. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
+
+**Note:** v8.6 Skill Trust Chain (148–150) remains a parallel track.
+
+---
+
 ## Current Position: Agent OS GSD Stack (In Progress 2026-07-06)
 
 **Scope:**

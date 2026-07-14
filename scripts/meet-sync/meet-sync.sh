@@ -16,6 +16,7 @@ fi
 #   meet-sync.sh --skip-ingest           # QMD refresh only
 #   meet-sync.sh --skip-embed
 #   meet-sync.sh --list
+#   meet-sync.sh --health
 #
 # Config (first match wins):
 #   $MEMROOS_MEETING_SOURCES_CONFIG
@@ -37,6 +38,7 @@ DRY_RUN=0
 SKIP_INGEST=0
 SKIP_EMBED=0
 LIST_ONLY=0
+HEALTH_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,8 +47,9 @@ while [[ $# -gt 0 ]]; do
     --skip-ingest) SKIP_INGEST=1; shift ;;
     --skip-embed) SKIP_EMBED=1; shift ;;
     --list) LIST_ONLY=1; shift ;;
+    --health) HEALTH_ONLY=1; shift ;;
     -h|--help)
-      sed -n '2,18p' "$0"
+      sed -n '2,19p' "$0"
       exit 0
       ;;
     *)
@@ -134,6 +137,89 @@ PY
   [[ "$LIST_ONLY" -eq 1 ]] && exit 0
   echo "$LOG_PREFIX dry-run complete ($SOURCE_COUNT source(s))"
   exit 0
+fi
+
+if [[ "$HEALTH_ONLY" -eq 1 ]]; then
+  python3 - "$SOURCES_JSON" "$STATUS_DIR" <<'PY'
+import json, sys, os
+from datetime import datetime, timezone
+from pathlib import Path
+
+data = json.loads(sys.argv[1])
+status_dir = Path(sys.argv[2])
+now = datetime.now(timezone.utc)
+critical = 0
+warns = 0
+
+def expand(raw: str) -> str:
+    if not raw:
+        return ""
+    return os.path.expanduser(os.path.expandvars(raw.replace("$HOME", os.path.expanduser("~"))))
+
+print(f"[meet-sync] health status_dir={status_dir}")
+for s in data["sources"]:
+    sid = s.get("id") or "?"
+    enabled = bool(s.get("enabled"))
+    threshold = int(s.get("freshnessThresholdMinutes") or 360)
+    output_dir = expand(s.get("outputDir") or "")
+    status_path = status_dir / f"{sid}.json"
+    doc_count = 0
+    if output_dir and Path(output_dir).is_dir():
+        doc_count = sum(1 for _ in Path(output_dir).glob("*.md"))
+
+    if not status_path.exists():
+        level = "WARN" if enabled else "OK"
+        if enabled:
+            warns += 1
+        print(f"  {level}  {sid}: no status file (enabled={enabled}, docs={doc_count})")
+        continue
+
+    try:
+        payload = json.loads(status_path.read_text())
+    except Exception as exc:
+        critical += 1
+        print(f"  FAIL  {sid}: bad status JSON ({exc})")
+        continue
+
+    ok = bool(payload.get("ok"))
+    finished = payload.get("finishedAt") or ""
+    age_min = None
+    try:
+        finished_dt = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+        age_min = int((now - finished_dt).total_seconds() / 60)
+    except Exception:
+        pass
+
+    detail = payload.get("detail") or {}
+    status_docs = detail.get("documentCount", doc_count)
+    stale = age_min is not None and age_min > threshold and enabled
+    empty_enabled = (
+        enabled
+        and bool(output_dir)
+        and int(status_docs or 0) == 0
+        and doc_count == 0
+    )
+
+    if not ok and enabled:
+        critical += 1
+        print(f"  FAIL  {sid}: last run not ok (age_min={age_min}, docs={doc_count})")
+    elif stale:
+        warns += 1
+        print(f"  WARN  {sid}: stale last run age_min={age_min} > threshold={threshold} (docs={doc_count})")
+    elif empty_enabled:
+        warns += 1
+        print(
+            f"  WARN  {sid}: enabled but empty output "
+            f"(docs={doc_count}; check API window / credentials — personal Fathom often empty)"
+        )
+    else:
+        print(f"  OK    {sid}: ok={ok} age_min={age_min} docs={doc_count}")
+
+print(f"[meet-sync] health summary: critical={critical} warns={warns}")
+sys.exit(1 if critical else 0)
+PY
+  # python exits non-zero on critical; always stop after health
+  exit $?
 fi
 
 ensure_collection() {
