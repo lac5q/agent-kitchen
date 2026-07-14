@@ -6,7 +6,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "test": "vitest",
-    "test:fast": "vitest --config vitest.config.ts",
+    "test:fast": "vitest --config vitest.config.ts --run",
     "test:slow": "vitest --config vitest.slow.config.ts",
     "dev": "next dev",
     "build": "next build",
