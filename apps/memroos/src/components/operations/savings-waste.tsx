@@ -17,13 +17,27 @@ import {
 export function Savings({ filters }: { filters?: NocFilters }) {
   const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
   const [since24h] = useState(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-  const modelUsage = useModelUsage(since24h);  const requests = modelUsage.data?.usage.total.requests ?? 0;
-  const tokenTotal = modelUsage.data?.usage.total
-    ? modelUsage.data.usage.total.inputTokens +
-      modelUsage.data.usage.total.outputTokens +
-      modelUsage.data.usage.total.cacheRead
-    : 0;
-  const spark = (modelUsage.data?.usage.models.slice(0, 12).map((model) => model.totalTokens) ?? [0, 0]);
+  const modelUsage = useModelUsage(since24h);
+  // Finding (5): never coerce absent model-usage data into 0. Compute a
+  // truthful envelope and only surface numeric totals when the source
+  // is live. When model-usage is failed/loading/unavailable the sparkline
+  // receives [] and the requests/tokens summary is hidden entirely.
+  const modelUsageLive =
+    !modelUsage.isError &&
+    !modelUsage.isLoading &&
+    modelUsage.data !== undefined;
+  const modelUsageEmpty = modelUsageLive
+    ? modelUsage.data!.usage.models.length === 0
+    : false;
+  const requests = modelUsageLive ? modelUsage.data!.usage.total.requests : null;
+  const tokenTotal = modelUsageLive
+    ? modelUsage.data!.usage.total.inputTokens +
+      modelUsage.data!.usage.total.outputTokens +
+      modelUsage.data!.usage.total.cacheRead
+    : null;
+  const spark: number[] = modelUsageLive
+    ? modelUsage.data!.usage.models.slice(0, 12).map((model) => model.totalTokens)
+    : [];
 
   return (
     <NocCard>
@@ -72,13 +86,39 @@ export function Savings({ filters }: { filters?: NocFilters }) {
         </div>
       </div>
       <div style={{ marginTop: 12 }}>
-        <Spark
-          values={spark.length >= 2 ? spark : [0, tokenTotal]}
-          color={NOC.success}
-          w={280}
-          h={40}
-          fill
-        />
+        {spark.length >= 2 ? (
+          <Spark
+            values={spark}
+            color={NOC.success}
+            w={280}
+            h={40}
+            fill
+          />
+        ) : (
+          <div
+            style={{
+              height: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: NOC.muted,
+              fontFamily: NOC_FONT_MONO,
+              fontSize: 11,
+              border: `1px dashed ${NOC.rule}`,
+              padding: "0 8px",
+              textAlign: "center",
+            }}
+            data-status-block="savings-sparkline-withheld"
+          >
+            {modelUsage.isError
+              ? "Token sparkline withheld — failed to load /api/model-usage"
+              : modelUsage.isLoading
+                ? "Token sparkline withheld — loading /api/model-usage"
+                : modelUsageEmpty
+                  ? "Token sparkline withheld — /api/model-usage returned no models"
+                  : "Token sparkline withheld — no /api/model-usage data"}
+          </div>
+        )}
       </div>
       <div
         style={{
@@ -91,8 +131,10 @@ export function Savings({ filters }: { filters?: NocFilters }) {
         }}
       >
         <span>12d ago</span>
-        <span style={{ color: NOC.success }}>
-          {requests} requests · {new Intl.NumberFormat("en", { notation: "compact" }).format(tokenTotal)} tokens
+        <span style={{ color: requests !== null ? NOC.success : NOC.muted }}>
+          {requests !== null && tokenTotal !== null
+            ? `${requests} requests · ${new Intl.NumberFormat("en", { notation: "compact" }).format(tokenTotal)} tokens`
+            : "requests/tokens withheld — /api/model-usage not live"}
         </span>
       </div>
       <div
@@ -214,7 +256,7 @@ export function Waste({ filters }: { filters?: NocFilters }) {
           gap: 10,
         }}
       >
-        {rows.map(({ label, sub, value, ok, loading, errored, errorMsg, source }) => {
+        {rows.map(({ label, sub, value, loading, errored, errorMsg, source }) => {
           const state = rowState(value, errored, loading);
           return (
             <div key={label} data-waste-row={label} data-waste-state={state}>

@@ -265,3 +265,102 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(body.metrics.governanceEvents.observedAt).toBe(auditTimestamp);
   });
 });
+describe("Round 2 blocking fixes", () => {
+  beforeEach(() => {
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+  });
+
+  afterEach(async () => {
+    const { closeDb } = await loadRoute();
+    closeDb();
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    delete process.env.SQLITE_DB_PATH;
+    vi.resetModules();
+  });
+
+  it("governanceEvents advertises scope=all (does NOT claim workspace partition)", async () => {
+    const { GET } = await loadRoute();
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=local")
+    );
+    const body = await response.json();
+    const envelope = body.metrics.governanceEvents as MetricEnvelope;
+    // Finding (1): governanceEvents queries audit_entries only by window,
+    // NOT by workspace. The envelope must disclose its true scope.
+    expect(envelope.scope).toEqual({ window: "24h", workspace: "all" });
+    expect(String(envelope.reason ?? "")).toMatch(/window|workspace|filter|cumulative/i);
+  });
+
+  it("governanceEvents observedAt reflects the audit_entries probe itself", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const auditTimestamp = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO audit_entries(id, actor_id, actor_role, event_type, entity_type, entity_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run("audit-r2-1", "test-actor", "operator", "noc.test", "test", "test", auditTimestamp);
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=all")
+    );
+    const body = await response.json();
+    const envelope = body.metrics.governanceEvents as MetricEnvelope;
+    // Finding (1): observedAt must come from the audit-entries probe.
+    expect(envelope.observedAt).toBe(auditTimestamp);
+  });
+
+  it("activeDispatches observedAt is derived from the status-filtered queried population", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    // Insert one ACTIVE delegation in the recent past and one FAILED old
+    // delegation. activeDispatches counts status IN ('pending','active','paused');
+    // observedAt should reflect THAT population, NOT the failed row's date.
+    const recent = "2026-07-13T11:00:00.000Z";
+    const oldFailed = "2020-01-01T00:00:00.000Z";
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("t-active", "codex", "claude", "active", 1, "active", recent, recent);
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("t-failed-old", "codex", "claude", "old failed", 1, "failed", oldFailed, oldFailed);
+
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=all")
+    );
+    const body = await response.json();
+    const active = body.metrics.activeDispatches as MetricEnvelope;
+    const failed = body.metrics.failedWork as MetricEnvelope;
+    // Finding (2): observedAt must reflect the metric-specific population.
+    // Active envelope's observedAt must come from the active row only.
+    expect(active.value).toBe(1);
+    expect(active.observedAt).toBe(recent);
+    // Failed envelope's observedAt must come from the failed row only.
+    expect(failed.value).toBe(1);
+    expect(failed.observedAt).toBe(oldFailed);
+    // They MUST NOT share an observedAt.
+    expect(active.observedAt).not.toBe(failed.observedAt);
+  });
+
+  it("activeDispatches observedAt is null when no rows match the status filter", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const oldFailed = "2020-01-01T00:00:00.000Z";
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("t-failed-only", "codex", "claude", "old failed", 1, "failed", oldFailed, oldFailed);
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=all")
+    );
+    const body = await response.json();
+    const active = body.metrics.activeDispatches as MetricEnvelope;
+    // Finding (2): with no active delegations, observedAt must NOT
+    // borrow from the failed delegations' updated_at column.
+    expect(active.status).toBe("empty");
+    expect(active.value).toBeNull();
+    expect(active.observedAt).toBeNull();
+    expect(active.source).toBe("sqlite://hive_delegations");
+  });
+});

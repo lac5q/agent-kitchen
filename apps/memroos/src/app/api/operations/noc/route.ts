@@ -618,14 +618,16 @@ async function buildNocResponse(request: Request) {
 
   // Independent latest-timestamp probes for each metric so observedAt
   // reflects the source's own freshness, not a reused message-table value.
-  const latestHive = safeLatest(
+  // Finding (2): each dispatch metric now derives observedAt from the
+  // SAME population it counts (status-filtered), so an empty active set
+  // does NOT borrow from the latest failed row.
+  const latestActiveHive = safeLatest(
     db,
-    "SELECT MAX(updated_at) AS value FROM hive_delegations"
+    "SELECT MAX(updated_at) AS value FROM hive_delegations WHERE status IN ('pending','active','paused')"
   );
-  const latestGovernance = safeLatest(
+  const latestFailedHive = safeLatest(
     db,
-    "SELECT MAX(created_at) AS value FROM audit_entries WHERE created_at >= ?",
-    [since]
+    "SELECT MAX(updated_at) AS value FROM hive_delegations WHERE status = 'failed'"
   );
   const latestSkills = safeLatest(
     db,
@@ -643,9 +645,19 @@ async function buildNocResponse(request: Request) {
       ? "Direct memory rows counted from SQLite messages for the selected window and workspace"
       : lastMessage.error ?? "Failed to query SQLite messages",
   });
-  const governanceEventsEnvelope = envelopeFromScalar(governanceEvents, "sqlite://audit_entries", scope, {
+  // Finding (1): governanceEvents queries audit_entries only by window —
+  // it does NOT partition by workspace. The envelope must disclose its
+  // true scope so the UI/API is not misled by the requested workspace.
+  const governanceScope: MetricScope = { window, workspace: "all" };
+  const latestGovernance = safeLatest(
+    db,
+    "SELECT MAX(created_at) AS value FROM audit_entries WHERE created_at >= ?",
+    [since]
+  );
+  const governanceEventsEnvelope = envelopeFromScalar(governanceEvents, "sqlite://audit_entries", governanceScope, {
     latestAt: latestGovernance.ok ? latestGovernance.latestAt : null,
-    reason: "Audit entries created within the selected window",
+    reason:
+      "Audit entries created within the selected window — workspace selection does not partition this source (workspace=all in the envelope).",
   });
 
   // Cumulative/fixed-scope envelopes (window/workspace NOT applied in the SQL).
@@ -653,15 +665,18 @@ async function buildNocResponse(request: Request) {
   const dispatchScope: MetricScope = { window: "all", workspace: "all" };
   const skillsScope: MetricScope = { window: "all", workspace: "all" };
   const cronScope: MetricScope = { window: "all", workspace: "all" };
+  // Finding (2): observedAt for each dispatch metric now comes from the
+  // status-filtered population (latestActiveHive / latestFailedHive), not
+  // from the unfiltered MAX(updated_at) of the whole hive_delegations table.
   const activeDispatchesEnvelope = envelopeFromScalar(activeDispatches, "sqlite://hive_delegations", dispatchScope, {
-    latestAt: latestHive.ok ? latestHive.latestAt : null,
+    latestAt: latestActiveHive.ok ? latestActiveHive.latestAt : null,
     reason:
-      "Active, pending, or paused hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply).",
+      "Active, pending, or paused hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply). observedAt is the latest updated_at of status IN ('pending','active','paused') rows.",
   });
   const failedWorkEnvelope = envelopeFromScalar(failedWork, "sqlite://hive_delegations", dispatchScope, {
-    latestAt: latestHive.ok ? latestHive.latestAt : null,
+    latestAt: latestFailedHive.ok ? latestFailedHive.latestAt : null,
     reason:
-      "Failed hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply).",
+      "Failed hive delegations counted across all tenants (cumulative scope, window/workspace filters do not apply). observedAt is the latest updated_at of status='failed' rows.",
   });
   const enabledSkillsEnvelope = envelopeFromScalar(enabledSkills, "sqlite://skill_registry", skillsScope, {
     latestAt: latestSkills.ok ? latestSkills.latestAt : null,
@@ -713,7 +728,7 @@ async function buildNocResponse(request: Request) {
     panels: {
       pulse: panelFromEnvelope(memoryRowsEnvelope, activeDispatchesEnvelope, lastMessage),
       memory: panelFromEnvelope(memoryRowsEnvelope, null, lastMessage),
-      dispatch: panelFromEnvelope(activeDispatchesEnvelope, null, latestHive),
+      dispatch: panelFromEnvelope(activeDispatchesEnvelope, null, latestActiveHive),
       governance: panelFromEnvelope(governanceEventsEnvelope, null, latestGovernance),
       skills: panelFromEnvelope(enabledSkillsEnvelope, null, latestSkills),
 

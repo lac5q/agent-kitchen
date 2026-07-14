@@ -76,11 +76,19 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
   const labels = labelsForWindow(filters.window);
   const writeSeries = valuesForLabels(labels, writes.data?.points);
   const recallSeries = valuesForLabels(labels, recalls.data?.points);
-  // The chart needs numeric arrays; treat non-live nulls as visible gaps
-  // (rendered as 0 only inside the SVG) but keep the per-bucket semantics
-  // honest by tracking `hasAnyPoint` and an explicit empty-state message.
-  const writeValuesForChart = writeSeries.values.map((v) => (v === null ? 0 : v));
-  const recallValuesForChart = recallSeries.values.map((v) => (v === null ? 0 : v));
+  // Finding (3): absent series buckets are NOT zero-filled. The chart
+  // receives `[]` when the source returned no points at all so a flat
+  // zero baseline cannot masquerade as measured activity. Per-bucket
+  // nulls map to 0 only inside the SVG path itself (so the chart
+  // shows a visible gap when SOME buckets are missing) and the
+  // `hasAnyPoint` flag plus the explicit empty-state block ensure we
+  // never present a numeric zero when nothing was measured.
+  const writeValuesForChart: number[] = writeSeries.hasAnyPoint
+    ? writeSeries.values.map((v) => (v === null ? 0 : v))
+    : [];
+  const recallValuesForChart: number[] = recallSeries.hasAnyPoint
+    ? recallSeries.values.map((v) => (v === null ? 0 : v))
+    : [];
   const totalTierCount = memory.data?.tierStats.reduce((sum, tier) => sum + tier.count, 0) ?? 0;
   const highTier = memory.data?.tierStats.find((tier) => tier.tier === "high" || tier.tier === "pinned")?.count ?? 0;
   const lowTier = memory.data?.tierStats.find((tier) => tier.tier === "low")?.count ?? 0;
@@ -156,15 +164,38 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
           /api/memory-stats or /api/time-series failed: {memory.error?.message ?? writes.error?.message ?? recalls.error?.message ?? "see network log"}
         </div>
       )}
-      <AreaStack
-        w={720}
-        h={210}
-        labels={labels}
-        series={[
-          { color: NOC.terra, values: writeValuesForChart },
-          { color: NOC.ink, values: recallValuesForChart },
-        ]}
-      />
+      {writeSeries.hasAnyPoint || recallSeries.hasAnyPoint ? (
+        <AreaStack
+          w={720}
+          h={210}
+          labels={labels}
+          series={[
+            { color: NOC.terra, values: writeValuesForChart },
+            { color: NOC.ink, values: recallValuesForChart },
+          ]}
+          data-empty={false}
+        />
+      ) : (
+        <div
+          style={{
+            height: 210,
+            border: `1px dashed ${NOC.rule}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: NOC.muted,
+            fontFamily: NOC_FONT_MONO,
+            fontSize: 11.5,
+            padding: 8,
+            textAlign: "center",
+          }}
+          data-status-block="chart-empty"
+          data-empty={true}
+        >
+          Chart withheld: zero buckets recorded for {nocWindowLabel(filters.window)}.
+          Source returns no measured activity; numeric zeros are NOT rendered.
+        </div>
+      )}
       {noPoints && !sourceError && (
         <div
           style={{
@@ -177,7 +208,7 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
           }}
           data-status-block="empty-series"
         >
-          No memory write or recall buckets recorded for {nocWindowLabel(filters.window)} (chart series span all workspaces, not workspace={filters.workspace}). Visible gaps are intentionally rendered as 0 so the absence of activity is obvious — these zeros are not a measured source value.
+          No memory write or recall buckets recorded for {nocWindowLabel(filters.window)} (chart series span all workspaces, not workspace={filters.workspace}). The chart is intentionally withheld — these zeros are NOT a measured source value.
         </div>
       )}      <div
         style={{
@@ -212,7 +243,10 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
           {
             label: "Pending consolidation",
             sublabel: `current snapshot, window=${filters.window}, workspace=${filters.workspace}`,
-            value: compact(memory.data?.pendingUnconsolidated ?? 0),
+            value:
+              consolidationStatus === "live" && memory.data
+                ? compact(memory.data.pendingUnconsolidated)
+                : "—",
             status: consolidationStatus,
             color:
               consolidationStatus === "error"

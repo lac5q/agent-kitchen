@@ -29,6 +29,9 @@ export function ModelRoutingPanel() {
 
   const summary = dashboard.data?.summary;
   const recs = recommendations.data?.recommendations ?? [];
+  const dashboardLive =
+    !dashboard.isLoading && !dashboard.isError && dashboard.data !== undefined;
+  const dash = "—";
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white/90 p-5">
@@ -64,7 +67,9 @@ export function ModelRoutingPanel() {
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="border border-stone-200 bg-white p-3">
           <p className="text-xs text-stone-500">Runs</p>
-          <p className="mt-1 text-2xl font-semibold text-stone-950">{summary?.totalRuns ?? 0}</p>
+          <p className="mt-1 text-2xl font-semibold text-stone-950">
+            {dashboardLive && summary ? summary.totalRuns : dash}
+          </p>
         </div>
         <div className="border border-stone-200 bg-white p-3">
           <p className="text-xs text-stone-500">Success</p>

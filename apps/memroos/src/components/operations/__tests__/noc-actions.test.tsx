@@ -156,8 +156,21 @@ describe("NOC actions", () => {
       </>
     );
 
+    // /evals link from EfficiencySignals: top-level navigation, not a
+    // drilldown from BehaviorSignals or MemoryNotDigested, so the bare
+    // href is acceptable (no scope forwarding required for finding 7).
     expect(screen.getByRole("link", { name: /open telemetry plan/i })).toHaveAttribute("href", "/evals");
-    expect(screen.getAllByRole("link", { name: /investigate/i })[0]).toHaveAttribute("href", "/notebooks");
+    // Finding (7): drilldown links from Memory Not Digested must carry
+    // the originating window/workspace so destinations can disclose the
+    // scope. The Investigate link is now /notebooks?from_window=24h...
+    expect(screen.getAllByRole("link", { name: /investigate/i })[0]).toHaveAttribute(
+      "href",
+      "/notebooks?from_window=24h&from_workspace=all&from_scope_note=" +
+        new URLSearchParams({
+          from_scope_note:
+            "Memory page has its own filters; originating NOC filters are shown for reference only and are NOT applied.",
+        }).toString().replace(/^from_scope_note=/, "")
+    );
     expect(screen.getByRole("link", { name: /re-route/i })).toHaveAttribute("href", "/ledger");
     expect(screen.getByRole("link", { name: /seal proposals/i })).toHaveAttribute("href", "/seal");
     expect(screen.getByRole("link", { name: /promote candidate/i })).toHaveAttribute("href", "/skills");

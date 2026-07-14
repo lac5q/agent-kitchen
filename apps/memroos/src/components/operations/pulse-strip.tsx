@@ -97,16 +97,22 @@ export function PulseStrip({ filters }: PulseStripProps) {
   const modelTokensEnvelope: MetricEnvelope<number> = useMemo(() => {
     const ts = modelUsage.data?.timestamp ?? null;
     const freshnessMs = computeFreshnessMs(ts, nowMs);
+    // Finding (4): /api/model-usage does NOT partition by workspace.
+    // The envelope MUST advertise scope.workspace='all' so the card
+    // does not falsely label local/remote partitions it does not
+    // actually query. The card subline further discloses this.
+    const modelTokensScope = { window: filters.window, workspace: "all" as const };
     if (modelUsage.isError) {
-      return metricEnvelope<number>({        value: null,
+      return metricEnvelope<number>({
+        value: null,
         status: "error",
         source: "/api/model-usage",
         observedAt: null,
         freshnessMs: null,
-        scope: { window: filters.window, workspace: filters.workspace },
+        scope: modelTokensScope,
         reason:
           modelUsage.error instanceof Error
-            ? `Failed to load /api/model-usage: ${modelUsage.error.message}`
+            ? `Failed to load /api/model-usage: ${modelUsage.error.message}. workspace=${filters.workspace} filter is NOT applied (model-usage is windowed only).`
             : "Failed to load /api/model-usage",
       });
     }
@@ -117,8 +123,8 @@ export function PulseStrip({ filters }: PulseStripProps) {
         source: "/api/model-usage",
         observedAt: null,
         freshnessMs: null,
-        scope: { window: filters.window, workspace: filters.workspace },
-        reason: "Loading /api/model-usage",
+        scope: modelTokensScope,
+        reason: `Loading /api/model-usage. workspace=${filters.workspace} filter is NOT applied (model-usage is windowed only).`,
       });
     }
     const usage = modelUsage.data.usage;
@@ -128,11 +134,10 @@ export function PulseStrip({ filters }: PulseStripProps) {
         value: null,
         status: "empty",
         source: "/api/model-usage",
-
         observedAt: ts,
         freshnessMs,
-        scope: { window: filters.window, workspace: filters.workspace },
-        reason: `Healthy /api/model-usage returned no token usage in ${filters.window}`,
+        scope: modelTokensScope,
+        reason: `Healthy /api/model-usage returned no token usage in ${filters.window}. workspace=${filters.workspace} filter is NOT applied (model-usage is windowed only).`,
       });
     }
     return metricEnvelope<number>({
@@ -140,8 +145,9 @@ export function PulseStrip({ filters }: PulseStripProps) {
       status: "live",
       source: "/api/model-usage",
       observedAt: ts,
-      freshnessMs,      scope: { window: filters.window, workspace: filters.workspace },
-      reason: `Sum of input+output+cacheRead tokens from /api/model-usage since=${since}`,
+      freshnessMs,
+      scope: modelTokensScope,
+      reason: `Sum of input+output+cacheRead tokens from /api/model-usage since=${since}. workspace=${filters.workspace} filter is NOT applied (model-usage is windowed only).`,
     });
 
   }, [
@@ -198,7 +204,7 @@ export function PulseStrip({ filters }: PulseStripProps) {
       env: modelTokensEnvelope,
       color: modelTokensEnvelope.status === "live" ? NOC.success : NOC.terra,
       spark: modelTokensSpark,
-      subline: `from /api/model-usage?since=${since}`,
+      subline: `from /api/model-usage?since=${since}. workspace=${filters.workspace} NOT applied (model-usage is windowed only).`,
     },
     {
       label: "Savings baseline",

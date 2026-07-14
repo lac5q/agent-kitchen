@@ -3,9 +3,21 @@
 import Link from "next/link";
 
 import { useMemoryStats, useMemoryTierHealth } from "@/lib/api-client";
-import { nocWindowToTimeSeriesWindow, type NocFilters } from "@/lib/noc-filters";
+import { nocWindowToTimeSeriesWindow, type NocFilters, type NocWindow, type NocWorkspace } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { NocPanelHeader, Mono } from "./noc-primitives";
+
+function buildDrilldownHref(
+  baseHref: string,
+  filters: { window: NocWindow; workspace: NocWorkspace },
+  scopeNote: string
+): string {
+  const params = new URLSearchParams();
+  params.set("from_window", filters.window);
+  params.set("from_workspace", filters.workspace);
+  params.set("from_scope_note", scopeNote);
+  return `${baseHref}?${params.toString()}`;
+}
 
 interface MemoryNotDigestedProps {
   filters?: NocFilters;
@@ -31,7 +43,11 @@ export function MemoryNotDigested({ filters }: MemoryNotDigestedProps) {
             name: "Consolidation blocked",
             meta: lastRunError ?? `failed at ${lastRun.started_at}`,
             value: memory.data?.recentFailures24h ?? 1,
-            href: "/library",
+            href: buildDrilldownHref(
+              "/library",
+              effectiveFilters,
+              "Library page has its own sources/index selectors; originating NOC filters are shown for reference only and are NOT applied."
+            ),
             tone: NOC.terra,
           },
         ]
@@ -42,21 +58,33 @@ export function MemoryNotDigested({ filters }: MemoryNotDigestedProps) {
         ? `last run ${lastRun.status} · batch ${lastRun.batch_size}`
         : "no consolidation run recorded",
       value: pending,
-      href: "/notebooks",
+      href: buildDrilldownHref(
+        "/notebooks",
+        effectiveFilters,
+        "Memory page has its own filters; originating NOC filters are shown for reference only and are NOT applied."
+      ),
       tone: pending > 0 ? NOC.warn : NOC.success,
     },
     ...tierFailures.map((tier) => ({
       name: `${tier.tier} backend ${tier.status}`,
       meta: tier.detail ?? tier.backend,
       value: tier.count ?? 0,
-      href: "/notebooks",
+      href: buildDrilldownHref(
+        "/notebooks",
+        effectiveFilters,
+        "Memory page has its own filters; originating NOC filters are shown for reference only and are NOT applied."
+      ),
       tone: NOC.terra,
     })),
     ...sources.slice(0, Math.max(0, 6 - tierFailures.length)).map((source) => ({
       name: source.agent_id,
       meta: "ingested message source",
       value: source.cnt,
-      href: `/notebooks?q=${encodeURIComponent(source.agent_id)}`,
+      href: buildDrilldownHref(
+        `/notebooks?q=${encodeURIComponent(source.agent_id)}`,
+        effectiveFilters,
+        "Memory page has its own filters; originating NOC filters are shown for reference only and are NOT applied."
+      ),
       tone: NOC.soft,
     })),
   ];
