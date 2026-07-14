@@ -1,0 +1,26 @@
+{
+  "title": "Fixture Sync",
+  "recording_id": 999,
+  "created_at": "2026-07-14T16:00:00Z",
+  "recording_start_time": "2026-07-14T15:00:00Z",
+  "recording_end_time": "2026-07-14T15:30:00Z",
+  "share_url": "https://fathom.video/share/fixture",
+  "recorded_by": {
+    "name": "Luis Calderon",
+    "email": "luis@epiloguecapital.com"
+  },
+  "calendar_invitees": [
+    {"name": "Luis", "email": "luis@epiloguecapital.com", "is_external": false}
+  ],
+  "default_summary": {
+    "markdown_formatted": "Fixture summary for unit tests."
+  },
+  "action_items": [],
+  "transcript": [
+    {
+      "speaker": {"display_name": "Luis"},
+      "timestamp": "00:00:05",
+      "text": "Hello from the fixture."
+    }
+  ]
+}

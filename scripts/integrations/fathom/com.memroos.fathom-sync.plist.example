@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template: copy to ~/Library/LaunchAgents/com.memroos.fathom-sync.plist
+  Replace MEMROOS_ROOT and adjust WorkingDirectory / paths for your machine.
+  Requires 1Password CLI auth (desktop app integration or OP_SERVICE_ACCOUNT_TOKEN).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.memroos.fathom-sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>source "$HOME/.memroos/memroos-runtime.env" 2>/dev/null; export MEMROOS_ROOT="${MEMROOS_ROOT:-$HOME/github/memroos}"; "$MEMROOS_ROOT/scripts/integrations/fathom/fathom-ingest.sh" &gt;&gt;"$HOME/.memroos/logs/fathom-sync.log" 2&gt;&amp;1; if command -v qmd &gt;/dev/null; then qmd index meet-recordings &gt;&gt;"$HOME/.memroos/logs/fathom-sync.log" 2&gt;&amp;1; fi</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/tmp/com.memroos.fathom-sync.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/com.memroos.fathom-sync.err.log</string>
+</dict>
+</plist>

@@ -1,25 +1,40 @@
 # Meeting Recordings Integration
 
-Memroos has a provider-agnostic `meet-recordings` context source slot. This guide uses
-**Circleback** as the reference implementation. The same pattern works for Fireflies,
-Otter, Zoom, Fathom, or any meeting tool with a CLI or API.
+Memroos has a provider-agnostic `meet-recordings` context source slot.
+
+**Preferred provider (dual Luis accounts):** [Fathom via 1Password](../../scripts/integrations/fathom/README.md)
+
+Also supported: Circleback (private scripts), Fireflies, Otter, Zoom, or any meeting tool with a CLI/API.
 
 ## How It Works
 
-1. Your provider exports transcripts as JSON or Markdown
-2. A private ingest script (never committed) transforms them to dated Markdown files in `data/context/meet-recordings/`
-3. `qmd` indexes them → searchable via `knowledge_search("meeting about X")`
+1. Provider exports transcripts (Fathom External API, Circleback CLI, …)
+2. An ingest script writes dated Markdown under `data/context/meet-recordings/`
+3. `qmd` indexes them → `knowledge_search("meeting about X")`
 
-The connection is wired through environment variables so the public repo stays provider-agnostic.
+Secrets stay out of git: 1Password (`op`) / env vars / `~/.memroos` overlays.
 
-## Quick Start
+## Fathom (both accounts)
 
-### Step 1 — Enable the source
+Ingests meetings for:
 
-The `meet-recordings` source is already in `context-sources.config.json` (disabled by default).
-Enable it in your private overlay:
+- `luis@epiloguecapital.com`
+- `luis.calderon@gmail.com`
 
-**`~/.memroos/context-sources.local.json`** (create from `context-sources.local.json.example`):
+```bash
+bash scripts/integrations/fathom/install-local.sh --probe
+bash scripts/integrations/fathom/install-local.sh --run
+```
+
+API keys resolve from 1Password items titled like `Fathom API - <email>` (or env
+`FATHOM_API_KEY_EPILOGUE` / `FATHOM_API_KEY_GMAIL`). Full details:
+[`scripts/integrations/fathom/README.md`](../../scripts/integrations/fathom/README.md).
+
+## Enable the source (any provider)
+
+`meet-recordings` is in `context-sources.config.json` (disabled by default). Enable via
+`~/.memroos/context-sources.local.json`:
+
 ```json
 {
   "sources": [
@@ -31,107 +46,41 @@ Enable it in your private overlay:
 }
 ```
 
-### Step 2 — Create your ingest script
-
-Create `~/.memroos/integrations/my-meetings-ingest.sh`:
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-OUTPUT_DIR="${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings"
-mkdir -p "$OUTPUT_DIR"
-# Your provider CLI command here → transform to Markdown → write to $OUTPUT_DIR
-```
-
-### Step 3 — Wire the env var
-
-In `~/.memroos/memroos-runtime.env`:
-```bash
-MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/my-meetings-ingest.sh
-```
-
-### Step 4 — Schedule nightly sync (optional)
-
-Copy `~/Library/LaunchAgents/com.memroos.circleback-sync.plist` from the Circleback
-reference below and adapt the ingest script path.
-
----
-
-## Circleback Reference Implementation
-
-[Circleback](https://circleback.ai) provides a CLI with `--json` output — the cleanest
-integration path for memroos.
-
-### Install the CLI
+Wire the ingest command in `~/.memroos/memroos-runtime.env`:
 
 ```bash
-npm install -g @circleback/cli
-circleback login
+MEETINGS_INGEST_COMMAND=$MEMROOS_ROOT/scripts/integrations/fathom/fathom-ingest.sh
+# or: MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/circleback-ingest.sh
 ```
 
-### Create the ingest script
+## Circleback (private reference)
+
+[Circleback](https://circleback.ai) CLI remains supported via private scripts:
 
 ```bash
 mkdir -p ~/.memroos/integrations
-cat > ~/.memroos/integrations/circleback-ingest.sh << 'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-OUTPUT_DIR="${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings"
-mkdir -p "$OUTPUT_DIR"
-circleback meetings list --json | python3 ~/.memroos/integrations/circleback-transform.py --output-dir "$OUTPUT_DIR"
-EOF
-chmod +x ~/.memroos/integrations/circleback-ingest.sh
-```
-
-### Wire the env var
-
-```bash
+# circleback-ingest.sh + circleback-transform.py live under ~/.memroos/integrations/
 echo 'MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/circleback-ingest.sh' \
   >> ~/.memroos/memroos-runtime.env
 ```
 
-### Run a manual sync
-
-```bash
-source ~/.memroos/memroos-runtime.env
-$MEETINGS_INGEST_COMMAND
-qmd index meet-recordings
-```
-
-### Verify
-
-```bash
-knowledge_search("last meeting with [person]")
-# Should return your circleback transcripts
-```
-
----
-
 ## Other Providers
-
-The same pattern works for any meeting tool:
 
 | Provider | Export command |
 |----------|----------------|
+| Fathom | `scripts/integrations/fathom/fathom-ingest.sh` |
 | Fireflies | `fireflies export --json` |
 | Otter.ai | `otter export --format json` |
 | Zoom | Zoom API `/meetings/{id}/recordings` |
-| Fathom | Fathom export API |
-
-Write a transform script that reads JSON from stdin and writes dated `.md` files
-to `$OUTPUT_DIR`. The `circleback-transform.py` script in `~/.memroos/integrations/`
-is a good starting point.
-
----
+| Circleback | `circleback meetings list --json` |
 
 ## Troubleshooting
 
 **`knowledge_health()` shows meet-recordings as disabled**
-→ Check `~/.memroos/context-sources.local.json` has `"enabled": true`
+→ Enable it in `~/.memroos/context-sources.local.json`
 
-**No meetings appear after running ingest**
-→ Run `qmd index meet-recordings` manually after the ingest script
-→ Check `data/context/meet-recordings/` for `.md` files
+**No meetings after ingest**
+→ Run `qmd index meet-recordings` and check `data/context/meet-recordings/`
 
-**`MEETINGS_INGEST_COMMAND: command not found`**
-→ Verify `source ~/.memroos/memroos-runtime.env` sets the variable
-→ Check script path and permissions: `chmod +x ~/.memroos/integrations/circleback-ingest.sh`
+**Fathom 1Password failures**
+→ See [Fathom README](../../scripts/integrations/fathom/README.md) troubleshooting

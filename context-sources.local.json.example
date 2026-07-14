@@ -4,7 +4,7 @@
     {
       "id": "meet-recordings",
       "enabled": true,
-      "_comment": "Circleback.ai provider wired via MEETINGS_INGEST_COMMAND. Set MEETINGS_INGEST_COMMAND=~/.memroos/scripts/circleback-ingest.sh in ~/.memroos/memroos-runtime.env"
+      "_comment": "Fathom dual-account provider (luis@epiloguecapital.com + luis.calderon@gmail.com). Prefer: bash scripts/integrations/fathom/install-local.sh. Sets MEETINGS_INGEST_COMMAND to scripts/integrations/fathom/fathom-ingest.sh and reads API keys from 1Password via ~/.memroos/integrations/fathom-accounts.json. Circleback remains a private alternative."
     }
   ]
 }

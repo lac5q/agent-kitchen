@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy to ~/.memroos/integrations/fathom-accounts.json. 1Password secret references cannot contain '@' — use item titles without the email at-sign (or percent-encode as %40). Resolve order per account: api_key_env → api_key_op_ref → auto-discover items titled with Fathom + email.",
+  "accounts": [
+    {
+      "email": "luis@epiloguecapital.com",
+      "label": "epilogue",
+      "api_key_op_ref": "op://Private/Fathom API Epilogue/credential",
+      "api_key_env": "FATHOM_API_KEY_EPILOGUE"
+    },
+    {
+      "email": "luis.calderon@gmail.com",
+      "label": "gmail",
+      "api_key_op_ref": "op://Private/Fathom API Gmail/credential",
+      "api_key_env": "FATHOM_API_KEY_GMAIL"
+    }
+  ]
+}
