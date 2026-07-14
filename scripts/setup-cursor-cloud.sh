@@ -30,6 +30,8 @@ Environment knobs:
   CURSOR_CLOUD_INSTALL_QWEN=0             Skip Qwen executor CLI install
   CURSOR_CLOUD_QWEN_VERSION=latest        Qwen CLI npm version/spec to install
   CURSOR_CLOUD_QWEN_SMOKE=0               Run a live Qwen smoke check after install
+  CURSOR_CLOUD_INSTALL_DROID=0            Skip Factory Droid CLI install
+  CURSOR_CLOUD_DROID_VERSION=latest       Droid npm version/spec to install
   QWEN_MODEL=qwen3.7-plus                 Qwen model used by qwen-agent
   MEMROOS_ROOT=/path/to/memroos           Override repo root
   KNOWLEDGE_ROOT=/path/to/brain           Override skill/wiki root
@@ -95,7 +97,7 @@ if ! grep -q "BEGIN MemRoOS Cursor Cloud Paths" "$BASHRC"; then
   cat >>"$BASHRC" <<'EOF'
 
 # BEGIN MemRoOS Cursor Cloud Paths
-export PATH="$HOME/.local/bin:${CURSOR_CONFIG_DIR:-$HOME/.cursor}/qwen-node/node_modules/.bin:$PATH"
+export PATH="$HOME/.local/bin:${CURSOR_CONFIG_DIR:-$HOME/.cursor}/qwen-node/node_modules/.bin:${CURSOR_CONFIG_DIR:-$HOME/.cursor}/droid-node/node_modules/.bin:$PATH"
 # END MemRoOS Cursor Cloud Paths
 EOF
 fi
@@ -103,7 +105,7 @@ fi
 export MEMROOS_ROOT="$ROOT"
 export KNOWLEDGE_ROOT="${KNOWLEDGE_ROOT:-$ROOT}"
 export MEMROOS_AGENT_ID="${MEMROOS_AGENT_ID:-cursor-cloud-memroos}"
-export PATH="$HOME/.local/bin:$CURSOR_CONFIG_DIR/qwen-node/node_modules/.bin:$PATH"
+export PATH="$HOME/.local/bin:$CURSOR_CONFIG_DIR/qwen-node/node_modules/.bin:$CURSOR_CONFIG_DIR/droid-node/node_modules/.bin:$PATH"
 
 if [[ "${CURSOR_CLOUD_INSTALL_NODE_DEPS:-1}" == "1" ]]; then
   echo "Installing Node dependencies with npm ci..."
@@ -286,6 +288,30 @@ QWEN_AGENT
   fi
 else
   echo "Skipping Qwen executor CLI install."
+fi
+
+if [[ "${CURSOR_CLOUD_INSTALL_DROID:-1}" == "1" ]]; then
+  DROID_VERSION="${CURSOR_CLOUD_DROID_VERSION:-latest}"
+  DROID_PREFIX="${CURSOR_CLOUD_DROID_PREFIX:-$CURSOR_CONFIG_DIR/droid-node}"
+
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to install the Factory Droid CLI." >&2
+    exit 1
+  fi
+
+  if [[ "$(uname -s)" == "Linux" ]] && command -v apt-get >/dev/null 2>&1 && ! command -v xdg-open >/dev/null 2>&1; then
+    echo "Installing xdg-utils for Droid desktop/browser handoff support..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq xdg-utils || echo "Warning: xdg-utils install failed; Droid CLI may still work headless." >&2
+  fi
+
+  echo "Installing Factory Droid CLI (${DROID_VERSION})..."
+  mkdir -p "$DROID_PREFIX" "$HOME/.local/bin"
+  npm install --prefix "$DROID_PREFIX" --no-audit --prefer-offline "droid@${DROID_VERSION}"
+  ln -sf "$DROID_PREFIX/node_modules/.bin/droid" "$HOME/.local/bin/droid"
+  "$HOME/.local/bin/droid" --version >/dev/null
+else
+  echo "Skipping Factory Droid CLI install."
 fi
 
 if [[ -x "$ROOT/.venv/bin/python" ]]; then

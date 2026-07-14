@@ -106,6 +106,25 @@ function checkQwen() {
   }
 }
 
+function checkDroid() {
+  const droidBin = path.join(HOME, ".local/bin/droid");
+  if (!fs.existsSync(droidBin)) {
+    record("droid CLI binary", "FAIL", `${droidBin} missing`);
+    return;
+  }
+
+  let version = "?";
+  try {
+    version = execSync(`${JSON.stringify(droidBin)} --version 2>&1`, { encoding: "utf8", timeout: 15000 }).trim();
+    record("droid CLI binary", "PASS", `${droidBin} (${version.slice(0, 60)})`);
+  } catch (e) {
+    record("droid CLI binary", "FAIL", `${droidBin} exists but --version failed: ${String(e.message || e).split("\n")[0]}`);
+    return;
+  }
+
+  record("Droid auth", "WARN", "not verified by fleet checker; run 'droid' interactively if this host needs Factory access");
+}
+
 function readSettingsKey(settingsPath, envKey) {
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -185,6 +204,7 @@ function runChecks() {
   checkSkillRequired("gsd-help");
   checkSkillRequired("beastmode-qwen-cloud");
   checkQwen();
+  checkDroid();
   checkGitnexus();
   checkMcpJson();
   checkRepoPresent();
