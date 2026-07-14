@@ -306,3 +306,13 @@ echo "MemRoOS root: $MEMROOS_ROOT"
 echo "Knowledge root: $KNOWLEDGE_ROOT"
 echo "Agent id: $MEMROOS_AGENT_ID"
 echo "Cursor skills installed: ${installed_skill_count:-0} under $CURSOR_SKILLS_DIR"
+
+# Run the fleet verifier so bootstrap failures are loud.
+# Uses the script next to this file, not a freshly-installed copy.
+if command -v node >/dev/null 2>&1 && [[ -f "$ROOT/scripts/check-cursor-coding-env.mjs" ]]; then
+  echo "---"
+  echo "Running fleet verifier: check-cursor-coding-env"
+  if ! node "$ROOT/scripts/check-cursor-coding-env.mjs"; then
+    echo "Verifier reported gaps. Re-run setup-cursor-cloud.sh or inspect scripts/check-cursor-coding-env.mjs output." >&2
+  fi
+fi
