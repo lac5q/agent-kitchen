@@ -146,13 +146,20 @@ function buildCards(metrics: OperationsNocEfficiencyMetrics) {
 
 export function EfficiencySignals({ filters }: { filters?: NocFilters }) {
   const noc = useOperationsNoc(filters);
-  const metrics = normalizeMetrics(noc.data?.metrics.efficiency ?? EMPTY_METRICS);
+  const envelope = noc.data?.metrics.efficiency;
+  const metrics = normalizeMetrics(envelope?.value ?? EMPTY_METRICS);
   const panel = noc.data?.panels.efficiency;
-  const status = noc.isLoading ? "loading" : noc.isError ? "degraded" : (panel?.status ?? "empty");
+  const status = noc.isLoading
+    ? "loading"
+    : noc.isError
+      ? "degraded"
+      : (envelope?.status ?? panel?.status ?? "empty");
   const statusColors = badgeColors(status);
   const warnings = noc.isError
     ? ["Unable to load efficiency telemetry"]
-    : panel?.warnings ?? ["No efficiency telemetry events in the selected window"];
+    : envelope && envelope.status !== "live" && envelope.status !== "zero"
+      ? [envelope.reason ?? "Efficiency telemetry unavailable"]
+      : panel?.warnings ?? ["No efficiency telemetry events in the selected window"];
   const cards = buildCards(metrics);
 
   return (

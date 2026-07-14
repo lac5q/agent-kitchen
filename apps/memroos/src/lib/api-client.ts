@@ -105,6 +105,10 @@ export function useContextSourceHealth() {
 
 export type NocPanelStatus = "live" | "empty" | "degraded" | "missing";
 
+import type { MetricEnvelope, MetricScope, MetricStatus } from "@/lib/metric-status";
+
+export type { MetricEnvelope, MetricScope, MetricStatus } from "@/lib/metric-status";
+
 export interface OperationsNocPanel {
   status: NocPanelStatus;
   source: string;
@@ -175,14 +179,14 @@ export interface OperationsNocResponse {
   filters: NocFilters & { since: string };
   generatedAt: string;
   metrics: {
-    memoryRows: number;
-    activeDispatches: number;
-    failedWork: number;
-    governanceEvents: number;
-    enabledSkills: number;
-    cronWarnings: number;
-    localFootprintBytes: number;
-    efficiency: OperationsNocEfficiencyMetrics;
+    memoryRows: MetricEnvelope<number>;
+    activeDispatches: MetricEnvelope<number>;
+    failedWork: MetricEnvelope<number>;
+    governanceEvents: MetricEnvelope<number>;
+    enabledSkills: MetricEnvelope<number>;
+    cronWarnings: MetricEnvelope<number>;
+    localFootprint: MetricEnvelope<number>;
+    efficiency: MetricEnvelope<OperationsNocEfficiencyMetrics>;
   };
   panels: Record<string, OperationsNocPanel> & {
     efficiency: OperationsNocPanel;

@@ -159,19 +159,19 @@ describe("GET /api/operations/noc efficiency metrics", () => {
 
     expect(body.panels.efficiency.status).toBe("live");
     expect(body.panels.efficiency.warnings).toEqual([]);
-    expect(body.metrics.efficiency.streams).toMatchObject({
+    expect(body.metrics.efficiency.value.streams).toMatchObject({
       retrieval_trace: 2,
       source_read: 2,
       token_ledger: 1,
       operator_question: 2,
       memory_write: 2,
     });
-    expect(body.metrics.efficiency.retrievalBeforeWorkRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.repeatedSourceReads).toBe(1);
-    expect(body.metrics.efficiency.rawContextTokenShare).toBeCloseTo(0.3);
-    expect(body.metrics.efficiency.operatorReaskRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.rediscoveredFactRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.recollection).toMatchObject({
+    expect(body.metrics.efficiency.value.retrievalBeforeWorkRate).toBeCloseTo(0.5);
+    expect(body.metrics.efficiency.value.repeatedSourceReads).toBe(1);
+    expect(body.metrics.efficiency.value.rawContextTokenShare).toBeCloseTo(0.3);
+    expect(body.metrics.efficiency.value.operatorReaskRate).toBeCloseTo(0.5);
+    expect(body.metrics.efficiency.value.rediscoveredFactRate).toBeCloseTo(0.5);
+    expect(body.metrics.efficiency.value.recollection).toMatchObject({
       totalDecisions: 2,
       searchRequired: 1,
       searchSkipped: 1,
@@ -193,7 +193,7 @@ describe("GET /api/operations/noc efficiency metrics", () => {
         "Task is local or mechanical with no stable recall dependency.": 1,
       },
     });
-    expect(body.metrics.efficiency.recollection.latestDecisions[0]).toMatchObject({
+    expect(body.metrics.efficiency.value.recollection.latestDecisions[0]).toMatchObject({
       taskId: "task-live",
       agentId: "codex",
       decision: "search_skipped",
@@ -230,7 +230,9 @@ describe("GET /api/operations/noc efficiency metrics", () => {
         "Missing memory-write telemetry",
       ])
     );
-    expect(body.metrics.efficiency.streams.retrieval_trace).toBe(1);
+    expect(body.metrics.efficiency.status).toBe("degraded");
+    expect(body.metrics.efficiency.value).toBeNull();
+    expect(body.metrics.efficiency.reason).toBeTruthy();
   });
 
   it("reports empty efficiency when no events exist in the selected window", async () => {
@@ -241,7 +243,9 @@ describe("GET /api/operations/noc efficiency metrics", () => {
 
     expect(body.panels.efficiency.status).toBe("empty");
     expect(body.panels.efficiency.warnings).toContain("No efficiency telemetry events in the selected window");
-    expect(body.metrics.efficiency.totalEvents).toBe(0);
+    expect(body.metrics.efficiency.status).toBe("empty");
+    expect(body.metrics.efficiency.value).toBeNull();
+    expect(body.metrics.efficiency.reason).toBeTruthy();
   });
 
   it("surfaces the memory iteration repair loop inside the NOC response", async () => {
