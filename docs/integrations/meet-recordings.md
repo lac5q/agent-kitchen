@@ -1,137 +1,147 @@
 # Meeting Recordings Integration
 
-Memroos has a provider-agnostic `meet-recordings` context source slot. This guide uses
-**Circleback** as the reference implementation. The same pattern works for Fireflies,
-Otter, Zoom, Fathom, or any meeting tool with a CLI or API.
+MemRoOS uses a **declarative meet-sync pattern**: every meeting provider
+(Google Meet, Spark, Circleback, Fathom, Zoom, …) follows the same pipeline.
+
+```
+ingest → ensure QMD collection → collection update → collection embed → status JSON
+```
+
+Public contract lives in [`scripts/meet-sync/`](../../scripts/meet-sync/).
+Private operator wiring lives in `~/.memroos/meeting-sources.json` (never commit secrets).
 
 ## How It Works
 
-1. Your provider exports transcripts as JSON or Markdown
-2. A private ingest script (never committed) transforms them to dated Markdown files in `data/context/meet-recordings/`
-3. `qmd` indexes them → searchable via `knowledge_search("meeting about X")`
+1. Provider ingest exports transcripts as dated Markdown
+2. `scripts/meet-sync/meet-sync.sh` indexes **only that source’s** QMD collection(s)
+3. `knowledge_search("meeting about X")` / `qmd query` can search the collection
 
-The connection is wired through environment variables so the public repo stays provider-agnostic.
+Each provider gets its **own** output directory and QMD collection. Do not reuse
+`meet-recordings` for Circleback/Fathom/Zoom — that collection is reserved for
+Google Meet / Gemini notes.
+
+| Provider | Output dir | QMD collection |
+|----------|------------|----------------|
+| Google Meet | knowledge `gdrive/meet-recordings` | `meet-recordings` |
+| Spark | knowledge `spark-recordings` | `spark-recordings` |
+| Circleback | `data/context/meet-recordings-circleback` | `meet-recordings-circleback` |
+| Fathom | `data/context/meet-recordings-epilogue` / `-personal` | matching name |
+| Zoom | `data/context/meet-recordings-zoom` | `meet-recordings-zoom` |
 
 ## Quick Start
 
-### Step 1 — Enable the source
-
-The `meet-recordings` source is already in `context-sources.config.json` (disabled by default).
-Enable it in your private overlay:
-
-**`~/.memroos/context-sources.local.json`** (create from `context-sources.local.json.example`):
-```json
-{
-  "sources": [
-    {
-      "id": "meet-recordings",
-      "enabled": true
-    }
-  ]
-}
-```
-
-### Step 2 — Create your ingest script
-
-Create `~/.memroos/integrations/my-meetings-ingest.sh`:
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-OUTPUT_DIR="${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings"
-mkdir -p "$OUTPUT_DIR"
-# Your provider CLI command here → transform to Markdown → write to $OUTPUT_DIR
-```
-
-### Step 3 — Wire the env var
-
-In `~/.memroos/memroos-runtime.env`:
-```bash
-MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/my-meetings-ingest.sh
-```
-
-### Step 4 — Schedule nightly sync (optional)
-
-Copy `~/Library/LaunchAgents/com.memroos.circleback-sync.plist` from the Circleback
-reference below and adapt the ingest script path.
-
----
-
-## Circleback Reference Implementation
-
-[Circleback](https://circleback.ai) provides a CLI with `--json` output — the cleanest
-integration path for memroos.
-
-### Install the CLI
+### Step 1 — Copy the example config
 
 ```bash
-npm install -g @circleback/cli
-circleback login
+mkdir -p ~/.memroos
+cp scripts/meet-sync/meeting-sources.example.json ~/.memroos/meeting-sources.json
 ```
 
-### Create the ingest script
+Enable the providers you use (`"enabled": true`) and point `ingestCommand` /
+`envFile` at your private scripts and API keys.
+
+### Step 2 — Private ingest scripts
+
+Keep provider CLIs/API keys under `~/.memroos/integrations/` and
+`~/.memroos/agent-keys/` (gitignored). A minimal Circleback example:
 
 ```bash
 mkdir -p ~/.memroos/integrations
 cat > ~/.memroos/integrations/circleback-ingest.sh << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-OUTPUT_DIR="${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings"
+OUTPUT_DIR="${1:-${MEMROOS_ROOT:-$HOME/github/memroos}/data/context/meet-recordings-circleback}"
+# Prefer --output-dir from meet-sync when provided
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 mkdir -p "$OUTPUT_DIR"
-circleback meetings list --json | python3 ~/.memroos/integrations/circleback-transform.py --output-dir "$OUTPUT_DIR"
+TMP="$(mktemp)"
+circleback meetings list --json > "$TMP"
+python3 "$HOME/.memroos/integrations/circleback-transform.py" --output-dir "$OUTPUT_DIR" < "$TMP"
+rm -f "$TMP"
 EOF
 chmod +x ~/.memroos/integrations/circleback-ingest.sh
 ```
 
-### Wire the env var
+### Step 3 — Enable context-source health overlays
 
-```bash
-echo 'MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/circleback-ingest.sh' \
-  >> ~/.memroos/memroos-runtime.env
+Copy patterns from [`context-sources.local.json.example`](../../context-sources.local.json.example)
+into `~/.memroos/context-sources.local.json`. Prefer meet-sync for index commands:
+
+```json
+{
+  "id": "meet-recordings-circleback",
+  "enabled": true,
+  "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source circleback --skip-ingest"
+}
 ```
 
-### Run a manual sync
+### Step 4 — Run and schedule
 
 ```bash
-source ~/.memroos/memroos-runtime.env
-$MEETINGS_INGEST_COMMAND
-qmd index meet-recordings
+./scripts/meet-sync/meet-sync.sh --dry-run
+./scripts/meet-sync/meet-sync.sh --source circleback
+./scripts/meet-sync/install-launchd.sh
 ```
 
-### Verify
+Status files: `~/.memroos/logs/meet-sync/<id>.json`.
+
+### Step 5 — Verify
 
 ```bash
-knowledge_search("last meeting with [person]")
-# Should return your circleback transcripts
+qmd collection show meet-recordings-circleback
+qmd search "last meeting" -c meet-recordings-circleback
 ```
+
+---
+
+## Google Meet + Spark
+
+Operators who already run
+`~/github/knowledge/personal-ingestion-transcripts.sh` should enable the
+`google-spark-transcripts` source in `meeting-sources.json`. That source:
+
+1. Runs the existing knowledge ingest (Drive Gemini notes + Spark Desktop DB)
+2. Reindexes `meet-recordings` and `spark-recordings` via meet-sync
+
+Do not invent a second Google/Spark pipeline inside MemRoOS.
 
 ---
 
 ## Other Providers
 
-The same pattern works for any meeting tool:
-
-| Provider | Export command |
+| Provider | Typical ingest |
 |----------|----------------|
-| Fireflies | `fireflies export --json` |
-| Otter.ai | `otter export --format json` |
-| Zoom | Zoom API `/meetings/{id}/recordings` |
-| Fathom | Fathom export API |
+| Fireflies | CLI/API → transform → Markdown |
+| Otter.ai | export JSON → transform |
+| Zoom | Server-to-Server OAuth + VTT download |
+| Fathom | `X-Api-Key` meetings API |
 
-Write a transform script that reads JSON from stdin and writes dated `.md` files
-to `$OUTPUT_DIR`. The `circleback-transform.py` script in `~/.memroos/integrations/`
-is a good starting point.
+Markdown should include a `## Transcript` section when the provider has one so
+readiness policies (`artifactCompleteMarker`) keep working.
 
 ---
 
 ## Troubleshooting
 
-**`knowledge_health()` shows meet-recordings as disabled**
-→ Check `~/.memroos/context-sources.local.json` has `"enabled": true`
+**`meet-sync` says no enabled sources**
+→ Edit `~/.memroos/meeting-sources.json` and set `"enabled": true`.
 
-**No meetings appear after running ingest**
-→ Run `qmd index meet-recordings` manually after the ingest script
-→ Check `data/context/meet-recordings/` for `.md` files
+**Circleback meetings never searchable under `meet-recordings`**
+→ Expected. Use collection `meet-recordings-circleback`.
 
-**`MEETINGS_INGEST_COMMAND: command not found`**
-→ Verify `source ~/.memroos/memroos-runtime.env` sets the variable
-→ Check script path and permissions: `chmod +x ~/.memroos/integrations/circleback-ingest.sh`
+**Still seeing `qmd index …` failures**
+→ Replace stale LaunchAgents / overlay `indexCommand` values with
+`scripts/meet-sync/meet-sync.sh`. Current QMD uses `update` / `embed`, not `index`.
+
+**`knowledge_health()` shows a meeting source disabled**
+→ Enable the matching id in `~/.memroos/context-sources.local.json`.
+
+## See also
+
+- [`scripts/meet-sync/README.md`](../../scripts/meet-sync/README.md)
+- [`scripts/meet-sync/meeting-sources.example.json`](../../scripts/meet-sync/meeting-sources.example.json)
