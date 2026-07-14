@@ -7,6 +7,7 @@ import {
   metricEnvelope,
   normalizeScope,
   type MetricEnvelope,
+  type MetricScope,
   type MetricStatus,
 } from "@/lib/metric-status";
 import {
@@ -177,7 +178,7 @@ function safeLatest(
 function envelopeFromScalar(
   result: { ok: boolean; value: number; error: string | null },
   source: string,
-  scope: ReturnType<typeof buildScope>,
+  scope: MetricScope,
   options: { latestAt: string | null; freshnessMs?: number | null; reason?: string } = { latestAt: null }
 ): MetricEnvelope<number> {
   const classification = classifyScalar({
