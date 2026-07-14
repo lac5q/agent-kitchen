@@ -49,6 +49,8 @@
     "check:recall-anchors": "node scripts/check-recall-anchors.mjs --skip-mem0",
     "check:recall-anchors:live": "node scripts/check-recall-anchors.mjs --require-mem0",
     "install:runtime-services": "node scripts/install-runtime-services.mjs install",
+    "sync:fathom": "bash scripts/integrations/fathom/fathom-sync.sh",
+    "check:runtime-services": "node scripts/install-runtime-services.mjs check && node --test scripts/install-runtime-services.test.mjs",
     "setup:multica-memroos": "node scripts/setup-multica-memroos.mjs",
     "lint": "npm --prefix apps/memroos run lint",
     "check:agents": "node scripts/check-agent-systems.mjs",

@@ -31,13 +31,14 @@ Fathom API keys are **per user**. Each key only sees meetings that account
 recorded or that were shared to its team. Use a separate 1Password item (or
 env var) per account.
 
-### One-shot local install
+### One-shot local install + regular indexing
 
 From the repo root on the operator machine (macOS host with `op` signed in):
 
 ```bash
 bash scripts/integrations/fathom/install-local.sh --probe
 bash scripts/integrations/fathom/install-local.sh --run
+bash scripts/integrations/fathom/install-local.sh --schedule
 ```
 
 This will:
@@ -46,6 +47,17 @@ This will:
 2. Enable `meet-recordings` in `~/.memroos/context-sources.local.json`
 3. Set `MEETINGS_INGEST_COMMAND` to `scripts/integrations/fathom/fathom-ingest.sh`
 4. Optionally probe both keys and sync meetings into `data/context/meet-recordings/`
+5. Install **`com.memroos.fathom-sync`** via `scripts/install-runtime-services.mjs` — every **3 hours** runs ingest + `qmd index meet-recordings` (under the 360‑minute freshness threshold)
+
+Manual equivalents:
+
+```bash
+npm run sync:fathom
+npm run install:runtime-services
+npm run check:runtime-services
+```
+
+`com.memroos.batch-embed` already includes the `meet-recordings` collection for embedding (3am/3pm). Fathom sync keeps the Markdown + qmd index fresh between those runs.
 
 ### 1Password item naming
 
@@ -84,14 +96,17 @@ source ~/.memroos/memroos-runtime.env
 qmd index meet-recordings
 ```
 
-### Nightly LaunchAgent (optional)
+### Regular schedule (required for freshness)
 
 ```bash
-cp scripts/integrations/fathom/com.memroos.fathom-sync.plist.example \
-  ~/Library/LaunchAgents/com.memroos.fathom-sync.plist
-# Edit MEMROOS_ROOT path if needed, then:
-launchctl load ~/Library/LaunchAgents/com.memroos.fathom-sync.plist
+bash scripts/integrations/fathom/install-local.sh --schedule
+# or
+npm run install:runtime-services
+launchctl list | grep fathom-sync
 ```
+
+Interval: **10800s (3h)** — keeps `meet-recordings` under `freshnessThresholdMinutes: 360`.
+Logs: `~/.memroos/logs/fathom-sync.log`
 
 ### Verify
 

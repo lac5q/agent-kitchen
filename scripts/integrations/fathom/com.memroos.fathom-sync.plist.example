@@ -1,32 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Template: copy to ~/Library/LaunchAgents/com.memroos.fathom-sync.plist
-  Replace MEMROOS_ROOT and adjust WorkingDirectory / paths for your machine.
-  Requires 1Password CLI auth (desktop app integration or OP_SERVICE_ACCOUNT_TOKEN).
+  Prefer: bash scripts/integrations/fathom/install-local.sh --schedule
+  which installs via scripts/install-runtime-services.mjs (com.memroos.fathom-sync every 3h).
+
+  This file is a manual fallback template only.
 -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>com.memroos.fathom-sync</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/YOUR_USER/github/memroos</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>-lc</string>
-    <string>source "$HOME/.memroos/memroos-runtime.env" 2>/dev/null; export MEMROOS_ROOT="${MEMROOS_ROOT:-$HOME/github/memroos}"; "$MEMROOS_ROOT/scripts/integrations/fathom/fathom-ingest.sh" &gt;&gt;"$HOME/.memroos/logs/fathom-sync.log" 2&gt;&amp;1; if command -v qmd &gt;/dev/null; then qmd index meet-recordings &gt;&gt;"$HOME/.memroos/logs/fathom-sync.log" 2&gt;&amp;1; fi</string>
+    <string>/Users/YOUR_USER/github/memroos/scripts/integrations/fathom/fathom-sync.sh</string>
   </array>
-  <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>6</integer>
-    <key>Minute</key>
-    <integer>15</integer>
-  </dict>
-  <key>RunAtLoad</key>
-  <false/>
+  <key>StartInterval</key>
+  <integer>10800</integer>
   <key>StandardOutPath</key>
-  <string>/tmp/com.memroos.fathom-sync.out.log</string>
+  <string>/Users/YOUR_USER/.memroos/logs/fathom-sync.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/com.memroos.fathom-sync.err.log</string>
+  <string>/Users/YOUR_USER/.memroos/logs/fathom-sync-error.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MEMROOS_ROOT</key>
+    <string>/Users/YOUR_USER/github/memroos</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>QMD_FORCE_CPU</key>
+    <string>1</string>
+  </dict>
 </dict>
 </plist>

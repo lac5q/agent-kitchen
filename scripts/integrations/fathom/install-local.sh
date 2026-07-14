@@ -6,11 +6,13 @@
 # 2. Enables meet-recordings in ~/.memroos/context-sources.local.json
 # 3. Sets MEETINGS_INGEST_COMMAND in ~/.memroos/memroos-runtime.env
 # 4. Optionally probes both Fathom accounts via 1Password (`op`)
+# 5. Optionally installs the regular launchd sync+index job (every 3h)
 #
 # Usage:
 #   bash scripts/integrations/fathom/install-local.sh
 #   bash scripts/integrations/fathom/install-local.sh --probe
 #   bash scripts/integrations/fathom/install-local.sh --run
+#   bash scripts/integrations/fathom/install-local.sh --schedule
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,22 +24,25 @@ ACCOUNTS_SRC="$SCRIPT_DIR/accounts.example.json"
 OVERLAY="$MEMROOS_HOME/context-sources.local.json"
 RUNTIME_ENV="$MEMROOS_HOME/memroos-runtime.env"
 INGEST_CMD="$SCRIPT_DIR/fathom-ingest.sh"
+SYNC_CMD="$SCRIPT_DIR/fathom-sync.sh"
 
 DO_PROBE=0
 DO_RUN=0
+DO_SCHEDULE=0
 for arg in "$@"; do
   case "$arg" in
     --probe) DO_PROBE=1 ;;
     --run) DO_RUN=1 ;;
+    --schedule) DO_SCHEDULE=1 ;;
     -h|--help)
-      sed -n '1,20p' "$0"
+      sed -n '1,25p' "$0"
       exit 0
       ;;
   esac
 done
 
 mkdir -p "$INTEGRATIONS_DIR" "$MEMROOS_HOME/logs" "$REPO_ROOT/data/context/meet-recordings"
-chmod +x "$INGEST_CMD"
+chmod +x "$INGEST_CMD" "$SYNC_CMD"
 
 if [[ ! -f "$ACCOUNTS_DST" ]]; then
   cp "$ACCOUNTS_SRC" "$ACCOUNTS_DST"
@@ -112,13 +117,13 @@ if [[ "$DO_PROBE" -eq 1 ]]; then
 fi
 
 if [[ "$DO_RUN" -eq 1 ]]; then
-  echo "Running Fathom ingest..."
-  bash "$INGEST_CMD"
-  if command -v qmd >/dev/null 2>&1; then
-    qmd index meet-recordings || true
-  else
-    echo "qmd not installed in PATH; skip index. Install/qmd later, then: qmd index meet-recordings"
-  fi
+  echo "Running Fathom sync + index..."
+  bash "$SYNC_CMD"
+fi
+
+if [[ "$DO_SCHEDULE" -eq 1 ]]; then
+  echo "Installing regular Fathom indexing via runtime services (every 3h)..."
+  node "$REPO_ROOT/scripts/install-runtime-services.mjs" install
 fi
 
 cat <<EOF
@@ -131,7 +136,9 @@ Next:
    - Fathom API Gmail     (luis.calderon@gmail.com)
    Note: op:// refs cannot contain '@' — do not put the raw email in the secret reference.
 2. Authenticate 1Password CLI (op signin) or set OP_SERVICE_ACCOUNT_TOKEN.
-3. Probe: bash $SCRIPT_DIR/install-local.sh --probe
-4. Sync:  bash $SCRIPT_DIR/install-local.sh --run
+3. Probe:    bash $SCRIPT_DIR/install-local.sh --probe
+4. Sync now: bash $SCRIPT_DIR/install-local.sh --run
+5. Schedule: bash $SCRIPT_DIR/install-local.sh --schedule
+   (installs com.memroos.fathom-sync every 3h: ingest + qmd index meet-recordings)
 
 EOF

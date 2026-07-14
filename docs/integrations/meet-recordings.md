@@ -24,10 +24,14 @@ Ingests meetings for:
 ```bash
 bash scripts/integrations/fathom/install-local.sh --probe
 bash scripts/integrations/fathom/install-local.sh --run
+bash scripts/integrations/fathom/install-local.sh --schedule
 ```
 
-API keys resolve from 1Password items titled like `Fathom API - <email>` (or env
-`FATHOM_API_KEY_EPILOGUE` / `FATHOM_API_KEY_GMAIL`). Full details:
+`--schedule` installs `com.memroos.fathom-sync` (every 3h: ingest + `qmd index meet-recordings`)
+alongside other runtime services. Same as `npm run install:runtime-services`.
+
+API keys resolve from 1Password items titled like `Fathom API Epilogue` / `Fathom API Gmail`
+(or env `FATHOM_API_KEY_EPILOGUE` / `FATHOM_API_KEY_GMAIL`). Full details:
 [`scripts/integrations/fathom/README.md`](../../scripts/integrations/fathom/README.md).
 
 ## Enable the source (any provider)
