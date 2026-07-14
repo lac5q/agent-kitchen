@@ -120,4 +120,143 @@ describe("memory policy gate", () => {
     expect(audit.target).toBe("external:unlabeled");
     expect(audit.detail).toContain("sealed_content");
   });
+
+  it("allows owner for private agent_visible when actor.id matches ownerUserId", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:owner", role: "operator" },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "agent_visible",
+        domain: "legal",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision).toMatchObject({ decision: "allow", reason: "owner_or_admin_private" });
+  });
+
+  it("allows admin for private indexable even when not the owner", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:admin", role: "admin" },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "indexable",
+        domain: "finance",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision).toMatchObject({ decision: "allow", reason: "owner_or_admin_private" });
+  });
+
+  it("denies other users for private agent_visible owned by someone else", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:other", role: "operator" },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "agent_visible",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision).toMatchObject({ decision: "deny", reason: "private_content" });
+  });
+
+  it("denies agents for private agent_visible even when id equals ownerUserId", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:owner", role: "agent" },
+      purpose: "dispatch",
+      label: {
+        visibility: "private",
+        policy: "agent_visible",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision).toMatchObject({ decision: "deny", reason: "private_content" });
+  });
+
+  it("still denies owner when private content remains sealed", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:owner", role: "operator" },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "sealed",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision).toMatchObject({ decision: "deny", reason: "sealed_content" });
+  });
+
+  it("extracts ownerUserId from nested metadata owner_user_id", () => {
+    const label = extractMemoryLabelSnapshot({
+      id: "mem0-owned",
+      memory: "owned memory",
+      metadata: {
+        visibility: "private",
+        policy: "agent_visible",
+        owner_user_id: "user:owner",
+      },
+    });
+    expect(label).toMatchObject({
+      visibility: "private",
+      policy: "agent_visible",
+      ownerUserId: "user:owner",
+    });
+  });
+
+  it("merges nested owner_user_id when top-level label omits owner", () => {
+    const label = extractMemoryLabelSnapshot({
+      visibility: "private",
+      policy: "agent_visible",
+      metadata: { owner_user_id: "user:owner" },
+    });
+    expect(label).toMatchObject({
+      visibility: "private",
+      policy: "agent_visible",
+      ownerUserId: "user:owner",
+    });
+  });
+
+  it("denies anonymous and system even when id matches ownerUserId", () => {
+    const label = {
+      visibility: "private" as const,
+      policy: "agent_visible" as const,
+      ownerUserId: "user:owner",
+    };
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "user:owner", role: "anonymous" },
+        purpose: "recall",
+        label,
+      }).decision
+    ).toBe("deny");
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "user:owner", role: "system" },
+        purpose: "recall",
+        label,
+      }).decision
+    ).toBe("deny");
+  });
+
+  it("allows reviewer owner and keeps ownerUserId off decision.label", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:owner", role: "reviewer" },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "agent_visible",
+        ownerUserId: "user:owner",
+      },
+    });
+    expect(decision.decision).toBe("allow");
+    expect(decision.label).toEqual({
+      visibility: "private",
+      domain: null,
+      sensitivity: null,
+      policy: "agent_visible",
+    });
+    expect("ownerUserId" in decision.label).toBe(false);
+  });
 });

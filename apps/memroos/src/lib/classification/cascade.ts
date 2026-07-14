@@ -16,6 +16,7 @@ import type {
   ClassifyVaultResult,
   DecideClassificationReviewInput,
 } from "./types";
+import { proposeShadowSuggestion } from "./llm-adjudicator";
 
 type RawArtifactRow = {
   id: string;
@@ -49,6 +50,8 @@ const SECRET_PATTERNS = new Set([
 
 const PII_PATTERNS = new Set(["ssn_us", "email_address", "phone_us"]);
 
+type FixedSensitiveKind = "confidential" | "legal" | "finance";
+
 function addReason(reasons: string[], code: string): void {
   if (!reasons.includes(code)) reasons.push(code);
 }
@@ -56,6 +59,138 @@ function addReason(reasons: string[], code: string): void {
 function combineText(input: ClassificationInput): string {
   const metadata = input.metadata ? JSON.stringify(input.metadata) : "";
   return `${input.content}\n${metadata}`.toLowerCase();
+}
+
+function collectProviderLabelTokens(metadata: Record<string, unknown> | undefined): string[] {
+  if (!metadata) return [];
+  const tokens: string[] = [];
+  const pushValue = (value: unknown) => {
+    if (typeof value === "string") {
+      tokens.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) pushValue(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const nested of Object.values(value as Record<string, unknown>)) pushValue(nested);
+    }
+  };
+
+  const labelKeys = new Set([
+    "gmail_labels",
+    "gmailLabels",
+    "labels",
+    "categories",
+    "confidential_label",
+    "confidentialLabel",
+    "microsoft_sensitivity",
+    "microsoftSensitivity",
+    "sensitivity_label",
+    "sensitivityLabel",
+    "provider_labels",
+    "providerLabels",
+  ]);
+
+  const visit = (record: Record<string, unknown>, depth: number) => {
+    if (depth > 3) return;
+    for (const [key, value] of Object.entries(record)) {
+      if (labelKeys.has(key)) {
+        pushValue(value);
+        continue;
+      }
+      // Vault classify path nests provider labels under replayMetadata.
+      if ((key === "replayMetadata" || key === "metadata") && value && typeof value === "object" && !Array.isArray(value)) {
+        visit(value as Record<string, unknown>, depth + 1);
+      }
+    }
+  };
+
+  visit(metadata, 0);
+  return tokens;
+}
+
+function normalizeLabelToken(token: string): string {
+  return token.trim().toLowerCase().replace(/[_/]+/g, " ").replace(/\s+/g, " ");
+}
+
+/**
+ * Fixed / provider labels are authoritative. They may only tighten classification.
+ * Matches: Confidential, Legal, Finance/Financial, and common Gmail/Purview variants.
+ */
+export function detectFixedSensitiveLabels(input: ClassificationInput): {
+  kinds: FixedSensitiveKind[];
+  matchedTokens: string[];
+  reasonCodes: string[];
+  evidenceSpans: ClassificationEvidenceSpan[];
+} {
+  const kinds = new Set<FixedSensitiveKind>();
+  const matchedTokens: string[] = [];
+  const reasonCodes: string[] = [];
+  const evidenceSpans: ClassificationEvidenceSpan[] = [];
+  const tokens = collectProviderLabelTokens(input.metadata);
+
+  for (const token of tokens) {
+    const normalized = normalizeLabelToken(token);
+    if (!normalized) continue;
+
+    let kind: FixedSensitiveKind | null = null;
+    if (
+      /\bconfidential\b/.test(normalized) ||
+      /\brestricted\b/.test(normalized) ||
+      /\bhighly confidential\b/.test(normalized)
+    ) {
+      kind = "confidential";
+    } else if (/\blegal\b/.test(normalized) || /\bprivileged\b/.test(normalized) || /\battorney\b/.test(normalized)) {
+      kind = "legal";
+    } else if (/\bfinance\b/.test(normalized) || /\bfinancial\b/.test(normalized) || /\bpayroll\b/.test(normalized)) {
+      kind = "finance";
+    }
+
+    if (!kind) continue;
+    kinds.add(kind);
+    matchedTokens.push(token);
+    addReason(reasonCodes, `fixed_label:${kind}`);
+    evidenceSpans.push({
+      reasonCode: `fixed_label:${kind}`,
+      text: token.slice(0, 80),
+      start: 0,
+      end: Math.min(token.length, 80),
+    });
+  }
+
+  return {
+    kinds: Array.from(kinds),
+    matchedTokens,
+    reasonCodes,
+    evidenceSpans,
+  };
+}
+
+function domainFromFixedKinds(kinds: FixedSensitiveKind[], fallback: VaultDomain): VaultDomain {
+  if (kinds.includes("legal")) return "legal";
+  if (kinds.includes("finance")) return "finance";
+  if (kinds.includes("confidential")) {
+    if (fallback === "engineering") return "client";
+    return fallback;
+  }
+  return fallback;
+}
+
+function sensitivityFromFixedKinds(
+  kinds: FixedSensitiveKind[],
+  scannerSensitivity: VaultSensitivity | null
+): VaultSensitivity | null {
+  if (kinds.includes("legal") || kinds.includes("confidential")) {
+    return scannerSensitivity === "credential" || scannerSensitivity === "payment"
+      ? scannerSensitivity
+      : "privileged";
+  }
+  if (kinds.includes("finance")) {
+    return scannerSensitivity === "credential" ? scannerSensitivity : "payment";
+  }
+  return scannerSensitivity;
 }
 
 function detectDomain(input: ClassificationInput): VaultDomain {
@@ -108,30 +243,60 @@ function sensitivityFromScanner(patternNames: string[], domain: VaultDomain): Va
 
 export function classifyText(input: ClassificationInput): ClassificationResult {
   const scan = scanContent(input.content);
-  const domain = detectDomain(input);
+  const fixed = detectFixedSensitiveLabels(input);
+  const domain = domainFromFixedKinds(fixed.kinds, detectDomain(input));
   const reasonCodes = ["default_private_sealed"];
   const scannerPatterns = scan.matches.map((match) => match.patternName);
-  const evidenceSpans = scannerEvidence(input.content);
+  const evidenceSpans = [...scannerEvidence(input.content), ...fixed.evidenceSpans];
 
   for (const match of scan.matches) {
     addReason(reasonCodes, `scanner:${match.patternName}`);
   }
+  for (const code of fixed.reasonCodes) addReason(reasonCodes, code);
 
   if (highRiskDomain(domain)) addReason(reasonCodes, `domain:${domain}`);
   if (publicPromotionCandidate(input)) addReason(reasonCodes, "public_promotion_candidate");
 
-  const requiresReview =
+  const scannerOrPublicRisk =
     scan.blocked ||
     scan.matches.length > 0 ||
-    publicPromotionCandidate(input) ||
-    highRiskDomain(domain);
+    publicPromotionCandidate(input);
+
+  // Keyword-only high-risk domains still go to human review.
+  // Fixed confidential/legal/finance labels are authoritative: owner-scoped agent_visible
+  // so the owner ACL path can recall them without waiting on review promotion.
+  const hasFixedSensitive = fixed.kinds.length > 0;
+  const requiresReview = scannerOrPublicRisk || (!hasFixedSensitive && highRiskDomain(domain)) || hasFixedSensitive;
+
+  let policy: VaultPolicy;
+  if (scannerOrPublicRisk) {
+    policy = "requires_human_review";
+  } else if (hasFixedSensitive) {
+    policy = "agent_visible";
+    addReason(reasonCodes, "fixed_label_owner_scoped");
+  } else if (highRiskDomain(domain)) {
+    policy = "requires_human_review";
+  } else {
+    policy = "sealed";
+  }
 
   const label: NormalizedLabel = {
     visibility: "private",
     domain,
-    sensitivity: sensitivityFromScanner(scannerPatterns, domain),
-    policy: requiresReview ? "requires_human_review" : "sealed",
+    sensitivity: sensitivityFromFixedKinds(fixed.kinds, sensitivityFromScanner(scannerPatterns, domain)),
+    policy,
   };
+
+  // Shadow adjudicator: never applied to labels in this phase; records tighten/abstain candidates.
+  if (process.env.MEMROOS_CLASSIFICATION_LLM_SHADOW === "1") {
+    const suggestion = proposeShadowSuggestion({
+      content: input.content,
+      sourceType: input.sourceType,
+      metadata: input.metadata,
+      deterministicReasonCodes: reasonCodes,
+    });
+    for (const code of suggestion.reasonCodes) addReason(reasonCodes, `shadow:${code}`);
+  }
 
   return { label, requiresReview, reasonCodes, evidenceSpans };
 }

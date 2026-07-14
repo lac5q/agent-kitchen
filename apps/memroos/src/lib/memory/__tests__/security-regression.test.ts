@@ -97,4 +97,53 @@ describe("MEMSEC-08 negative fixture regression suite", () => {
     expect(allowed).toHaveLength(1);
     expect(allowed[0].id).toBe(rows[1].id);
   });
+
+  it("denies other users private legal/finance agent_visible while allowing owner and admin", () => {
+    const ownedLegal = {
+      visibility: "private" as const,
+      domain: "legal" as const,
+      sensitivity: "privileged" as const,
+      policy: "agent_visible" as const,
+      ownerUserId: "user:owner",
+    };
+    const ownedFinance = {
+      visibility: "private" as const,
+      domain: "finance" as const,
+      sensitivity: "payment" as const,
+      policy: "indexable" as const,
+      ownerUserId: "user:owner",
+    };
+
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "user:other", role: "operator" },
+        purpose: "recall",
+        label: ownedLegal,
+      }).decision
+    ).toBe("deny");
+
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "user:owner", role: "operator" },
+        purpose: "recall",
+        label: ownedLegal,
+      }).decision
+    ).toBe("allow");
+
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "user:admin", role: "admin" },
+        purpose: "recall",
+        label: ownedFinance,
+      }).decision
+    ).toBe("allow");
+
+    expect(
+      authorizeMemoryUse({
+        actor: { id: "agent:worker", role: "agent" },
+        purpose: "dispatch",
+        label: ownedFinance,
+      }).decision
+    ).toBe("deny");
+  });
 });
