@@ -126,6 +126,51 @@ AWK_EOF
     bash -n \"\$bashrc\" && echo bashrc-syntax-ok"
 }
 
+# Wire login-shell profile files so `bash -lc "cmd"` and SSH command shells also see agent-env.
+# Handles ~/.bash_profile, ~/.bash_login, and ~/.profile (whichever exists).
+# Idempotent: strips legacy agent-env blocks before appending a single canonical source line.
+remote_wire_login_files() {
+  local host="$1"
+  local awk_b64
+  awk_b64=$(base64 <<'AWK_EOF'
+BEGIN { skip=0 }
+{
+  if (skip==1) {
+    if ($0 ~ /^[[:space:]]*fi[[:space:]]*(#|$)/) { skip=0; next }
+    next
+  }
+  if ($0 ~ /agent-env/) {
+    if ($0 ~ /;[[:space:]]*then[[:space:]]*(#|$)/) { skip=1 }
+    next
+  }
+  print
+}
+AWK_EOF
+)
+  sshq "$host" "set -euo pipefail
+    canonicalise() {
+      f=\"\$1\"
+      [ -f \"\$f\" ] || return 0
+      tmp=\"\$(mktemp)\"
+      echo '$awk_b64' | base64 -d | awk -f - \"\$f\" > \"\$tmp\"
+      {
+        cat \"\$tmp\"
+        printf '\n# MemRoOS agent secrets (login-shell, owner-only 600)\n'
+        printf '[ -f \"\$HOME/.memroos/agent-env\" ] && . \"\$HOME/.memroos/agent-env\"\n'
+      } > \"\$f.new\"
+      rm -f \"\$tmp\"
+      mv \"\$f.new\" \"\$f\"
+      case \"\$f\" in
+        *.bash_profile|*.bash_login|*.bashrc) bash -n \"\$f\" && echo \"\$f: syntax-ok\" ;;
+      esac
+      echo \"\$f: canonicalised\"
+    }
+    for f in \"\$HOME/.bash_profile\" \"\$HOME/.bash_login\" \"\$HOME/.profile\"; do
+      [ -f \"\$f\" ] && canonicalise \"\$f\" || true
+    done
+    echo login-files-done"
+}
+
 push_minimax() {
   local host="$1"
   if [[ "$SKIP_MINIMAX" == "1" ]]; then warn "SKIP_MINIMAX=1, skipping"; return 0; fi
@@ -205,6 +250,12 @@ for host in "${HOSTS[@]}"; do
   else
     err "bashrc wire failed on $host"
     continue
+  fi
+  echo "  remote_wire_login_files"
+  if remote_wire_login_files "$host" | grep -q login-files-done; then
+    ok "login files wired"
+  else
+    warn "login files wire had issues on $host (non-fatal)"
   fi
   echo "  push_minimax"
   push_minimax "$host" || warn "minimax push had issues on $host"

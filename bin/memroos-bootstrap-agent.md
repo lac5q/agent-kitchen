@@ -10,14 +10,20 @@ lines, with each secret stored at `chmod 600`.
 1. **Installs** `~/.local/bin/memroos-set-secret` — silent-prompt helper
    that writes/overwrites a single `export VAR=value` line into
    `~/.memroos/agent-env` (drops any prior line for that var).
-2. **Wires** `~/.bashrc` to source `~/.memroos/agent-env` early (skips
-   if already present).
-3. **Pushes** `MINIMAX_API_KEY` from local `op` (vault `Clawdbot`,
+2. **Wires** `~/.bashrc` to source `~/.memroos/agent-env` early
+   (canonicalises to a single line; strips legacy installer blocks).
+3. **Wires login-shell files** (`~/.bash_profile`, `~/.bash_login`,
+   `~/.profile`) — whichever exists — so `bash -lc "cmd"` and SSH
+   command shells also see the secrets. Login shells do not source
+   `~/.bashrc` by default, so this is required for tools that invoke
+   `bash -lc` (including this script's own verify step).
+4. **Pushes** `MINIMAX_API_KEY` from local `op` (vault `Clawdbot`,
    item `Minimax Coding Plan API Key`) without ever printing it.
-4. **Pushes** `OP_SERVICE_ACCOUNT_TOKEN` via a local silent prompt
+5. **Pushes** `OP_SERVICE_ACCOUNT_TOKEN` via a local silent prompt
    (`read -rsp`), since a service account cannot self-fetch its own
-   token from a 1Password vault.
-5. **Verifies** lengths only, perms are `600`, runs `op whoami`, and
+   token from a 1Password vault. Aborts loudly if the prompt returns
+   empty (e.g. when invoked from a non-interactive shell).
+6. **Verifies** lengths only, perms are `600`, runs `op whoami`, and
    smoke-tests `https://api.minimaxi.chat/v1/models` with the key.
 
 ## Usage
@@ -78,8 +84,10 @@ source ~/.memroos/agent-env
 ## Files created on each host
 
 ```
-~/.local/bin/memroos-set-secret         700, root-only
-~/.memroos/                              700, owner-only
-~/.memroos/agent-env                     600, owner-only
-~/.bashrc                                +source line at end (idempotent)
+~/.local/bin/memroos-set-secret              700, root-only
+~/.memroos/                                   700, owner-only
+~/.memroos/agent-env                          600, owner-only
+~/.bashrc                                     +1 canonical source line
+~/.bash_profile / ~/.bash_login / ~/.profile  +1 canonical source line
+                                              (whichever exists, idempotent)
 ```
