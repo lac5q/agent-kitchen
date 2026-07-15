@@ -239,14 +239,44 @@ fi
 
 # ── Check 1: Mem0 ────────────────────────────────────────────────────────────
 log "Checking Mem0 ($MEM0_URL)..."
-MEM0_HEALTH=$(curl -s --max-time 6 "$MEM0_URL/health" 2>/dev/null)
+MEM0_RESTART_COOLDOWN_SECONDS="${MEM0_RESTART_COOLDOWN_SECONDS:-1800}"
+MEM0_LIVEZ=$(curl -s --max-time 3 "$MEM0_URL/livez" 2>/dev/null || true)
+MEM0_LIVEZ_STATUS=$(json_field "$MEM0_LIVEZ" "status")
+MEM0_HEALTH=$(curl -s --max-time 6 "$MEM0_URL/health" 2>/dev/null || true)
 MEM0_STATUS=$(json_field "$MEM0_HEALTH" "status")
+
+maybe_restart_hung_mem0() {
+  local reason="$1"
+  local cooldown_file="${ALERT_STATE_DIR}/mem0_restart.cooldown"
+  local elapsed=999999
+  if [ -f "$cooldown_file" ]; then
+    elapsed=$(( NOW - $(cat "$cooldown_file" 2>/dev/null || echo 0) ))
+  fi
+  if [ "$elapsed" -lt "$MEM0_RESTART_COOLDOWN_SECONDS" ]; then
+    log "Mem0 restart suppressed (cooldown ${elapsed}s < ${MEM0_RESTART_COOLDOWN_SECONDS}s): $reason"
+    return 0
+  fi
+  echo "$NOW" > "$cooldown_file"
+  log "Attempting Mem0 restart (hung/unreachable): $reason"
+  alert "mem0_auto_restart" "Mem0 *auto-restart* triggered
+- Reason: $reason
+- Cooldown: ${MEM0_RESTART_COOLDOWN_SECONDS}s
+- Command: \`launchctl kickstart -k gui/\$(id -u)/com.mem0.server\`"
+  if command -v launchctl >/dev/null 2>&1; then
+    launchctl kickstart -k "gui/$(id -u)/com.mem0.server" 2>/dev/null \
+      || log "launchctl kickstart failed; start Mem0 manually via services/memory/start-mem0.sh"
+  else
+    log "launchctl unavailable; start Mem0 manually via services/memory/start-mem0.sh"
+  fi
+}
+
 if [ "$MEM0_STATUS" = "ok" ]; then
   QDRANT_STATUS=$(json_field "$MEM0_HEALTH" "vector_store")
   QUEUED_MEMORIES=$(echo "$MEM0_HEALTH" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print((d.get('queue') or {}).get('queued', 0) or 0)" 2>/dev/null || echo "unknown")
   log "Mem0: OK (vector_store: $QDRANT_STATUS)"
   recover "mem0_down" "Mem0 is back online"
   recover "mem0_degraded" "Mem0 is no longer degraded"
+  recover "mem0_hung" "Mem0 health/livez responding again"
   if [ "$QDRANT_STATUS" != "connected" ]; then
     alert "qdrant_via_mem0" "Mem0 up but *Qdrant not connected* (status: $QDRANT_STATUS)
 - Semantic memory writes will fail
@@ -266,9 +296,18 @@ elif [ "$MEM0_STATUS" = "degraded" ]; then
   alert "mem0_degraded" "Mem0 is *DEGRADED*
 - Queued memory saves: ${QUEUED_MEMORIES}
 - \`tail -50 $MEM0_LOG_DIR/mem0-server.log\`"
+  # Alive enough to answer /health — do not auto-restart on degraded alone.
+elif [ "$MEM0_LIVEZ_STATUS" != "ok" ]; then
+  alert "mem0_hung" "Mem0 appears *HUNG or DOWN* at \`$MEM0_URL\`
+- /livez status: ${MEM0_LIVEZ_STATUS}
+- /health status: ${MEM0_STATUS}
+- Restart: \`launchctl kickstart -k gui/\$(id -u)/com.mem0.server\`"
+  maybe_restart_hung_mem0 "livez=${MEM0_LIVEZ_STATUS} health=${MEM0_STATUS}"
 else
   alert "mem0_down" "Mem0 is *DOWN* at \`$MEM0_URL\`
+- /livez ok but /health not responding with status
 - Restart: \`launchctl kickstart -k gui/\$(id -u)/com.mem0.server\`"
+  maybe_restart_hung_mem0 "livez=ok but health=${MEM0_STATUS}"
 fi
 
 # ── Check 1.5: Mem0 failures ─────────────────────────────────────────────────

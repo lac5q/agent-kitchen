@@ -628,6 +628,30 @@ def check_qdrant_vector_store(vector_cfg: dict[str, Any]) -> str:
     return "connected"
 
 
+def cached_qdrant_vector_status(vector_cfg: dict[str, Any], *, force: bool = False) -> str:
+    """Interval-cached Qdrant connectivity for /health (avoids probing on every request)."""
+    global _qdrant_probe_ok, _qdrant_probe_last
+    import time
+
+    now = time.time()
+    if (
+        not force
+        and _qdrant_probe_ok is not None
+        and (now - _qdrant_probe_last) < _QDRANT_PROBE_INTERVAL
+    ):
+        return "connected" if _qdrant_probe_ok else "disconnected"
+
+    _qdrant_probe_last = now
+    try:
+        status = check_qdrant_vector_store(vector_cfg)
+        _qdrant_probe_ok = status == "connected"
+        return status
+    except Exception as exc:
+        logger.warning(f"Qdrant health check failed: {exc}")
+        _qdrant_probe_ok = False
+        return "disconnected"
+
+
 # ---------------------------------------------------------------------------
 # Exception Handler
 # ---------------------------------------------------------------------------
@@ -778,6 +802,12 @@ def delete_memory(memory_id: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/livez")
+def livez():
+    """Process liveness only — no Qdrant/disk/runtime suite (hang-safe for supervisors)."""
+    return {"status": "ok", "service": "mem0-server"}
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """Health check — verifies mem0 runtime, vector store, disk, SQLite, and queued writes."""
@@ -791,11 +821,7 @@ def health():
         if not QDRANT_AVAILABLE:
             vector_status = "disconnected"
         else:
-            try:
-                vector_status = check_qdrant_vector_store(vector_cfg)
-            except Exception as e:
-                logger.warning(f"Qdrant health check failed: {e}")
-                vector_status = "disconnected"
+            vector_status = cached_qdrant_vector_status(vector_cfg)
     elif vector_provider == "chroma":
         # Chroma is embedded — if the server is running at all, it's healthy
         try:
@@ -952,7 +978,9 @@ async def _qdrant_health_checker():
     Background task that:
     - Detects when Qdrant has recovered from an outage
     - Auto-resets the memory client so requests succeed again
-    - Silences old failure alerts once the system is healthy for a while
+
+    Phase 155: in-process only — never self-HTTP to the local mem0 /health or /memory/reset
+    endpoints (self-HTTP can hang the event loop when /health itself is blocked on Qdrant).
     """
     consecutive_healthy = 0
     HEALTH_THRESHOLD = 3  # must be healthy N consecutive checks before clearing
@@ -960,22 +988,28 @@ async def _qdrant_health_checker():
     while True:
         await asyncio.sleep(60)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get("http://localhost:3201/health")
-                data = resp.json()
+            cfg = await asyncio.to_thread(load_config)
+            vector_cfg = cfg.get("vector_store", {}).get("config", {})
+            vector_provider = cfg.get("vector_store", {}).get("provider", "unknown")
 
-            qdrant_ok = data.get("vector_store") == "connected"
-            disk_ok = not data.get("disk", {}).get("critical", False)
+            if vector_provider == "qdrant":
+                vector_status = await asyncio.to_thread(
+                    lambda: cached_qdrant_vector_status(vector_cfg, force=True)
+                )
+                qdrant_ok = vector_status == "connected"
+            else:
+                qdrant_ok = True
+
+            disk_status = await asyncio.to_thread(check_disk_space)
+            disk_ok = not disk_status.get("critical", False)
 
             if qdrant_ok and disk_ok:
                 consecutive_healthy += 1
                 if consecutive_healthy >= HEALTH_THRESHOLD:
-                    # System is healthy — try to reset the memory client to pick up Qdrant
-                    # This recovers from the "frozen" state where get_memory()
-                    # never retries after a transient Qdrant outage
+                    # Recover frozen Memory client after Qdrant blips — in-process reset.
                     try:
-                        await client.post("http://localhost:3201/memory/reset")
-                        logger.info("Auto-reset memory client after Qdrant recovery")
+                        await asyncio.to_thread(reset_memory)
+                        logger.info("Auto-reset memory client after Qdrant recovery (in-process)")
                     except Exception:
                         pass
                     consecutive_healthy = 0  # reset counter after recovery action

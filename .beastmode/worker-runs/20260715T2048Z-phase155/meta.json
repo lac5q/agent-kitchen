@@ -1,0 +1,12 @@
+{
+  "id": "06a724fcd2f4871d45e6be2d753cc2dc",
+  "model": "MiniMax-M3",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 516,
+    "output_tokens": 3734,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 128,
+    "service_tier": "standard"
+  }
+}
