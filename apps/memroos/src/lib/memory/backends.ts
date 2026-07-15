@@ -17,6 +17,12 @@ function memorySearchTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 15_000;
 }
 
+/** Mem0 `/health` probe timeout for vector tier health (strict MCP gate path). */
+export function mem0HealthTimeoutMs(): number {
+  const parsed = Number(process.env.MEM0_HEALTH_TIMEOUT_MS ?? 15_000);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 15_000;
+}
+
 export function neo4jConfig() {
   return {
     url: (process.env.NEO4J_HTTP_URL || "http://localhost:7474").replace(/\/$/, ""),
@@ -76,7 +82,7 @@ async function _queryGraphMemoryDirect(query: string, limit: number) {
 
 async function _checkVectorHealthDirect(): Promise<MemoryTierHealth> {
   try {
-    const response = await fetch(`${MEM0_URL}/health`, { signal: timeoutSignal(3000) });
+    const response = await fetch(`${MEM0_URL}/health`, { signal: timeoutSignal(mem0HealthTimeoutMs()) });
     if (!response.ok) {
       return { tier: "vector", backend: "mem0-qdrant", status: "down", detail: `HTTP ${response.status}` };
     }
