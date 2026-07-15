@@ -8,11 +8,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { AgentLivenessBadge } from "@/components/agents/agent-liveness-badge";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
 import type { RegisteredAgent } from "@/types";
+import type { LivenessObservation } from "@/lib/agent-liveness";
 
 interface AgentRegistryDrawerProps {
   agent: RegisteredAgent | null;
+  liveness?: LivenessObservation | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -84,7 +87,7 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function AgentRegistryDrawer({ agent, open, onOpenChange }: AgentRegistryDrawerProps) {
+export function AgentRegistryDrawer({ agent, liveness, open, onOpenChange }: AgentRegistryDrawerProps) {
   if (!agent) return null;
   const a2a = a2aMetadata(agent);
 
@@ -108,10 +111,21 @@ export function AgentRegistryDrawer({ agent, open, onOpenChange }: AgentRegistry
               {PLATFORM_LABELS[agent.platform] ?? agent.platform}
             </Badge>
             <Badge variant="outline" className="border-stone-300 text-stone-600">{agent.status}</Badge>
+            {liveness ? <AgentLivenessBadge observation={liveness} showObserved /> : null}
           </div>
-          <div>
+          <div className="border border-stone-200 bg-white/90 p-3">
             <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">Last heartbeat</p>
             <p className="text-stone-700">{agent.lastHeartbeat ?? "never"}</p>
+            {liveness ? (
+              <p className="mt-2 text-xs text-stone-500" data-liveness-source>
+                source={liveness.source}
+                {liveness.observedAt ? ` · observed at ${liveness.observedAt}` : ""}
+                {liveness.freshnessMs !== null ? ` · age ${Math.round(liveness.freshnessMs / 1000)}s` : ""}
+              </p>
+            ) : null}
+            {liveness ? (
+              <p className="mt-1 text-xs text-stone-500" data-liveness-reason>{liveness.reason}</p>
+            ) : null}
           </div>
           <div>
             <p className="mb-2 text-xs uppercase tracking-wide text-stone-500">Capabilities</p>

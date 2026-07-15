@@ -376,6 +376,22 @@ export interface SecurityReportResponse {
   timestamp: string;
 }
 
+export interface SecurityCapabilitiesPoliciesView {
+  defaultMode: string;
+  dispatchPolicy: string;
+  a2aPolicy: string;
+  memoryWritePolicy: string;
+  metric: MetricEnvelope<number>;
+}
+
+export interface SecurityCapabilitiesSummaryMetrics {
+  totalAgents: MetricEnvelope<number>;
+  strictAgents: MetricEnvelope<number>;
+  standardAgents: MetricEnvelope<number>;
+  permissiveAgents: MetricEnvelope<number>;
+  agentsWithSecurityCapabilities: MetricEnvelope<number>;
+}
+
 export interface SecurityCapabilitiesResponse {
   summary: {
     totalAgents: number;
@@ -383,13 +399,9 @@ export interface SecurityCapabilitiesResponse {
     standardAgents: number;
     permissiveAgents: number;
     agentsWithSecurityCapabilities: number;
+    metrics: SecurityCapabilitiesSummaryMetrics;
   };
-  policies: {
-    defaultMode: string;
-    dispatchPolicy: string;
-    a2aPolicy: string;
-    memoryWritePolicy: string;
-  };
+  policies: SecurityCapabilitiesPoliciesView;
   agents: Array<{
     id: string;
     name: string;
@@ -400,6 +412,7 @@ export interface SecurityCapabilitiesResponse {
     securityCapabilities: string[];
     readinessScore: number;
     lastHeartbeat: string | null;
+    liveness: AgentLivenessObservation;
   }>;
   timestamp: string;
 }
@@ -616,11 +629,57 @@ export function useOperationsNoc(filters: NocFilters = { window: "24h", workspac
   });
 }
 
+export interface AgentLivenessObservation {
+  state: "live" | "stale" | "never" | "missing" | "error";
+  observedAt: string | null;
+  freshnessMs: number | null;
+  source: string;
+  reason: string;
+}
+
+export interface AgentWithLiveness extends RegisteredAgent {
+  liveness: AgentLivenessObservation;
+}
+
+export interface AgentsSummaryView {
+  total: import("@/lib/metric-status").MetricEnvelope<number>;
+  active: import("@/lib/metric-status").MetricEnvelope<number>;
+  idle: import("@/lib/metric-status").MetricEnvelope<number>;
+  dormant: import("@/lib/metric-status").MetricEnvelope<number>;
+  error: import("@/lib/metric-status").MetricEnvelope<number>;
+}
+
+export interface AgentsProtocolView {
+  rest: import("@/lib/metric-status").MetricEnvelope<number>;
+  a2a: import("@/lib/metric-status").MetricEnvelope<number>;
+  ui: import("@/lib/metric-status").MetricEnvelope<number>;
+  local: import("@/lib/metric-status").MetricEnvelope<number>;
+}
+
+export interface AgentsReadinessView {
+  average: import("@/lib/metric-status").MetricEnvelope<number | null>;
+  withCapabilities: import("@/lib/metric-status").MetricEnvelope<number>;
+}
+
+export interface AgentsLocalRuntimeView {
+  ok: boolean;
+  metric: import("@/lib/metric-status").MetricEnvelope<number>;
+}
+
+export interface AgentsResponse {
+  agents: AgentWithLiveness[];
+  summary: AgentsSummaryView;
+  liveness: import("@/lib/metric-status").MetricEnvelope<number>;
+  readiness: AgentsReadinessView;
+  protocols: AgentsProtocolView;
+  localRuntime: AgentsLocalRuntimeView;
+  timestamp: string;
+}
+
 export function useAgents() {
   return useQuery({
     queryKey: ["agents"],
-    queryFn: () =>
-      fetchJSON<{ agents: RegisteredAgent[]; timestamp: string }>("/api/agents"),
+    queryFn: () => fetchJSON<AgentsResponse>("/api/agents"),
     refetchInterval: POLL_INTERVALS.agents,
   });
 }

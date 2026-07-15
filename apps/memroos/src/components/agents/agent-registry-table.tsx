@@ -2,14 +2,22 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AgentLivenessBadge } from "@/components/agents/agent-liveness-badge";
 import { PLATFORM_LABELS, STATUS_COLORS } from "@/lib/ui-constants";
 import type { RegisteredAgent } from "@/types";
+import type { LivenessObservation } from "@/lib/agent-liveness";
+
+export interface RegistryAgentRow extends RegisteredAgent {
+  liveness?: LivenessObservation;
+}
 
 interface AgentRegistryTableProps {
-  agents: RegisteredAgent[];
-  onSelect: (agent: RegisteredAgent) => void;
+  agents: RegistryAgentRow[];
+  onSelect: (agent: RegistryAgentRow) => void;
   onDeregister: (agentId: string) => void;
   isDeregistering?: boolean;
+  emptyTitle?: string;
+  emptyReason?: string;
 }
 
 function formatHeartbeat(value: string | null): string {
@@ -35,22 +43,29 @@ export function AgentRegistryTable({
   onSelect,
   onDeregister,
   isDeregistering = false,
+  emptyTitle = "No registered agents match this view.",
+  emptyReason,
 }: AgentRegistryTableProps) {
   if (agents.length === 0) {
     return (
-      <div className="border border-stone-200 bg-white/90 px-4 py-10 text-center text-sm text-stone-500">
-        No registered agents match this view.
+      <div
+        className="border border-stone-200 bg-white/90 px-4 py-10 text-center text-sm text-stone-500"
+        data-status-block="empty-agents"
+      >
+        <p className="font-medium text-stone-700">{emptyTitle}</p>
+        {emptyReason ? <p className="mt-1 text-xs text-stone-500">{emptyReason}</p> : null}
       </div>
     );
   }
 
   return (
     <div className="overflow-hidden border border-stone-200 bg-white/90">
-      <div className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_1fr_1fr_0.6fr] border-b border-stone-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+      <div className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] border-b border-stone-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
         <span>Agent</span>
         <span>Protocol</span>
         <span>Platform</span>
         <span>Status</span>
+        <span>Liveness</span>
         <span>Last Heartbeat</span>
         <span>Capabilities</span>
         <span className="text-right">Action</span>
@@ -58,7 +73,11 @@ export function AgentRegistryTable({
       {agents.map((agent) => (
         <div
           key={agent.id}
-          className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_1fr_1fr_0.6fr] items-center border-b border-stone-200 px-3 py-3 text-sm last:border-b-0 hover:bg-stone-100"
+          className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] items-center border-b border-stone-200 px-3 py-3 text-sm last:border-b-0 hover:bg-stone-100"
+          data-agent-id={agent.id}
+          data-agent-protocol={agent.protocol}
+          data-agent-status={agent.status}
+          data-agent-liveness={agent.liveness?.state ?? "unknown"}
         >
           <button
             className="min-w-0 text-left"
@@ -79,6 +98,9 @@ export function AgentRegistryTable({
           </div>
           <span className="text-stone-600">{PLATFORM_LABELS[agent.platform] ?? agent.platform}</span>
           <span style={{ color: STATUS_COLORS[agent.status] }}>{agent.status}</span>
+          <div className="flex">
+            {agent.liveness ? <AgentLivenessBadge observation={agent.liveness} /> : <span className="text-xs text-stone-500">unknown</span>}
+          </div>
           <span className="text-xs text-stone-500">{formatHeartbeat(agent.lastHeartbeat)}</span>
           <div className="flex min-w-0 flex-wrap gap-1">
             {agent.capabilities.slice(0, 2).map((capability) => (
