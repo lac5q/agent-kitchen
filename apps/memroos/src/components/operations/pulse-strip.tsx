@@ -74,6 +74,7 @@ export function PulseStrip({ filters }: PulseStripProps) {
   const metrics = noc.data?.metrics;
   const envelopes = {
     memoryRows: metrics?.memoryRows,
+    hiveActions: metrics?.hiveActions,
     activeDispatches: metrics?.activeDispatches,
     failedWork: metrics?.failedWork,
     governanceEvents: metrics?.governanceEvents,
@@ -180,10 +181,17 @@ export function PulseStrip({ filters }: PulseStripProps) {
   }> = [
     {
       label: "Hive actions (window)",
-      env: envelopes.memoryRows,
+      // Round 4 [F1]: bind to the hiveActions envelope ONLY. When the
+      // backend stops exposing that envelope, we render the disclosed
+      // subline instead of silently swapping in memoryRows — that was
+      // the original bug that mislabeled memory telemetry as hive
+      // activity.
+      env: envelopes.hiveActions,
       color: NOC.ink,
-      spark: actions.slice(0, 12).reverse().map((_, i) => i + 1),
-      subline: `Memory rows counted for window=${filters.window}, workspace=${filters.workspace}`,
+      spark: actions.length > 0 ? actions.slice(-12).map((a) => (a.action_type === "error" ? 0 : 1)) : [],
+      subline: envelopes.hiveActions
+        ? undefined
+        : `Hive actions card; backing /api/hive envelope not yet supplied. ${actions.length} recent rows from /api/hive?limit=200.`,
     },
     {
       label: "Active dispatches",

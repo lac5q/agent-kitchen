@@ -185,3 +185,44 @@ describe("NOC actions", () => {
     expect(screen.getByText(/4 visible/i)).toBeInTheDocument();
   });
 });
+
+
+
+describe("Round 4 blocking fixes — Seal drilldown navigation", () => {
+  it("[F2] /seal drilldown renders a plain anchor with /seal href (GET-only navigation)", () => {
+    // Round 4 [F2]: the SEAL proposals link must use a plain <a>
+    // tag with href="/seal" so the browser performs a full GET
+    // navigation. Previous <Link href> behaviour could stall the
+    // click in production (the request fired but the URL never
+    // updated). We assert both the role/link affordance and the
+    // data attribute that PillBtn emits to mark anchor navigation.
+    render(<SkillsLifecycle />);
+
+    const sealLink = screen.getByRole("link", { name: /seal proposals/i });
+    expect(sealLink).toHaveAttribute("href", "/seal");
+    expect(sealLink.getAttribute("data-navigation-element")).toBe("anchor");
+    expect(sealLink.getAttribute("data-pill-href")).toBe("/seal");
+    // Anchor must be a real <a> tag (not a <button> or <Link>
+    // wrapper), so we can rely on browser-native navigation.
+    expect(sealLink.tagName.toLowerCase()).toBe("a");
+  });
+
+  it("[F2] every NOC drilldown Pill renders an anchor (no Link dependency)", () => {
+    // Cross-check: the EfficiencySignals, ModelUtility, and
+    // SkillsLifecycle drilldown PillBtns must all use plain anchors
+    // so get-only click navigation is reliable for each route.
+    render(
+      <>
+        <EfficiencySignals />
+        <ModelUtility />
+        <SkillsLifecycle />
+      </>
+    );
+
+    for (const label of [/open telemetry plan/i, /re-route/i, /seal proposals/i, /promote candidate/i]) {
+      const link = screen.getByRole("link", { name: label });
+      expect(link.getAttribute("data-navigation-element")).toBe("anchor");
+      expect(link.tagName.toLowerCase()).toBe("a");
+    }
+  });
+});

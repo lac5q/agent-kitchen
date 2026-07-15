@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   describeMetricEnvelope,
   type MetricEnvelope,
@@ -276,10 +275,20 @@ export function PillBtn({
   };
 
   if (href) {
+    // Round 4 [F2]: Use a plain anchor for navigation. The previous
+    // <Link href> approach could stall the navigation in production
+    // (observed for /seal — the click registered but the URL never
+    // updated). A plain anchor guarantees GET-only navigation via the
+    // browser, with no client-side route hydration required.
     return (
-      <Link href={href} style={style}>
+      <a
+        href={href}
+        style={style}
+        data-navigation-element="anchor"
+        data-pill-href={href}
+      >
         {children}
-      </Link>
+      </a>
     );
   }
 

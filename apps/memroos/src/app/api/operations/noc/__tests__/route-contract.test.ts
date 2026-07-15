@@ -364,3 +364,110 @@ describe("Round 2 blocking fixes", () => {
     expect(active.source).toBe("sqlite://hive_delegations");
   });
 });
+
+
+
+describe("Round 4 blocking fixes — operations/NOC", () => {
+  beforeEach(() => {
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+  });
+
+  afterEach(async () => {
+    const { closeDb } = await loadRoute();
+    closeDb();
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    delete process.env.SQLITE_DB_PATH;
+    vi.resetModules();
+  });
+
+  it("[F1] /api/operations/noc exposes a hiveActions envelope sourced from /api/hive", async () => {
+    // The Hive Actions card on Operations NOC must reconcile with this
+    // envelope: its label and provenance point to /api/hive, NOT to
+    // sqlite://messages. The envelope must honor the selected window
+    // and workspace and observe its own freshness (not borrow
+    // observedAt from the messages table).
+    const { GET } = await loadRoute();
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=all")
+    );
+    const body = await response.json();
+    expect(isMetricEnvelope(body.metrics.hiveActions)).toBe(true);
+    const env = body.metrics.hiveActions as MetricEnvelope;
+    expect(env.source).toBe("/api/hive");
+    // Round 4 [F1]: hiveActions SQL applies window + workspace, so the
+    // envelope MUST advertise the same scope the caller requested.
+    expect(env.scope).toEqual({ window: "24h", workspace: "all" });
+    expect(env.status).toBe("empty");
+    expect(env.value).toBeNull();
+    expect(env.observedAt).toBeNull();
+    expect(String(env.reason ?? "")).toMatch(/hive/i);
+  });
+
+  it("[F1] hiveActions is live with /api/hive provenance when hive_actions rows exist", async () => {
+    // Insert one hive_actions row inside the window and verify the
+    // envelope reports it as live (value=1) with the right scope and
+    // a real observedAt timestamp.
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const ts = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO hive_actions(agent_id, action_type, summary, artifacts, session_id, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run("codex", "continue", "round4-live", null, null, ts);
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=local")
+    );
+    const body = await response.json();
+    const env = body.metrics.hiveActions as MetricEnvelope;
+    expect(env.status).toBe("live");
+    expect(env.value).toBe(1);
+    expect(env.source).toBe("/api/hive");
+    expect(env.scope).toEqual({ window: "24h", workspace: "local" });
+    expect(env.observedAt).toBe(ts);
+  });
+
+  it("[F1] hiveActions does not borrow observedAt from messages or other envelopes", async () => {
+    // Insert a hive_actions row with a known timestamp but ONLY a
+    // memory rows row (no hive_actions value). The hiveActions probe
+    // must reflect its own source's freshness, not reuse message
+    // timestamps.
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    // Use the current time (within the 24h window) so the rows match the
+    // selected scope filter. The test asserts the observedAt fields are
+    // independent per source.
+    const hiveTs = new Date().toISOString();
+    const messageTs = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    db.prepare(
+      `INSERT INTO hive_actions(agent_id, action_type, summary, artifacts, session_id, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run("codex", "trigger", "round4-isolation", null, null, hiveTs);
+    db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy, request_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "round4-session",
+      "round4-project",
+      "codex",
+      "user",
+      "isolated",
+      messageTs,
+      "internal",
+      "indexable",
+      "round4-req"
+    );
+    const response = await GET(
+      new Request("http://localhost/api/operations/noc?window=24h&workspace=local")
+    );
+    const body = await response.json();
+    const hive = body.metrics.hiveActions as MetricEnvelope;
+    const mem = body.metrics.memoryRows as MetricEnvelope;
+    // hive observedAt must come from its own source, NOT the message.
+    expect(hive.observedAt).toBe(hiveTs);
+    expect(mem.observedAt).toBe(messageTs);
+    expect(hive.observedAt).not.toBe(mem.observedAt);
+    expect(hive.source).toBe("/api/hive");
+    expect(mem.source).toBe("sqlite://messages");
+  });
+});

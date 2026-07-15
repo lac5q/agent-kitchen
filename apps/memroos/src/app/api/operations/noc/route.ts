@@ -224,6 +224,17 @@ function efficiencyWorkspaceClause(workspace: NocWorkspace) {
   return "";
 }
 
+function hiveActionsWorkspaceClause(workspace: NocWorkspace) {
+  const quotedIds = LOCAL_NOC_AGENT_IDS.map((agentId) => `'${agentId}'`).join(",");
+  if (workspace === "local") {
+    return `AND a.agent_id IN (${quotedIds})`;
+  }
+  if (workspace === "remote") {
+    return `AND a.agent_id NOT IN (${quotedIds})`;
+  }
+  return "";
+}
+
 function panel(status: PanelStatus, source: string, lastUpdated: string | null, warnings: string[] = []) {
   return { status, source, lastUpdated, warnings };
 }
@@ -592,6 +603,12 @@ async function buildNocResponse(request: Request) {
     db,
     "SELECT COUNT(*) AS value FROM hive_delegations WHERE status = 'failed'"
   );
+  const hawkws = hiveActionsWorkspaceClause(workspace);
+  const hiveActions = safeScalar(
+    db,
+    `SELECT COUNT(*) AS value FROM hive_actions a WHERE a.timestamp >= ? ${hawkws}`,
+    [since]
+  );
   const governanceEvents = safeScalar(
     db,
     "SELECT COUNT(*) AS value FROM audit_entries WHERE created_at >= ?",
@@ -629,6 +646,11 @@ async function buildNocResponse(request: Request) {
     db,
     "SELECT MAX(updated_at) AS value FROM hive_delegations WHERE status = 'failed'"
   );
+  const latestHiveActions = safeLatest(
+    db,
+    `SELECT MAX(timestamp) AS value FROM hive_actions a WHERE a.timestamp >= ? ${hawkws}`,
+    [since]
+  );
   const latestSkills = safeLatest(
     db,
     "SELECT MAX(updated_at) AS value FROM skill_registry WHERE dispatch_status = 'enabled'"
@@ -644,6 +666,16 @@ async function buildNocResponse(request: Request) {
     reason: lastMessage.ok
       ? "Direct memory rows counted from SQLite messages for the selected window and workspace"
       : lastMessage.error ?? "Failed to query SQLite messages",
+  });
+  // Round 4 [F1]: the Hive Actions card must show a hive_actions
+  // metric, NOT memoryRows. We count hive_actions rows directly so
+  // the source label is `/api/hive` (which surfaces hive_actions).
+  // observedAt comes from the hive_actions probe, not messages.
+  const hiveActionsEnvelope = envelopeFromScalar(hiveActions, "/api/hive", scope, {
+    latestAt: latestHiveActions.ok ? latestHiveActions.latestAt : null,
+    reason: latestHiveActions.ok
+      ? "Hive actions counted from hive_actions via /api/hive for the selected window and workspace"
+      : latestHiveActions.error ?? "Failed to query hive_actions",
   });
   // Finding (1): governanceEvents queries audit_entries only by window —
   // it does NOT partition by workspace. The envelope must disclose its
@@ -704,6 +736,7 @@ async function buildNocResponse(request: Request) {
     generatedAt: new Date().toISOString(),
     metrics: {
       memoryRows: memoryRowsEnvelope,
+      hiveActions: hiveActionsEnvelope,
       activeDispatches: activeDispatchesEnvelope,
       failedWork: failedWorkEnvelope,
       governanceEvents: governanceEventsEnvelope,

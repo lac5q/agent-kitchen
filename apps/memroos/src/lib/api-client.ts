@@ -180,6 +180,7 @@ export interface OperationsNocResponse {
   generatedAt: string;
   metrics: {
     memoryRows: MetricEnvelope<number>;
+    hiveActions: MetricEnvelope<number>;
     activeDispatches: MetricEnvelope<number>;
     failedWork: MetricEnvelope<number>;
     governanceEvents: MetricEnvelope<number>;
