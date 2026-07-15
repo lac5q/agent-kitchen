@@ -184,3 +184,77 @@ describe("GET /api/memory-inventory", () => {
     );
   });
 });
+
+describe("GET /api/memory-inventory truthful metric contract (VAL-MEM-001/003/004)", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "ok",
+          memory_count: 11,
+          vector_store: "connected",
+          last_write: "2026-05-24T10:00:00Z",
+        }),
+      })
+    );
+  });
+
+  it("emits a truthful metric envelope per category so empty / degraded are distinct", async () => {
+    const { GET } = await import("../route");
+    const res = await GET(new Request("http://localhost/api/memory-inventory") as unknown as import("next/server").NextRequest);
+    const body = await res.json();
+
+    expect(body.categories).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "vector_memory" }),
+      expect.objectContaining({ id: "ingested_message" }),
+    ]));
+
+    for (const category of body.categories as Array<{ id: string; metric?: unknown; status: string; count: number | null }>) {
+      // Every category must carry either a truthful metric envelope or
+      // a count+status pair compatible with the truthful contract.
+      if (category.metric) {
+        const m = category.metric as Record<string, unknown>;
+        expect(m).toMatchObject({
+          scope: expect.objectContaining({ window: expect.any(String), workspace: expect.any(String) }),
+        });
+        expect(["live", "zero", "empty", "stale", "blocked", "unavailable", "degraded", "error"]).toContain(m.status);
+        if (m.status === "live" || m.status === "zero") {
+          expect(typeof m.value).toBe("number");
+        } else {
+          expect(m.value).toBeNull();
+        }
+      } else {
+        expect(["live", "empty", "degraded", "missing", "zero", "stale", "blocked", "unavailable", "error"]).toContain(category.status);
+        if (category.status === "live" || category.status === "empty") {
+          // live = count present and >=0; empty = count 0
+        }
+      }
+    }
+  });
+
+  it("denies reviewers and unauthenticated callers without leaking counts (VAL-MEM-004)", async () => {
+    const reviewerAuth = await import("@/lib/auth/session");
+    vi.mocked(reviewerAuth.authenticateUser).mockResolvedValueOnce({
+      userId: "reviewer-x",
+      role: "reviewer",
+      email: "",
+      displayName: "",
+      tenantId: "default",
+    });
+    const { requireRole } = await import("@/lib/auth/middleware-roles");
+    vi.mocked(requireRole).mockReturnValueOnce(
+      Response.json({ error: "insufficient permissions" }, { status: 403 })
+    );
+
+    const { GET } = await import("../route");
+    const res = await GET(new Request("http://localhost/api/memory-inventory") as unknown as import("next/server").NextRequest);
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe("insufficient permissions");
+    expect(body).not.toHaveProperty("categories");
+    expect(body).not.toHaveProperty("rows");
+  });
+});

@@ -68,8 +68,13 @@ export interface MetricEnvelopeInput<T = number> {
  */
 export function metricEnvelope<T = number>(input: MetricEnvelopeInput<T>): MetricEnvelope<T> {
   const status = input.status;
-  const isLive = status === "live" || status === "zero";
-  const value = isLive ? input.value : null;
+  // Carry the supplied value only when the status represents a *successful*
+  // measurement or a known zero result. Non-success statuses
+  // (blocked, error, empty, stale, degraded, unavailable) collapse value
+  // to null so adapters cannot accidentally display a number for a
+  // failed or non-measured source.
+  const carriesValue = status === "live" || status === "zero";
+  const value = carriesValue ? input.value : null;
 
   const reason =
     typeof input.reason === "string" && input.reason.length > 0

@@ -210,6 +210,16 @@ export interface MultiMemorySearchTier {
   ok: boolean;
   count: number;
   error?: string;
+  /** Truthful metric envelope for the tier (status, source, observedAt, scope, reason). */
+  metric?: {
+    value: number | null;
+    status: string;
+    source: string;
+    observedAt: string | null;
+    freshnessMs: number | null;
+    scope: { window: string; workspace: string };
+    reason: string | null;
+  };
 }
 
 export interface MultiMemorySearchResponse {
@@ -228,7 +238,25 @@ export type MemoryInventoryCategoryId =
   | "graph_fact"
   | "knowledge_file";
 
-export type MemoryInventoryStatus = "live" | "empty" | "degraded" | "missing";
+export type MemoryInventoryStatus =
+  | "live"
+  | "zero"
+  | "empty"
+  | "stale"
+  | "blocked"
+  | "unavailable"
+  | "degraded"
+  | "error";
+
+export interface TruthfulMetricEnvelope {
+  value: number | null;
+  status: MemoryInventoryStatus | string;
+  source: string;
+  observedAt: string | null;
+  freshnessMs: number | null;
+  scope: { window: string; workspace: string };
+  reason: string | null;
+}
 
 export interface MemoryInventoryCategory {
   id: MemoryInventoryCategoryId;
@@ -240,6 +268,7 @@ export interface MemoryInventoryCategory {
   status: MemoryInventoryStatus;
   lastUpdated: string | null;
   warnings: string[];
+  metric?: TruthfulMetricEnvelope;
 }
 
 export interface MemoryInventoryRow {
