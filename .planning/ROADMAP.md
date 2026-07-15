@@ -2410,6 +2410,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 154. Probe Timeout Honesty | 0/1 | Pending | — |
-| 155. Mem0 Hang Immunity | 0/1 | Pending | — |
-| 156. Strict-Gate Diagnostics + Path-Scoped Disk | 0/1 | Pending | — |
+| 154. Probe Timeout Honesty | 1/1 | Complete | 2026-07-15 |
+| 155. Mem0 Hang Immunity | 1/1 | Complete | 2026-07-15 |
+| 156. Strict-Gate Diagnostics + Path-Scoped Disk | 1/1 | Complete | 2026-07-15 |

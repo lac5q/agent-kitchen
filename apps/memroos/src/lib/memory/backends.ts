@@ -92,20 +92,42 @@ async function _checkVectorHealthDirect(): Promise<MemoryTierHealth> {
     const queued = typeof body.queue?.queued === "number" ? body.queue.queued : 0;
     const vectorStore = typeof body.vector_store === "string" ? body.vector_store : "unknown";
     const runtime = body.memory_runtime as { status?: string; error?: string } | undefined;
+    const disk = body.disk as {
+      critical?: boolean;
+      warning?: boolean;
+      home_advisory?: { critical?: boolean; percent_used?: number };
+    } | undefined;
 
-    if (body.status === "degraded") details.push("mem0 reports degraded");
-    if (queued > 0) details.push(`${queued} queued memory saves`);
-    if (vectorStore !== "connected") {
-      details.push(`vector store ${vectorStore}`);
+    const vectorOk = vectorStore === "connected";
+    const runtimeOk = !runtime?.status || runtime.status === "available";
+    const pathDiskCritical = Boolean(disk?.critical);
+    const homeAdvisoryCritical = Boolean(disk?.home_advisory?.critical);
+
+    if (!vectorOk) details.push(`vector store ${vectorStore}`);
+    if (!runtimeOk) {
+      details.push(`runtime ${runtime?.status ?? "unavailable"}${runtime?.error ? `: ${runtime.error}` : ""}`);
     }
-    if (runtime?.status && runtime.status !== "available") {
-      details.push(`runtime ${runtime.status}${runtime.error ? `: ${runtime.error}` : ""}`);
+    if (queued > 0) details.push(`${queued} queued memory saves`);
+    if (pathDiskCritical) details.push("mem0 path-scoped disk critical");
+    else if (disk?.warning) details.push("mem0 disk warning");
+    if (homeAdvisoryCritical) {
+      details.push(`home disk advisory critical (${disk?.home_advisory?.percent_used ?? "?"}%)`);
+    }
+
+    // Fail closed on vector/runtime. Never map home df% alone → vector=down.
+    let status: MemoryTierHealth["status"];
+    if (!vectorOk || !runtimeOk) {
+      status = "down";
+    } else if (queued > 0 || pathDiskCritical) {
+      status = "degraded";
+    } else {
+      status = "up";
     }
 
     return {
       tier: "vector",
       backend: "mem0-qdrant",
-      status: details.length > 0 ? "degraded" : "up",
+      status,
       detail: details.length > 0 ? details.join("; ") : undefined,
     };
   } catch (error) {

@@ -44,7 +44,7 @@ def test_health_uses_cached_qdrant_status(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "QDRANT_AVAILABLE", True)
     monkeypatch.setattr(module, "QUEUE_DB_PATH", tmp_path / "queue.db")
     monkeypatch.setattr(module, "check_qdrant_vector_store", fake_qdrant)
-    monkeypatch.setattr(module, "check_disk_space", lambda: {"critical": False})
+    monkeypatch.setattr(module, "check_disk_space", lambda *args, **kwargs: {"critical": False})
     monkeypatch.setattr(module, "check_sqlite_db", lambda: {"status": "healthy"})
     monkeypatch.setattr(module, "check_mem0_runtime", lambda: {"status": "available"})
     monkeypatch.setattr(

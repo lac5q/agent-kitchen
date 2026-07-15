@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v8.12
 milestone_name: MemRoOS MCP Memory Gate Resilience (Codex)
-status: in_progress
-stopped_at: Phase 154 planning — Beastmode Director kickoff 2026-07-15
-last_updated: "2026-07-15T20:45:27Z"
+status: complete
+stopped_at: Phase 156 complete — v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15)
+last_updated: "2026-07-15T20:55:00Z"
 progress:
   total_phases: 73
   completed_phases: 50
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 154 in progress (probe timeout honesty)
+Phase: 156 complete — v8.12 MCP Memory Gate Resilience COMPLETE
 Plan: GATE-RESILE-01..03
 Status: Beastmode Director + GSD orchestrator active on branch `beastmode/v8.12-mcp-memory-gate-resilience`
 Locked: Keep MEMROOS_REQUIRE_SERVER_MEMORY=1; do not fix via allow-degraded.

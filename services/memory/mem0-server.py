@@ -483,7 +483,7 @@ def vector_store_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def check_disk_space(path: str = "~") -> dict:
-    """Check disk space and return status.
+    """Check disk space for a single path and return status.
 
     Defaults are sized for local Docker Desktop volumes. The old absolute
     thresholds (critical <10GB, warning <20GB) made a 23.5GB Docker disk look
@@ -498,6 +498,7 @@ def check_disk_space(path: str = "~") -> dict:
         critical_percent = float(os.environ.get("MEM0_DISK_CRITICAL_PERCENT", "95"))
         warning_percent = float(os.environ.get("MEM0_DISK_WARNING_PERCENT", "85"))
         return {
+            "path": os.path.expanduser(path),
             "total_gb": round(usage.total / (1024**3), 1),
             "used_gb": round(usage.used / (1024**3), 1),
             "free_gb": round(gb_free, 1),
@@ -506,7 +507,45 @@ def check_disk_space(path: str = "~") -> dict:
             "warning": percent_used > warning_percent or gb_free < warning_free_gb,
         }
     except Exception as e:
-        return {"error": str(e), "critical": True}
+        return {"path": path, "error": str(e), "critical": True}
+
+
+def mem0_disk_paths() -> list[str]:
+    """Paths whose free space actually gates Mem0 durability (not home alone)."""
+    paths = [
+        str(Path(QUEUE_DB_PATH).expanduser().resolve().parent),
+        str(LOG_DIR.resolve()),
+    ]
+    # Dedupe while preserving order (home may share the same mount — still path-scoped).
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        ordered.append(path)
+    return ordered
+
+
+def check_mem0_disk_space() -> dict:
+    """Aggregate path-scoped disk status for Mem0-relevant paths.
+
+    Home `df%` alone must not be treated as a vector-store failure when Qdrant is
+    remote. Critical/warning flags here reflect QUEUE_DB / LOG_DIR mounts only.
+    An advisory home sample is included for operators when it differs.
+    """
+    scoped = [check_disk_space(path) for path in mem0_disk_paths()]
+    home = check_disk_space("~")
+    critical = any(entry.get("critical") for entry in scoped)
+    warning = any(entry.get("warning") for entry in scoped) or bool(home.get("warning"))
+    return {
+        "critical": critical,
+        "warning": warning,
+        "paths": scoped,
+        "home_advisory": home,
+        # Backward-compatible flat fields from the worst scoped path (or first).
+        **(next((e for e in scoped if e.get("critical")), scoped[0] if scoped else home)),
+    }
 
 
 def check_sqlite_db(db_path: str | None = None) -> dict:
@@ -833,7 +872,7 @@ def health():
         # Unknown provider — assume healthy if no exception thrown during init
         vector_status = "unknown"
 
-    disk_status = check_disk_space()
+    disk_status = check_mem0_disk_space()
     sqlite_status = check_sqlite_db()
     try:
         from mem0_queue import Mem0Queue
@@ -842,7 +881,7 @@ def health():
     except Exception as exc:
         queue_status = {"status": "error", "error": str(exc), "queued": None}
 
-    # Log warnings for concerning states
+    # Log warnings for concerning states (path-scoped critical only — not home advisory alone)
     if disk_status.get("critical"):
         log_failure("disk_critical", disk_status)
     elif disk_status.get("warning"):
@@ -856,6 +895,8 @@ def health():
 
     queued_count = queue_status.get("queued")
     queue_ok = queued_count in (0, None) and queue_status.get("status") != "error"
+    # Path-scoped disk critical can degrade overall health, but vector_store stays
+    # independent — home advisory alone never flips is_ok via disk_status.critical.
     is_ok = (
         runtime_status.get("status") == "available"
         and vector_status == "connected"
@@ -1000,7 +1041,7 @@ async def _qdrant_health_checker():
             else:
                 qdrant_ok = True
 
-            disk_status = await asyncio.to_thread(check_disk_space)
+            disk_status = await asyncio.to_thread(check_mem0_disk_space)
             disk_ok = not disk_status.get("critical", False)
 
             if qdrant_ok and disk_ok:
