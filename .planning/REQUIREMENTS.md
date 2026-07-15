@@ -516,3 +516,18 @@
 | URECALL-05 | 153 | Done |
 | URECALL-06 | 153 | Done |
 
+
+## v8.12 MemRoOS MCP Memory Gate Resilience (Codex) — 2026-07-15
+
+**Created:** 2026-07-15T20:45:27Z  
+**Updated:** 2026-07-15T20:45:27Z  
+**Version:** 2026-07-15.1  
+**Sources:** content/research/memroos-mcp-tools-unavailable-codex-session-2026-07-05.md; operator probe timings (3s abort vs 9–31s Mem0 /health)
+
+| ID | Requirement | Phase | Status |
+|----|-------------|-------|--------|
+| GATE-RESILE-01 | Mem0 health probe default timeout 15s via backends.ts (health route uses it); configurable `MEM0_HEALTH_TIMEOUT_MS`; tests cover timeout honesty | 154 | pending |
+| GATE-RESILE-02 | Remove Mem0 self-HTTP health loop; keep/strengthen Qdrant probe cache; optional `/livez`; healthcheck.sh auto-restart hung Mem0 with cooldown | 155 | pending |
+| GATE-RESILE-03 | Strict-gate diagnostics include tier detail; path-scoped disk so home df% alone does not map to vector=down | 156 | pending |
+
+**Locked:** Keep `MEMROOS_REQUIRE_SERVER_MEMORY=1`. Do not fix via allow-degraded or unsetting strict.

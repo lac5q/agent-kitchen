@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.11
-milestone_name: Unified Meeting Memory
-status: complete
-stopped_at: Phase 153 verified (2026-07-14) — v8.11 COMPLETE
-last_updated: "2026-07-14T19:45:00.000Z"
+milestone: v8.12
+milestone_name: MemRoOS MCP Memory Gate Resilience (Codex)
+status: in_progress
+stopped_at: Phase 154 planning — Beastmode Director kickoff 2026-07-15
+last_updated: "2026-07-15T20:45:27Z"
 progress:
-  total_phases: 70
+  total_phases: 73
   completed_phases: 50
-  total_plans: 78
+  total_plans: 81
   completed_plans: 93
   percent: 71
 ---
@@ -17,23 +17,24 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
+See: .planning/PROJECT.md
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v8.11 Unified Meeting Memory COMPLETE (Phases 151-153). Parallel candidate remains v8.6 Skill Trust Chain (148-150).
+**Current focus:** v8.12 MemRoOS MCP Memory Gate Resilience (Codex) — Phases 154–156.
 
 ## Current Position
 
-Phase: 153 complete, v8.11 milestone COMPLETE
-Plan: MEETREL-01..04 + URECALL-01..06 shipped
-Status: v8.11 Unified Meeting Memory COMPLETE; v8.5 COMPLETE; v8.6 Skill Trust Chain remains a separate track
+Phase: 154 in progress (probe timeout honesty)
+Plan: GATE-RESILE-01..03
+Status: Beastmode Director + GSD orchestrator active on branch `beastmode/v8.12-mcp-memory-gate-resilience`
+Locked: Keep MEMROOS_REQUIRE_SERVER_MEMORY=1; do not fix via allow-degraded.
 
 ## Session Continuity
 
-Last session: 2026-07-14T19:45:00.000Z
-Stopped at: Phase 153 verified; v8.11 COMPLETE.
-Resume file: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`
-Next action: Optional operator re-ingest for id-based filenames; or resume v8.6 Skill Trust Chain planning.
+Last session: 2026-07-15T20:45:27Z
+Stopped at: Milestone kickoff + Phase 154 plan authored.
+Resume file: `.planning/milestones/v8.12-mcp-memory-gate-resilience-KICKOFF.md`
+Next action: Execute Phase 154 via MiniMax Worker → Grok Watcher → atomic commit.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
