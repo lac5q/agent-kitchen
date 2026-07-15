@@ -6,7 +6,7 @@ import { KpiTimelinePanel } from "@/components/business-ops/kpi-timeline-panel";
 import { useAgents, useEvalConfig } from "@/lib/api-client";
 import { resolveFinanceTerminology } from "@/lib/finance-reconciliation/terminology";
 import { Card, PageHeader } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
 const DATE_RANGES = [
   { label: "Last 24 hours", value: "1", days: 1 },
@@ -29,9 +29,10 @@ export default function BusinessOpsPage() {
   const selectedRange = DATE_RANGES.find((range) => range.value === rangeDays) ?? DATE_RANGES[2];
   const since = new Date(new Date(rangeAnchorIso).getTime() - selectedRange.days * 24 * 60 * 60 * 1000).toISOString();
   const dateRange = { since };
+  const scopeLabel = `since=${since.slice(0, 10)}, agentId=${selectedAgentId ?? "all"}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-business-ops-scope={scopeLabel}>
       <PageHeader
         eyebrow="Operations"
         title={title}
@@ -42,7 +43,7 @@ export default function BusinessOpsPage() {
         }
       />
 
-      <Card className="flex flex-wrap items-center gap-3" pad="sm">
+      <Card className="flex flex-wrap items-center gap-3" pad="sm" data-business-ops-filter-card>
         <label className="text-sm font-semibold" style={{ color: NOC.ink }} htmlFor="agent-select">
           Agent
         </label>
@@ -52,10 +53,11 @@ export default function BusinessOpsPage() {
           style={{ background: NOC.paper, border: `1px solid ${NOC.ruleStrong}`, color: NOC.ink }}
           value={selectedAgentId ?? ""}
           onChange={(e) => setSelectedAgentId(e.target.value || undefined)}
+          data-business-ops-agent-select
         >
           <option value="">All agents</option>
           {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
+            <option key={agent.id} value={agent.id} data-business-ops-agent-option={agent.id}>
               {agent.name ?? agent.id}
             </option>
           ))}
@@ -69,21 +71,26 @@ export default function BusinessOpsPage() {
           style={{ background: NOC.paper, border: `1px solid ${NOC.ruleStrong}`, color: NOC.ink }}
           value={rangeDays}
           onChange={(e) => setRangeDays(e.target.value as typeof rangeDays)}
+          data-business-ops-date-select
         >
           {DATE_RANGES.map((range) => (
-            <option key={range.value} value={range.value}>
+            <option key={range.value} value={range.value} data-business-ops-date-option={range.value}>
               {range.label}
             </option>
           ))}
         </select>
-        <span className="text-xs" style={{ color: NOC.soft }}>
-          Timeline and adapter status use this window.
+        <span
+          className="text-xs"
+          style={{ color: NOC.soft, fontFamily: NOC_FONT_MONO }}
+          data-business-ops-filter-scope
+        >
+          scope: {scopeLabel} · W timeline and adapter status use this window.
         </span>
       </Card>
 
       <KpiTimelinePanel agentId={selectedAgentId} dateRange={dateRange} />
 
-      <AdapterStatusPanel dateRange={dateRange} />
+      <AdapterStatusPanel agentId={selectedAgentId} dateRange={dateRange} />
     </div>
   );
 }
