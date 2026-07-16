@@ -2,8 +2,10 @@
 
 **Created:** 2026-07-16  
 **Updated:** 2026-07-16  
-**Version:** 2026-07-16.1  
+**Version:** 2026-07-16.2  
 **Source:** `.planning/goals/2026-07-16-hermes-dual-mode-memory.md`, Hermes memory-provider plugin API  
+
+**Package options index:** [package-options-embeddings-hermes-memory.md](../package-options-embeddings-hermes-memory.md) (embeddings off / Ollama / Voyage planned + Hermes dual-mode matrix)  
 
 ## Why this exists
 

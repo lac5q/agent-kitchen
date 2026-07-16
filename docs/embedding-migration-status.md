@@ -1,8 +1,14 @@
 # Embedding Migration Status Report
 
 **Date**: 2026-05-16  
+**Updated**: 2026-07-16 — package options matrix added (Voyage planned, not shipped)  
 **Status**: COMPLETE - mem0 uses local Ollama for LLM + embeddings  
-**Cost**: Local CPU/GPU only vs Gemini quota/billing
+**Cost**: Local CPU/GPU only vs Gemini quota/billing  
+
+**Current package options (embeddings + Hermes memory):** see
+[`docs/package-options-embeddings-hermes-memory.md`](./package-options-embeddings-hermes-memory.md).
+Default app embedding gate is `MEMROOS_EMBEDDING_PROVIDER=null` (off) or `ollama`
+(local). Voyage cloud is documented as a future option only.
 
 ## 2026-05-16 Update
 

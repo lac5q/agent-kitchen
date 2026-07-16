@@ -4,6 +4,9 @@ MemroOS supports multiple operating profiles so teams can start locally and grow
 
 Profiles live in `config/operating-profiles.json` and are selected with `MEMROOS_A2A_PROFILE`.
 
+**Related package options** (embeddings off / local Ollama / Voyage planned; Hermes dual-mode memory):
+[`docs/package-options-embeddings-hermes-memory.md`](./package-options-embeddings-hermes-memory.md).
+
 ## Quick Profile Table
 
 | Profile | Best for | Network | Auth expectation |
