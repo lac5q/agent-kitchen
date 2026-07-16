@@ -76,7 +76,7 @@ completed: 2026-07-16
 3. **Task 3: Operator-stub installer** — `9e3ec14` (feat)
 4. **Task 4: First-day verifier + handoff** — `251bd0d` (feat)
 
-**Plan metadata:** (pending docs commit)
+**Plan metadata:** `00cd433` (docs: complete plan)
 
 ## Files Created/Modified
 
