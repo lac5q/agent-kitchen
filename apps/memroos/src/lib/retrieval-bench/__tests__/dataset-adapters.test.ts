@@ -18,6 +18,7 @@ import {
   type LongMemEvalRawSample,
 } from "../adapters/longmemeval";
 import { loadSyntheticSmoke } from "../adapters/synthetic";
+import { resolveFromRepoRoot } from "@/lib/paths";
 
 describe("LoCoMo dataset adapter (VAL-RETR-003, VAL-RETR-004)", () => {
   it("preserves session/turn order and evidence spans", () => {
@@ -147,18 +148,13 @@ describe("LongMemEval dataset adapter (VAL-RETR-003, VAL-RETR-004)", () => {
   });
 });
 
+const FIXTURES_DIR = resolveFromRepoRoot("evals", "comparative-retrieval", "fixtures");
+
 describe("Synthetic dataset adapter (VAL-RETR-001)", () => {
   it("loads the smoke fixture when the path is correct", () => {
-    const fixturesDir = path.join(process.cwd(), "..", "..", "evals", "comparative-retrieval", "fixtures");
-    const r = loadSyntheticSmoke({ fixturesDir, limit: 25 });
-    if (!r.ok) {
-      // Try a few alternative paths because the test may be run from a
-      // different working directory.
-      const alt = path.resolve("/Users/lcalderon/github/memroos/evals/comparative-retrieval/fixtures");
-      const r2 = loadSyntheticSmoke({ fixturesDir: alt, limit: 25 });
-      expect(r2.ok).toBe(true);
-      return;
-    }
+    const r = loadSyntheticSmoke({ fixturesDir: FIXTURES_DIR, limit: 25 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
     expect(r.tasks?.length).toBe(25);
     expect(r.truncated).toBe(false);
   });
@@ -178,7 +174,7 @@ describe("Synthetic dataset adapter (VAL-RETR-001)", () => {
     // untouched by the load.
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bench-fixture-mut-"));
     const fixturePath = path.join(tmpDir, "memroos-public-smoke.json");
-    const sourceFixture = path.resolve("/Users/lcalderon/github/memroos/evals/comparative-retrieval/fixtures/memroos-public-smoke.json");
+    const sourceFixture = path.join(FIXTURES_DIR, "memroos-public-smoke.json");
     const original = fs.readFileSync(sourceFixture);
     fs.writeFileSync(fixturePath, original);
     const before = crypto.createHash("sha256").update(fs.readFileSync(fixturePath)).digest("hex");

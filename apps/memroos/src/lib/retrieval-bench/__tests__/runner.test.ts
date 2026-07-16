@@ -2,7 +2,6 @@
  * End-to-end runner tests (VAL-RETR-001, VAL-RETR-005, VAL-RETR-008, VAL-RETR-013).
  */
 import { describe, expect, it } from "vitest";
-import path from "node:path";
 import {
   runBenchmark,
   writeReport,
@@ -11,10 +10,9 @@ import {
 } from "../runner";
 import { canonicalOutputPath } from "../redaction";
 import { hashScopeIdentity, normalizeScopeIdentity } from "@/lib/msiq/scope-identity";
+import { resolveFromRepoRoot } from "@/lib/paths";
 
-const FIXTURES_DIR = path.resolve(
-  "/Users/lcalderon/github/memroos/evals/comparative-retrieval/fixtures",
-);
+const FIXTURES_DIR = resolveFromRepoRoot("evals", "comparative-retrieval", "fixtures");
 
 const LIVE_SCOPE = {
   tenantId: "benchmark-tenant",
