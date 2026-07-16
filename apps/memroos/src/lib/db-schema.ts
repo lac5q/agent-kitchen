@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 29;
+export const CURRENT_SCHEMA_VERSION = 30;
 
 type SchemaMigration = {
   version: number;
@@ -230,6 +230,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 29,
     name: 'federation-admitted-coordinate-ledger',
     up: applyFederationAdmittedCoordinateLedgerSchema,
+  },
+  {
+    version: 30,
+    name: 'dsar-erasure-tombstones',
+    up: applyDsarErasureTombstonesSchema,
   },
 ];
 
@@ -2197,6 +2202,36 @@ function applyFederationAdmittedCoordinateLedgerSchema(db: Database.Database): v
   } catch {
     // Existing databases already carrying the additive column are safe to re-run.
   }
+}
+
+/**
+ * Phase 127 / ENTOPS-08: DSAR right-to-delete compliance-window tombstones.
+ *
+ * Distinct from `memory_erasure_tombstones` (MEMLIFE subject erasure). This
+ * table is a non-destructive marker only — NEVER deletes audit_entries rows
+ * and must not break knowledge/memory hash chains. Full derivative purge is
+ * a later MEMLIFE milestone (`purged_at` stays null until then).
+ */
+function applyDsarErasureTombstonesSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS erasure_tombstones (
+      id                   TEXT PRIMARY KEY,
+      tenant_id            TEXT NOT NULL DEFAULT 'default-tenant',
+      entity_type          TEXT NOT NULL,
+      entity_id            TEXT NOT NULL,
+      reason               TEXT NOT NULL DEFAULT 'dsar',
+      tombstoned_by        TEXT NOT NULL,
+      tombstoned_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      scheduled_purge_at   TEXT NOT NULL,
+      purged_at            TEXT,
+      UNIQUE(tenant_id, entity_type, entity_id, reason)
+    );
+    CREATE INDEX IF NOT EXISTS erasure_tombstones_tenant
+      ON erasure_tombstones(tenant_id, tombstoned_at DESC);
+    CREATE INDEX IF NOT EXISTS erasure_tombstones_purge
+      ON erasure_tombstones(tenant_id, scheduled_purge_at)
+      WHERE purged_at IS NULL;
+  `);
 }
 
 function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {
