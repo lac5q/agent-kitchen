@@ -83,7 +83,7 @@ completed: 2026-07-16
 4. **Task 4: native-memory sink** - `eb301ce` (feat)
 5. **Task 5: ENTOPS-07 handoff append** - `3c38920` (docs)
 
-**Plan metadata:** (pending final docs commit)
+**Plan metadata:** `87b4280` (docs: complete plan)
 
 ## Files Created/Modified
 
