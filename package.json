@@ -26,6 +26,7 @@
     "install:memory-resilience": "node scripts/install-memory-resilience.mjs install",
     "setup:codex-cloud": "bash scripts/setup-codex-cloud.sh",
     "setup:cursor-cloud": "bash scripts/setup-cursor-cloud.sh",
+    "check:cursor-coding-env": "node scripts/check-cursor-coding-env.mjs",
     "test": "npm --prefix apps/memroos run test --",
     "eval:context-sources": "node scripts/run-context-source-evals.mjs",
     "eval:knowledge-save-contract": "node scripts/check-knowledge-save-contract.mjs --fixture evals/knowledge-save-contract/cases.json",
