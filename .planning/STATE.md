@@ -32,7 +32,7 @@ Status: Phase 126 Acceptance Contract met for CODE deliverables; ENTOPS-06 close
 
 Last session: 2026-07-16T20:48:12.567Z
 Stopped at: Phase 126-01 executed; code slice complete; IdP/MDM handoff documented.
-Resume file: None
+Resume file: `docs/entops-stub-handoff.md`
 Next action: Phase 127 (ENTOPS-07/08) or IdP/MDM infrastructure follow-up; optional v8.6 Skill Trust Chain.
 
 ## Roadmap Summary (v5.0 + v6.0)
