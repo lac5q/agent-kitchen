@@ -141,7 +141,7 @@ describe("memory tier routes", () => {
     expect(vector.detail).toContain("4 queued memory saves");
   });
 
-  it("reports vector memory as degraded when mem0 runtime or vector status is unknown", async () => {
+  it("reports vector memory as down (truthful) when mem0 runtime or vector status is unknown", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       Response.json({
         status: "ok",
@@ -156,7 +156,7 @@ describe("memory tier routes", () => {
     const body = await response.json();
     const vector = body.tiers.find((tier: { tier: string }) => tier.tier === "vector");
 
-    expect(vector.status).toBe("degraded");
+    expect(vector.status).toBe("down");
     expect(vector.detail).toContain("vector store unknown");
     expect(vector.detail).toContain("runtime unavailable: No module named 'mem0'");
   });
