@@ -517,7 +517,7 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
 - [x] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
 - [x] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03 (completed 2026-07-07; per-tenant vault isolation with operator-mode fail-closed guard, MCP→operator central hash-chained audit bridge, SIEM/DSAR export by user; Beastmode watcher PASS after chain-race + fail-open hardening)
 - [x] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06 (code slice completed 2026-07-16; IdP/MDM/S9/S10 remain handoff stubs — see `docs/entops-stub-handoff.md`)
-- [ ] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08
+- [x] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08 (code slice completed 2026-07-16; ENTOPS-08 closed; ENTOPS-07 operator sink shipped, per-harness wiring stubbed — see `docs/entops-stub-handoff.md`)
 
 ### Phase 124: Operator Load Proof + SLO Gate
 **Goal**: The hosted operator's capacity is proven, not assumed — a repeatable load harness gates all enterprise-readiness claims.
@@ -561,7 +561,7 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
   1. Harness auto-memory writes (Claude auto-memory, Hermes `memory add`, Codex `/memory`) route to MemroOS first, are filtered/sanitized, and replay into local files under the server-enforced budget; `directive_diff` alerts on drift and never deletes
   2. Hermes MEMORY.md retains its skills-routing layer — only the directive body is stubbed (regression-tested against Hermes routing behavior)
   3. `memroos export --flat` produces a markdown tarball + signed manifest of the org vault; per-user DSAR export (vault + audit trail) works in one action; right-to-delete tombstones via MEMLIFE semantics without breaking the audit chain
-**Plans**: 0/? planned
+**Plans**: 1/1 complete
 **UI hint**: yes
 
 ## v8.2 Team-Scale Access + Policy Plane (Phases 128-131) — PLANNED

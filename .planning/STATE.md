@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v8.11
 milestone_name: Unified Meeting Memory
 status: completed
-stopped_at: Phase 126-01 executed; code slice complete; IdP/MDM handoff documented.
-last_updated: "2026-07-16T20:48:12.591Z"
+stopped_at: Phase 127-01 executed; ENTOPS-08 closed; ENTOPS-07 sink shipped with harness stubs.
+last_updated: "2026-07-16T20:54:47.403Z"
 progress:
   total_phases: 112
-  completed_phases: 75
+  completed_phases: 76
   total_plans: 155
-  completed_plans: 134
-  percent: 67
+  completed_plans: 135
+  percent: 68
 ---
 
 # State: Memroos
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 126 complete (code slice) — ENTOPS-04/05/06 code delivered; IdP/MDM/S9/S10 still handoff
-Plan: 126-01 complete
-Status: Phase 126 Acceptance Contract met for CODE deliverables; ENTOPS-06 closed; ENTOPS-04/05 IdP+MDM remain open per `docs/entops-stub-handoff.md`. Parallel: v8.11 COMPLETE; v8.6 Skill Trust Chain remains a separate track.
+Phase: 127 complete (code slice) — ENTOPS-08 closed; ENTOPS-07 operator sink delivered; Claude/Hermes/Codex harness wiring still handoff
+Plan: 127-01 complete
+Status: Phase 127 Acceptance Contract met for CODE deliverables; ENTOPS-08 closed; ENTOPS-07 partial (sink yes / harness wiring stubbed) per `docs/entops-stub-handoff.md`. Parallel: v8.11 COMPLETE; v8.6 Skill Trust Chain remains a separate track.
 
 ## Session Continuity
 
-Last session: 2026-07-16T20:48:12.567Z
-Stopped at: Phase 126-01 executed; code slice complete; IdP/MDM handoff documented.
-Resume file: `docs/entops-stub-handoff.md`
-Next action: Phase 127 (ENTOPS-07/08) or IdP/MDM infrastructure follow-up; optional v8.6 Skill Trust Chain.
+Last session: 2026-07-16T20:54:47.378Z
+Stopped at: Phase 127-01 executed; ENTOPS-08 closed; ENTOPS-07 sink shipped with harness stubs.
+Resume file: None
+Next action: Harness wiring for ENTOPS-07 (Claude/Hermes/Codex) or IdP/MDM follow-up from Phase 126; optional v8.6 Skill Trust Chain.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
