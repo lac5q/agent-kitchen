@@ -15,7 +15,7 @@ import { A2A_HTTP_JSON_ROUTES, A2A_JSON_RPC_METHODS } from "./bindings";
 export const A2A_CONTRACT_ID = "memroos-a2a.v1";
 export const A2A_CONTRACT_HEADER = "X-Memroos-Contract";
 
-const jsonObjectSchema = z.record(z.unknown());
+const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 const jsonObjectOpenApiSchema = {
   type: "object",
@@ -137,7 +137,7 @@ const a2aSecuritySchemeSchema = z.union([
     .passthrough(),
 ]);
 
-export const a2aAgentCardSchema: z.ZodType<A2aAgentCard> = z
+export const a2aAgentCardSchema = z
   .object({
     name: z.string().min(1),
     description: z.string().min(1),
@@ -153,8 +153,8 @@ export const a2aAgentCardSchema: z.ZodType<A2aAgentCard> = z
       .passthrough(),
     defaultInputModes: z.array(z.string()),
     defaultOutputModes: z.array(z.string()),
-    securitySchemes: z.record(a2aSecuritySchemeSchema),
-    security: z.array(z.record(z.array(z.string()))),
+    securitySchemes: z.record(z.string(), a2aSecuritySchemeSchema),
+    security: z.array(z.record(z.string(), z.array(z.string()))),
     skills: z.array(a2aAgentSkillSchema),
     extensions: z
       .object({

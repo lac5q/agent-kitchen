@@ -11,7 +11,7 @@ const scorerResultSchema = z
     layer: z.enum(["l1", "l2", "l3"]),
     score: z.number(),
     detail: z.string(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 
@@ -65,7 +65,7 @@ const agentEvalTraceSchema = z
       })
       .passthrough()
       .optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 
@@ -73,7 +73,7 @@ const evalSubmitResultSchema = z
   .object({
     runId: z.string().min(1),
     w: z.number(),
-    layers: z.record(layerBreakdownSchema),
+    layers: z.record(z.string(), layerBreakdownSchema),
     proposalIds: z.array(z.string()),
     tenantId: z.string().min(1),
   })
