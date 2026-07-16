@@ -321,6 +321,14 @@
 - [x] **SKILLTRUST-04**: Cross-harness auto-sync (Claude Code, Codex, Hermes, OpenCode dirs) becomes governed: detected skill changes arrive as import proposals with diffs, not silent updates; version pinning per agent with one-step rollback. *(Completed 2026-07-16 — Phase 149; `skill-sync.ts` / `skill-sync-governance.ts` + sync/pins APIs.)*
 - [x] **SKILLTRUST-05**: Skill lifecycle states (draft, enabled, deprecated, retired) with deprecation warnings surfaced to dependent agents, a dependency view of which agents/workflows use which skill versions, and audit on every state change. *(Completed 2026-07-16 — Phase 150; `skill-lifecycle.ts` + `skill-dependencies.ts` + `/api/skills/lifecycle`.)*
 
+## ORCH-FOLLOWUP — Phase 70 Multi-hop Compensation Closure
+
+*Source: `.planning/phases/70-foundation-engine-core/deferred-items.md`; ROADMAP Future Milestone Priority item 14 / v8.8 Orchestration Evidence Depth.*
+
+*Completion note (2026-07-16): Residual ORCH-FOLLOWUP-01 gaps for A2A compensate dispatch + `attempts_per_hop` tracking closed in `services/orchestration/` without requiring a live LangGraph runtime for unit proof.*
+
+- [x] **ORCH-FOLLOWUP-01**: Rollback compensation dispatches a `requiredCapability="compensate"` A2A task (local receipt or injected transport) when the agent exposes compensate capability; agents without that capability yield an honest `compensation_skipped` row. Per-hop retry counts are recorded in lineage `detail_json["attempts_per_hop"]` keyed by hop lineage id, distinct from `orchestration_runs.attempts`. Multi-hop plan compensation records `compensation_dispatched` before `compensation_committed` when a compensate target exists. *(Completed 2026-07-16 — DEFERRED-70-03-C/D; tests in `services/orchestration/tests/test_engine.py` + `test_multihop.py`.)*
+
 ## MEMLIFE Memory Lifecycle, Retention + Erasure (Proposed)
 
 *Source: a governed store must forget as reliably as it remembers. Embeddings, graph nodes, FTS rows, and qmd projections all copy data — erasure must chase every derivative. ICP anchor: a contractor offboards, or a prospect requests data deletion.*

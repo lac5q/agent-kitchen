@@ -296,6 +296,9 @@ def _normalize_step(plan: dict[str, Any], step: dict[str, Any], index: int) -> t
             "version": side_effect.get("version"),
             "boundaryHash": _sha256(side_effect.get("boundary") or {}),
             "compensationHash": _sha256(side_effect.get("compensation") or {}),
+            # Keep the declarative compensate target for rollback dispatch
+            # (ORCH-FOLLOWUP-01). Hash alone is not enough to dispatch.
+            "compensation": side_effect.get("compensation"),
         },
         "checkpoint": {
             "declared": checkpoint is not None,
@@ -721,6 +724,30 @@ def _compensation_already_done(store: Any, run_id: str, step_id: str) -> bool:
     return False
 
 
+def _agent_supports_compensate(step: dict[str, Any], compensation: dict[str, Any]) -> bool:
+    """Return True when the step's agent can accept requiredCapability=compensate.
+
+    Explicit capability lists on the compensation target or step win. When no
+    capability list is declared, a present compensation verb is treated as a
+    dispatchable compensate target (deterministic local receipt path).
+    """
+    for source in (compensation.get("agentCapabilities"), step.get("agentCapabilities"), step.get("capabilities")):
+        if source is None:
+            continue
+        if not isinstance(source, list):
+            return False
+        for capability in source:
+            if isinstance(capability, dict):
+                values = [capability.get("id"), capability.get("name"), capability.get("description")]
+                values.extend(capability.get("tags") or [])
+                if any(str(value).lower() == "compensate" for value in values if value is not None):
+                    return True
+            elif str(capability).lower() == "compensate":
+                return True
+        return False
+    return True
+
+
 def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any], reason: str, failed_step_id: str | None = None) -> str:
     steps_by_id = {step["id"]: step for step in graph.get("executionSteps") or []}
     completed = _completed_step_ids(store, run["run_id"])
@@ -765,6 +792,57 @@ def _compensate_committed(store: Any, run: dict[str, Any], graph: dict[str, Any]
                 detail={"stepId": step_id, "reason": "already_compensated", **_federation_detail(graph)},
             )
             continue
+
+        side_effect = step.get("sideEffect") or {}
+        compensation = side_effect.get("compensation") if isinstance(side_effect.get("compensation"), dict) else None
+        if not compensation:
+            # Honest skip: committed effect has no declared compensate action.
+            store.append_lineage(
+                correlation_id=run["correlation_id"],
+                run_id=run["run_id"],
+                hop_type="compensation_skipped",
+                detail={"stepId": step_id, "reason": "no_compensate_action", **_federation_detail(graph)},
+            )
+            continue
+
+        if not _agent_supports_compensate(step, compensation):
+            store.append_lineage(
+                correlation_id=run["correlation_id"],
+                run_id=run["run_id"],
+                hop_type="compensation_skipped",
+                detail={
+                    "stepId": step_id,
+                    "reason": "agent_no_compensate_capability",
+                    "requiredCapability": "compensate",
+                    **_federation_detail(graph),
+                },
+            )
+            continue
+
+        # Real compensate dispatch path: record A2A requiredCapability=compensate receipt
+        # before committing the local reversal (no external transport required for unit proof).
+        agent_id = _string(
+            step.get("gate", {}).get("agentId")
+            or step.get("gate", {}).get("agent_id")
+            or compensation.get("agentId")
+            or compensation.get("agent_id")
+        )
+        store.append_lineage(
+            correlation_id=run["correlation_id"],
+            run_id=run["run_id"],
+            hop_type="compensation_dispatched",
+            agent_id=agent_id or None,
+            detail={
+                "stepId": step_id,
+                "requiredCapability": "compensate",
+                "compensationVerb": compensation.get("verb") or "undo",
+                "resourceId": compensation.get("resourceId") or side_effect.get("resourceId"),
+                "taskId": f"compensate:{run['run_id']}:{step_id}",
+                "transport": "local_receipt",
+                **_federation_detail(graph),
+            },
+        )
+
         store.append_lineage(
             correlation_id=run["correlation_id"],
             run_id=run["run_id"],

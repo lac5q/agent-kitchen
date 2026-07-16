@@ -151,10 +151,32 @@ class MultihopOrchestrationTest(unittest.TestCase):
         self.assertEqual(result["status"], "step_failed")
         rows = self.lineage("comp-run")
         compensation = [self.detail(row) for row in rows if row["hop_type"] == "compensation_committed"]
+        dispatched = [self.detail(row) for row in rows if row["hop_type"] == "compensation_dispatched"]
         skipped = [self.detail(row) for row in rows if row["hop_type"] == "compensation_skipped"]
         self.assertEqual([entry["stepId"] for entry in compensation], ["b", "a"])
+        self.assertEqual([entry["stepId"] for entry in dispatched], ["b", "a"])
+        self.assertTrue(all(entry.get("requiredCapability") == "compensate" for entry in dispatched))
         self.assertIn({"stepId": "read", "reason": "read_only"}, skipped)
         self.assertIn({"stepId": "c", "reason": "uncommitted"}, skipped)
+
+    def test_compensation_skips_when_agent_lacks_compensate_capability(self):
+        # ORCH-FOLLOWUP-01 — honest skip when compensate target cannot be dispatched
+        step_a = make_step("a")
+        step_a["sideEffect"]["compensation"]["agentCapabilities"] = [
+            {"id": "research", "name": "Research", "tags": ["research"]}
+        ]
+        step_b = make_step("b", deps=["a"], outcome="failed_before_commit")
+        plan = make_plan([step_a, step_b])
+
+        result = self.engine.execute_multihop_plan({"plan": plan, "runId": "comp-skip-cap", "correlationId": "comp-skip-cap"})
+        self.assertEqual(result["status"], "step_failed")
+        rows = self.lineage("comp-skip-cap")
+        skipped = [self.detail(row) for row in rows if row["hop_type"] == "compensation_skipped"]
+        self.assertTrue(
+            any(entry.get("stepId") == "a" and entry.get("reason") == "agent_no_compensate_capability" for entry in skipped)
+        )
+        self.assertNotIn("compensation_dispatched", [row["hop_type"] for row in rows if self.detail(row).get("stepId") == "a"])
+        self.assertNotIn("compensation_committed", [row["hop_type"] for row in rows if self.detail(row).get("stepId") == "a"])
 
     def test_ambiguous_commit_reconciles_by_lookup_before_mutation_and_unresolved_is_not_success(self):
         committed_lookup = make_plan([make_step("a", outcome="timeout_after_commit", commit_lookup="committed")])
@@ -331,7 +353,7 @@ class MultihopOrchestrationTest(unittest.TestCase):
             rows = self.lineage("federation-run")
             bound = [self.detail(row) for row in rows if row["hop_type"] in {
                 "plan_validated", "step_gate", "step_action_invoked", "checkpoint_saved",
-                "compensation_gate", "compensation_committed", "rollback_complete",
+                "compensation_dispatched", "compensation_gate", "compensation_committed", "rollback_complete",
             }]
             self.assertGreater(len(bound), 0)
             self.assertTrue(all(row.get("federationProofHash") for row in bound))

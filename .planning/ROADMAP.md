@@ -1008,10 +1008,11 @@ Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays clou
    - Requirements: `INT-FOLLOWUP-01..07` in `.planning/REQUIREMENTS.md`.
    - Goal: keep one canonical MemRoOS MCP connection, remove stale memory adapters, upgrade FastMCP and mem0ai deliberately, validate A2A/ADK and Next proxy boundaries against current specs, and stage SDK/toolchain majors before they become operational debt. Pull any integration task forward if it blocks P0 memory/security work.
 
-14. **P2 — Plan Phase 70 follow-up topology closure.**
+14. **P2 — Plan Phase 70 follow-up topology closure.** — **ORCH-FOLLOWUP-01 residual closed 2026-07-16** (compensate dispatch + `attempts_per_hop`; LangGraph multi-hop loop / `rollback_compensation` node already present in `graph.py`).
    - Source note: `.planning/phases/70-foundation-engine-core/deferred-items.md`.
-   - Requirement: `ORCH-FOLLOWUP-01` in `.planning/REQUIREMENTS.md`.
+   - Requirement: `ORCH-FOLLOWUP-01` in `.planning/REQUIREMENTS.md` (checked).
    - Goal: close deferred LangGraph multi-hop topology and rollback-compensation gaps before claiming full multi-hop orchestration depth. Pull forward only if a live workflow needs multi-hop compensation.
+   - Remaining limitation: default compensate transport is a local acknowledged receipt; wire a live A2A endpoint via `OrchestrationEngine(compensate_dispatcher=...)` when remote compensate agents are available.
 
 15. **P3 — Plan commercial/product/backend expansion.**
    - Requirements: `PRODUCT-01..02`, `VERTICAL-01`, and `L3-FOLLOWUP-01..03`.

@@ -231,6 +231,131 @@ class OrchestrationEngineTest(unittest.TestCase):
             "rollback_reason must be non-null after rollback (ORCH-10)",
         )
 
+    def test_compensate_dispatch_when_agent_has_compensate_capability(self):
+        # ORCH-FOLLOWUP-01 / DEFERRED-70-03-D
+        agents = [
+            {
+                "id": "compensating-agent",
+                "name": "Compensating Agent",
+                "status": "active",
+                "protocol": "a2a",
+                "capabilities": [
+                    {"id": "research", "name": "Research", "tags": ["research"]},
+                    {"id": "compensate", "name": "Compensate", "tags": ["compensate"]},
+                ],
+            }
+        ]
+        dispatched = []
+
+        def capture_dispatch(**kwargs):
+            dispatched.append(kwargs)
+            return {
+                "acknowledged": True,
+                "requiredCapability": "compensate",
+                "taskId": "compensate_test_1",
+                "agentId": kwargs.get("agent_id"),
+            }
+
+        engine = OrchestrationEngine(self.store, retry_limit=2, compensate_dispatcher=capture_dispatch)
+        result = engine.route_task(
+            {
+                "taskSummary": "Compensate-capable rollback",
+                "requiredCapability": "research",
+                "agents": agents,
+                "correlationId": "corr-compensate-done",
+            }
+        )
+        for _ in range(engine.retry_limit):
+            engine.record_task_failure(result["runId"], "boom")
+
+        lineage = self.store.list_lineage("corr-compensate-done")
+        hop_types = [row["hop_type"] for row in lineage]
+        self.assertIn("compensation_done", hop_types)
+        self.assertNotIn("compensation_skipped", hop_types)
+        self.assertEqual(len(dispatched), 1)
+        self.assertEqual(dispatched[0]["compensation_verb"], "undo")
+        done = next(row for row in lineage if row["hop_type"] == "compensation_done")
+        import json as _json
+
+        detail = _json.loads(done["detail_json"])
+        self.assertEqual(detail["requiredCapability"], "compensate")
+        self.assertEqual(detail["a2a_task"]["taskId"], "compensate_test_1")
+
+    def test_compensate_skipped_when_agent_lacks_compensate_capability(self):
+        # ORCH-FOLLOWUP-01 — honest skip remains when compensate is unavailable
+        result = self.engine.route_task(
+            {
+                "taskSummary": "No compensate capability",
+                "requiredCapability": "research",
+                "agents": AGENTS,
+                "correlationId": "corr-compensate-skip",
+            }
+        )
+        for _ in range(self.engine.retry_limit):
+            self.engine.record_task_failure(result["runId"], "boom")
+
+        lineage = self.store.list_lineage("corr-compensate-skip")
+        skipped = [row for row in lineage if row["hop_type"] == "compensation_skipped"]
+        self.assertEqual(len(skipped), 1)
+        import json as _json
+
+        detail = _json.loads(skipped[0]["detail_json"])
+        self.assertEqual(detail["reason"], "agent_no_compensate_capability")
+        self.assertNotIn("compensation_done", [row["hop_type"] for row in lineage])
+
+    def test_attempts_per_hop_are_tracked_separately_from_run_attempts(self):
+        # ORCH-FOLLOWUP-01 / DEFERRED-70-03-C
+        result = self.engine.route_task(
+            {
+                "taskSummary": "Per-hop attempts",
+                "requiredCapability": "research",
+                "agents": AGENTS,
+                "correlationId": "corr-attempts-hop",
+                "runId": "attempts-hop-run",
+            }
+        )
+        hop1 = self.store.latest_dispatch_request("attempts-hop-run")
+        self.assertIsNotNone(hop1)
+        hop1_id = hop1["id"]
+
+        # Simulate a second hop dispatch row (multi-hop chain) without requiring LangGraph.
+        hop2_id = self.store.append_lineage(
+            correlation_id="corr-attempts-hop",
+            run_id="attempts-hop-run",
+            hop_type="dispatch_request",
+            agent_id="active-agent",
+            detail={"protocol": "a2a", "hop": 2},
+        )
+        self.store.append_lineage(
+            correlation_id="corr-attempts-hop",
+            run_id="attempts-hop-run",
+            hop_type="compensation_pending",
+            agent_id="active-agent",
+            detail={"forward_hop_id": hop2_id, "compensation_verb": "undo", "agent_id": "active-agent"},
+        )
+
+        # Hop 1 retries twice; hop 2 fails once (exhausts retry_limit=2 on second hop-1 failure first).
+        # Use a higher retry budget so both hop counters can accumulate.
+        engine = OrchestrationEngine(self.store, retry_limit=5)
+        engine._agents_by_id = self.engine._agents_by_id
+        first = engine.record_task_failure("attempts-hop-run", "hop1-fail-1", hop_lineage_id=hop1_id)
+        second = engine.record_task_failure("attempts-hop-run", "hop1-fail-2", hop_lineage_id=hop1_id)
+        third = engine.record_task_failure("attempts-hop-run", "hop2-fail-1", hop_lineage_id=hop2_id)
+
+        self.assertEqual(first["attemptsPerHop"][str(hop1_id)], 1)
+        self.assertEqual(second["attemptsPerHop"][str(hop1_id)], 2)
+        self.assertEqual(third["attemptsPerHop"][str(hop1_id)], 2)
+        self.assertEqual(third["attemptsPerHop"][str(hop2_id)], 1)
+        self.assertEqual(third["attempts"], 3)
+
+        lineage = self.store.list_lineage("corr-attempts-hop")
+        failure_rows = [row for row in lineage if row["hop_type"] == "dispatch_failure"]
+        import json as _json
+
+        latest = _json.loads(failure_rows[-1]["detail_json"])["attempts_per_hop"]
+        self.assertEqual(latest[str(hop1_id)], 2)
+        self.assertEqual(latest[str(hop2_id)], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

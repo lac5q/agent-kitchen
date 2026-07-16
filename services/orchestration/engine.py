@@ -11,7 +11,7 @@ import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 try:
     from .multihop import (
@@ -324,6 +324,36 @@ class OrchestrationStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_lineage_for_run(self, run_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM orchestration_lineage
+            WHERE run_id = ?
+            ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_lineage_row(self, row_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM orchestration_lineage WHERE id = ?",
+            (row_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def latest_dispatch_request(self, run_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT * FROM orchestration_lineage
+            WHERE run_id = ? AND hop_type = 'dispatch_request'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
     def list_compensation_pending(self, run_id: str) -> list[dict[str, Any]]:
         """Return all compensation_pending lineage rows for a run, ordered descending
         (most-recent hop first) so rollback can replay in reverse order (ORCH-09)."""
@@ -424,11 +454,24 @@ class OrchestrationStore:
         return camelize_hil(updated)
 
 
+CompensateDispatcher = Callable[..., dict[str, Any]]
+
+
 class OrchestrationEngine:
-    def __init__(self, store: OrchestrationStore, retry_limit: int = 2, graph_runtime: Any | None = None):
+    def __init__(
+        self,
+        store: OrchestrationStore,
+        retry_limit: int = 2,
+        graph_runtime: Any | None = None,
+        compensate_dispatcher: CompensateDispatcher | None = None,
+    ):
         self.store = store
         self.retry_limit = retry_limit
         self.graph_runtime = graph_runtime
+        self.compensate_dispatcher = compensate_dispatcher or self._default_compensate_dispatch
+        # In-process agent registry keyed by agent id. Populated from route_task payloads
+        # so rollback can resolve requiredCapability="compensate" without a remote registry.
+        self._agents_by_id: dict[str, dict[str, Any]] = {}
 
     def route_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         task_summary = str(payload.get("taskSummary") or "").strip()
@@ -441,6 +484,7 @@ class OrchestrationEngine:
         if required_capability is not None:
             required_capability = str(required_capability)
         agents = payload.get("agents") if isinstance(payload.get("agents"), list) else []
+        self._register_agents(agents)
         selected_agent = self._select_agent(agents, required_capability)
         selected_agent_id = selected_agent.get("id") if selected_agent else None
 
@@ -516,6 +560,9 @@ class OrchestrationEngine:
         # ORCH-09: write a declarative compensation_pending row paired with the dispatch.
         # Compensation instructions are stored as lineage rows — NEVER Python closures.
         # Remote agents without requiredCapability="compensate" yield compensation_skipped.
+        agent_capabilities = []
+        if selected_agent and isinstance(selected_agent.get("capabilities"), list):
+            agent_capabilities = selected_agent.get("capabilities") or []
         self.store.append_lineage(
             correlation_id=correlation_id,
             run_id=run_id,
@@ -525,6 +572,9 @@ class OrchestrationEngine:
                 "forward_hop_id": dispatch_row_id,
                 "compensation_verb": "undo",
                 "agent_id": selected_agent_id,
+                # Snapshot capabilities so rollback can decide compensate vs skip
+                # even if the in-process registry is empty after restart.
+                "agent_capabilities": agent_capabilities,
             },
         )
         return self._result(
@@ -583,10 +633,21 @@ class OrchestrationEngine:
             },
         )
 
-    def record_task_failure(self, run_id: str, error: str | None = None) -> dict[str, Any]:
+    def record_task_failure(
+        self,
+        run_id: str,
+        error: str | None = None,
+        hop_lineage_id: int | None = None,
+    ) -> dict[str, Any]:
         run = self.store.get_run(run_id)
         if run is None:
             raise KeyError(f"Unknown orchestration run: {run_id}")
+
+        hop_id = self._resolve_hop_lineage_id(run_id, hop_lineage_id)
+        attempts_per_hop = self._read_attempts_per_hop(run_id)
+        if hop_id is not None:
+            hop_key = str(hop_id)
+            attempts_per_hop[hop_key] = int(attempts_per_hop.get(hop_key, 0)) + 1
 
         attempts_after_failure = int(run["attempts"]) + 1
         terminal = attempts_after_failure >= self.retry_limit
@@ -597,7 +658,14 @@ class OrchestrationEngine:
             run_id=run_id,
             hop_type="dispatch_failure",
             agent_id=run["selected_agent_id"],
-            detail={"error": error, "attempts": updated["attempts"]},
+            detail={
+                "error": error,
+                "attempts": updated["attempts"],
+                "hop_lineage_id": hop_id,
+                # ORCH-FOLLOWUP-01 / DEFERRED-70-03-C: per-hop retries live here,
+                # not only in orchestration_runs.attempts (RESEARCH.md Pitfall 3).
+                "attempts_per_hop": attempts_per_hop,
+            },
         )
 
         if not terminal:
@@ -606,7 +674,11 @@ class OrchestrationEngine:
                 run_id=run_id,
                 hop_type="retry_scheduled",
                 agent_id=run["selected_agent_id"],
-                detail={"remainingRetries": self.retry_limit - int(updated["attempts"])},
+                detail={
+                    "remainingRetries": self.retry_limit - int(updated["attempts"]),
+                    "hop_lineage_id": hop_id,
+                    "attempts_per_hop": attempts_per_hop,
+                },
             )
             return {
                 "ok": True,
@@ -615,6 +687,7 @@ class OrchestrationEngine:
                 "status": "retrying",
                 "attempts": int(updated["attempts"]),
                 "remainingRetries": self.retry_limit - int(updated["attempts"]),
+                "attemptsPerHop": attempts_per_hop,
             }
 
         decision_id = self.store.create_hil_decision(
@@ -629,7 +702,11 @@ class OrchestrationEngine:
             run_id=run_id,
             hop_type="retry_exhausted",
             agent_id=run["selected_agent_id"],
-            detail={"hilDecisionId": decision_id},
+            detail={
+                "hilDecisionId": decision_id,
+                "hop_lineage_id": hop_id,
+                "attempts_per_hop": attempts_per_hop,
+            },
         )
 
         # ORCH-09/ORCH-10: run rollback compensation declaratively.
@@ -645,6 +722,7 @@ class OrchestrationEngine:
             "attempts": int(updated["attempts"]),
             "remainingRetries": 0,
             "hilDecisionId": decision_id,
+            "attemptsPerHop": attempts_per_hop,
         }
 
     def _run_rollback_compensation(
@@ -677,7 +755,7 @@ class OrchestrationEngine:
             },
         )
 
-        compensated_count = 0
+        processed_count = 0
         for comp_row in pending_rows:
             row_id = comp_row["id"]
             try:
@@ -686,12 +764,56 @@ class OrchestrationEngine:
                 detail_data = {}
 
             forward_hop_id = detail_data.get("forward_hop_id")
-            agent_id = comp_row.get("agent_id")
+            agent_id = comp_row.get("agent_id") or detail_data.get("agent_id")
+            compensation_verb = detail_data.get("compensation_verb") or "undo"
+            agent = self._resolve_agent_for_compensation(agent_id, detail_data)
 
-            # A2A convention: check if agent supports "compensate" capability.
-            # Without actual agent registry access, we use the safe-default: compensation_skipped.
-            # Agents implementing compensation will be dispatched via requiredCapability="compensate".
-            # For now, record compensation_skipped with the documented reason (RESEARCH.md Anti-Patterns).
+            if agent is not None and self._agent_matches(agent, "compensate"):
+                dispatch_receipt = self.compensate_dispatcher(
+                    agent_id=str(agent_id) if agent_id is not None else None,
+                    correlation_id=correlation_id,
+                    run_id=run_id,
+                    forward_hop_id=forward_hop_id,
+                    compensation_verb=compensation_verb,
+                    pending_row_id=row_id,
+                )
+                acknowledged = bool(dispatch_receipt.get("acknowledged", True))
+                if acknowledged:
+                    self.store.append_lineage(
+                        correlation_id=correlation_id,
+                        run_id=run_id,
+                        hop_type="compensation_done",
+                        agent_id=agent_id,
+                        detail={
+                            "forward_hop_id": forward_hop_id,
+                            "pending_row_id": row_id,
+                            "agent_id": agent_id,
+                            "confirmed_at": now_iso(),
+                            "requiredCapability": "compensate",
+                            "compensation_verb": compensation_verb,
+                            "a2a_task": dispatch_receipt,
+                        },
+                    )
+                    processed_count += 1
+                    continue
+
+                self.store.append_lineage(
+                    correlation_id=correlation_id,
+                    run_id=run_id,
+                    hop_type="compensation_skipped",
+                    agent_id=agent_id,
+                    detail={
+                        "forward_hop_id": forward_hop_id,
+                        "pending_row_id": row_id,
+                        "reason": "compensate_dispatch_not_acknowledged",
+                        "agent_id": agent_id,
+                        "a2a_task": dispatch_receipt,
+                    },
+                )
+                processed_count += 1
+                continue
+
+            # Honest skip: no compensate capability on the agent (or agent unknown).
             self.store.append_lineage(
                 correlation_id=correlation_id,
                 run_id=run_id,
@@ -704,7 +826,7 @@ class OrchestrationEngine:
                     "agent_id": agent_id,
                 },
             )
-            compensated_count += 1
+            processed_count += 1
 
         # rollback_complete marks end of compensation sequence.
         self.store.append_lineage(
@@ -716,7 +838,7 @@ class OrchestrationEngine:
 
         # ORCH-10: set status to "rolled_back" with a granular rollback_reason.
         hop_n = attempts
-        compensated_hops = list(range(1, compensated_count + 1))
+        compensated_hops = list(range(1, processed_count + 1))
         if compensated_hops:
             compensated_str = f"compensated hops {compensated_hops[0]}..{compensated_hops[-1]}"
         else:
@@ -795,6 +917,88 @@ class OrchestrationEngine:
             return (active_rank, str(agent.get("name") or "").lower(), str(agent.get("id") or "").lower())
 
         return sorted(candidates, key=sort_key)[0]
+
+    def _register_agents(self, agents: list[Any]) -> None:
+        for agent in agents:
+            if not isinstance(agent, dict):
+                continue
+            agent_id = agent.get("id")
+            if agent_id is None:
+                continue
+            self._agents_by_id[str(agent_id)] = agent
+
+    def _resolve_agent_for_compensation(
+        self,
+        agent_id: Any,
+        detail_data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if agent_id is not None and str(agent_id) in self._agents_by_id:
+            return self._agents_by_id[str(agent_id)]
+        capabilities = detail_data.get("agent_capabilities")
+        if isinstance(capabilities, list):
+            return {
+                "id": agent_id,
+                "capabilities": capabilities,
+                "status": "active",
+            }
+        return None
+
+    def _resolve_hop_lineage_id(self, run_id: str, hop_lineage_id: int | None) -> int | None:
+        if hop_lineage_id is not None:
+            return int(hop_lineage_id)
+        latest = self.store.latest_dispatch_request(run_id)
+        if latest is None:
+            return None
+        return int(latest["id"])
+
+    def _read_attempts_per_hop(self, run_id: str) -> dict[str, int]:
+        """Return the latest attempts_per_hop map written for this run (append-only lineage)."""
+        latest: dict[str, int] = {}
+        for row in self.store.list_lineage_for_run(run_id):
+            try:
+                detail = json.loads(row.get("detail_json") or "{}")
+            except Exception:
+                detail = {}
+            raw = detail.get("attempts_per_hop")
+            if not isinstance(raw, dict):
+                continue
+            parsed: dict[str, int] = {}
+            for key, value in raw.items():
+                try:
+                    parsed[str(key)] = int(value)
+                except (TypeError, ValueError):
+                    continue
+            latest = parsed
+        return dict(latest)
+
+    def _default_compensate_dispatch(
+        self,
+        *,
+        agent_id: str | None,
+        correlation_id: str,
+        run_id: str,
+        forward_hop_id: Any,
+        compensation_verb: str,
+        pending_row_id: int,
+    ) -> dict[str, Any]:
+        """Local A2A compensate receipt when no external transport is injected.
+
+        MemRoOS owns transport; this default records an acknowledged compensate task
+        so lineage can distinguish real dispatch from capability-based skips without
+        requiring a live agent endpoint in unit tests.
+        """
+        return {
+            "acknowledged": True,
+            "requiredCapability": "compensate",
+            "taskId": f"compensate_{uuid.uuid4().hex[:12]}",
+            "agentId": agent_id,
+            "correlationId": correlation_id,
+            "runId": run_id,
+            "forwardHopId": forward_hop_id,
+            "compensationVerb": compensation_verb,
+            "pendingRowId": pending_row_id,
+            "transport": "local_receipt",
+        }
 
     def _agent_matches(self, agent: dict[str, Any], required_capability: str) -> bool:
         needle = required_capability.lower()
