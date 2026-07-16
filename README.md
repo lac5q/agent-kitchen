@@ -670,6 +670,7 @@ memroos/
 - [Claude Code integration](docs/integrations/claude-code.md)
 - [Google ADK integration](docs/integrations/google-adk.md)
 - [LangGraph integration](docs/integrations/langgraph.md)
+- [Microsoft Agent Framework (MAF) memory](docs/integrations/microsoft-agent-framework.md)
 - [MemroOS MCP server](docs/integrations/mcp.md)
 - [CrewAI and AutoGen integration](docs/integrations/crewai-autogen.md)
 - [Workflow feedback intake](docs/workflow-feedback-intake.md)
