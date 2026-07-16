@@ -88,6 +88,52 @@ function seedPromotionContext(candidateId: string, tenantId: string, candidates:
 }
 
 describe("ontology candidate governance", () => {
+  it("ONTO-03 tags candidates EXTRACTED/INFERRED/AMBIGUOUS from confidence (never auth-bearing)", async () => {
+    const { candidates } = await setup();
+    const extracted = candidates.extractOntologyCandidate(db, {
+      ...extraction(),
+      confidenceLabel: "high",
+      confidenceScore: 0.9,
+      proposed: { id: "finance.extracted", semantics: { kind: "entity" } },
+    });
+    expect(extracted.provenanceTag).toBe("EXTRACTED");
+    expect(candidates.provenanceTagFromConfidence("high")).toBe("EXTRACTED");
+    expect(candidates.provenanceTagFromConfidence("medium")).toBe("INFERRED");
+    expect(candidates.provenanceTagFromConfidence("low")).toBe("AMBIGUOUS");
+
+    const inferred = candidates.extractOntologyCandidate(db, {
+      ...extraction(),
+      confidenceLabel: "medium",
+      confidenceScore: 0.5,
+      proposed: { id: "finance.inferred", semantics: { kind: "entity" } },
+      provenanceTag: "INFERRED",
+    });
+    expect(inferred.provenanceTag).toBe("INFERRED");
+
+    const ambiguous = candidates.extractOntologyCandidate(db, {
+      ...extraction(),
+      confidenceLabel: "low",
+      confidenceScore: 0.1,
+      proposed: { id: "finance.ambiguous", semantics: { kind: "entity" } },
+    });
+    expect(ambiguous.provenanceTag).toBe("AMBIGUOUS");
+    // AMBIGUOUS is still reviewable — provenance tag is never authorization-bearing.
+    const approved = candidates.decideOntologyCandidate(db, {
+      candidateId: ambiguous.id, tenantId: "tenant-a", spaceId: "space-a",
+      decision: "approve", reviewerId: "operator", reason: "reviewed despite ambiguity",
+    });
+    expect(approved.status).toBe("approved");
+    expect(approved.provenanceTag).toBe("AMBIGUOUS");
+
+    expect(() => candidates.extractOntologyCandidate(db, {
+      ...extraction(),
+      confidenceLabel: "high",
+      confidenceScore: 0.9,
+      proposed: { id: "finance.mismatch", semantics: { kind: "entity" } },
+      provenanceTag: "AMBIGUOUS",
+    })).toThrow(/provenance tag must match/);
+  });
+
   it("VAL-ONTO-010..013 creates scoped non-authoritative deterministic candidates and retains immutable evidence decisions", async () => {
     const { candidates } = await setup();
     const first = candidates.extractOntologyCandidate(db, extraction());

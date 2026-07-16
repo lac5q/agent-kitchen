@@ -65,6 +65,7 @@ import {
   type PolicyReceipt,
 } from "./receipt";
 import { resolveOntologyValidity } from "@/lib/ontology/validity";
+import { withOntologyTypeRef } from "@/lib/ontology/receipt-types";
 
 /**
  * Shape of the dimension rules in the manifest. The manifest is JSON, so
@@ -139,6 +140,10 @@ export interface PolicyRequest {
     spaceId: string;
     recordType: string;
     recordId: string;
+    /** ONTO-06: optional subject type (e.g. organization / Account). */
+    aboutType?: string;
+    /** ONTO-06: optional belief stage for typed receipts. */
+    beliefStage?: string;
   };
 }
 
@@ -182,6 +187,12 @@ export function buildReceipt(
   }
 ): PolicyReceipt {
   const actor = req.actor;
+  const ontology = req.ontologyContext
+    ? withOntologyTypeRef(req.ontologyContext as Record<string, unknown>, {
+        aboutType: req.ontologyReference?.aboutType,
+        beliefStage: req.ontologyReference?.beliefStage,
+      }) as PolicyReceipt["ontology"]
+    : undefined;
   return {
     policyVersion: POLICY_VERSION,
     domain: req.domain,
@@ -194,7 +205,7 @@ export function buildReceipt(
     actorRole: collapseAuditRole(actor?.role),
     tenantId: actor?.tenantId ?? "default-tenant",
     createdAt: nowIso(),
-    ontology: req.ontologyContext,
+    ontology,
   };
 }
 
@@ -325,7 +336,11 @@ export function resolveRequiredKnowledgeOntologyContext(
   //   - ontology stale / not globally active
   // We surface every such case as `ontology_context_unavailable` so callers
   // do not need to know the failure mode.
-  return resolveOntologyValidity(db, reference);
+  const context = resolveOntologyValidity(db, reference);
+  return withOntologyTypeRef(context as Record<string, unknown>, {
+    aboutType: reference.aboutType,
+    beliefStage: reference.beliefStage,
+  }) as PolicyReceipt["ontology"];
 }
 
 /**

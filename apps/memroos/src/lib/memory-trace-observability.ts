@@ -31,6 +31,9 @@ export interface RecollectionTraceReceipt {
     beliefStage: BeliefStage;
     reliance: RecollectionReliance;
     score: number;
+    /** ONTO-06: typed ontology coordinates when known. */
+    ontologyType?: string;
+    aboutType?: string;
   }>;
   ignored: Array<{
     id: string;
@@ -44,6 +47,9 @@ export interface RecollectionTraceReceipt {
     namespace: string;
     canonicalId: string;
     aliasMigrationPath: unknown[];
+    ontologyType?: string;
+    aboutType?: string;
+    beliefStage?: string;
   };
 }
 

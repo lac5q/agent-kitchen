@@ -44,6 +44,10 @@ export interface Claim {
   content: string;
   /** Stable identifier for callers; not part of the receipt surface. */
   id?: string;
+  /** ONTO-06: ontology type of this claim (e.g. "claim"). */
+  ontologyType?: string;
+  /** ONTO-06: subject type the claim is about (e.g. "organization" / Account). */
+  aboutType?: string;
 }
 
 /**
@@ -66,6 +70,9 @@ export interface OutboundReceipt {
   stage: BeliefStage;
   action: "emitted" | "caveated" | "dropped";
   reason: string;
+  /** ONTO-06: typed ontology coordinates ("gold Claim about Account"). */
+  ontologyType?: string;
+  aboutType?: string;
 }
 
 export interface FilterOutboundOptions {
@@ -147,6 +154,10 @@ export function filterOutboundClaims(
 
   for (const claim of claims) {
     const claimHash = claimHashOf(claim.content);
+    const ontologyFields = {
+      ...(claim.ontologyType ? { ontologyType: claim.ontologyType } : {}),
+      ...(claim.aboutType ? { aboutType: claim.aboutType } : {}),
+    };
 
     switch (claim.stage) {
       case "gold_operational_truth": {
@@ -156,6 +167,7 @@ export function filterOutboundClaims(
           stage: claim.stage,
           action: "emitted",
           reason: "gold passes through as operational truth",
+          ...ontologyFields,
         });
         break;
       }
@@ -167,6 +179,7 @@ export function filterOutboundClaims(
             stage: claim.stage,
             action: "dropped",
             reason: "silver dropped because goldOnly=true",
+            ...ontologyFields,
           });
         } else {
           emitted.push({
@@ -179,6 +192,7 @@ export function filterOutboundClaims(
             stage: claim.stage,
             action: "caveated",
             reason: "silver emitted with deterministic caveat",
+            ...ontologyFields,
           });
         }
         break;
@@ -198,6 +212,7 @@ export function filterOutboundClaims(
             reason: citationMode
               ? "bronze emitted as citation only (citationMode=true)"
               : "bronze emitted as citation only (policy.bronzeAsCitationOnly=false)",
+            ...ontologyFields,
           });
         } else {
           dropped.push(claim);
@@ -206,6 +221,7 @@ export function filterOutboundClaims(
             stage: claim.stage,
             action: "dropped",
             reason: "bronze dropped (citationOnly=true; not in citation mode)",
+            ...ontologyFields,
           });
         }
         break;

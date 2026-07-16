@@ -107,5 +107,11 @@ export interface PromotionReceiptSummary {
     sourceId: string;
     sourceHash: string;
     derivativeId: string;
+    /** ONTO-06: typed ontology type (e.g. claim). */
+    ontologyType?: string;
+    /** ONTO-06: optional subject type (e.g. organization / Account). */
+    aboutType?: string;
+    /** ONTO-06: belief stage mirrored onto the receipt when known. */
+    beliefStage?: BeliefStage | string;
   };
 }

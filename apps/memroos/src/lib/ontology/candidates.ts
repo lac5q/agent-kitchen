@@ -3,12 +3,33 @@ import type Database from "better-sqlite3";
 
 import { commitAuditAtomic } from "@/lib/skills/skill-audit-atomic";
 import { discoverOntology } from "./registry";
+import { withOntologyTypeRef } from "./receipt-types";
 import { assertCandidateAuthoritative, registerOntologyDerivative, registerOntologySource, resolveOntologyValidity } from "./validity";
 
 type CandidateStatus = "pending" | "approved" | "rejected" | "deferred" | "superseded" | "invalidated" | "promoted";
 type CandidateDecision = "approve" | "reject" | "defer" | "supersede" | "invalidate";
 type CandidateKind = "type" | "relationship" | "alias";
 export type ConfidenceLabel = "low" | "medium" | "high";
+
+/**
+ * ONTO-03 provenance tags for extracted vocabulary candidates.
+ * Bronze/silver vocabulary only — retrievable with caveats.
+ * NEVER authorization-bearing (promotion/policy must not key off these tags).
+ */
+export type CandidateProvenanceTag = "EXTRACTED" | "INFERRED" | "AMBIGUOUS";
+
+export const CANDIDATE_PROVENANCE_TAGS: readonly CandidateProvenanceTag[] = [
+  "EXTRACTED",
+  "INFERRED",
+  "AMBIGUOUS",
+] as const;
+
+/** Map confidence bands → ONTO-03 provenance tags (deterministic). */
+export function provenanceTagFromConfidence(label: ConfidenceLabel): CandidateProvenanceTag {
+  if (label === "high") return "EXTRACTED";
+  if (label === "medium") return "INFERRED";
+  return "AMBIGUOUS";
+}
 
 export interface OntologyCandidate {
   id: string;
@@ -24,6 +45,8 @@ export interface OntologyCandidate {
   proposed: Record<string, unknown>;
   confidenceLabel: ConfidenceLabel;
   confidenceScore: number;
+  /** ONTO-03: EXTRACTED | INFERRED | AMBIGUOUS — never authorization-bearing. */
+  provenanceTag: CandidateProvenanceTag;
   evidenceHash: string;
   status: CandidateStatus;
   createdAt: string;
@@ -42,6 +65,11 @@ export interface ExtractCandidateInput {
   proposed: Record<string, unknown>;
   confidenceLabel: ConfidenceLabel;
   confidenceScore: number;
+  /**
+   * Optional ONTO-03 override. When omitted, derived from confidenceLabel.
+   * When provided, must match the confidence-derived tag (no free-form tags).
+   */
+  provenanceTag?: CandidateProvenanceTag;
   actor: string;
 }
 
@@ -107,12 +135,30 @@ function validConfidence(label: ConfidenceLabel, score: number): void {
   if (label !== expected) throw new OntologyGovernanceError("confidence label does not match deterministic score band", "invalid");
 }
 
+function resolveProvenanceTag(
+  confidenceLabel: ConfidenceLabel,
+  provided?: CandidateProvenanceTag,
+): CandidateProvenanceTag {
+  const derived = provenanceTagFromConfidence(confidenceLabel);
+  if (provided === undefined) return derived;
+  if (!CANDIDATE_PROVENANCE_TAGS.includes(provided)) {
+    throw new OntologyGovernanceError("provenance tag must be EXTRACTED, INFERRED, or AMBIGUOUS", "invalid");
+  }
+  if (provided !== derived) {
+    throw new OntologyGovernanceError("provenance tag must match confidence-derived band", "invalid");
+  }
+  return provided;
+}
+
 function candidateFrom(row: Record<string, string>): OntologyCandidate {
+  const confidenceLabel = row.confidence_label as ConfidenceLabel;
   return {
     id: row.id, tenantId: row.tenant_id, spaceId: row.space_id, sourceId: row.source_id, sourceHash: row.source_hash,
     sourceSpans: JSON.parse(row.source_spans_json) as string[], extractorId: row.extractor_id, extractorVersion: row.extractor_version,
     candidateKind: row.candidate_kind as CandidateKind, namespace: row.namespace, proposed: JSON.parse(row.proposed_json) as Record<string, unknown>,
-    confidenceLabel: row.confidence_label as ConfidenceLabel, confidenceScore: Number(row.confidence_score), evidenceHash: row.evidence_hash,
+    confidenceLabel, confidenceScore: Number(row.confidence_score),
+    provenanceTag: provenanceTagFromConfidence(confidenceLabel),
+    evidenceHash: row.evidence_hash,
     status: row.status as CandidateStatus, createdAt: row.created_at,
   };
 }
@@ -137,17 +183,18 @@ export function extractOntologyCandidate(db: Database.Database, input: ExtractCa
   }
   if (!input.proposed || typeof input.proposed !== "object" || Array.isArray(input.proposed)) throw new OntologyGovernanceError("proposed candidate is required", "invalid");
   validConfidence(input.confidenceLabel, input.confidenceScore);
+  const provenanceTag = resolveProvenanceTag(input.confidenceLabel, input.provenanceTag);
   const evidenceHash = hash({ sourceHash, sourceSpans: input.sourceSpans, extractorId, extractorVersion, candidateKind: input.candidateKind, namespace, proposed: input.proposed, confidenceLabel: input.confidenceLabel, confidenceScore: input.confidenceScore });
   const existing = db.prepare(`SELECT * FROM ontology_candidates WHERE tenant_id = ? AND space_id = ? AND source_hash = ? AND extractor_id = ? AND extractor_version = ? AND evidence_hash = ?`).get(tenantId, spaceId, sourceHash, extractorId, extractorVersion, evidenceHash) as Record<string, string> | undefined;
   if (existing) return candidateFrom(existing);
   const candidate: OntologyCandidate = {
     id: `ontcand_${randomUUID()}`, tenantId, spaceId, sourceId, sourceHash, sourceSpans: [...input.sourceSpans], extractorId, extractorVersion,
     candidateKind: input.candidateKind, namespace, proposed: input.proposed, confidenceLabel: input.confidenceLabel, confidenceScore: input.confidenceScore,
-    evidenceHash, status: "pending", createdAt: new Date().toISOString(),
+    provenanceTag, evidenceHash, status: "pending", createdAt: new Date().toISOString(),
   };
   const commit = commitAuditAtomic(db, {
     actor, eventType: "ontology_candidate_extracted", entityType: "ontology_candidate", entityId: candidate.id,
-    metadata: { candidate_id: candidate.id, tenant_id: tenantId, space_id: spaceId, source_id: sourceId, source_hash: sourceHash, extractor_id: extractorId, extractor_version: extractorVersion, evidence_hash: evidenceHash, candidate_kind: candidate.candidateKind, namespace, confidence_label: candidate.confidenceLabel, confidence_score: candidate.confidenceScore },
+    metadata: { candidate_id: candidate.id, tenant_id: tenantId, space_id: spaceId, source_id: sourceId, source_hash: sourceHash, extractor_id: extractorId, extractor_version: extractorVersion, evidence_hash: evidenceHash, candidate_kind: candidate.candidateKind, namespace, confidence_label: candidate.confidenceLabel, confidence_score: candidate.confidenceScore, provenance_tag: candidate.provenanceTag },
     body: () => {
       const now = candidate.createdAt;
       // A different verified hash for the same source atomically revokes
@@ -245,6 +292,9 @@ export function getOntologyCandidate(db: Database.Database, candidateId: string,
   return candidateForScope(db, candidateId, tenantId, spaceId);
 }
 
-export function ontologyReceiptContext(db: Database.Database, input: { tenantId: string; spaceId: string; recordType: string; recordId: string }): Record<string, unknown> {
-  return resolveOntologyValidity(db, input);
+export function ontologyReceiptContext(db: Database.Database, input: { tenantId: string; spaceId: string; recordType: string; recordId: string; aboutType?: string; beliefStage?: string }): Record<string, unknown> {
+  return withOntologyTypeRef(resolveOntologyValidity(db, input) as Record<string, unknown>, {
+    aboutType: input.aboutType,
+    beliefStage: input.beliefStage,
+  });
 }

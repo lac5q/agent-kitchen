@@ -68,6 +68,16 @@ export interface PolicyReceipt {
     namespace: string;
     canonicalId: string;
     aliasMigrationPath: unknown[];
+    /** ONTO-06: typed ontology type (e.g. claim). */
+    ontologyType?: string;
+    /** ONTO-06: optional subject type (e.g. organization / Account). */
+    aboutType?: string;
+    /** ONTO-06: belief stage when the decision is belief-scoped. */
+    beliefStage?: string;
+    sourceId?: string;
+    sourceHash?: string;
+    derivativeId?: string;
+    derivativeType?: string;
   };
 }
 
