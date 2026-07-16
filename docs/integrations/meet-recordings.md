@@ -10,10 +10,32 @@ ingest → ensure QMD collection → collection update → collection embed → 
 Public contract lives in [`scripts/meet-sync/`](../../scripts/meet-sync/).
 Private operator wiring lives in `~/.memroos/meeting-sources.json` (never commit secrets).
 
+## Preferred provider: Fathom dual-account
+
+**Fathom is the primary provider** for both Luis accounts. Setup uses
+`scripts/integrations/fathom/install-local.sh` which installs a launchd agent
+that reads API keys from 1Password (`~/.memroos/integrations/fathom-accounts.json`).
+See [`scripts/integrations/fathom/README.md`](../../scripts/integrations/fathom/README.md).
+
+```bash
+bash scripts/integrations/fathom/install-local.sh --probe
+bash scripts/integrations/fathom/install-local.sh --run
+bash scripts/integrations/fathom/install-local.sh --schedule
+```
+
+`--schedule` installs `com.memroos.fathom-sync` (every 3h: ingest + `qmd index meet-recordings`)
+alongside other runtime services. Same as `npm run install:runtime-services`.
+
+API keys resolve from 1Password items titled like `Fathom API Epilogue` / `Fathom API Gmail`
+(or env `FATHOM_API_KEY_EPILOGUE` / `FATHOM_API_KEY_GMAIL`).
+
+Memroos also supports Circleback (private scripts), Fireflies, Otter, Zoom, or any meeting
+tool with a CLI/API. Secrets stay out of git: 1Password (`op`) / env vars / `~/.memroos` overlays.
+
 ## How It Works
 
-1. Provider ingest exports transcripts as dated Markdown
-2. `scripts/meet-sync/meet-sync.sh` indexes **only that source’s** QMD collection(s)
+1. Provider ingest exports transcripts as dated Markdown (Fathom External API, Circleback CLI, …)
+2. `scripts/meet-sync/meet-sync.sh` indexes **only that source's** QMD collection(s)
 3. Agents use MCP **`memory_recall("meeting about X")`** — federates all enabled
    meeting collections + knowledge + mem0 (no need for `qmd -c` collection names)
 4. Operators can still use `qmd search … -c <collection>` for debugging one source
@@ -35,7 +57,7 @@ Google Meet / Gemini notes.
 Private meeting collections are also listed in [`collections.config.json`](../../collections.config.json)
 with `"private": true` — content stays under local `data/context/` (gitignored).
 
-## Quick Start
+## Fathom (both accounts) — detailed setup
 
 ### Step 1 — Copy the example config
 
@@ -73,6 +95,13 @@ into `~/.memroos/context-sources.local.json`. Prefer meet-sync for index command
   "enabled": true,
   "indexCommand": "$HOME/github/memroos/scripts/meet-sync/meet-sync.sh --source circleback --skip-ingest"
 }
+```
+
+Alternative: wire the ingest command in `~/.memroos/memroos-runtime.env`:
+
+```bash
+MEETINGS_INGEST_COMMAND=$MEMROOS_ROOT/scripts/integrations/fathom/fathom-ingest.sh
+# or: MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/circleback-ingest.sh
 ```
 
 ### Step 4 — Run, health, and schedule
@@ -117,14 +146,26 @@ Do not invent a second Google/Spark pipeline inside MemRoOS.
 
 ---
 
+## Circleback (private reference)
+
+[Circleback](https://circleback.ai) CLI remains supported via private scripts:
+
+```bash
+mkdir -p ~/.memroos/integrations
+# circleback-ingest.sh + circleback-transform.py live under ~/.memroos/integrations/
+echo 'MEETINGS_INGEST_COMMAND=$HOME/.memroos/integrations/circleback-ingest.sh' \
+  >> ~/.memroos/memroos-runtime.env
+```
+
 ## Other Providers
 
-| Provider | Typical ingest |
+| Provider | Export command |
 |----------|----------------|
-| Fireflies | CLI/API → transform → Markdown |
-| Otter.ai | export JSON → transform |
-| Zoom | Server-to-Server OAuth + VTT download |
-| Fathom | `X-Api-Key` meetings API |
+| Fathom | `scripts/integrations/fathom/fathom-ingest.sh` |
+| Fireflies | `fireflies export --json` |
+| Otter.ai | `otter export --format json` |
+| Zoom | Zoom API `/meetings/{id}/recordings` |
+| Circleback | `circleback meetings list --json` |
 
 Markdown should include a `## Transcript` section when the provider has one so
 readiness policies (`artifactCompleteMarker`) keep working.
@@ -150,6 +191,15 @@ collections are outside KNOWLEDGE_ROOT.
 
 **`knowledge_health()` shows a meeting source disabled**
 → Enable the matching id in `~/.memroos/context-sources.local.json`.
+
+**`knowledge_health()` shows meet-recordings as disabled**
+→ Enable it in `~/.memroos/context-sources.local.json`
+
+**No meetings after ingest**
+→ Run `qmd index meet-recordings` and check `data/context/meet-recordings/`
+
+**Fathom 1Password failures**
+→ See [Fathom README](../../scripts/integrations/fathom/README.md) troubleshooting
 
 ## See also
 
