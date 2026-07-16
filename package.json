@@ -4,6 +4,9 @@
   "private": true,
   "packageManager": "npm@11.12.1",
   "license": "SEE LICENSE IN LICENSE",
+  "bin": {
+    "memroos": "./bin/memroos.mjs"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
