@@ -2,7 +2,24 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
-## Current Position: v8.11 Unified Meeting Memory (Completed 2026-07-14)
+## Current Position: v8.6 Skill Trust Chain (Completed 2026-07-16)
+
+**Scope:**
+
+1. Skill contracts (incl. `evidence_examples`) + fail-closed dispatch.
+2. Ed25519 content-hash signing and registry provenance.
+3. Quarantine lane before enablement; governed cross-harness sync with proposals/pins/rollback.
+4. Lifecycle states + dependency view + audit.
+
+**Phases:** 148–150 — complete (planning closeout after code-first land).  
+**Requirements:** SKILLTRUST-01..05 — checked complete 2026-07-16.  
+**Evidence:** `.planning/phases/148-skill-contracts-signing/`, `149-skill-quarantine-governed-sync/`, `150-skill-lifecycle/`.
+
+**Next residual gaps:** v8.7 Memory Lifecycle + Erasure; v8.8 Orchestration Evidence Depth; v8.10 Governed Ontology Foundation (plus ENTOPS harness/IdP follow-ups).
+
+---
+
+## Prior Position: v8.11 Unified Meeting Memory (Completed 2026-07-14)
 
 **Scope:**
 
@@ -11,8 +28,6 @@ This file tracks the current high-level product milestone state. Detailed requir
 3. Add multi-search QMD lane, docs, and Monaco/Fathom regressions.
 
 **Phases:** 151–153 — complete. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
-
-**Note:** v8.6 Skill Trust Chain (148–150) remains a parallel track.
 
 ---
 

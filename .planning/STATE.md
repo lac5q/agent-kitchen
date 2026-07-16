@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.11
-milestone_name: Unified Meeting Memory
+milestone: v8.6
+milestone_name: Skill Trust Chain
 status: completed
-stopped_at: Phase 127-01 executed; ENTOPS-08 closed; ENTOPS-07 sink shipped with harness stubs.
-last_updated: "2026-07-16T20:54:47.403Z"
+stopped_at: v8.6 Skill Trust Chain planning closeout (Phases 148-150); SKILLTRUST-01..05 checked complete.
+last_updated: "2026-07-16T21:00:00.000Z"
 progress:
-  total_phases: 112
-  completed_phases: 76
-  total_plans: 155
-  completed_plans: 135
-  percent: 68
+  total_phases: 115
+  completed_phases: 79
+  total_plans: 158
+  completed_plans: 138
+  percent: 70
 ---
 
 # State: Memroos
@@ -20,20 +20,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** v8.11 Unified Meeting Memory COMPLETE (Phases 151-153). Parallel candidate remains v8.6 Skill Trust Chain (148-150).
+**Current focus:** v8.6 Skill Trust Chain COMPLETE (Phases 148-150). v8.11 Unified Meeting Memory also COMPLETE (Phases 151-153).
 
 ## Current Position
 
-Phase: 127 complete (code slice) — ENTOPS-08 closed; ENTOPS-07 operator sink delivered; Claude/Hermes/Codex harness wiring still handoff
-Plan: 127-01 complete
-Status: Phase 127 Acceptance Contract met for CODE deliverables; ENTOPS-08 closed; ENTOPS-07 partial (sink yes / harness wiring stubbed) per `docs/entops-stub-handoff.md`. Parallel: v8.11 COMPLETE; v8.6 Skill Trust Chain remains a separate track.
+Phase: v8.6 COMPLETE (Phases 148–150 planning closeout 2026-07-16)
+Plan: 148-01 / 149-01 / 150-01 closeout summaries written (product code already shipped)
+Status: **v8.6 Skill Trust Chain COMPLETE** — SKILLTRUST-01..05 checked in REQUIREMENTS.md. Product modules live under `apps/memroos/src/lib/skills/` + `/api/skills/`; skill Vitest suites green (237 passed).
+
+**Next = residual gaps for:**
+- **v8.7** Memory Lifecycle + Erasure (`MEMLIFE-01..05`) — retention, derivative-chasing erasure, subject-scoped plans, decay, tombstones
+- **v8.8** Orchestration Evidence Depth — harness evidence governance, `MSIQ-04..05`, multi-hop compensation
+- **v8.10** Governed Ontology Foundation (`ONTO-01..06`) — upper ontology + domain packs + SEAL promotion
+- Also open: ENTOPS harness wiring (Claude/Hermes/Codex), IdP/MDM follow-ups from Phases 126–127
 
 ## Session Continuity
 
-Last session: 2026-07-16T20:54:47.378Z
-Stopped at: Phase 127-01 executed; ENTOPS-08 closed; ENTOPS-07 sink shipped with harness stubs.
+Last session: 2026-07-16T21:00:00.000Z
+Stopped at: v8.6 Skill Trust Chain planning closeout (Phases 148-150); SKILLTRUST-01..05 checked complete.
 Resume file: None
-Next action: Harness wiring for ENTOPS-07 (Claude/Hermes/Codex) or IdP/MDM follow-up from Phase 126; optional v8.6 Skill Trust Chain.
+Next action: Pick residual gap track — v8.7 MEMLIFE, v8.8 orchestration evidence, or v8.10 ontology; or finish ENTOPS harness wiring.
 
 ## Roadmap Summary (v5.0 + v6.0)
 

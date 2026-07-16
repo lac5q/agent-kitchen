@@ -1,6 +1,6 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-07-14*
+*Updated: 2026-07-16*
 
 ---
 
@@ -20,7 +20,9 @@
 - v8.2 Team-Scale Access + Policy Plane — complete
 - v8.3 Agent OS GSD Stack — complete
 - v8.4 Project-Centric Operator UX — complete
-- v8.5 Agent Fleet Plane — **planned** (Phases 142-147, FLEET-01..26)
+- v8.5 Agent Fleet Plane — complete (Phases 142-147, FLEET-01..26)
+- v8.6 Skill Trust Chain — complete (Phases 148-150, SKILLTRUST-01..05; closed 2026-07-16)
+- v8.11 Unified Meeting Memory — complete (Phases 151-153)
 
 ---
 
@@ -307,15 +309,17 @@
 - [x] **TEAMSCALE-05**: Org-level observability: per-team NOC views of memory growth, promotion queue depth, policy denials, skill usage, and agent activity, so a 100-person org can see which teams' memory is healthy, stale, or leaking effort.
 - [x] **TEAMSCALE-06**: Relationship-sensitive assets (e.g. investor/warm-intro graphs in the Cordant scenario) support named-owner approval gates: any agent use of the asset requires the owner's standing or per-use approval, enforced by POLGOV and visible in receipts.
 
-## SKILLTRUST Skill Trust Chain (Proposed)
+## SKILLTRUST Skill Trust Chain — COMPLETE (Phases 148–150)
 
 *Source: SkillForge governs skill optimization, and the marketplace distributes skills, but imported/synced skills are trusted on import. Skills are executable instructions — at ICP scale they need supply-chain treatment. Promotes the "governed skill contracts" and "cross-harness skill auto-sync" Later Ideas.*
 
-- [ ] **SKILLTRUST-01**: Every registered skill carries a contract: preconditions, allowed tools, risk tier, verification checks, owner, rollback behavior, and evidence examples; dispatch remains fail-closed on incomplete contracts (extends the shipped completeness gate).
-- [ ] **SKILLTRUST-02**: Skills are content-hashed and signed at publish/import; the registry records provenance (author, source harness/marketplace, signature) and dispatch can be policy-restricted to signed skills above a trust threshold.
-- [ ] **SKILLTRUST-03**: Imported/marketplace skills run a quarantine lane before enablement: injection/scanner pass, sandboxed eval against the skill's declared verification checks, and operator approval — no direct-to-enabled imports.
-- [ ] **SKILLTRUST-04**: Cross-harness auto-sync (Claude Code, Codex, Hermes, OpenCode dirs) becomes governed: detected skill changes arrive as import proposals with diffs, not silent updates; version pinning per agent with one-step rollback.
-- [ ] **SKILLTRUST-05**: Skill lifecycle states (draft, enabled, deprecated, retired) with deprecation warnings surfaced to dependent agents, a dependency view of which agents/workflows use which skill versions, and audit on every state change.
+*Completion note (2026-07-16): Product code already shipped (`registry.ts`, `skill-signing.ts`, `skill-quarantine.ts`, `skill-sync*.ts`, `skill-lifecycle.ts`, `skill-dependencies.ts`, APIs under `apps/memroos/src/app/api/skills/`). Planning dirs were missing because code landed without GSD closeout; closed with SUMMARY + VERIFICATION under phases 148–150. Skill Vitest suites green (237 passed on 2026-07-16).*
+
+- [x] **SKILLTRUST-01**: Every registered skill carries a contract: preconditions, allowed tools, risk tier, verification checks, owner, rollback behavior, and evidence examples; dispatch remains fail-closed on incomplete contracts (extends the shipped completeness gate). *(Completed 2026-07-16 — Phase 148; `registry.ts` + contract gate.)*
+- [x] **SKILLTRUST-02**: Skills are content-hashed and signed at publish/import; the registry records provenance (author, source harness/marketplace, signature) and dispatch can be policy-restricted to signed skills above a trust threshold. *(Completed 2026-07-16 — Phase 148; `skill-signing.ts` + `/api/skills/sign|verify`.)*
+- [x] **SKILLTRUST-03**: Imported/marketplace skills run a quarantine lane before enablement: injection/scanner pass, sandboxed eval against the skill's declared verification checks, and operator approval — no direct-to-enabled imports. *(Completed 2026-07-16 — Phase 149; `skill-quarantine.ts` + `/api/skills/quarantine/*`.)*
+- [x] **SKILLTRUST-04**: Cross-harness auto-sync (Claude Code, Codex, Hermes, OpenCode dirs) becomes governed: detected skill changes arrive as import proposals with diffs, not silent updates; version pinning per agent with one-step rollback. *(Completed 2026-07-16 — Phase 149; `skill-sync.ts` / `skill-sync-governance.ts` + sync/pins APIs.)*
+- [x] **SKILLTRUST-05**: Skill lifecycle states (draft, enabled, deprecated, retired) with deprecation warnings surfaced to dependent agents, a dependency view of which agents/workflows use which skill versions, and audit on every state change. *(Completed 2026-07-16 — Phase 150; `skill-lifecycle.ts` + `skill-dependencies.ts` + `/api/skills/lifecycle`.)*
 
 ## MEMLIFE Memory Lifecycle, Retention + Erasure (Proposed)
 
@@ -515,4 +519,9 @@
 | URECALL-04 | 153 | Done |
 | URECALL-05 | 153 | Done |
 | URECALL-06 | 153 | Done |
+| SKILLTRUST-01 | 148 | Complete |
+| SKILLTRUST-02 | 148 | Complete |
+| SKILLTRUST-03 | 149 | Complete |
+| SKILLTRUST-04 | 149 | Complete |
+| SKILLTRUST-05 | 150 | Complete |
 

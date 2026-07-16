@@ -41,6 +41,8 @@
 - ✅ **v8.3 Agent OS GSD Stack** — Phases 132-136 (completed 2026-07-07; Mark Kashef transcript-audit stack shipped as MemRoOS-native control plane + portable skill boundary)
 - ✅ **v8.4 Project-Centric Operator UX** — Phases 137-141 (completed 2026-07-08; MemClaw operator-UX parity: workspace load, write rules, document directory, `is_shared`, cache admin, save-artifact gate; 22 requirement IDs shipped)
 - ✅ **v8.5 Agent Fleet Plane** — Phases 142-147 (completed 2026-07-10; MemroOS as top-layer fleet plane across runtimes, LangGraph as peer orchestration runtime, Paperclip as parallel tenant; FLEET-01..26 shipped; sources: Discord #devops fleet research + Paperclip audit + OSS control-plane survey)
+- ✅ **v8.6 Skill Trust Chain** — Phases 148-150 (completed 2026-07-16; contracts, Ed25519 signing/provenance, quarantine lane, governed sync + pins, lifecycle/dependencies; SKILLTRUST-01..05 shipped; planning closeout after code-first land)
+- ✅ **v8.11 Unified Meeting Memory** — Phases 151-153 (completed 2026-07-14; meeting ingest reliability + federated `memory_recall` + operator surfaces; MEETREL-01..04 + URECALL-01..06)
 
 ## Phases
 
@@ -922,12 +924,12 @@ Priority order (each is a candidate milestone; requirements in `.planning/REQUIR
 4. **P0 — v8.3 Agent OS GSD Stack — COMPLETE (Phases 132-136 complete 2026-07-07).** `GSDSTACK-01..11`. Context packet, run ledger, shipcheck, goal/resume/standup, portable skill boundary, skill audit, lane evals, model routing, thin adapters, and safety slice. This is the implementation spine that makes Hermes/Discord/Telegram/Codex/Claude replaceable interfaces over MemRoOS rather than competing OSes. Scenario: S11.
 5. **P0 — v8.4 Project-Centric Operator UX — COMPLETE (Phases 137-141 complete 2026-07-08).** `WORKLOAD-01..05`, `WRITERULES-01..06`, `SHAREDRO-01..03`, `CACHEADMIN-01..05`, `ARTGATE-01..03`. MemClaw operator-UX parity while preserving MEMSEC/belief/evidence/audit.
 6. **P0 — v8.5 Agent Fleet Plane — PLANNED as Phases 142-147 (2026-07-08, from fleet control tooling research).** `FLEET-01..26`. MemroOS is the top-layer fleet plane across runtimes; LangGraph is a peer orchestration runtime; Paperclip is a parallel tenant for company/budget/board. Closes the "who governs agents on many machines" decision without adopting Archestra (AGPL) or rebuilding LangGraph as a control plane. Scenario: **S12**. Kickoff: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`.
-7. **P1 — v8.6 Skill Trust Chain** — `SKILLTRUST-01..05` (was v8.5; renumbered 2026-07-08 to insert fleet plane). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6.
+7. **P1 — v8.6 Skill Trust Chain — COMPLETE (Phases 148-150 closed 2026-07-16).** `SKILLTRUST-01..05` (was v8.5; renumbered 2026-07-08 to insert fleet plane). Contracts, signing/provenance, quarantine lane, governed sync, lifecycle states. Scenario: S6. Planning closeout: `.planning/phases/148-skill-contracts-signing/`, `149-skill-quarantine-governed-sync/`, `150-skill-lifecycle/`.
 8. **P1 — v8.7 Memory Lifecycle + Erasure** — `MEMLIFE-01..05` (was v8.6). Retention per type+label, verified derivative-chasing erasure, subject-scoped erasure plans, decay/consolidation into the raw vault, chain-safe tombstones. Scenario: S7 (data half).
 9. **P1 — v8.8 Orchestration Evidence Depth** — (was v8.7). Harness Control Plane + evidence governance, `MSIQ-04..05`, `ORCH-FOLLOWUP-01` multi-hop compensation. Consumes receipts from v8.0–v8.5; fleet plane pre-exec receipts (v8.5 Phase 145) feed this lane.
 10. **P2 — v8.9 Retrieval Quality + External Benchmark Proof** — (was v8.8). LoCoMo/LongMemEval lanes, embedding upgrade behind flags, LLM recall scoring.
 11. **P2 — v8.10 Governed Ontology Foundation** — `ONTO-01..06` (was v8.9). Fixed upper ontology + domain packs + SEAL-governed promotion.
-12. **P1 — v8.11 Unified Meeting Memory — PLANNED as Phases 151-153 (2026-07-14).** `MEETREL-01..04`, `URECALL-01..06`. Idempotent meeting ingest + federated `memory_recall` so agents find Circleback/Fathom/Zoom without knowing collection names. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
+12. **P1 — v8.11 Unified Meeting Memory — COMPLETE (Phases 151-153 complete 2026-07-14).** `MEETREL-01..04`, `URECALL-01..06`. Idempotent meeting ingest + federated `memory_recall` so agents find Circleback/Fathom/Zoom without knowing collection names. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
 13. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
 
 **Renumbering note (2026-07-08):** inserted **v8.5 Agent Fleet Plane** after completed v8.4. Prior P1/P2 candidates shift: Skill Trust Chain v8.5→**v8.6**, Memory Lifecycle v8.6→**v8.7**, Orchestration Evidence v8.7→**v8.8**, Retrieval Quality v8.8→**v8.9**, Ontology v8.9→**v8.10**. Earlier 2026-07-07 note (Ontology v8.4→v8.9 for MemClaw UX) is superseded by this ordering for future planning.
@@ -2366,4 +2368,24 @@ Plans:
 1. `/api/memory/multi-search` includes a QMD meeting lane.
 2. Docs + `collections.config.json` list private meeting collections.
 3. Regression coverage for Monaco Circleback + Fathom Impromptu via `memory_recall` without `-c`.
+
+---
+
+## v8.6 Skill Trust Chain (Phases 148–150) — COMPLETE (2026-07-16)
+
+*Planning closeout 2026-07-16: product code shipped earlier without GSD phase dirs; SUMMARY + VERIFICATION added retroactively. Skill Vitest suites green (237 passed).*
+
+**Scenario:** S6 — Marketplace/cross-harness skill import arrives signed, quarantined, sandbox-evaluated against its contract, and operator-approved before dispatch.
+
+- [x] **Phase 148: Skill Contracts + Signing** — SKILLTRUST-01, SKILLTRUST-02  
+  Modules: `registry.ts`, `skill-signing.ts`; APIs: `/api/skills/sign`, `/api/skills/verify`, import provenance.  
+  Closeout: `.planning/phases/148-skill-contracts-signing/148-01-SUMMARY.md`, `148-VERIFICATION.md`
+- [x] **Phase 149: Skill Quarantine + Governed Sync** — SKILLTRUST-03, SKILLTRUST-04  
+  Modules: `skill-quarantine.ts`, `skill-sync.ts`, `skill-sync-governance.ts`; APIs: quarantine/*, sync/*, pins/*.  
+  Closeout: `.planning/phases/149-skill-quarantine-governed-sync/149-01-SUMMARY.md`, `149-VERIFICATION.md`
+- [x] **Phase 150: Skill Lifecycle** — SKILLTRUST-05  
+  Modules: `skill-lifecycle.ts`, `skill-dependencies.ts`; API: `/api/skills/lifecycle`.  
+  Closeout: `.planning/phases/150-skill-lifecycle/150-01-SUMMARY.md`, `150-VERIFICATION.md`
+
+**Tests:** `apps/memroos/src/lib/skills/__tests__/` (signing, quarantine, sync, lifecycle, dependencies, trust-chain, registry).
 
