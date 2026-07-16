@@ -24,6 +24,7 @@ const SERVICES = [
     name: 'Neo4j Browser',
     url: 'http://localhost:7474',
     port: 7474,
+    optional: true,
     healthPaths: ['/', '/browser'],
     acceptStatuses: ['200', '307'],
   },
