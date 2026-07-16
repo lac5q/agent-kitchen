@@ -41,7 +41,7 @@ describe("native-memory sink (ENTOPS-07 code slice)", () => {
     expect(result.enforcement).toBe("warn_only");
     expect(NATIVE_MEMORY_SINK_POLICY.neverDelete).toBe(true);
     expect(NATIVE_MEMORY_SINK_POLICY.neverAutoTrim).toBe(true);
-    expect(NATIVE_MEMORY_SINK_POLICY.harnessWiring).toBe("not_built");
+    expect(NATIVE_MEMORY_SINK_POLICY.harnessWiring).toBe("hermes_observe_opt_in");
     expect(result.alerts.some((a) => a.includes("directive_diff"))).toBe(true);
   });
 

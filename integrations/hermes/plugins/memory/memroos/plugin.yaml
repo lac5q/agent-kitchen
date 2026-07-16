@@ -1,0 +1,5 @@
+name: memroos
+version: 1.0.0
+description: "MemRoOS — opt-in dual-mode memory mirror. Built-in MEMORY.md stays primary; MemRoOS observes via native-memory ingest."
+hooks:
+  - on_memory_write

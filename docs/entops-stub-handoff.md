@@ -88,6 +88,22 @@ Phase 127 ships **ENTOPS-08** (exit/DSAR tooling) fully in code, and the **opera
 3. Pipeline is warn-only on budgets/diffs; HIGH secrets are redacted from `replay` via `scanContent`.
 4. Caller (future harness hook) owns writing `replay` to the local file — MemRoOS does not touch harness internals.
 
+---
+
+# EntOps — Hermes dual-mode observe (append 2026-07-16)
+
+**Status:** Hermes **opt-in** additive provider shipped. Default Hermes MEMORY.md unchanged.
+
+| Item | Status |
+|------|--------|
+| MemRoOS Hermes plugin (`integrations/hermes/plugins/memory/memroos`) | **Shipped** — observe mirror via `on_memory_write` |
+| Installer `scripts/install-hermes-memroos-memory.sh` | **Shipped** |
+| Default `memory.provider` unset | **Safe** — built-in only |
+| `rewrite_local` / MemRoOS-first MEMORY.md replacement | **NOT built** (deferred until observe proves out) |
+| Claude / Codex wiring | **NOT built** |
+
+See `docs/integrations/hermes-memory-dual-mode.md`.
+
 ## Verification commands
 
 ```bash

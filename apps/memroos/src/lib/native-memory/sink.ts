@@ -115,5 +115,9 @@ export function processNativeMemoryIngest(
 export const NATIVE_MEMORY_SINK_POLICY = {
   neverDelete: true,
   neverAutoTrim: true,
-  harnessWiring: "not_built" as const,
+  /**
+   * Hermes: opt-in observe provider (MEMORY.md stays primary).
+   * Claude/Codex: still not wired.
+   */
+  harnessWiring: "hermes_observe_opt_in" as const,
 } as const;

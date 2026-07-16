@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
-stopped_at: 2026-07-16 requirement closeout — MEMLIFE-03..05, MSIQ-05, ONTO-02..06 checked; MSIQ-06 still approval-gated.
-last_updated: "2026-07-16T21:30:00.000Z"
+stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary.
+last_updated: "2026-07-16T21:45:00.000Z"
 progress:
   total_phases: 115
   completed_phases: 79
@@ -20,25 +20,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** Requirement closeout (2026-07-16) for already-shipped v8.7 MEMLIFE, v8.8 MSIQ-05/ORCH, and v8.10 ONTO. Small code gaps closed for ONTO-03 provenance tags + ONTO-06 typed receipt refs.
+**Current focus:** Hermes dual-mode memory — opt-in MemRoOS observe provider; built-in MEMORY.md remains default.
 
 ## Current Position
 
-Phase: Requirement closeout (no new GSD phase number) — 2026-07-16
-Plan: Docs + VERIFY against shipped code; ONTO-03/06 code gaps closed
-Status: **v8.7 MEMLIFE-01..05 COMPLETE** · **v8.8 MSIQ-05 + ORCH-FOLLOWUP-01 COMPLETE** (MSIQ-06 open) · **v8.10 ONTO-01..06 COMPLETE** · **v8.9 bench done; Voyage/LLM scoring deferred**
+Phase: 159 Hermes dual-mode memory (observe) — 2026-07-16
+Plan: ENTOPS-07 Hermes opt-in slice complete; Claude/Codex still open
+Status: **Hermes MEMORY.md unchanged by default** · **MemRoOS provider available when `memory.provider: memroos`** · Voyage clarified as cloud API (not implemented)
 
 **Still open:**
-- **MSIQ-06** — bounded GraphRAG spike remains Luis approval-gated
-- **ENTOPS-04/05/07** — infra/harness stubs unchanged (IdP/MDM/per-harness wiring)
-- **v8.9** residual — Voyage embedding upgrade + LLM recall scoring (approval/deferred)
+- **MSIQ-06** — GraphRAG spike (Luis approval)
+- **ENTOPS-04/05** — IdP/MDM
+- **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred
+- **v8.9** — Voyage/LLM scoring (cloud API if approved)
 
 ## Session Continuity
 
-Last session: 2026-07-16T21:30:00.000Z
-Stopped at: Requirement closeout for MEMLIFE/MSIQ/ONTO; MSIQ-06 left unchecked.
-Resume file: None
-Next action: Pick MSIQ-06 (only with Luis approval), ENTOPS harness wiring, or v8.9 Voyage/LLM scoring lane.
+Last session: 2026-07-16T21:45:00.000Z
+Stopped at: Hermes dual-mode observe provider installed (inactive by default).
+Resume file: `.planning/goals/2026-07-16-hermes-dual-mode-memory.md`
+Next action: Local Hermes trial with `MEMROOS_HERMES_DRY_RUN=1`, then live ingest; `hermes memory off` until satisfied.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
