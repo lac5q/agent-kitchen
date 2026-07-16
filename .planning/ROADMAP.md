@@ -516,7 +516,7 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
 
 - [x] **Phase 124: Operator Load Proof + SLO Gate** — ENTOPS-01
 - [x] **Phase 125: Multi-Tenant Vaults + Central Tamper-Evident Audit** — ENTOPS-02, ENTOPS-03 (completed 2026-07-07; per-tenant vault isolation with operator-mode fail-closed guard, MCP→operator central hash-chained audit bridge, SIEM/DSAR export by user; Beastmode watcher PASS after chain-race + fail-open hardening)
-- [ ] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06
+- [x] **Phase 126: Operator-Stub Distribution + Day-1 Onboarding** — ENTOPS-04, ENTOPS-05, ENTOPS-06 (code slice completed 2026-07-16; IdP/MDM/S9/S10 remain handoff stubs — see `docs/entops-stub-handoff.md`)
 - [ ] **Phase 127: Write-Side Native-Memory Enforcement + Exit Tool** — ENTOPS-07, ENTOPS-08
 
 ### Phase 124: Operator Load Proof + SLO Gate
@@ -550,7 +550,7 @@ Source: 2026-07-06 adversarial enterprise review (`content/research/memroos-ente
   1. `install-agent-integrations.sh` defaults to `MEMROOS_OPERATOR_URL` + OAuth device flow; `--local` is the explicit solo escape hatch; shared-mode stubs contain no git-clone fallback path (S10: on MCP outage, agents degrade honestly instead of pulling the corpus)
   2. S9 demo: invite token → MDM-deployable installer on a locked-down corporate Mac without admin rights → first-day verification script passes → the new hire's agents carry their team directives with zero human intervention
   3. Directive budgets are per-tenant config (default 200 lines, admin-overridable); enforcement warns and diffs against canonical — no auto-trim path exists anywhere
-**Plans**: 0/? planned
+**Plans**: 1/1 complete (`126-01` — code slice 2026-07-16; IdP/MDM/S9/S10 still handoff)
 **UI hint**: yes (onboarding + budget admin)
 
 ### Phase 127: Write-Side Native-Memory Enforcement + Exit Tool

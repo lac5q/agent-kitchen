@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v8.11
 milestone_name: Unified Meeting Memory
-status: complete
-stopped_at: Phase 153 verified (2026-07-14) — v8.11 COMPLETE
-last_updated: "2026-07-14T19:45:00.000Z"
+status: completed
+stopped_at: Phase 126-01 executed; code slice complete; IdP/MDM handoff documented.
+last_updated: "2026-07-16T20:48:12.591Z"
 progress:
-  total_phases: 70
-  completed_phases: 50
-  total_plans: 78
-  completed_plans: 93
-  percent: 71
+  total_phases: 112
+  completed_phases: 75
+  total_plans: 155
+  completed_plans: 134
+  percent: 67
 ---
 
 # State: Memroos
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
 
 ## Current Position
 
-Phase: 153 complete, v8.11 milestone COMPLETE
-Plan: MEETREL-01..04 + URECALL-01..06 shipped
-Status: v8.11 Unified Meeting Memory COMPLETE; v8.5 COMPLETE; v8.6 Skill Trust Chain remains a separate track
+Phase: 126 complete (code slice) — ENTOPS-04/05/06 code delivered; IdP/MDM/S9/S10 still handoff
+Plan: 126-01 complete
+Status: Phase 126 Acceptance Contract met for CODE deliverables; ENTOPS-06 closed; ENTOPS-04/05 IdP+MDM remain open per `docs/entops-stub-handoff.md`. Parallel: v8.11 COMPLETE; v8.6 Skill Trust Chain remains a separate track.
 
 ## Session Continuity
 
-Last session: 2026-07-14T19:45:00.000Z
-Stopped at: Phase 153 verified; v8.11 COMPLETE.
-Resume file: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`
-Next action: Optional operator re-ingest for id-based filenames; or resume v8.6 Skill Trust Chain planning.
+Last session: 2026-07-16T20:48:12.567Z
+Stopped at: Phase 126-01 executed; code slice complete; IdP/MDM handoff documented.
+Resume file: None
+Next action: Phase 127 (ENTOPS-07/08) or IdP/MDM infrastructure follow-up; optional v8.6 Skill Trust Chain.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
