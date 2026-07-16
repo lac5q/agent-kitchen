@@ -162,6 +162,11 @@ export class OntologyRegistryError extends Error {
   }
 }
 
+/**
+ * Canonical upper-ontology vocabulary projected from
+ * `content/ontology/upper.yaml` (ONTO-01). Existing five roots are preserved
+ * byte-stable; the remaining types complete the shared ~12–15 core set.
+ */
 export const CORE_VOCABULARY: readonly OntologyDefinition[] = Object.freeze([
   {
     id: "entity",
@@ -169,9 +174,64 @@ export const CORE_VOCABULARY: readonly OntologyDefinition[] = Object.freeze([
     semantics: { kind: "root", description: "A governed resource with an immutable identity." },
   },
   {
+    id: "person",
+    aliases: ["contact"],
+    semantics: { kind: "entity", description: "A human individual in the operating graph." },
+  },
+  {
+    id: "organization",
+    aliases: ["account"],
+    semantics: { kind: "entity", description: "A company, customer account, or institutional body." },
+  },
+  {
+    id: "team",
+    aliases: ["group"],
+    semantics: { kind: "entity", description: "A named group of people or agents with shared ownership." },
+  },
+  {
     id: "agent",
     aliases: ["actor"],
     semantics: { kind: "entity", description: "An accountable human or automated actor." },
+  },
+  {
+    id: "skill",
+    aliases: ["procedure"],
+    semantics: { kind: "entity", description: "A reusable, governed procedure an agent can execute." },
+  },
+  {
+    id: "tool",
+    aliases: ["capability_tool"],
+    semantics: { kind: "entity", description: "An invocable capability, API, or MCP tool surface." },
+  },
+  {
+    id: "project",
+    aliases: ["workspace_project"],
+    semantics: { kind: "entity", description: "A bounded operating project or engagement." },
+  },
+  {
+    id: "task",
+    aliases: ["work_item"],
+    semantics: { kind: "entity", description: "A discrete unit of work with an owner and outcome." },
+  },
+  {
+    id: "event",
+    aliases: ["meeting"],
+    semantics: { kind: "entity", description: "A time-bounded occurrence such as a meeting or incident." },
+  },
+  {
+    id: "source",
+    aliases: ["document"],
+    semantics: { kind: "entity", description: "A durable source artifact such as a document or transcript." },
+  },
+  {
+    id: "claim",
+    aliases: ["assertion"],
+    semantics: { kind: "entity", description: "A statement about the world that may carry belief stage." },
+  },
+  {
+    id: "decision",
+    aliases: ["resolution"],
+    semantics: { kind: "entity", description: "An explicit choice with rationale and effective scope." },
   },
   {
     id: "memory",
@@ -188,7 +248,23 @@ export const CORE_VOCABULARY: readonly OntologyDefinition[] = Object.freeze([
     aliases: ["governance_policy"],
     semantics: { kind: "entity", description: "A rule that constrains governed operations." },
   },
+  {
+    id: "relationship_path",
+    aliases: ["relationship-path", "intro_path"],
+    semantics: { kind: "entity", description: "A governed multi-hop relationship path between entities." },
+  },
 ]);
+
+export const CORE_RELATIONSHIPS: readonly OntologyRelationship[] = Object.freeze(
+  CORE_VOCABULARY.filter((definition) => definition.id !== "entity").map((definition) => ({
+    from: definition.id,
+    to: "entity",
+    type: "is_a",
+  }))
+);
+
+/** Git path for the upper-ontology source projected by this registry. */
+export const UPPER_ONTOLOGY_SOURCE = "content/ontology/upper.yaml";
 
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
@@ -456,12 +532,7 @@ export function ensureCanonicalUpperOntology(db: Database.Database, actor = "sys
     id: UPPER_ONTOLOGY_ID,
     version: "1.0.0",
     definitions: [...CORE_VOCABULARY],
-    relationships: [
-      { from: "agent", to: "entity", type: "is_a" },
-      { from: "memory", to: "entity", type: "is_a" },
-      { from: "provenance", to: "entity", type: "is_a" },
-      { from: "policy", to: "entity", type: "is_a" },
-    ],
+    relationships: [...CORE_RELATIONSHIPS],
   };
   const hash = canonicalContentHash(document);
   return publishOntologyVersion(db, {

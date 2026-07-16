@@ -40,10 +40,7 @@ function migrationTarget(registry: typeof import("../registry"), source: { ontol
     version: "1.1.0",
     definitions: [...registry.CORE_VOCABULARY, { id: "migration.target", semantics: { kind: "entity" } }],
     relationships: [
-      { from: "agent", to: "entity", type: "is_a" },
-      { from: "memory", to: "entity", type: "is_a" },
-      { from: "provenance", to: "entity", type: "is_a" },
-      { from: "policy", to: "entity", type: "is_a" },
+      ...registry.CORE_RELATIONSHIPS,
       { from: "migration.target", to: "entity", type: "is_a" },
     ],
     parent: source,

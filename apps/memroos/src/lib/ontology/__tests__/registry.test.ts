@@ -48,14 +48,11 @@ function nextDocument(mod: Awaited<ReturnType<typeof registry>>, parent: { versi
     version: "1.1.0",
     definitions: [
       ...mod.CORE_VOCABULARY,
-      { id: "project", aliases: ["workspace_project"], semantics: { kind: "entity", description: "A bounded operating project." } },
+      { id: "dossier", aliases: ["case_file"], semantics: { kind: "entity", description: "A curated multi-source case file." } },
     ],
     relationships: [
-      { from: "agent", to: "entity", type: "is_a" },
-      { from: "memory", to: "entity", type: "is_a" },
-      { from: "provenance", to: "entity", type: "is_a" },
-      { from: "policy", to: "entity", type: "is_a" },
-      { from: "project", to: "entity", type: "is_a" },
+      ...mod.CORE_RELATIONSHIPS,
+      { from: "dossier", to: "entity", type: "is_a" },
     ],
     parent: { ontologyId: mod.UPPER_ONTOLOGY_ID, version: parent.version, contentHash: parent.contentHash },
   };
@@ -92,6 +89,25 @@ describe("ontology registry validation", () => {
     expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_registry`).get()).toMatchObject({ count: 1 });
   });
 
+  it("VAL-ONTO-011 projects the git upper ontology (~12–15+ core types) including required ONTO-01 vocabulary", async () => {
+    const { mod, ontology } = await canonical();
+    const required = [
+      "person", "organization", "team", "agent", "skill", "tool", "project", "task",
+      "event", "source", "claim", "decision", "policy", "relationship_path",
+    ];
+    const ids = ontology.definitions.map((definition) => definition.id);
+    expect(ids).toEqual(mod.CORE_VOCABULARY.map((definition) => definition.id));
+    expect(mod.CORE_VOCABULARY.length).toBeGreaterThanOrEqual(14);
+    expect(mod.CORE_VOCABULARY.length).toBeLessThanOrEqual(20);
+    for (const id of required) {
+      expect(ids).toContain(id);
+    }
+    expect(ontology.definitions.find((d) => d.id === "organization")?.aliases).toContain("account");
+    expect(ontology.definitions.find((d) => d.id === "event")?.aliases).toContain("meeting");
+    expect(ontology.definitions.find((d) => d.id === "source")?.aliases).toContain("document");
+    expect(ontology.relationships).toEqual([...mod.CORE_RELATIONSHIPS]);
+  });
+
   it("VAL-ONTO-002 rejects malformed, duplicate, regressive, unparented, and hash-mismatched publication", async () => {
     const { mod, ontology } = await canonical();
     const valid = nextDocument(mod, ontology);
@@ -120,13 +136,13 @@ describe("ontology registry validation", () => {
       actor: "operator", suppliedHash: duplicateHash,
       projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: duplicateHash })),
     })).toThrow(/Alias shadows/);
-    const broken = { ...document, relationships: [...document.relationships, { from: "project", to: "missing", type: "is_a" }] };
+    const broken = { ...document, relationships: [...document.relationships, { from: "dossier", to: "missing", type: "is_a" }] };
     const brokenHash = mod.canonicalContentHash(broken);
     expect(() => mod.publishOntologyVersion(db, {
       ...broken, actor: "operator", suppliedHash: brokenHash,
       projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: brokenHash })),
     })).toThrow(/endpoints/);
-    const cyclic = { ...document, relationships: [...document.relationships, { from: "entity", to: "project", type: "is_a" }] };
+    const cyclic = { ...document, relationships: [...document.relationships, { from: "entity", to: "dossier", type: "is_a" }] };
     const cyclicHash = mod.canonicalContentHash(cyclic);
     expect(() => mod.publishOntologyVersion(db, { ...cyclic, actor: "operator", suppliedHash: cyclicHash, projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: cyclicHash })) })).toThrow(/cycle/);
     const weakened = { ...document, definitions: document.definitions.map((definition) => definition.id === "agent" ? { ...definition, semantics: { kind: "entity", description: "different" } } : definition) };
@@ -139,7 +155,7 @@ describe("ontology registry validation", () => {
     const relationshipRemoved = {
       ...nextDocument(mod, published),
       version: "1.2.0",
-      relationships: document.relationships.filter((relationship) => relationship.from !== "project"),
+      relationships: document.relationships.filter((relationship) => relationship.from !== "dossier"),
     };
     const relationshipRemovedHash = mod.canonicalContentHash(relationshipRemoved);
     expect(() => mod.publishOntologyVersion(db, {

@@ -1,0 +1,132 @@
+# MemRoOS upper ontology (git source of truth)
+# Projected into SQLite / Neo4j labels / knowledge frontmatter / memory-tier metadata
+# via apps/memroos/src/lib/ontology/registry.ts (CORE_VOCABULARY + ensureCanonicalUpperOntology).
+#
+# Creation date: 2026-07-16
+# Update date: 2026-07-16
+# Version: 1.0.0
+# Requirement: ONTO-01
+
+id: memroos.upper
+version: "1.0.0"
+
+definitions:
+  - id: entity
+    aliases: [thing]
+    semantics:
+      kind: root
+      description: A governed resource with an immutable identity.
+
+  - id: person
+    aliases: [contact]
+    semantics:
+      kind: entity
+      description: A human individual in the operating graph.
+
+  - id: organization
+    aliases: [account]
+    semantics:
+      kind: entity
+      description: A company, customer account, or institutional body.
+
+  - id: team
+    aliases: [group]
+    semantics:
+      kind: entity
+      description: A named group of people or agents with shared ownership.
+
+  - id: agent
+    aliases: [actor]
+    semantics:
+      kind: entity
+      description: An accountable human or automated actor.
+
+  - id: skill
+    aliases: [procedure]
+    semantics:
+      kind: entity
+      description: A reusable, governed procedure an agent can execute.
+
+  - id: tool
+    aliases: [capability_tool]
+    semantics:
+      kind: entity
+      description: An invocable capability, API, or MCP tool surface.
+
+  - id: project
+    aliases: [workspace_project]
+    semantics:
+      kind: entity
+      description: A bounded operating project or engagement.
+
+  - id: task
+    aliases: [work_item]
+    semantics:
+      kind: entity
+      description: A discrete unit of work with an owner and outcome.
+
+  - id: event
+    aliases: [meeting]
+    semantics:
+      kind: entity
+      description: A time-bounded occurrence such as a meeting or incident.
+
+  - id: source
+    aliases: [document]
+    semantics:
+      kind: entity
+      description: A durable source artifact such as a document or transcript.
+
+  - id: claim
+    aliases: [assertion]
+    semantics:
+      kind: entity
+      description: A statement about the world that may carry belief stage.
+
+  - id: decision
+    aliases: [resolution]
+    semantics:
+      kind: entity
+      description: An explicit choice with rationale and effective scope.
+
+  - id: memory
+    aliases: [knowledge_record]
+    semantics:
+      kind: entity
+      description: A retained, governed memory record.
+
+  - id: provenance
+    aliases: [lineage]
+    semantics:
+      kind: entity
+      description: The immutable origin and binding evidence for a record.
+
+  - id: policy
+    aliases: [governance_policy]
+    semantics:
+      kind: entity
+      description: A rule that constrains governed operations.
+
+  - id: relationship_path
+    aliases: [relationship-path, intro_path]
+    semantics:
+      kind: entity
+      description: A governed multi-hop relationship path between entities.
+
+relationships:
+  - { from: person, to: entity, type: is_a }
+  - { from: organization, to: entity, type: is_a }
+  - { from: team, to: entity, type: is_a }
+  - { from: agent, to: entity, type: is_a }
+  - { from: skill, to: entity, type: is_a }
+  - { from: tool, to: entity, type: is_a }
+  - { from: project, to: entity, type: is_a }
+  - { from: task, to: entity, type: is_a }
+  - { from: event, to: entity, type: is_a }
+  - { from: source, to: entity, type: is_a }
+  - { from: claim, to: entity, type: is_a }
+  - { from: decision, to: entity, type: is_a }
+  - { from: memory, to: entity, type: is_a }
+  - { from: provenance, to: entity, type: is_a }
+  - { from: policy, to: entity, type: is_a }
+  - { from: relationship_path, to: entity, type: is_a }
