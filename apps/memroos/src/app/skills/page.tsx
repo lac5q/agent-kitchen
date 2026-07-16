@@ -19,10 +19,11 @@
  */
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSkillRegistry, useSkillSuggestions } from "@/lib/api-client";
 import type { SkillRegistryItem, SkillSuggestion } from "@/lib/api-client";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
 // ── Pagination constants ──────────────────────────────────────────────────────
 const PAGE_SIZE = 20;
@@ -255,6 +256,10 @@ type FilterHarness = string;
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SkillsRegistryPage() {
+  const search = useSearchParams();
+  const fromWindow = search?.get("from_window") ?? null;
+  const fromWorkspace = search?.get("from_workspace") ?? null;
+  const fromScopeNote = search?.get("from_scope_note") ?? null;
   const [page, setPage] = useState(0);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterHarness, setFilterHarness] = useState<FilterHarness>("all");
@@ -286,6 +291,19 @@ export default function SkillsRegistryPage() {
         title="Governed Skill Registry"
         hint="MemRoOS-suggested skills, cross-harness SKILL.md contracts, dispatch readiness, and contract verification at a glance."
       />
+
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="skills">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Skills registry is a cumulative snapshot; the originating scope is shown for reference only and is NOT applied."}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">

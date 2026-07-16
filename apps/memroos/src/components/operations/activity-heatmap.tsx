@@ -1,10 +1,11 @@
+
 "use client";
 
 import { Heatmap, Donut } from "@/components/shared/charts";
 import { useHiveFeed } from "@/lib/api-client";
+import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
 import { NOC } from "@/lib/noc-theme";
 import { NocCard, NocPanelHeader, Eyebrow } from "./noc-primitives";
-
 function buildHeatmap(actions: Array<{ timestamp: string }>): { data: number[][]; max: number; today: number } {
   const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
   const now = new Date();
@@ -23,9 +24,12 @@ function buildHeatmap(actions: Array<{ timestamp: string }>): { data: number[][]
   };
 }
 
-export function ActivityHeatmap() {
+
+export function ActivityHeatmap({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
   const hive = useHiveFeed(500);
-  const heat = buildHeatmap(hive.data?.actions ?? []);
+  const hiveOk = !hive.isError && !hive.isLoading && hive.data !== undefined;
+  const heat = buildHeatmap(hiveOk ? hive.data!.actions : []);
   const weekdayP95 = Math.max(1, Math.ceil(heat.max * 24 * 0.95));
   const todayLoad = Math.min(100, Math.round((heat.today / weekdayP95) * 100));
 
@@ -33,9 +37,10 @@ export function ActivityHeatmap() {
     <NocCard>
       <NocPanelHeader
         title="When agents work"
-        hint="Live hive actions by hour from /api/hive. Empty columns mean no recorded actions, not hidden sample data."
-      />
-      <Heatmap w={290} h={104} data={heat.data} />
+        // Activity heatmap is a 7-day rollup across all workspaces; it does
+        // not honor the selected NOC filters.
+        hint={`Live hive actions by hour from /api/hive. Scope is a fixed 7-day rollup across all workspaces — window=${effectiveFilters.window} and workspace=${effectiveFilters.workspace} filters do not partition this metric. ${nocWindowLabel(effectiveFilters.window)} for context only.`}
+      />      <Heatmap w={290} h={104} data={heat.data} />
       <div
         style={{
           display: "flex",

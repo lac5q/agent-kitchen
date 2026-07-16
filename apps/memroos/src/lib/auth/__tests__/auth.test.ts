@@ -10,7 +10,10 @@ beforeEach(() => {
   process.env.MEMROOS_JWT_SECRET = 'test-secret-that-is-long-enough-32ch';
 });
 
-describe('password', () => {
+// bcrypt cost 12 hashing runs ~700-900ms per call; keep these on the slow
+// split so the milestone gate (`npm test -- --run`) stays fast and reliable.
+// They are exercised on demand via `npm run test:slow -- --run` and CI.
+describe('password', { tags: ['slow'] }, () => {
   it('hashPassword + verifyPassword round-trip', async () => {
     const plain = 'correct-horse-battery-staple';
     const hash = await hashPassword(plain);

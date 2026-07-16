@@ -137,3 +137,19 @@ Standard commands are in the root `package.json`: `npm run dev` (port 3000),
   without them.
 - `src/lib/__tests__/efficiency-telemetry.test.ts` was updated on 2026-07-07 to assert the
  current schema version rather than a stale hard-coded value.
+
+## Test suite split (fast vs slow)
+
+`npm test -- --run` is the milestone gate and intentionally excludes a small
+set of tests tagged `slow`. Those cover the bcrypt cost-12 password hashing
+in `src/lib/auth/__tests__/auth.test.ts` and the onboarding route suite at
+`src/app/api/onboarding/__tests__/route.test.ts`, both of which can take a
+second or more per case. Keeping them out of the default gate lets local
+runs and CI stay deterministic; coverage is preserved by CI mirroring with
+`npm run test:slow -- --run` after the fast step. To exercise the slow split
+locally, run `npm run test:slow -- --run` from the repo root. The two
+configs live at `apps/memroos/vitest.config.ts` (fast) and
+`apps/memroos/vitest.slow.config.ts` (slow). When you add a new test that
+takes more than a few hundred milliseconds, tag its `describe`/`it` with
+`{ tags: ['slow'] }` and re-run both suites to confirm parity.
+

@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { cacheKey, responseCache } from "@/lib/response-cache";
+import {
+  metricEnvelope,
+  type MetricEnvelope,
+  type MetricScope,
+} from "@/lib/metric-status";
 
 export const dynamic = "force-dynamic";
 
@@ -124,18 +129,79 @@ function buildSecurityReport(limit: number) {
     securityEvent: isSecurityEvent(row),
   }));
 
+  const summaryStatus: "clear" | "watch" | "attention" = statusFor(securityRows);
+  const lastAuditAtIso = rows[0]?.timestamp ?? null;
+  const securityEventCount = securityRows.length;
+  const blockedCount = securityRows.filter(isBlockedEvent).length;
+  const SCOPE: MetricScope = { window: "all", workspace: "all" };
+  const highCount = securityRows.filter((row) => row.severity === "high").length;
+  const mediumCount = securityRows.filter((row) => row.severity === "medium").length;
+  // Build a per-metric truthful envelope so the UI renders source/observedAt/scope.
+  const metrics: Record<string, MetricEnvelope<number | null>> = {
+    securityEvents: metricEnvelope<number | null>({
+      value: securityEventCount,
+      status: securityEventCount === 0 ? "zero" : "live",
+      source: "sqlite://audit_log#security-events",
+      observedAt: securityRows[0]?.timestamp ?? null,
+      scope: SCOPE,
+      reason: securityEventCount === 0
+        ? "No security-tagged audit rows in the loaded window"
+        : `${securityEventCount} security-tagged audit row(s) loaded`,
+    }),
+    auditEvents: metricEnvelope<number | null>({
+      value: rows.length,
+      status: rows.length === 0 ? "zero" : "live",
+      source: "sqlite://audit_log",
+      observedAt: lastAuditAtIso,
+      scope: SCOPE,
+      reason: rows.length === 0
+        ? "No audit rows in the loaded set"
+        : `${rows.length} audit row(s) loaded from the last 250 events`,
+    }),
+    highSeverity: metricEnvelope<number | null>({
+      value: highCount,
+      status: highCount === 0 ? "zero" : (summaryStatus === "attention" ? "live" : "degraded"),
+      source: "sqlite://audit_log",
+      observedAt: securityRows[0]?.timestamp ?? null,
+      scope: SCOPE,
+      reason: highCount === 0
+        ? "No high-severity security events"
+        : `${highCount} high-severity security event(s) → summary=attention`,
+    }),
+    mediumSeverity: metricEnvelope<number | null>({
+      value: mediumCount,
+      status: mediumCount === 0 ? "zero" : (summaryStatus === "watch" ? "live" : "degraded"),
+      source: "sqlite://audit_log",
+      observedAt: securityRows[0]?.timestamp ?? null,
+      scope: SCOPE,
+      reason: mediumCount === 0
+        ? "No medium-severity security events"
+        : `${mediumCount} medium-severity security event(s)`,
+    }),
+    blockedAttempts: metricEnvelope<number | null>({
+      value: blockedCount,
+      status: blockedCount === 0 ? "zero" : "live",
+      source: "sqlite://audit_log",
+      observedAt: securityRows[0]?.timestamp ?? null,
+      scope: SCOPE,
+      reason: blockedCount === 0
+        ? "No blocked/denied attempts detected"
+        : `${blockedCount} blocked/denied attempt(s) detected`,
+    }),
+  };
   return {
     summary: {
-      status: statusFor(securityRows),
-      securityEvents: securityRows.length,
+      status: summaryStatus,
+      securityEvents: securityEventCount,
       auditEvents: rows.length,
-      highSeverity: securityRows.filter((row) => row.severity === "high").length,
-      mediumSeverity: securityRows.filter((row) => row.severity === "medium").length,
-      blockedAttempts: securityRows.filter(isBlockedEvent).length,
+      highSeverity: highCount,
+      mediumSeverity: mediumCount,
+      blockedAttempts: blockedCount,
       lastEventAt: securityRows[0]?.timestamp ?? null,
-      lastAuditAt: rows[0]?.timestamp ?? null,
+      lastAuditAt: lastAuditAtIso,
       topActors: topActors(securityRows),
     },
+    metrics,
     controls: [
       { id: "dispatch-policy", label: "Dispatch policy", status: "active" },
       { id: "a2a-policy", label: "A2A send policy", status: "active" },

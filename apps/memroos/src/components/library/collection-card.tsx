@@ -27,20 +27,34 @@ const CATEGORY_TEXT_COLORS: Record<KnowledgeCollection["category"], string> = {
 };
 
 interface CollectionCardProps {
-  collection: KnowledgeCollection;
+  collection: KnowledgeCollection & {
+    metric?: {
+      status?: string;
+      value?: number | null;
+      reason?: string | null;
+      source?: string;
+      observedAt?: string | null;
+    };
+  };
   maxCount: number;
 }
 
 export function CollectionCard({ collection, maxCount }: CollectionCardProps) {
-  const { name, docCount, category } = collection;
+  const { name, docCount, category, metric } = collection;
   const fillPercent = maxCount > 0 ? (docCount / maxCount) * 100 : 0;
   const borderColor = CATEGORY_COLORS[category];
   const barColor = CATEGORY_BAR_COLORS[category];
   const textColor = CATEGORY_TEXT_COLORS[category];
+  const metricStatus = (metric?.status ?? (docCount > 0 ? "live" : "empty")) as string;
 
   return (
     <Card
       className={`border-l-4 border-stone-200 bg-white/90 ${borderColor.split(" ")[0]} p-0`}
+      data-collection={name}
+      data-status={metricStatus}
+      data-source={metric?.source ?? `qmd://${name}`}
+      data-observed-at={metric?.observedAt ?? null}
+      title={metric?.reason ?? `${name}: ${docCount} files`}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">

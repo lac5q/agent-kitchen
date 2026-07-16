@@ -8,7 +8,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { NOC } from "@/lib/noc-theme";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
+import type { MetricEnvelope } from "@/lib/metric-status";
 
 interface ModelMixDataPoint {
   name: string;
@@ -17,6 +18,7 @@ interface ModelMixDataPoint {
 
 interface ModelMixChartProps {
   data: ModelMixDataPoint[];
+  envelope?: MetricEnvelope<number>;
 }
 
 const DONUT_COLORS = [NOC.warn, NOC.info, NOC.success, NOC.terra];
@@ -37,32 +39,66 @@ function DarkTooltip({ active, payload }: {
   );
 }
 
-export function ModelMixChart({ data }: ModelMixChartProps) {
+export function ModelMixChart({ data, envelope }: ModelMixChartProps) {
+  const status = envelope?.status;
+  const isNonLive = status && status !== "live" && status !== "zero";
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={100}
-          paddingAngle={3}
-          dataKey="value"
+    <div data-model-mix-source={envelope?.source ?? "/api/model-usage"}>
+      {isNonLive && (
+        <div
+          className="mb-2 rounded border px-2 py-1 text-xs"
+          style={{
+            borderColor: status === "error" ? NOC.terra : NOC.warn,
+            background: status === "error" ? NOC.peach : NOC.warnBg,
+            color: status === "error" ? NOC.terra : NOC.warn,
+            fontFamily: NOC_FONT_MONO,
+          }}
+          data-model-mix-status={status}
         >
-          {data.map((_, index) => (
-            <Cell
-              key={`cell-${index}`}
-              fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+          <span className="font-semibold uppercase tracking-wide">{status}</span>
+          {envelope?.reason && <span className="ml-2">{envelope.reason}</span>}
+        </div>
+      )}
+      {data.length === 0 ? (
+        <div
+          className="flex h-64 items-center justify-center text-sm"
+          style={{ color: NOC.soft }}
+          data-model-mix-empty
+        >
+          {status === "blocked"
+            ? "Loading model mix..."
+            : status === "error"
+              ? "Model mix unavailable (see status above)."
+              : "No model usage recorded for the selected window."}
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={100}
+              paddingAngle={3}
+              dataKey="value"
+            >
+              {data.map((_, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<DarkTooltip />} />
+            <Legend
+              wrapperStyle={{ fontSize: 12, color: NOC.soft }}
+              iconType="circle"
             />
-          ))}
-        </Pie>
-        <Tooltip content={<DarkTooltip />} />
-        <Legend
-          wrapperStyle={{ fontSize: 12, color: NOC.soft }}
-          iconType="circle"
-        />
-      </PieChart>
-    </ResponsiveContainer>
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    </div>
   );
 }

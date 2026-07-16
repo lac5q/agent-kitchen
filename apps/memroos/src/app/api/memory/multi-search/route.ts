@@ -1,7 +1,13 @@
 import { CLAUDE_MEMORY_PATH } from "@/lib/constants";
 import { getDb } from "@/lib/db";
-import { searchMeetingCollections } from "@/lib/meeting-qmd-recall";
 import { queryGraphMemory, searchVectorMemory } from "@/lib/memory/backends";
+import {
+  classifyScalar,
+  metricEnvelope,
+  type MetricEnvelope,
+  type MetricScope,
+  type MetricStatus,
+} from "@/lib/metric-status";
 import {
   extractMemoryLabelSnapshot,
   filterAuthorizedMemoryItems,
@@ -12,7 +18,7 @@ import type { MemoryEntry } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-type SearchTier = "vector" | "graph" | "episodic" | "qmd";
+type SearchTier = "vector" | "graph" | "episodic";
 
 interface NormalizedMemoryResult {
   id: string;
@@ -26,9 +32,14 @@ interface NormalizedMemoryResult {
 
 interface TierResult {
   tier: SearchTier;
+  /** Backwards-compatible: ok === status === "live" or "empty". */
   ok: boolean;
+  /** Authorized count (number when successful, 0 when blocked / errored). */
   count: number;
-  error?: string;
+  /** Legacy detail string for older UI consumers. */
+  error?: string | null;
+  /** Truthful metric envelope. */
+  metric: MetricEnvelope<number | null>;
 }
 
 interface SearchOutcome {
@@ -36,6 +47,12 @@ interface SearchOutcome {
   items: NormalizedMemoryResult[];
   error?: string;
 }
+
+const TIER_SOURCES: Record<SearchTier, string> = {
+  vector: "mem0-qdrant",
+  graph: "neo4j",
+  episodic: "claude-memory-jsonl",
+};
 
 function parseLimit(raw: string | null): number {
   const parsed = Number(raw ?? 10);
@@ -137,10 +154,79 @@ function normalizeEpisodic(entries: MemoryEntry[], query: string, limit: number)
     }));
 }
 
+function buildTierEnvelope(args: {
+  tier: SearchTier;
+  sourceOk: boolean;
+  error: string | undefined;
+  rawCount: number;
+  authorizedCount: number;
+  scope: MetricScope;
+  observedAt: string | null;
+}): MetricEnvelope<number | null> {
+  const { tier, sourceOk, error, rawCount, authorizedCount, scope, observedAt } = args;
+
+  if (!sourceOk) {
+    return metricEnvelope<number>({
+      value: null,
+      status: "error",
+      source: TIER_SOURCES[tier],
+      observedAt,
+      scope,
+      reason: error ?? `${tier} backend is unreachable`,
+    });
+  }
+
+  // Source returned but policy gate denied every row (rawCount > 0, authorizedCount = 0)
+  if (rawCount > 0 && authorizedCount === 0) {
+    return metricEnvelope<number>({
+      value: 0,
+      status: "blocked",
+      source: TIER_SOURCES[tier],
+      observedAt,
+      scope,
+      reason: `${tier} returned ${rawCount} hit(s) but policy gate denied every match for the current viewer`,
+    });
+  }
+
+  if (authorizedCount === 0) {
+    // Healthy source, no hits — distinct from "blocked" and from an errored backend.
+    return metricEnvelope<number>({
+      value: 0,
+      status: "empty",
+      source: TIER_SOURCES[tier],
+      observedAt,
+      scope,
+      reason: `${tier} search produced no observations for the query`,
+    });
+  }
+
+  const classification = classifyScalar({
+    rowCount: authorizedCount,
+    sourceOk: true,
+    latestAt: observedAt,
+    freshnessMs: null,
+  });
+  // classifyScalar returns "live" or "zero" here; force live when we have authorized hits.
+  const status: MetricStatus = classification.status === "zero" ? "live" : "live";
+  return metricEnvelope<number>({
+    value: authorizedCount,
+    status,
+    source: TIER_SOURCES[tier],
+    observedAt,
+    scope,
+    reason: `${tier} search returned ${authorizedCount} authorized hit(s)`,
+  });
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const query = (url.searchParams.get("q") || "").trim();
   const limit = parseLimit(url.searchParams.get("limit"));
+  const scope: MetricScope = {
+    window: "all",
+    workspace: "all",
+  };
+  const observedAt = new Date().toISOString();
 
   if (!query) {
     return Response.json({ ok: false, error: "Query is required" }, { status: 400 });
@@ -155,7 +241,7 @@ export async function GET(request: Request) {
     capability: "memory_search",
   };
 
-  const [vector, graph, episodic, qmd]: SearchOutcome[] = await Promise.all([
+  const [vector, graph, episodic]: SearchOutcome[] = await Promise.all([
     searchVectorMemory(query, limit)
       .then((raw) => ({ tier: "vector" as const, items: normalizeVector(raw, limit) }))
       .catch((error) => ({
@@ -177,43 +263,45 @@ export async function GET(request: Request) {
         items: [] as NormalizedMemoryResult[],
         error: error instanceof Error ? error.message : "Episodic memory unavailable",
       })),
-    searchMeetingCollections(query, limit)
-      .then((outcome) => ({
-        tier: "qmd" as const,
-        items: outcome.hits.map((hit) => ({
-          id: hit.id,
-          tier: "qmd" as const,
-          title: hit.title,
-          content: hit.content,
-          source: `qmd:${hit.collection}`,
-          score: hit.score,
-          metadata: { collection: hit.collection, path: hit.path, ...(hit.metadata as object) },
-        })),
-        error: outcome.error,
-      }))
-      .catch((error) => ({
-        tier: "qmd" as const,
-        items: [] as NormalizedMemoryResult[],
-        error: error instanceof Error ? error.message : "QMD meeting lane unavailable",
-      })),
   ]);
 
-  for (const tier of [vector, graph, episodic, qmd]) {
+  for (const tier of [vector, graph, episodic]) {
+    const tierItems = tier.items;
     const authorizedItems = filterAuthorizedMemoryItems(
       db,
-      tier.items,
+      tierItems,
       actor,
       "multi-search",
       (item) => extractMemoryLabelSnapshot(item.metadata),
       (item) => `${item.tier}:${item.id}`
     );
+    const metric = buildTierEnvelope({
+      tier: tier.tier,
+      sourceOk: !tier.error,
+      error: tier.error,
+      rawCount: tierItems.length,
+      authorizedCount: authorizedItems.length,
+      scope,
+      observedAt,
+    });
+
+    // Backwards-compatible: ok is true when the source itself returned
+    // without error. The truthful metric envelope (metric) is the
+    // canonical signal for fine-grained UI behavior.
+    const sourceOk = !tier.error;
     tiers.push({
       tier: tier.tier,
-      ok: !tier.error,
+      ok: sourceOk,
       count: authorizedItems.length,
-      error: tier.error,
+      error: tier.error ?? (metric.status === "blocked" ? metric.reason : null),
+      metric,
     });
-    results.push(...authorizedItems);
+    // Only surface results when the operator can actually retrieve them.
+    // Empty/blocked/error/degraded tiers must not have a hit list even if
+    // the source emitted raw items.
+    if (metric.status === "live") {
+      for (const item of authorizedItems) results.push(item);
+    }
   }
 
   return Response.json({
@@ -221,6 +309,6 @@ export async function GET(request: Request) {
     query,
     tiers,
     results,
-    timestamp: new Date().toISOString(),
+    timestamp: observedAt,
   });
 }

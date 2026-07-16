@@ -1,5 +1,5 @@
 import { NOC } from "@/lib/noc-theme";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 
 type CardPadding = "none" | "sm" | "md" | "lg";
 
@@ -15,14 +15,16 @@ export function Card({
   pad = "md",
   className,
   style,
+  ...rest
 }: {
   children: ReactNode;
   pad?: CardPadding;
   className?: string;
   style?: CSSProperties;
-}) {
+} & Omit<HTMLAttributes<HTMLElement>, "children">) {
   return (
     <section
+      {...rest}
       className={className}
       style={{
         background: NOC.paper,

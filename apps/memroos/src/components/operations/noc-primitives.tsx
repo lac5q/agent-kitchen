@@ -1,10 +1,135 @@
-import Link from "next/link";
+import {
+  describeMetricEnvelope,
+  type MetricEnvelope,
+  type MetricStatus,
+} from "@/lib/metric-status";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
 export type SignalSeverity = "high" | "med" | "low" | "info";
 
-// Shared micro-components for the NOC screen.
-// All use inline styles with NOC token constants for dark-mode safety.
+export function formatObservedAt(observedAt: string | null): string {
+  if (!observedAt) return "—";
+  const date = new Date(observedAt);
+  if (!Number.isFinite(date.getTime())) return observedAt;
+  return date.toISOString().replace("T", " ").slice(0, 19) + "Z";
+}
+
+export function formatFreshness(freshnessMs: number | null): string {
+  if (freshnessMs === null || !Number.isFinite(freshnessMs)) return "—";
+  if (freshnessMs < 60_000) return `${Math.max(0, Math.round(freshnessMs / 1000))}s`;
+  if (freshnessMs < 60 * 60_000) return `${Math.round(freshnessMs / 60_000)}m`;
+  if (freshnessMs < 24 * 60 * 60_000) return `${Math.round(freshnessMs / (60 * 60_000))}h`;
+  return `${Math.round(freshnessMs / (24 * 60 * 60_000))}d`;
+}
+
+export function statusBadgeColor(status: MetricStatus): { background: string; color: string } {
+  switch (status) {
+    case "live":
+      return { background: NOC.successBg, color: NOC.success };
+    case "zero":
+      return { background: NOC.successBg, color: NOC.success };
+    case "empty":
+      return { background: NOC.fog, color: NOC.muted };
+    case "stale":
+      return { background: NOC.warnBg, color: NOC.warn };
+    case "blocked":
+      return { background: NOC.warnBg, color: NOC.warn };
+    case "unavailable":
+      return { background: NOC.warnBg, color: NOC.warn };
+    case "degraded":
+      return { background: NOC.warnBg, color: NOC.warn };
+    case "error":
+      return { background: NOC.peach, color: NOC.terra };
+  }
+}
+
+export function SourceStatusBadge({
+  status,
+  label,
+}: {
+  status: MetricStatus;
+  label?: string;
+}) {
+  const { label: stateLabel } = describeMetricEnvelope({
+    value: null,
+    status,
+    source: "",
+    observedAt: null,
+    freshnessMs: null,
+    scope: { window: "24h", workspace: "all" },
+    reason: null,
+  });
+  const { background, color } = statusBadgeColor(status);
+  return (
+    <span
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: "0.1em",
+        padding: "2px 6px",
+        background,
+        color,
+        textTransform: "uppercase",
+        fontFamily: NOC_FONT_MONO,
+        whiteSpace: "nowrap",
+      }}
+      data-status={status}
+    >
+      {label ?? stateLabel}
+    </span>
+  );
+}
+
+export function EnvelopeCaption({
+  envelope,
+  showSource = true,
+  showFreshness = true,
+  showScope = false,
+}: {
+  envelope: MetricEnvelope<unknown> | undefined | null;
+  showSource?: boolean;
+  showFreshness?: boolean;
+  showScope?: boolean;
+}) {
+  if (!envelope) {
+    return (
+      <div style={{ fontSize: 10.5, color: NOC.soft, fontFamily: NOC_FONT_MONO }}>
+        source: —
+      </div>
+    );
+  }
+  const isLive = envelope.status === "live" || envelope.status === "zero";
+  return (
+    <div
+      style={{
+        fontSize: 10.5,
+        color: NOC.soft,
+        fontFamily: NOC_FONT_MONO,
+        lineHeight: 1.5,
+        overflowWrap: "anywhere",
+      }}
+    >
+      {showSource && (
+        <div>
+          source: <span style={{ color: NOC.muted }}>{envelope.source || "—"}</span>
+        </div>
+      )}
+      {!isLive && envelope.reason && (
+        <div style={{ color: NOC.terra }}>{envelope.reason}</div>
+      )}
+      {showScope && (
+        <div>
+          scope: window={envelope.scope.window}, workspace={envelope.scope.workspace}
+        </div>
+      )}
+      {showFreshness && (
+        <div>
+          observed: {formatObservedAt(envelope.observedAt)} · age {formatFreshness(envelope.freshnessMs)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function NocCard({
   children,
@@ -150,10 +275,20 @@ export function PillBtn({
   };
 
   if (href) {
+    // Round 4 [F2]: Use a plain anchor for navigation. The previous
+    // <Link href> approach could stall the navigation in production
+    // (observed for /seal — the click registered but the URL never
+    // updated). A plain anchor guarantees GET-only navigation via the
+    // browser, with no client-side route hydration required.
     return (
-      <Link href={href} style={style}>
+      <a
+        href={href}
+        style={style}
+        data-navigation-element="anchor"
+        data-pill-href={href}
+      >
         {children}
-      </Link>
+      </a>
     );
   }
 

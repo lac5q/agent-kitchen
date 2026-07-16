@@ -14,8 +14,8 @@ import { ContentViewer } from "@/components/notebooks/content-viewer";
 import { InfoTip } from "@/components/ui/info-tip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
 
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 const CATEGORY_ORDER: Array<MemoryInventoryCategoryId | "all"> = [
   "all",
   "vector_memory",
@@ -54,10 +54,13 @@ function StatCard({
   );
 }
 
+
 export default function NotebooksPage() {
   const searchParams = useSearchParams();
   const urlSearchQuery = searchParams.get("q")?.trim() ?? "";
-  const [categoryFilter, setCategoryFilter] = useState<MemoryInventoryCategoryId | "all">("all");
+  const fromWindow = searchParams.get("from_window") ?? null;
+  const fromWorkspace = searchParams.get("from_workspace") ?? null;
+  const fromScopeNote = searchParams.get("from_scope_note") ?? null;  const [categoryFilter, setCategoryFilter] = useState<MemoryInventoryCategoryId | "all">("all");
   const [selected, setSelected] = useState<MemoryInventoryRow | null>(null);
   const [searchInput, setSearchInput] = useState(urlSearchQuery);
   const [submittedSearchQuery, setSubmittedSearchQuery] = useState("");
@@ -81,24 +84,52 @@ export default function NotebooksPage() {
   return (
     <TooltipProvider>
     <div className="flex flex-col gap-6">
+
       <PageHeader
         eyebrow="Memory"
         title={<>Memory Inventory <InfoTip text="Counts are split by source-backed category: vector memories, ingested messages, consolidated insights, episodic writes, graph facts, and knowledge files." /></>}
         hint="Source-backed category counts, provenance rows, multi-tier search, and degraded-state inspection."
       />
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Newest inventory row: <span className="font-semibold">{newestRowDate}</span>. Counts cite their owning store, and degraded categories explain missing backend counts.
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="memory">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Memory has its own category + search filters; the originating scope is shown for reference and is NOT applied to the inventory below."}
+          </div>
+        </Card>
+      )}      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-testid="memory-inventory-banner">
+        Newest inventory row: <span className="font-semibold">{newestRowDate}</span>. Counts cite their owning store, and degraded categories explain missing backend counts. Operator-only data is gated by <code className="bg-amber-100 px-1">role=operator</code>; non-operator viewers see no inventory payload (HTTP 403).
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
-        {categories.map((category) => (
-          <StatCard
-            key={category.id}
-            label={category.label}
-            value={category.count ?? "unknown"}
-            tone={category.status === "degraded" ? "warn" : category.status === "empty" ? "neutral" : "info"}
-            tooltip={`${category.description} Source: ${category.sourceOfTruth}${category.lastUpdated ? `. Last updated: ${category.lastUpdated}` : ""}${category.warnings.length ? `. ${category.warnings.join("; ")}` : ""}`}
-          />
-        ))}
+        {categories.map((category) => {
+          const status = (category.metric?.status ?? category.status) as string;
+          const displayValue = (() => {
+            if (status === "live" || status === "zero") return category.count ?? 0;
+            if (status === "empty") return 0;
+            if (status === "degraded" || status === "blocked" || status === "stale") return category.count ?? "unknown";
+            return category.count ?? "unavailable";
+          })();
+          const tone = (() => {
+            if (status === "live" || status === "zero") return "info" as const;
+            if (status === "empty") return "neutral" as const;
+            if (status === "degraded" || status === "stale" || status === "blocked") return "warn" as const;
+            return "warn" as const;
+          })();
+          const reason = category.metric?.reason ?? (category.warnings.length ? category.warnings.join("; ") : null);
+          return (
+            <StatCard
+              key={category.id}
+              label={category.label}
+              value={displayValue}
+              tone={tone}
+              tooltip={`${category.description} Status: ${status}. Source: ${category.sourceOfTruth}${category.lastUpdated ? `. Last updated: ${category.lastUpdated}` : ""}${reason ? `. Reason: ${reason}` : ""}`}
+            />
+          );
+        })}
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white/85 p-5 shadow-[0_18px_42px_rgba(15,23,42,0.05)]">
@@ -114,18 +145,41 @@ export default function NotebooksPage() {
           </div>
           {search.data?.tiers && (
             <div className="flex flex-wrap gap-2">
-              {search.data.tiers.map((tier) => (
-                <span
-                  key={tier.tier}
-                  className={[
-                    "rounded-full border px-2.5 py-1 text-xs font-semibold",
-                    tier.ok ? TIER_STYLES[tier.tier] : "border-rose-200 bg-rose-50 text-rose-700",
-                  ].join(" ")}
-                  title={tier.error}
-                >
-                  {tier.tier} {tier.ok ? tier.count : "offline"}
-                </span>
-              ))}
+              {search.data.tiers.map((tier) => {
+                const status = (tier.metric?.status ?? (tier.ok ? "live" : "error")) as string;
+                const label = (() => {
+                  if (status === "live") return `${tier.count} hits`;
+                  if (status === "empty") return "empty";
+                  if (status === "blocked") return "blocked";
+                  if (status === "degraded") return "degraded";
+                  if (status === "stale") return "stale";
+                  if (status === "unavailable") return "unavailable";
+                  if (status === "error") return "error";
+                  if (status === "zero") return "0";
+                  return "offline";
+                })();
+                const toneClass = (() => {
+                  if (status === "live") return TIER_STYLES[tier.tier];
+                  if (status === "empty" || status === "zero") return "border-slate-200 bg-slate-100 text-stone-600";
+                  if (status === "blocked") return "border-amber-200 bg-amber-50 text-amber-700";
+                  if (status === "stale" || status === "degraded") return "border-amber-200 bg-amber-50 text-amber-700";
+                  if (status === "unavailable" || status === "error") return "border-rose-200 bg-rose-50 text-rose-700";
+                  return "border-rose-200 bg-rose-50 text-rose-700";
+                })();
+                const reason = tier.metric?.reason ?? tier.error;
+                const source = tier.metric?.source;
+                return (
+                  <span
+                    key={tier.tier}
+                    className={["rounded-full border px-2.5 py-1 text-xs font-semibold", toneClass].join(" ")}
+                    title={`${tier.tier} [${status}] ${reason ?? ""}${source ? ` — source: ${source}` : ""}`}
+                    data-tier={tier.tier}
+                    data-status={status}
+                  >
+                    {tier.tier} {label}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
