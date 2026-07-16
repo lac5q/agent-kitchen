@@ -34,6 +34,7 @@ Environment knobs:
   DASHSCOPE_API_KEY=...            Qwen executor API key for agent phase
   MEM0_URL=https://...             Optional live main-brain mem0 URL
   MEMROOS_APP_URL=https://...      Optional live MemRoOS app URL
+  MEMROOS_OPERATOR_URL=https://... Alias for MEMROOS_APP_URL (ENTOPS-04)
   MEMROOS_AGENT_API_KEY=...        Optional scoped dev agent key
 HELP
   exit 0
@@ -44,6 +45,14 @@ fi
 
 ROOT="${MEMROOS_ROOT:-$(pwd)}"
 ROOT="$(cd "$ROOT" && pwd)"
+
+# ENTOPS-04: MEMROOS_OPERATOR_URL aliases MEMROOS_APP_URL when the latter is unset.
+if [[ -n "${MEMROOS_OPERATOR_URL:-}" && -z "${MEMROOS_APP_URL:-}" ]]; then
+  export MEMROOS_APP_URL="$MEMROOS_OPERATOR_URL"
+fi
+if [[ -n "${MEMROOS_APP_URL:-}" && -z "${MEMROOS_OPERATOR_URL:-}" ]]; then
+  export MEMROOS_OPERATOR_URL="$MEMROOS_APP_URL"
+fi
 
 if [[ ! -f "$ROOT/package.json" || ! -d "$ROOT/services/knowledge-mcp" ]]; then
   echo "MEMROOS_ROOT does not look like the MemRoOS repo: $ROOT" >&2
@@ -305,6 +314,7 @@ env_vars = [
   "KNOWLEDGE_ROOT",
   "MEM0_URL",
   "MEMROOS_APP_URL",
+  "MEMROOS_OPERATOR_URL",
   "MEMROOS_BASE_URL",
   "MEMROOS_MCP_CLIENT",
   "MEMROOS_REQUIRE_SERVER_MEMORY",

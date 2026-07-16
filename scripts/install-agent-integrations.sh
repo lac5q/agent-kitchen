@@ -21,9 +21,15 @@
 #
 # Usage:
 #   bash scripts/install-agent-integrations.sh                 # auto-detect
+#   bash scripts/install-agent-integrations.sh --local         # force local MCP (solo)
 #   bash scripts/install-agent-integrations.sh --uninstall     # remove all
 #   bash scripts/install-agent-integrations.sh --check         # dry-run audit
+#   MEMROOS_OPERATOR_URL=https://... bash scripts/install-agent-integrations.sh
 #   MEMROOS_ROOT=/custom/path bash scripts/install-agent-integrations.sh
+#
+# ENTOPS-04: when MEMROOS_OPERATOR_URL (or MEMROOS_APP_URL) is set and --local
+# is NOT passed, MCP blocks point at scripts/memroos-operator-stub.sh.
+# Operator mode NEVER adds a git-clone fallback.
 
 set -euo pipefail
 
@@ -40,6 +46,7 @@ fi
 TEMPLATE="$MEMROOS_ROOT/agents/AGENTS_TEMPLATE.md"
 SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
+OPERATOR_STUB="$MEMROOS_ROOT/scripts/memroos-operator-stub.sh"
 
 if [[ ! -f "$TEMPLATE" ]]; then
   echo "❌ Canonical AGENTS template not found: $TEMPLATE" >&2
@@ -57,8 +64,52 @@ fi
 HOME_DIR="${HOME:-$(eval echo "~$(whoami)")}"
 
 MODE="install"
-[[ "${1:-}" == "--uninstall" ]] && MODE="uninstall"
-[[ "${1:-}" == "--check" ]] && MODE="check"
+FORCE_LOCAL=0
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) MODE="uninstall" ;;
+    --check) MODE="check" ;;
+    --local) FORCE_LOCAL=1 ;;
+  esac
+done
+
+# Operator URL: MEMROOS_OPERATOR_URL preferred; MEMROOS_APP_URL is the alias.
+OPERATOR_URL="${MEMROOS_OPERATOR_URL:-${MEMROOS_APP_URL:-}}"
+OPERATOR_URL="${OPERATOR_URL%/}"
+
+USE_OPERATOR_STUB=0
+if [[ "$FORCE_LOCAL" -eq 1 ]]; then
+  USE_OPERATOR_STUB=0
+elif [[ -n "$OPERATOR_URL" ]]; then
+  USE_OPERATOR_STUB=1
+fi
+
+if [[ "$USE_OPERATOR_STUB" -eq 1 ]]; then
+  if [[ ! -x "$OPERATOR_STUB" ]]; then
+    echo "❌ Operator stub not found or not executable: $OPERATOR_STUB" >&2
+    exit 1
+  fi
+  # printf %q safely embeds the URL for a bash -lc string.
+  MCP_EXEC_LINE="export MEMROOS_OPERATOR_URL=$(printf '%q' "$OPERATOR_URL"); exec $(printf '%q' "$OPERATOR_STUB")"
+  MCP_MODE_LABEL="operator-stub (${OPERATOR_URL})"
+else
+  MCP_EXEC_LINE='exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"'
+  MCP_MODE_LABEL="local (memroos-mcp.sh)"
+fi
+export MCP_EXEC_LINE
+
+# ENTOPS-04 hard guard: operator mode must never introduce a clone-based corpus fallback.
+if [[ "$USE_OPERATOR_STUB" -eq 1 ]]; then
+  if grep -En '(^|[[:space:]])git[[:space:]]+clone([[:space:]]|$)' "$OPERATOR_STUB" "$0" 2>/dev/null \
+    | grep -Ev '^\s*#' \
+    | grep -Ev 'hard guard|never introduce|ENTOPS-04|Refusing|Operator mode MUST|no git' >/dev/null; then
+    echo "❌ Refusing operator-stub install: clone-based corpus fallback detected" >&2
+    exit 1
+  fi
+fi
+
+# Operator mode MUST NOT add git-clone fallback (docs/entops-stub-handoff.md).
+# Baseline: grep -c "git clone" on this file should stay at documentation mentions only.
 
 # ---- Agent target definitions ----------------------------------------------
 #
@@ -71,8 +122,6 @@ MODE="install"
 # YAML targets (Hermes/OpenClaw/etc.) need a YAML-aware registration.
 # ZCode uses its own JSON shape under ~/.zcode/cli/config.json.
 # Plain markdown targets (AGENTS.md only) just get the file copy.
-
-MCP_BASH_COMMAND_LINE='-lc exec "${MEMROOS_ROOT:-\$HOME/github/memroos}/scripts/memroos-mcp.sh"'
 
 declare -a TARGETS=(
   # name | AGENTS.md path | skills dir | MCP config style
@@ -173,22 +222,24 @@ YAML
 
   # Remove existing memroos block (any indentation), then append fresh block
   python3 - "$target_file" <<'PY'
-import sys, re
+import os, sys, re, json
 path = sys.argv[1]
+exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
 with open(path) as f:
     text = f.read()
 # Drop any memroos block (0+ leading spaces)
 text = re.sub(r"^[ \t]*memroos:\n(?:^[ \t]+.*\n?|\n)*", "", text, flags=re.MULTILINE)
 # Drop trailing blank lines then ensure single newline
 text = text.rstrip() + "\n\n"
-block = """memroos:
-  command: /bin/bash
-  args:
-    - -lc
-    - exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"
-  connect_timeout: 30
-  timeout: 60
-"""
+block = (
+    "memroos:\n"
+    "  command: /bin/bash\n"
+    "  args:\n"
+    "    - -lc\n"
+    f"    - {json.dumps(exec_line)}\n"
+    "  connect_timeout: 30\n"
+    "  timeout: 60\n"
+)
 with open(path, "w") as f:
     f.write(text + block)
 PY
@@ -200,8 +251,9 @@ upsert_toml_mcp_block() {
   touch "$target_file"
 
   python3 - "$target_file" <<'PY'
-import sys, re
+import os, sys, re
 path = sys.argv[1]
+exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
 try:
     with open(path) as f:
         text = f.read()
@@ -217,9 +269,11 @@ text = re.sub(
 )
 text = text.rstrip() + "\n\n"
 
-block = """[mcp_servers.memroos]
+# TOML string: escape backslashes and quotes for double-quoted value
+escaped = exec_line.replace("\\", "\\\\").replace('"', '\\"')
+block = f"""[mcp_servers.memroos]
 command = "/bin/bash"
-args = ["-lc", "exec \\"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\\""]
+args = ["-lc", "{escaped}"]
 connect_timeout = 30
 timeout = 60
 """
@@ -236,8 +290,9 @@ upsert_json_mcp_block() {
   fi
 
   python3 - "$target_file" <<'PY'
-import sys, json
+import os, sys, json
 path = sys.argv[1]
+exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
 with open(path) as f:
     try:
         data = json.load(f)
@@ -246,7 +301,7 @@ with open(path) as f:
 data.setdefault("mcpServers", {})
 data["mcpServers"]["memroos"] = {
     "command": "/bin/bash",
-    "args": ["-lc", "exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""],
+    "args": ["-lc", exec_line],
     "connectTimeout": 30,
     "timeout": 60000,
 }
@@ -264,8 +319,9 @@ upsert_zcode_mcp_block() {
   fi
 
   python3 - "$target_file" <<'PY'
-import sys, json
+import os, sys, json
 path = sys.argv[1]
+exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
 with open(path) as f:
     try:
         data = json.load(f)
@@ -276,7 +332,7 @@ data["mcp"].setdefault("servers", {})
 data["mcp"]["servers"]["memroos"] = {
     "type": "stdio",
     "command": "/bin/bash",
-    "args": ["-lc", "exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""],
+    "args": ["-lc", exec_line],
     "enabled": True,
     "timeoutMs": 60000,
 }
@@ -387,6 +443,7 @@ echo "Repo:        $MEMROOS_ROOT"
 echo "Template:    $TEMPLATE"
 echo "Skill:       $SKILL_SRC"
 echo "Mode:        $MODE"
+echo "MCP mode:    $MCP_MODE_LABEL"
 echo ""
 
 case "$MODE" in
