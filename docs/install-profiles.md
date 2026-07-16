@@ -75,10 +75,20 @@ For cloud-first operators, run MemroOS natively or in Compose and point it at ma
 For public repo users who want a local container install, use the Docker installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --local
 ```
 
-That path starts `docker-compose.demo.yml`, which builds the MemroOS app container plus local demo memory/orchestration services and a local Ollama container without host Node or Python. The first demo boot pulls `qwen2.5:3b` and `nomic-embed-text`, so allow a few minutes for image/model downloads. For production-style Compose, use `MEMROOS_COMPOSE_FILE=docker-compose.yml` and provide the required environment values before running the installer. Qdrant remains configured through environment variables.
+### Compose profiles (local container installs)
+
+| Compose file | `install.sh` flag | Services | Graph memory | Best for |
+| --- | --- | --- | --- | --- |
+| `docker-compose.local.yml` | `--local` (**default**) | app + mem0 (Chroma) + **Neo4j** + Ollama + orchestration | ✅ local Neo4j | Full self-hosted stack on one host |
+| `docker-compose.demo.yml` | `--docker` w/ `MEMROOS_COMPOSE_FILE=docker-compose.demo.yml` | app + mem0 (Chroma) + Ollama + orchestration | ❌ | Fastest boot, no graph memory |
+| `docker-compose.yml` | `MEMROOS_COMPOSE_FILE=docker-compose.yml` | app + mem0 + Neo4j + orchestration | ✅ (managed) | Production, points at managed Qdrant + a host/managed LLM |
+
+`--local` (the default) starts `docker-compose.local.yml`: the MemroOS app plus local memory/graph/orchestration services and a bundled Ollama container, with **no host Node/Python and no cloud accounts**. It is the demo stack plus a local Neo4j so graph memory works out of the box. Its Neo4j/Qdrant wiring is pinned to local values and deliberately ignores any cloud placeholders in `.env`. The first boot pulls `qwen2.5:3b` and `nomic-embed-text`, so allow a few minutes for image/model downloads.
+
+For the lighter no-graph variant, pass `MEMROOS_COMPOSE_FILE=docker-compose.demo.yml`. For production-style Compose, use `MEMROOS_COMPOSE_FILE=docker-compose.yml` and provide the required environment values (managed Qdrant, Neo4j) before running the installer.
 
 ## Environment Validation
 

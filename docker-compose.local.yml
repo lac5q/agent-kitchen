@@ -1,0 +1,171 @@
+name: memroos-local
+
+# MemroOS — Fully Local Self-Hosted Stack
+# =======================================
+# This is the DEFAULT for a local install (install.sh --local).
+#
+# It is the demo stack (bundled Ollama + embedded Chroma vector store, no cloud
+# accounts) PLUS a local Neo4j so Graph Memory works — i.e. every memory tier
+# runs on this one host with zero external dependencies:
+#
+#   - Knowledge store   → git-backed markdown in the repo (content/)
+#   - Vector memory     → mem0 + embedded Chroma (SQLite), local Ollama embeddings
+#   - Graph memory      → local Neo4j (this file's addition over the demo stack)
+#   - Orchestration     → local LangGraph service
+#   - LLM / embeddings  → bundled Ollama container (qwen2.5:3b + nomic-embed-text)
+#
+# For the lighter no-graph variant use docker-compose.demo.yml; for a
+# production stack pointed at managed Qdrant/Neo4j use docker-compose.yml.
+
+services:
+  memroos:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.memroos
+    ports:
+      - "${MEMROOS_PORT:-3000}:3000"
+    environment:
+      MEMROOS_A2A_PROFILE: ${MEMROOS_A2A_PROFILE:-local-dev}
+      MEMROOS_PUBLIC_BASE_URL: ${MEMROOS_PUBLIC_BASE_URL:-http://localhost:3000}
+      MEMROOS_A2A_ENDPOINT_BASE_URL: ${MEMROOS_A2A_ENDPOINT_BASE_URL:-http://localhost:3000}
+      MEMROOS_OPERATOR_API_KEY: ${MEMROOS_OPERATOR_API_KEY:-demo-key}
+      # This server's OWN dashboard login. Pinned local-only values (like the
+      # Neo4j wiring) so the .env placeholders don't apply and an admin is seeded
+      # on first boot. LOCAL ONLY — change these before exposing this instance.
+      # This is a separate, self-contained instance; it does NOT touch any
+      # hosted/production MemroOS dashboard.
+      MEMROOS_JWT_SECRET: memroos-local-dev-jwt-secret-change-me-0123456789
+      MEMROOS_ADMIN_EMAIL: admin@memroos.local
+      MEMROOS_ADMIN_PASSWORD: memroos-local-admin
+      MEM0_URL: http://mem0:3201
+      ORCHESTRATION_SERVICE_URL: http://orchestration:3210
+      # Graph memory: point the app at the bundled local Neo4j.
+      # Hardcoded (not ${...}) on purpose: the repo .env ships cloud (Neo4j Aura)
+      # placeholders, and this stack must stay fully self-contained on one host.
+      NEO4J_HTTP_URL: http://neo4j:7474
+      NEO4J_DATABASE: neo4j
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: memroos-local
+      SQLITE_DB_PATH: /data/conversations.db
+      CLAUDE_MEMORY_PATH: /data/claude-memory
+      KNOWLEDGE_BASE_PATH: /knowledge
+      MEMROOS_DATA_RESIDENCY: ${MEMROOS_DATA_RESIDENCY:-0}
+      LOCAL_JUDGE_PROVIDER: ${LOCAL_JUDGE_PROVIDER:-ollama}
+      LOCAL_JUDGE_ENDPOINT: ${LOCAL_JUDGE_ENDPOINT:-http://ollama:11434/v1}
+      LOCAL_JUDGE_MODEL: ${LOCAL_JUDGE_MODEL:-qwen2.5:3b}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
+    volumes:
+      - memroos-data:/data
+      - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+    depends_on:
+      mem0:
+        condition: service_healthy
+      orchestration:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  mem0:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.memory
+    ports:
+      - "${MEM0_PORT:-3201}:3201"
+    environment:
+      # Local mode: no Qdrant required (embedded Chroma vector store).
+      # Pinned empty so the repo .env's cloud Qdrant placeholders can't leak in.
+      QDRANT_URL: ""
+      QDRANT_API_KEY: ""
+      OLLAMA_BASE_URL: http://ollama:11434
+      ANONYMIZED_TELEMETRY: "False"
+      CHROMA_PRODUCT_TELEMETRY_IMPL: chroma_noop_telemetry.NoopTelemetry
+      CHROMA_TELEMETRY_IMPL: chroma_noop_telemetry.NoopTelemetry
+      ORT_LOG_SEVERITY_LEVEL: "3"
+    volumes:
+      - mem0-logs:/app/services/memory/logs
+      - mem0-history:/root/.mem0
+      - ./services/memory/mem0-config.demo.yaml:/app/services/memory/mem0-config.yaml:ro
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:3201/health', timeout=3)\nPY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - "ollama pull qwen2.5:3b && ollama pull nomic-embed-text"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      # NEO4J_AUTH is the ONE credential var the neo4j image handles specially.
+      # Do NOT set NEO4J_PASSWORD here: the image maps every other NEO4J_* env to
+      # a server setting under strict validation, and there is no 'PASSWORD'
+      # setting, so the server refuses to start. Pinned literal to match the app
+      # wiring above and stay independent of the repo .env cloud placeholders.
+      NEO4J_AUTH: neo4j/memroos-local
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://127.0.0.1:7687 -u neo4j -p memroos-local 'RETURN 1' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+
+  orchestration:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.orchestration
+    ports:
+      - "${ORCHESTRATION_PORT:-3210}:3210"
+    environment:
+      ORCHESTRATION_DB_PATH: /data/orchestration.db
+      ORCHESTRATION_RETRY_LIMIT: ${ORCHESTRATION_RETRY_LIMIT:-2}
+    volumes:
+      - orchestration-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:3210/health', timeout=3)\nPY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  memroos-data:
+  mem0-logs:
+  mem0-history:
+  ollama-data:
+  neo4j-data:
+  neo4j-logs:
+  orchestration-data:
