@@ -2367,6 +2367,24 @@ Plans:
 2. Docs + `collections.config.json` list private meeting collections.
 3. Regression coverage for Monaco Circleback + Fathom Impromptu via `memory_recall` without `-c`.
 
+### v8.11 Follow-up — MEETREL-FOLLOWUP-05: Source-to-Index Evidence
+
+**Goal:** Make a missing meeting diagnosable from one operator-visible receipt rather than leaving ambiguity between provider absence, OAuth scope failure, capture, routing, indexing, and recall.
+
+**Trigger:** July 16 Cordant investigation: Circleback had no July 15 Eric meeting and Fathom had only an unrelated meeting. Spark Desktop did capture the complete `Eric <> Luis` transcript (July 15, row 325), and direct `qmd search "Douglas fintech" -c spark-recordings` retrieved it at 96%. However, MCP `memory_recall` enumerated `spark-recordings` and returned zero QMD results for the same content. Separately, the Cordant Google account returned insufficient scopes for both Meet conference records and Drive meeting-note search; the scheduled Google/Spark sync then reported `ok: true` with zero Google documents. The system has both a unified-recall parity defect and a false-healthy provider-auth state.
+
+**Depends on:** Phases 151–153.
+
+**Success criteria:**
+1. A meeting lookup by stable provider ID, Meet code, or calendar-event identity returns one bounded status: `provider_absent`, `provider_auth_blocked`, `captured_unrouted`, `routed_unindexed`, `indexed_unrecalled`, or `recalled`.
+2. Provider adapters preflight their required scopes and return an actionable, secret-free reauthorization remedy; an OAuth failure is never reported as an empty provider result or a successful ingest.
+3. A transcript returned by direct QMD collection search is returned by `memory_recall` under the same authorization context, with a receipt that names the searched collection and any lane-level failure.
+4. Every successful capture records provider identity, raw-capture receipt, routing decision, index receipt, and recall proof without committing transcript bodies or provider credentials.
+5. Operator health shows enabled-but-empty sources separately from auth-blocked sources, reports the aggregate sync as degraded when a configured source is blocked or behind, and supports a date-window trace for a single meeting.
+6. Regression fixtures cover Circleback absent, Fathom unrelated-result, Google Meet/Drive scope denial, Spark-captured-but-unified-recall-missing, and the full captured-to-recalled path.
+
+**Investigation gate:** Repair the unified-recall Spark parity first, then restore the Cordant Google Meet scopes and compare the provider record and Google-generated notes against the raw-capture, routing, QMD-index, and `memory_recall` receipts.
+
 
 ## v8.12 MemRoOS MCP Memory Gate Resilience (Codex) (Phases 154–156)
 
