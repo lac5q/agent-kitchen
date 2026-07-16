@@ -49,3 +49,48 @@ grep -c "git clone" scripts/install-agent-integrations.sh   # expect 0 (or docs-
 - **Platform / IdP:** OAuth device flow + token exchange into `MEMROOS_AGENT_API_KEY` (or successor).
 - **Desktop / MDM:** Signed installer distribution, non-admin install path, first-boot verification.
 - **SRE:** S10 outage drill proving honest degrade without laptop corpus pulls.
+
+---
+
+# EntOps Stub Handoff — Phase 127 (append)
+
+**Creation date:** 2026-07-16  
+**Update date:** 2026-07-16  
+**Document version:** 2026-07-16.2  
+**Source:** `.planning/phases/127-write-side-enforcement-exit-tool/127-01-PLAN.md`, `.planning/REQUIREMENTS.md` (ENTOPS-07/08)  
+**Data gathered:** 2026-07-16 (operator sink + exit tool code slice; no harness wiring)
+
+## Purpose
+
+Phase 127 ships **ENTOPS-08** (exit/DSAR tooling) fully in code, and the **operator-side half of ENTOPS-07** (native-memory ingest sink/filter/budget/replay contract). Per-harness interception of Claude auto-memory, Hermes `memory add`, and Codex `/memory` is **NOT built** — documented here so operators do not mistake the sink API for finished write-side enforcement.
+
+## Shipped in this phase (code)
+
+| ID | What shipped |
+|----|----------------|
+| ENTOPS-08 | `bin/memroos.mjs` (`export --flat`, `export --dsar`, `delete --user`); `lib/export/flat-export.ts` + `dsar-export.ts`; `POST /api/dsar/export` + `POST /api/dsar/delete`; `erasure_tombstones` migration (schema v30) — tombstone only, never deletes audit rows |
+| ENTOPS-07 (operator sink) | `lib/native-memory/filter.ts` + `sink.ts`; `POST /api/native-memory/ingest` — `directive_diff` alert (never deletes) → secret filter → directive budget warn → returns `{replay}` |
+
+## NOT built — ENTOPS-07 per-harness wiring (honest stubs)
+
+| Item | Harness | Status | Follow-up |
+|------|---------|--------|-----------|
+| Claude Code auto-memory → MemRoOS ingest | Claude | **NOT built** — no Claude memory-write hook / plugin | Wire Claude memory writes to `POST /api/native-memory/ingest`, then write `replay` to local auto-memory file |
+| Hermes `memory add` → MemRoOS first | Hermes | **NOT built** — Hermes runtime not modified; MEMORY.md skills-routing layer **untouched** | Intercept `memory add` before local write; stub directive body only after sink returns replay |
+| Codex `/memory` routing → MemRoOS first | Codex | **NOT built** — no Codex memory router change | Route `/memory` writes through ingest, then replay under budget |
+| Live harness regression (Hermes running) | Hermes | **NOT built** — no live Hermes lab in this slice | Integration test with running Hermes proving MEMORY.md skills routing intact + directive body stubbed |
+| Fake harness “green” in CI | — | **Explicitly refused** — do not simulate harness interception as shipped | Keep stubs documented until real hooks exist |
+
+## Operator sink contract (shipped)
+
+1. Auth: operator session **or** `MEMROOS_OPERATOR_API_KEY` / `MEMROOS_AGENT_API_KEY` bearer.
+2. Body: `{source, agentId, userId, content, memoryPath, tenantId?, canonicalContent?}`.
+3. Pipeline is warn-only on budgets/diffs; HIGH secrets are redacted from `replay` via `scanContent`.
+4. Caller (future harness hook) owns writing `replay` to the local file — MemRoOS does not touch harness internals.
+
+## Verification commands
+
+```bash
+cd apps/memroos && npx vitest run src/lib/export/__tests__/ src/lib/native-memory/__tests__/ src/lib/__tests__/erasure-tombstone.test.ts && npm run typecheck
+cd ../.. && node bin/memroos.mjs export --flat --tenant default-tenant --vault-root /path/to/fixture --out /tmp/memroos-export-test
+```
