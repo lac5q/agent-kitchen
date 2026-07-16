@@ -16,6 +16,9 @@ import {
   invalidateFederationArtifactsForCanonical,
   invalidateFederationArtifactsForSource,
 } from "../federation/action-bridge";
+import { neo4jConfig } from "./backends";
+import { responseCache } from "@/lib/response-cache";
+import { ensureMessageMemorySchema } from "@/lib/message-memory/store";
 
 export interface ErasureStoreOutcome {
   storeId: string;
@@ -420,40 +423,482 @@ function collectTargetStores(identity: CanonicalMemoryIdentity, indirect: Canoni
   return targets;
 }
 
-/**
- * Placeholder adapter used for stores that are not yet wired to a real backend.
- *
- * Behaviour:
- *  - When the identity has a direct derivative for this store, the adapter
- *    reports `purged` (we treated the linked row as removed). The erasure
- *    coordinator drives this path only when the direct derivative list
- *    explicitly references the store, so we never claim a `purged` result for
- *    an unrelated store.
- *  - When the store is not linked, the adapter reports `zero_match` so the
- *    per-store report stays exhaustive.
- *
- * Production deployments should override these registrations with real
- * adapters via `registerErasureStoreAdapter`. The placeholder exists so the
- * coordinator has a deterministic, non-default branch per store and never
- * silently regresses to a hardcoded if-else "purged" outcome.
- */
-function makePlaceholderAdapter(storeId: KnownStore): ErasureStoreAdapter {
-  return {
-    storeId,
-    async erase(_db, _tenantId, identity, _opts) {
-      const linked = identity.derivatives.some((d) => d.storeId === storeId);
-      return linked
-        ? { status: "purged", reason: `placeholder_adapter_purged:${storeId}` }
-        : { status: "zero_match", reason: `not_linked:${storeId}` };
-    },
-  };
+function linkedToStore(identity: CanonicalMemoryIdentity, storeId: KnownStore): boolean {
+  return identity.derivatives.some((d) => d.storeId === storeId);
 }
 
-// Register the placeholder adapter for stores without a real implementation.
-// Real adapters can override these via registerErasureStoreAdapter().
-for (const storeId of ["graph", "fts", "cache", "context", "candidates", "platform", "message", "salience"] as const) {
-  registerErasureStoreAdapter(makePlaceholderAdapter(storeId));
+function metadataRecordIds(identity: CanonicalMemoryIdentity): string[] {
+  const ids = new Set<string>();
+  for (const derivative of identity.derivatives) {
+    const meta = derivative.metadata ?? {};
+    for (const key of ["message_id", "messageId", "record_id", "recordId", "artifact_id", "candidate_id"]) {
+      const value = meta[key];
+      if (typeof value === "string" && value.trim()) ids.add(value.trim());
+      if (typeof value === "number" && Number.isFinite(value)) ids.add(String(Math.trunc(value)));
+    }
+  }
+  if (/^\d+$/.test(identity.id)) ids.add(identity.id);
+  return Array.from(ids);
 }
+
+function resolveMessageIds(db: Database.Database, identity: CanonicalMemoryIdentity): number[] {
+  const ids = new Set<number>();
+  for (const raw of metadataRecordIds(identity)) {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n > 0) ids.add(n);
+  }
+
+  if (tableExists(db, "memory_retention_records")) {
+    const rows = db
+      .prepare(
+        `SELECT record_id, record_type, scope_json FROM memory_retention_records
+         WHERE record_type = 'message'
+           AND (record_id = ? OR scope_json LIKE ? OR scope_json LIKE ?)`
+      )
+      .all(identity.id, `%"canonicalId":"${identity.id}"%`, `%"canonicalMemoryId":"${identity.id}"%`) as Array<{
+      record_id: string;
+      record_type: string;
+      scope_json: string;
+    }>;
+    for (const row of rows) {
+      const n = Number(row.record_id);
+      if (Number.isInteger(n) && n > 0) ids.add(n);
+    }
+  }
+
+  if (tableExists(db, "platform_message_memory")) {
+    const rows = db
+      .prepare(
+        `SELECT message_row_id FROM platform_message_memory
+         WHERE content_hash = ? OR id = ? OR dedupe_key = ?`
+      )
+      .all(identity.canonicalHash, identity.id, identity.id) as Array<{ message_row_id: number | null }>;
+    for (const row of rows) {
+      if (typeof row.message_row_id === "number" && Number.isInteger(row.message_row_id) && row.message_row_id > 0) {
+        ids.add(row.message_row_id);
+      }
+    }
+  }
+
+  return Array.from(ids).sort((a, b) => a - b);
+}
+
+function purgeFtsRows(db: Database.Database, messageIds: number[]): number {
+  if (!tableExists(db, "messages_fts") || messageIds.length === 0) return 0;
+  let purged = 0;
+  // FTS5 external-content: read payload from messages, confirm rowid in the index.
+  const msgSelect = db.prepare(
+    `SELECT id, content, project, timestamp, agent_id FROM messages WHERE id = ?`
+  );
+  const ftsExists = db.prepare(`SELECT rowid FROM messages_fts WHERE rowid = ?`);
+  const del = db.prepare(
+    `INSERT INTO messages_fts(messages_fts, rowid, content, project, timestamp, agent_id)
+     VALUES('delete', ?, ?, ?, ?, ?)`
+  );
+  for (const messageId of messageIds) {
+    if (!ftsExists.get(messageId)) continue;
+    const row = msgSelect.get(messageId) as
+      | { id: number; content: string; project: string; timestamp: string; agent_id: string }
+      | undefined;
+    if (!row) continue;
+    del.run(row.id, row.content, row.project, row.timestamp, row.agent_id);
+    purged += 1;
+  }
+  return purged;
+}
+
+async function eraseNeo4jCanonical(
+  identity: CanonicalMemoryIdentity,
+  erasureId: string
+): Promise<{ status: ErasureStoreOutcome["status"]; reason: string; metadata?: Record<string, unknown> }> {
+  const config = neo4jConfig();
+  if (!config.password) {
+    return { status: "unavailable", reason: "neo4j_not_configured" };
+  }
+  const cypher = `MATCH (n)
+    WHERE n.canonical_id = $canonicalId
+       OR n.canonicalId = $canonicalId
+       OR n.memroos_canonical_id = $canonicalId
+       OR n.content_hash = $canonicalHash
+       OR n.id = $canonicalId
+    DETACH DELETE n
+    RETURN count(*) AS deleted`;
+  try {
+    const response = await fetch(`${config.url}/db/${encodeURIComponent(config.database)}/tx/commit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`,
+      },
+      body: JSON.stringify({
+        statements: [
+          {
+            statement: cypher,
+            parameters: {
+              canonicalId: identity.id,
+              canonicalHash: identity.canonicalHash,
+              erasureId,
+            },
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    const result = (await response.json().catch(() => ({}))) as {
+      errors?: unknown[];
+      results?: Array<{ data?: Array<{ row?: unknown[] }> }>;
+    };
+    if (!response.ok || (Array.isArray(result.errors) && result.errors.length > 0)) {
+      return { status: "unavailable", reason: "neo4j_graph_backend_unavailable" };
+    }
+    const deleted = Number(result.results?.[0]?.data?.[0]?.row?.[0] ?? 0);
+    if (!Number.isFinite(deleted) || deleted <= 0) {
+      return { status: "zero_match", reason: "no_neo4j_nodes_for_canonical" };
+    }
+    return {
+      status: "purged",
+      reason: "neo4j_nodes_detached_deleted",
+      metadata: { deleted, erasure_id: erasureId },
+    };
+  } catch (err) {
+    return {
+      status: "unavailable",
+      reason: err instanceof Error ? `neo4j_error:${err.message}` : "neo4j_error",
+    };
+  }
+}
+
+/** Graph (Neo4j): best-effort DETACH DELETE; honest unavailable when not configured/down. */
+registerErasureStoreAdapter({
+  storeId: "graph",
+  async erase(_db, _tenantId, identity, opts) {
+    if (!linkedToStore(identity, "graph")) {
+      return { status: "zero_match", reason: "not_linked:graph" };
+    }
+    return eraseNeo4jCanonical(identity, opts.erasureId);
+  },
+});
+
+/** FTS: delete messages_fts projections for resolved message rowids. */
+registerErasureStoreAdapter({
+  storeId: "fts",
+  async erase(db, _tenantId, identity, opts) {
+    if (!tableExists(db, "messages_fts")) {
+      return linkedToStore(identity, "fts")
+        ? { status: "unavailable", reason: "messages_fts_missing" }
+        : { status: "zero_match", reason: "fts_table_missing" };
+    }
+    const messageIds = resolveMessageIds(db, identity);
+    // When the message store is also targeted, sealing the message flips policy
+    // and the messages_au_* triggers remove FTS rows. Mutating FTS first then
+    // updating messages corrupts external-content FTS5 ("disk image is malformed").
+    if (linkedToStore(identity, "message") && messageIds.length > 0) {
+      return {
+        status: "tombstoned",
+        reason: "fts_deferred_to_message_seal_triggers",
+        metadata: { message_ids: messageIds, erasure_id: opts.erasureId },
+      };
+    }
+    const purged = purgeFtsRows(db, messageIds);
+    if (purged > 0) {
+      return {
+        status: "purged",
+        reason: "messages_fts_rows_deleted",
+        metadata: { message_ids: messageIds, purged, erasure_id: opts.erasureId },
+      };
+    }
+    return linkedToStore(identity, "fts")
+      ? { status: "zero_match", reason: "no_fts_rows_for_canonical", metadata: { message_ids: messageIds } }
+      : { status: "zero_match", reason: "not_linked:fts" };
+  },
+});
+
+/** Cache: invalidate space_cache_state + in-process responseCache tags for the canonical. */
+registerErasureStoreAdapter({
+  storeId: "cache",
+  async erase(db, _tenantId, identity, opts) {
+    let invalidated = 0;
+    const resourceIds = new Set<string>([identity.id, identity.canonicalHash, ...metadataRecordIds(identity)]);
+
+    if (tableExists(db, "space_cache_state")) {
+      const now = opts.now.toISOString();
+      for (const resourceId of resourceIds) {
+        const result = db
+          .prepare(
+            `UPDATE space_cache_state
+             SET invalidated_at = ?, retrieval_count = 0
+             WHERE resource_id = ? AND (invalidated_at IS NULL OR invalidated_at = '')`
+          )
+          .run(now, resourceId);
+        invalidated += Number(result.changes ?? 0);
+      }
+    }
+
+    for (const tag of resourceIds) {
+      invalidated += responseCache.invalidateTag(tag);
+      invalidated += responseCache.invalidateTag(`canonical:${tag}`);
+      invalidated += responseCache.invalidateTag(`memory:${tag}`);
+    }
+
+    if (invalidated > 0) {
+      return {
+        status: "purged",
+        reason: "cache_entries_invalidated",
+        metadata: { invalidated, erasure_id: opts.erasureId },
+      };
+    }
+    return linkedToStore(identity, "cache")
+      ? { status: "zero_match", reason: "no_cache_entries_for_canonical" }
+      : { status: "zero_match", reason: "not_linked:cache" };
+  },
+});
+
+/** Context packs: expire/redact agent_handoff_packs snapshots tied to the canonical. */
+registerErasureStoreAdapter({
+  storeId: "context",
+  async erase(db, tenantId, identity, opts) {
+    if (!tableExists(db, "agent_handoff_packs")) {
+      return linkedToStore(identity, "context")
+        ? { status: "unavailable", reason: "agent_handoff_packs_missing" }
+        : { status: "zero_match", reason: "context_table_missing" };
+    }
+    const likeCanon = `%"${identity.id}"%`;
+    const likeHash = `%"${identity.canonicalHash}"%`;
+    const rows = db
+      .prepare(
+        `SELECT id FROM agent_handoff_packs
+         WHERE tenant_id = ?
+           AND status IN ('ready','consumed')
+           AND (context_pack_json LIKE ? OR context_pack_json LIKE ?
+                OR source_capture_ids_json LIKE ? OR id = ? OR task_id = ? OR session_id = ?)`
+      )
+      .all(tenantId, likeCanon, likeHash, likeCanon, identity.id, identity.id, identity.id) as Array<{ id: string }>;
+
+    if (rows.length === 0) {
+      return linkedToStore(identity, "context")
+        ? { status: "zero_match", reason: "no_context_packs_for_canonical" }
+        : { status: "zero_match", reason: "not_linked:context" };
+    }
+
+    const now = opts.now.toISOString();
+    const tombstonePack = stableJson({
+      erased: true,
+      erasure_id: opts.erasureId,
+      canonical_id: identity.id,
+      erased_at: now,
+    });
+    const update = db.prepare(
+      `UPDATE agent_handoff_packs
+       SET status = 'expired', context_pack_json = ?, redaction_state = 'redacted'
+       WHERE id = ?`
+    );
+    for (const row of rows) update.run(tombstonePack, row.id);
+    return {
+      status: "tombstoned",
+      reason: "context_packs_expired_redacted",
+      metadata: { pack_ids: rows.map((r) => r.id), erasure_id: opts.erasureId },
+    };
+  },
+});
+
+/** Candidates: tombstone agent_memory_candidates + invalidate ontology_candidates. */
+registerErasureStoreAdapter({
+  storeId: "candidates",
+  async erase(db, tenantId, identity, opts) {
+    const touched: string[] = [];
+    const now = opts.now.toISOString();
+    const ids = metadataRecordIds(identity);
+
+    if (tableExists(db, "agent_memory_candidates")) {
+      let candidates: Array<{ id: string }> = [];
+      if (ids.length > 0) {
+        candidates = db
+          .prepare(
+            `SELECT id FROM agent_memory_candidates
+             WHERE tenant_id = ?
+               AND (id = ? OR content_hash = ? OR id IN (${ids.map(() => "?").join(",")}))`
+          )
+          .all(tenantId, identity.id, identity.canonicalHash, ...ids) as Array<{ id: string }>;
+      } else {
+        candidates = db
+          .prepare(
+            `SELECT id FROM agent_memory_candidates
+             WHERE tenant_id = ? AND (id = ? OR content_hash = ?)`
+          )
+          .all(tenantId, identity.id, identity.canonicalHash) as Array<{ id: string }>;
+      }
+      const update = db.prepare(
+        `UPDATE agent_memory_candidates
+         SET content = '[erased]', status = 'rejected', metadata_json = ?
+         WHERE id = ?`
+      );
+      for (const row of candidates) {
+        update.run(stableJson({ erased: true, erasure_id: opts.erasureId, erased_at: now }), row.id);
+        touched.push(`agent_memory_candidates:${row.id}`);
+      }
+    }
+
+    if (tableExists(db, "ontology_candidates")) {
+      const ontologyRows = db
+        .prepare(
+          `SELECT id FROM ontology_candidates
+           WHERE tenant_id = ?
+             AND status NOT IN ('invalidated','rejected')
+             AND (source_id = ? OR source_hash = ? OR id = ?)`
+        )
+        .all(tenantId, identity.id, identity.canonicalHash, identity.id) as Array<{ id: string }>;
+      const invalidate = db.prepare(
+        `UPDATE ontology_candidates SET status = 'invalidated', invalidated_at = ? WHERE id = ?`
+      );
+      for (const row of ontologyRows) {
+        invalidate.run(now, row.id);
+        touched.push(`ontology_candidates:${row.id}`);
+      }
+    }
+
+    if (touched.length > 0) {
+      return {
+        status: "tombstoned",
+        reason: "candidate_rows_tombstoned",
+        metadata: { touched, erasure_id: opts.erasureId },
+      };
+    }
+    if (!tableExists(db, "agent_memory_candidates") && !tableExists(db, "ontology_candidates")) {
+      return linkedToStore(identity, "candidates")
+        ? { status: "unavailable", reason: "candidate_tables_missing" }
+        : { status: "zero_match", reason: "candidate_tables_missing" };
+    }
+    return linkedToStore(identity, "candidates")
+      ? { status: "zero_match", reason: "no_candidates_for_canonical" }
+      : { status: "zero_match", reason: "not_linked:candidates" };
+  },
+});
+
+/** Platform message memory: redact platform_message_memory rows by hash/id. */
+registerErasureStoreAdapter({
+  storeId: "platform",
+  async erase(db, _tenantId, identity, opts) {
+    ensureMessageMemorySchema(db);
+    if (!tableExists(db, "platform_message_memory")) {
+      return linkedToStore(identity, "platform")
+        ? { status: "unavailable", reason: "platform_message_memory_missing" }
+        : { status: "zero_match", reason: "platform_table_missing" };
+    }
+    const messageIds = resolveMessageIds(db, identity);
+    const rows =
+      messageIds.length > 0
+        ? (db
+            .prepare(
+              `SELECT id FROM platform_message_memory
+               WHERE content_hash = ? OR id = ? OR dedupe_key = ?
+                  OR message_row_id IN (${messageIds.map(() => "?").join(",")})`
+            )
+            .all(identity.canonicalHash, identity.id, identity.id, ...messageIds) as Array<{ id: string }>)
+        : (db
+            .prepare(
+              `SELECT id FROM platform_message_memory
+               WHERE content_hash = ? OR id = ? OR dedupe_key = ?`
+            )
+            .all(identity.canonicalHash, identity.id, identity.id) as Array<{ id: string }>);
+
+    if (rows.length === 0) {
+      return linkedToStore(identity, "platform")
+        ? { status: "zero_match", reason: "no_platform_rows_for_canonical" }
+        : { status: "zero_match", reason: "not_linked:platform" };
+    }
+
+    const now = opts.now.toISOString();
+    const update = db.prepare(
+      `UPDATE platform_message_memory
+       SET content = '[erased]', content_hash = ?, metadata = ?, updated_at = ?
+       WHERE id = ?`
+    );
+    for (const row of rows) {
+      update.run(
+        `erased:${opts.erasureId}`,
+        stableJson({ erased: true, erasure_id: opts.erasureId, erased_at: now }),
+        now,
+        row.id
+      );
+    }
+    return {
+      status: "tombstoned",
+      reason: "platform_message_memory_redacted",
+      metadata: { ids: rows.map((r) => r.id), erasure_id: opts.erasureId },
+    };
+  },
+});
+
+/**
+ * Message: redact episodic message payloads (never delete audit rows).
+ * Distinct from Phase 127 `erasure_tombstones` — this redacts `messages` content.
+ */
+registerErasureStoreAdapter({
+  storeId: "message",
+  async erase(db, _tenantId, identity, opts) {
+    if (!tableExists(db, "messages")) {
+      return linkedToStore(identity, "message")
+        ? { status: "unavailable", reason: "messages_table_missing" }
+        : { status: "zero_match", reason: "messages_table_missing" };
+    }
+    const messageIds = resolveMessageIds(db, identity);
+    if (messageIds.length === 0) {
+      return linkedToStore(identity, "message")
+        ? { status: "zero_match", reason: "no_messages_for_canonical" }
+        : { status: "zero_match", reason: "not_linked:message" };
+    }
+    const update = db.prepare(
+      `UPDATE messages
+       SET content = '[erased]', visibility = 'private', domain = NULL, sensitivity = NULL, policy = 'sealed'
+       WHERE id = ?`
+    );
+    let changed = 0;
+    for (const messageId of messageIds) {
+      const result = update.run(messageId);
+      changed += Number(result.changes ?? 0);
+    }
+    // messages_au_* triggers remove/reindex FTS when policy/visibility change.
+    if (changed === 0) {
+      return { status: "zero_match", reason: "messages_already_absent" };
+    }
+    return {
+      status: "tombstoned",
+      reason: "message_payload_redacted",
+      metadata: { message_ids: messageIds, erasure_id: opts.erasureId },
+    };
+  },
+});
+
+/** Salience: delete memory_salience rows for resolved messages. */
+registerErasureStoreAdapter({
+  storeId: "salience",
+  async erase(db, _tenantId, identity, opts) {
+    if (!tableExists(db, "memory_salience")) {
+      return linkedToStore(identity, "salience")
+        ? { status: "unavailable", reason: "memory_salience_missing" }
+        : { status: "zero_match", reason: "salience_table_missing" };
+    }
+    const messageIds = resolveMessageIds(db, identity);
+    if (messageIds.length === 0) {
+      return linkedToStore(identity, "salience")
+        ? { status: "zero_match", reason: "no_salience_targets_for_canonical" }
+        : { status: "zero_match", reason: "not_linked:salience" };
+    }
+    const del = db.prepare("DELETE FROM memory_salience WHERE message_id = ?");
+    let purged = 0;
+    for (const messageId of messageIds) {
+      purged += Number(del.run(messageId).changes ?? 0);
+    }
+    if (purged === 0) {
+      return { status: "zero_match", reason: "no_salience_rows_for_canonical" };
+    }
+    return {
+      status: "purged",
+      reason: "memory_salience_rows_deleted",
+      metadata: { message_ids: messageIds, purged, erasure_id: opts.erasureId },
+    };
+  },
+});
 
 /** Federation action proofs are erasure derivatives. Invalidation is a
  * tombstone-only transition: historical orchestration evidence remains

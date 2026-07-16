@@ -44,6 +44,14 @@ const DEFAULT_JOBS: CronHealthJobInput[] = [
     expectedIntervalMinutes: 60,
   },
   {
+    id: "memory-retention-expiry",
+    name: "Memory retention expiry",
+    sourceFamily: "memory",
+    schedule: "hourly",
+    expectedIntervalMinutes: 60,
+    healthEndpoint: "/api/memory-lifecycle/expiry",
+  },
+  {
     id: "hil-sla",
     name: "HIL SLA escalation",
     sourceFamily: "orchestration",
@@ -103,7 +111,9 @@ function computeHealth(job: {
 
 export function ensureDefaultCronJobs(db: Database.Database): void {
   for (const job of DEFAULT_JOBS) {
-    upsertCronHealthJob(db, job);
+    const existing = db.prepare("SELECT id FROM cron_health_jobs WHERE id = ?").get(job.id);
+    // Seed-only: never overwrite pause/stop or heartbeat fields on existing rows.
+    if (!existing) upsertCronHealthJob(db, job);
   }
 }
 
@@ -170,6 +180,66 @@ export function updateCronJobStatus(
   if (result.changes === 0) return null;
   const row = db.prepare("SELECT * FROM cron_health_jobs WHERE id = ?").get(id);
   return mapCronHealthJob(row as Record<string, unknown>);
+}
+
+/** True when the job is paused/stopped, or missing after seeding defaults. */
+export function isCronJobRunnable(db: Database.Database, id: string): boolean {
+  ensureDefaultCronJobs(db);
+  const row = db.prepare("SELECT status FROM cron_health_jobs WHERE id = ?").get(id) as
+    | { status: string }
+    | undefined;
+  if (!row) return false;
+  return normalizeStatus(row.status) === "active";
+}
+
+/**
+ * Heartbeat after a scheduler tick. Seeds the job definition if missing, then
+ * updates only run-related columns so pause/stop state is preserved.
+ */
+export function recordCronHealthRun(
+  db: Database.Database,
+  id: string,
+  input: {
+    success: boolean;
+    itemsProcessed?: number;
+    warning?: string | null;
+    now?: Date;
+    metadata?: Record<string, unknown>;
+  }
+): CronHealthJob | null {
+  ensureDefaultCronJobs(db);
+  const now = (input.now ?? new Date()).toISOString();
+  const existing = db.prepare("SELECT * FROM cron_health_jobs WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
+  if (!existing) return null;
+
+  const priorMeta = parseJson(String(existing.metadata_json ?? "{}"));
+  const mergedMeta = { ...priorMeta, ...(input.metadata ?? {}) };
+  db.prepare(
+    `UPDATE cron_health_jobs SET
+       last_run_at = ?,
+       last_success_at = CASE WHEN ? THEN ? ELSE last_success_at END,
+       last_failure_at = CASE WHEN ? THEN ? ELSE NULL END,
+       items_processed = ?,
+       warning = ?,
+       metadata_json = ?,
+       updated_at = ?
+     WHERE id = ?`
+  ).run(
+    now,
+    input.success ? 1 : 0,
+    now,
+    input.success ? 0 : 1,
+    now,
+    input.itemsProcessed ?? Number(existing.items_processed ?? 0),
+    input.warning ?? null,
+    JSON.stringify(mergedMeta),
+    now,
+    id
+  );
+  const row = db.prepare("SELECT * FROM cron_health_jobs WHERE id = ?").get(id);
+  return row ? mapCronHealthJob(row as Record<string, unknown>) : null;
 }
 
 export function listCronHealthJobs(db: Database.Database): CronHealthJob[] {

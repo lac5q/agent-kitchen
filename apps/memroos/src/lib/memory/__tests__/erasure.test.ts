@@ -45,7 +45,6 @@ describe("Erasure Coordinator", () => {
       scope: { tenantId: "tenant1" }
     });
     
-    expect(report.status).toBe("completed");
     expect(report.storeOutcomes.length).toBeGreaterThan(0);
     
     const vectorOutcome = report.storeOutcomes.find(o => o.storeId === "vector");
@@ -53,7 +52,15 @@ describe("Erasure Coordinator", () => {
     const ftsOutcome = report.storeOutcomes.find(o => o.storeId === "fts");
     
     expect(vectorOutcome?.status).toBe("purged");
-    expect(graphOutcome?.status).toBe("purged");
+    // Graph is Neo4j-backed: without credentials the adapter must degrade honestly
+    // (unavailable) rather than fake a purge. When Neo4j is configured the status
+    // may be purged/zero_match depending on matching nodes.
+    expect(["unavailable", "purged", "zero_match"]).toContain(graphOutcome?.status);
+    if (graphOutcome?.status === "unavailable") {
+      expect(report.status).toBe("incomplete");
+    } else {
+      expect(report.status).toBe("completed");
+    }
     expect(ftsOutcome?.status).toBe("zero_match"); // Not linked
   });
 
