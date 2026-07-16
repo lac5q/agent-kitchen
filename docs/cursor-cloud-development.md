@@ -30,7 +30,8 @@ The bootstrap script installs:
 3. **GSD Cursor skills (full profile)** — all `/gsd` workflow skills under `~/.cursor/skills`
 4. **MemRoOS cloud skills** — `$qwen-cloud` and `$beastmode-qwen-cloud` from `docs/codex-cloud/skills`
 5. **Qwen executor lane** — `~/.local/bin/qwen-agent` for external executor work
-6. **Agent integrations** (when `.agents/skills/memroos-save/SKILL.md` is present) — `install-agent-integrations.sh`
+6. **Factory Droid CLI** — `~/.local/bin/droid` installed from npm without global npm permissions
+7. **Agent integrations** (when `.agents/skills/memroos-save/SKILL.md` is present) — `install-agent-integrations.sh`
 
 Knowledge-repo skills (`skills/<name>/SKILL.md` under `KNOWLEDGE_ROOT`) are served dynamically via the MemRoOS MCP `skill-packs` workspace — they do not need a separate file install.
 
@@ -44,6 +45,8 @@ CURSOR_CLOUD_INSTALL_GSD=0               # skip GSD
 CURSOR_CLOUD_INSTALL_PROJECT_SKILLS=0    # skip qwen/beastmode skills
 CURSOR_CLOUD_INSTALL_QWEN=0              # skip Qwen CLI
 CURSOR_CLOUD_QWEN_SMOKE=1                # live Qwen smoke after install
+CURSOR_CLOUD_INSTALL_DROID=0             # skip Factory Droid CLI
+CURSOR_CLOUD_DROID_VERSION=latest        # Droid npm version/spec to install
 DASHSCOPE_API_KEY=<scoped-key>           # required for live Qwen execution
 ```
 
@@ -91,7 +94,19 @@ After creating or changing the Cursor Cloud environment:
 ~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
 ```
 
-The setup is healthy when dependencies install, the MemRoOS MCP starts, Cursor skills are visible, and cloud tasks can run normal TypeScript/test commands without invoking the Docker-based local installer.
+7. Verify Droid is installed:
+
+```bash
+~/.local/bin/droid --version
+```
+
+8. Run the fleet verifier on persistent remotes such as `maeve-u1` and `oracle-1` after maintenance:
+
+```bash
+npm run check:cursor-coding-env
+```
+
+The setup is healthy when dependencies install, the MemRoOS MCP starts, Cursor skills are visible, GitNexus is registered, Qwen/Droid CLIs are present, and cloud tasks can run normal TypeScript/test commands without invoking the Docker-based local installer.
 
 ## See Also
 

@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy to ~/.memroos/email-sources.json. Keep disabled until owner ACL + classification proofs pass.",
+  "enabled": false,
+  "sources": [
+    {
+      "id": "gmail-primary",
+      "type": "gmail",
+      "enabled": false,
+      "owner_user_id": "",
+      "owner_email": "",
+      "outDir": "data/context/emails",
+      "qmdCollection": "emails-private",
+      "labelDetectors": ["Confidential", "Legal", "Finance"],
+      "notes": "General mail may promote to shared knowledge; confidential/legal/finance stay owner-scoped."
+    }
+  ]
+}

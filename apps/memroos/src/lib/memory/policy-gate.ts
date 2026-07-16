@@ -23,6 +23,8 @@ export interface MemoryUseActor {
   capability?: string | null;
   tenantId?: string | null;
   project?: string | null;
+  /** Reserved for delegated agent acting-for; unused for allow decisions in owner-ACL slice A. */
+  actingForUserId?: string | null;
 }
 
 export interface MemoryLabelSnapshot {
@@ -30,6 +32,8 @@ export interface MemoryLabelSnapshot {
   domain?: VaultDomain | null;
   sensitivity?: VaultSensitivity | null;
   policy?: VaultPolicy | null;
+  /** Mailbox/meeting owner; required for private agent_visible|indexable allow path. */
+  ownerUserId?: string | null;
 }
 
 export interface MemoryUseDecisionResult {
@@ -66,6 +70,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function readOwnerUserId(record: Record<string, unknown>): string | null | undefined {
+  const raw = record.ownerUserId ?? record.owner_user_id;
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function labelFromRecord(record: Record<string, unknown>): MemoryLabelSnapshot | undefined {
   const visibility = typeof record.visibility === "string" && VAULT_VISIBILITIES.has(record.visibility as VaultVisibility)
     ? (record.visibility as VaultVisibility)
@@ -85,9 +97,10 @@ function labelFromRecord(record: Record<string, unknown>): MemoryLabelSnapshot |
   const policy = typeof record.policy === "string" && VAULT_POLICIES.has(record.policy as VaultPolicy)
     ? (record.policy as VaultPolicy)
     : undefined;
+  const ownerUserId = readOwnerUserId(record);
 
-  if (visibility || domain !== undefined || sensitivity !== undefined || policy) {
-    return { visibility, domain, sensitivity, policy };
+  if (visibility || domain !== undefined || sensitivity !== undefined || policy || ownerUserId !== undefined) {
+    return { visibility, domain, sensitivity, policy, ownerUserId };
   }
   return undefined;
 }
@@ -111,12 +124,24 @@ export function extractMemoryLabelSnapshot(value: unknown): MemoryLabelSnapshot 
     node?.metadata,
   ];
 
+  let snapshot: MemoryLabelSnapshot | undefined;
   for (const candidate of candidates) {
     if (!isRecord(candidate)) continue;
     const label = labelFromRecord(candidate);
-    if (label) return label;
+    if (!label) continue;
+    if (!snapshot) {
+      snapshot = { ...label };
+      continue;
+    }
+    snapshot = {
+      visibility: snapshot.visibility ?? label.visibility,
+      domain: snapshot.domain !== undefined ? snapshot.domain : label.domain,
+      sensitivity: snapshot.sensitivity !== undefined ? snapshot.sensitivity : label.sensitivity,
+      policy: snapshot.policy ?? label.policy,
+      ownerUserId: snapshot.ownerUserId !== undefined ? snapshot.ownerUserId : label.ownerUserId,
+    };
   }
-  return undefined;
+  return snapshot;
 }
 
 function normalizeLabel(label: MemoryLabelSnapshot): MemoryUseDecisionResult["label"] {
@@ -126,6 +151,15 @@ function normalizeLabel(label: MemoryLabelSnapshot): MemoryUseDecisionResult["la
     sensitivity: label.sensitivity ?? null,
     policy: label.policy ?? "sealed",
   };
+}
+
+function isOwnerOrAdmin(actor: MemoryUseActor, ownerUserId: string | null | undefined): boolean {
+  if (actor.role === "admin") return true;
+  // Owner ACL is for human principals only in slice A; agents stay denied until OwnerGate delegation.
+  if (actor.role === "agent" || actor.role === "anonymous" || actor.role === "system") {
+    return false;
+  }
+  return typeof ownerUserId === "string" && ownerUserId.length > 0 && actor.id === ownerUserId;
 }
 
 export function authorizeMemoryUse(input: {
@@ -145,6 +179,10 @@ export function authorizeMemoryUse(input: {
     return { decision: "redact", reason: "redaction_required", label };
   }
   if (label.visibility === "private") {
+    const usablePrivatePolicy = label.policy === "agent_visible" || label.policy === "indexable";
+    if (usablePrivatePolicy && isOwnerOrAdmin(input.actor, input.label.ownerUserId)) {
+      return { decision: "allow", reason: "owner_or_admin_private", label };
+    }
     return { decision: "deny", reason: "private_content", label };
   }
   if (input.actor.role === "anonymous" && label.visibility !== "public_approved") {

@@ -74,6 +74,97 @@ describe("classification cascade", () => {
     expect(result.reasonCodes).toContain("public_promotion_candidate");
   });
 
+  it("treats Gmail Confidential as owner-scoped agent_visible without waiting on review promotion", () => {
+    const result = classifyText({
+      content: "Quarterly board packet attached.",
+      sourceType: "email",
+      metadata: { gmail_labels: ["Confidential", "INBOX"] },
+    });
+
+    expect(result.label).toMatchObject({
+      visibility: "private",
+      policy: "agent_visible",
+      sensitivity: "privileged",
+    });
+    expect(result.requiresReview).toBe(true);
+    expect(result.reasonCodes).toEqual(
+      expect.arrayContaining(["fixed_label:confidential", "fixed_label_owner_scoped"])
+    );
+  });
+
+  it("maps Legal and Finance provider labels to domain + owner-scoped policy", () => {
+    const legal = classifyText({
+      content: "Counsel notes from the call.",
+      sourceType: "email",
+      metadata: { labels: ["Legal", "Important"] },
+    });
+    expect(legal.label).toMatchObject({
+      visibility: "private",
+      domain: "legal",
+      sensitivity: "privileged",
+      policy: "agent_visible",
+    });
+    expect(legal.reasonCodes).toContain("fixed_label:legal");
+
+    const finance = classifyText({
+      content: "Wire instructions for vendors.",
+      sourceType: "email",
+      metadata: { confidential_label: "Finance" },
+    });
+    expect(finance.label).toMatchObject({
+      visibility: "private",
+      domain: "finance",
+      sensitivity: "payment",
+      policy: "agent_visible",
+    });
+    expect(finance.reasonCodes).toContain("fixed_label:finance");
+  });
+
+  it("keeps scanner hits on confidential mail as requires_human_review (tighten, never loosen)", () => {
+    const result = classifyText({
+      content: "SSN is 123-45-6789",
+      sourceType: "email",
+      metadata: { gmail_labels: ["Confidential"] },
+    });
+    expect(result.label.policy).toBe("requires_human_review");
+    expect(result.reasonCodes).toEqual(
+      expect.arrayContaining(["fixed_label:confidential", "scanner:ssn_us"])
+    );
+  });
+
+  it("keeps fixed Confidential + public-promotion wording as requires_human_review", () => {
+    const result = classifyText({
+      content: "Prepare a public website announcement from this memo.",
+      sourceType: "email",
+      metadata: { gmail_labels: ["Confidential"] },
+    });
+    expect(result.label.policy).toBe("requires_human_review");
+    expect(result.reasonCodes).toEqual(
+      expect.arrayContaining(["fixed_label:confidential", "public_promotion_candidate"])
+    );
+  });
+
+  it("reads provider labels nested under vault replayMetadata", () => {
+    const artifact = writeVaultArtifact(db, {
+      sourceType: "email",
+      sourceId: "msg-confidential",
+      sessionId: null,
+      project: "legal",
+      body: "Counsel update without secrets.\n",
+      replayMetadata: { gmail_labels: ["Confidential"] },
+    });
+
+    const result = classifyVaultArtifact(db, artifact.id);
+    expect(result.label).toMatchObject({
+      visibility: "private",
+      policy: "agent_visible",
+      sensitivity: "privileged",
+    });
+    expect(result.requiresReview).toBe(true);
+    expect(result.reviewId).toBeTruthy();
+    expect(result.reasonCodes).toContain("fixed_label:confidential");
+  });
+
   it("classifies vault artifacts, stamps message labels, and opens review escalations", () => {
     db.prepare(
       `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp)

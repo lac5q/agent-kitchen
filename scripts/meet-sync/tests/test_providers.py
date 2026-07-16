@@ -45,6 +45,29 @@ class TestCommon(unittest.TestCase):
         self.assertIn("share_url:", fm)
         self.assertIn("meeting_id:", fm)
         self.assertIn("source: fathom", fm)
+        self.assertIn("visibility: private", fm)
+        self.assertIn("policy: sealed", fm)
+
+    def test_frontmatter_owner_and_sensitive_fields(self):
+        fm = self.common.yaml_frontmatter(
+            source="circleback",
+            meeting_id="cb-1",
+            title="Legal review",
+            owner_user_id="user:luis",
+            owner_email="luis@example.com",
+            confidential_label="Confidential",
+            domain="legal",
+            sensitivity="privileged",
+            policy="agent_visible",
+            pii_protected=True,
+        )
+        self.assertIn('owner_user_id: "user:luis"', fm)
+        self.assertIn("owner_email: luis@example.com", fm)
+        self.assertIn("confidential_label: Confidential", fm)
+        self.assertIn("domain: legal", fm)
+        self.assertIn("sensitivity: privileged", fm)
+        self.assertIn("policy: agent_visible", fm)
+        self.assertIn("pii_protected: true", fm)
 
 
 class TestFathomTransform(unittest.TestCase):

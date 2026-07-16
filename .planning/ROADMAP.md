@@ -2367,3 +2367,49 @@ Plans:
 2. Docs + `collections.config.json` list private meeting collections.
 3. Regression coverage for Monaco Circleback + Fathom Impromptu via `memory_recall` without `-c`.
 
+
+## v8.12 MemRoOS MCP Memory Gate Resilience (Codex) (Phases 154–156)
+
+*Added: 2026-07-15 · Version: 2026-07-15.1*
+
+**Branch:** `beastmode/v8.12-mcp-memory-gate-resilience`  
+**Kickoff:** `.planning/milestones/v8.12-mcp-memory-gate-resilience-KICKOFF.md`  
+**Depends on:** Phase 153 / v8.11 complete; Codex strict memory gate remains on.
+
+### Phase 154 — Probe Timeout Honesty
+
+**Goal:** Stop false `vector=down` when Mem0 `/health` is slow-but-healthy (9–31s) by raising the operator probe default to 15s and exposing `MEM0_HEALTH_TIMEOUT_MS`.
+**Requirements:** GATE-RESILE-01
+**Success criteria:**
+1. `backends.ts` Mem0 health fetch default timeout is 15_000ms (not 3_000).
+2. `MEM0_HEALTH_TIMEOUT_MS` overrides the probe timeout when set to a positive integer.
+3. `/api/memory/health` inherits the new probe timeout via `checkVectorHealth`.
+4. Unit tests prove default 15s and env override behavior (including TimeoutError → down detail).
+
+### Phase 155 — Mem0 Hang Immunity
+
+**Goal:** Eliminate self-HTTP health loops that can hang Mem0; keep Qdrant probe caching; add `/livez`; auto-restart hung Mem0 from healthcheck with cooldown.
+**Requirements:** GATE-RESILE-02
+**Success criteria:**
+1. Background recovery no longer `GET http://localhost:3201/health` / self-POST reset via HTTP loop that can deadlock the event loop.
+2. Qdrant connectivity checks remain interval-cached (not every request / every health call uncached).
+3. Optional `GET /livez` returns process-alive without full Qdrant/disk/runtime suite.
+4. `healthcheck.sh` detects hung Mem0 (health timeout / no response) and restarts with cooldown.
+
+### Phase 156 — Strict-Gate Diagnostics + Path-Scoped Disk
+
+**Goal:** Failure messages diagnose disk vs vector vs runtime; path-scoped disk so home `df%` alone does not force vector tier down under strict gate.
+**Requirements:** GATE-RESILE-03
+**Success criteria:**
+1. Strict gate stderr includes actionable detail (HTTP code, tier statuses, mem0 detail when present) without secrets.
+2. Disk checks are path-scoped to Mem0-relevant paths (queue/logs/data), not home alone as vector killer.
+3. Home volume pressure alone does not map to `vector=down` when Qdrant vector_store is connected.
+4. Tests cover disk-vs-vector separation and diagnostic string shape.
+
+### Progress Table (v8.12 MCP gate)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 154. Probe Timeout Honesty | 1/1 | Complete | 2026-07-15 |
+| 155. Mem0 Hang Immunity | 1/1 | Complete | 2026-07-15 |
+| 156. Strict-Gate Diagnostics + Path-Scoped Disk | 1/1 | Complete | 2026-07-15 |
