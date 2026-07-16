@@ -229,53 +229,53 @@
 - [x] **ARTGATE-02**: On save, the agent appends the artifact to the Document Directory (or creates a new document) and emits a run-ledger event with the resource id and belief stage.
 - [x] **ARTGATE-03**: On save, the agent updates the space README's "Last artifact" pointer in the Document Directory; the operator can disable auto-update per-space; auto-updates are policy-receipted.
 
-## v8.5 Agent Fleet Plane (Proposed / Potential Plan)
+## v8.5 Agent Fleet Plane (COMPLETE — 2026-07-10)
 
-*Source: 2026-07-08 Discord #devops "Agent fleet control tooling research". Decision: MemroOS is the top-layer fleet plane that manages agents directly across runtimes; LangGraph is a peer orchestration runtime (already under Orchestration Proxy); Paperclip is a parallel tenant (companies/budgets/board), not the top layer. Rejected: LangGraph-as-control-plane, Archestra default (AGPL), CrewAI ACP (cloud), "Gardner" (no OSS match), cloud-only AgentCore/Foundry/Vertex as substitutes. Scenario S12. Kickoff: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`.*
+*Source: 2026-07-08 Discord #devops "Agent fleet control tooling research". Decision: MemroOS is the top-layer fleet plane that manages agents directly across runtimes; LangGraph is a peer orchestration runtime (already under Orchestration Proxy); Paperclip is a parallel tenant (companies/budgets/board), not the top layer. Rejected: LangGraph-as-control-plane, Archestra default (AGPL), CrewAI ACP (cloud), "Gardner" (no OSS match), cloud-only AgentCore/Foundry/Vertex as substitutes. Scenario S12. Kickoff: `.planning/milestones/v8.5-agent-fleet-plane-KICKOFF.md`. Shipped Phases 142–147; ROADMAP/STATE locked 2026-07-10. Closeout notes added 2026-07-16 (FLEET-01..12 were still unchecked despite milestone COMPLETE).*
 
 ### Architecture lock + validation
 
-- [ ] **FLEET-01**: Product architecture docs state MemroOS as top fleet plane, LangGraph as peer orchestration runtime, and Paperclip as parallel tenant — in language an operator can quote without reading research dumps.
-- [ ] **FLEET-02**: Independent second-opinion validation of the fleet architecture is filed with provenance `model:` not equal to the authoring model (MiniMax-M3); amend loop opens on reject.
-- [ ] **FLEET-03**: Scenario **S12** (multi-machine Mac + remote Hermes/OpenClaw under one MemroOS operator, Paperclip optional company budgets) is recorded in roadmap backlog and used as phase acceptance context.
-- [ ] **FLEET-04**: Planning research index points at architecture decision, OSS control-plane survey, and Paperclip audit under `content/`.
+- [x] **FLEET-01**: Product architecture docs state MemroOS as top fleet plane, LangGraph as peer orchestration runtime, and Paperclip as parallel tenant — in language an operator can quote without reading research dumps. *(Completed 2026-07-09 — Phase 142; `docs/architecture.md` Fleet plane subsection + `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`.)*
+- [x] **FLEET-02**: Independent second-opinion validation of the fleet architecture is filed with provenance `model:` not equal to the authoring model (MiniMax-M3); amend loop opens on reject. *(Completed 2026-07-09 — Phase 142; GLM-5.2 PASS at `content/architecture/memroos-fleet-plane-validation-glm52-2026-07-09.md`.)*
+- [x] **FLEET-03**: Scenario **S12** (multi-machine Mac + remote Hermes/OpenClaw under one MemroOS operator, Paperclip optional company budgets) is recorded in roadmap backlog and used as phase acceptance context. *(Completed 2026-07-09 — Phase 142; S12 in ROADMAP v8.5 + backlog.)*
+- [x] **FLEET-04**: Planning research index points at architecture decision, OSS control-plane survey, and Paperclip audit under `content/`. *(Completed 2026-07-09 — Phase 142; `.planning/research/agent-fleet-plane-2026-07-08.md`.)*
 
 ### Runtime adapter maturity
 
-- [ ] **FLEET-05**: Every target of `scripts/install-agent-integrations.sh` appears in `docs/runtime-adapter-maturity.md` with T1/T2/T3 classification, evidence, and owner.
-- [ ] **FLEET-06**: T1 means shipped + smoke-tested + governance-hook path available; T3 is explicitly stub/unproven (no silent promotion).
-- [ ] **FLEET-07**: Hermes and OpenClaw maturity claims cite real adapter evidence (MemroOS and/or Paperclip `hermes_local` / `hermes_gateway` / `openclaw-gateway`).
-- [ ] **FLEET-08**: Installer target list and maturity matrix cannot silently drift (documented check or CI note).
+- [x] **FLEET-05**: Every target of `scripts/install-agent-integrations.sh` appears in `docs/runtime-adapter-maturity.md` with T1/T2/T3 classification, evidence, and owner. *(Completed 2026-07-09 — Phase 143; nine-target matrix.)*
+- [x] **FLEET-06**: T1 means shipped + smoke-tested + governance-hook path available; T3 is explicitly stub/unproven (no silent promotion). *(Completed 2026-07-09 — Phase 143; T1/T2/T3 definitions in maturity matrix.)*
+- [x] **FLEET-07**: Hermes and OpenClaw maturity claims cite real adapter evidence (MemroOS and/or Paperclip `hermes_local` / `hermes_gateway` / `openclaw-gateway`). *(Completed 2026-07-09 — Phase 143; Hermes T1 / OpenClaw T2 with Paperclip adapter cites.)*
+- [x] **FLEET-08**: Installer target list and maturity matrix cannot silently drift (documented check or CI note). *(Completed 2026-07-09 — Phase 143; "Maturity drift check" section in matrix doc.)*
 
 ### LangGraph peer contract
 
-- [ ] **FLEET-09**: `docs/integrations/langgraph.md` documents input/output schema, checkpoint store layout, HIL interrupt protocol, and failure modes.
-- [ ] **FLEET-10**: Ownership split is explicit: MemroOS owns agent identity, memory routing, audit; LangGraph owns graph execution and checkpoints (no StateGraph reimplementation in Next routes).
-- [ ] **FLEET-11**: Checkpoint durability path exists (litestream **or** Postgres checkpointer behind flag) with restore steps written.
-- [ ] **FLEET-12**: One multi-step graph smoke proves interrupt → resume with an operator-visible receipt.
+- [x] **FLEET-09**: `docs/integrations/langgraph.md` documents input/output schema, checkpoint store layout, HIL interrupt protocol, and failure modes. *(Completed 2026-07-09 — Phase 144; peer contract pinned in langgraph.md.)*
+- [x] **FLEET-10**: Ownership split is explicit: MemroOS owns agent identity, memory routing, audit; LangGraph owns graph execution and checkpoints (no StateGraph reimplementation in Next routes). *(Completed 2026-07-09 — Phase 144; ownership tables in langgraph.md + architecture.md.)*
+- [x] **FLEET-11**: Checkpoint durability path exists (litestream **or** Postgres checkpointer behind flag) with restore steps written. *(Completed 2026-07-09 — Phase 144; `services/orchestration/litestream.yml.example` + restore docs.)*
+- [x] **FLEET-12**: One multi-step graph smoke proves interrupt → resume with an operator-visible receipt. *(Completed 2026-07-09 — Phase 144; `services/orchestration/tests/test_hil_checkpoint_smoke.py`.)*
 
 ### Pre-execution policy gate
 
-- [x] **FLEET-13**: A pre-execution policy gate evaluates actor/action/purpose/labels **before** tool execution on at least one T1 runtime path.
-- [x] **FLEET-14**: Deny blocks execution and emits a policy receipt (policy version, rule, reason) into audit/run ledger.
-- [x] **FLEET-15**: Headless runs fail closed on the gate (no silent allow / last-used bypass).
-- [x] **FLEET-16**: MEMSEC-08 security regression corpus remains green after gate wiring.
+- [x] **FLEET-13**: A pre-execution policy gate evaluates actor/action/purpose/labels **before** tool execution on at least one T1 runtime path. *(Completed 2026-07-09 — Phase 145; see `145-01-SUMMARY.md`.)*
+- [x] **FLEET-14**: Deny blocks execution and emits a policy receipt (policy version, rule, reason) into audit/run ledger. *(Completed 2026-07-09 — Phase 145.)*
+- [x] **FLEET-15**: Headless runs fail closed on the gate (no silent allow / last-used bypass). *(Completed 2026-07-09 — Phase 145.)*
+- [x] **FLEET-16**: MEMSEC-08 security regression corpus remains green after gate wiring. *(Completed 2026-07-09 — Phase 145; 25/25 green.)*
 
 ### Paperclip tenant + cost delegation
 
-- [x] **FLEET-17**: `docs/integrations/paperclip.md` states ownership boundaries: Paperclip owns companies/issues/budgets/board; MemroOS owns cross-runtime registry/memory/fleet governance.
-- [x] **FLEET-18**: At least one integration path exists (contract-tested or live): Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue.
-- [x] **FLEET-19**: Fleet cost/budget hard-stop is **delegated to Paperclip** (source of truth documented); MemroOS does not re-implement monthly hard-stop auto-pause.
-- [x] **FLEET-20**: Multi-Paperclip server federation is explicitly out of scope and documented as Paperclip V1 exclusion.
-- [x] **FLEET-21**: Passive Hermes/OpenClaw adapter behavior is documented (runtime must already exist; Paperclip does not provision agent hosts).
+- [x] **FLEET-17**: `docs/integrations/paperclip.md` states ownership boundaries: Paperclip owns companies/issues/budgets/board; MemroOS owns cross-runtime registry/memory/fleet governance. *(Completed 2026-07-09 — Phase 146; see `146-01-SUMMARY.md`.)*
+- [x] **FLEET-18**: At least one integration path exists (contract-tested or live): Paperclip activity → MemroOS visibility **or** MemroOS incident → Paperclip issue. *(Completed 2026-07-09 — Phase 146.)*
+- [x] **FLEET-19**: Fleet cost/budget hard-stop is **delegated to Paperclip** (source of truth documented); MemroOS does not re-implement monthly hard-stop auto-pause. *(Completed 2026-07-09 — Phase 146.)*
+- [x] **FLEET-20**: Multi-Paperclip server federation is explicitly out of scope and documented as Paperclip V1 exclusion. *(Completed 2026-07-09 — Phase 146.)*
+- [x] **FLEET-21**: Passive Hermes/OpenClaw adapter behavior is documented (runtime must already exist; Paperclip does not provision agent hosts). *(Completed 2026-07-09 — Phase 146.)*
 
 ### Secrets + HA
 
-- [x] **FLEET-22**: Adapter API keys have a documented secrets path (broker/rotation); secrets never land in git or audit receipts.
-- [x] **FLEET-23**: MemroOS kernel durability path (litestream or Postgres) is documented with one executed restore drill.
-- [x] **FLEET-24**: LangGraph checkpoint durability is aligned with FLEET-11.
-- [x] **FLEET-25**: Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit for 50-host fleets) is documented as **not v8.5**.
-- [x] **FLEET-26**: Auto-provision of new agent hosts on demand remains explicitly out of scope (industry gap; none of Paperclip/LangGraph/Archestra own it cleanly).
+- [x] **FLEET-22**: Adapter API keys have a documented secrets path (broker/rotation); secrets never land in git or audit receipts. *(Completed 2026-07-10 — Phase 147; `docs/secrets-and-durability.md`.)*
+- [x] **FLEET-23**: MemroOS kernel durability path (litestream or Postgres) is documented with one executed restore drill. *(Completed 2026-07-10 — Phase 147; `scripts/restore-drill.sh`.)*
+- [x] **FLEET-24**: LangGraph checkpoint durability is aligned with FLEET-11. *(Completed 2026-07-10 — Phase 147; aligned with Phase 144 litestream path.)*
+- [x] **FLEET-25**: Stretch multi-machine identity (SPIFFE/SPIRE, Envoy ratelimit for 50-host fleets) is documented as **not v8.5**. *(Completed 2026-07-10 — Phase 147.)*
+- [x] **FLEET-26**: Auto-provision of new agent hosts on demand remains explicitly out of scope (industry gap; none of Paperclip/LangGraph/Archestra own it cleanly). *(Completed 2026-07-10 — Phase 147.)*
 
 ## ONTO Governed Emergent Ontology (Proposed)
 
@@ -490,6 +490,32 @@
 | ARTGATE-01 | 141 | Planned |
 | ARTGATE-02 | 141 | Planned |
 | ARTGATE-03 | 141 | Planned |
+| FLEET-01 | 142 | Complete |
+| FLEET-02 | 142 | Complete |
+| FLEET-03 | 142 | Complete |
+| FLEET-04 | 142 | Complete |
+| FLEET-05 | 143 | Complete |
+| FLEET-06 | 143 | Complete |
+| FLEET-07 | 143 | Complete |
+| FLEET-08 | 143 | Complete |
+| FLEET-09 | 144 | Complete |
+| FLEET-10 | 144 | Complete |
+| FLEET-11 | 144 | Complete |
+| FLEET-12 | 144 | Complete |
+| FLEET-13 | 145 | Complete |
+| FLEET-14 | 145 | Complete |
+| FLEET-15 | 145 | Complete |
+| FLEET-16 | 145 | Complete |
+| FLEET-17 | 146 | Complete |
+| FLEET-18 | 146 | Complete |
+| FLEET-19 | 146 | Complete |
+| FLEET-20 | 146 | Complete |
+| FLEET-21 | 146 | Complete |
+| FLEET-22 | 147 | Complete |
+| FLEET-23 | 147 | Complete |
+| FLEET-24 | 147 | Complete |
+| FLEET-25 | 147 | Complete |
+| FLEET-26 | 147 | Complete |
 
 ---
 
