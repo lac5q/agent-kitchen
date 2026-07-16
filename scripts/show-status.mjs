@@ -52,12 +52,22 @@ const SERVICES = [
 ];
 
 function isPortOpen(port) {
-  try {
-    execSync(`lsof -ti :${port} >/dev/null 2>&1`);
-    return true;
-  } catch {
-    return false;
+  // Prefer `ss` (no root needed on most distros). Fall back to `lsof`
+  // and `netstat` for environments where `ss` is unavailable.
+  const probes = [
+    `ss -tlnH "sport = :${port}" 2>/dev/null | grep -q LISTEN`,
+    `lsof -ti :${port} >/dev/null 2>&1`,
+    `netstat -tln 2>/dev/null | awk '{print $4}' | grep -E "[:.]${port}$" >/dev/null`,
+  ];
+  for (const cmd of probes) {
+    try {
+      execSync(cmd, { stdio: ['ignore', 'ignore', 'ignore'] });
+      return true;
+    } catch {
+      continue;
+    }
   }
+  return false;
 }
 
 function probeHealth(url, paths, acceptStatuses) {
