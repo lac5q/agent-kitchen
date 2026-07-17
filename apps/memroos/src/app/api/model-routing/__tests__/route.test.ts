@@ -161,4 +161,62 @@ describe("model routing APIs", () => {
     expect(evalData.summary.totalRuns).toBeGreaterThan(0);
     expect(listEfficiencyEvents(testDb, { eventType: "token_ledger" })).toHaveLength(0);
   });
+
+  it("returns POST recommendations with custom task type, strategy, and limit", async () => {
+    const res = await recommendationsRoute.POST(
+      postRequest("http://localhost/api/model-routing/recommendations", {
+        taskType: "Product",
+        strategy: "latency",
+        limit: 2,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("product");
+    expect(data.strategy).toBe("latency");
+    expect(data.recommendations).toHaveLength(2);
+    expect(data.timestamp).toBeTruthy();
+  });
+
+  it("defaults POST recommendations when body fields are missing or invalid", async () => {
+    const res = await recommendationsRoute.POST(
+      postRequest("http://localhost/api/model-routing/recommendations", {
+        strategy: "unsupported",
+        limit: 99,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("engineering");
+    expect(data.strategy).toBe("balanced");
+    expect(data.recommendations.length).toBeLessThanOrEqual(8);
+    expect(data.recommendations.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("GET recommendations honor strategy and limit query params", async () => {
+    const res = await recommendationsRoute.GET(
+      new Request(
+        "http://localhost/api/model-routing/recommendations?taskType=engineering&strategy=cost&limit=1"
+      ) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("engineering");
+    expect(data.strategy).toBe("cost");
+    expect(data.recommendations).toHaveLength(1);
+  });
+
+  it("GET recommendations clamp invalid limit values", async () => {
+    const res = await recommendationsRoute.GET(
+      new Request("http://localhost/api/model-routing/recommendations?limit=not-a-number") as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.recommendations.length).toBeGreaterThanOrEqual(1);
+    expect(data.recommendations.length).toBeLessThanOrEqual(4);
+  });
 });

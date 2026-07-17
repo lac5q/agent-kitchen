@@ -73,6 +73,59 @@ describe("/api/agents/versions", () => {
     });
   });
 
+  it("returns 400 when GET is missing agentId", async () => {
+    const req = new Request("http://localhost/api/agents/versions");
+    const res = await versionsRoute.GET(req);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      status: "error",
+      message: "agentId parameter is required",
+    });
+  });
+
+  it("returns 400 when POST body is missing required fields", async () => {
+    const req = new Request("http://localhost/api/agents/versions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId: "agent-missing-version" }),
+    });
+    const res = await versionsRoute.POST(req);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      status: "error",
+      message: "version is required",
+    });
+  });
+
+  it("lists created versions for an agent", async () => {
+    const agentId = `agent-list-${Date.now()}`;
+
+    const postReq = new Request("http://localhost/api/agents/versions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId,
+        version: "2.0.0",
+        profile: "test",
+        modelRoute: { provider: "openai", model: "gpt-4.1-mini" },
+        systemInstructions: "List test agent.",
+      }),
+    });
+    const postRes = await versionsRoute.POST(postReq);
+    expect(postRes.status).toBe(200);
+
+    const listReq = new Request(
+      `http://localhost/api/agents/versions?agentId=${encodeURIComponent(agentId)}`
+    );
+    const listRes = await versionsRoute.GET(listReq);
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    expect(listBody.status).toBe("ok");
+    expect(listBody.versions).toEqual([
+      expect.objectContaining({ agentId, version: "2.0.0", profile: "test", tenantId: "default-tenant" }),
+    ]);
+  });
+
   it("creates, promotes, and rolls back agent versions via REST endpoints", async () => {
     const agentId = `agent-${Date.now()}`;
 
