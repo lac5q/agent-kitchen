@@ -122,4 +122,16 @@ describe("BELIEF-05 promotion eval CI canary", () => {
     else process.env.BELIEF_PROMOTION_EVAL_CASES_PATH = prev;
     fs.unlinkSync(customPath);
   });
+
+  it("runBeliefPromotionEvalSuite honors a custom clock for startedAt", async () => {
+    db = new Database(":memory:");
+    initSchema(db);
+    const fixed = new Date("2026-06-01T12:00:00.000Z");
+    const run = await runBeliefPromotionEvalSuite({
+      mode: "gold",
+      db,
+      clock: () => fixed,
+    });
+    expect(run.startedAt).toBe(fixed.toISOString());
+  });
 });

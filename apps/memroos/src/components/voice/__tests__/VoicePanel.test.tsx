@@ -338,4 +338,43 @@ describe("VoicePanel", () => {
       expect(screen.getByText("Voice reply")).toBeInTheDocument();
     });
   });
+
+  it("labels dedicated CLI agent ids and knowledge project paths", () => {
+    mockUseAgents.mockReturnValue({
+      data: {
+        agents: [
+          {
+            id: "codex-cli-agent",
+            name: "Codex Agent",
+            role: "Codex CLI identity",
+            company: null,
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "registry", path: "/workspace/knowledge/notes" },
+          },
+        ],
+      },
+    } as ReturnType<typeof useAgents>);
+    render(<VoicePanel />);
+    expect(screen.getByRole("option", { name: "Codex CLI - Agent" })).toBeInTheDocument();
+  });
+
+  it("surfaces generic chat errors from non-streaming failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "upstream exploded",
+      }),
+    );
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "boom" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => {
+      expect(screen.getByText(/upstream exploded/i)).toBeInTheDocument();
+    });
+  });
 });

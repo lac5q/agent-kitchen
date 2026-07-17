@@ -500,4 +500,40 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
       deleteDocumentDirectoryEntry(db, 99999, { actorId, expectedVersion: 1 }),
     ).toThrow(/not found/);
   });
+
+  it("31) createWriteRule rejects empty spaceId and actorId", () => {
+    expect(() =>
+      createWriteRule(db, {
+        spaceId: " ",
+        dataType: "decision_intent",
+        targetDocument: "decisions.md",
+        actorId,
+      }),
+    ).toThrow(/spaceId is required/);
+    expect(() =>
+      createWriteRule(db, {
+        spaceId,
+        dataType: "decision_intent",
+        targetDocument: "decisions.md",
+        actorId: " ",
+      }),
+    ).toThrow(/actorId is required/);
+  });
+
+  it("32) createWriteRule rejects duplicate data_type in the same space", () => {
+    createWriteRule(db, {
+      spaceId,
+      dataType: "duplicate_type",
+      targetDocument: "one.md",
+      actorId,
+    });
+    expect(() =>
+      createWriteRule(db, {
+        spaceId,
+        dataType: "duplicate_type",
+        targetDocument: "two.md",
+        actorId,
+      }),
+    ).toThrow(/already exists/);
+  });
 });

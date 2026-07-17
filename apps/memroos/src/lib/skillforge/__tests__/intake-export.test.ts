@@ -479,4 +479,53 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     });
     expect(loadIntakeRow(db, "applied-path")?.state).toBe("exported");
   });
+
+  it("recordIntakeRedaction rejects missing proposals and invalid states", async () => {
+    const { recordIntakeRedaction, intakeProposal, advanceProposalState, SkillForgeIntakeError } =
+      await import("../intake-export");
+    expect(() =>
+      recordIntakeRedaction(db, {
+        proposalId: "missing",
+        actor: "operator",
+        redactedEntryCount: 1,
+        scopeKey: "scope",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    intakeProposal(db, {
+      proposalId: "redact-state",
+      sourceSkillId: "skill-506",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "redact-state", actor: "operator", toState: "analyzing" });
+    expect(() =>
+      recordIntakeRedaction(db, {
+        proposalId: "redact-state",
+        actor: "operator",
+        redactedEntryCount: 2,
+        scopeKey: "scope-1",
+      })
+    ).toThrow(/only 'intake_pending'/);
+  });
+
+  it("recordIntakeRedaction stores scope metadata on pending proposals", async () => {
+    const { recordIntakeRedaction, intakeProposal, loadIntakeRow } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "redact-ok",
+      sourceSkillId: "skill-507",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    const updated = recordIntakeRedaction(db, {
+      proposalId: "redact-ok",
+      actor: "operator",
+      redactedEntryCount: 3,
+      scopeKey: "tenant/default",
+    });
+    expect(updated.redactedEntryCount).toBe(3);
+    expect(updated.scopeKey).toBe("tenant/default");
+    expect(loadIntakeRow(db, "redact-ok")?.scopeKey).toBe("tenant/default");
+  });
 });

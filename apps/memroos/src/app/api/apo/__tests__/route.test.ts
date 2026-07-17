@@ -346,6 +346,21 @@ describe("POST /api/apo validation and errors", () => {
     expect(body.stats.archivedProposals).toBe(1);
   });
 
+  it("archived tracking falls back when approval sidecar JSON is missing", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    const approvedPath = path.join(proposalsPath, "approved", proposalFilename);
+    const archivedDir = path.join(proposalsPath, "archived");
+    mkdirSync(archivedDir, { recursive: true });
+    writeFileSync(path.join(archivedDir, proposalFilename), readFileSync(approvedPath, "utf-8"));
+    rmSync(`${approvedPath}.json`, { force: true });
+    rmSync(approvedPath, { force: true });
+
+    const body = await (await GET()).json();
+    const archived = body.proposals.find((p: { status: string }) => p.status === "archived");
+    expect(archived?.tracking?.label).toBe("Implemented");
+  });
+
   it("process-approved honors limit and archived tracking labels applied=false", async () => {
     const { GET, POST } = await loadRoute();
     await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));

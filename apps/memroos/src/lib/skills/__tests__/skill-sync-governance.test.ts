@@ -1120,4 +1120,56 @@ describe("pin lookup helpers and agent-scoped rollback", () => {
       })
     ).toThrow(SyncGovernanceError);
   });
+
+  it("detectSkillChange rejects empty harness, skill name, actor, and malformed hashes", async () => {
+    const { detectSkillChange, SyncGovernanceError } = await importSyncModule();
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "   ",
+        skill_name: "x",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "bad-hash",
+        detected_content_hash: "short",
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "missing-actor",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: " ",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("approveImportProposal refuses unknown proposals and double approval", async () => {
+    const { detectSkillChange, approveImportProposal, SyncGovernanceError } = await importSyncModule();
+    expect(() => approveImportProposal(db, "missing-id", "alice", "ok")).toThrow(SyncGovernanceError);
+    insertSkillRow({ name: "double-approve", content_hash: "0".repeat(64) });
+    const det = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "double-approve",
+      detected_content_hash: "1".repeat(64),
+      proposed_by: "scanner",
+    });
+    approveImportProposal(db, det.proposal.id, "alice", "first");
+    expect(() => approveImportProposal(db, det.proposal.id, "alice", "second")).toThrow(
+      SyncGovernanceError
+    );
+  });
 });

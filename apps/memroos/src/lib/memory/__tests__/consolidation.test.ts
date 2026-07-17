@@ -299,4 +299,5 @@ describe("VAL-MEM-025: consolidation failure and replay are safe", () => {
     expect(durability?.replay_state).toBe("failed");
     expect(durability?.failure_reason).toMatch(/vault_replay_failed/);
   });
+
 });

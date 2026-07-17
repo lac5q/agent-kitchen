@@ -217,4 +217,46 @@ describe("buildMemoryInventory", () => {
     expect(writes?.count).toBe(0);
     expect(writes?.metric.status).toBe("zero");
   });
+
+  it("filters by backend, source, date range, and degraded category status", async () => {
+    seedMessage("backend filter row");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(
+      new URL(
+        "http://localhost/api/memory-inventory?category=ingested_message&backend=sqlite&source=codex&dateFrom=2026-05-24T00:00:00Z&dateTo=2026-05-25T00:00:00Z&degraded=live"
+      )
+    );
+    expect(response.rows.every((r) => r.backend === "sqlite")).toBe(true);
+    expect(response.rows.every((r) => r.source === "codex")).toBe(true);
+  });
+
+  it("ignores knowledge_file rows when another category filter is active", async () => {
+    writeFileSync(path.join(knowledgeDir, "filtered.md"), "# filtered\n", "utf8");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(
+      new URL("http://localhost/api/memory-inventory?category=ingested_message")
+    );
+    expect(response.rows.every((r) => r.category === "ingested_message")).toBe(true);
+    expect(response.rows.some((r) => r.category === "knowledge_file")).toBe(false);
+  });
+
+  it("parses malformed agent_memory_writes metadata as empty object", async () => {
+    testDb
+      .prepare(
+        `INSERT INTO registered_agents(id, name, role, platform, protocol, status, location)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run("agent-bad-meta", "Bad Meta", "operator", "local", "rest", "active", "local");
+    testDb
+      .prepare(
+        `INSERT INTO agent_memory_writes(agent_id, memory_type, content_hash, metadata, result, written_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run("agent-bad-meta", "lesson", "hash-bad", "not-json", "ok", "2026-05-24T12:00:00Z");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const row = response.rows.find((r) => r.category === "episodic_write" && r.source === "agent-bad-meta");
+    expect(row).toBeTruthy();
+    expect(row?.project).toBeNull();
+  });
 });

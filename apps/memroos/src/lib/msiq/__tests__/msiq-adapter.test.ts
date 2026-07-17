@@ -435,4 +435,18 @@ describe("VAL-ORCH-006 -- readViaMsiqAdapter and closeMsiqSession", () => {
       expect(result.reason).toBe("session_not_found");
     }
   });
+
+  it("foundry-only mode refuses hosted fallback without provider override", async () => {
+    const { openMsiqSession } = await loadAdapter();
+    const session = openMsiqSession(db, {
+      tenantId: "default-tenant",
+      actor: makeActor(),
+      spaceId: "space-1",
+      label: makeLabel(),
+      purpose: "memory-promotion",
+      beliefStage: "silver_candidate_claim",
+      foundryOnlyMode: true,
+    });
+    expect(session.kind).toBe("foundry_only_unavailable");
+  });
 });

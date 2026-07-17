@@ -259,4 +259,56 @@ describe("marketplace", () => {
     expect(result.success).toBe(true);
     expect(searchListings(db, { query: "Deprecate Me" }).total).toBe(0);
   });
+
+  it("getListing returns null for unknown ids and deprecate rejects missing listings", () => {
+    const result = deprecateSkill(db, "missing-listing", "gone");
+    expect(result.success).toBe(true);
+  });
+
+  it("publishSkill fails when skill name exists in multiple harnesses", () => {
+    db.prepare(
+      `INSERT INTO skill_registry (name, source_harness, dispatch_status, raw_body, imported_by, version)
+       VALUES ('ambig', 'claude', 'enabled', 'b', 'op', '1.0.0')`
+    ).run();
+    db.prepare(
+      `INSERT INTO skill_registry (name, source_harness, dispatch_status, raw_body, imported_by, version)
+       VALUES ('ambig', 'codex', 'enabled', 'b', 'op', '1.0.0')`
+    ).run();
+    const result = publishSkill(db, {
+      skillId: "ambig",
+      name: "Ambig",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    });
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("ambiguous_harness");
+  });
+
+  it("searchListings flags orphan listings as not dispatchable", () => {
+    db.prepare(
+      `INSERT INTO skill_marketplace
+       (id, skill_id, name, description, author, tags, version, changelog, rating, review_count, download_count, category, published_at, updated_at, deprecated)
+       VALUES ('orphan', 'ghost-skill', 'Ghost', 'd', 'a', '[]', '1.0.0', '', 0, 0, 0, 'cat', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0)`
+    ).run();
+    const results = searchListings(db, { query: "Ghost" });
+    expect(results.listings[0].isDispatchable).toBe(false);
+    expect(results.listings[0].dispatchDenialReason).toMatch(/not found/);
+  });
+
+  it("publishSkill rejects empty skillId via governance binding", () => {
+    const missingId = publishSkill(db, {
+      skillId: " ",
+      name: "X",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    });
+    expect(missingId.success).toBe(false);
+    expect(missingId.code).toBe("missing_skill_id");
+  });
 });

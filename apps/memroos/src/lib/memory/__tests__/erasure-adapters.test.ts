@@ -547,6 +547,124 @@ describe("MEMLIFE-02 real erasure store adapters", () => {
     expect(message?.reason).toMatch(/no_messages|already_absent/);
   });
 
+  it("traverseIndirectDerivatives dedupes repeated embedding provenance rows", async () => {
+    const database = freshDb();
+    const { traverseIndirectDerivatives } = await import("../erasure");
+    const identity = buildCanonicalIdentity("dedupe", "message", "ingress", "vector");
+    const now = "2026-01-01T00:00:00Z";
+    for (const [id, modelId] of [
+      ["emb-dup-1", "m1"],
+      ["emb-dup-2", "m2"],
+    ] as const) {
+      database
+        .prepare(
+          `INSERT INTO memory_embedding_provenance
+           (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+            dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+           VALUES (?, 'default-tenant', ?, 'cache', 'cache', ?, ?, '1.0', 0, 'p', 'active', 'erasable', '{}', ?, ?)`
+        )
+        .run(id, identity.id, identity.canonicalHash, modelId, now, now);
+    }
+    const indirect = traverseIndirectDerivatives(database, identity);
+    const embeddingCache = indirect.filter(
+      (d) => d.storeId === "cache" && d.provenance.startsWith("embedding_provenance:")
+    );
+    expect(embeddingCache).toHaveLength(1);
+  });
+
+  it("returns cached completed report when stored outcomes JSON is malformed", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("bad-json-cache", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    const erasureId = "erasure_bad_json_cache";
+    database
+      .prepare(
+        `INSERT INTO memory_erasure_reports
+         (id, tenant_id, canonical_id, status, store_outcomes_json, actor_id, scope_hash, started_at, completed_at)
+         VALUES (?, 'default-tenant', ?, 'completed', 'not-json', 'tester', 'sh', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+      )
+      .run(erasureId, identity.id);
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+      erasureId,
+    });
+    expect(report.status).toBe("completed");
+    expect(report.storeOutcomes).toEqual([]);
+  });
+
+  it("reports neo4j unavailable when the HTTP backend errors", async () => {
+    const database = freshDb();
+    const prevPassword = process.env.NEO4J_PASSWORD;
+    const prevFetch = global.fetch;
+    process.env.NEO4J_PASSWORD = "secret";
+    global.fetch = vi.fn().mockRejectedValue(new Error("connection reset")) as typeof fetch;
+    try {
+      const identity = buildCanonicalIdentity("neo4j-down", "graph", "ingress", "graph", {
+        tenantId: "default-tenant",
+      });
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "default-tenant",
+        actorId: "tester",
+        scope: { tenantId: "default-tenant" },
+      });
+      const graph = report.storeOutcomes.find((o) => o.storeId === "graph");
+      expect(graph?.status).toBe("unavailable");
+      expect(graph?.reason).toMatch(/neo4j_error/);
+    } finally {
+      if (prevPassword === undefined) delete process.env.NEO4J_PASSWORD;
+      else process.env.NEO4J_PASSWORD = prevPassword;
+      global.fetch = prevFetch;
+    }
+  });
+
+  it("reports platform and salience zero_match when not linked", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("unlinked stores", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "platform")?.reason).toMatch(/not_linked/);
+    expect(report.storeOutcomes.find((o) => o.storeId === "salience")?.reason).toMatch(/not_linked/);
+    expect(report.storeOutcomes.find((o) => o.storeId === "qmd")?.reason).toMatch(/not_linked/);
+  });
+
+  it("vault adapter reports zero_match when no artifacts exist", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("no vault", "message", "ingress", "vault", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "vault")?.status).toBe("zero_match");
+  });
+
+  it("candidates adapter reports unavailable when candidate tables are missing", async () => {
+    const database = freshDb();
+    database.exec("DROP TABLE IF EXISTS agent_memory_candidates");
+    database.exec("DROP TABLE IF EXISTS ontology_candidates");
+    const identity = buildCanonicalIdentity("no tables", "lesson", "ingress", "candidates", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const candidates = report.storeOutcomes.find((o) => o.storeId === "candidates");
+    expect(candidates?.status).toBe("unavailable");
+    expect(candidates?.reason).toMatch(/candidate_tables_missing/);
+  });
+
   it("marks adapter failures as failed overall status", async () => {
     const database = freshDb();
     const { getErasureStoreAdapter, registerErasureStoreAdapter } = await import("../erasure");

@@ -1,6 +1,7 @@
 /**
  * End-to-end runner tests (VAL-RETR-001, VAL-RETR-005, VAL-RETR-008, VAL-RETR-013).
  */
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   runBenchmark,
@@ -374,5 +375,26 @@ describe("loadDataset explicit errors", () => {
     if (!r.ok) {
       expect(r.reason).toContain("longmemeval_v2_unavailable");
     }
+  });
+
+  it("refuses unsupported dataset ids", () => {
+    const r = loadDataset({ dataset: "unknown_dataset" as "memroos_public_synthetic", fixturesDir: FIXTURES_DIR });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toContain("dataset_unsupported");
+    }
+  });
+
+  it("fails smoke run when synthetic fixture loading breaks", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 1,
+      k: 1,
+      seed: 0,
+      bypassCliParser: true,
+      fixturesDir: path.join(FIXTURES_DIR, "missing-dir"),
+    });
+    expect(r.ok).toBe(false);
   });
 });
