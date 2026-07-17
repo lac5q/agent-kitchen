@@ -1,14 +1,21 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { initSchema } from "../db-schema";
 import {
+  ensureMemoryEvalTables,
+  getLatestMemoryEvalRun,
   hasRequiredRecallTiming,
   loadMemoryRecallEvalCases,
+  memoryEvalRunToAgentTrace,
+  runMemoryRecallEvalSuite,
   scoreMemoryRecallCase,
   summarizeMemoryEvalRun,
+  type MemoryEvalRun,
   type MemoryRecallEvalCase,
   type MemoryRecallTraceEvent,
   type NormalizedRecallResult,
@@ -268,6 +275,388 @@ describe("memory recall eval scoring", () => {
     ]);
 
     expect(summary.tierFailures).toEqual(["episodic", "graph", "vector"]);
+  });
+
+  it("fails when latency exceeds the configured threshold", () => {
+    const results: NormalizedRecallResult[] = [
+      { id: "mem-1", tier: "vector", content: "MER below target", latencyMs: 9000 },
+      { id: "mem-2", tier: "episodic", content: "do not scale spend", latencyMs: 9000 },
+    ];
+    const trace: MemoryRecallTraceEvent[] = [{ action: "memory_recall", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }];
+
+    const score = scoreMemoryRecallCase(baseCase, results, trace, 5);
+
+    expect(score.failures).toContain("latency above threshold");
+    expect(score.metrics.latencyMs).toBe(9000);
+  });
+
+  it("fails when recall timing is missing from the trace", () => {
+    const results: NormalizedRecallResult[] = [
+      { id: "mem-1", tier: "vector", content: "MER below target", latencyMs: 100 },
+      { id: "mem-2", tier: "episodic", content: "do not scale spend", latencyMs: 100 },
+    ];
+    const trace: MemoryRecallTraceEvent[] = [{ action: "plan", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }];
+
+    const score = scoreMemoryRecallCase(baseCase, results, trace, 5);
+
+    expect(score.failures).toContain("memory recall happened too late or not at all");
+  });
+
+  it("fails when expected tier coverage is incomplete", () => {
+    const results: NormalizedRecallResult[] = [
+      { id: "mem-1", tier: "vector", content: "MER below target", latencyMs: 100 },
+      { id: "mem-2", tier: "vector", content: "do not scale spend", latencyMs: 100 },
+    ];
+    const trace: MemoryRecallTraceEvent[] = [{ action: "memory_recall", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }];
+
+    const score = scoreMemoryRecallCase(baseCase, results, trace, 5);
+
+    expect(score.metrics.tierCoverage).toBe(0.5);
+    expect(score.failures).toContain("missing expected tier coverage");
+  });
+
+  it("caps metadata search depth to avoid runaway nested scans", () => {
+    const deep: Record<string, unknown> = { level: 0 };
+    let node: Record<string, unknown> = deep;
+    for (let i = 1; i <= 8; i += 1) {
+      const next: Record<string, unknown> = { level: i, eval_id: i === 7 ? "mem-1" : undefined };
+      node.child = next;
+      node = next;
+    }
+
+    const results: NormalizedRecallResult[] = [
+      {
+        id: "deep",
+        tier: "vector",
+        content: "unrelated",
+        latencyMs: 50,
+        metadata: deep,
+      },
+    ];
+    const trace: MemoryRecallTraceEvent[] = [{ action: "memory_recall", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }];
+
+    const score = scoreMemoryRecallCase({
+      ...baseCase,
+      expectedMemoryIds: ["mem-1"],
+      expectedFacts: ["mem-1"],
+      expectedTiers: ["vector"],
+    }, results, trace, 5);
+
+    expect(score.metrics.recallAtK).toBe(0);
+    expect(score.failures).toContain("no expected memory found in top k");
+  });
+
+  it("uses fact-only expected count when memory ids are absent", () => {
+    const results: NormalizedRecallResult[] = [
+      { id: "generated", tier: "vector", content: "MER below target only", latencyMs: 50 },
+    ];
+    const trace: MemoryRecallTraceEvent[] = [{ action: "memory_recall", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }];
+    const score = scoreMemoryRecallCase({
+      ...baseCase,
+      expectedMemoryIds: [],
+      expectedFacts: ["MER below target", "do not scale spend"],
+      expectedTiers: ["vector"],
+    }, results, trace, 5);
+
+    expect(score.metrics.recallAtK).toBe(0.5);
+    expect(score.failures).toContain("recallAtK below threshold");
+  });
+});
+
+describe("memoryEvalRunToAgentTrace", () => {
+  function makeRun(overrides: Partial<MemoryEvalRun> = {}): MemoryEvalRun {
+    return {
+      id: "memory-eval-test-run",
+      mode: "gold",
+      status: "passed",
+      startedAt: "2026-05-15T00:00:00.000Z",
+      completedAt: "2026-05-15T00:00:01.000Z",
+      summary: {
+        totalCases: 1,
+        passedCases: 1,
+        failedCases: 0,
+        passRate: 1,
+        p95LatencyMs: 120,
+        tierFailures: [],
+      },
+      results: [
+        {
+          caseId: "case-1",
+          agentId: "codex",
+          layer: "gold",
+          scenario: "scenario",
+          taskPrompt: "prompt",
+          passed: true,
+          failures: [],
+          metrics: {
+            recallAtK: 0.9,
+            precisionAtK: 0.8,
+            mrr: 0.75,
+            latencyMs: 120,
+            tierCoverage: 1,
+            stalenessHours: null,
+            falsePositiveRate: 0.1,
+          },
+          tiers: [{ tier: "episodic", ok: true, count: 2 }],
+          retrieved: [
+            { id: "mem-1", tier: "episodic", content: "billing sync decision", latencyMs: 120 },
+          ],
+          trace: [{ action: "memory_recall", timing: "before_plan", timestamp: "2026-05-15T00:00:00.000Z" }],
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("maps a passed eval run into an AgentEvalTrace for the eval engine bridge", () => {
+    const trace = memoryEvalRunToAgentTrace(makeRun());
+
+    expect(trace.traceId).toBe("memory-eval-bridge-memory-eval-test-run");
+    expect(trace.role).toBe("memory-recall");
+    expect(trace.memory?.recallAtK).toBe(0.9);
+    expect(trace.memory?.precisionAtK).toBe(0.8);
+    expect(trace.memory?.mrr).toBe(0.75);
+    expect(trace.outcome?.completed).toBe(true);
+    expect(trace.outcome?.escalated).toBe(false);
+    expect(trace.memory?.retrievedFacts).toContain("billing");
+  });
+
+  it("marks failed runs as escalated with conservative metric defaults for empty results", () => {
+    const trace = memoryEvalRunToAgentTrace(makeRun({
+      status: "failed",
+      summary: {
+        totalCases: 0,
+        passedCases: 0,
+        failedCases: 0,
+        passRate: 0,
+        p95LatencyMs: 0,
+        tierFailures: [],
+      },
+      results: [],
+    }));
+
+    expect(trace.outcome?.completed).toBe(false);
+    expect(trace.outcome?.escalated).toBe(true);
+    expect(trace.memory?.recallAtK).toBe(0.5);
+    expect(trace.expectedFacts).toEqual(["memory", "recall"]);
+    expect(trace.memory?.retrievedFacts).toEqual(["memory"]);
+  });
+});
+
+describe("memory eval persistence", () => {
+  let db: Database.Database;
+  const originalCasesPath = process.env.MEMORY_RECALL_EVAL_CASES_PATH;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    initSchema(db);
+    ensureMemoryEvalTables(db);
+  });
+
+  afterEach(() => {
+    db.close();
+    if (originalCasesPath === undefined) {
+      delete process.env.MEMORY_RECALL_EVAL_CASES_PATH;
+    } else {
+      process.env.MEMORY_RECALL_EVAL_CASES_PATH = originalCasesPath;
+    }
+  });
+
+  it("returns null for the latest run when the table is empty", () => {
+    const response = getLatestMemoryEvalRun(db);
+
+    expect(response.ok).toBe(true);
+    expect(response.run).toBeNull();
+    expect(response.timestamp).toBeTruthy();
+  });
+
+  it("persists and reloads the latest eval run", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-persist-${Date.now()}.json`);
+    const cases: MemoryRecallEvalCase[] = [
+      {
+        id: "persist-case",
+        layer: "gold",
+        scenario: "persist scenario",
+        agentId: "codex",
+        taskPrompt: "Recall the billing note.",
+        expectedFacts: ["billing sync decision"],
+        expectedTiers: ["episodic"],
+        requiredTiming: "before_plan",
+        fixtures: [{ id: "persist-fixture", tier: "episodic", content: "billing sync decision for April" }],
+      },
+    ];
+    fs.writeFileSync(casesPath, JSON.stringify(cases));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+    const latest = getLatestMemoryEvalRun(db);
+
+    expect(run.status).toBe("passed");
+    expect(latest.run?.id).toBe(run.id);
+    expect(latest.run?.results).toHaveLength(1);
+    expect(latest.run?.results[0]?.caseId).toBe("persist-case");
+    expect(latest.run?.summary.totalCases).toBe(1);
+
+    fs.rmSync(casesPath, { force: true });
+  });
+
+  it("filters canary and full modes from the loaded case set", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-modes-${Date.now()}.json`);
+    const episodicCase = (id: string, layer: MemoryRecallEvalCase["layer"]): MemoryRecallEvalCase => ({
+      id,
+      layer,
+      scenario: `${layer} scenario`,
+      agentId: "codex",
+      taskPrompt: "Recall billing context.",
+      expectedFacts: ["billing sync decision"],
+      expectedTiers: ["episodic"],
+      requiredTiming: "before_plan",
+      fixtures: [{ id: `${id}-fixture`, tier: "episodic", content: "billing sync decision for April" }],
+    });
+    fs.writeFileSync(casesPath, JSON.stringify([
+      episodicCase("gold-case", "gold"),
+      episodicCase("canary-case", "canary"),
+      episodicCase("scenario-case", "scenario"),
+    ]));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+
+    const goldRun = await runMemoryRecallEvalSuite({ mode: "gold", db });
+    const canaryRun = await runMemoryRecallEvalSuite({ mode: "canary", db });
+    const fullRun = await runMemoryRecallEvalSuite({ mode: "full", db });
+
+    expect(goldRun.results.map((result) => result.caseId)).toEqual(["gold-case"]);
+    expect(canaryRun.results.map((result) => result.caseId)).toEqual(["canary-case"]);
+    expect(fullRun.results.map((result) => result.caseId)).toEqual(["gold-case", "canary-case", "scenario-case"]);
+
+    fs.rmSync(casesPath, { force: true });
+  });
+
+  it("records tier search failures without aborting the suite", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-graph-fail-${Date.now()}.json`);
+    const cases: MemoryRecallEvalCase[] = [
+      {
+        id: "graph-fail-case",
+        layer: "gold",
+        scenario: "graph tier unavailable",
+        agentId: "codex",
+        taskPrompt: "Recall billing context.",
+        expectedFacts: ["billing sync decision"],
+        expectedTiers: ["graph"],
+        requiredTiming: "before_plan",
+      },
+    ];
+    fs.writeFileSync(casesPath, JSON.stringify(cases));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockRejectedValue(new Error("graph offline"));
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+
+    expect(run.status).toBe("failed");
+    expect(run.results[0]?.failures).toContain("graph tier failed");
+    expect(run.results[0]?.tiers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tier: "graph", ok: false, error: "graph offline" }),
+    ]));
+
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
+  });
+
+  it("skips hive alerting when MEMORY_EVAL_HIVE_ALERTS is disabled", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-no-alert-${Date.now()}.json`);
+    const cases: MemoryRecallEvalCase[] = [
+      {
+        id: "fail-case",
+        layer: "gold",
+        scenario: "forced graph failure",
+        agentId: "codex",
+        taskPrompt: "Recall billing context.",
+        expectedFacts: ["billing sync decision"],
+        expectedTiers: ["graph"],
+        requiredTiming: "before_plan",
+      },
+    ];
+    fs.writeFileSync(casesPath, JSON.stringify(cases));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+    process.env.MEMORY_EVAL_HIVE_ALERTS = "0";
+
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockRejectedValue(new Error("graph offline"));
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+
+    expect(run.status).toBe("failed");
+
+    delete process.env.MEMORY_EVAL_HIVE_ALERTS;
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
+  });
+
+  it("records fixture seed failures without aborting the remaining case flow", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-vector-seed-fail-${Date.now()}.json`);
+    const cases: MemoryRecallEvalCase[] = [
+      {
+        id: "vector-seed-fail",
+        layer: "gold",
+        scenario: "vector write unavailable",
+        agentId: "codex",
+        taskPrompt: "Recall billing context.",
+        expectedFacts: ["billing sync decision"],
+        expectedTiers: ["vector", "episodic"],
+        requiredTiming: "before_plan",
+        fixtures: [{ id: "vector-fixture", tier: "vector", content: "billing sync decision for April" }],
+      },
+    ];
+    fs.writeFileSync(casesPath, JSON.stringify(cases));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+    process.env.MEMORY_EVAL_VECTOR_SETTLE_TIMEOUT_MS = "50";
+    process.env.MEMORY_EVAL_VECTOR_SETTLE_POLL_MS = "10";
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("mem0 down"));
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+
+    expect(run.results[0]?.tiers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tier: "vector", ok: false, error: expect.stringContaining("mem0 down") }),
+    ]));
+
+    delete process.env.MEMORY_EVAL_VECTOR_SETTLE_TIMEOUT_MS;
+    delete process.env.MEMORY_EVAL_VECTOR_SETTLE_POLL_MS;
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
+  });
+
+  it("normalizes graph search hits into recall results", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-graph-success-${Date.now()}.json`);
+    const cases: MemoryRecallEvalCase[] = [
+      {
+        id: "graph-success",
+        layer: "gold",
+        scenario: "graph tier recall",
+        agentId: "codex",
+        taskPrompt: "Recall billing context.",
+        expectedFacts: ["billing sync decision"],
+        expectedTiers: ["graph"],
+        requiredTiming: "before_plan",
+      },
+    ];
+    fs.writeFileSync(casesPath, JSON.stringify(cases));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockResolvedValue({
+      results: [{ memory: "billing sync decision from graph", id: "graph-node-1" }],
+    });
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+
+    expect(run.results[0]?.tiers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tier: "graph", ok: true, count: 1 }),
+    ]));
+    expect(run.results[0]?.retrieved[0]?.content).toContain("billing sync decision");
+
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
   });
 });
 
