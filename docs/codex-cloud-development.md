@@ -34,17 +34,20 @@ CODEX_CLOUD_GSD_PROFILE=full
 
 Set `CODEX_CLOUD_INSTALL_GSD=0` to skip GSD installation for a minimal environment.
 
-## Qwen And Beastmode
+## External Executors And Beastmode
 
-Codex Cloud cannot make Qwen the native Codex model for a task. The supported pattern is:
+Codex Cloud cannot make Qwen, Droid MiniMax, or another external model the
+native Codex model for a task. The supported pattern is:
 
 - Codex is the director/reviewer in the current session.
-- Qwen runs as an external executor through `~/.local/bin/qwen-agent`.
-- Codex reviews Qwen output, applies acceptable patches, and runs verification.
+- External workers run through `~/.local/bin/qwen-agent` or `~/.local/bin/droid exec --model <id>`.
+- Codex reviews worker output, applies acceptable patches, and runs verification.
 
 The setup script installs `@qwen-code/qwen-code` into `CODEX_HOME/qwen-node`, links `qwen` into `~/.local/bin`, and creates `~/.local/bin/qwen-agent`. It also copies these cloud skills into `CODEX_HOME/skills`:
 
+- `$goal`
 - `$qwen-cloud`
+- `$beastmode-cloud`
 - `$beastmode-qwen-cloud`
 
 Codex skills are invoked with `$skill-name` or through `/skills`. Native custom slash prompts such as `/qwen` or `/beastmode` are not the reliable path in Codex Cloud.
@@ -72,7 +75,24 @@ The live smoke check is intentionally opt-in. A cloud environment can have the Q
 ~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
 ```
 
-Do not report the Qwen/Beastmode worker as operational until that smoke check returns `QWEN OK`.
+Do not report the Qwen worker as operational until that smoke check returns `QWEN OK`.
+
+For Beastmode with the direct MiniMax API, use `$beastmode-cloud`, set
+`MINIMAX_API_KEY`, and verify the API separately:
+
+```bash
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+```
+
+For Beastmode with MiniMax or another Droid model, use `$beastmode-cloud` and
+verify Droid/Factory separately:
+
+```bash
+~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
+```
 
 ## Main Brain Variables
 

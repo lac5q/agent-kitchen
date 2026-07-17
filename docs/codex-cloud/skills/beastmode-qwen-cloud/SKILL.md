@@ -1,6 +1,6 @@
 ---
 name: beastmode-qwen-cloud
-description: Run Codex-led Beastmode in Codex Cloud with Qwen as the external executor and Codex as planner, reviewer, and merge gate.
+description: Backward-compatible Beastmode entrypoint. Prefer beastmode-cloud for pluggable Qwen, Droid MiniMax, GLM, and other model workers.
 ---
 
 # Beastmode Qwen Cloud
@@ -8,8 +8,12 @@ description: Run Codex-led Beastmode in Codex Cloud with Qwen as the external ex
 Use this skill when Luis asks for Beastmode, Qwen, cheap-worker execution, or a
 planner/worker/validator pattern inside Codex Cloud.
 
-Codex Cloud does not make Qwen a native Codex model. This skill implements the
-same operating pattern by installing Qwen as an external executor CLI:
+This is the legacy Qwen-specific entrypoint. For new Beastmode runs, prefer
+`$beastmode-cloud`, which supports Qwen plus Droid models such as `minimax-m3`,
+GLM, and other configured Factory models.
+
+Codex Cloud does not make Qwen a native Codex model. This skill implements one
+worker lane by using Qwen as an external executor CLI:
 
 - Director: Codex in the current session.
 - Worker: `~/.local/bin/qwen-agent` using `qwen3.7-plus`.

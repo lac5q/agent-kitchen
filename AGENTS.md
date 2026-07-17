@@ -86,8 +86,8 @@ For Cursor Cloud environments on `lac5q/memroos`, commit `.cursor/environment.js
 new environments run `bash scripts/setup-cursor-cloud.sh` automatically before each
 agent session. This wires the MemRoOS MCP "main brain" without running the
 Docker-oriented local installer. It installs the full GSD Cursor skill catalog
-(`CURSOR_CLOUD_GSD_PROFILE=full` by default), MemRoOS cloud skills (`$qwen-cloud`,
-`$beastmode-qwen-cloud`), and the Qwen executor lane unless disabled via
+(`CURSOR_CLOUD_GSD_PROFILE=full` by default), MemRoOS cloud skills (`$goal`, `$qwen-cloud`,
+`$beastmode-cloud`, `$beastmode-qwen-cloud`), and the Qwen executor lane unless disabled via
 `CURSOR_CLOUD_INSTALL_GSD=0` or `CURSOR_CLOUD_INSTALL_QWEN=0`.
 
 See `docs/cursor-cloud-development.md` for verification steps and environment knobs.
@@ -99,7 +99,7 @@ as the environment setup script and `bash scripts/setup-codex-cloud.sh --mainten
 as the maintenance script. This wires the MemRoOS MCP "main brain" without running
 the Docker-oriented local installer. It also installs the GSD Codex skills with
 the `standard` profile unless `CODEX_CLOUD_INSTALL_GSD=0` is set, and installs
-the Qwen executor lane plus `$qwen-cloud` / `$beastmode-qwen-cloud` skills unless
+the Qwen executor lane plus `$goal` / `$qwen-cloud` / `$beastmode-cloud` / `$beastmode-qwen-cloud` skills unless
 `CODEX_CLOUD_INSTALL_QWEN=0` is set.
 
 Do not use `./setup.sh` as the default cloud setup path. It is intended for local
@@ -109,7 +109,7 @@ service startup that cloud code tasks do not need.
 If MCP tools are unavailable, continue with repo-local files and state clearly
 that the main brain is not connected for that run. When MCP is available, load
 auto-loading skills through `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})`.
-Use `/skills`, `$gsd-help`, `$qwen-cloud`, or `$beastmode-qwen-cloud` to access
+Use `/skills`, `$goal`, `$gsd-help`, `$qwen-cloud`, `$beastmode-cloud`, or `$beastmode-qwen-cloud` to access
 cloud workflows in Codex. Qwen is an external executor in cloud; do not claim it
 is operational until `~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"`
 returns `QWEN OK`.

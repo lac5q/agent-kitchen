@@ -28,7 +28,7 @@ The bootstrap script installs:
 1. **Node dependencies** — `npm ci`
 2. **MemRoOS MCP Python deps** — lightweight `.venv` for the knowledge MCP
 3. **GSD Cursor skills (full profile)** — all `/gsd` workflow skills under `~/.cursor/skills`
-4. **MemRoOS cloud skills** — `$qwen-cloud` and `$beastmode-qwen-cloud` from `docs/codex-cloud/skills`
+4. **MemRoOS cloud skills** — `$goal`, `$qwen-cloud`, `$beastmode-cloud`, and `$beastmode-qwen-cloud` from `docs/codex-cloud/skills`
 5. **Qwen executor lane** — `~/.local/bin/qwen-agent` for external executor work
 6. **Factory Droid CLI** — `~/.local/bin/droid` installed from npm without global npm permissions
 7. **Agent integrations** (when `.agents/skills/memroos-save/SKILL.md` is present) — `install-agent-integrations.sh`
@@ -48,6 +48,7 @@ CURSOR_CLOUD_QWEN_SMOKE=1                # live Qwen smoke after install
 CURSOR_CLOUD_INSTALL_DROID=0             # skip Factory Droid CLI
 CURSOR_CLOUD_DROID_VERSION=latest        # Droid npm version/spec to install
 DASHSCOPE_API_KEY=<scoped-key>           # required for live Qwen execution
+MINIMAX_API_KEY=<scoped-key>             # required for direct MiniMax API Beastmode workers
 ```
 
 Use `CURSOR_CLOUD_GSD_PROFILE=standard` only when you want a smaller GSD footprint.
@@ -87,20 +88,32 @@ After creating or changing the Cursor Cloud environment:
 2. Start a small cloud task on `lac5q/memroos`.
 3. Ask the agent to run `npm run typecheck` and inspect MCP tools.
 4. Ask it to call `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})` if MCP tools are available.
-5. Ask it to invoke `$gsd-help` to confirm GSD skills are present under `~/.cursor/skills`.
-6. Ask it to invoke `$qwen-cloud` or `$beastmode-qwen-cloud`, then run the Qwen smoke check if `DASHSCOPE_API_KEY` is configured:
+5. Ask it to invoke `$goal` to confirm the MemRoOS goal workflow is present.
+6. Ask it to invoke `$gsd-help` to confirm GSD skills are present under `~/.cursor/skills`.
+7. Ask it to invoke `$beastmode-cloud` for multi-model Beastmode support. Use `$beastmode-qwen-cloud` only for the legacy Qwen-specific path.
+8. Run the Qwen smoke check if `DASHSCOPE_API_KEY` is configured:
 
 ```bash
 ~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
 ```
 
-7. Verify Droid is installed:
+9. Verify direct MiniMax API workers when `MINIMAX_API_KEY` is configured:
+
+```bash
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+```
+
+10. Verify Droid and the Droid MiniMax lane only when using Factory/Droid workers:
 
 ```bash
 ~/.local/bin/droid --version
+~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
 ```
 
-8. Run the fleet verifier on persistent remotes such as `maeve-u1` and `oracle-1` after maintenance:
+11. Run the fleet verifier on persistent remotes such as `maeve-u1` and `oracle-1` after maintenance:
 
 ```bash
 npm run check:cursor-coding-env

@@ -125,6 +125,15 @@ function checkDroid() {
   record("Droid auth", "WARN", "not verified by fleet checker; run 'droid' interactively if this host needs Factory access");
 }
 
+function checkMiniMaxApiKey() {
+  const key = process.env.MINIMAX_API_KEY;
+  if (!key) {
+    record("MiniMax API key", "WARN", "MINIMAX_API_KEY not set; direct MiniMax API Beastmode lane unavailable");
+    return;
+  }
+  record("MiniMax API key", "PASS", "set");
+}
+
 function readSettingsKey(settingsPath, envKey) {
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -201,9 +210,12 @@ function runChecks() {
   checkHome();
   checkCursorDir();
   checkSkillsDir();
+  checkSkillRequired("goal");
   checkSkillRequired("gsd-help");
+  checkSkillRequired("beastmode-cloud");
   checkSkillRequired("beastmode-qwen-cloud");
   checkQwen();
+  checkMiniMaxApiKey();
   checkDroid();
   checkGitnexus();
   checkMcpJson();
