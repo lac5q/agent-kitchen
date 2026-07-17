@@ -1066,4 +1066,58 @@ describe("pin lookup helpers and agent-scoped rollback", () => {
       rejectImportProposal(db, det.proposal.id, "bob", "too late")
     ).toThrow(SyncGovernanceError);
   });
+
+  it("detectSkillChange computes hash from detected_content_body when hash omitted", async () => {
+    const { detectSkillChange, computeGovernanceContentHash } = await importSyncModule();
+    const body = "governed body for hashing";
+    const created = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "hash-from-body",
+      detected_content_body: body,
+      proposed_by: "scanner",
+    });
+    expect(created.proposal.detected_content_hash).toBe(computeGovernanceContentHash(body));
+  });
+
+  it("rollbackAgentVersionPinByAgent fails closed on policy-invalid prior rows", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      SyncGovernanceError,
+    } = await importSyncModule();
+    insertAgent("policy-agent", "Policy Agent");
+    const priorId = insertSkillRow({
+      name: "policy-prior",
+      dispatch_status: "disabled",
+      completeness_pct: 100,
+      content_hash: "1".repeat(64),
+    });
+    const currentId = insertSkillRow({
+      name: "policy-current",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      content_hash: "2".repeat(64),
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "policy-agent",
+      skill_name: "policy-skill",
+      skill_id: currentId,
+      current_version: "2.0.0",
+      current_content_hash: "2".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET prior_version = ?, prior_content_hash = ?, prior_skill_id = ?
+        WHERE agent_id = ? AND skill_name = ?`
+    ).run("1.0.0", "1".repeat(64), priorId, "policy-agent", "policy-skill");
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "policy-agent",
+        skill_name: "policy-skill",
+        operator: "alice",
+        reason: "bad prior",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
 });

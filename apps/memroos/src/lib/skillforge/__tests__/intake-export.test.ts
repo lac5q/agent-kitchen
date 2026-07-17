@@ -421,4 +421,62 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     expect(result.outcome).toBe("status_only");
     expect(result.reason).toMatch(/not_exported|status-only/);
   });
+
+  it("rollbackExport validates required proposalId, actor, and reason", async () => {
+    const { rollbackExport, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      rollbackExport(db, { proposalId: "", actor: "operator", reason: "x" })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      rollbackExport(db, { proposalId: "p1", actor: "", reason: "x" })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      rollbackExport(db, { proposalId: "p1", actor: "operator", reason: "" })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("rollbackExport throws when the proposal id does not exist", async () => {
+    const { rollbackExport, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      rollbackExport(db, {
+        proposalId: "missing-proposal",
+        actor: "operator",
+        reason: "cleanup",
+      })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("exports state constants and advances through applied before exported", async () => {
+    const {
+      intakeProposal,
+      advanceProposalState,
+      exportProposal,
+      AUTHORITATIVE_PROPOSAL_STATES,
+      TERMINAL_PROPOSAL_STATES,
+      loadIntakeRow,
+    } = await import("../intake-export");
+    expect(AUTHORITATIVE_PROPOSAL_STATES).toContain("applied");
+    expect(TERMINAL_PROPOSAL_STATES).toContain("exported");
+
+    intakeProposal(db, {
+      proposalId: "applied-path",
+      sourceSkillId: "skill-505",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "approved" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "applied" });
+    exportProposal(db, {
+      proposalId: "applied-path",
+      runtimeSkillId: "skill-505",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-505",
+      actor: "operator",
+    });
+    expect(loadIntakeRow(db, "applied-path")?.state).toBe("exported");
+  });
 });

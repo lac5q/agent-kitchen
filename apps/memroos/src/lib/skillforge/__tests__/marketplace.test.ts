@@ -215,4 +215,48 @@ describe("marketplace", () => {
     const results = searchListings(db, { query: "Bad Tags" });
     expect(results.listings[0].tags).toEqual([]);
   });
+
+  it("rejects publish when the registry row is incomplete or missing", () => {
+    const missing = publishSkill(db, {
+      skillId: "missing-skill",
+      name: "Missing",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    });
+    expect(missing.success).toBe(false);
+    expect(missing.code).toBe("skill_not_found");
+
+    registerSkill(db, "incomplete");
+    db.prepare(`UPDATE skill_registry SET completeness_pct = 50 WHERE name = ?`).run("incomplete");
+    const incomplete = publishSkill(db, {
+      skillId: "incomplete",
+      name: "Incomplete",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    });
+    expect(incomplete.success).toBe(false);
+    expect(incomplete.error).toMatch(/incomplete/i);
+  });
+
+  it("deprecates an existing listing and hides it from search", () => {
+    registerSkill(db, "deprecate-me");
+    const pub = publishSkill(db, {
+      skillId: "deprecate-me",
+      name: "Deprecate Me",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    });
+    const result = deprecateSkill(db, pub.listingId!, "retired");
+    expect(result.success).toBe(true);
+    expect(searchListings(db, { query: "Deprecate Me" }).total).toBe(0);
+  });
 });

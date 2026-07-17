@@ -315,6 +315,37 @@ describe("POST /api/apo validation and errors", () => {
     expect((await apply.json()).applied).toBe(false);
   });
 
+  it("process-approved with an empty queue returns zero processed items", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(makeApproveRequest({ action: "process-approved" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, processed: 0, failed: 0, results: [] });
+  });
+
+  it("rejects malformed JSON bodies", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      new Request("http://localhost/api/apo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not-json",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("proposalId is required");
+  });
+
+  it("lists archived proposals with implemented tracking metadata", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    await POST(makeApproveRequest({ action: "process-approved" }));
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body.proposals.some((proposal: { status: string }) => proposal.status === "archived")).toBe(true);
+    expect(body.stats.archivedProposals).toBe(1);
+  });
+
   it("process-approved honors limit and archived tracking labels applied=false", async () => {
     const { GET, POST } = await loadRoute();
     await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));

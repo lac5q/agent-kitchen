@@ -450,8 +450,6 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
     expect(result.driftReceiptReason).toBe("current");
   });
 
-  // --- cross-space isolation ---
-
   it("28) write rules and document directory entries are isolated per space", () => {
     createWriteRule(db, {
       spaceId,
@@ -485,5 +483,21 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
     });
     expect(getDocumentDirectory(db, spaceId)).toHaveLength(1);
     expect(getDocumentDirectory(db, secondSpaceId)).toHaveLength(1);
+  });
+
+  it("29) updateWriteRule throws when the rule does not exist", () => {
+    expect(() =>
+      updateWriteRule(db, 99999, {
+        targetDocument: "missing.md",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/not found/);
+  });
+
+  it("30) deleteDocumentDirectoryEntry throws when the entry does not exist", () => {
+    expect(() =>
+      deleteDocumentDirectoryEntry(db, 99999, { actorId, expectedVersion: 1 }),
+    ).toThrow(/not found/);
   });
 });

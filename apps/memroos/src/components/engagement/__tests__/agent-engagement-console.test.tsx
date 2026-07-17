@@ -504,4 +504,132 @@ describe("AgentEngagementConsole", () => {
       expect(screen.getByText(/Chat unavailable/i)).toBeInTheDocument();
     });
   });
+
+  it("shows default model labels and fallback routing after diagnostics", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      json: async () => ({
+        results: [{
+          agentId: "claude-sonnet-engineer",
+          name: "Claude Sonnet Engineer",
+          status: "active",
+          chat: {
+            status: "warning",
+            runner: "opencode",
+            model: "bailian/qwen3.5-plus",
+            fallbackRunner: "anthropic",
+            fallbackModel: "claude-sonnet-4-6",
+            detail: "fallback ready",
+          },
+          dispatch: { status: "ready", adapter: "hive-poll", detail: "queued" },
+          voice: { status: "ready", detail: "ok" },
+        }],
+      }),
+    } as Response);
+
+    render(<AgentEngagementConsole />);
+    expect(screen.getAllByText(/model: claude-sonnet-4-6|model: opencode/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /test primary agents/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/hive-poll \/ opencode -> anthropic\/claude-sonnet-4-6/)).toBeInTheDocument();
+    });
+  });
+
+  it("renders directory agents and error-status pills outside the primary roster", () => {
+    const directoryAgent = {
+      ...mockAgents[1],
+      id: "directory-only-agent",
+      name: "Directory Only",
+      role: "Support",
+      status: "error" as const,
+    };
+    vi.mocked(useAgents).mockReturnValue({
+      data: { agents: [...mockAgents, directoryAgent] },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    render(<AgentEngagementConsole />);
+    expect(screen.getByText("Registered directory")).toBeInTheDocument();
+    expect(screen.getByText("Directory Only")).toBeInTheDocument();
+    expect(screen.getAllByText("error").length).toBeGreaterThan(0);
+  });
+
+  it("uses active and all participant presets in room mode", async () => {
+    vi.mocked(fetch).mockResolvedValue(chatStream("Room preset reply"));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use all" }));
+
+    expect(screen.getByText(/2 participants/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled();
+      expect(screen.getByText("Room preset reply")).toBeInTheDocument();
+    });
+  });
+
+  it("runs a multi-participant room round and surfaces per-agent failures", async () => {
+    vi.mocked(useAgents).mockReturnValue({
+      data: {
+        agents: mockAgents.map((agent) =>
+          agent.id === "codex-cli-agent" ? { ...agent, status: "active" as const } : agent,
+        ),
+      },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("First agent update."))
+      .mockResolvedValueOnce(
+        new Response('{"message":"room provider down"}', { status: 503 }),
+      );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("First agent update.")).toBeInTheDocument();
+      expect(screen.getByText(/Chat unavailable/i)).toBeInTheDocument();
+    });
+  });
+
+  it("ignores TTS failures without blocking chat", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("spoken reply"))
+      .mockResolvedValueOnce(new Response("tts down", { status: 503 }));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("spoken reply")).toBeInTheDocument();
+    });
+  });
+
+  it("stops an active voice capture session when Speak is clicked again", () => {
+    const stop = vi.fn();
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = stop;
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    vi.stubGlobal("webkitSpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+
+    expect(stop).toHaveBeenCalled();
+  });
 });

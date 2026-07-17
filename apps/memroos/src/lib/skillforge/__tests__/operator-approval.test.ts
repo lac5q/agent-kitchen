@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import { listProposals, getProposal, applyApprovalAction, markApplied } from "../operator-approval";
+import { listProposals, getProposal, applyApprovalAction, markApplied, rollbackProposal } from "../operator-approval";
 import type { SkillForgeProposal } from "../types";
 
 function makeProposal(id: string, status: string): SkillForgeProposal {
@@ -47,6 +47,26 @@ describe("SkillForge Operator Approval", () => {
         residual_risks TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+      CREATE TABLE skillforge_exports (
+        id INTEGER PRIMARY KEY,
+        proposal_id TEXT NOT NULL,
+        pre_version TEXT,
+        pre_hash TEXT,
+        pre_raw_body TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE audit_entries (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        actor_role TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        reason TEXT,
+        metadata_json TEXT,
+        created_at TEXT NOT NULL
       );
     `);
   });
@@ -137,5 +157,47 @@ describe("SkillForge Operator Approval", () => {
 
     const result = markApplied(db, "p1");
     expect(result.success).toBe(false);
+  });
+
+  it("requests changes by moving a gated proposal back to pending", () => {
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("p-change", "skill-1", "1.0.0", "diff1", "gated", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+
+    const result = applyApprovalAction(db, {
+      proposalId: "p-change",
+      action: "request_changes",
+      operator: "reviewer",
+      reasoning: "needs more evidence",
+    });
+    expect(result.success).toBe(true);
+    expect(getProposal(db, "p-change")?.status).toBe("pending");
+  });
+
+  it("lists approved and rejected proposals in separate queues", () => {
+    const insert = db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    insert.run("approved-1", "skill-1", "1.0.0", "diff", "approved", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+    insert.run("rejected-1", "skill-1", "1.0.0", "diff", "rejected", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+
+    const queue = listProposals(db);
+    expect(queue.approved.map((proposal) => proposal.id)).toContain("approved-1");
+    expect(queue.rejected.map((proposal) => proposal.id)).toContain("rejected-1");
+  });
+
+  it("rolls back an applied proposal without export history as status-only honesty", () => {
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("rollback-1", "skill-1", "1.0.0", "diff", "applied", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+
+    const result = rollbackProposal(db, "rollback-1", "operator", "undo export");
+    expect(result.success).toBe(true);
+    expect(result.restored).toBe(false);
+    expect(result.proposalState).toBe("pending_approval");
+    expect(getProposal(db, "rollback-1")?.status).toBe("pending_approval");
   });
 });

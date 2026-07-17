@@ -303,6 +303,54 @@ describe("writeReport + renderTextReport", () => {
   });
 });
 
+describe("runBenchmark governance gates", () => {
+  it("requires CLI parser or cliCommand when bypassCliParser is false", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      bypassCliParser: false,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("cli_parser_required");
+    }
+  });
+
+  it("accepts cliCommand as the governed entry point", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 3,
+      k: 3,
+      seed: 0,
+      cliCommand: { noWrite: true },
+      bypassCliParser: false,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.taskCount).toBe(3);
+  });
+
+  it("marks mem0 and qdrant adapters as unavailable", async () => {
+    for (const adapter of ["mem0", "qdrant"] as const) {
+      const r = await runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter,
+        limit: 3,
+        k: 3,
+        seed: 0,
+        bypassCliParser: true,
+        fixturesDir: FIXTURES_DIR,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.tasks.every((task) => task.status === "unavailable")).toBe(true);
+    }
+  });
+});
+
 describe("loadDataset explicit errors", () => {
   it("refuses locomo without caller-local source", () => {
     const r = loadDataset({ dataset: "locomo", fixturesDir: FIXTURES_DIR });

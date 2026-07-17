@@ -8,6 +8,37 @@ import { getToolAttention, getSimilarTaskRecommendations } from "@/lib/tool-atte
 
 let tempRoot: string | undefined;
 
+function makeOutcomeFile(root: string, records: object[]): string {
+  const p = path.join(root, "outcomes.jsonl");
+  fs.writeFileSync(p, records.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  return p;
+}
+
+function makeCatalogFile(root: string, toolId: string): string {
+  const p = path.join(root, "catalog.json");
+  fs.writeFileSync(
+    p,
+    JSON.stringify({
+      capabilities: [
+        {
+          id: toolId,
+          name: toolId,
+          type: "mcp-tool",
+          source: "test",
+          description: "d",
+          status: "available",
+          tags: [],
+          useWhen: [],
+          topLevel: false,
+          loadCommand: null,
+        },
+      ],
+      sources: [],
+    }),
+  );
+  return p;
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
   if (tempRoot) {
@@ -17,27 +48,6 @@ afterEach(() => {
 });
 
 describe("contextMatchSignal", () => {
-  function makeOutcomeFile(root: string, records: object[]): string {
-    const p = path.join(root, "outcomes.jsonl");
-    fs.writeFileSync(p, records.map((r) => JSON.stringify(r)).join("\n") + "\n");
-    return p;
-  }
-
-  function makeCatalogFile(root: string, toolId: string): string {
-    const p = path.join(root, "catalog.json");
-    fs.writeFileSync(
-      p,
-      JSON.stringify({
-        capabilities: [
-          { id: toolId, name: toolId, type: "mcp-tool", source: "test", description: "d",
-            status: "available", tags: [], useWhen: [], topLevel: false, loadCommand: null },
-        ],
-        sources: [],
-      })
-    );
-    return p;
-  }
-
   it("scores task_type match * 2", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-"));
     const outcomesPath = makeOutcomeFile(root, [
@@ -220,5 +230,85 @@ describe("getToolAttention", () => {
 
     const gitnexus = getToolAttention("gitnexus", 10).capabilities.find((item) => item.id === "mcp-server:gitnexus");
     expect(gitnexus?.status).toBe("available");
+  });
+
+  it("scores shared tags and failure outcomes when ranking similar tasks", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-tags-"));
+    const toolId = "skill:tagged";
+    const outcomesPath = makeOutcomeFile(root, [
+      {
+        timestamp: "t1",
+        toolId,
+        outcome: "failed",
+        metadata: { task_type: "deploy", repo: "memroos", tags: ["heroku", "release"] },
+      },
+      {
+        timestamp: "t2",
+        toolId,
+        outcome: "helped",
+        metadata: { task_type: "deploy", repo: "memroos", tags: ["heroku"] },
+      },
+    ]);
+    const catalogPath = makeCatalogFile(root, toolId);
+    vi.stubEnv("MEMROOS_ROOT", root);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(root, "no-skills"));
+
+    const result = getSimilarTaskRecommendations({
+      task_type: "deploy",
+      repo: "memroos",
+      tags: ["heroku", "release"],
+    });
+    const rec = result.recommendations.find((item) => item.capabilityId === toolId);
+    expect(rec).toBeDefined();
+    expect(rec!.contextScore).toBeGreaterThanOrEqual(6);
+    expect(rec!.reason).toMatch(/context match score/i);
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("appends outcomes to the configured jsonl file", async () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tool-attention-append-"));
+    const outcomesPath = path.join(tempRoot, "logs", "tool-attention-outcomes.jsonl");
+    const catalogPath = path.join(tempRoot, "catalog.json");
+    fs.mkdirSync(path.dirname(outcomesPath), { recursive: true });
+    fs.writeFileSync(catalogPath, JSON.stringify({ capabilities: [], sources: [] }));
+
+    vi.stubEnv("MEMROOS_ROOT", tempRoot);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(tempRoot, "no-skills"));
+
+    const { appendToolAttentionOutcome } = await import("@/lib/tool-attention");
+    appendToolAttentionOutcome({
+      timestamp: "2026-07-17T00:00:00.000Z",
+      toolId: "skill:append",
+      outcome: "helped",
+      metadata: { task_type: "review" },
+    });
+
+    const lines = fs.readFileSync(outcomesPath, "utf-8").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!).toolId).toBe("skill:append");
+  });
+
+  it("marks invalid MCP config as invalid and tolerates missing catalog files", () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tool-attention-invalid-"));
+    const catalogPath = path.join(tempRoot, "missing-catalog.json");
+    const outcomesPath = path.join(tempRoot, "missing-outcomes.jsonl");
+
+    fs.mkdirSync(tempRoot, { recursive: true });
+    fs.writeFileSync(path.join(tempRoot, ".mcp.json"), "{not-json");
+
+    vi.stubEnv("MEMROOS_ROOT", tempRoot);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(tempRoot, "no-skills"));
+
+    const data = getToolAttention("mcp", 5);
+    expect(data.sources.find((source) => source.id === "root-mcp-json")?.status).toBe("invalid");
+    expect(data.health.catalog).toBe("missing");
+    expect(data.health.outcomes).toBe("missing");
   });
 });

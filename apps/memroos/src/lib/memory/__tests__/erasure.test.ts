@@ -438,5 +438,69 @@ describe("coordinateErasure idempotency and scope", () => {
     expect(stores).toContain("vector");
     expect(stores).toContain("embeddings");
     expect(getErasureStoreAdapter("vector")).toBeTruthy();
+    expect(getErasureStoreAdapter("nonexistent-store")).toBeUndefined();
+  });
+
+  it("persists erasure report even when memory_erasure_reports table is missing", async () => {
+    const bare = new Database(":memory:");
+    bare.exec(`
+      CREATE TABLE audit_entries (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT,
+        actor_id TEXT,
+        actor_role TEXT,
+        event_type TEXT,
+        entity_type TEXT,
+        entity_id TEXT,
+        reason TEXT,
+        metadata_json TEXT,
+        created_at TEXT
+      );
+    `);
+    const identity = buildCanonicalIdentity("no reports table", "message", "ingress", "vector", {
+      tenantId: "tenant1",
+    });
+    const report = await coordinateErasure(bare, identity, {
+      tenantId: "tenant1",
+      actorId: "actor1",
+      scope: { tenantId: "tenant1", purpose: "dsar" },
+    });
+    expect(report.status).toBe("completed");
+    const audits = bare
+      .prepare("SELECT COUNT(*) AS c FROM audit_entries WHERE event_type = ?")
+      .get("memory.erasure.completed") as { c: number };
+    expect(audits.c).toBe(1);
+    bare.close();
+  });
+
+  it("traverseIndirectDerivatives includes snapshot rows from embedding provenance", () => {
+    db.exec(`
+      CREATE TABLE memory_embedding_provenance (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        adapter_kind TEXT NOT NULL,
+        source_hash TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        model_version TEXT,
+        dimensionality INTEGER NOT NULL DEFAULT 0,
+        provenance TEXT NOT NULL,
+        lifecycle_state TEXT NOT NULL DEFAULT 'active',
+        removability TEXT NOT NULL DEFAULT 'erasable',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const identity = buildCanonicalIdentity("snap", "vault", "ingress", "vault");
+    db.prepare(
+      `INSERT INTO memory_embedding_provenance
+       (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+        dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+       VALUES (?, 'default-tenant', ?, 'snapshot', 'snapshot', ?, 'm', NULL, 0, 'p', 'active', 'erasable', '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+    ).run("snap-1", identity.id, identity.canonicalHash);
+    const indirect = traverseIndirectDerivatives(db, identity);
+    expect(indirect.some((d) => d.storeId === "snapshot")).toBe(true);
   });
 });

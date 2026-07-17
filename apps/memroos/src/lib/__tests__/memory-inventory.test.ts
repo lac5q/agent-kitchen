@@ -153,4 +153,68 @@ describe("buildMemoryInventory", () => {
     expect(response.rows.every((r) => r.project === "memroos")).toBe(true);
     expect(response.rows.every((r) => r.consolidationState === "pending")).toBe(true);
   });
+
+  it("marks graph category unavailable when Neo4j password is missing", async () => {
+    const prev = process.env.NEO4J_PASSWORD;
+    delete process.env.NEO4J_PASSWORD;
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const graph = response.categories.find((c) => c.id === "graph_fact");
+    expect(graph?.status).toBe("degraded");
+    expect(graph?.warnings.some((w) => /password/i.test(w))).toBe(true);
+    if (prev !== undefined) process.env.NEO4J_PASSWORD = prev;
+  });
+
+  it("parses nested vector counts from mem0 health payloads", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          vector: { count: 12 },
+          last_updated: "2026-05-24T09:00:00Z",
+        }),
+      })
+    );
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const vector = response.categories.find((c) => c.id === "vector_memory");
+    expect(vector?.count).toBe(12);
+    expect(vector?.status).toBe("live");
+  });
+
+  it("filters rows by security label and degraded category status", async () => {
+    seedMessage("label filter alpha");
+    testDb
+      .prepare(`UPDATE messages SET sensitivity = ? WHERE content = ?`)
+      .run("payment", "label filter alpha");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(
+      new URL(
+        "http://localhost/api/memory-inventory?category=ingested_message&label=payment&degraded=live"
+      )
+    );
+    expect(response.rows.every((r) => r.securityLabel.sensitivity === "payment")).toBe(true);
+  });
+
+  it("reuses cached category counts within MEMORY_INVENTORY_CATEGORY_TTL_MS", async () => {
+    process.env.MEMORY_INVENTORY_CATEGORY_TTL_MS = "60000";
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const firstCount = (
+      await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"))
+    ).categories.find((c) => c.id === "ingested_message")?.count;
+    seedMessage("after cache warm");
+    const secondCount = (
+      await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"))
+    ).categories.find((c) => c.id === "ingested_message")?.count;
+    expect(secondCount).toBe(firstCount);
+  });
+
+  it("returns zero metric envelope for empty sqlite categories", async () => {
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const writes = response.categories.find((c) => c.id === "episodic_write");
+    expect(writes?.count).toBe(0);
+    expect(writes?.metric.status).toBe("zero");
+  });
 });

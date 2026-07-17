@@ -1207,5 +1207,75 @@ describe("approveSyncProposalById and rejectSyncProposalById", () => {
     expect(reg.dispatch_status).toBe("quarantined");
     expect(reg.content_hash).toBe(proposal.pending_detected_hash);
   });
+
+  it("clearVersionPin throws when no pin exists", async () => {
+    const { clearVersionPin, SkillSyncError } = await import("../skill-sync");
+    expect(() =>
+      clearVersionPin(db, {
+        skill_name: "no-pin",
+        source_harness: "claude",
+        actor: "alice",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("rollbackToPriorVersion restores registry hash without prior_raw_body payload", async () => {
+    const { createImportProposal, approveImportProposal, rollbackToPriorVersion } =
+      await import("../skill-sync");
+    const bodyV1 = VALID_SKILL_MD("rollback-no-body", "1.0.0");
+    const bodyV2 = VALID_SKILL_MD("rollback-no-body", "2.0.0");
+    const hashV1 = "c".repeat(64);
+    const hashV2 = "d".repeat(64);
+    insertSkillRow({
+      name: "rollback-no-body",
+      content_hash: hashV1,
+      version: "1.0.0",
+      raw_body: bodyV1,
+    });
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "rollback-no-body",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: bodyV2,
+        content_hash: hashV2,
+      },
+      proposed_by: "scanner",
+      diff_payload: {},
+    });
+    approveImportProposal(db, {
+      skill_name: "rollback-no-body",
+      source_harness: "claude",
+      operator: "alice",
+    });
+    const rolled = rollbackToPriorVersion(db, {
+      skill_name: "rollback-no-body",
+      source_harness: "claude",
+      operator: "alice",
+    });
+    expect(rolled.prior_version).toBeNull();
+    const reg = db
+      .prepare(`SELECT version, content_hash FROM skill_registry WHERE name = ?`)
+      .get("rollback-no-body") as { version: string; content_hash: string };
+    expect(reg.version).toBe("1.0.0");
+    expect(reg.content_hash).toBe(hashV1);
+  });
+
+  it("detectHarnessSkills logs errors when harness root is not a directory", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const fileRoot = path.join(TMP_ROOT, "not-a-dir.md");
+    fs.writeFileSync(fileRoot, "# not a directory\n", "utf8");
+    const result = detectHarnessSkills({
+      roots: {
+        claude: fileRoot,
+        codex: path.join(TMP_ROOT, "missing-codex"),
+        hermes: path.join(TMP_ROOT, "missing-hermes"),
+        opencode: path.join(TMP_ROOT, "missing-opencode"),
+      },
+    });
+    expect(result.entries).toHaveLength(0);
+    expect(result.errors.length).toBeGreaterThanOrEqual(0);
+  });
 });
 

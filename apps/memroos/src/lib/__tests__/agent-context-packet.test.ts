@@ -1,7 +1,7 @@
 // @vitest-environment node
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { buildAgentContextPacket } from "@/lib/agent-context-packet";
+import { buildAgentContextPacket, readAgentRunLedger } from "@/lib/agent-context-packet";
 import { createAgentCheckpoint } from "@/lib/agent-checkpoints";
 import { ensureAgentContextBusSchema, postAgentContextMessage } from "@/lib/agent-context-bus";
 import { initSchema } from "@/lib/db-schema";
@@ -186,6 +186,120 @@ describe("agent context packet", () => {
     }));
     expect(db.prepare(`SELECT reason FROM audit_entries WHERE entity_id = 'ontology_context_candidate:ontology-missing'`).get())
       .toMatchObject({ reason: "ontology_context_unavailable" });
+    db.close();
+  });
+
+  it("includes allowed memories, efficiency receipts, and completed goal status in the ledger", () => {
+    const db = seedDb();
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id)
+       VALUES(?, 'codex', 'agent-beta', 'Ship packet v2', 'completed', ?)`
+    ).run(GOAL_ID, GOAL_ID);
+    db.prepare(
+      `INSERT INTO agent_session_captures
+       (id, source_agent_id, runtime, session_id, task_id, capture_hash, captured_at)
+       VALUES ('allowed-capture', 'agent-alpha', 'codex', 'session-allowed', ?, 'sha256:capture', '2026-07-06T11:00:00Z')`
+    ).run(GOAL_ID);
+    db.prepare(
+      `INSERT INTO agent_memory_candidates
+       (id, capture_id, agent_id, memory_type, content, content_hash, status, metadata_json, belief_stage)
+       VALUES ('mem-allowed', 'allowed-capture', 'agent-alpha', 'lesson', 'allowed lesson text', 'sha256:allowed', 'candidate', ?, 'gold_operational_truth')`
+    ).run(JSON.stringify({
+      goalId: GOAL_ID,
+      title: "Allowed lesson",
+      authorization: "allowed",
+      provenance: ["manual-review"],
+      caveat: "safe to include",
+    }));
+    db.prepare(
+      `INSERT INTO efficiency_events
+       (tenant_id, task_id, event_type, payload, created_at)
+       VALUES ('default-tenant', ?, 'retrieval_trace', ?, '2026-07-06T11:05:00Z')`
+    ).run(GOAL_ID, JSON.stringify({ sources: [{ id: "src-1" }] }));
+    db.prepare(
+      `INSERT INTO efficiency_events
+       (tenant_id, task_id, event_type, payload, created_at)
+       VALUES ('default-tenant', ?, 'token_ledger', ?, '2026-07-06T11:06:00Z')`
+    ).run(GOAL_ID, JSON.stringify({ tokens: 42 }));
+
+    const result = buildAgentContextPacket(db, {
+      goalId: GOAL_ID,
+      actorAgentId: "agent-alpha",
+      userId: "user-1",
+      delegatedChain: ["ceo", "agent-alpha"],
+      lane: "deployment",
+      goalTitle: "Ship packet v2",
+      acceptanceCriteria: ["route test passes"],
+      scope: { repo: "lac5q/memroos", project: "memroos" },
+      now: () => FIXED_NOW,
+    });
+
+    expect(result.packet.goal).toMatchObject({
+      status: "complete",
+      lane: "deployment",
+      title: "Ship packet v2",
+    });
+    expect(result.packet.actor).toMatchObject({
+      agentId: "agent-alpha",
+      userId: "user-1",
+      delegatedChain: ["ceo", "agent-alpha"],
+    });
+    expect(result.packet.memories).toContainEqual(
+      expect.objectContaining({
+        id: "mem-allowed",
+        title: "Allowed lesson",
+        authorization: "allowed",
+        caveat: "safe to include",
+      }),
+    );
+    expect(result.packet.receipts).toContainEqual(
+      expect.objectContaining({
+        source: "efficiency_events",
+        status: "included",
+        reason: expect.stringContaining("retrieval trace recorded"),
+      }),
+    );
+    expect(result.packet.receipts).toContainEqual(
+      expect.objectContaining({
+        source: "efficiency_events",
+        status: "included",
+        reason: expect.stringContaining("token_ledger receipt recorded"),
+      }),
+    );
+    expect(result.ledger.tasks[0]).toMatchObject({ status: "completed", lane: "deployment" });
+    db.close();
+  });
+
+  it("readAgentRunLedger assembles tasks, events, and verifications", () => {
+    const db = seedDb();
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id, created_at, updated_at)
+       VALUES(?, 'codex', 'agent-beta', 'Ledger task', 'active', ?, '2026-07-06T10:00:00Z', '2026-07-06T10:30:00Z')`
+    ).run(GOAL_ID, GOAL_ID);
+    db.prepare(
+      `INSERT INTO hive_actions(agent_id, action_type, summary, artifacts, timestamp)
+       VALUES('agent-alpha', 'checkpoint', 'Accepted work', ?, '2026-07-06T10:15:00Z')`
+    ).run(JSON.stringify({ goalId: GOAL_ID }));
+    createAgentCheckpoint(db, {
+      runId: GOAL_ID,
+      ownerAgentId: "agent-alpha",
+      objective: "Ledger task",
+      decisions: { substrate: "sqlite" },
+      artifactRefs: ["docs/context.md"],
+      verificationState: { lint: "pass" },
+      nextSafeAction: "ship",
+    });
+
+    const ledger = readAgentRunLedger(db, {
+      goalId: GOAL_ID,
+      lane: "code",
+      now: () => FIXED_NOW,
+    });
+
+    expect(ledger.goalId).toBe(GOAL_ID);
+    expect(ledger.tasks[0]).toMatchObject({ id: GOAL_ID, status: "active", lane: "code" });
+    expect(ledger.events[0]).toMatchObject({ actionType: "checkpoint", summary: "Accepted work" });
+    expect(ledger.verifications[0]).toMatchObject({ requiredProof: "lint", proofStatus: "pass" });
     db.close();
   });
 });

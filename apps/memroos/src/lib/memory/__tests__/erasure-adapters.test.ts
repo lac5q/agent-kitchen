@@ -415,6 +415,138 @@ describe("MEMLIFE-02 real erasure store adapters", () => {
     expect(onto.status).toBe("invalidated");
   });
 
+  it("purges embedding provenance rows and aggregates per-store outcomes", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("embed body", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives.push({
+      storeId: "embeddings",
+      sourceHash: identity.canonicalHash,
+      provenance: "test",
+    });
+    const now = "2026-01-01T00:00:00Z";
+    database
+      .prepare(
+        `INSERT INTO memory_embedding_provenance
+         (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+          dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+         VALUES (?, 'default-tenant', ?, 'vector', 'local', ?, 'm1', '1.0', 8, 'p', 'active', 'erasable', '{}', ?, ?)`
+      )
+      .run("emb-vec-1", identity.id, identity.canonicalHash, now, now);
+    database
+      .prepare(
+        `INSERT INTO memory_embedding_provenance
+         (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+          dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+         VALUES (?, 'default-tenant', ?, 'cache', 'cache', ?, 'm2', '1.0', 0, 'p', 'active', 'erasable', '{}', ?, ?)`
+      )
+      .run("emb-cache-1", identity.id, identity.canonicalHash, now, now);
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const vector = report.storeOutcomes.find((o) => o.storeId === "vector");
+    const embeddings = report.storeOutcomes.find((o) => o.storeId === "embeddings");
+    expect(["purged", "tombstoned", "zero_match"]).toContain(vector?.status);
+    expect(["purged", "tombstoned", "zero_match"]).toContain(embeddings?.status);
+  });
+
+  it("reports neo4j zero_match when the graph backend deletes zero nodes", async () => {
+    const database = freshDb();
+    const prevPassword = process.env.NEO4J_PASSWORD;
+    const prevFetch = global.fetch;
+    process.env.NEO4J_PASSWORD = "secret";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ data: [{ row: [0] }] }] }),
+    }) as typeof fetch;
+    try {
+      const identity = buildCanonicalIdentity("empty graph", "graph", "ingress", "graph", {
+        tenantId: "default-tenant",
+      });
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "default-tenant",
+        actorId: "tester",
+        scope: { tenantId: "default-tenant" },
+      });
+      const graph = report.storeOutcomes.find((o) => o.storeId === "graph");
+      expect(graph?.status).toBe("zero_match");
+      expect(graph?.reason).toMatch(/no_neo4j_nodes/);
+    } finally {
+      if (prevPassword === undefined) delete process.env.NEO4J_PASSWORD;
+      else process.env.NEO4J_PASSWORD = prevPassword;
+      global.fetch = prevFetch;
+    }
+  });
+
+  it("returns graph zero_match when the identity is not linked to graph", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("no graph link", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const graph = report.storeOutcomes.find((o) => o.storeId === "graph");
+    expect(graph?.status).toBe("zero_match");
+    expect(graph?.reason).toMatch(/not_linked/);
+  });
+
+  it("vector adapter purges when provenance table is absent but vector is linked", async () => {
+    const database = freshDb();
+    database.exec("DROP TABLE IF EXISTS memory_embedding_provenance");
+    const identity = buildCanonicalIdentity("no prov table", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "vector")?.status).toBe("purged");
+  });
+
+  it("federation store reports zero_match when no active derivatives exist", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("no fed", "message", "ingress", "federation", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "federation")?.status).toBe("zero_match");
+  });
+
+  it("message erasure reports zero_match when resolved message ids are absent", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("ghost message", "message", "ingress", "message", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives = [
+      {
+        storeId: "message",
+        sourceHash: identity.canonicalHash,
+        provenance: "test",
+        metadata: { message_id: 999_999 },
+      },
+    ];
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const message = report.storeOutcomes.find((o) => o.storeId === "message");
+    expect(message?.status).toBe("zero_match");
+    expect(message?.reason).toMatch(/no_messages|already_absent/);
+  });
+
   it("marks adapter failures as failed overall status", async () => {
     const database = freshDb();
     const { getErasureStoreAdapter, registerErasureStoreAdapter } = await import("../erasure");

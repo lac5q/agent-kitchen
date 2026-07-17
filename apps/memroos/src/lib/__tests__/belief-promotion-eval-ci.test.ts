@@ -6,6 +6,9 @@
 // runBeliefPromotionEvalSuite({ mode: 'gold' }), and asserts every committed
 // invariant case passes. Runs with no external services and no LLM calls.
 import Database from "better-sqlite3";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { initSchema } from "../db-schema";
@@ -67,5 +70,56 @@ describe("BELIEF-05 promotion eval CI canary", () => {
     expect(run.summary.totalCases).toBe(allCases.length);
     expect(run.summary.failedCases).toBe(0);
     expect(run.pass).toBe(true);
+  });
+
+  it("loadBeliefPromotionEvalCases throws when cases file is not an array", () => {
+    const badPath = path.join(os.tmpdir(), `belief-bad-cases-${Date.now()}.json`);
+    fs.writeFileSync(badPath, JSON.stringify({ not: "an array" }), "utf8");
+    expect(() => loadBeliefPromotionEvalCases(badPath)).toThrow(/must be a JSON array/);
+    fs.unlinkSync(badPath);
+  });
+
+  it("runBeliefPromotionEvalSuite reports missing handlers for unknown case ids", async () => {
+    db = new Database(":memory:");
+    initSchema(db);
+    const casesPath = path.join(os.tmpdir(), `belief-unknown-case-${Date.now()}.json`);
+    fs.writeFileSync(
+      casesPath,
+      JSON.stringify([
+        {
+          id: "unknown_case_id_xyz",
+          description: "no handler",
+          expectations: {},
+        },
+      ]),
+      "utf8"
+    );
+    const run = await runBeliefPromotionEvalSuite({ mode: "full", db, casesPath });
+    expect(run.pass).toBe(false);
+    expect(run.cases[0]?.reason).toMatch(/no handler registered/);
+    fs.unlinkSync(casesPath);
+  });
+
+  it("loadBeliefPromotionEvalCases honors BELIEF_PROMOTION_EVAL_CASES_PATH", () => {
+    const customPath = path.join(os.tmpdir(), `belief-custom-cases-${Date.now()}.json`);
+    fs.writeFileSync(
+      customPath,
+      JSON.stringify([
+        {
+          id: "bronze_citation_only",
+          description: "custom path case",
+          expectations: { outboundReceiptAction: "dropped" },
+        },
+      ]),
+      "utf8"
+    );
+    const prev = process.env.BELIEF_PROMOTION_EVAL_CASES_PATH;
+    process.env.BELIEF_PROMOTION_EVAL_CASES_PATH = customPath;
+    const cases = loadBeliefPromotionEvalCases();
+    expect(cases).toHaveLength(1);
+    expect(cases[0]?.id).toBe("bronze_citation_only");
+    if (prev === undefined) delete process.env.BELIEF_PROMOTION_EVAL_CASES_PATH;
+    else process.env.BELIEF_PROMOTION_EVAL_CASES_PATH = prev;
+    fs.unlinkSync(customPath);
   });
 });

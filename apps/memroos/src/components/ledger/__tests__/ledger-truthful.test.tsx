@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LedgerAnalyticsPanel } from "../analytics-panel";
 import { ModelRoutingPanel } from "../model-routing-panel";
@@ -126,6 +126,91 @@ describe("Ledger truthful metric rendering", () => {
 
       expect(screen.getAllByText(/error/i).length).toBeGreaterThan(0);
       expect(document.querySelectorAll('[data-routing-metric-status="error"]').length).toBeGreaterThan(0);
+    });
+
+    it("renders live routing metrics, recommendations, and eval dimensions", () => {
+      apiMock.useModelRoutingDashboard.mockReturnValue({
+        data: {
+          events: [],
+          summary: {
+            totalRuns: 12,
+            successfulRuns: 10,
+            successRate: 0.83,
+            averageQuality: 0.91,
+            averageLatencyMs: 240,
+          },
+          timestamp: "2026-05-21T00:00:00.000Z",
+        },
+        isLoading: false,
+        error: null,
+      });
+      apiMock.useModelRoutingRecommendations.mockReturnValue({
+        data: {
+          taskType: "engineering",
+          strategy: "balanced",
+          recommendations: [
+            {
+              provider: "anthropic",
+              model: "claude-sonnet-4-6",
+              score: 0.88,
+              label: "balanced pick",
+              observations: 4,
+              averageQuality: 0.9,
+            },
+          ],
+          timestamp: "2026-05-21T00:00:00.000Z",
+        },
+        isLoading: false,
+        error: null,
+      });
+      apiMock.useModelRoutingEvals.mockReturnValue({
+        data: {
+          dimensions: [{ id: "latency", label: "Latency", rubric: "Lower is better" }],
+          referenceTasks: [],
+          summary: null,
+          timestamp: "2026-05-21T00:00:00.000Z",
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ModelRoutingPanel />);
+
+      expect(screen.getByText("12")).toBeInTheDocument();
+      expect(screen.getByText("83%")).toBeInTheDocument();
+      expect(screen.getByText("0.91")).toBeInTheDocument();
+      expect(screen.getByText("240ms")).toBeInTheDocument();
+      expect(screen.getByText("claude-sonnet-4-6")).toBeInTheDocument();
+      expect(screen.getAllByText("Latency").length).toBeGreaterThan(0);
+      expect(screen.getByText("Lower is better")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "sales" }));
+      fireEvent.click(screen.getByRole("button", { name: "latency" }));
+      expect(document.querySelector('[data-routing-scope="taskType=sales,strategy=latency"]')).toBeTruthy();
+    });
+
+    it("shows loading and empty recommendation states", () => {
+      apiMock.useModelRoutingDashboard.mockReturnValue({
+        data: undefined,
+        isLoading: true,
+        error: null,
+      });
+      apiMock.useModelRoutingRecommendations.mockReturnValue({
+        data: { taskType: "engineering", strategy: "balanced", recommendations: [], timestamp: "2026-05-21T00:00:00.000Z" },
+        isLoading: false,
+        error: null,
+      });
+      apiMock.useModelRoutingEvals.mockReturnValue({
+        data: { dimensions: [], referenceTasks: [], summary: null, timestamp: "2026-05-21T00:00:00.000Z" },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ModelRoutingPanel />);
+
+      expect(screen.getAllByText("loading").length).toBeGreaterThan(0);
+      expect(screen.getByText(/No recommendations available/i)).toBeInTheDocument();
+      expect(screen.getByText(/No eval dimensions configured/i)).toBeInTheDocument();
     });
   });
 

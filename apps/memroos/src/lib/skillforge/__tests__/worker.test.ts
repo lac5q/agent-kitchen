@@ -1,6 +1,6 @@
 // @vitest-environment node
 import Database from "better-sqlite3";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { initSchema } from "@/lib/db-schema";
 import { SkillForgeWorker } from "../worker";
 import { DEFAULT_SKILLFORGE_CONFIG } from "../types";
@@ -138,5 +138,65 @@ describe("SkillForge Worker", () => {
     const worker = new SkillForgeWorker(bare, DEFAULT_SKILLFORGE_CONFIG);
     expect(worker.getStatus()).toEqual({ lastRun: null, status: null, entriesProcessed: 0 });
     bare.close();
+  });
+
+  it("returns failure status when the intake pipeline throws before proposals", async () => {
+    const intake = await import("../intake");
+    const spy = vi.spyOn(intake, "runIntakePipeline").mockImplementation(() => {
+      throw new Error("intake exploded");
+    });
+    try {
+      const worker = new SkillForgeWorker(db, DEFAULT_SKILLFORGE_CONFIG);
+      const result = await worker.run();
+      expect(result.status).toBe("failure");
+      expect(result.errors[0]).toContain("intake exploded");
+      expect(result.proposalsCreated).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("returns partial status when proposal persistence fails after proposals are built", async () => {
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO skill_registry (name, source_harness, dispatch_status, version, imported_by, imported_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run("persist-fail-skill", "codex", "enabled", "1.0.0", "test", now);
+
+    const editGenerator = await import("../edit-generator");
+    const proposal = await import("../proposal");
+    vi.spyOn(editGenerator, "generateEditProposals").mockReturnValue([
+      {
+        id: "sf-prop-partial",
+        sealProposalId: null,
+        sourceSkillId: "persist-fail-skill",
+        sourceVersion: "1.0.0",
+        proposedDiff: "diff",
+        status: "pending_approval",
+        trainSplitId: null,
+        validationResults: null,
+        heldOutResults: null,
+        wDelta: null,
+        rejectedEdits: [],
+        residualRisks: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    const persistSpy = vi.spyOn(proposal, "persistProposals").mockImplementation(() => {
+      throw new Error("persist exploded");
+    });
+    try {
+      const worker = new SkillForgeWorker(db, {
+        ...DEFAULT_SKILLFORGE_CONFIG,
+        minTraceAgeHours: 0,
+      });
+      const result = await worker.run();
+      expect(result.status).toBe("partial");
+      expect(result.proposalsCreated).toBe(1);
+      expect(result.errors[0]).toContain("persist exploded");
+    } finally {
+      persistSpy.mockRestore();
+    }
   });
 });
