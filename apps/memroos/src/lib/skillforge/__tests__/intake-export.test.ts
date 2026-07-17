@@ -185,6 +185,133 @@ describe("VAL-SKILL-036 state machine blocks repeated actions and failed eval", 
   });
 });
 
+describe("VAL-SKILL-036 hash helpers and listing", () => {
+  it("computeEvaluationHash is stable for the same receipt JSON", async () => {
+    const { computeEditHash, computeEvaluationHash } = await import("../intake-export");
+    const receipt = JSON.stringify({ verdict: "pass", score: 1 });
+    expect(computeEvaluationHash(receipt)).toBe(computeEvaluationHash(receipt));
+    expect(computeEditHash("## Preconditions\nnone")).toHaveLength(64);
+  });
+
+  it("listIntakeProposals filters by state and returns newest first", async () => {
+    const { intakeProposal, advanceProposalState, listIntakeProposals } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "list-pending",
+      sourceSkillId: "skill-500",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\npending",
+      actor: "operator",
+    });
+    intakeProposal(db, {
+      proposalId: "list-rejected",
+      sourceSkillId: "skill-501",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nrejected",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "list-rejected", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "list-rejected", actor: "operator", toState: "rejected" });
+
+    const pending = listIntakeProposals(db, { state: "intake_pending" });
+    expect(pending.some((row) => row.proposalId === "list-pending")).toBe(true);
+    expect(pending.some((row) => row.proposalId === "list-rejected")).toBe(false);
+
+    const all = listIntakeProposals(db, { limit: 10 });
+    expect(all.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("isAuthoritative is true only for approved, applied, and exported states", async () => {
+    const { isAuthoritative } = await import("../intake-export");
+    expect(isAuthoritative("approved")).toBe(true);
+    expect(isAuthoritative("applied")).toBe(true);
+    expect(isAuthoritative("exported")).toBe(true);
+    expect(isAuthoritative("intake_pending")).toBe(false);
+    expect(isAuthoritative("rejected")).toBe(false);
+  });
+
+  it("intakeProposal validates required fields", async () => {
+    const { intakeProposal, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "",
+        sourceSkillId: "skill-502",
+        sourceVersion: "1.0.0",
+        proposedDiff: "## Preconditions\nnone",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("advanceProposalState appends notes and exported proposals stay terminal", async () => {
+    const {
+      intakeProposal,
+      advanceProposalState,
+      exportProposal,
+      loadIntakeRow,
+      SkillForgeIntakeError,
+    } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "note-export",
+      sourceSkillId: "skill-503",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "analyzing", note: "first note" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "approved" });
+    exportProposal(db, {
+      proposalId: "note-export",
+      runtimeSkillId: "skill-503",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-503",
+      actor: "operator",
+    });
+    const exported = loadIntakeRow(db, "note-export");
+    expect(exported?.notes).toContain("first note");
+    expect(exported?.state).toBe("exported");
+    expect(() =>
+      advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "analyzing" })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("rollback on already rolled back export returns status_only", async () => {
+    const { intakeProposal, advanceProposalState, exportProposal, rollbackExport } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "double-rollback",
+      sourceSkillId: "skill-504",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "approved" });
+    exportProposal(db, {
+      proposalId: "double-rollback",
+      runtimeSkillId: "skill-504",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-504",
+      actor: "operator",
+    });
+    const first = rollbackExport(db, {
+      proposalId: "double-rollback",
+      actor: "operator",
+      reason: "first rollback",
+    });
+    expect(first.outcome).toBe("restored");
+    const second = rollbackExport(db, {
+      proposalId: "double-rollback",
+      actor: "operator",
+      reason: "second rollback",
+    });
+    expect(second.outcome).toBe("status_only");
+    expect(second.reason).toMatch(/applied|already rolled back|no prior runtime export/i);
+  });
+});
+
 describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approved", () => {
   it("exportProposal refuses a non-authoritative proposal (no auto-export from approval)", async () => {
     const { intakeProposal, exportProposal, SkillForgeIntakeError } = await import(

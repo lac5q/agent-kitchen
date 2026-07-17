@@ -107,6 +107,96 @@ async function loadPostRouteWithAnthropicSuccess() {
   return import("../route");
 }
 
+async function loadPostRouteWithOpenCodeRssExceeded() {
+  vi.resetModules();
+  vi.stubEnv("AGENT_CONFIGS_PATH", agentConfigsPath);
+  vi.stubEnv("PMO_AGENT_CONFIGS_PATH", pmoAgentsPath);
+  vi.stubEnv("PMO_MODEL_ROUTING_PATH", pmoModelRoutingPath);
+  vi.stubEnv("SQLITE_DB_PATH", testDbPath);
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+  vi.stubEnv("MEMROOS_ENABLE_OPENCODE", "true");
+  vi.stubEnv("MEMROOS_OPENCODE_MAX_RSS_MB", "1");
+  vi.stubEnv("MEMROOS_OPENCODE_RSS_POLL_MS", "10");
+  vi.doMock("@anthropic-ai/sdk", () => ({
+    default: class MockAnthropic {
+      messages = {
+        stream: vi.fn(async () => {
+          throw new Error("anthropic should not run");
+        }),
+      };
+    },
+  }));
+  vi.doMock("child_process", async () => {
+    const { EventEmitter } = await import("events");
+    return {
+      execFile: vi.fn((_cmd: string, _args: string[], _opts: unknown, callback?: (error: Error | null, stdout: string) => void) => {
+        callback?.(null, "12345 1 2048000\n");
+      }),
+      spawn: vi.fn(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter;
+          stderr: EventEmitter;
+          pid: number;
+          exitCode: number | null;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.pid = 12345;
+        child.exitCode = null;
+        queueMicrotask(() => {
+          child.stdout.emit("data", Buffer.from("partial output before rss stop"));
+        });
+        setTimeout(() => {
+          child.exitCode = null;
+          child.emit("close", null, "SIGTERM");
+        }, 40);
+        return child;
+      }),
+    };
+  });
+  return import("../route");
+}
+
+async function loadPostRouteWithOpenCodeBusySlot() {
+  vi.resetModules();
+  vi.stubEnv("AGENT_CONFIGS_PATH", agentConfigsPath);
+  vi.stubEnv("PMO_AGENT_CONFIGS_PATH", pmoAgentsPath);
+  vi.stubEnv("PMO_MODEL_ROUTING_PATH", pmoModelRoutingPath);
+  vi.stubEnv("SQLITE_DB_PATH", testDbPath);
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+  vi.stubEnv("MEMROOS_ENABLE_OPENCODE", "true");
+  vi.stubEnv("MEMROOS_OPENCODE_MAX_CONCURRENT", "1");
+  vi.doMock("@anthropic-ai/sdk", () => ({
+    default: class MockAnthropic {
+      messages = {
+        stream: vi.fn(async () => {
+          throw new Error("anthropic should not run");
+        }),
+      };
+    },
+  }));
+  vi.doMock("child_process", async () => {
+    const { EventEmitter } = await import("events");
+    return {
+      execFile: vi.fn(),
+      spawn: vi.fn(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter;
+          stderr: EventEmitter;
+          pid: number;
+          exitCode: number | null;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.pid = 54321;
+        child.exitCode = null;
+        return child;
+      }),
+    };
+  });
+  return import("../route");
+}
+
 async function loadPostRouteWithContextFailure(errorMessage: string) {
   vi.resetModules();
   vi.stubEnv("AGENT_CONFIGS_PATH", agentConfigsPath);
@@ -690,4 +780,107 @@ describe("chat route model resolution", () => {
     expect(res.status).toBe(200);
     expect(text).toContain("opencode model unavailable");
   });
+
+  it("humanizes unregistered agent ids in the generic local fallback", async () => {
+    const { POST } = await loadPostRouteWithAnthropicFailure("provider unavailable");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "beta_tester",
+        message: "Give me a one-line status update.",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    const text = await readStream(res);
+
+    expect(res.status).toBe(200);
+    expect(text).toContain("Beta Tester local response");
+  });
+
+  it("records operator question telemetry for question-like prompts without a question mark", async () => {
+    const { POST } = await loadPostRouteWithAnthropicFailure("usage limit exceeded (2056)");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "ceo",
+        taskId: "operator-what-1",
+        message: "What changed in the rollout plan",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    await readStream(res);
+
+    const { getDb } = await import("@/lib/db");
+    const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");
+    const events = listEfficiencyEvents(getDb(), {
+      eventType: "operator_question",
+      taskId: "operator-what-1",
+    });
+
+    expect(res.status).toBe(200);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload).toMatchObject({
+      questionText: "What changed in the rollout plan",
+      priorAnswerMatch: false,
+    });
+  });
+
+  it("stops OpenCode when process-tree RSS exceeds the configured limit", async () => {
+    mkdirSync(path.join(pmoAgentsPath, "alba"), { recursive: true });
+    writeFileSync(path.join(pmoAgentsPath, "alba", "AGENTS.md"), "# Alba\n");
+    await registerTestAgent({
+      id: "alba",
+      name: "Alba",
+      role: "Head Chef",
+      platform: "hermes",
+    });
+    const { POST } = await loadPostRouteWithOpenCodeRssExceeded();
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "alba",
+        message: "status check",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    const text = await readStream(res);
+
+    expect(res.status).toBe(200);
+    expect(text).toMatch(/exceeded 1MB RSS|partial output before rss stop/);
+  });
+
+  it("returns a busy error when OpenCode concurrency is saturated", async () => {
+    mkdirSync(path.join(pmoAgentsPath, "alba"), { recursive: true });
+    writeFileSync(path.join(pmoAgentsPath, "alba", "AGENTS.md"), "# Alba\n");
+    await registerTestAgent({
+      id: "alba",
+      name: "Alba",
+      role: "Head Chef",
+      platform: "hermes",
+    });
+    const { POST } = await loadPostRouteWithOpenCodeBusySlot();
+
+    const first = POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ agentId: "alba", message: "first", history: [] }),
+      headers: { "content-type": "application/json" },
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const secondRes = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ agentId: "alba", message: "second", history: [] }),
+      headers: { "content-type": "application/json" },
+    }));
+    const secondText = await readStream(secondRes);
+
+    expect(secondRes.status).toBe(200);
+    expect(secondText).toMatch(/OpenCode chat runner is busy/);
+    await first;
+  }, 10_000);
 });

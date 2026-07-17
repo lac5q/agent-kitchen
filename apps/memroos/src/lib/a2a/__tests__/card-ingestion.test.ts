@@ -158,4 +158,73 @@ describe("A2A card ingestion", () => {
 
     expect(agent.id).toBe(expected);
   });
+
+  it("rejects oversized, invalid, and non-ok fetch responses", async () => {
+    const { fetchA2aAgentCard, isAllowedAgentCardUrl } = await loadIngestion();
+    const publicCardUrl = "https://agent.example.test/.well-known/agent-card.json";
+    expect(isAllowedAgentCardUrl(publicCardUrl)).toBe(true);
+
+    if (!("timeout" in AbortSignal)) {
+      Object.defineProperty(AbortSignal, "timeout", {
+        value: (ms: number) => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), ms);
+          return controller.signal;
+        },
+      });
+    }
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404 })));
+    await expect(fetchA2aAgentCard(publicCardUrl)).rejects.toMatchObject({
+      message: "A2A agent card could not be fetched",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify(ADK_CARD), {
+          status: 200,
+          headers: { "content-length": String(300_000) },
+        })
+      )
+    );
+    await expect(fetchA2aAgentCard(publicCardUrl)).rejects.toMatchObject({
+      message: "A2A agent card response is too large",
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{not-json", { status: 200 })));
+    await expect(fetchA2aAgentCard(publicCardUrl)).rejects.toMatchObject({
+      message: "A2A agent card response is not valid JSON",
+    });
+  });
+
+  it("ingests non-ADK cards as openclaw agents with stable memroos ids", async () => {
+    const card = {
+      ...ADK_CARD,
+      name: "OpenClaw Agent",
+      url: "https://agent.example.test/v1",
+      extensions: { memroos: { id: "memroos-remote-1", profile: "custom", cardPaths: { canonical: "", compatibility: "" } } },
+      skills: [{ id: "search", name: "Search", description: "Search the web", tags: ["web"] }],
+    };
+    mockFetchCard(card);
+    const { ingestA2aAgentCard } = await loadIngestion();
+
+    const { agent } = await ingestA2aAgentCard({
+      cardUrl: "https://agent.example.test/.well-known/agent-card.json",
+      source: "a2a",
+    });
+
+    expect(agent.platform).toBe("openclaw");
+    expect(agent.id).toBe("memroos-remote-1");
+    expect(agent.location).toBe("cloudflare");
+    expect(agent.capabilities[0]?.tags).toEqual(expect.arrayContaining(["a2a"]));
+  });
+
+  it("rejects invalid card payloads during validation", async () => {
+    const { validateA2aAgentCard } = await loadIngestion();
+
+    expect(() => validateA2aAgentCard(null)).toThrow(/must be an object/);
+    expect(() => validateA2aAgentCard({ ...ADK_CARD, url: "not-a-url" })).toThrow(/valid URL/);
+    expect(() => validateA2aAgentCard({ ...ADK_CARD, version: "" })).toThrow(/version/i);
+  });
 });

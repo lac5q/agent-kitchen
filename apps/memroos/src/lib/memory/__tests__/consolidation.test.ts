@@ -241,4 +241,62 @@ describe("VAL-MEM-025: consolidation failure and replay are safe", () => {
     expect(result.status).toBe("failed");
     expect(result.failureReason).toBe("provider_returned_empty");
   });
+
+  it("treats decay_protected and protected classification flags as protected sources", async () => {
+    const database = freshDb();
+    const decayProtected = makeSource({
+      canonicalId: "canon_decay_protected",
+      classification: { visibility: "internal", policy: "sealed", decay_protected: true },
+    });
+    const protectedFlag = makeSource({
+      canonicalId: "canon_protected_flag",
+      classification: { visibility: "internal", policy: "sealed", protected: true },
+    });
+    const result = await runConsolidationCycle(database, {
+      runKey: "run-protected-flags",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      sources: [decayProtected, protectedFlag],
+      actorId: "operator",
+    });
+    expect(result.considered).toBe(2);
+    expect(result.protected).toBe(2);
+    expect(result.eligible).toBe(0);
+    expect(result.status).toBe("skipped_empty");
+  });
+
+  it("vault replay mismatch records durability failure and leaves no summary", async () => {
+    vi.resetModules();
+    const vaultWriter = await import("@/lib/vault/writer");
+    const originalWrite = vaultWriter.writeVaultArtifact;
+    const writeSpy = vi.spyOn(vaultWriter, "writeVaultArtifact").mockImplementation((dbHandle, opts) => {
+      const written = originalWrite(dbHandle, opts);
+      const row = dbHandle
+        .prepare("SELECT artifact_path FROM raw_artifacts WHERE id = ?")
+        .get(written.id) as { artifact_path: string };
+      const absolute = path.join(VAULT_ROOT, "default-tenant", row.artifact_path);
+      fs.writeFileSync(absolute, Buffer.from("tampered-vault-bytes"));
+      return written;
+    });
+
+    const database = freshDb();
+    const source = makeSource({ canonicalId: "canon_vault_replay" });
+    const { runConsolidationCycle: runCycle } = await import("../consolidation");
+    const result = await runCycle(database, {
+      runKey: "run-vault-replay-fail",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      sources: [source],
+      actorId: "operator",
+    });
+
+    writeSpy.mockRestore();
+
+    expect(result.status).toBe("failed");
+    expect(result.failureReason).toMatch(/vault_replay_failed/);
+    expect(result.summaryId).toBeNull();
+    const durability = database
+      .prepare("SELECT replay_state, failure_reason FROM memory_vault_durability ORDER BY created_at DESC LIMIT 1")
+      .get() as { replay_state: string; failure_reason: string } | undefined;
+    expect(durability?.replay_state).toBe("failed");
+    expect(durability?.failure_reason).toMatch(/vault_replay_failed/);
+  });
 });

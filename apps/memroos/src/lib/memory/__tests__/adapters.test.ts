@@ -8,9 +8,14 @@
  *   implementing the interface. search(), write(), health() contract is satisfied.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MemoryAdapter, MemorySearchResult } from "../adapter";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("MemoryAdapter interface contract (MEM-06)", () => {
   it("MemoryAdapter interface has no getClient method — client handle leakage is forbidden", async () => {
@@ -96,5 +101,82 @@ describe("Concrete adapter search/write/health contract (MEM-08)", () => {
     expect(adapter.tiers).toContain("graph");
     expect(adapter["getClient"]).toBeUndefined(); // MEM-06
     expect(adapter["driver"]).toBeUndefined(); // MEM-06
+  });
+
+  it("VectorMemoryAdapter normalizes mem0 search results and writes through HTTP", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes("/memory/search")) {
+          return Response.json({
+            results: [{ id: "m1", memory: "vector hit", score: 0.88 }],
+          });
+        }
+        if (String(url).includes("/memory/add")) {
+          expect(init?.method).toBe("POST");
+          return new Response(null, { status: 201 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const { VectorMemoryAdapter } = await import("../backends");
+    const adapter = new VectorMemoryAdapter();
+    const results = await adapter.search("roadmap", 3);
+    expect(results).toEqual([
+      expect.objectContaining({ id: "m1", content: "vector hit", score: 0.88 }),
+    ]);
+    await expect(adapter.write({ content: "new memory" })).resolves.toBeUndefined();
+  });
+
+  it("GraphMemoryAdapter reports not_configured when Neo4j password is missing", async () => {
+    const originalPassword = process.env.NEO4J_PASSWORD;
+    delete process.env.NEO4J_PASSWORD;
+    const { GraphMemoryAdapter } = await import("../backends");
+    const adapter = new GraphMemoryAdapter();
+    const health = await adapter.health();
+    expect(health).toMatchObject({ tier: "graph", backend: "neo4j", status: "not_configured" });
+    if (originalPassword !== undefined) process.env.NEO4J_PASSWORD = originalPassword;
+  });
+
+  it("EpisodicMemoryAdapter health reports sqlite message count", async () => {
+    const { EpisodicMemoryAdapter } = await import("../backends");
+    const { getDb } = await import("@/lib/db");
+    const { initSchema } = await import("@/lib/db-schema");
+    const database = getDb();
+    initSchema(database);
+    const adapter = new EpisodicMemoryAdapter(() => database);
+    const health = await adapter.health();
+    expect(health).toMatchObject({
+      tier: "episodic",
+      backend: "sqlite-fts5",
+      status: "up",
+    });
+    expect(typeof health.count).toBe("number");
+  });
+
+  it("GraphMemoryAdapter normalizes Neo4j rows and writes through mem0 HTTP", async () => {
+    process.env.NEO4J_PASSWORD = "graph-pass";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes("/tx/commit")) {
+          return Response.json({
+            results: [{ data: [{ row: [{ title: "Graph Node" }, ["REL"], []] }] }],
+          });
+        }
+        if (String(url).includes("/memory/add")) {
+          expect(init?.method).toBe("POST");
+          return new Response(null, { status: 201 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const { GraphMemoryAdapter } = await import("../backends");
+    const adapter = new GraphMemoryAdapter();
+    const results = await adapter.search("graph", 2);
+    expect(results[0]?.content).toBe("Graph Node");
+    await expect(adapter.write({ content: "graph edge" })).resolves.toBeUndefined();
   });
 });

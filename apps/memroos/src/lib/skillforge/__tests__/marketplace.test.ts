@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import { publishSkill, searchListings, submitReview, recordDownload, deprecateSkill } from "../marketplace";
+import { publishSkill, searchListings, submitReview, recordDownload, deprecateSkill, checkDispatchEligibility, publishGovernedSkill } from "../marketplace";
 
 function setupDb(): Database.Database {
   const db = new Database(":memory:");
@@ -121,5 +121,98 @@ describe("marketplace", () => {
 
     const results = searchListings(db, {});
     expect(results.total).toBe(0);
+  });
+
+  it("searches with category, minRating, and sortBy downloads", () => {
+    registerSkill(db, "sort-a");
+    registerSkill(db, "sort-b");
+    const pubA = publishSkill(db, { skillId: "sort-a", name: "Alpha Tool", description: "First", author: "a", tags: [], category: "tools", changelog: "" });
+    publishSkill(db, { skillId: "sort-b", name: "Beta Tool", description: "Second", author: "a", tags: [], category: "other", changelog: "" });
+    submitReview(db, pubA.listingId!, { reviewer: "u1", rating: 5, text: "Great", verified: true });
+    recordDownload(db, pubA.listingId!);
+    recordDownload(db, pubA.listingId!);
+
+    const byCategory = searchListings(db, { category: "tools" });
+    expect(byCategory.total).toBe(1);
+    expect(byCategory.listings[0].name).toBe("Alpha Tool");
+
+    const byRating = searchListings(db, { minRating: 4 });
+    expect(byRating.total).toBe(1);
+
+    const byDownloads = searchListings(db, { sortBy: "downloads" });
+    expect(byDownloads.listings[0].downloadCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("checkDispatchEligibility reports missing registry rows and disabled dispatch", () => {
+    const enabledRow = db.prepare(
+      `SELECT id, name, source_harness, dispatch_status, completeness_pct, lifecycle_state, content_hash, raw_body, signature, version
+         FROM skill_registry WHERE name = ?`
+    ).get("s1") as {
+      id: number;
+      name: string;
+      source_harness: string;
+      dispatch_status: string | null;
+      completeness_pct: number | null;
+      lifecycle_state: string | null;
+      content_hash: string | null;
+      raw_body: string | null;
+      signature: string | null;
+      version: string | null;
+    } | undefined;
+    registerSkill(db, "dispatch-check");
+    const row = db.prepare(
+      `SELECT id, name, source_harness, dispatch_status, completeness_pct, lifecycle_state, content_hash, raw_body, signature, version
+         FROM skill_registry WHERE name = ?`
+    ).get("dispatch-check") as NonNullable<typeof enabledRow>;
+    expect(checkDispatchEligibility(row).eligible).toBe(true);
+    expect(checkDispatchEligibility(null).eligible).toBe(false);
+
+    db.prepare(`UPDATE skill_registry SET dispatch_status = 'disabled' WHERE name = ?`).run("dispatch-check");
+    const disabled = db.prepare(
+      `SELECT id, name, source_harness, dispatch_status, completeness_pct, lifecycle_state, content_hash, raw_body, signature, version
+         FROM skill_registry WHERE name = ?`
+    ).get("dispatch-check") as NonNullable<typeof enabledRow>;
+    expect(checkDispatchEligibility(disabled).eligible).toBe(false);
+    void enabledRow;
+  });
+
+  it("publishGovernedSkill resolves numeric registry ids", () => {
+    registerSkill(db, "numeric-skill", "2.1.0");
+    const registryId = db.prepare(`SELECT id FROM skill_registry WHERE name = ?`).get("numeric-skill") as { id: number };
+    const result = publishGovernedSkill(
+      db,
+      String(registryId.id),
+      {
+        name: "Numeric Skill",
+        description: "Published by registry id",
+        author: "tester",
+        tags: ["numeric"],
+        category: "testing",
+        changelog: "by id",
+      }
+    );
+    expect(result.success).toBe(true);
+    const listing = db.prepare(`SELECT skill_id, version FROM skill_marketplace WHERE id = ?`).get(result.listingId!) as {
+      skill_id: string;
+      version: string;
+    };
+    expect(listing.skill_id).toBe(String(registryId.id));
+    expect(listing.version).toBe("2.1.0");
+  });
+
+  it("searchListings tolerates invalid tags JSON", () => {
+    registerSkill(db, "bad-tags");
+    const pub = publishSkill(db, {
+      skillId: "bad-tags",
+      name: "Bad Tags",
+      description: "Desc",
+      author: "a",
+      tags: ["x"],
+      category: "cat",
+      changelog: "",
+    });
+    db.prepare(`UPDATE skill_marketplace SET tags = 'not-json' WHERE id = ?`).run(pub.listingId!);
+    const results = searchListings(db, { query: "Bad Tags" });
+    expect(results.listings[0].tags).toEqual([]);
   });
 });

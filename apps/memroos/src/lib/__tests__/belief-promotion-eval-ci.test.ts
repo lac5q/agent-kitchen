@@ -9,7 +9,10 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { initSchema } from "../db-schema";
-import { runBeliefPromotionEvalSuite } from "../evals/belief-promotion-eval";
+import {
+  loadBeliefPromotionEvalCases,
+  runBeliefPromotionEvalSuite,
+} from "../evals/belief-promotion-eval";
 
 describe("BELIEF-05 promotion eval CI canary", () => {
   let db: Database.Database | undefined;
@@ -41,5 +44,28 @@ describe("BELIEF-05 promotion eval CI canary", () => {
       "receipt_exposes_stage",
       "unsupported_silver_never_truth",
     ]);
+  });
+
+  it("loadBeliefPromotionEvalCases reads the committed cases file", () => {
+    const cases = loadBeliefPromotionEvalCases();
+    expect(cases.length).toBeGreaterThanOrEqual(5);
+    expect(cases.every((c) => typeof c.id === "string" && c.expectations)).toBe(true);
+  });
+
+  it("reports failure when no db is injected into the runner", async () => {
+    const run = await runBeliefPromotionEvalSuite({ mode: "gold" });
+    expect(run.pass).toBe(false);
+    expect(run.cases.every((c) => c.reason === "no db provided to runner")).toBe(true);
+  });
+
+  it("full mode includes every case in the cases file", async () => {
+    db = new Database(":memory:");
+    initSchema(db);
+    const allCases = loadBeliefPromotionEvalCases();
+    const run = await runBeliefPromotionEvalSuite({ mode: "full", db });
+    expect(run.mode).toBe("full");
+    expect(run.summary.totalCases).toBe(allCases.length);
+    expect(run.summary.failedCases).toBe(0);
+    expect(run.pass).toBe(true);
   });
 });

@@ -658,6 +658,75 @@ describe("memory eval persistence", () => {
     vi.restoreAllMocks();
     fs.rmSync(casesPath, { force: true });
   });
+
+  it("posts hive alerts for failed runs when alerting is enabled", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-alert-${Date.now()}.json`);
+    fs.writeFileSync(casesPath, JSON.stringify([{
+      id: "alert-case",
+      layer: "gold",
+      scenario: "forced failure",
+      agentId: "codex",
+      taskPrompt: "Recall billing context.",
+      expectedFacts: ["billing sync decision"],
+      expectedTiers: ["graph"],
+      requiredTiming: "before_plan",
+    }]));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+
+    const hiveDir = path.join(os.tmpdir(), `hive-alert-${Date.now()}`);
+    fs.mkdirSync(hiveDir, { recursive: true });
+    const hivePost = path.join(hiveDir, "post.sh");
+    fs.writeFileSync(hivePost, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const originalHome = process.env.HOME;
+    process.env.HOME = hiveDir;
+    delete process.env.MEMORY_EVAL_HIVE_ALERTS;
+
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockRejectedValue(new Error("graph offline"));
+
+    const { runMemoryRecallEvalSuite: runSuite } = await import("../memory-recall-evals");
+    const run = await runSuite({ mode: "gold", db });
+    expect(run.status).toBe("failed");
+
+    process.env.HOME = originalHome;
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
+    fs.rmSync(hiveDir, { recursive: true, force: true });
+  });
+
+  it("waits for queued vector writes before scoring episodic fixtures", async () => {
+    const casesPath = path.join(os.tmpdir(), `memory-recall-queued-${Date.now()}.json`);
+    fs.writeFileSync(casesPath, JSON.stringify([{
+      id: "queued-vector",
+      layer: "gold",
+      scenario: "queued vector write",
+      agentId: "codex",
+      taskPrompt: "Recall billing context.",
+      expectedFacts: ["billing sync decision"],
+      expectedTiers: ["vector"],
+      requiredTiming: "before_plan",
+      fixtures: [{ id: "queued-fixture", tier: "vector", content: "billing sync decision for April" }],
+    }]));
+    process.env.MEMORY_RECALL_EVAL_CASES_PATH = casesPath;
+    process.env.MEMORY_EVAL_VECTOR_SETTLE_TIMEOUT_MS = "200";
+    process.env.MEMORY_EVAL_VECTOR_SETTLE_POLL_MS = "25";
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "queued" }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({
+        results: [{ id: "queued-fixture", memory: "billing sync decision for April", metadata: { eval_id: "queued-fixture" } }],
+      }), { status: 200 }));
+
+    const run = await runMemoryRecallEvalSuite({ mode: "gold", db });
+    expect(run.results[0]?.tiers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tier: "vector", ok: true }),
+    ]));
+
+    delete process.env.MEMORY_EVAL_VECTOR_SETTLE_TIMEOUT_MS;
+    delete process.env.MEMORY_EVAL_VECTOR_SETTLE_POLL_MS;
+    vi.restoreAllMocks();
+    fs.rmSync(casesPath, { force: true });
+  });
 });
 
 describe("loadMemoryRecallEvalCases", () => {

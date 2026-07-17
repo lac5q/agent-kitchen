@@ -448,6 +448,64 @@ describe("ontology registry validation", () => {
     expect(retired.lifecycleState).toBe("retired");
   });
 
+  it("rejects pack relationship mismatches, duplicate relationships, and invalid coordinates", async () => {
+    const { mod, ontology } = await canonical();
+    const base = mod.registerDomainPack(db, {
+      namespace: "rel.base", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_base", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_base"] },
+      ontology: { id: ontology.ontologyId, version: ontology.version, contentHash: ontology.contentHash },
+      types: [packType(ontology, "rel.base.record")], actor: "operator",
+    });
+    mod.transitionDomainPack(db, { packId: base.id, toState: "approved", actor: "operator" });
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.bad-parent", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_bad_parent", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_bad_parent"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.bad-parent.child")],
+      relationships: [{ from: "rel.bad-parent.child", to: "person", type: "is_a" }],
+      actor: "operator",
+    })).toThrow(/preserve the declared inherited parent/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.duplicate", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_duplicate", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_duplicate"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.duplicate.child")],
+      relationships: [
+        { from: "rel.duplicate.child", to: "entity", type: "is_a" },
+        { from: "rel.duplicate.child", to: "entity", type: "is_a" },
+      ],
+      actor: "operator",
+    })).toThrow(/Duplicate pack relationship/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.missing", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_missing", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_missing"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.missing.child")],
+      relationships: [],
+      actor: "operator",
+    })).toThrow(/preserve its inherited is_a relationship/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "coords.bad", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_coords_bad", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_coords_bad"] },
+      ontology: null as never,
+      types: [packType(ontology, "coords.bad.child")],
+      actor: "operator",
+    })).toThrow(/ontology coordinates are required/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "deps.bad", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_deps_bad", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_deps_bad"] },
+      ontology: base.ontology,
+      dependencies: ["not-an-object"] as never,
+      types: [packType(ontology, "deps.bad.child")],
+      actor: "operator",
+    })).toThrow(/dependency is invalid/);
+  });
+
   it("VAL-ONTO-009 rolls back ontology publication when its paired audit row fails", async () => {
     const { mod, ontology } = await canonical();
     db.exec(`

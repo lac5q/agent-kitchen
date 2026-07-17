@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkVectorHealth } from "../backends";
+import { checkVectorHealth, searchVectorMemory } from "../backends";
+import * as registry from "../registry";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -67,5 +68,22 @@ describe("vector health disk vs vector separation", () => {
     const health = await checkVectorHealth();
     expect(health.status).toBe("degraded");
     expect(health.status).not.toBe("down");
+  });
+
+  it("searchVectorMemory falls back to the direct mem0 HTTP path when no adapter is registered", async () => {
+    const getAdaptersSpy = vi.spyOn(registry, "getAdapters").mockReturnValue([]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/memory/search")) {
+          return Response.json({ memories: [{ id: "m2", text: "direct hit" }] });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const results = await searchVectorMemory("roadmap", 2);
+    expect(results).toEqual({ memories: [{ id: "m2", text: "direct hit" }] });
+    getAdaptersSpy.mockRestore();
   });
 });
