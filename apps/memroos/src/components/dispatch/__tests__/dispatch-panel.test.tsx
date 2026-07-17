@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -87,6 +87,67 @@ function wrap(ui: React.ReactElement) {
   const qc = new QueryClient();
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
+
+describe("DispatchPanel interactions", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("submits a dispatch and shows success notice", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ mode: "direct" }),
+    } as Response);
+
+    wrap(<DispatchPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "sophia" } });
+    fireEvent.change(screen.getByPlaceholderText("Task summary…"), { target: { value: "ship fix" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Dispatch$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Dispatched successfully.")).toBeInTheDocument();
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/dispatch",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ to_agent: "sophia", task_summary: "ship fix", priority: 5 }),
+      })
+    );
+  });
+
+  it("shows queued notice when dispatch mode is queued", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ mode: "queued" }),
+    } as Response);
+
+    wrap(<DispatchPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "sophia" } });
+    fireEvent.change(screen.getByPlaceholderText("Task summary…"), { target: { value: "poll task" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Dispatch$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Queued in Hive/i)).toBeInTheDocument();
+    });
+  });
+
+  it("surfaces API errors from dispatch failures", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "agent offline" }),
+    } as Response);
+
+    wrap(<DispatchPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "sophia" } });
+    fireEvent.change(screen.getByPlaceholderText("Task summary…"), { target: { value: "fail task" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Dispatch$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("agent offline")).toBeInTheDocument();
+    });
+  });
+});
 
 describe("DispatchPanel", () => {
   it("renders dispatch form with agent selector", () => {

@@ -817,3 +817,64 @@ describe("POST /api/skills/lifecycle", () => {
     expect(json.audit.actor).toBe("alice");
   });
 });
+
+describe("lifecycle dependency helpers", () => {
+  it("removeSkillDependency deletes an existing dependency row", async () => {
+    const { addSkillDependency, removeSkillDependency, getDependents } =
+      await importLifecycleModule();
+    const id = insertSkillRow({ lifecycle_state: "enabled" });
+    addSkillDependency(db, {
+      skillId: id,
+      dependentAgentId: "agent-remove",
+      skillVersion: "1.0.0",
+      registeredBy: "alice",
+    });
+    expect(getDependents(db, id)).toHaveLength(1);
+    expect(removeSkillDependency(db, id, "agent-remove")).toBe(true);
+    expect(removeSkillDependency(db, id, "agent-remove")).toBe(false);
+    expect(getDependents(db, id)).toHaveLength(0);
+  });
+
+  it("listDeprecatedSkills derives warning levels from dependent counts", async () => {
+    const { transitionLifecycleState, addSkillDependency, listDeprecatedSkills } =
+      await importLifecycleModule();
+    const { upsertQuarantineRecord } = await importQuarantineModule();
+    const id = insertSkillRow({ lifecycle_state: "draft" });
+    upsertQuarantineRecord(db, {
+      skillId: id,
+      stage: "enabled",
+      approvalStatus: "approved",
+    });
+    transitionLifecycleState(db, id, "enabled", "alice", "enable");
+    transitionLifecycleState(db, id, "deprecated", "alice", "sunset");
+    for (let i = 0; i < 5; i += 1) {
+      addSkillDependency(db, {
+        skillId: id,
+        dependentAgentId: `agent-${i}`,
+        skillVersion: "1.0.0",
+        registeredBy: "alice",
+      });
+    }
+    const entries = listDeprecatedSkills(db, { limit: 10 });
+    const entry = entries.find((row) => row.skill_id === id);
+    expect(entry?.warning_level).toBe("critical");
+    expect(entry?.dependent_count).toBe(5);
+  });
+
+  it("addSkillDependency rejects invalid parameters", async () => {
+    const { addSkillDependency, LifecycleTransitionError } = await importLifecycleModule();
+    expect(() =>
+      addSkillDependency(db, {
+        skillId: 0,
+        dependentAgentId: "agent",
+        skillVersion: "1.0.0",
+        registeredBy: "alice",
+      })
+    ).toThrow(LifecycleTransitionError);
+  });
+
+  it("getLifecycleAuditTrail returns empty for invalid skill ids", async () => {
+    const { getLifecycleAuditTrail } = await importLifecycleModule();
+    expect(getLifecycleAuditTrail(db, { skillId: 0 })).toEqual([]);
+  });
+});

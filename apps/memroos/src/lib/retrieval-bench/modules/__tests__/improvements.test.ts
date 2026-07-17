@@ -18,6 +18,10 @@
  *   VAL-RETR-029 — replayable config
  *   VAL-RETR-030 — cross-lane/run contamination
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -41,6 +45,7 @@ import {
   performTemporalRetrieval,
   performTierFanout,
   previewSnapshot,
+  receiptLineageFor,
   reconcileStages,
   rerankCandidates,
   stageRecord,
@@ -126,6 +131,145 @@ describe("CLI parser + write guard (VAL-RETR-014)", () => {
   it("previewSnapshot reports existing files", () => {
     const snap = previewSnapshot({ paths: ["/definitely/not/a/real/path"] });
     expect(snap.ok).toBe(true);
+  });
+
+  it("parses numeric, boolean, scope, and output-dir flags", () => {
+    const r = parseCliArgs([
+      "--adapter", "lexical",
+      "--k", "5",
+      "--seed", "42",
+      "--rerank",
+      "--judge",
+      "--scope-tenant", "tenant-a",
+      "--scope-user", "user-a",
+      "--scope-agent", "agent-a",
+      "--scope-space", "space-a",
+      "--scope-label-visibility", "internal",
+      "--scope-label-policy", "agent_visible",
+      "--scope-label-domain", "ops",
+      "--scope-label-sensitivity", "low",
+      "--scope-purpose", "recall",
+      "--scope-belief-stage", "gold_claim",
+      "--output-dir", "/tmp/custom-results",
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.command).toMatchObject({
+      adapter: "lexical",
+      k: 5,
+      seed: 42,
+      rerank: true,
+      judge: true,
+      scopeTenant: "tenant-a",
+      scopeUser: "user-a",
+      scopeAgent: "agent-a",
+      scopeSpace: "space-a",
+      scopeLabelVisibility: "internal",
+      scopeLabelPolicy: "agent_visible",
+      scopeLabelDomain: "ops",
+      scopeLabelSensitivity: "low",
+      scopePurpose: "recall",
+      scopeBeliefStage: "gold_claim",
+      outputDir: "/tmp/custom-results",
+    });
+  });
+
+  it("rejects missing values for every value-bearing flag", () => {
+    const flags = [
+      "--dataset",
+      "--limit",
+      "--adapter",
+      "--k",
+      "--seed",
+      "--scope-tenant",
+      "--scope-space",
+      "--scope-user",
+      "--scope-agent",
+      "--scope-label-visibility",
+      "--scope-label-policy",
+      "--scope-label-domain",
+      "--scope-label-sensitivity",
+      "--scope-purpose",
+      "--scope-belief-stage",
+      "--output-dir",
+    ];
+    for (const flag of flags) {
+      const r = parseCliArgs([flag]);
+      expect(r.ok, flag).toBe(false);
+      expect(r.reason, flag).toContain("missing_value_for_flag");
+    }
+  });
+
+  it("rejects invalid k, limit, and negative seed values", () => {
+    expect(parseCliArgs(["--k", "0"]).reason).toBe("invalid_k:0");
+    expect(parseCliArgs(["--limit", "-3"]).reason).toContain("invalid_limit");
+    expect(parseCliArgs(["--seed", "-1"]).reason).toBe("invalid_seed:-1");
+    expect(parseCliArgs(["--k", "3.5"]).reason).toBe("invalid_k:3.5");
+  });
+
+  it("rejects live adapter scope with invalid visibility, policy, or belief stage", () => {
+    const base = [
+      "--adapter", "live",
+      "--scope-tenant", "tenant",
+      "--scope-user", "user",
+      "--scope-agent", "agent",
+      "--scope-space", "space",
+      "--scope-purpose", "memory_search",
+    ];
+    expect(parseCliArgs([
+      ...base,
+      "--scope-label-visibility", "secret",
+      "--scope-label-policy", "agent_visible",
+      "--scope-belief-stage", "gold_claim",
+    ]).reason).toBe("invalid_live_scope");
+    expect(parseCliArgs([
+      ...base,
+      "--scope-label-visibility", "internal",
+      "--scope-label-policy", "unknown_policy",
+      "--scope-belief-stage", "gold_claim",
+    ]).reason).toBe("invalid_live_scope");
+    expect(parseCliArgs([
+      ...base,
+      "--scope-label-visibility", "internal",
+      "--scope-label-policy", "agent_visible",
+      "--scope-belief-stage", "draft",
+    ]).reason).toBe("invalid_live_scope");
+  });
+
+  it("ignores positional arguments without failing", () => {
+    const r = parseCliArgs(["extra-positional", "--json"]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.command?.json).toBe(true);
+    expect(r.command?.rawArgs).toEqual(["extra-positional", "--json"]);
+  });
+
+  it("sanitizes unsafe characters in canonicalReportPath", () => {
+    expect(
+      canonicalReportPath({
+        resultsDir: "/tmp/r/",
+        dataset: "data set!!",
+        adapter: "live",
+        lane: "lane/name",
+        extension: "md",
+      }),
+    ).toBe("/tmp/r/data-set-live-lane-name-latest.md");
+  });
+
+  it("previewSnapshot flags paths that already exist", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-preview-"));
+    const file = path.join(dir, "existing.json");
+    fs.writeFileSync(file, "{}");
+    const snap = previewSnapshot({ paths: [file, path.join(dir, "missing.json")] });
+    expect(snap.ok).toBe(false);
+    expect(snap.exists).toEqual([file]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("records byte counts on blocked write attempts", () => {
+    const guard = createWriteGuard(true);
+    expect(guard.allow({ path: "/tmp/out.json", reason: "report", bytes: 128 })).toBe(false);
+    expect(guard.attempts[0]).toMatchObject({ path: "/tmp/out.json", bytes: 128, reason: "report" });
   });
 });
 
@@ -986,6 +1130,185 @@ describe("publication gate (VAL-RETR-028)", () => {
     });
     expect(r.ok).toBe(true);
     expect(r.status).toBe("ready_for_publication");
+    expect(r.decisionHash.startsWith("sha256:")).toBe(true);
+    expect(r.decidedAtIso).toEqual(expect.any(String));
+  });
+
+  it("blocks publication for malformed provenance and failed auxiliary gates", () => {
+    const cleanProvenance = {
+      configHash: "sha256:abc",
+      fixtureHash: "sha256:def",
+      seed: 0,
+      k: 3,
+      providerFlags: { rerank: false },
+    };
+    const verified = [
+      { receiptHash: "h1", chainDomain: "retrieval-bench", verified: true, verifiedAtIso: "now" },
+    ];
+
+    const missingField = evaluatePublicationGate({
+      report: baseReport,
+      provenance: { ...cleanProvenance, fixtureHash: undefined as unknown as string },
+      receiptVerifications: verified,
+    });
+    expect(missingField.caveats).toContain("missing_provenance_field:fixtureHash");
+
+    const malformed = evaluatePublicationGate({
+      report: baseReport,
+      provenance: { ...cleanProvenance, configHash: "not-a-hash" },
+      receiptVerifications: verified,
+    });
+    expect(malformed.caveats).toContain("config_hash_malformed");
+
+    const failedReceipt = evaluatePublicationGate({
+      report: baseReport,
+      provenance: cleanProvenance,
+      receiptVerifications: [
+        { receiptHash: "bad", chainDomain: "retrieval-bench", verified: false, verifiedAtIso: "now" },
+      ],
+    });
+    expect(failedReceipt.caveats.some((c) => c.startsWith("receipt_verification_failed:"))).toBe(true);
+
+    const contaminated = evaluatePublicationGate({
+      report: baseReport,
+      provenance: cleanProvenance,
+      receiptVerifications: verified,
+      contamination: { ok: false, reason: "foreign_artifact" },
+    });
+    expect(contaminated.caveats).toContain("contamination_failed:foreign_artifact");
+
+    const auditFailed = evaluatePublicationGate({
+      report: baseReport,
+      provenance: cleanProvenance,
+      receiptVerifications: verified,
+      auditPersistence: { ok: false, reasons: ["sqlite_busy"] },
+    });
+    expect(auditFailed.caveats).toContain("audit_persistence_failed:sqlite_busy");
+
+    const skippedNoWrite = evaluatePublicationGate({
+      report: baseReport,
+      provenance: cleanProvenance,
+      receiptVerifications: verified,
+      auditPersistence: { ok: true, skippedNoWrite: true },
+    });
+    expect(skippedNoWrite.caveats).toContain("audit_persistence_skipped_no_write");
+
+    const sentinel = evaluatePublicationGate({
+      report: baseReport,
+      provenance: cleanProvenance,
+      receiptVerifications: verified,
+      sentinelScan: { ok: false, violations: 2 },
+    });
+    expect(sentinel.caveats).toContain("sentinel_scan_failed:violations=2");
+  });
+
+  it("blocks publication when report metadata diverges from provenance", () => {
+    const provenance = {
+      configHash: "sha256:abc",
+      fixtureHash: "sha256:def",
+      seed: 0,
+      k: 3,
+      providerFlags: { rerank: false },
+    };
+    const verified = [
+      { receiptHash: "h", chainDomain: "retrieval-bench", verified: true, verifiedAtIso: "now" },
+    ];
+
+    expect(
+      evaluatePublicationGate({
+        report: { ...baseReport, seed: 9 },
+        provenance,
+        receiptVerifications: verified,
+      }).caveats,
+    ).toContain("report_seed_mismatch");
+
+    expect(
+      evaluatePublicationGate({
+        report: { ...baseReport, k: 5 },
+        provenance,
+        receiptVerifications: verified,
+      }).caveats,
+    ).toContain("report_k_mismatch");
+
+    expect(
+      evaluatePublicationGate({
+        report: { ...baseReport, configHash: "sha256:other" },
+        provenance,
+        receiptVerifications: verified,
+      }).caveats,
+    ).toContain("report_config_hash_mismatch");
+  });
+
+  it("buildReplayHandle inspects args, fingerprints, and provider flag mismatches", () => {
+    const handle = buildReplayHandle({
+      dataset: "locomo",
+      adapter: "lexical",
+      lane: "external_retrieval",
+      configHash: "sha256:c",
+      fixtureHash: "sha256:f",
+      seed: 0,
+      k: 3,
+      providerFlags: { rerank: true, judge: false },
+      rerankEnabled: true,
+      judgeEnabled: false,
+      retrievalPolicyVersion: "retrieval-v2",
+    });
+    expect(handle.inspect()).toMatchObject({
+      dataset: "locomo",
+      retrievalPolicyVersion: "retrieval-v2",
+      providerFlags: { rerank: true, judge: false },
+    });
+    expect(handle.fingerprint.startsWith("sha256:")).toBe(true);
+    expect(
+      handle.matches({
+        dataset: "locomo",
+        adapter: "lexical",
+        lane: "external_retrieval",
+        configHash: "sha256:c",
+        fixtureHash: "sha256:f",
+        seed: 0,
+        k: 3,
+        providerFlags: { judge: false, rerank: false },
+        rerankEnabled: true,
+        judgeEnabled: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("receiptLineageFor hashes adapter receipt stages", () => {
+    const lineage = receiptLineageFor({
+      adapterName: "lexical",
+      adapterVersion: "1",
+      status: "ok",
+      latencyMs: 1,
+      authorization: { evaluated: true, allowed: true },
+      provenance: {
+        provider: "corpus",
+        providerVersion: null,
+        retrievalPolicyVersion: "retrieval-v1",
+        configHash: "sha256:cfg",
+        fixtureHash: "sha256:fix",
+      },
+      metrics: {
+        tokensRetrieval: null,
+        tokensRerank: null,
+        tokensPack: null,
+        tokensJudge: null,
+        contextPackBytes: null,
+        contextPackHash: "sha256:pack",
+      },
+    });
+    expect(lineage.receiptHash.startsWith("sha256:")).toBe(true);
+    expect(lineage.stages).toEqual(
+      expect.arrayContaining([
+        "status:ok",
+        "provider:corpus",
+        "policy:retrieval-v1",
+        "pack:sha256:pack",
+        "config:sha256:cfg",
+        "fixture:sha256:fix",
+      ]),
+    );
   });
 });
 

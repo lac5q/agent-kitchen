@@ -480,4 +480,46 @@ describe("proxy", () => {
     expect(csp).toContain("https://fonts.googleapis.com");
     expect(csp).toContain("https://fonts.gstatic.com");
   });
+
+  it("redirects legacy memroos.dev hosts to the canonical marketing domain", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.dev/pricing", {
+        headers: { host: "memroos.dev" },
+      })
+    );
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://memroos.com/");
+  });
+
+  it("redirects unauthenticated UI routes to login", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.example.com/agents", {
+        headers: { host: "memroos.example.com" },
+      })
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://memroos.example.com/login");
+  });
+
+  it("redirects configured app hosts when x-forwarded-proto is http", async () => {
+    process.env.MEMROOS_HTTPS_APP_HOSTS = "secure.memroos.test";
+    const response = await proxy(
+      new NextRequest("https://secure.memroos.test/dispatch", {
+        headers: { host: "secure.memroos.test", "x-forwarded-proto": "http" },
+      })
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://secure.memroos.test/dispatch");
+    delete process.env.MEMROOS_HTTPS_APP_HOSTS;
+  });
+
+  it("redirects non-landing marketing paths back to home", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.com/private-console", {
+        headers: { host: "memroos.com" },
+      })
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://memroos.com/");
+  });
 });

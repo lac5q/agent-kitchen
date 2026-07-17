@@ -35,4 +35,24 @@ describe("QMD Serializer", () => {
     expect(failedFinal.status).toBe("failed");
     expect(failedFinal.lastSuccessTimestamp).toBeFalsy();
   });
+
+  it("tolerates missing qmd tables", () => {
+    const bareDb = new Database(":memory:");
+    const state = serializeQmdUpdate(bareDb, "orphan/path.md", "content");
+    expect(state.status).toBe("pending");
+
+    const finalized = finalizeQmdUpdate(bareDb, state.id, "timeout");
+    expect(finalized.status).toBe("timeout");
+  });
+
+  it("reports unknown update ids when the table exists", () => {
+    expect(() => finalizeQmdUpdate(db, "missing-update", "success")).toThrow(/not found/i);
+  });
+
+  it("records cancelled outcomes without advancing last success", () => {
+    const state = serializeQmdUpdate(db, "target/path3.md", "content3");
+    const cancelled = finalizeQmdUpdate(db, state.id, "cancelled");
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.lastSuccessTimestamp).toBeFalsy();
+  });
 });

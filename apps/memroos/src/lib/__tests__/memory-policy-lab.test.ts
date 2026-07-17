@@ -161,3 +161,100 @@ describe("rankMemoryPolicies", () => {
     expect(typeof results[0].layerScores.l3).toBe("number");
   });
 });
+
+describe("rankMemoryPolicies default evaluator", () => {
+  it("scores variants deterministically against a golden set path", async () => {
+    const variants: MemoryPolicyVariant[] = [
+      { name: "k=3 vector-first", config: { k: 3, tier: "vector" } },
+      { name: "k=10 episodic", config: { k: 10, tier: "episodic" } },
+    ];
+
+    const results = await rankMemoryPolicies(variants, "./golden-sets/business-ops-50.jsonl");
+
+    expect(results).toHaveLength(2);
+    expect(results[0].compositeW).toBeGreaterThan(0);
+    expect(results[1].compositeW).toBeGreaterThan(0);
+    expect(results[0].evalRunId).toBeTruthy();
+    expect(results[0].layerScores.l1).toBeGreaterThan(0);
+
+    const rerun = await rankMemoryPolicies(variants, "./golden-sets/business-ops-50.jsonl");
+    expect(rerun.map((row) => row.compositeW)).toEqual(results.map((row) => row.compositeW));
+    expect(rerun.map((row) => row.name)).toEqual(results.map((row) => row.name));
+  });
+
+  it("differentiates variants with different configs via the built-in scorer", async () => {
+    const variants: MemoryPolicyVariant[] = [
+      { name: "alpha", config: { k: 1, decay: 0.1 } },
+      { name: "beta", config: { k: 9, decay: 0.9, routing: "graph-first" } },
+    ];
+
+    const results = await rankMemoryPolicies(variants, "./golden-sets/business-ops-50.jsonl");
+
+    const scores = results.map((row) => row.compositeW);
+    expect(new Set(scores).size).toBe(2);
+    expect(results[0].rank).toBe(1);
+    expect(results[1].rank).toBe(2);
+  });
+
+  it("resolves role keys through eval config golden set mapping", async () => {
+    const variants: MemoryPolicyVariant[] = [
+      { name: "sales-policy", config: { k: 5 } },
+    ];
+    let resolvedPath = "";
+    const capturePath: PolicyEvaluator = (variant, goldenSetPath) => {
+      resolvedPath = goldenSetPath;
+      return makeRun(0.7, `run-${variant.name}`);
+    };
+
+    await rankMemoryPolicies(variants, "sales", capturePath);
+
+    expect(resolvedPath).toBe("./golden-sets/sales-50.jsonl");
+  });
+
+  it("falls back to the default golden set for unknown role keys", async () => {
+    const variants: MemoryPolicyVariant[] = [
+      { name: "unknown-role", config: { k: 5 } },
+    ];
+    let resolvedPath = "";
+    const capturePath: PolicyEvaluator = (_variant, goldenSetPath) => {
+      resolvedPath = goldenSetPath;
+      return makeRun(0.6);
+    };
+
+    await rankMemoryPolicies(variants, "nonexistent-role", capturePath);
+
+    expect(resolvedPath).toBe("./golden-sets/business-ops-50.jsonl");
+  });
+
+  it("accepts absolute golden set paths", async () => {
+    const { getRepoRoot } = await import("@/lib/paths");
+    const absolutePath = `${getRepoRoot()}/golden-sets/business-ops-50.jsonl`;
+    const variants: MemoryPolicyVariant[] = [
+      { name: "abs-path", config: { k: 5 } },
+    ];
+    let resolvedPath = "";
+    const capturePath: PolicyEvaluator = (_variant, goldenSetPath) => {
+      resolvedPath = goldenSetPath;
+      return makeRun(0.8);
+    };
+
+    await rankMemoryPolicies(variants, absolutePath, capturePath);
+
+    expect(resolvedPath).toBe(absolutePath);
+  });
+
+  it("supports async evaluators", async () => {
+    const variants: MemoryPolicyVariant[] = [
+      { name: "async-variant", config: { k: 5 } },
+    ];
+    const asyncEvaluator: PolicyEvaluator = async (variant) => {
+      await Promise.resolve();
+      return makeRun(0.77, `async-${variant.name}`);
+    };
+
+    const results = await rankMemoryPolicies(variants, "./test.jsonl", asyncEvaluator);
+
+    expect(results[0].compositeW).toBe(0.77);
+    expect(results[0].evalRunId).toBe("async-async-variant");
+  });
+});

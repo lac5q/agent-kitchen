@@ -105,12 +105,6 @@ describe("VoicePanel", () => {
     expect(screen.getByRole("button", { name: "chat" })).toBeInTheDocument();
   });
 
-  it("renders no agents gracefully when useAgents returns empty", () => {
-    mockUseAgents.mockReturnValue({ data: { agents: [] } } as ReturnType<typeof useAgents>);
-    render(<VoicePanel />);
-    expect(screen.getByText("Voice & Chat")).toBeInTheDocument();
-  });
-
   it("shows provider rate limits as a readable chat error", async () => {
     vi.stubGlobal(
       "fetch",
@@ -140,6 +134,247 @@ describe("VoicePanel", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Provider limit hit: usage limit exceeded/)).toBeInTheDocument();
+    });
+  });
+
+  it("renders no agents gracefully when useAgents returns empty", () => {
+    mockUseAgents.mockReturnValue({ data: { agents: [] } } as ReturnType<typeof useAgents>);
+    render(<VoicePanel />);
+    expect(screen.getByText("Voice & Chat")).toBeInTheDocument();
+  });
+
+  it("sends chat via the send button and renders the streamed assistant reply", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode('data: {"text":"All systems nominal"}\n\ndata: [DONE]\n\n'),
+            );
+            controller.close();
+          },
+        }),
+      }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "status check" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("All systems nominal")).toBeInTheDocument();
+    });
+  });
+
+  it("shows OpenCode disabled guidance in chat errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => "OpenCode chat runner is disabled",
+      }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "ping" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/OpenCode chat runner is disabled/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("clears history when the selected agent changes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode('data: {"text":"First agent reply"}\n\ndata: [DONE]\n\n'),
+            );
+            controller.close();
+          },
+        }),
+      }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "hello" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("First agent reply")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "sophia" },
+    });
+
+    expect(screen.queryByText("First agent reply")).not.toBeInTheDocument();
+    expect(screen.getByText(/Ask OpenClaw subagent - Sophia/i)).toBeInTheDocument();
+  });
+
+  it("labels MemroOS system agents when metadata is not from PMO", () => {
+    mockUseAgents.mockReturnValue({
+      data: {
+        agents: [
+          ...FIXTURE_AGENTS,
+          {
+            id: "memroos-ops",
+            name: "Ops Agent",
+            role: "Operator helper",
+            company: null,
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "registry" },
+          },
+        ],
+      },
+    } as ReturnType<typeof useAgents>);
+
+    render(<VoicePanel />);
+    expect(screen.getByRole("option", { name: "MemroOS system - Ops Agent" })).toBeInTheDocument();
+  });
+
+  it("shows thinking state while a chat request is in flight", async () => {
+    let resolveFetch: (value: Response) => void = () => {};
+    const pending = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(pending));
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "slow" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(screen.getByText("…")).toBeInTheDocument();
+
+    resolveFetch(
+      new Response('data: {"text":"done"}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("done")).toBeInTheDocument();
+    });
+  });
+
+  it("starts voice capture and sends the final transcript", async () => {
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        const result = {
+          isFinal: true,
+          0: { transcript: "voice hello" },
+        } as unknown as SpeechRecognitionResult;
+        const event = { results: [result] } as unknown as SpeechRecognitionEvent;
+        this.onresult?.(event);
+      }
+      stop() {}
+    }
+
+    vi.stubGlobal("SpeechRecognition", MockRecognition);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode('data: {"text":"Voice reply"}\n\ndata: [DONE]\n\n'),
+              );
+              controller.close();
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: async () => new Blob(["audio"], { type: "audio/mpeg" }),
+        }),
+    );
+
+    const play = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal(
+      "Audio",
+      class {
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        play = play;
+      },
+    );
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:voice"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Voice reply")).toBeInTheDocument();
+    });
+  });
+
+  it("labels dedicated CLI agent ids and knowledge project paths", () => {
+    mockUseAgents.mockReturnValue({
+      data: {
+        agents: [
+          {
+            id: "codex-cli-agent",
+            name: "Codex Agent",
+            role: "Codex CLI identity",
+            company: null,
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "registry", path: "/workspace/knowledge/notes" },
+          },
+        ],
+      },
+    } as ReturnType<typeof useAgents>);
+    render(<VoicePanel />);
+    expect(screen.getByRole("option", { name: "Codex CLI - Agent" })).toBeInTheDocument();
+  });
+
+  it("surfaces generic chat errors from non-streaming failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "upstream exploded",
+      }),
+    );
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "boom" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => {
+      expect(screen.getByText(/upstream exploded/i)).toBeInTheDocument();
     });
   });
 });

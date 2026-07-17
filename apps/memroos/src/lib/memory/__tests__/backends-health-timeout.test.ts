@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkVectorHealth, mem0HealthTimeoutMs } from "../backends";
+import { checkVectorHealth, checkGraphHealth, mem0HealthTimeoutMs, neo4jConfig, queryGraphMemory } from "../backends";
+import * as registry from "../registry";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -104,5 +105,101 @@ describe("checkVectorHealth timeout honesty", () => {
 
     const health = await checkVectorHealth();
     expect(health).toMatchObject({ tier: "vector", backend: "mem0-qdrant", status: "up" });
+  });
+
+  it("marks vector degraded when queued saves are pending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          queue: { queued: 3 },
+          memory_runtime: { status: "available" },
+          disk: { critical: false },
+        }),
+      ),
+    );
+
+    const health = await checkVectorHealth();
+    expect(health.status).toBe("degraded");
+    expect(String(health.detail)).toMatch(/3 queued memory saves/);
+  });
+
+  it("marks vector down when memory runtime is unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "degraded",
+          vector_store: "connected",
+          queue: { queued: 0 },
+          memory_runtime: { status: "error", error: "worker offline" },
+          disk: { critical: false },
+        }),
+      ),
+    );
+
+    const health = await checkVectorHealth();
+    expect(health.status).toBe("down");
+    expect(String(health.detail)).toMatch(/runtime error/);
+  });
+
+  it("marks vector down on non-OK HTTP responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("service unavailable", { status: 503 })),
+    );
+
+    const health = await checkVectorHealth();
+    expect(health.status).toBe("down");
+    expect(String(health.detail)).toMatch(/HTTP 503/);
+  });
+
+  it("neo4jConfig returns trimmed defaults and env overrides", () => {
+    const original = {
+      url: process.env.NEO4J_HTTP_URL,
+      database: process.env.NEO4J_DATABASE,
+      username: process.env.NEO4J_USERNAME,
+      password: process.env.NEO4J_PASSWORD,
+    };
+    process.env.NEO4J_HTTP_URL = "http://neo4j.example.com/";
+    process.env.NEO4J_DATABASE = "graphdb";
+    process.env.NEO4J_USERNAME = "graph-user";
+    process.env.NEO4J_PASSWORD = "graph-pass";
+    expect(neo4jConfig()).toEqual({
+      url: "http://neo4j.example.com",
+      database: "graphdb",
+      username: "graph-user",
+      password: "graph-pass",
+    });
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key as keyof typeof original];
+      else process.env[key as keyof typeof original] = value;
+    }
+  });
+
+  it("queryGraphMemory and checkGraphHealth use the direct Neo4j HTTP path when no adapter is registered", async () => {
+    const getAdaptersSpy = vi.spyOn(registry, "getAdapters").mockReturnValue([]);
+    process.env.NEO4J_PASSWORD = "graph-pass";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(String(url)).toContain("/tx/commit");
+        expect(init?.method).toBe("POST");
+        return Response.json({
+          results: [{ data: [{ row: [{ name: "Node A" }, ["KNOWS"], [{ title: "Node B" }]] }] }],
+        });
+      }),
+    );
+
+    const graphResults = await queryGraphMemory("node", 3);
+    expect(graphResults).toEqual({
+      results: [{ data: [{ row: [{ name: "Node A" }, ["KNOWS"], [{ title: "Node B" }]] }] }],
+    });
+
+    const health = await checkGraphHealth();
+    expect(health).toMatchObject({ tier: "graph", backend: "neo4j", status: "up" });
+    getAdaptersSpy.mockRestore();
   });
 });

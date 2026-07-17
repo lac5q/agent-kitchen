@@ -179,3 +179,206 @@ describe("POST /api/apo approve", () => {
     );
   });
 });
+
+describe("GET /api/apo", () => {
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), "apo-route-get-"));
+    proposalsPath = path.join(root, "proposals");
+    skillsPath = path.join(root, "skills");
+    agentsPath = path.join(root, "agents");
+    cronLogPath = path.join(root, "apo.log");
+    mkdirSync(proposalsPath, { recursive: true });
+    mkdirSync(path.join(skillsPath, "ceo"), { recursive: true });
+    writeFileSync(path.join(proposalsPath, proposalFilename), proposalBody);
+    writeFileSync(path.join(skillsPath, "ceo", "SKILL.md"), "# CEO Skill\n");
+    writeFileSync(cronLogPath, "[2026-05-05 12:00:00] APO cycle\n");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("lists pending proposals and parses cron log timestamps", async () => {
+    const { GET } = await loadRoute();
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.stats).toMatchObject({
+      pendingProposals: 1,
+      approvedProposals: 0,
+      archivedProposals: 0,
+      totalProposals: 1,
+    });
+    expect(body.proposals[0]).toMatchObject({
+      id: proposalFilename,
+      status: "pending",
+      tracking: { phase: "pending", label: "Awaiting review" },
+    });
+    expect(body.stats.recentLogLines.length).toBeGreaterThan(0);
+    expect(body.stats.lastRun).toEqual(expect.any(String));
+  });
+
+  it("falls back to cron log mtime when no run marker is present", async () => {
+    writeFileSync(cronLogPath, "plain log line without markers\n");
+    const { GET } = await loadRoute();
+    const body = await (await GET()).json();
+    expect(body.stats.lastRun).toEqual(expect.any(String));
+  });
+});
+
+describe("POST /api/apo validation and errors", () => {
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), "apo-route-post-"));
+    proposalsPath = path.join(root, "proposals");
+    skillsPath = path.join(root, "skills");
+    agentsPath = path.join(root, "agents");
+    cronLogPath = path.join(root, "apo.log");
+    mkdirSync(proposalsPath, { recursive: true });
+    mkdirSync(path.join(skillsPath, "ceo"), { recursive: true });
+    writeFileSync(path.join(proposalsPath, proposalFilename), proposalBody);
+    writeFileSync(path.join(skillsPath, "ceo", "SKILL.md"), "# CEO Skill\n");
+    writeFileSync(cronLogPath, "[2026-05-05 12:00:00] APO cycle\n");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("rejects remote writes without operator credentials", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      makeApproveRequest(
+        { action: "approve", proposalId: proposalFilename },
+        "https://memroos.example/api/apo",
+      ),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects unknown actions and missing proposal ids", async () => {
+    const { POST } = await loadRoute();
+
+    const badAction = await POST(makeApproveRequest({ action: "launch", proposalId: proposalFilename }));
+    expect(badAction.status).toBe(400);
+    expect((await badAction.json()).error).toContain("action must be approve");
+
+    const missingId = await POST(makeApproveRequest({ action: "approve" }));
+    expect(missingId.status).toBe(400);
+    expect((await missingId.json()).error).toBe("proposalId is required");
+  });
+
+  it("returns 404 when proposal or target is missing", async () => {
+    const { POST } = await loadRoute();
+
+    const missingProposal = await POST(
+      makeApproveRequest({ action: "approve", proposalId: "APO_PROPOSAL_missing_skill_x_20260505_120000.md" }),
+    );
+    expect(missingProposal.status).toBe(404);
+
+    const noConstraint = "APO_PROPOSAL_plain_plain_20260505_120000.md";
+    writeFileSync(path.join(proposalsPath, noConstraint), "# No constraint block\n");
+    const missingConstraint = await POST(makeApproveRequest({ action: "approve", proposalId: noConstraint }));
+    expect(missingConstraint.status).toBe(422);
+
+    rmSync(path.join(skillsPath, "ceo"), { recursive: true, force: true });
+    const missingTarget = await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    expect(missingTarget.status).toBe(404);
+    expect((await missingTarget.json()).searched.skillRoots).toEqual(expect.any(Array));
+  });
+
+  it("uses custom executor CLI and skips re-applying an existing constraint", async () => {
+    const { POST } = await loadRoute();
+
+    const approve = await POST(
+      makeApproveRequest({
+        action: "approve",
+        proposalId: proposalFilename,
+        executorCli: " codex ",
+      }),
+    );
+    expect(approve.status).toBe(200);
+    expect((await approve.json()).executorCli).toBe("codex");
+
+    const constraint = "CRITICAL: Check provider auth before retrying blocked work.";
+    writeFileSync(
+      path.join(skillsPath, "ceo", "SKILL.md"),
+      `# CEO Skill\n${constraint}\n`,
+    );
+
+    const apply = await POST(
+      makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename, executorCli: "codex" }),
+    );
+    expect(apply.status).toBe(200);
+    expect((await apply.json()).applied).toBe(false);
+  });
+
+  it("process-approved with an empty queue returns zero processed items", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(makeApproveRequest({ action: "process-approved" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, processed: 0, failed: 0, results: [] });
+  });
+
+  it("rejects malformed JSON bodies", async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      new Request("http://localhost/api/apo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not-json",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("proposalId is required");
+  });
+
+  it("lists archived proposals with implemented tracking metadata", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    await POST(makeApproveRequest({ action: "process-approved" }));
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body.proposals.some((proposal: { status: string }) => proposal.status === "archived")).toBe(true);
+    expect(body.stats.archivedProposals).toBe(1);
+  });
+
+  it("archived tracking falls back when approval sidecar JSON is missing", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    const approvedPath = path.join(proposalsPath, "approved", proposalFilename);
+    const archivedDir = path.join(proposalsPath, "archived");
+    mkdirSync(archivedDir, { recursive: true });
+    writeFileSync(path.join(archivedDir, proposalFilename), readFileSync(approvedPath, "utf-8"));
+    rmSync(`${approvedPath}.json`, { force: true });
+    rmSync(approvedPath, { force: true });
+
+    const body = await (await GET()).json();
+    const archived = body.proposals.find((p: { status: string }) => p.status === "archived");
+    expect(archived?.tracking?.label).toBe("Implemented");
+  });
+
+  it("process-approved honors limit and archived tracking labels applied=false", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+
+    const constraint = "CRITICAL: Check provider auth before retrying blocked work.";
+    writeFileSync(
+      path.join(skillsPath, "ceo", "SKILL.md"),
+      `# CEO Skill\n${constraint}\n`,
+    );
+
+    const processed = await POST(makeApproveRequest({ action: "process-approved", limit: 1 }));
+    expect(processed.status).toBe(200);
+    expect((await processed.json()).processed).toBe(1);
+
+    const list = await (await GET()).json();
+    expect(list.proposals[0]).toMatchObject({
+      status: "archived",
+      tracking: { label: "Archived", applied: false },
+    });
+  });
+});

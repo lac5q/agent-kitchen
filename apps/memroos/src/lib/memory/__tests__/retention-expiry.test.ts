@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import { createRetentionPolicy, listRetentionReceipts, registerRetentionRecord } from "../retention-policy";
-import { createLegalHold, releaseLegalHold, runRetentionExpiry } from "../retention-expiry";
+import { createLegalHold, releaseLegalHold, runRetentionExpiry, updateLegalHoldScope } from "../retention-expiry";
 
 let db: Database.Database | null = null;
 
@@ -204,5 +204,74 @@ describe("memory retention expiry runner and legal holds", () => {
     expect(concurrent.status).toBe("lease_held");
     expect(concurrent.expired || 0).toBe(0);
     expect(database.prepare("SELECT status FROM memory_retention_records WHERE record_id = ?").get("concurrent-1")).toMatchObject({ status: "active" });
+  });
+
+  it("updates legal hold scope and skips already-expired or policy-unavailable records", () => {
+    const database = freshDb();
+    registerRecord(database, "already-expired", "2026-01-01T00:00:00.000Z");
+    runRetentionExpiry(database, {
+      runKey: "run-expire-first",
+      actorId: "system",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    const hold = createLegalHold(database, {
+      id: "hold-scope",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+      reasonCode: "audit",
+      actorId: "operator-legal",
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    const updated = updateLegalHoldScope(database, {
+      holdId: hold.id,
+      scope: { tenantId: "default-tenant", recordId: "already-expired" },
+      actorId: "operator-legal",
+      now: new Date("2026-01-01T13:00:00.000Z"),
+    });
+    expect(JSON.parse(updated.scope_json)).toMatchObject({ recordId: "already-expired" });
+
+    database.prepare(
+      `INSERT INTO memory_retention_records
+        (id, tenant_id, record_type, record_id, ontology_type, security_label_json, purpose, scope_json, status, created_at, updated_at)
+       VALUES ('policy-missing', 'default-tenant', 'message', 'policy-missing', 'memory.note', '{}', 'recall', ?, 'active', ?, ?)`
+    ).run(
+      JSON.stringify({ tenantId: "default-tenant", project: "alpha" }),
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z"
+    );
+
+    const summary = runRetentionExpiry(database, {
+      runKey: "run-policy-missing",
+      actorId: "system",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    expect(summary.skippedAlreadyExpired).toBeGreaterThanOrEqual(1);
+    expect(summary.policyUnavailable).toBeGreaterThanOrEqual(1);
+  });
+
+  it("marks the expiry run failed when receipt persistence throws", () => {
+    const database = freshDb();
+    registerRecord(database, "fail-receipt", "2026-01-01T00:00:00.000Z");
+    database.exec(`
+      CREATE TRIGGER reject_retention_receipt
+      BEFORE INSERT ON memory_retention_receipts
+      BEGIN SELECT RAISE(ABORT, 'receipt rejection'); END;
+    `);
+
+    const summary = runRetentionExpiry(database, {
+      runKey: "run-failed",
+      actorId: "system",
+      scope: { tenantId: "default-tenant", project: "alpha" },
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    expect(summary.status).toBe("failed");
+    expect(summary.failed).toBeGreaterThanOrEqual(1);
+    const runRow = database.prepare("SELECT status, error_message FROM memory_retention_expiry_runs WHERE run_key = ?").get("run-failed") as { status: string; error_message: string };
+    expect(runRow.status).toBe("failed");
+    expect(runRow.error_message).toContain("receipt");
   });
 });

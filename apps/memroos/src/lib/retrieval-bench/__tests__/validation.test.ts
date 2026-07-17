@@ -219,4 +219,164 @@ describe("retrieval-bench fixture validation (VAL-RETR-002)", () => {
     expect(isDatasetId("locomo")).toBe(true);
     expect(isDatasetId("nope")).toBe(false);
   });
+
+  it("rejects non-object tasks and duplicate ids within validateTask", () => {
+    const notObject = validateTask("nope", { seenIds: new Set() });
+    expect(notObject.ok).toBe(false);
+    if (!notObject.ok) {
+      expect(notObject.issues[0]).toMatchObject({ field: "task", reason: "task_not_object" });
+    }
+
+    const seen = new Set<string>(["task-1"]);
+    const duplicate = validateTask(makeTask({ id: "task-1" }), { seenIds: seen });
+    expect(duplicate.ok).toBe(false);
+    if (!duplicate.ok) {
+      expect(duplicate.issues.some((i) => i.reason === "duplicate_task_id")).toBe(true);
+    }
+  });
+
+  it("rejects invalid dataset enum and missing question/expected_answer", () => {
+    const badDataset = validateTask(makeTask({ dataset: "unknown" }), { seenIds: new Set() });
+    expect(badDataset.ok).toBe(false);
+
+    const missingQuestion = validateTask(makeTask({ question: "" }), { seenIds: new Set() });
+    expect(missingQuestion.ok).toBe(false);
+    if (!missingQuestion.ok) {
+      expect(missingQuestion.issues.some((i) => i.field === "question")).toBe(true);
+    }
+
+    const missingAnswer = validateTask(makeTask({ expected_answer: undefined }), { seenIds: new Set() });
+    expect(missingAnswer.ok).toBe(false);
+    if (!missingAnswer.ok) {
+      expect(missingAnswer.issues.some((i) => i.reason === "expected_answer_missing")).toBe(true);
+    }
+
+    const badAnswerType = validateTask(makeTask({ expected_answer: 42 }), { seenIds: new Set() });
+    expect(badAnswerType.ok).toBe(false);
+    if (!badAnswerType.ok) {
+      expect(badAnswerType.issues.some((i) => i.reason === "expected_answer_not_string")).toBe(true);
+    }
+  });
+
+  it("validates abstention and evidence_spans typing", () => {
+    const badAbstention = validateTask(makeTask({ abstention_correct: "yes" }), { seenIds: new Set() });
+    expect(badAbstention.ok).toBe(false);
+    if (!badAbstention.ok) {
+      expect(badAbstention.issues.some((i) => i.reason === "abstention_correct_not_boolean")).toBe(true);
+    }
+
+    const badSpans = validateTask(makeTask({ evidence_spans: [1, 2] }), { seenIds: new Set() });
+    expect(badSpans.ok).toBe(false);
+    if (!badSpans.ok) {
+      expect(badSpans.issues.some((i) => i.reason === "evidence_spans_not_string_array")).toBe(true);
+    }
+  });
+
+  it("validates sessions, temporal metadata, and provenance fields", () => {
+    const sessions = validateTask(
+      makeTask({
+        sessions: [
+          {
+            session_id: "",
+            turns: [{ role: "narrator", content: "hi" }],
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(sessions.ok).toBe(false);
+    if (!sessions.ok) {
+      expect(sessions.issues.some((i) => i.field.includes("session_id"))).toBe(true);
+      expect(sessions.issues.some((i) => i.reason === "turn_role_invalid")).toBe(true);
+    }
+
+    const temporal = validateTask(
+      makeTask({
+        temporal_metadata: {
+          reference_time_iso: "bad",
+          fact_valid_until_iso: "also-bad",
+          temporal_direction: "sideways",
+        },
+      }),
+      { seenIds: new Set() },
+    );
+    expect(temporal.ok).toBe(false);
+    if (!temporal.ok) {
+      expect(temporal.issues.some((i) => i.reason === "timestamp_invalid_iso8601")).toBe(true);
+      expect(temporal.issues.some((i) => i.reason === "temporal_direction_invalid_enum")).toBe(true);
+    }
+
+    const provenance = validateTask(
+      makeTask({
+        provenance: {
+          sourceCitation: "",
+          sourceLicense: "MIT",
+          sourceAvailability: "mystery",
+        },
+      }),
+      { seenIds: new Set() },
+    );
+    expect(provenance.ok).toBe(false);
+    if (!provenance.ok) {
+      expect(provenance.issues.some((i) => i.reason === "provenance_sourceCitation_missing")).toBe(true);
+      expect(provenance.issues.some((i) => i.reason === "provenance_sourceAvailability_invalid")).toBe(true);
+    }
+  });
+
+  it("validates corpus entry metadata and accepts a complete candidate scope", () => {
+    const corpusIssues = validateTask(
+      makeTask({
+        corpus: [
+          {
+            id: "",
+            text: "",
+            timestamp_iso: "not-iso",
+            entity_refs: [1],
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(corpusIssues.ok).toBe(false);
+    if (!corpusIssues.ok) {
+      expect(corpusIssues.issues.some((i) => i.reason === "corpus_id_missing_or_empty")).toBe(true);
+      expect(corpusIssues.issues.some((i) => i.reason === "corpus_text_missing_or_empty")).toBe(true);
+      expect(corpusIssues.issues.some((i) => i.reason === "entity_refs_not_string_array")).toBe(true);
+    }
+
+    const validScope = validateTask(
+      makeTask({
+        corpus: [
+          {
+            id: "mem-1",
+            text: "Scoped memory.",
+            scope: {
+              tenantId: "tenant",
+              userId: "user",
+              agentId: "agent",
+              spaceId: "space",
+              label: { visibility: "internal", policy: "agent_visible" },
+              purpose: "recall",
+              beliefStage: "silver_candidate_claim",
+            },
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(validScope.ok).toBe(true);
+  });
+
+  it("validateFixtures rejects non-arrays and partitionValidTasks returns valid tasks", () => {
+    const notArray = validateFixtures({ id: "task-1" });
+    expect(notArray.ok).toBe(false);
+    expect(notArray.issues[0]).toMatchObject({ field: "fixtures", reason: "fixtures_not_array" });
+
+    const ok = partitionValidTasks([
+      makeTask({ id: "task-1" }),
+      makeTask({ id: "task-2" }),
+    ]);
+    expect(ok).toMatchObject({ ok: true, invalid: 0, valid: expect.any(Array) });
+    expect(ok.valid).toHaveLength(2);
+  });
 });

@@ -450,8 +450,6 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
     expect(result.driftReceiptReason).toBe("current");
   });
 
-  // --- cross-space isolation ---
-
   it("28) write rules and document directory entries are isolated per space", () => {
     createWriteRule(db, {
       spaceId,
@@ -485,5 +483,57 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
     });
     expect(getDocumentDirectory(db, spaceId)).toHaveLength(1);
     expect(getDocumentDirectory(db, secondSpaceId)).toHaveLength(1);
+  });
+
+  it("29) updateWriteRule throws when the rule does not exist", () => {
+    expect(() =>
+      updateWriteRule(db, 99999, {
+        targetDocument: "missing.md",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/not found/);
+  });
+
+  it("30) deleteDocumentDirectoryEntry throws when the entry does not exist", () => {
+    expect(() =>
+      deleteDocumentDirectoryEntry(db, 99999, { actorId, expectedVersion: 1 }),
+    ).toThrow(/not found/);
+  });
+
+  it("31) createWriteRule rejects empty spaceId and actorId", () => {
+    expect(() =>
+      createWriteRule(db, {
+        spaceId: " ",
+        dataType: "decision_intent",
+        targetDocument: "decisions.md",
+        actorId,
+      }),
+    ).toThrow(/spaceId is required/);
+    expect(() =>
+      createWriteRule(db, {
+        spaceId,
+        dataType: "decision_intent",
+        targetDocument: "decisions.md",
+        actorId: " ",
+      }),
+    ).toThrow(/actorId is required/);
+  });
+
+  it("32) createWriteRule rejects duplicate data_type in the same space", () => {
+    createWriteRule(db, {
+      spaceId,
+      dataType: "duplicate_type",
+      targetDocument: "one.md",
+      actorId,
+    });
+    expect(() =>
+      createWriteRule(db, {
+        spaceId,
+        dataType: "duplicate_type",
+        targetDocument: "two.md",
+        actorId,
+      }),
+    ).toThrow(/already exists/);
   });
 });

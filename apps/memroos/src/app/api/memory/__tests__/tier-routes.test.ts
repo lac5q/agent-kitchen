@@ -188,4 +188,72 @@ describe("memory tier routes", () => {
     expect(body.tiers.map((tier: { tier: string }) => tier.tier)).toEqual(["vector", "graph", "episodic"]);
     expect(mockAuthenticateAgentHeaders).toHaveBeenCalled();
   });
+
+  it("filters graph neighbors through the retrieval policy gate", async () => {
+    const graphRoute = await loadGraphRoute();
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockResolvedValueOnce({
+      results: [
+        {
+          node: {
+            id: "parent",
+            metadata: { visibility: "internal", policy: "agent_visible" },
+          },
+          neighbors: [
+            { id: "allowed-neighbor", metadata: { visibility: "internal", policy: "agent_visible" } },
+            { id: "blocked-neighbor" },
+          ],
+        },
+      ],
+    });
+
+    const response = await graphRoute.GET(new Request("http://localhost/api/memory/graph?q=parent&limit=5"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.result.results[0].neighbors).toHaveLength(1);
+    expect(body.result.results[0].neighbors[0].id).toBe("allowed-neighbor");
+  });
+
+  it("returns 502 when graph memory backend is unavailable", async () => {
+    const graphRoute = await loadGraphRoute();
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "queryGraphMemory").mockRejectedValueOnce(new Error("neo4j offline"));
+
+    const response = await graphRoute.GET(new Request("http://localhost/api/memory/graph?q=fail"));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({ ok: false, tier: "graph", error: "neo4j offline" });
+  });
+
+  it("searches vector payloads keyed by memories and data arrays", async () => {
+    const searchRoute = await loadSearchRoute();
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "searchVectorMemory").mockResolvedValueOnce({
+      memories: [
+        { id: 42, memory: "numeric id memory", metadata: { visibility: "internal", policy: "agent_visible" } },
+      ],
+      data: [{ id: "ignored", memory: "ignored" }],
+    });
+
+    const response = await searchRoute.GET(new Request("http://localhost/api/memory/search?limit=5"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.result.memories).toHaveLength(1);
+    expect(body.result.memories[0].id).toBe(42);
+  });
+
+  it("returns 502 when vector memory backend is unavailable", async () => {
+    const searchRoute = await loadSearchRoute();
+    const backends = await import("@/lib/memory/backends");
+    vi.spyOn(backends, "searchVectorMemory").mockRejectedValueOnce(new Error("mem0 offline"));
+
+    const response = await searchRoute.GET(new Request("http://localhost/api/memory/search?q=fail"));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({ ok: false, tier: "vector", error: "mem0 offline" });
+  });
 });

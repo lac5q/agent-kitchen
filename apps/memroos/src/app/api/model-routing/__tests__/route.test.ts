@@ -29,6 +29,38 @@ describe("model routing APIs", () => {
     testDb.exec("DELETE FROM efficiency_events");
   });
 
+  it("GET telemetry returns recent events and summary", async () => {
+    await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+      }) as any
+    );
+
+    const res = await telemetryRoute.GET(
+      new Request("http://localhost/api/model-routing/telemetry?limit=5") as any
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.events.length).toBeGreaterThan(0);
+    expect(data.summary.totalRuns).toBeGreaterThan(0);
+    expect(data.timestamp).toBeTruthy();
+  });
+
+  it("POST telemetry returns 400 when required fields are missing", async () => {
+    const res = await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        provider: "openai",
+      }) as any
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/taskType, provider, and model are required/i);
+  });
+
   it("blocks direct non-local telemetry writes without operator authorization", async () => {
     const res = await telemetryRoute.POST(
       postRequest("https://memroos.example.com/api/model-routing/telemetry", {
@@ -160,5 +192,63 @@ describe("model routing APIs", () => {
     expect(evalData.dimensions.map((d: any) => d.id)).toContain("task_fit");
     expect(evalData.summary.totalRuns).toBeGreaterThan(0);
     expect(listEfficiencyEvents(testDb, { eventType: "token_ledger" })).toHaveLength(0);
+  });
+
+  it("returns POST recommendations with custom task type, strategy, and limit", async () => {
+    const res = await recommendationsRoute.POST(
+      postRequest("http://localhost/api/model-routing/recommendations", {
+        taskType: "Product",
+        strategy: "latency",
+        limit: 2,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("product");
+    expect(data.strategy).toBe("latency");
+    expect(data.recommendations).toHaveLength(2);
+    expect(data.timestamp).toBeTruthy();
+  });
+
+  it("defaults POST recommendations when body fields are missing or invalid", async () => {
+    const res = await recommendationsRoute.POST(
+      postRequest("http://localhost/api/model-routing/recommendations", {
+        strategy: "unsupported",
+        limit: 99,
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("engineering");
+    expect(data.strategy).toBe("balanced");
+    expect(data.recommendations.length).toBeLessThanOrEqual(8);
+    expect(data.recommendations.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("GET recommendations honor strategy and limit query params", async () => {
+    const res = await recommendationsRoute.GET(
+      new Request(
+        "http://localhost/api/model-routing/recommendations?taskType=engineering&strategy=cost&limit=1"
+      ) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.taskType).toBe("engineering");
+    expect(data.strategy).toBe("cost");
+    expect(data.recommendations).toHaveLength(1);
+  });
+
+  it("GET recommendations clamp invalid limit values", async () => {
+    const res = await recommendationsRoute.GET(
+      new Request("http://localhost/api/model-routing/recommendations?limit=not-a-number") as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.recommendations.length).toBeGreaterThanOrEqual(1);
+    expect(data.recommendations.length).toBeLessThanOrEqual(4);
   });
 });

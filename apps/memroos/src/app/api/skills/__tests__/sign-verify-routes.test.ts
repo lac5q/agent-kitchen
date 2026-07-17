@@ -374,4 +374,77 @@ describe("POST /api/skills/verify", () => {
     expect(json.reason).toMatch(/no signature|no content_hash/i);
     closeDb();
   });
+
+  it("400 — invalid JSON body and non-object payloads", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = newTempDb();
+    fs.writeFileSync(dbPath, "");
+    const { verifyRoute, closeDb } = await loadRoutesAndDb(dbPath);
+    const badJson = await verifyRoute.POST(
+      new Request("https://memroos.example.com/api/skills/verify", {
+        method: "POST",
+        headers: { authorization: "Bearer secret-key", "content-type": "application/json" },
+        body: "not-json",
+      })
+    );
+    expect(badJson.status).toBe(400);
+    const notObject = await verifyRoute.POST(
+      makePostRequest([], { authorization: "Bearer secret-key" })
+    );
+    expect(notObject.status).toBe(400);
+    closeDb();
+  });
+
+  it("404 — stored skill_name not found", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = newTempDb();
+    fs.writeFileSync(dbPath, "");
+    const { verifyRoute, closeDb } = await loadRoutesAndDb(dbPath);
+    const res = await verifyRoute.POST(
+      makePostRequest({ skill_name: "missing-skill" }, { authorization: "Bearer secret-key" })
+    );
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.verified).toBe(false);
+    expect(json.reason).toMatch(/not found/i);
+    closeDb();
+  });
+
+  it("400 — inline mode missing hash/signature and invalid public_key_pem", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = newTempDb();
+    fs.writeFileSync(dbPath, "");
+    const { verifyRoute, closeDb } = await loadRoutesAndDb(dbPath);
+    const missingFields = await verifyRoute.POST(
+      makePostRequest({ content: "only content" }, { authorization: "Bearer secret-key" })
+    );
+    expect(missingFields.status).toBe(400);
+
+    const badPem = await verifyRoute.POST(
+      makePostRequest(
+        {
+          content_hash: "a".repeat(64),
+          signature: "AAAA",
+          public_key_pem: "not-a-valid-pem",
+        },
+        { authorization: "Bearer secret-key" }
+      )
+    );
+    expect(badPem.status).toBe(400);
+    const badJson = await badPem.json();
+    expect(badJson.reason).toMatch(/valid PEM/i);
+    closeDb();
+  });
+
+  it("400 — missing skill_name when not using inline mode", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = newTempDb();
+    fs.writeFileSync(dbPath, "");
+    const { verifyRoute, closeDb } = await loadRoutesAndDb(dbPath);
+    const res = await verifyRoute.POST(
+      makePostRequest({}, { authorization: "Bearer secret-key" })
+    );
+    expect(res.status).toBe(400);
+    closeDb();
+  });
 });

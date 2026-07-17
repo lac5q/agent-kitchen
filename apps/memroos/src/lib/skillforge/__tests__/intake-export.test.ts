@@ -185,6 +185,133 @@ describe("VAL-SKILL-036 state machine blocks repeated actions and failed eval", 
   });
 });
 
+describe("VAL-SKILL-036 hash helpers and listing", () => {
+  it("computeEvaluationHash is stable for the same receipt JSON", async () => {
+    const { computeEditHash, computeEvaluationHash } = await import("../intake-export");
+    const receipt = JSON.stringify({ verdict: "pass", score: 1 });
+    expect(computeEvaluationHash(receipt)).toBe(computeEvaluationHash(receipt));
+    expect(computeEditHash("## Preconditions\nnone")).toHaveLength(64);
+  });
+
+  it("listIntakeProposals filters by state and returns newest first", async () => {
+    const { intakeProposal, advanceProposalState, listIntakeProposals } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "list-pending",
+      sourceSkillId: "skill-500",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\npending",
+      actor: "operator",
+    });
+    intakeProposal(db, {
+      proposalId: "list-rejected",
+      sourceSkillId: "skill-501",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nrejected",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "list-rejected", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "list-rejected", actor: "operator", toState: "rejected" });
+
+    const pending = listIntakeProposals(db, { state: "intake_pending" });
+    expect(pending.some((row) => row.proposalId === "list-pending")).toBe(true);
+    expect(pending.some((row) => row.proposalId === "list-rejected")).toBe(false);
+
+    const all = listIntakeProposals(db, { limit: 10 });
+    expect(all.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("isAuthoritative is true only for approved, applied, and exported states", async () => {
+    const { isAuthoritative } = await import("../intake-export");
+    expect(isAuthoritative("approved")).toBe(true);
+    expect(isAuthoritative("applied")).toBe(true);
+    expect(isAuthoritative("exported")).toBe(true);
+    expect(isAuthoritative("intake_pending")).toBe(false);
+    expect(isAuthoritative("rejected")).toBe(false);
+  });
+
+  it("intakeProposal validates required fields", async () => {
+    const { intakeProposal, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "",
+        sourceSkillId: "skill-502",
+        sourceVersion: "1.0.0",
+        proposedDiff: "## Preconditions\nnone",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("advanceProposalState appends notes and exported proposals stay terminal", async () => {
+    const {
+      intakeProposal,
+      advanceProposalState,
+      exportProposal,
+      loadIntakeRow,
+      SkillForgeIntakeError,
+    } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "note-export",
+      sourceSkillId: "skill-503",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "analyzing", note: "first note" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "approved" });
+    exportProposal(db, {
+      proposalId: "note-export",
+      runtimeSkillId: "skill-503",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-503",
+      actor: "operator",
+    });
+    const exported = loadIntakeRow(db, "note-export");
+    expect(exported?.notes).toContain("first note");
+    expect(exported?.state).toBe("exported");
+    expect(() =>
+      advanceProposalState(db, { proposalId: "note-export", actor: "operator", toState: "analyzing" })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("rollback on already rolled back export returns status_only", async () => {
+    const { intakeProposal, advanceProposalState, exportProposal, rollbackExport } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "double-rollback",
+      sourceSkillId: "skill-504",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "double-rollback", actor: "operator", toState: "approved" });
+    exportProposal(db, {
+      proposalId: "double-rollback",
+      runtimeSkillId: "skill-504",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-504",
+      actor: "operator",
+    });
+    const first = rollbackExport(db, {
+      proposalId: "double-rollback",
+      actor: "operator",
+      reason: "first rollback",
+    });
+    expect(first.outcome).toBe("restored");
+    const second = rollbackExport(db, {
+      proposalId: "double-rollback",
+      actor: "operator",
+      reason: "second rollback",
+    });
+    expect(second.outcome).toBe("status_only");
+    expect(second.reason).toMatch(/applied|already rolled back|no prior runtime export/i);
+  });
+});
+
 describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approved", () => {
   it("exportProposal refuses a non-authoritative proposal (no auto-export from approval)", async () => {
     const { intakeProposal, exportProposal, SkillForgeIntakeError } = await import(
@@ -293,5 +420,112 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     });
     expect(result.outcome).toBe("status_only");
     expect(result.reason).toMatch(/not_exported|status-only/);
+  });
+
+  it("rollbackExport validates required proposalId, actor, and reason", async () => {
+    const { rollbackExport, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      rollbackExport(db, { proposalId: "", actor: "operator", reason: "x" })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      rollbackExport(db, { proposalId: "p1", actor: "", reason: "x" })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      rollbackExport(db, { proposalId: "p1", actor: "operator", reason: "" })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("rollbackExport throws when the proposal id does not exist", async () => {
+    const { rollbackExport, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      rollbackExport(db, {
+        proposalId: "missing-proposal",
+        actor: "operator",
+        reason: "cleanup",
+      })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("exports state constants and advances through applied before exported", async () => {
+    const {
+      intakeProposal,
+      advanceProposalState,
+      exportProposal,
+      AUTHORITATIVE_PROPOSAL_STATES,
+      TERMINAL_PROPOSAL_STATES,
+      loadIntakeRow,
+    } = await import("../intake-export");
+    expect(AUTHORITATIVE_PROPOSAL_STATES).toContain("applied");
+    expect(TERMINAL_PROPOSAL_STATES).toContain("exported");
+
+    intakeProposal(db, {
+      proposalId: "applied-path",
+      sourceSkillId: "skill-505",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "analyzing" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "eval_running" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "pending_approval" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "approved" });
+    advanceProposalState(db, { proposalId: "applied-path", actor: "operator", toState: "applied" });
+    exportProposal(db, {
+      proposalId: "applied-path",
+      runtimeSkillId: "skill-505",
+      runtimeVersion: "1.0.0",
+      runtimeContentHash: "hash-505",
+      actor: "operator",
+    });
+    expect(loadIntakeRow(db, "applied-path")?.state).toBe("exported");
+  });
+
+  it("recordIntakeRedaction rejects missing proposals and invalid states", async () => {
+    const { recordIntakeRedaction, intakeProposal, advanceProposalState, SkillForgeIntakeError } =
+      await import("../intake-export");
+    expect(() =>
+      recordIntakeRedaction(db, {
+        proposalId: "missing",
+        actor: "operator",
+        redactedEntryCount: 1,
+        scopeKey: "scope",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    intakeProposal(db, {
+      proposalId: "redact-state",
+      sourceSkillId: "skill-506",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    advanceProposalState(db, { proposalId: "redact-state", actor: "operator", toState: "analyzing" });
+    expect(() =>
+      recordIntakeRedaction(db, {
+        proposalId: "redact-state",
+        actor: "operator",
+        redactedEntryCount: 2,
+        scopeKey: "scope-1",
+      })
+    ).toThrow(/only 'intake_pending'/);
+  });
+
+  it("recordIntakeRedaction stores scope metadata on pending proposals", async () => {
+    const { recordIntakeRedaction, intakeProposal, loadIntakeRow } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "redact-ok",
+      sourceSkillId: "skill-507",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    const updated = recordIntakeRedaction(db, {
+      proposalId: "redact-ok",
+      actor: "operator",
+      redactedEntryCount: 3,
+      scopeKey: "tenant/default",
+    });
+    expect(updated.redactedEntryCount).toBe(3);
+    expect(updated.scopeKey).toBe("tenant/default");
+    expect(loadIntakeRow(db, "redact-ok")?.scopeKey).toBe("tenant/default");
   });
 });

@@ -953,3 +953,223 @@ describe("listImportProposals / listAgentVersionPins filters", () => {
     expect(xPins[0].skill_name).toBe("sk-x");
   });
 });
+
+describe("getImportProposal and listImportProposals", () => {
+  it("getImportProposal returns null for invalid ids and the row when present", async () => {
+    const { detectSkillChange, getImportProposal } = await importSyncModule();
+    expect(getImportProposal(db, "")).toBeNull();
+    const created = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "lookup-skill",
+      detected_content_body: "body",
+      proposed_by: "scanner",
+    });
+    const found = getImportProposal(db, created.proposal.id);
+    expect(found?.id).toBe(created.proposal.id);
+    expect(found?.status).toBe("pending");
+  });
+
+  it("listImportProposals filters by status and harness", async () => {
+    const { detectSkillChange, listImportProposals } = await importSyncModule();
+    detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "listed-skill",
+      detected_content_body: "listed body",
+      proposed_by: "scanner",
+    });
+    const pending = listImportProposals(db, {
+      status: "pending",
+      source_harness: "claude",
+      skill_name: "listed-skill",
+    });
+    expect(pending).toHaveLength(1);
+    expect(() => listImportProposals(db, { status: "bogus" as "pending" })).toThrow(
+      /Invalid proposal status/
+    );
+  });
+});
+
+describe("pin lookup helpers and agent-scoped rollback", () => {
+  it("getAgentVersionPin and getVersionPin return the stored pin row", async () => {
+    const { createOrUpdateAgentVersionPin, getAgentVersionPin, getVersionPin } =
+      await importSyncModule();
+    insertAgent("lookup-agent", "Lookup Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "lookup-agent",
+      skill_name: "lookup-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+    });
+    const byAgent = getAgentVersionPin(db, "lookup-agent", "lookup-skill");
+    expect(byAgent?.current_version).toBe("1.0.0");
+    const byId = getVersionPin(db, byAgent!.id);
+    expect(byId?.agent_id).toBe("lookup-agent");
+    expect(getAgentVersionPin(db, "", "lookup-skill")).toBeNull();
+    expect(getVersionPin(db, -1)).toBeNull();
+  });
+
+  it("rollbackAgentVersionPinByAgent rolls back using agent + skill tuple", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      getAgentVersionPin,
+    } = await importSyncModule();
+    insertAgent("rb-agent", "RB Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "2".repeat(64),
+      actor: "alice",
+    });
+    const rolled = rollbackAgentVersionPinByAgent(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      operator: "alice",
+      reason: "regression",
+    });
+    expect(rolled.current_version).toBe("1.0.0");
+    expect(getAgentVersionPin(db, "rb-agent", "rb-by-agent")?.prior_version).toBeNull();
+  });
+
+  it("computeGovernanceContentHash is stable SHA-256 hex", async () => {
+    const { computeGovernanceContentHash } = await importSyncModule();
+    const a = computeGovernanceContentHash("same body");
+    const b = computeGovernanceContentHash("same body");
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("rejectImportProposal refuses already-approved proposals", async () => {
+    const { detectSkillChange, approveImportProposal, rejectImportProposal, SyncGovernanceError } =
+      await importSyncModule();
+    insertSkillRow({ name: "no-reject-after-approve", content_hash: "0".repeat(64) });
+    const det = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "no-reject-after-approve",
+      detected_content_hash: "1".repeat(64),
+      proposed_by: "scanner",
+    });
+    approveImportProposal(db, det.proposal.id, "alice", "approved");
+    expect(() =>
+      rejectImportProposal(db, det.proposal.id, "bob", "too late")
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("detectSkillChange computes hash from detected_content_body when hash omitted", async () => {
+    const { detectSkillChange, computeGovernanceContentHash } = await importSyncModule();
+    const body = "governed body for hashing";
+    const created = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "hash-from-body",
+      detected_content_body: body,
+      proposed_by: "scanner",
+    });
+    expect(created.proposal.detected_content_hash).toBe(computeGovernanceContentHash(body));
+  });
+
+  it("rollbackAgentVersionPinByAgent fails closed on policy-invalid prior rows", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      SyncGovernanceError,
+    } = await importSyncModule();
+    insertAgent("policy-agent", "Policy Agent");
+    const priorId = insertSkillRow({
+      name: "policy-prior",
+      dispatch_status: "disabled",
+      completeness_pct: 100,
+      content_hash: "1".repeat(64),
+    });
+    const currentId = insertSkillRow({
+      name: "policy-current",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      content_hash: "2".repeat(64),
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "policy-agent",
+      skill_name: "policy-skill",
+      skill_id: currentId,
+      current_version: "2.0.0",
+      current_content_hash: "2".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET prior_version = ?, prior_content_hash = ?, prior_skill_id = ?
+        WHERE agent_id = ? AND skill_name = ?`
+    ).run("1.0.0", "1".repeat(64), priorId, "policy-agent", "policy-skill");
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "policy-agent",
+        skill_name: "policy-skill",
+        operator: "alice",
+        reason: "bad prior",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("detectSkillChange rejects empty harness, skill name, actor, and malformed hashes", async () => {
+    const { detectSkillChange, SyncGovernanceError } = await importSyncModule();
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "   ",
+        skill_name: "x",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "bad-hash",
+        detected_content_hash: "short",
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "missing-actor",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: " ",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("approveImportProposal refuses unknown proposals and double approval", async () => {
+    const { detectSkillChange, approveImportProposal, SyncGovernanceError } = await importSyncModule();
+    expect(() => approveImportProposal(db, "missing-id", "alice", "ok")).toThrow(SyncGovernanceError);
+    insertSkillRow({ name: "double-approve", content_hash: "0".repeat(64) });
+    const det = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "double-approve",
+      detected_content_hash: "1".repeat(64),
+      proposed_by: "scanner",
+    });
+    approveImportProposal(db, det.proposal.id, "alice", "first");
+    expect(() => approveImportProposal(db, det.proposal.id, "alice", "second")).toThrow(
+      SyncGovernanceError
+    );
+  });
+});

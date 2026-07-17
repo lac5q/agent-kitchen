@@ -309,4 +309,89 @@ describe("agent registry service", () => {
       }),
     ]);
   });
+
+  it("authenticates bearer headers and records skill, tool, and source-read telemetry", async () => {
+    const {
+      authenticateAgentHeaders,
+      createAgentApiKey,
+      getDb,
+      recordSkillReport,
+      recordToolOutcome,
+      registerAgent,
+    } = await loadRegistry();
+    const { listEfficiencyEvents } = await import("../efficiency-telemetry");
+
+    registerAgent({
+      id: "telemetry-agent",
+      name: "Telemetry Agent",
+      role: "Reports outcomes",
+      platform: "codex",
+      protocol: "rest",
+    });
+    const key = createAgentApiKey("telemetry-agent");
+    const headers = new Headers({ authorization: `Bearer ${key}` });
+    expect(authenticateAgentHeaders(headers, "telemetry-agent")?.id).toBe("telemetry-agent");
+
+    recordSkillReport("telemetry-agent", { skillId: "memory.write", action: "invoke", metadata: { lane: "test" } });
+    recordToolOutcome("telemetry-agent", {
+      toolId: "read_file",
+      outcome: "ok",
+      metadata: { sourceId: "doc-1", sourceContent: "hello world", taskId: "task-1" },
+    });
+
+    const skillRows = getDb().prepare("SELECT skill_id FROM agent_skill_reports WHERE agent_id = ?").all("telemetry-agent") as Array<{ skill_id: string }>;
+    expect(skillRows).toEqual([{ skill_id: "memory.write" }]);
+    const sourceEvents = listEfficiencyEvents(getDb(), { eventType: "source_read", taskId: "task-1", limit: 5 });
+    expect(sourceEvents[0]?.payload.sourceId).toBe("doc-1");
+  });
+
+  it("resolves cloudflare tunnel agents and polls remote health endpoints", async () => {
+    const { getRemoteAgents, pollAllRemoteAgents, pollRemoteAgent, registerAgent } = await loadRegistry();
+
+    registerAgent({
+      id: "cloud-agent",
+      name: "Cloud Agent",
+      role: "HTTPS worker",
+      platform: "claude",
+      protocol: "a2a",
+      location: "cloudflare",
+      tunnelUrl: "https://agent.example.test",
+      metadata: {
+        a2a: { endpointUrl: "https://agent.example.test/v1" },
+      },
+      capabilities: [{ id: "dispatch", name: "Dispatch", description: "Tasks", tags: [] }],
+    });
+
+    expect(getRemoteAgents()[0]).toMatchObject({
+      id: "cloud-agent",
+      host: "agent.example.test",
+      port: 443,
+      tunnelUrl: "https://agent.example.test",
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })));
+    const polled = await pollRemoteAgent(getRemoteAgents()[0]!);
+    expect(polled.reachable).toBe(true);
+    expect(polled.latencyMs).not.toBeNull();
+
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const all = await pollAllRemoteAgents();
+    expect(all.some((entry) => entry.reachable === false)).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects API keys for unknown or deregistered agents", async () => {
+    const { createAgentApiKey, deregisterAgent, registerAgent } = await loadRegistry();
+
+    registerAgent({
+      id: "gone-agent",
+      name: "Gone Agent",
+      role: "Retired",
+      platform: "codex",
+      protocol: "rest",
+    });
+    deregisterAgent("gone-agent");
+    expect(() => createAgentApiKey("gone-agent")).toThrow(/unknown or deregistered/);
+    expect(() => createAgentApiKey("missing-agent")).toThrow(/unknown or deregistered/);
+  });
 });

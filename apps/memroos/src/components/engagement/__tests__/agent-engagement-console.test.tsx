@@ -107,7 +107,7 @@ const mockAgents = [
 ];
 
 vi.mock("@/lib/api-client", () => ({
-  useAgents: () => ({ data: { agents: mockAgents }, isLoading: false }),
+  useAgents: vi.fn(() => ({ data: { agents: mockAgents }, isLoading: false })),
   useDelegations: () => ({
     data: {
       delegations: [{
@@ -121,6 +121,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { AgentEngagementConsole } from "../agent-engagement-console";
+import { useAgents } from "@/lib/api-client";
 
 function chatStream(text: string): Response {
   return new Response(`data: ${JSON.stringify({ text })}\n\ndata: [DONE]\n\n`, {
@@ -131,6 +132,7 @@ function chatStream(text: string): Response {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useAgents).mockReturnValue({ data: { agents: mockAgents }, isLoading: false } as ReturnType<typeof useAgents>);
   vi.stubGlobal("fetch", vi.fn());
 });
 
@@ -246,6 +248,151 @@ describe("AgentEngagementConsole", () => {
     expect(screen.getByText(/Room session/i)).toBeInTheDocument();
   });
 
+  it("shows recent delegations in the sidebar", () => {
+    render(<AgentEngagementConsole />);
+
+    expect(screen.getByText("existing task")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Timeline t1" })).toBeInTheDocument();
+    expect(screen.getByText("pending")).toBeInTheDocument();
+  });
+
+  it("runs a conference round with the default prompt when the room message is blank", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Conference summary from the room."));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/chat", expect.objectContaining({ method: "POST" }));
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(String(init?.body));
+      expect(body.message).toContain("group conference round");
+      expect(screen.getByText("Conference summary from the room.")).toBeInTheDocument();
+    });
+  });
+
+  it("includes standup blockers and operator ask in the standup prompt", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Blocked on deploy access."));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.change(screen.getByLabelText(/Standup focus/i), { target: { value: "Dispatch reliability" } });
+    fireEvent.change(screen.getByPlaceholderText(/Anything blocked or stale/i), {
+      target: { value: "Heroku token expired" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Reply with status, next step/i), {
+      target: { value: "Name the next unblocker" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Run 15-minute standup/i }));
+
+    await waitFor(() => {
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(String(init?.body));
+      expect(body.message).toContain("Known blockers: Heroku token expired");
+      expect(body.message).toContain("Operator ask: Name the next unblocker");
+    });
+  });
+
+  it("surfaces chat stream failures in the transcript", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('{"error":{"message":"Provider unavailable"}}', { status: 503 }),
+    );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "ping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chat unavailable: Provider unavailable/)).toBeInTheDocument();
+    });
+  });
+
+  it("surfaces engagement test network failures", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: /test primary agents/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("network down")).toBeInTheDocument();
+    });
+  });
+
+  it("runs diagnostics for a single agent from the roster card", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      json: async () => ({
+        results: [{
+          agentId: "codex-cli-agent",
+          name: "Codex CLI",
+          status: "idle",
+          chat: { status: "ready", runner: "codex", model: "gpt-4.1", detail: "ready" },
+          dispatch: { status: "ready", adapter: "hive-poll", detail: "queued" },
+          voice: { status: "ready", detail: "ok" },
+        }],
+      }),
+    } as Response);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[1]);
+
+    await waitFor(() => {
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(String(init?.body)).toContain("codex-cli-agent");
+    });
+  });
+
+  it("toggles room participation from an agent card", () => {
+    render(<AgentEngagementConsole />);
+
+    expect(screen.getByText(/1 participant/)).toBeInTheDocument();
+    const roomButtons = screen.getAllByRole("button", { name: /Room/i });
+    fireEvent.click(roomButtons[1]);
+
+    expect(screen.getByText(/2 participants/)).toBeInTheDocument();
+  });
+
+  it("can hide system agents again after showing them", () => {
+    render(<AgentEngagementConsole />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Show system \(2\)/i }));
+    expect(screen.getByText("CEO")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hide system/i }));
+    expect(screen.queryByText("CEO")).not.toBeInTheDocument();
+  });
+
+  it("sends direct chat on Enter without Shift", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Enter key works"));
+
+    render(<AgentEngagementConsole />);
+    const textarea = screen.getByLabelText("Direct message");
+    fireEvent.change(textarea, { target: { value: "via enter" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      expect(screen.getByText("Enter key works")).toBeInTheDocument();
+    });
+  });
+
+  it("records a system message when voice capture is unsupported in room mode", () => {
+    const originalSpeechRecognition = window.SpeechRecognition;
+    // @ts-expect-error test cleanup
+    delete window.SpeechRecognition;
+    // @ts-expect-error test cleanup
+    delete window.webkitSpeechRecognition;
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Speak to room" }));
+
+    expect(
+      screen.getByText(/Voice capture is not supported in this browser/i),
+    ).toBeInTheDocument();
+
+    window.SpeechRecognition = originalSpeechRecognition;
+  });
+
   it("scopes direct chat history and payload to the selected agent", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(chatStream("Claude response"))
@@ -273,5 +420,216 @@ describe("AgentEngagementConsole", () => {
       expect(body.history).toEqual([]);
       expect(screen.getByText("Codex response")).toBeInTheDocument();
     });
+  });
+
+  it("filters the roster by search query", () => {
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Filter agents"), { target: { value: "codex" } });
+    expect(screen.getAllByText("Codex CLI").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Claude Sonnet Engineer")).not.toBeInTheDocument();
+  });
+
+  it("filters the roster by agent status", () => {
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Filter by agent status"), { target: { value: "active" } });
+    expect(screen.getAllByText("Claude Sonnet Engineer").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Codex CLI")).not.toBeInTheDocument();
+  });
+
+  it("invokes TTS after voice capture delivers a transcript in direct chat", async () => {
+    const play = vi.fn().mockResolvedValue(undefined);
+    class MockAudio {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play = play;
+      pause = vi.fn();
+    }
+    vi.stubGlobal("Audio", MockAudio as unknown as typeof Audio);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:tts"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        this.onresult?.({ results: [{ 0: { transcript: "voice hello" } }] });
+        this.onend?.();
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    vi.stubGlobal("webkitSpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("spoken reply"))
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["audio"]),
+      } as Response);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
+      expect(play).toHaveBeenCalled();
+    });
+  });
+
+  it("shows loading state while agents are fetching", () => {
+    vi.mocked(useAgents).mockReturnValueOnce({ data: undefined, isLoading: true } as ReturnType<typeof useAgents>);
+    render(<AgentEngagementConsole />);
+    expect(screen.getByText("Loading agents...")).toBeInTheDocument();
+  });
+
+  it("parses stream payload errors embedded in SSE data lines", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        'data: {"error":"{\\"message\\":\\"rate limited\\"}"}\n\n',
+        { status: 200, headers: { "Content-Type": "text/event-stream" } }
+      )
+    );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "boom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chat unavailable/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows default model labels and fallback routing after diagnostics", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      json: async () => ({
+        results: [{
+          agentId: "claude-sonnet-engineer",
+          name: "Claude Sonnet Engineer",
+          status: "active",
+          chat: {
+            status: "warning",
+            runner: "opencode",
+            model: "bailian/qwen3.5-plus",
+            fallbackRunner: "anthropic",
+            fallbackModel: "claude-sonnet-4-6",
+            detail: "fallback ready",
+          },
+          dispatch: { status: "ready", adapter: "hive-poll", detail: "queued" },
+          voice: { status: "ready", detail: "ok" },
+        }],
+      }),
+    } as Response);
+
+    render(<AgentEngagementConsole />);
+    expect(screen.getAllByText(/model: claude-sonnet-4-6|model: opencode/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /test primary agents/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/hive-poll \/ opencode -> anthropic\/claude-sonnet-4-6/)).toBeInTheDocument();
+    });
+  });
+
+  it("renders directory agents and error-status pills outside the primary roster", () => {
+    const directoryAgent = {
+      ...mockAgents[1],
+      id: "directory-only-agent",
+      name: "Directory Only",
+      role: "Support",
+      status: "error" as const,
+    };
+    vi.mocked(useAgents).mockReturnValue({
+      data: { agents: [...mockAgents, directoryAgent] },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    render(<AgentEngagementConsole />);
+    expect(screen.getByText("Registered directory")).toBeInTheDocument();
+    expect(screen.getByText("Directory Only")).toBeInTheDocument();
+    expect(screen.getAllByText("error").length).toBeGreaterThan(0);
+  });
+
+  it("uses active and all participant presets in room mode", async () => {
+    vi.mocked(fetch).mockResolvedValue(chatStream("Room preset reply"));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use all" }));
+
+    expect(screen.getByText(/2 participants/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled();
+      expect(screen.getByText("Room preset reply")).toBeInTheDocument();
+    });
+  });
+
+  it("runs a multi-participant room round and surfaces per-agent failures", async () => {
+    vi.mocked(useAgents).mockReturnValue({
+      data: {
+        agents: mockAgents.map((agent) =>
+          agent.id === "codex-cli-agent" ? { ...agent, status: "active" as const } : agent,
+        ),
+      },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("First agent update."))
+      .mockResolvedValueOnce(
+        new Response('{"message":"room provider down"}', { status: 503 }),
+      );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("First agent update.")).toBeInTheDocument();
+      expect(screen.getByText(/Chat unavailable/i)).toBeInTheDocument();
+    });
+  });
+
+  it("ignores TTS failures without blocking chat", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("spoken reply"))
+      .mockResolvedValueOnce(new Response("tts down", { status: 503 }));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("spoken reply")).toBeInTheDocument();
+    });
+  });
+
+  it("stops an active voice capture session when Speak is clicked again", () => {
+    const stop = vi.fn();
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = stop;
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    vi.stubGlobal("webkitSpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+
+    expect(stop).toHaveBeenCalled();
   });
 });

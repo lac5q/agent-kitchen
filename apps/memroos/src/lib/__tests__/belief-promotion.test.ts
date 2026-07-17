@@ -10,6 +10,8 @@ import {
   demoteCandidate,
   enqueueForReview,
   evaluatePromotionChecks,
+  listOpenReviews,
+  normalizeCategory,
   promoteCandidate,
   resolveReview,
 } from "../belief/promotion";
@@ -981,6 +983,133 @@ describe("belief promotion pipeline", () => {
     })).toThrow("caller-supplied ontology context is not accepted");
   });
 
+  it("normalizeCategory maps unknown labels to unclassified and trims valid categories", () => {
+    expect(normalizeCategory("  OPERATIONAL  ")).toBe("operational");
+    expect(normalizeCategory("not-a-real-category")).toBe("unclassified");
+    expect(normalizeCategory(null)).toBe("unclassified");
+  });
+
+  it("listOpenReviews returns open queue items for the tenant", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queued = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected review queue");
+
+    const open = listOpenReviews(db, { tenantId: TENANT, limit: 10 });
+    expect(open.some((item) => item.id === queued.queueId)).toBe(true);
+    expect(open.find((item) => item.id === queued.queueId)).toMatchObject({
+      candidateId: f.candidateId,
+      category: "pricing",
+      status: "open",
+    });
+  });
+
+  it("canAdmitToGold is idempotent for already-gold candidates via latestDecisionForCandidate", () => {
+    const f = insertFixture(db, { category: "operational" });
+    const first = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(first.kind).toBe("admitted");
+    if (first.kind !== "admitted") throw new Error("expected admitted");
+
+    const again = canAdmitToGold(db, TENANT, f.candidateId, {
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(again.kind).toBe("admitted");
+    if (again.kind !== "admitted") throw new Error("expected admitted");
+    expect(again.decisionId).toBe(first.decisionId);
+    expect(again.receipt.entryHash).toBe(first.receipt.entryHash);
+  });
+
+  it("freshness_check_denies_stale_capture: candidates older than the freshness window fail closed", () => {
+    const staleDate = new Date();
+    staleDate.setDate(staleDate.getDate() - 400);
+    const f = insertFixture(db, {
+      category: "operational",
+      capturedAt: staleDate.toISOString(),
+    });
+    const checks = evaluatePromotionChecks(db, TENANT, f.candidateId, {
+      now: new Date(),
+    });
+    const freshness = checks.find((c) => c.name === "freshness");
+    expect(freshness?.pass).toBe(false);
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(decision.kind).toBe("denied");
+    if (decision.kind !== "denied") throw new Error("expected denied");
+    expect(decision.failedCheck).toBe("freshness");
+  });
+
+  it("provenance_check_denies_missing_capture_hash", () => {
+    const captureId = crypto.randomUUID();
+    const artifactId = `artifact-no-hash-${captureId}`;
+    db.prepare(
+      `INSERT OR IGNORE INTO raw_artifacts (id, tenant_id, source_type, artifact_uri, artifact_path, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(artifactId, TENANT, "test_fixture", `memroos://test/${artifactId}`, `/tmp/test/${artifactId}`, sha256(artifactId));
+    db.prepare(
+      `INSERT INTO agent_session_captures
+         (id, tenant_id, source_agent_id, runtime, project, repo_path, session_id, task_id,
+          status, capture_health, model_route_json, summary, decision_intent_json,
+          sources_json, files_json, commands_json, errors_json, verification_json,
+          metadata_json, raw_artifact_id, capture_hash, captured_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'captured', 'ok', '{}', '', '{}',
+               '[]', '[]', '[]', '[]', '[]', '{}', ?, '', ?, ?)`
+    ).run(
+      captureId,
+      TENANT,
+      "codex",
+      "test",
+      "memroos",
+      "/repo",
+      "session-no-hash",
+      "task-no-hash",
+      artifactId,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    const candidateId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO agent_memory_candidates
+         (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status,
+          belief_stage, metadata_json, created_at)
+       VALUES (?, ?, ?, 'codex', 'decision_intent', ?, ?, 'candidate',
+              'silver_candidate_claim', ?, ?)`
+    ).run(
+      candidateId,
+      TENANT,
+      captureId,
+      "missing-hash-claim",
+      sha256("missing-hash-claim"),
+      JSON.stringify({ visibility: "internal", policy: "agent_visible" }),
+      new Date().toISOString(),
+    );
+    seedBeliefReviewOntology(db, candidateId);
+
+    const decision = promoteCandidate(db, {
+      candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(decision.kind).toBe("denied");
+    if (decision.kind !== "denied") throw new Error("expected denied");
+    expect(decision.failedCheck).toBe("provenance");
+  });
+
   it("writeAdmittedReceipt_persists_ontology_coordinates: the admitted receipt carries verifiable ontology coordinates", () => {
     // writeAdmittedReceipt is internal; we exercise the gate through
     // promoteCandidate. The candidate has a valid ontology context seeded
@@ -1003,6 +1132,191 @@ describe("belief promotion pipeline", () => {
     expect(decision.receipt.ontology?.sourceId).toBeTruthy();
     expect(decision.receipt.ontology?.sourceHash).toBeTruthy();
     expect(decision.receipt.ontology?.derivativeId).toBeTruthy();
+  });
+
+  it("provenance_check_denies_missing_capture", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.pragma("foreign_keys = OFF");
+    db.prepare(`DELETE FROM agent_session_captures WHERE id = ?`).run(f.captureId);
+    db.pragma("foreign_keys = ON");
+
+    const checks = evaluatePromotionChecks(db, TENANT, f.candidateId);
+    const provenance = checks.find((c) => c.name === "provenance");
+    expect(provenance?.pass).toBe(false);
+    expect(provenance?.evidence).toMatchObject({ reason: "capture_not_found" });
+  });
+
+  it("resolveReview rejects unknown queue ids and already-resolved items", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queued = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected queue");
+
+    expect(() =>
+      resolveReview(db, {
+        queueId: "missing-queue",
+        tenantId: TENANT,
+        resolution: "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/not found/);
+
+    resolveReview(db, {
+      queueId: queued.queueId,
+      tenantId: TENANT,
+      resolution: "rejected",
+      operatorId: "operator-2",
+      note: "nope",
+    });
+
+    expect(() =>
+      resolveReview(db, {
+        queueId: queued.queueId,
+        tenantId: TENANT,
+        resolution: "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/already rejected/);
+  });
+
+  it("enqueueForReview fails when ontology context is unavailable", () => {
+    const captureId = crypto.randomUUID();
+    const artifactId = `artifact-enq-${captureId}`;
+    db.prepare(
+      `INSERT OR IGNORE INTO raw_artifacts (id, tenant_id, source_type, artifact_uri, artifact_path, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(artifactId, TENANT, "test_fixture", `memroos://test/${artifactId}`, `/tmp/test/${artifactId}`, sha256(artifactId));
+    db.prepare(
+      `INSERT INTO agent_session_captures
+         (id, tenant_id, source_agent_id, runtime, project, repo_path, session_id, task_id,
+          status, capture_health, model_route_json, summary, decision_intent_json,
+          sources_json, files_json, commands_json, errors_json, verification_json,
+          metadata_json, raw_artifact_id, capture_hash, captured_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'captured', 'ok', '{}', '', '{}',
+               '[]', '[]', '[]', '[]', '[]', '{}', ?, ?, ?, ?)`
+    ).run(
+      captureId,
+      TENANT,
+      "codex",
+      "test",
+      "memroos",
+      "/repo",
+      "session-enq",
+      "task-enq",
+      artifactId,
+      sha256(`cap-${captureId}`),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    const candidateId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO agent_memory_candidates
+         (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status,
+          belief_stage, metadata_json, created_at)
+       VALUES (?, ?, ?, 'codex', 'decision_intent', ?, ?, 'candidate',
+              'silver_candidate_claim', ?, ?)`
+    ).run(
+      candidateId,
+      TENANT,
+      captureId,
+      "no ontology enqueue",
+      sha256("no ontology enqueue"),
+      JSON.stringify({ visibility: "internal", policy: "agent_visible" }),
+      new Date().toISOString(),
+    );
+
+    expect(() =>
+      enqueueForReview(db, {
+        candidateId,
+        tenantId: TENANT,
+        category: "operational",
+      })
+    ).toThrow(/ontology context is unavailable/);
+  });
+
+  it("promoteCandidate succeeds with an explicit ontologyReference", () => {
+    const f = insertFixture(db, { category: "operational" });
+    const ref = db
+      .prepare(
+        `SELECT space_id, record_type, record_id
+           FROM ontology_versioned_records
+          WHERE record_type = 'belief_candidate' AND record_id = ?
+          LIMIT 1`
+      )
+      .get(f.candidateId) as { space_id: string; record_type: string; record_id: string };
+
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+      ontologyReference: {
+        tenantId: TENANT,
+        spaceId: ref.space_id,
+        recordType: ref.record_type,
+        recordId: ref.record_id,
+      },
+    });
+    expect(decision.kind).toBe("admitted");
+  });
+
+  it("policy_check_denies_restricted labels for promotion", () => {
+    const f = insertFixture(db, {
+      category: "operational",
+      metadata: { visibility: "internal", policy: "agent_restricted" },
+    });
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(decision.kind).toBe("denied");
+    if (decision.kind !== "denied") throw new Error("expected denied");
+    expect(decision.failedCheck).toBe("policy");
+  });
+
+  it("demoteCandidate records supersession metadata when a replacement gold exists", () => {
+    const f1 = insertFixture(db, { category: "operational", content: "shared supersede claim" });
+    const f2 = insertFixture(db, {
+      category: "operational",
+      content: "shared supersede claim",
+      captureHash: sha256(`cap-f2-${f1.captureId}`),
+    });
+    promoteCandidate(db, {
+      candidateId: f1.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    demoteCandidate(db, {
+      candidateId: f1.candidateId,
+      tenantId: TENANT,
+      reason: "superseded_by_conflict",
+      actor: { id: "test-operator", role: "operator" },
+    });
+    promoteCandidate(db, {
+      candidateId: f2.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    const demote = demoteCandidate(db, {
+      candidateId: f1.candidateId,
+      tenantId: TENANT,
+      reason: "superseded_by_conflict",
+      actor: { id: "test-operator", role: "operator" },
+    });
+    const meta = db
+      .prepare(`SELECT metadata_json FROM belief_promotion_decisions WHERE id = ?`)
+      .get(demote.decisionId) as { metadata_json: string };
+    const parsed = JSON.parse(meta.metadata_json) as Record<string, unknown>;
+    expect(parsed.supersedesCandidateId).toBe(f2.candidateId);
   });
 
 });

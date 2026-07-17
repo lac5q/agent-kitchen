@@ -751,3 +751,102 @@ describe("VAL-QUAR-012 API auth gating", () => {
     expect(Array.isArray(json.items)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Quarantine module helpers
+// ---------------------------------------------------------------------------
+
+describe("quarantine module helpers", () => {
+  it("lists and fetches quarantine records with filters", async () => {
+    const {
+      getQuarantineRecord,
+      listQuarantineRecords,
+      upsertQuarantineRecord,
+    } = await importQuarantineModule();
+    const id = insertSkill({ name: "listed-skill" });
+    upsertQuarantineRecord(db, {
+      skillId: id,
+      stage: "pending_approval",
+      approvalStatus: "pending",
+    });
+
+    expect(getQuarantineRecord(db, 99999)).toBeNull();
+    const listed = listQuarantineRecords(db, {
+      stage: "pending_approval",
+      approvalStatus: "pending",
+      limit: 10,
+      offset: 0,
+    });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.skill_id).toBe(id);
+  });
+
+  it("upsert updates an existing row instead of inserting a duplicate", async () => {
+    const { upsertQuarantineRecord, getQuarantineRecord } = await importQuarantineModule();
+    const id = insertSkill({ name: "upsert-skill" });
+    upsertQuarantineRecord(db, { skillId: id, stage: "imported", approvalStatus: "pending" });
+    upsertQuarantineRecord(db, { skillId: id, stage: "scanning", approvalStatus: "pending" });
+    expect(getQuarantineRecord(db, id)?.stage).toBe("scanning");
+  });
+
+  it("resolveEvalThreshold reads MEMROOS_QUARANTINE_EVAL_THRESHOLD", async () => {
+    const { resolveEvalThreshold } = await importQuarantineModule();
+    process.env["MEMROOS_QUARANTINE_EVAL_THRESHOLD"] = "0.9";
+    expect(resolveEvalThreshold()).toBe(0.9);
+    process.env["MEMROOS_QUARANTINE_EVAL_THRESHOLD"] = "not-a-number";
+    expect(resolveEvalThreshold()).toBe(0.5);
+  });
+
+  it("scoreVerificationChecks handles empty checks and token-only lines", async () => {
+    const { scoreVerificationChecks } = await importQuarantineModule();
+    expect(scoreVerificationChecks("body", null)).toBe(1);
+    expect(scoreVerificationChecks("verify output json", "- verify output\n- json format")).toBe(1);
+    expect(scoreVerificationChecks("unrelated body", "- must have database migration")).toBe(0);
+  });
+
+  it("runQuarantinePipeline rejects low eval scores", async () => {
+    const { runQuarantinePipeline } = await importQuarantineModule();
+    const id = insertSkill({
+      raw_body: "harmless skill body",
+      verification_checks: "- must include database migration\n- must include regression suite",
+    });
+    const result = runQuarantinePipeline(
+      db,
+      id,
+      "harmless skill body",
+      "- must include database migration\n- must include regression suite",
+      { evalThreshold: 0.99 },
+    );
+    expect(result.advancedTo).toBe("rejected");
+    expect(result.reason).toMatch(/below threshold/);
+  });
+
+  it("rejectQuarantine is idempotent for rejected rows and blocks enabled skills", async () => {
+    const {
+      approveQuarantine,
+      rejectQuarantine,
+      runQuarantinePipeline,
+      upsertQuarantineRecord,
+      QuarantineTransitionError,
+    } = await importQuarantineModule();
+
+    const rejectedId = insertSkill({ name: "already-rejected" });
+    upsertQuarantineRecord(db, {
+      skillId: rejectedId,
+      stage: "rejected",
+      approvalStatus: "rejected",
+      rejectionReason: "prior",
+    });
+    const again = rejectQuarantine(db, rejectedId, "bob", "again");
+    expect(again.stage).toBe("rejected");
+
+    const enabledId = insertSkill({
+      name: "enabled-skill",
+      raw_body: "verify output json format",
+      verification_checks: "- verify output\n- json format",
+    });
+    runQuarantinePipeline(db, enabledId, "verify output json format", "- verify output\n- json format");
+    approveQuarantine(db, enabledId, "alice");
+    expect(() => rejectQuarantine(db, enabledId, "bob", "too late")).toThrow(QuarantineTransitionError);
+  });
+});

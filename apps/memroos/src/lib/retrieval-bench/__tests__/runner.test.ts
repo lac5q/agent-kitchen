@@ -1,6 +1,7 @@
 /**
  * End-to-end runner tests (VAL-RETR-001, VAL-RETR-005, VAL-RETR-008, VAL-RETR-013).
  */
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   runBenchmark,
@@ -303,6 +304,54 @@ describe("writeReport + renderTextReport", () => {
   });
 });
 
+describe("runBenchmark governance gates", () => {
+  it("requires CLI parser or cliCommand when bypassCliParser is false", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      bypassCliParser: false,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("cli_parser_required");
+    }
+  });
+
+  it("accepts cliCommand as the governed entry point", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 3,
+      k: 3,
+      seed: 0,
+      cliCommand: { noWrite: true },
+      bypassCliParser: false,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.taskCount).toBe(3);
+  });
+
+  it("marks mem0 and qdrant adapters as unavailable", async () => {
+    for (const adapter of ["mem0", "qdrant"] as const) {
+      const r = await runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter,
+        limit: 3,
+        k: 3,
+        seed: 0,
+        bypassCliParser: true,
+        fixturesDir: FIXTURES_DIR,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.tasks.every((task) => task.status === "unavailable")).toBe(true);
+    }
+  });
+});
+
 describe("loadDataset explicit errors", () => {
   it("refuses locomo without caller-local source", () => {
     const r = loadDataset({ dataset: "locomo", fixturesDir: FIXTURES_DIR });
@@ -326,5 +375,26 @@ describe("loadDataset explicit errors", () => {
     if (!r.ok) {
       expect(r.reason).toContain("longmemeval_v2_unavailable");
     }
+  });
+
+  it("refuses unsupported dataset ids", () => {
+    const r = loadDataset({ dataset: "unknown_dataset" as "memroos_public_synthetic", fixturesDir: FIXTURES_DIR });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toContain("dataset_unsupported");
+    }
+  });
+
+  it("fails smoke run when synthetic fixture loading breaks", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 1,
+      k: 1,
+      seed: 0,
+      bypassCliParser: true,
+      fixturesDir: path.join(FIXTURES_DIR, "missing-dir"),
+    });
+    expect(r.ok).toBe(false);
   });
 });

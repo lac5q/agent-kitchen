@@ -469,3 +469,49 @@ describe('db-ingest: direct provider file ingestion', () => {
     expect(rows).toEqual([{ content: 'yes' }]);
   });
 });
+
+describe('db-ingest: ingestAllSessions provider scans', () => {
+  let db: import('better-sqlite3').Database;
+
+  beforeEach(async () => {
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+    const dbModule = await import('../db');
+    if (dbModule.closeDb) dbModule.closeDb();
+    db = dbModule.getDb();
+    const m = await import('../db-ingest');
+    ingestAllSessions = m.ingestAllSessions;
+  });
+
+  it('ingests qwen, hermes, and codex session files through ingestAllSessions', () => {
+    const qwenProject = path.join(process.env.QWEN_MEMORY_PATH!, '-Users-jdoe-github-memroos', 'chats');
+    const hermesDir = process.env.HERMES_MEMORY_PATH!;
+    const codexDir = path.join(process.env.CODEX_MEMORY_PATH!, '2026', '01', '17');
+
+    writeJsonl(path.join(qwenProject, 'sess-all-qwen.jsonl'), [{
+      type: 'user',
+      timestamp: '2026-03-01T10:00:00Z',
+      message: { role: 'user', parts: [{ text: 'qwen ingest all' }] },
+    }]);
+    writeJsonl(path.join(hermesDir, 'sess-all-hermes.jsonl'), [{
+      role: 'assistant',
+      content: 'hermes ingest all',
+      timestamp: '2026-03-01T10:00:01Z',
+    }]);
+    writeJsonl(path.join(codexDir, 'sess-all-codex.jsonl'), [{
+      type: 'response_item',
+      timestamp: '2026-04-01T12:00:00Z',
+      payload: { role: 'assistant', content: [{ type: 'output_text', text: 'codex ingest all' }] },
+    }]);
+
+    const result = ingestAllSessions(db);
+    expect(result.filesProcessed).toBeGreaterThanOrEqual(3);
+    expect(result.rowsInserted).toBeGreaterThanOrEqual(3);
+
+    const qwenRows = db.prepare('SELECT project FROM messages WHERE session_id = ?').all('sess-all-qwen') as Array<{ project: string }>;
+    const hermesRows = db.prepare('SELECT project FROM messages WHERE session_id = ?').all('sess-all-hermes') as Array<{ project: string }>;
+    const codexRows = db.prepare('SELECT project FROM messages WHERE session_id = ?').all('sess-all-codex') as Array<{ project: string }>;
+    expect(qwenRows[0]?.project).toBe('qwen:memroos');
+    expect(hermesRows[0]?.project).toBe('hermes');
+    expect(codexRows[0]?.project).toBe('codex');
+  });
+});
