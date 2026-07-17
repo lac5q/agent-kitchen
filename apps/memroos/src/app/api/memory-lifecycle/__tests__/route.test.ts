@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb } from "@/lib/db";
 import { POST as expiryPost } from "../expiry/route";
 import { POST as decayPost } from "../decay/route";
-import { POST as holdsPost } from "../legal-holds/route";
-import { POST as retentionPost } from "../retention/route";
+import { GET as holdsGet, POST as holdsPost } from "../legal-holds/route";
+import { GET as retentionGet, POST as retentionPost } from "../retention/route";
 import { POST as subjectErasurePost } from "../subject-erasure/route";
 
 const TMP_ROOT = path.join(os.tmpdir(), `memory-lifecycle-route-${crypto.randomUUID()}`);
@@ -111,6 +111,106 @@ describe("memory lifecycle API routes", () => {
     const expiredJson = (await expiredRun.json()) as { summary: { held: number; expired: number } };
     expect(expiredJson.summary.held).toBe(0);
     expect(expiredJson.summary.expired).toBe(1);
+  });
+
+  it("lists legal holds and supports scope updates plus validation errors", async () => {
+    const createResponse = await holdsPost(
+      jsonRequest({
+        action: "create",
+        id: "hold-list",
+        scope: { tenantId: "default-tenant", recordId: "api-msg-list" },
+        reasonCode: "audit",
+        actorId: "operator",
+      })
+    );
+    expect(createResponse.status).toBe(200);
+
+    const listResponse = await holdsGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/legal-holds?tenantId=default-tenant")
+    );
+    const listJson = (await listResponse.json()) as { holds: Array<{ id: string }> };
+    expect(listResponse.status).toBe(200);
+    expect(listJson.holds.some((hold) => hold.id === "hold-list")).toBe(true);
+
+    const updateResponse = await holdsPost(
+      jsonRequest({
+        action: "update_scope",
+        holdId: "hold-list",
+        scope: { tenantId: "default-tenant", recordId: "api-msg-list", project: "alpha" },
+        actorId: "operator",
+        reason: "expanded scope",
+      })
+    );
+    expect(updateResponse.status).toBe(200);
+
+    const unsupportedResponse = await holdsPost(
+      jsonRequest({
+        action: "archive",
+        holdId: "hold-list",
+        actorId: "operator",
+      })
+    );
+    expect(unsupportedResponse.status).toBe(400);
+    expect((await unsupportedResponse.json()).error).toMatch(/unsupported action/i);
+  });
+
+  it("evaluates retention policies and lists receipts via GET", async () => {
+    await retentionPost(
+      jsonRequest({
+        action: "create_policy",
+        id: "policy-eval",
+        name: "eval policy",
+        ontologyType: "memory.note",
+        securityLabel: { visibility: "internal" },
+        purpose: "recall",
+        scope: { tenantId: "default-tenant", project: "beta" },
+        durationDays: 30,
+        actorId: "operator",
+      })
+    );
+
+    const evaluateResponse = await retentionPost(
+      jsonRequest({
+        action: "evaluate",
+        ontologyType: "memory.note",
+        securityLabel: { visibility: "internal" },
+        purpose: "recall",
+        scope: { tenantId: "default-tenant", project: "beta" },
+        createdAt: "2026-01-01T00:00:00.000Z",
+        now: "2026-01-02T00:00:00.000Z",
+      })
+    );
+    expect(evaluateResponse.status).toBe(200);
+
+    const registerResponse = await retentionPost(
+      jsonRequest({
+        action: "register_record",
+        recordType: "message",
+        recordId: "receipt-msg-1",
+        ontologyType: "memory.note",
+        securityLabel: { visibility: "internal" },
+        purpose: "recall",
+        scope: { tenantId: "default-tenant", project: "beta" },
+        actorId: "operator",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      })
+    );
+    expect(registerResponse.status).toBe(200);
+
+    const receiptsResponse = await retentionGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/retention?recordId=receipt-msg-1")
+    );
+    const receiptsJson = (await receiptsResponse.json()) as { receipts: unknown[] };
+    expect(receiptsResponse.status).toBe(200);
+    expect(receiptsJson.receipts.length).toBeGreaterThan(0);
+
+    const unsupportedResponse = await retentionPost(
+      jsonRequest({
+        action: "purge_all",
+        actorId: "operator",
+      })
+    );
+    expect(unsupportedResponse.status).toBe(400);
   });
 
 

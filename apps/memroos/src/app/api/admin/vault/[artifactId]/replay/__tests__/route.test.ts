@@ -78,4 +78,48 @@ describe("/api/admin/vault/[artifactId]/replay", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("returns 401 when the session is missing", async () => {
+    const { GET } = await import("../route");
+    sessionRole = null;
+
+    const res = await GET(new Request("http://localhost/api/admin/vault/a/replay") as never, {
+      params: Promise.resolve({ artifactId: "artifact-id" }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 for unknown artifacts", async () => {
+    const { GET } = await import("../route");
+
+    const res = await GET(new Request("http://localhost/api/admin/vault/a/replay") as never, {
+      params: Promise.resolve({ artifactId: "missing-artifact" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 when the stored artifact hash no longer matches", async () => {
+    const artifact = writeVaultArtifact(testDb, {
+      tenantId: "default-tenant",
+      sourceType: "messages",
+      sourceId: "session-tamper",
+      sessionId: "session-tamper",
+      project: "memroos",
+      body: "original vault body",
+    });
+
+    testDb
+      .prepare("UPDATE raw_artifacts SET content_hash = ? WHERE id = ?")
+      .run("0".repeat(64), artifact.id);
+
+    const { GET } = await import("../route");
+    const res = await GET(new Request("http://localhost/api/admin/vault/a/replay") as never, {
+      params: Promise.resolve({ artifactId: artifact.id }),
+    });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/hash mismatch/i);
+  });
 });

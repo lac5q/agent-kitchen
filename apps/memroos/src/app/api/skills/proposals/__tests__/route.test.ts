@@ -590,4 +590,53 @@ describe("POST /api/skills/proposals/[id]/reject", () => {
     );
     expect(res.status).toBe(401);
   });
+
+  it("400 for invalid JSON and missing operator", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const route = await import("../[id]/reject/route");
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/proposals/x/reject", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: "{",
+      }),
+      { params: Promise.resolve({ id: "x" }) }
+    );
+    expect(invalidJson.status).toBe(400);
+
+    const missingOperator = await route.POST(
+      new Request("https://example.com/api/skills/proposals/x/reject", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: JSON.stringify({ reason: "spam" }),
+      }),
+      { params: Promise.resolve({ id: "x" }) }
+    );
+    expect(missingOperator.status).toBe(400);
+  });
+
+  it("404 when the proposal does not exist", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    await loadRouteAndDb();
+    const route = await import("../[id]/reject/route");
+    const res = await route.POST(
+      new Request("https://example.com/api/skills/proposals/missing/reject", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: JSON.stringify({ operator: "bob", reason: "missing" }),
+      }),
+      { params: Promise.resolve({ id: "missing" }) }
+    );
+    expect(res.status).toBe(404);
+  });
 });

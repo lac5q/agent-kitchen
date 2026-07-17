@@ -207,4 +207,42 @@ describe("/api/agents/versions", () => {
     expect(rollbackData.version.version).toBe("1.0.0");
     expect(rollbackData.version.status).toBe("active");
   });
+
+  it("returns 400 when promote or rollback bodies are missing required fields", async () => {
+    const promoteRes = await promoteRoute.POST(
+      new Request("http://localhost/api/agents/versions/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: "agent-missing-fields" }),
+      })
+    );
+    expect(promoteRes.status).toBe(400);
+    expect((await promoteRes.json()).message).toMatch(/agentId, version, and profile are required/i);
+
+    const rollbackRes = await rollbackRoute.POST(
+      new Request("http://localhost/api/agents/versions/rollback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: "agent-missing-fields" }),
+      })
+    );
+    expect(rollbackRes.status).toBe(400);
+    expect((await rollbackRes.json()).message).toMatch(/profile are required/i);
+  });
+
+  it("returns 400 when promoting a version that does not exist", async () => {
+    const promoteRes = await promoteRoute.POST(
+      new Request("http://localhost/api/agents/versions/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: "agent-missing-version",
+          version: "9.9.9",
+          profile: "dev",
+        }),
+      })
+    );
+    expect(promoteRes.status).toBe(400);
+    expect((await promoteRes.json()).status).toBe("error");
+  });
 });

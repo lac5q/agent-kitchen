@@ -29,6 +29,38 @@ describe("model routing APIs", () => {
     testDb.exec("DELETE FROM efficiency_events");
   });
 
+  it("GET telemetry returns recent events and summary", async () => {
+    await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+      }) as any
+    );
+
+    const res = await telemetryRoute.GET(
+      new Request("http://localhost/api/model-routing/telemetry?limit=5") as any
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.events.length).toBeGreaterThan(0);
+    expect(data.summary.totalRuns).toBeGreaterThan(0);
+    expect(data.timestamp).toBeTruthy();
+  });
+
+  it("POST telemetry returns 400 when required fields are missing", async () => {
+    const res = await telemetryRoute.POST(
+      postRequest("http://localhost/api/model-routing/telemetry", {
+        taskType: "engineering",
+        provider: "openai",
+      }) as any
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/taskType, provider, and model are required/i);
+  });
+
   it("blocks direct non-local telemetry writes without operator authorization", async () => {
     const res = await telemetryRoute.POST(
       postRequest("https://memroos.example.com/api/model-routing/telemetry", {
