@@ -988,3 +988,82 @@ describe("getImportProposal and listImportProposals", () => {
     );
   });
 });
+
+describe("pin lookup helpers and agent-scoped rollback", () => {
+  it("getAgentVersionPin and getVersionPin return the stored pin row", async () => {
+    const { createOrUpdateAgentVersionPin, getAgentVersionPin, getVersionPin } =
+      await importSyncModule();
+    insertAgent("lookup-agent", "Lookup Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "lookup-agent",
+      skill_name: "lookup-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+    });
+    const byAgent = getAgentVersionPin(db, "lookup-agent", "lookup-skill");
+    expect(byAgent?.current_version).toBe("1.0.0");
+    const byId = getVersionPin(db, byAgent!.id);
+    expect(byId?.agent_id).toBe("lookup-agent");
+    expect(getAgentVersionPin(db, "", "lookup-skill")).toBeNull();
+    expect(getVersionPin(db, -1)).toBeNull();
+  });
+
+  it("rollbackAgentVersionPinByAgent rolls back using agent + skill tuple", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      getAgentVersionPin,
+    } = await importSyncModule();
+    insertAgent("rb-agent", "RB Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "2".repeat(64),
+      actor: "alice",
+    });
+    const rolled = rollbackAgentVersionPinByAgent(db, {
+      agent_id: "rb-agent",
+      skill_name: "rb-by-agent",
+      operator: "alice",
+      reason: "regression",
+    });
+    expect(rolled.current_version).toBe("1.0.0");
+    expect(getAgentVersionPin(db, "rb-agent", "rb-by-agent")?.prior_version).toBeNull();
+  });
+
+  it("computeGovernanceContentHash is stable SHA-256 hex", async () => {
+    const { computeGovernanceContentHash } = await importSyncModule();
+    const a = computeGovernanceContentHash("same body");
+    const b = computeGovernanceContentHash("same body");
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("rejectImportProposal refuses already-approved proposals", async () => {
+    const { detectSkillChange, approveImportProposal, rejectImportProposal, SyncGovernanceError } =
+      await importSyncModule();
+    insertSkillRow({ name: "no-reject-after-approve", content_hash: "0".repeat(64) });
+    const det = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "no-reject-after-approve",
+      detected_content_hash: "1".repeat(64),
+      proposed_by: "scanner",
+    });
+    approveImportProposal(db, det.proposal.id, "alice", "approved");
+    expect(() =>
+      rejectImportProposal(db, det.proposal.id, "bob", "too late")
+    ).toThrow(SyncGovernanceError);
+  });
+});

@@ -1061,3 +1061,151 @@ describe("checkSync and sync state helpers", () => {
   });
 });
 
+describe("approveSyncProposalById and rejectSyncProposalById", () => {
+  it("approves by proposal id with source re-verification", async () => {
+    const {
+      detectHarnessSkills,
+      checkSync,
+      approveSyncProposalById,
+      getSyncStateRow,
+    } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    const body = VALID_SKILL_MD("proposal-id-skill", "2.0.0");
+    writeHarnessSkill(harnessRoots.claude, "proposal-id-skill", body);
+    insertSkillRow({
+      name: "proposal-id-skill",
+      content_hash: "0".repeat(64),
+      version: "1.0.0",
+      raw_body: VALID_SKILL_MD("proposal-id-skill", "1.0.0"),
+    });
+    const scan = checkSync(db, { roots: harnessRoots, proposed_by: "scanner" });
+    expect(scan.created).toBeGreaterThanOrEqual(1);
+    const state = getSyncStateRow(db, "proposal-id-skill", "claude");
+    expect(state?.pending_proposal_id).toBeTruthy();
+
+    const result = approveSyncProposalById(db, {
+      proposal_id: state!.pending_proposal_id!,
+      operator: "alice",
+      reason: "looks good",
+    });
+    expect(result.status).toBe("approved");
+    expect(result.registry_updated).toBe(true);
+    expect(result.reverified_hash).toBeTruthy();
+    const reg = db
+      .prepare(`SELECT dispatch_status, content_hash FROM skill_registry WHERE name = ?`)
+      .get("proposal-id-skill") as { dispatch_status: string; content_hash: string };
+    expect(reg.dispatch_status).toBe("quarantined");
+    expect(reg.content_hash).toBe(state?.pending_detected_hash);
+  });
+
+  it("rejects stale concurrent updates via expected_updated_at", async () => {
+    const { createImportProposal, approveSyncProposalById, SkillSyncError } =
+      await import("../skill-sync");
+    insertSkillRow({ name: "stale-proposal", content_hash: "0".repeat(64) });
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "stale-proposal",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: VALID_SKILL_MD("stale-proposal", "2.0.0"),
+        content_hash: "1".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: proposal.pending_proposal_id!,
+        operator: "alice",
+        expected_updated_at: "2020-01-01T00:00:00.000Z",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("rejectSyncProposalById clears pending state without registry mutation", async () => {
+    const { createImportProposal, rejectSyncProposalById } = await import("../skill-sync");
+    const id = insertSkillRow({
+      name: "reject-by-id",
+      content_hash: "0".repeat(64),
+      dispatch_status: "enabled",
+    });
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "reject-by-id",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: VALID_SKILL_MD("reject-by-id", "2.0.0"),
+        content_hash: "1".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    const result = rejectSyncProposalById(db, {
+      proposal_id: proposal.pending_proposal_id!,
+      operator: "bob",
+      reason: "not now",
+    });
+    expect(result.status).toBe("rejected");
+    expect(result.registry_updated).toBe(false);
+    const reg = db
+      .prepare(`SELECT dispatch_status, content_hash FROM skill_registry WHERE id = ?`)
+      .get(id) as { dispatch_status: string; content_hash: string | null };
+    expect(reg.dispatch_status).toBe("enabled");
+    expect(reg.content_hash).toBe("0".repeat(64));
+  });
+
+  it("createImportProposal records no-change scan marker when registry hash matches", async () => {
+    const { createImportProposal, computeContentHash } = await import("../skill-sync");
+    const body = VALID_SKILL_MD("no-drift", "1.0.0");
+    const hash = computeContentHash(body);
+    insertSkillRow({
+      name: "no-drift",
+      content_hash: hash,
+      version: "1.0.0",
+      raw_body: body,
+    });
+    const result = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "no-drift",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: body,
+        content_hash: hash,
+      },
+      proposed_by: "scanner",
+    });
+    expect(result.created).toBe(false);
+    expect(result.proposal.pending_proposal_id).toBeNull();
+    expect(result.proposal.last_synced_hash).toBe(hash);
+  });
+
+  it("approveImportProposal inserts a new registry row when the skill is new", async () => {
+    const { createImportProposal, approveImportProposal } = await import("../skill-sync");
+    const body = VALID_SKILL_MD("brand-new-skill", "1.0.0");
+    const hash = "a".repeat(64);
+    const { proposal } = createImportProposal(db, {
+      source_harness: "codex",
+      detected: {
+        skill_name: "brand-new-skill",
+        source_harness: "codex",
+        version: "1.0.0",
+        raw_body: body,
+        content_hash: hash,
+      },
+      proposed_by: "scanner",
+      diff_payload: { raw_body: body },
+    });
+    approveImportProposal(db, {
+      skill_name: "brand-new-skill",
+      source_harness: "codex",
+      operator: "alice",
+    });
+    const reg = db
+      .prepare(`SELECT dispatch_status, content_hash FROM skill_registry WHERE name = ? AND source_harness = ?`)
+      .get("brand-new-skill", "codex") as { dispatch_status: string; content_hash: string };
+    expect(reg.dispatch_status).toBe("quarantined");
+    expect(reg.content_hash).toBe(proposal.pending_detected_hash);
+  });
+});
+

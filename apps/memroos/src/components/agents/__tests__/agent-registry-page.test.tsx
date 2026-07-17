@@ -243,4 +243,82 @@ describe("AgentRegistryPage", () => {
     expect(screen.queryByText(/Bearer /)).not.toBeInTheDocument();
     expect(screen.queryByText(/ak_/)).not.toBeInTheDocument();
   });
+
+  it("shows loading spinner while agents are fetching", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+    render(<AgentRegistryPage />);
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
+  });
+
+  it("shows API error banner when registry fetch fails", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("upstream timeout"),
+    } as ReturnType<typeof useRegisteredAgents>);
+    render(<AgentRegistryPage />);
+    expect(screen.getByText(/Failed to load \/api\/agents/i)).toBeInTheDocument();
+    expect(screen.getByText(/upstream timeout/)).toBeInTheDocument();
+  });
+
+  it("filters agents by protocol and shows empty-state guidance", () => {
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByRole("button", { name: "a2a", exact: true }));
+    expect(screen.getByText("ADK Prime Agent")).toBeInTheDocument();
+    expect(screen.queryByText("REST Agent")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "ui", exact: true }));
+    expect(screen.getByText("No registered agents match this view.")).toBeInTheDocument();
+    expect(screen.getByText(/Adjust the protocol, status, or liveness filters/i)).toBeInTheDocument();
+  });
+
+  it("surfaces invite errors with operator-key guidance", async () => {
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    const [, options] = mutateInvite.mock.calls[0];
+    options.onError(new Error("Registry write authorization required"));
+    await waitFor(() => {
+      expect(screen.getByText(/Operator key required/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders liveness and readiness banners when envelopes are present", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents,
+        timestamp: "",
+        summary: {
+          total: { value: 2, status: "live", source: "registry" },
+          active: { value: 2, status: "live", source: "registry" },
+        },
+        liveness: { value: 2, status: "live", source: "heartbeat", reason: "fresh" },
+        protocols: {
+          rest: { value: 1, status: "live" },
+          a2a: { value: 1, status: "live" },
+          ui: { value: 0, status: "zero" },
+          local: { value: 0, status: "zero" },
+        },
+        readiness: {
+          average: { value: 0.9, status: "live", source: "registry" },
+          withCapabilities: { value: 2, status: "live", source: "registry" },
+        },
+        localRuntime: {
+          metric: { value: 1, status: "live", source: "scan", reason: null },
+        },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+    render(<AgentRegistryPage />);
+    expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent(/Liveness/i);
+    expect(screen.getByText(/Readiness:/)).toBeInTheDocument();
+    expect(screen.getByText(/Local runtime scan:/)).toBeInTheDocument();
+  });
 });

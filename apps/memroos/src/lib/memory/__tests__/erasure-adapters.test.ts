@@ -1,6 +1,6 @@
 // @vitest-environment node
 import Database from "better-sqlite3";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import { buildCanonicalIdentity } from "@/lib/memory/canonical";
@@ -264,6 +264,182 @@ describe("MEMLIFE-02 real erasure store adapters", () => {
     } finally {
       if (prev === undefined) delete process.env.NEO4J_PASSWORD;
       else process.env.NEO4J_PASSWORD = prev;
+    }
+  });
+
+  it("purges Neo4j nodes when the graph backend responds with deleted count", async () => {
+    const database = freshDb();
+    const prevPassword = process.env.NEO4J_PASSWORD;
+    const prevFetch = global.fetch;
+    process.env.NEO4J_PASSWORD = "secret";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ data: [{ row: [2] }] }] }),
+    }) as typeof fetch;
+    try {
+      const identity = buildCanonicalIdentity("graph-node", "graph", "ingress", "graph", {
+        tenantId: "default-tenant",
+      });
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "default-tenant",
+        actorId: "tester",
+        scope: { tenantId: "default-tenant" },
+      });
+      const graph = report.storeOutcomes.find((o) => o.storeId === "graph");
+      expect(graph?.status).toBe("purged");
+      expect(graph?.metadata).toMatchObject({ deleted: 2 });
+    } finally {
+      if (prevPassword === undefined) delete process.env.NEO4J_PASSWORD;
+      else process.env.NEO4J_PASSWORD = prevPassword;
+      global.fetch = prevFetch;
+    }
+  });
+
+  it("defers FTS when message sealing is also targeted", async () => {
+    const database = freshDb();
+    const messageId = Number(
+      database
+        .prepare(
+          `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+           VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+        )
+        .run("sess-defer", "proj", "agent", "user", "defer fts content", "2026-01-01T00:00:00Z")
+        .lastInsertRowid
+    );
+    const identity = buildCanonicalIdentity("defer fts content", "message", "ingress", "message", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives = [
+      { storeId: "fts", sourceHash: identity.canonicalHash, provenance: "test", metadata: { message_id: messageId } },
+      { storeId: "message", sourceHash: identity.canonicalHash, provenance: "test", metadata: { message_id: messageId } },
+    ];
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const fts = report.storeOutcomes.find((o) => o.storeId === "fts");
+    expect(fts?.status).toBe("tombstoned");
+    expect(fts?.reason).toBe("fts_deferred_to_message_seal_triggers");
+  });
+
+  it("invalidates cache tags and purges salience via retention-linked messages", async () => {
+    const database = freshDb();
+    const messageId = Number(
+      database
+        .prepare(
+          `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+           VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+        )
+        .run("sess-ret", "proj", "agent", "user", "retention linked", "2026-01-01T00:00:00Z")
+        .lastInsertRowid
+    );
+    database
+      .prepare(
+        `INSERT INTO memory_retention_records
+         (id, tenant_id, record_type, record_id, ontology_type, purpose, scope_json, created_at, updated_at)
+         VALUES (?, 'default-tenant', 'message', ?, 'message', 'test', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+      )
+      .run(`ret-${messageId}`, String(messageId), JSON.stringify({ canonicalId: "canon-ret-1" }));
+
+    const identity = buildCanonicalIdentity("retention linked", "message", "ingress", "cache", {
+      tenantId: "default-tenant",
+    });
+    (identity as { id: string }).id = "canon-ret-1";
+    identity.derivatives.push(
+      { storeId: "salience", sourceHash: identity.canonicalHash, provenance: "test", metadata: { message_id: messageId } },
+      { storeId: "cache", sourceHash: identity.canonicalHash, provenance: "test" }
+    );
+
+    await responseCache.getOrSet("ns", "cache-key", 60_000, () => ({ ok: true }), [identity.id]);
+
+    database
+      .prepare(`INSERT INTO memory_salience(message_id, tier, salience_score, last_decay_at) VALUES (?, 'mid', 1.0, ?)`)
+      .run(messageId, "2026-01-01T00:00:00Z");
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "cache")?.status).toBe("purged");
+    expect(report.storeOutcomes.find((o) => o.storeId === "salience")?.status).toBe("purged");
+  });
+
+  it("tombstones ontology_candidates alongside agent_memory_candidates", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("candidate body", "lesson", "ingress", "candidates", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives.push({
+      storeId: "candidates",
+      sourceHash: identity.canonicalHash,
+      provenance: "test",
+      metadata: { candidate_id: "cand-onto-1" },
+    });
+    database
+      .prepare(
+        `INSERT INTO agent_session_captures
+         (id, tenant_id, source_agent_id, runtime, session_id, capture_hash, captured_at)
+         VALUES (?, 'default-tenant', 'agent', 'test', 'sess', 'ch', '2026-01-01T00:00:00Z')`
+      )
+      .run("cap-onto");
+    database
+      .prepare(
+        `INSERT INTO agent_memory_candidates
+         (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status, metadata_json, created_at)
+         VALUES (?, 'default-tenant', 'cap-onto', 'agent', 'lesson', 'secret', ?, 'candidate', '{}', '2026-01-01T00:00:00Z')`
+      )
+      .run("cand-onto-1", identity.canonicalHash);
+    database
+      .prepare(
+        `INSERT INTO ontology_candidates
+         (id, tenant_id, space_id, source_id, source_hash, extractor_id, extractor_version,
+          candidate_kind, namespace, proposed_json, confidence_label, confidence_score,
+          evidence_hash, original_json, status, created_at)
+         VALUES (?, 'default-tenant', 'space-1', ?, ?, 'extractor', '1.0.0',
+                 'type', 'default', '{}', 'high', 0.9,
+                 'evidence-hash', '{}', 'pending', '2026-01-01T00:00:00Z')`
+      )
+      .run("onto-1", identity.id, identity.canonicalHash);
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "candidates")?.status).toBe("tombstoned");
+    const onto = database
+      .prepare(`SELECT status FROM ontology_candidates WHERE id = ?`)
+      .get("onto-1") as { status: string };
+    expect(onto.status).toBe("invalidated");
+  });
+
+  it("marks adapter failures as failed overall status", async () => {
+    const database = freshDb();
+    const { getErasureStoreAdapter, registerErasureStoreAdapter } = await import("../erasure");
+    const original = getErasureStoreAdapter("qmd");
+    registerErasureStoreAdapter({
+      storeId: "qmd",
+      async erase() {
+        throw new Error("qmd_adapter_exploded");
+      },
+    });
+    try {
+      const identity = buildCanonicalIdentity("qmd fail", "doc", "ingress", "qmd", {
+        tenantId: "default-tenant",
+      });
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "default-tenant",
+        actorId: "tester",
+        scope: { tenantId: "default-tenant" },
+      });
+      expect(report.status).toBe("failed");
+      const qmd = report.storeOutcomes.find((o) => o.storeId === "qmd");
+      expect(qmd?.status).toBe("failed");
+      expect(qmd?.reason).toContain("qmd_adapter_exploded");
+    } finally {
+      if (original) registerErasureStoreAdapter(original);
     }
   });
 });

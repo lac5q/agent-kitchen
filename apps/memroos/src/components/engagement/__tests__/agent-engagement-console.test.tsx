@@ -107,7 +107,7 @@ const mockAgents = [
 ];
 
 vi.mock("@/lib/api-client", () => ({
-  useAgents: () => ({ data: { agents: mockAgents }, isLoading: false }),
+  useAgents: vi.fn(() => ({ data: { agents: mockAgents }, isLoading: false })),
   useDelegations: () => ({
     data: {
       delegations: [{
@@ -121,6 +121,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { AgentEngagementConsole } from "../agent-engagement-console";
+import { useAgents } from "@/lib/api-client";
 
 function chatStream(text: string): Response {
   return new Response(`data: ${JSON.stringify({ text })}\n\ndata: [DONE]\n\n`, {
@@ -131,6 +132,7 @@ function chatStream(text: string): Response {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useAgents).mockReturnValue({ data: { agents: mockAgents }, isLoading: false } as ReturnType<typeof useAgents>);
   vi.stubGlobal("fetch", vi.fn());
 });
 
@@ -417,6 +419,89 @@ describe("AgentEngagementConsole", () => {
       expect(body.agentId).toBe("codex-cli-agent");
       expect(body.history).toEqual([]);
       expect(screen.getByText("Codex response")).toBeInTheDocument();
+    });
+  });
+
+  it("filters the roster by search query", () => {
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Filter agents"), { target: { value: "codex" } });
+    expect(screen.getAllByText("Codex CLI").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Claude Sonnet Engineer")).not.toBeInTheDocument();
+  });
+
+  it("filters the roster by agent status", () => {
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Filter by agent status"), { target: { value: "active" } });
+    expect(screen.getAllByText("Claude Sonnet Engineer").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Codex CLI")).not.toBeInTheDocument();
+  });
+
+  it("invokes TTS after voice capture delivers a transcript in direct chat", async () => {
+    const play = vi.fn().mockResolvedValue(undefined);
+    class MockAudio {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play = play;
+      pause = vi.fn();
+    }
+    vi.stubGlobal("Audio", MockAudio as unknown as typeof Audio);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:tts"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        this.onresult?.({ results: [{ 0: { transcript: "voice hello" } }] });
+        this.onend?.();
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    vi.stubGlobal("webkitSpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(chatStream("spoken reply"))
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["audio"]),
+      } as Response);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
+      expect(play).toHaveBeenCalled();
+    });
+  });
+
+  it("shows loading state while agents are fetching", () => {
+    vi.mocked(useAgents).mockReturnValueOnce({ data: undefined, isLoading: true } as ReturnType<typeof useAgents>);
+    render(<AgentEngagementConsole />);
+    expect(screen.getByText("Loading agents...")).toBeInTheDocument();
+  });
+
+  it("parses stream payload errors embedded in SSE data lines", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        'data: {"error":"{\\"message\\":\\"rate limited\\"}"}\n\n',
+        { status: 200, headers: { "Content-Type": "text/event-stream" } }
+      )
+    );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "boom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chat unavailable/i)).toBeInTheDocument();
     });
   });
 });

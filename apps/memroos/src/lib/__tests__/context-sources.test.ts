@@ -5,6 +5,7 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 
 import {
+  deepMergeConfigs,
   evaluateContextSources,
   loadContextSourceContracts,
   requireFreshContextSources,

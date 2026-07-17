@@ -365,3 +365,78 @@ describe("traverseIndirectDerivatives extended graph walks", () => {
     expect(indirect.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("coordinateErasure idempotency and scope", () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE audit_entries (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT,
+        actor_id TEXT,
+        actor_role TEXT,
+        event_type TEXT,
+        entity_type TEXT,
+        entity_id TEXT,
+        reason TEXT,
+        metadata_json TEXT,
+        created_at TEXT
+      );
+      CREATE TABLE memory_erasure_reports (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT,
+        canonical_id TEXT,
+        status TEXT,
+        store_outcomes_json TEXT,
+        actor_id TEXT,
+        scope_hash TEXT,
+        started_at TEXT,
+        completed_at TEXT
+      );
+    `);
+  });
+
+  it("returns the cached completed report without re-running adapters", async () => {
+    const identity = buildCanonicalIdentity("cached", "message", "ingress", "vector", { tenantId: "tenant1" });
+    const opts = {
+      tenantId: "tenant1",
+      actorId: "actor1",
+      scope: { tenantId: "tenant1", purpose: "dsar" },
+      erasureId: "erasure_cached_completed",
+    };
+    const first = await coordinateErasure(db, identity, opts);
+    expect(first.status).toBe("completed");
+
+    const auditBefore = (db.prepare("SELECT COUNT(*) AS c FROM audit_entries").get() as { c: number }).c;
+    const second = await coordinateErasure(db, identity, opts);
+    const auditAfter = (db.prepare("SELECT COUNT(*) AS c FROM audit_entries").get() as { c: number }).c;
+
+    expect(second.status).toBe("completed");
+    expect(second.erasureId).toBe(first.erasureId);
+    expect(second.storeOutcomes.map((o) => o.storeId).sort()).toEqual(
+      first.storeOutcomes.map((o) => o.storeId).sort()
+    );
+    expect(auditAfter).toBe(auditBefore);
+  });
+
+  it("rejects when options.tenantId disagrees with scope.tenantId", async () => {
+    const identity = buildCanonicalIdentity("scope", "message", "ingress", "vector", { tenantId: "tenant-a" });
+    await expect(
+      coordinateErasure(db, identity, {
+        tenantId: "tenant-b",
+        actorId: "actor",
+        scope: { tenantId: "tenant-a" },
+      })
+    ).rejects.toBeInstanceOf(ErasureAuthorizationError);
+  });
+
+  it("lists registered erasure stores including vector and embeddings", async () => {
+    const { listRegisteredErasureStores, getErasureStoreAdapter } = await import("../erasure");
+    const stores = listRegisteredErasureStores();
+    expect(stores).toContain("vector");
+    expect(stores).toContain("embeddings");
+    expect(getErasureStoreAdapter("vector")).toBeTruthy();
+  });
+});
