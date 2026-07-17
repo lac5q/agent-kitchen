@@ -758,9 +758,12 @@ export function useTokenStats() {
   return useQuery({
     queryKey: ["tokens"],
     queryFn: () =>
-      fetchJSON<{ stats: Record<string, unknown>; timestamp: string }>(
-        "/api/tokens"
-      ),
+      fetchJSON<{
+        available?: boolean;
+        stats: Record<string, unknown> | null;
+        error?: string;
+        timestamp: string;
+      }>("/api/tokens"),
     refetchInterval: POLL_INTERVALS.tokens,
     retry: false,
   });

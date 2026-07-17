@@ -36,7 +36,7 @@ export function CostCalculator({
     <Card className="border-stone-200 bg-white/90 p-5" data-cost-source={savingsEnvelope?.source ?? "/api/tokens"}>
       <p className="flex items-center text-sm font-medium text-stone-600 mb-4">
         Cost Calculator
-        <InfoTip text="Estimates your AI spend based on actual token usage from RTK logs. Enter your model's per-million-token rates to see Estimated Spend (what you paid). RTK Savings (what RTK avoided) only renders when the savings envelope proves a successful measurement — never as a fabricated zero baseline." />
+        <InfoTip text="Estimates AI spend from multi-model token totals (input/output from /api/model-usage). Optional RTK Savings only renders when the savings envelope proves a successful RTK measurement — never as a fabricated zero." />
       </p>
       <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -71,7 +71,7 @@ export function CostCalculator({
             ${estimatedSpend.toFixed(2)}
           </p>
           <p className="mt-1 text-[10px] text-stone-400">
-            from totalInput/totalOutput ({savingsEnvelope?.source ?? "/api/tokens"})
+            from totalInput/totalOutput (/api/model-usage)
           </p>
         </div>
         <div

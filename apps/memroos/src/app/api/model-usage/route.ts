@@ -1,5 +1,10 @@
 import { parseModelUsage } from "@/lib/parsers";
 import { apiError } from "@/lib/api-error";
+import { getDb } from "@/lib/db";
+import {
+  aggregateEfficiencyTokenLedger,
+  mergeModelUsageSources,
+} from "@/lib/efficiency-telemetry";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +28,25 @@ async function buildModelUsageResponse(req: NextRequest) {
   if (modelUsageCache?.key === cacheKey && Date.now() - modelUsageCache.checkedAt < ttlMs) {
     return Response.json({ usage: modelUsageCache.usage, timestamp: new Date().toISOString() });
   }
-  const usage = await parseModelUsage(since);
+
+  // Claude JSONL (local developer hosts) + durable token_ledger (cloud/Heroku).
+  const claudeUsage = await parseModelUsage(since);
+  let ledgerUsage = { models: [] as ModelUsageResult["models"], total: claudeUsage.total };
+  try {
+    ledgerUsage = aggregateEfficiencyTokenLedger(getDb(), since);
+  } catch {
+    // Keep Claude-only results if the efficiency table is unavailable.
+  }
+  const usage = mergeModelUsageSources(claudeUsage, ledgerUsage);
   modelUsageCache = { key: cacheKey, checkedAt: Date.now(), usage };
-  return Response.json({ usage, timestamp: new Date().toISOString() });
+  return Response.json({
+    usage,
+    sources: {
+      claudeJsonlModels: claudeUsage.models.length,
+      efficiencyLedgerModels: ledgerUsage.models.length,
+    },
+    timestamp: new Date().toISOString(),
+  });
 }
 
 export async function GET(req: NextRequest) {

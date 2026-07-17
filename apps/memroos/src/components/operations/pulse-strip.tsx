@@ -219,7 +219,7 @@ export function PulseStrip({ filters }: PulseStripProps) {
       env: undefined,
       color: NOC.warn,
       spark: [0, 0],
-      subline: "Baseline savings are explicitly blocked until a retained-memory baseline exists",
+      subline: "Baseline savings blocked until retained-memory/RTK baseline exists (token_ledger cache hits are not savings)",
     },
     {
       label: "Failed work",

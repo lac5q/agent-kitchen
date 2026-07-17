@@ -240,3 +240,149 @@ export function listEfficiencyEvents(
 
   return rows.map(rowToEvent);
 }
+
+export interface EfficiencyTokenLedgerUsageStat {
+  id: string;
+  name: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheCreation: number;
+  requests: number;
+  totalTokens: number;
+}
+
+export interface EfficiencyTokenLedgerUsage {
+  models: EfficiencyTokenLedgerUsageStat[];
+  total: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheRead: number;
+    cacheCreation: number;
+    requests: number;
+  };
+}
+
+/**
+ * Aggregate durable token_ledger efficiency events into the same shape as
+ * Claude JSONL model-usage. Used on hosts (e.g. Heroku) where ~/.claude/projects
+ * is empty.
+ */
+export function aggregateEfficiencyTokenLedger(
+  db: Database.Database,
+  since?: Date,
+  tenantId = "default-tenant"
+): EfficiencyTokenLedgerUsage {
+  const params: Record<string, unknown> = { tenantId };
+  let sinceClause = "";
+  if (since && Number.isFinite(since.getTime())) {
+    sinceClause = " AND created_at >= @since";
+    params.since = normalizeCreatedAt(since.toISOString());
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT payload
+       FROM efficiency_events
+       WHERE tenant_id = @tenantId
+         AND event_type = 'token_ledger'
+         ${sinceClause}
+       ORDER BY created_at DESC, id DESC
+       LIMIT 5000`
+    )
+    .all(params) as Array<{ payload: string }>;
+
+  const acc = new Map<string, EfficiencyTokenLedgerUsageStat>();
+  for (const row of rows) {
+    let payload: TokenLedgerPayload;
+    try {
+      payload = JSON.parse(row.payload) as TokenLedgerPayload;
+    } catch {
+      continue;
+    }
+    const modelId =
+      typeof payload.modelId === "string" && payload.modelId.trim()
+        ? payload.modelId.trim()
+        : "unknown";
+    const raw = Number(payload.rawContextTokens) || 0;
+    const cached = Number(payload.cachedTokens) || 0;
+    const total = Number(payload.totalTokens) || raw + cached;
+    if (total <= 0 && raw <= 0 && cached <= 0) continue;
+
+    const current = acc.get(modelId) ?? {
+      id: modelId,
+      name: modelId,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheRead: 0,
+      cacheCreation: 0,
+      requests: 0,
+      totalTokens: 0,
+    };
+    // Map ledger fields onto ModelUsageStat: raw→input, cached→cacheRead.
+    current.inputTokens += Math.max(0, raw);
+    current.cacheRead += Math.max(0, cached);
+    current.totalTokens += Math.max(0, total);
+    current.requests += 1;
+    acc.set(modelId, current);
+  }
+
+  const models = Array.from(acc.values())
+    .filter((m) => m.totalTokens > 0 || m.inputTokens > 0 || m.cacheRead > 0)
+    .sort((a, b) => b.totalTokens - a.totalTokens);
+  const total = models.reduce(
+    (t, m) => ({
+      inputTokens: t.inputTokens + m.inputTokens,
+      outputTokens: t.outputTokens + m.outputTokens,
+      cacheRead: t.cacheRead + m.cacheRead,
+      cacheCreation: t.cacheCreation + m.cacheCreation,
+      requests: t.requests + m.requests,
+    }),
+    { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 }
+  );
+  return { models, total };
+}
+
+export function mergeModelUsageSources(
+  ...sources: Array<{
+    models: EfficiencyTokenLedgerUsageStat[];
+    total: EfficiencyTokenLedgerUsage["total"];
+  }>
+): EfficiencyTokenLedgerUsage {
+  const acc = new Map<string, EfficiencyTokenLedgerUsageStat>();
+  for (const source of sources) {
+    for (const model of source.models) {
+      const current = acc.get(model.id) ?? {
+        id: model.id,
+        name: model.name || model.id,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheRead: 0,
+        cacheCreation: 0,
+        requests: 0,
+        totalTokens: 0,
+      };
+      current.inputTokens += model.inputTokens;
+      current.outputTokens += model.outputTokens;
+      current.cacheRead += model.cacheRead;
+      current.cacheCreation += model.cacheCreation;
+      current.requests += model.requests;
+      current.totalTokens += model.totalTokens;
+      acc.set(model.id, current);
+    }
+  }
+  const models = Array.from(acc.values())
+    .filter((m) => m.totalTokens > 0 || m.inputTokens + m.outputTokens + m.cacheRead > 0)
+    .sort((a, b) => b.totalTokens - a.totalTokens);
+  const total = models.reduce(
+    (t, m) => ({
+      inputTokens: t.inputTokens + m.inputTokens,
+      outputTokens: t.outputTokens + m.outputTokens,
+      cacheRead: t.cacheRead + m.cacheRead,
+      cacheCreation: t.cacheCreation + m.cacheCreation,
+      requests: t.requests + m.requests,
+    }),
+    { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 }
+  );
+  return { models, total };
+}

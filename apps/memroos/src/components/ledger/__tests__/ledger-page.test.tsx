@@ -70,8 +70,10 @@ describe("Ledger page truthful metric rendering", () => {
     // Each KPI card must show its status badge (data-ledger-kpi-badge).
     const badges = document.querySelectorAll('[data-ledger-kpi-badge]');
     expect(badges.length).toBeGreaterThanOrEqual(4);
-    // RTK unavailable → tokens processed/saved/commands/exec surfaces an error badge.
-    expect(document.querySelectorAll('[data-ledger-kpi-badge="error"]').length).toBeGreaterThan(0);
+    // RTK unavailable → Tokens Processed comes from model-usage (empty/no data),
+    // while RTK-only savings/commands stay unavailable — never hard error badges.
+    expect(document.querySelectorAll('[data-ledger-kpi-badge="error"]').length).toBe(0);
+    expect(document.querySelectorAll('[data-ledger-kpi-badge="unavailable"]').length).toBeGreaterThan(0);
   });
 
   it("renders date-range filter and propagates since to model-usage scope label", () => {

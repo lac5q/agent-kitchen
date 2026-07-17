@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { readFile, readdir } from "fs/promises";
+import { readFile, readdir, access } from "fs/promises";
 import path from "path";
 import { apiError } from "@/lib/api-error";
 import { SKILLS_PATH, SKILL_CONTRIBUTIONS_LOG, FAILURES_LOG } from "@/lib/constants";
 import { parseFailuresLog, aggregateFailures } from "@/lib/failures-parser";
 import { readSkillBudgetReport } from "@/lib/skill-budget";
 import { buildSkillWorkflowItems, readSkillReviewState } from "@/lib/skill-workflow";
+import { resolveFromRepoRoot } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,36 @@ const SKILL_SYNC_STATE = path.join(
   process.env.HOME || "",
   ".openclaw/skill-sync-state.json"
 );
+
+/** Extra skill roots that ship with the repo (cloud/Heroku often lack ~/.claude/skills). */
+async function bundledSkillRoots(): Promise<string[]> {
+  const candidates = [
+    resolveFromRepoRoot("docs/codex-cloud/skills"),
+    resolveFromRepoRoot(".agents/skills"),
+    resolveFromRepoRoot("apps/memroos/.agents/skills"),
+  ];
+  const roots: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      roots.push(candidate);
+    } catch {
+      /* missing is fine */
+    }
+  }
+  return roots;
+}
+
+async function listSkillDirNames(root: string): Promise<string[]> {
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
 
 interface JournalEvent {
   skill: string;
@@ -23,18 +54,22 @@ interface JournalEvent {
 }
 
 async function buildSkillsResponse() {
-  // 1. Count skills in master dir (exclude dot-prefixed dirs and non-directories)
-  let totalSkills = 0;
-  let skillDirNames: string[] = [];
-  try {
-    const entries = await readdir(SKILLS_PATH, { withFileTypes: true });
-    skillDirNames = entries
-      .filter(e => e.isDirectory() && !e.name.startsWith("."))
-      .map(e => e.name);
-    totalSkills = skillDirNames.length;
-  } catch {
-    /* directory inaccessible — return 0 */
+  // 1. Count skills from configured path + repo-bundled roots (dedupe by name).
+  const skillNameSet = new Set<string>();
+  const skillSources: Array<{ root: string; names: string[] }> = [];
+
+  const primaryNames = await listSkillDirNames(SKILLS_PATH);
+  skillSources.push({ root: SKILLS_PATH, names: primaryNames });
+  for (const name of primaryNames) skillNameSet.add(name);
+
+  for (const root of await bundledSkillRoots()) {
+    const names = await listSkillDirNames(root);
+    skillSources.push({ root, names });
+    for (const name of names) skillNameSet.add(name);
   }
+
+  const skillDirNames = Array.from(skillNameSet).sort();
+  const totalSkills = skillDirNames.length;
 
   // 2. Read sync state for lastPruned and lastUpdated
   let lastPruned: string | null = null;
@@ -166,18 +201,35 @@ async function buildSkillsResponse() {
     );
   const skillBudget = await readSkillBudgetReport();
   const reviewState = await readSkillReviewState();
-  const skillDetails = await buildSkillWorkflowItems({
-    skillsPath: SKILLS_PATH,
-    skillNames: skillDirNames,
-    coverageGaps,
-    skillUsage,
-    reviewState,
-  });
+  // Prefer the first root that actually contains each skill's SKILL.md.
+  const skillRootByName = new Map<string, string>();
+  for (const { root, names } of skillSources) {
+    for (const name of names) {
+      if (!skillRootByName.has(name)) skillRootByName.set(name, root);
+    }
+  }
+  const detailRoots = Array.from(new Set(skillRootByName.values()));
+  const skillDetailsNested = await Promise.all(
+    detailRoots.map((root) =>
+      buildSkillWorkflowItems({
+        skillsPath: root,
+        skillNames: skillDirNames.filter((name) => skillRootByName.get(name) === root),
+        coverageGaps,
+        skillUsage,
+        reviewState,
+      })
+    )
+  );
+  const skillDetails = skillDetailsNested.flat().sort((a, b) => a.name.localeCompare(b.name));
 
   return NextResponse.json({
     totalSkills,
     allSkills: skillDirNames,
     skillDetails,
+    skillSources: skillSources.map(({ root, names }) => ({
+      root,
+      count: names.length,
+    })),
     contributedByHermes,
     contributedByGwen,
     recentContributions,

@@ -47,11 +47,10 @@ function envelopeLabel(env: NumberEnvelope, formatter: (n: number) => string = f
 }
 
 function tokenStatsEnvelopes(
-  data: { stats?: Record<string, unknown>; timestamp?: string } | undefined,
+  data: { available?: boolean; stats?: Record<string, unknown> | null; timestamp?: string } | undefined,
   error: unknown,
   isLoading: boolean
 ): {
-  tokensProcessed: NumberEnvelope;
   tokensSaved: NumberEnvelope;
   totalCommands: NumberEnvelope;
   avgExecutionTime: NumberEnvelope;
@@ -59,26 +58,30 @@ function tokenStatsEnvelopes(
 } {
   const source = "/api/tokens";
   const observedAt = data?.timestamp ?? null;
-  const rtkUnavailable = isLoading === false && (error !== undefined && error !== null || data === undefined || data?.stats === null);
+  const cumulativeScope = { window: "cumulative" as const, workspace: "all" as const };
+  const rtkMissing =
+    isLoading === false &&
+    (Boolean(error) || data === undefined || data.available === false || data.stats == null);
 
   if (error) {
     const errMsg = error instanceof Error ? error.message : "unknown error";
-    const env = (status: NumberEnvelope["status"], reason: string): NumberEnvelope =>
+    const env = (reason: string): NumberEnvelope =>
       metricEnvelope<number>({
         value: null,
-        status,
+        status: "unavailable",
         source,
         observedAt: null,
         freshnessMs: null,
-        scope: { window: "cumulative", workspace: "all" },
+        scope: cumulativeScope,
         reason,
       });
     return {
-      tokensProcessed: env("error", `Failed to load ${source}: ${errMsg}. RTK token stats are cumulative (window=cumulative, workspace=all) until RTK exposes ranged stats.`),
-      tokensSaved: env("error", `Failed to load ${source}: ${errMsg}. Savings baseline is explicitly unavailable until a retained-memory baseline exists.`),
-      totalCommands: env("error", `Failed to load ${source}: ${errMsg}`),
-      avgExecutionTime: env("error", `Failed to load ${source}: ${errMsg}`),
-      savingsPercent: env("error", `Failed to load ${source}: ${errMsg}`),
+      tokensSaved: env(
+        `Optional RTK savings source failed (${errMsg}). Tokens Processed uses /api/model-usage across models.`
+      ),
+      totalCommands: env(`RTK command totals unavailable (${errMsg}).`),
+      avgExecutionTime: env(`RTK avg execution unavailable (${errMsg}).`),
+      savingsPercent: env(`RTK savings percent unavailable (${errMsg}).`),
     };
   }
   if (isLoading || !data) {
@@ -88,98 +91,163 @@ function tokenStatsEnvelopes(
       source,
       observedAt: null,
       freshnessMs: null,
-      scope: { window: "cumulative", workspace: "all" },
-      reason: `Loading ${source}. RTK token stats are cumulative (window=cumulative, workspace=all).`,
+      scope: cumulativeScope,
+      reason: `Loading optional RTK savings source (${source}).`,
     });
+    return { tokensSaved: env, totalCommands: env, avgExecutionTime: env, savingsPercent: env };
+  }
+
+  const stats = data.stats;
+  if (rtkMissing || !stats) {
+    const reason =
+      "RTK CLI is optional and unavailable here. Tokens Processed comes from /api/model-usage (Claude JSONL + efficiency token_ledger across models). RTK savings/commands stay unavailable — not zero.";
+    const env = (extra = ""): NumberEnvelope =>
+      metricEnvelope<number>({
+        value: null,
+        status: "unavailable",
+        source,
+        observedAt: null,
+        freshnessMs: null,
+        scope: cumulativeScope,
+        reason: `${reason}${extra}`,
+      });
     return {
-      tokensProcessed: env,
-      tokensSaved: env,
-      totalCommands: env,
-      avgExecutionTime: env,
-      savingsPercent: env,
+      tokensSaved: env(" Savings require a real retained-memory/RTK baseline."),
+      totalCommands: env(),
+      avgExecutionTime: env(),
+      savingsPercent: env(),
     };
   }
 
-  const stats = data?.stats;
-  const totalInput = typeof stats?.totalInput === "number" ? (stats.totalInput as number) : null;
-  const totalOutput = typeof stats?.totalOutput === "number" ? (stats.totalOutput as number) : null;
-  const tokensSaved = typeof stats?.tokensSaved === "number" ? (stats.tokensSaved as number) : null;
-  const totalCommands = typeof stats?.totalCommands === "number" ? (stats.totalCommands as number) : null;
-  const avgExecutionTime = typeof stats?.avgExecutionTime === "number" ? (stats.avgExecutionTime as number) : null;
-  const savingsPercent = typeof stats?.savingsPercent === "number" ? (stats.savingsPercent as number) : null;
+  const tokensSaved = typeof stats.tokensSaved === "number" ? (stats.tokensSaved as number) : null;
+  const totalCommands = typeof stats.totalCommands === "number" ? (stats.totalCommands as number) : null;
+  const avgExecutionTime =
+    typeof stats.avgExecutionTime === "number" ? (stats.avgExecutionTime as number) : null;
+  const savingsPercent =
+    typeof stats.savingsPercent === "number" ? (stats.savingsPercent as number) : null;
 
-  // RTK only exposes cumulative stats; we explicitly disclose that the
-  // page-level date-range selector does not change the underlying RTK
-  // measurement (VAL-LEDGER-001).
-  const cumulativeScope = { window: "cumulative", workspace: "all" as const };
-
-  if (rtkUnavailable) {
-    const reason = `${source} returned no stats. RTK is unavailable on this host; the page-level date-range selector does NOT change the cumulative baseline.`;
-    return {
-      tokensProcessed: metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt: null, freshnessMs: null, scope: cumulativeScope, reason }),
-      tokensSaved: metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt: null, freshnessMs: null, scope: cumulativeScope, reason: `${reason} Savings baseline is explicitly unavailable until a retained-memory baseline exists.` }),
-      totalCommands: metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt: null, freshnessMs: null, scope: cumulativeScope, reason }),
-      avgExecutionTime: metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt: null, freshnessMs: null, scope: cumulativeScope, reason }),
-      savingsPercent: metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt: null, freshnessMs: null, scope: cumulativeScope, reason: `${reason} Savings percent cannot be measured as zero without a baseline.` }),
-    };
-  }
-
-  const liveOrZero = (
-    value: number | null,
-    reason: string
-  ): NumberEnvelope => {
+  const liveOrZero = (value: number | null, reason: string): NumberEnvelope => {
     if (value === null) {
-      return metricEnvelope<number>({ value: null, status: "empty", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason });
+      return metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason });
     }
     if (value === 0) {
-      return metricEnvelope<number>({ value: 0, status: "zero", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason: `Successful ${source} measured exactly zero (cumulative, workspace=all).` });
+      return metricEnvelope<number>({ value: 0, status: "zero", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason: `Successful ${source} measured exactly zero.` });
     }
     return metricEnvelope<number>({ value, status: "live", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason });
   };
 
   return {
-    tokensProcessed: liveOrZero(
-      totalInput !== null && totalOutput !== null ? totalInput + totalOutput : null,
-      `${source} returned no cumulative input/output token counts`
-    ),
     tokensSaved: metricEnvelope<number>({
       value: tokensSaved,
-      status: tokensSaved === null
-        ? "unavailable"
-        : tokensSaved === 0
-          ? "zero"
-          : "live",
+      status: tokensSaved === null ? "unavailable" : tokensSaved === 0 ? "zero" : "live",
       source,
       observedAt,
       freshnessMs: null,
       scope: cumulativeScope,
       reason:
         tokensSaved === null
-          ? "Savings baseline is explicitly unavailable until a retained-memory baseline exists; never report a measured zero without one."
+          ? "Savings baseline unavailable until a real retained-memory/RTK measurement exists."
           : tokensSaved === 0
-            ? `Successful ${source} measured exactly zero cumulative savings (cumulative, workspace=all).`
-            : `${formatNum(tokensSaved)} cumulative tokens saved by RTK (cumulative, workspace=all).`,
+            ? `Successful ${source} measured exactly zero cumulative savings.`
+            : `${formatNum(tokensSaved)} cumulative tokens saved by RTK (optional savings lane).`,
     }),
-    totalCommands: liveOrZero(totalCommands, `${source} returned no cumulative command count`),
+    totalCommands: liveOrZero(totalCommands, `${source} returned no command count`),
     avgExecutionTime: liveOrZero(avgExecutionTime, `${source} returned no avg execution time`),
     savingsPercent: metricEnvelope<number>({
       value: savingsPercent,
-      status: savingsPercent === null
-        ? "unavailable"
-        : savingsPercent === 0
-          ? "zero"
-          : "live",
+      status: savingsPercent === null ? "unavailable" : savingsPercent === 0 ? "zero" : "live",
       source,
       observedAt,
       freshnessMs: null,
       scope: cumulativeScope,
       reason:
         savingsPercent === null
-          ? "Savings percent is explicitly unavailable until a retained-memory baseline exists; never report a measured zero without one."
-          : savingsPercent === 0
-            ? `Successful ${source} measured exactly 0% savings (cumulative, workspace=all).`
-            : `${savingsPercent.toFixed(1)}% savings rate from ${source} (cumulative, workspace=all).`,
+          ? "Savings percent unavailable until a real baseline exists."
+          : `${savingsPercent.toFixed(1)}% RTK savings rate.`,
     }),
+  };
+}
+
+function tokensProcessedEnvelope(
+  modelData:
+    | {
+        usage?: {
+          total: { inputTokens: number; outputTokens: number; cacheRead: number; requests: number };
+          models: unknown[];
+        };
+        timestamp?: string;
+      }
+    | undefined,
+  modelError: unknown,
+  modelLoading: boolean,
+  since: string
+): { envelope: NumberEnvelope; inputTokens: number; outputTokens: number } {
+  const source = "/api/model-usage";
+  const scope = { window: `since=${since.slice(0, 10)}`, workspace: "all" as const };
+  if (modelError) {
+    const errMsg = modelError instanceof Error ? modelError.message : "unknown error";
+    return {
+      envelope: metricEnvelope<number>({
+        value: null,
+        status: "error",
+        source,
+        observedAt: null,
+        freshnessMs: null,
+        scope,
+        reason: `Failed to load multi-model usage (${errMsg}).`,
+      }),
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  }
+  if (modelLoading || !modelData) {
+    return {
+      envelope: metricEnvelope<number>({
+        value: null,
+        status: "blocked",
+        source,
+        observedAt: null,
+        freshnessMs: null,
+        scope,
+        reason: `Loading multi-model token totals since ${since.slice(0, 10)}.`,
+      }),
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  }
+  const total = modelData.usage?.total;
+  const inputTokens = total?.inputTokens ?? 0;
+  const outputTokens = total?.outputTokens ?? 0;
+  const cacheRead = total?.cacheRead ?? 0;
+  const processed = inputTokens + outputTokens + cacheRead;
+  const models = modelData.usage?.models?.length ?? 0;
+  if (models === 0 && processed === 0) {
+    return {
+      envelope: metricEnvelope<number>({
+        value: null,
+        status: "empty",
+        source,
+        observedAt: modelData.timestamp ?? null,
+        freshnessMs: null,
+        scope,
+        reason: `No model token observations since ${since.slice(0, 10)} (Claude JSONL + efficiency token_ledger). Not a fabricated zero.`,
+      }),
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  }
+  return {
+    envelope: metricEnvelope<number>({
+      value: processed,
+      status: processed === 0 ? "zero" : "live",
+      source,
+      observedAt: modelData.timestamp ?? null,
+      freshnessMs: null,
+      scope,
+      reason: `${formatNum(processed)} tokens across ${models} model(s) since ${since.slice(0, 10)} (input+output+cacheRead).`,
+    }),
+    inputTokens,
+    outputTokens,
   };
 }
 
@@ -361,13 +429,16 @@ export default function LedgerPage() {
   const { data: modelData, isLoading: modelLoading, error: modelError } = useModelUsage(since);
   const [activeTab, setActiveTab] = useState<Tab>("Savings Breakdown");
 
-  const stats = data?.stats ?? {};
-  const totalInput = (stats.totalInput as number) ?? 0;
-  const totalOutput = (stats.totalOutput as number) ?? 0;
-  const tokensSavedRaw = (stats.tokensSaved as number) ?? 0;
-  const savingsPercentRaw = (stats.savingsPercent as number) ?? 0;
+  const stats = data?.stats ?? null;
+  const tokensSavedRaw =
+    stats && typeof stats.tokensSaved === "number" ? (stats.tokensSaved as number) : 0;
+  const savingsPercentRaw =
+    stats && typeof stats.savingsPercent === "number" ? (stats.savingsPercent as number) : 0;
 
   const tokenEnvelopes = tokenStatsEnvelopes(data, tokenError, tokenLoading);
+  const processed = tokensProcessedEnvelope(modelData, modelError, modelLoading, since);
+  const totalInput = processed.inputTokens;
+  const totalOutput = processed.outputTokens;
   const mixEnvelopes = modelMixEnvelopes(modelData, modelError, modelLoading, since);
 
   const breakdown = (stats?.commandBreakdown as Array<{
@@ -433,16 +504,16 @@ export default function LedgerPage() {
           ))}
         </select>
         <span className="text-xs" style={{ color: NOC.soft }} data-ledger-filter-scope>
-          Model mix window={rangeDays}d (since={since.slice(0, 10)}, workspace=all). RTK token savings are cumulative until RTK exposes ranged stats.
+          Tokens Processed + Model Mix window={rangeDays}d (since={since.slice(0, 10)}, workspace=all) from /api/model-usage. RTK savings/commands are optional and cumulative when available.
         </span>
       </Card>
 
-      {(tokenLoading || modelLoading || tokenError || modelError) && (
+      {(tokenLoading || modelLoading || modelError || (tokenError && modelError)) && (
         <Card pad="sm" data-ledger-source-status>
           <div className="text-sm font-semibold" style={{ color: NOC.ink }}>Ledger source status</div>
           <div className="mt-1 text-xs" style={{ color: tokenError || modelError ? NOC.terra : NOC.soft }}>
-            {tokenLoading || modelLoading ? "Loading RTK token stats and Claude model usage..." : null}
-            {tokenError ? `RTK token stats failed: ${tokenError instanceof Error ? tokenError.message : "unknown error"}. ` : null}
+            {tokenLoading || modelLoading ? "Loading multi-model usage and optional RTK savings..." : null}
+            {tokenError ? `Optional RTK source failed: ${tokenError instanceof Error ? tokenError.message : "unknown error"} (Tokens Processed still uses model-usage). ` : null}
             {modelError ? `Model usage failed: ${modelError instanceof Error ? modelError.message : "unknown error"}.` : null}
           </div>
         </Card>
@@ -452,8 +523,8 @@ export default function LedgerPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <EnvelopeStatCard
-            label={<>Tokens Processed <InfoTip text="Total tokens sent to and received from AI models — input (prompts) plus output (responses). Sourced from RTK's SQLite session log. RTK exposes cumulative stats only; the page-level date-range selector does NOT change the underlying measurement (window=cumulative, workspace=all)." /></>}
-            envelope={tokenEnvelopes.tokensProcessed}
+            label={<>Tokens Processed <InfoTip text="Total tokens across all observed models — input + output + cacheRead from /api/model-usage (Claude JSONL and efficiency token_ledger). Respects the page date range. Independent of RTK." /></>}
+            envelope={processed.envelope}
             subtitle={
               <span style={{ fontFamily: NOC_FONT_MONO }}>
                 {formatNum(totalInput)} in / {formatNum(totalOutput)} out
@@ -532,7 +603,7 @@ export default function LedgerPage() {
           <>
             <ModelMixChart data={modelMixData} envelope={mixEnvelopes.modelMix} />
             <p className="mt-3 text-xs" style={{ color: NOC.soft }}>
-              Aggregated from Claude Code session logs (~/.claude/projects) for window={rangeDays}d (since={since.slice(0, 10)}).
+              Aggregated from Claude JSONL and efficiency token_ledger events for window={rangeDays}d (since={since.slice(0, 10)}). RTK is not required.
             </p>
           </>
         )}

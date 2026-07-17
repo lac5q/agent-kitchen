@@ -6,6 +6,8 @@ import { CURRENT_SCHEMA_VERSION, initSchema } from "@/lib/db-schema";
 import {
   listEfficiencyEvents,
   recordEfficiencyEvent,
+  aggregateEfficiencyTokenLedger,
+  mergeModelUsageSources,
   type EfficiencyEventType,
 } from "@/lib/efficiency-telemetry";
 
@@ -223,5 +225,73 @@ describe("efficiency telemetry event foundation", () => {
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM efficiency_events").get()
     ).toEqual({ count: 0 });
+  });
+
+  it("aggregates token_ledger events into model-usage shape", () => {
+    recordEfficiencyEvent(db, {
+      eventType: "token_ledger",
+      agentId: "maeve",
+      payload: {
+        modelId: "MiniMax-M3",
+        rawContextTokens: 1000,
+        cachedTokens: 400,
+        totalTokens: 1400,
+      },
+      createdAt: "2026-07-17T01:00:00.000Z",
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "token_ledger",
+      agentId: "codex",
+      payload: {
+        modelId: "MiniMax-M3",
+        rawContextTokens: 500,
+        cachedTokens: 100,
+        totalTokens: 600,
+      },
+      createdAt: "2026-07-17T02:00:00.000Z",
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "token_ledger",
+      agentId: "codex",
+      payload: {
+        modelId: "gpt-5",
+        rawContextTokens: 200,
+        cachedTokens: 50,
+        totalTokens: 250,
+      },
+      createdAt: "2026-07-17T03:00:00.000Z",
+    });
+
+    const usage = aggregateEfficiencyTokenLedger(db);
+    expect(usage.models).toHaveLength(2);
+    const mini = usage.models.find((m) => m.id === "MiniMax-M3");
+    expect(mini).toMatchObject({
+      inputTokens: 1500,
+      cacheRead: 500,
+      totalTokens: 2000,
+      requests: 2,
+    });
+    expect(usage.total.requests).toBe(3);
+    expect(usage.total.totalTokens ?? usage.total.inputTokens + usage.total.cacheRead).toBeGreaterThan(0);
+
+    const merged = mergeModelUsageSources(
+      {
+        models: [
+          {
+            id: "MiniMax-M3",
+            name: "MiniMax-M3",
+            inputTokens: 10,
+            outputTokens: 5,
+            cacheRead: 0,
+            cacheCreation: 0,
+            requests: 1,
+            totalTokens: 15,
+          },
+        ],
+        total: { inputTokens: 10, outputTokens: 5, cacheRead: 0, cacheCreation: 0, requests: 1 },
+      },
+      usage
+    );
+    expect(merged.models.find((m) => m.id === "MiniMax-M3")?.requests).toBe(3);
   });
 });
