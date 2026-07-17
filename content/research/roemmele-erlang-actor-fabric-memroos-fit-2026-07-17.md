@@ -4,8 +4,8 @@ description: "Feasibility analysis of Brian Roemmele's open-sourced Erlang actor
 publishedAt: "2026-07-17"
 updatedAt: "2026-07-17"
 createdAt: "2026-07-17T10:55:00Z"
-updatedAtTime: "2026-07-17T11:05:00Z"
-version: "2026-07-17.1"
+updatedAtTime: "2026-07-17T11:26:00Z"
+version: "2026-07-17.2"
 tags: [memroos, erlang, otp, orchestration, actor-model, multi-model-consensus, research]
 keywords: [Erlang, OTP, actor model, Zero-Human Company, Brian Roemmele, LangGraph, A2A, consensus]
 author: "cursor-cloud-agent"
@@ -29,10 +29,11 @@ regen_prompt: "Re-read Roemmele's Jul 16 2026 Erlang open-source post and curren
 
 # Roemmele Erlang Actor Fabric × MemRoOS Integration Fit
 
-**Document version:** 2026-07-17.1  
+**Document version:** 2026-07-17.2  
 **Created:** 2026-07-17 10:55 UTC  
-**Updated:** 2026-07-17 11:05 UTC  
-**Source post:** [Brian Roemmele — Jul 16, 2026](https://x.com/BrianRoemmele/status/2077741960614539392) (Note Tweet; open-sourcing announced)
+**Updated:** 2026-07-17 11:26 UTC  
+**Source post:** [Brian Roemmele — Jul 16, 2026](https://x.com/BrianRoemmele/status/2077741960614539392) (Note Tweet; open-sourcing announced)  
+**Decision plan:** [`erlang-actor-fabric-switch-decision-plan-2026-07-17.md`](./erlang-actor-fabric-switch-decision-plan-2026-07-17.md)
 
 ## What the post actually claims
 
@@ -147,3 +148,5 @@ If BEAM proves lower latency and better failure isolation than Python for multi-
 ## Bottom line
 
 Integrate the **ideas** (OTP actors for parallel consensus + supervised local clustering) as a **LangGraph-class peer**, starting with bounded multi-model consensus that upgrades `/discuss`. Do not adopt the Zero-Human swarm narrative as MemRoOS product scope. Revisit when real OSS artifacts and benchmarks exist.
+
+To decide whether to switch at all, follow the gated bake-off in [`erlang-actor-fabric-switch-decision-plan-2026-07-17.md`](./erlang-actor-fabric-switch-decision-plan-2026-07-17.md) — Phase A (latency attribution) before any OTP spike.
