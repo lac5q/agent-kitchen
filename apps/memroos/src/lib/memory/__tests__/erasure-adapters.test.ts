@@ -162,6 +162,90 @@ describe("MEMLIFE-02 real erasure store adapters", () => {
     expect(candidate.status).toBe("rejected");
   });
 
+  it("tombstones vault, qmd, embeddings, context, and federation stores", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("multi-store", "message", "ingress", "vault", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives.push(
+      { storeId: "qmd", sourceHash: identity.canonicalHash, provenance: "test" },
+      { storeId: "embeddings", sourceHash: identity.canonicalHash, provenance: "test" },
+      { storeId: "context", sourceHash: identity.canonicalHash, provenance: "test" },
+      { storeId: "federation", sourceHash: identity.canonicalHash, provenance: "test" }
+    );
+
+    database
+      .prepare(
+        `INSERT INTO raw_artifacts
+         (id, tenant_id, source_type, artifact_uri, artifact_path, content_hash, source_id)
+         VALUES (?, 'default-tenant', 'memory.test', 'vault://x', 'x.bin', ?, ?)`
+      )
+      .run("vault-art-1", identity.canonicalHash, identity.id);
+
+    database
+      .prepare(
+        `INSERT INTO agent_handoff_packs
+         (id, tenant_id, title, status, context_pack_json, source_capture_ids_json)
+         VALUES (?, 'default-tenant', 'pack', 'ready', ?, '[]')`
+      )
+      .run("pack-1", JSON.stringify({ canonical_id: identity.id, body: "secret" }));
+
+    database
+      .prepare(
+        `INSERT INTO federation_action_artifacts
+         (id, tenant_id, space_id, federation_run_id, pack_hash, pack_bytes, pack_item_count,
+          bound_status, scope_hash, policy_hash, ontology_hash, artifact_hash)
+         VALUES (?, 'default-tenant', 'space-1', 'run-1', 'ph', 1, 1, 'bounded', 'sh', 'ph2', 'oh', 'ah')`
+      )
+      .run("fed-art-1");
+    database
+      .prepare(
+        `INSERT INTO federation_action_derivatives
+         (id, tenant_id, artifact_id, canonical_id, canonical_hash, source_id, status)
+         VALUES (?, 'default-tenant', ?, ?, ?, ?, 'active')`
+      )
+      .run("fed-deriv-1", "fed-art-1", identity.id, identity.canonicalHash, identity.id);
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+      idempotencyKey: "multi-store-erasure",
+    });
+
+    expect(report.storeOutcomes.find((o) => o.storeId === "vault")?.status).toBe("tombstoned");
+    expect(report.storeOutcomes.find((o) => o.storeId === "qmd")?.status).toBe("tombstoned");
+    expect(report.storeOutcomes.find((o) => o.storeId === "embeddings")?.status).toBe("purged");
+    expect(report.storeOutcomes.find((o) => o.storeId === "context")?.status).toBe("tombstoned");
+    expect(report.storeOutcomes.find((o) => o.storeId === "federation")?.status).toBe("tombstoned");
+
+    const pack = database
+      .prepare("SELECT status, redaction_state FROM agent_handoff_packs WHERE id = ?")
+      .get("pack-1") as { status: string; redaction_state: string };
+    expect(pack.status).toBe("expired");
+    expect(pack.redaction_state).toBe("redacted");
+  });
+
+  it("returns cached completed report on retry without duplicating work", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("idempotent", "message", "ingress", "message", {
+      tenantId: "default-tenant",
+    });
+    const opts = {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+      idempotencyKey: "completed-cache-key",
+    };
+    const first = await coordinateErasure(database, identity, opts);
+    const second = await coordinateErasure(database, identity, opts);
+    expect(second.status).toBe("completed");
+    expect(second.erasureId).toBe(first.erasureId);
+    expect(second.storeOutcomes.map((o) => o.storeId).sort()).toEqual(
+      first.storeOutcomes.map((o) => o.storeId).sort()
+    );
+  });
+
   it("reports graph unavailable when Neo4j is not configured (honest degrade)", async () => {
     const database = freshDb();
     const prev = process.env.NEO4J_PASSWORD;

@@ -8,6 +8,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import {
+  listVaultArtifactsForTenant,
+  markOrphanedArtifacts,
+  readVaultArtifactForTenant,
   reconcileVaultDurability,
   replayVaultArtifactWithDurability,
   writeVaultArtifactWithDurability,
@@ -160,5 +163,54 @@ describe("VAL-MEM-026: vault durability and replay are tenant-safe", () => {
     const verification = verifyMemoryAuditChain(database, "default-tenant");
     expect(verification.valid).toBe(true);
     expect(verification.checked).toBeGreaterThanOrEqual(2);
+  });
+
+  it("readVaultArtifactForTenant enforces tenant scope", () => {
+    const database = freshDb();
+    const written = writeVaultArtifactWithDurability(database, {
+      tenantId: "default-tenant",
+      sourceType: "memory.test",
+      sourceId: "tenant-read",
+      body: "tenant scoped",
+      label: { visibility: "private", policy: "sealed" },
+      actorId: "operator",
+    });
+    const read = readVaultArtifactForTenant(database, "default-tenant", written.id);
+    expect(read.id).toBe(written.id);
+    expect(() => readVaultArtifactForTenant(database, "other-tenant", written.id)).toThrow(/tenant mismatch/);
+  });
+
+  it("listVaultArtifactsForTenant returns artifacts for the tenant", () => {
+    const database = freshDb();
+    writeVaultArtifactWithDurability(database, {
+      tenantId: "default-tenant",
+      sourceType: "memory.test",
+      sourceId: "list-a",
+      body: "listed",
+      label: { visibility: "private", policy: "sealed" },
+      actorId: "operator",
+    });
+    const listed = listVaultArtifactsForTenant(database, "default-tenant", { limit: 10 });
+    expect(listed.artifacts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("markOrphanedArtifacts flags pending durability rows with missing files", () => {
+    const database = freshDb();
+    const now = new Date().toISOString();
+    database
+      .prepare(
+        `INSERT INTO memory_vault_durability
+         (id, tenant_id, artifact_id, artifact_uri, content_hash, classification_json, label_version,
+          write_state, replay_state, created_at, updated_at)
+         VALUES (?, 'default-tenant', 'orphan-art', 'vault://orphan', 'abc', '{}', 1, 'pending', 'pending', ?, ?)`
+      )
+      .run("vdr-orphan", now, now);
+    const marked = markOrphanedArtifacts(database, "default-tenant");
+    expect(marked).toBe(1);
+    const row = database
+      .prepare("SELECT write_state, failure_reason FROM memory_vault_durability WHERE id = ?")
+      .get("vdr-orphan") as { write_state: string; failure_reason: string };
+    expect(row.write_state).toBe("orphaned");
+    expect(row.failure_reason).toContain("orphaned");
   });
 });

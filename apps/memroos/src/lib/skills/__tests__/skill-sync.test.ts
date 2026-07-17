@@ -985,3 +985,79 @@ describe("VAL-SKILL-028 detectHarnessSkills rejects symlinks and traversal escap
   });
 });
 
+// ---------------------------------------------------------------------------
+// checkSync, listSyncState, clearVersionPin
+// ---------------------------------------------------------------------------
+
+describe("checkSync and sync state helpers", () => {
+  it("checkSync scans harness roots and creates proposals for drift", async () => {
+    const { checkSync } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    writeHarnessSkill(
+      harnessRoots.claude,
+      "check-sync-skill",
+      VALID_SKILL_MD("check-sync-skill", "1.0.0")
+    );
+    insertSkillRow({
+      name: "check-sync-skill",
+      content_hash: "0".repeat(64),
+      version: "0.9.0",
+    });
+    const result = checkSync(db, { roots: harnessRoots, proposed_by: "scanner" });
+    expect(result.detected).toBeGreaterThanOrEqual(1);
+    expect(result.created).toBeGreaterThanOrEqual(1);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("listSyncState and listSyncObservability expose pending and drift flags", async () => {
+    const { createImportProposal, listSyncState, listSyncObservability } =
+      await import("../skill-sync");
+    insertSkillRow({
+      name: "obs-drift",
+      content_hash: "0".repeat(64),
+      version: "1.0.0",
+    });
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "obs-drift",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: VALID_SKILL_MD("obs-drift", "2.0.0"),
+        content_hash: "1".repeat(64),
+        file_path: "/tmp/obs-drift.md",
+        parse_error: null,
+      },
+      proposed_by: "scanner",
+    });
+    const rows = listSyncState(db, { pending_only: true });
+    expect(rows.some((r) => r.skill_name === "obs-drift")).toBe(true);
+    const observability = listSyncObservability(db, { pending_only: true });
+    const item = observability.find((o) => o.skill_name === "obs-drift");
+    expect(item?.drift).toBe(true);
+    expect(item?.pending_proposal_id).toBeTruthy();
+  });
+
+  it("clearVersionPin removes an existing pin", async () => {
+    const { pinVersion, clearVersionPin } = await import("../skill-sync");
+    insertSkillRow({ name: "pin-clear", version: "1.0.0" });
+    pinVersion(db, {
+      skill_name: "pin-clear",
+      source_harness: "claude",
+      version: "1.0.0",
+      actor: "alice",
+    });
+    const cleared = clearVersionPin(db, {
+      skill_name: "pin-clear",
+      source_harness: "claude",
+      actor: "alice",
+    });
+    expect(cleared.version_pinned_to).toBeNull();
+  });
+
+  it("requireHarness rejects unsupported harness identifiers", async () => {
+    const { requireHarness } = await import("../skill-sync");
+    expect(() => requireHarness("unknown-harness")).toThrow(/Unsupported source_harness/);
+  });
+});
+

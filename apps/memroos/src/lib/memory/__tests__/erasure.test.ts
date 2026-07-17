@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import { coordinateErasure, traverseIndirectDerivatives } from "../erasure";
+import {
+  coordinateErasure,
+  deriveErasureId,
+  ErasureAuthorizationError,
+  registerErasureStoreAdapter,
+  traverseIndirectDerivatives,
+} from "../erasure";
 import { buildCanonicalIdentity } from "../canonical";
 
 describe("Erasure Coordinator", () => {
@@ -261,5 +267,101 @@ describe("Erasure Coordinator -- new validation", () => {
     expect(indirect.length).toBeGreaterThanOrEqual(2);
     expect(indirect.some(i => i.storeId === "cache")).toBe(true);
     expect(indirect.some(i => i.storeId === "context")).toBe(true);
+  });
+});
+
+describe("Erasure helpers and authorization", () => {
+  it("deriveErasureId is stable for the same tenant and canonical id", () => {
+    const id1 = deriveErasureId("tenant-a", "canon-123");
+    const id2 = deriveErasureId("tenant-a", "canon-123");
+    expect(id1).toBe(id2);
+    expect(id1).toMatch(/^erasure_[a-f0-9]{64}$/);
+  });
+
+  it("registerErasureStoreAdapter rejects unknown store ids", () => {
+    expect(() =>
+      registerErasureStoreAdapter({
+        storeId: "bogus" as never,
+        async erase() {
+          return { status: "purged", reason: "test" };
+        },
+      })
+    ).toThrow(/unknown storeId/);
+  });
+
+  it("throws ErasureAuthorizationError when scope tenantId is missing", async () => {
+    const db = new Database(":memory:");
+    const identity = buildCanonicalIdentity("x", "t", "ingress", "vector", { tenantId: "t1" });
+    await expect(
+      coordinateErasure(db, identity, { tenantId: "t1", actorId: "a", scope: { tenantId: "" } })
+    ).rejects.toBeInstanceOf(ErasureAuthorizationError);
+  });
+
+  it("throws when canonical identity tenant disagrees with scope tenant", async () => {
+    const db = new Database(":memory:");
+    const identity = buildCanonicalIdentity("x", "t", "ingress", "vector", { tenantId: "tenant-a" });
+    (identity as typeof identity & { tenantId: string }).tenantId = "tenant-a";
+    await expect(
+      coordinateErasure(db, identity, {
+        tenantId: "tenant-b",
+        actorId: "a",
+        scope: { tenantId: "tenant-b" },
+      })
+    ).rejects.toBeInstanceOf(ErasureAuthorizationError);
+  });
+});
+
+describe("traverseIndirectDerivatives extended graph walks", () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE raw_artifacts (
+        id TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL,
+        source_id TEXT,
+        created_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z'
+      );
+      CREATE TABLE memory_erasure_reports (
+        id TEXT PRIMARY KEY,
+        canonical_id TEXT NOT NULL,
+        store_outcomes_json TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z'
+      );
+    `);
+  });
+
+  it("returns empty array for falsy source identity", () => {
+    expect(traverseIndirectDerivatives(db, "" as unknown as string)).toEqual([]);
+  });
+
+  it("discovers vault neighbors from raw_artifacts and prior erasure report snapshots", () => {
+    const identity = buildCanonicalIdentity("vault body", "vault", "ingress", "vault");
+    db.prepare(
+      `INSERT INTO raw_artifacts (id, content_hash, source_id) VALUES (?, ?, ?)`
+    ).run("art-1", identity.canonicalHash, identity.id);
+    db.prepare(
+      `INSERT INTO memory_erasure_reports (id, canonical_id, store_outcomes_json)
+       VALUES (?, ?, ?)`
+    ).run(
+      "er-1",
+      identity.id,
+      JSON.stringify([{ storeId: "platform", status: "tombstoned", sourceHash: identity.canonicalHash }])
+    );
+
+    const indirect = traverseIndirectDerivatives(db, identity);
+    expect(indirect.some((d) => d.storeId === "vault")).toBe(true);
+    expect(indirect.some((d) => d.provenance === "erasure_report_snapshot")).toBe(true);
+  });
+
+  it("skips malformed prior erasure report JSON", () => {
+    const identity = buildCanonicalIdentity("bad json", "vault", "ingress", "vault");
+    db.prepare(
+      `INSERT INTO memory_erasure_reports (id, canonical_id, store_outcomes_json)
+       VALUES (?, ?, ?)`
+    ).run("er-bad", identity.id, "not-json");
+    const indirect = traverseIndirectDerivatives(db, identity.id);
+    expect(indirect.length).toBeGreaterThanOrEqual(2);
   });
 });

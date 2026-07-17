@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db-schema";
 import { writeAuditEntry, openEscalation, resolveEscalation } from "@/lib/audit/write";
-import { queryAuditEntries, streamAuditEntries } from "@/lib/audit/query";
+import { queryAuditEntries, streamAuditEntries, queryEscalations } from "@/lib/audit/query";
 import { checkSlaBreaches } from "@/lib/audit/sla";
 
 function makeDb(): Database.Database {
@@ -139,6 +139,52 @@ describe("audit: queryAuditEntries", () => {
     const page1Ids = new Set(page1.entries.map((e) => e.id));
     expect(page2.entries.every((e) => !page1Ids.has(e.id))).toBe(true);
   });
+
+  it("filters by tenantId, agentId, entityId, date range, and userId metadata", () => {
+    writeAuditEntry(
+      {
+        tenant_id: "default-tenant",
+        actor_id: "user-z",
+        actor_role: "operator",
+        event_type: "agent.matched",
+        entity_type: "agent",
+        entity_id: "agent:b-001",
+        metadata_json: JSON.stringify({ user_id: "stream-user" }),
+        created_at: "2026-02-01T00:00:00.000Z",
+      },
+      db,
+    );
+
+    const tenant = queryAuditEntries({ tenantId: "default-tenant", limit: 50 }, db);
+    expect(tenant.entries.length).toBeGreaterThan(0);
+
+    const agent = queryAuditEntries({ agentId: "b-001", limit: 50 }, db);
+    expect(agent.entries.every((e) => e.entity_id === "agent:b-001")).toBe(true);
+
+    const entity = queryAuditEntries({ entityId: "agent:b-001", limit: 50 }, db);
+    expect(entity.entries).toHaveLength(1);
+
+    const ranged = queryAuditEntries(
+      { from: "2026-01-15T00:00:00.000Z", to: "2026-02-15T00:00:00.000Z", limit: 50 },
+      db,
+    );
+    expect(ranged.entries.some((e) => e.entity_id === "agent:b-001")).toBe(true);
+
+    const user = queryAuditEntries({ userId: "stream-user", limit: 50 }, db);
+    expect(user.entries).toHaveLength(1);
+  });
+
+  it("filters by multiple event types and ignores empty eventType arrays", () => {
+    const multi = queryAuditEntries(
+      { eventType: ["agent.matched", "seal.approved"], limit: 50 },
+      db,
+    );
+    expect(multi.entries.length).toBeGreaterThan(0);
+    expect(multi.entries.every((e) => ["agent.matched", "seal.approved"].includes(e.event_type))).toBe(true);
+
+    const emptyArray = queryAuditEntries({ eventType: [], limit: 50 }, db);
+    expect(emptyArray.entries.length).toBe(10);
+  });
 });
 
 describe("audit: streamAuditEntries (export)", () => {
@@ -181,6 +227,30 @@ describe("audit: streamAuditEntries (export)", () => {
     const rows = [];
     for (const row of iterator) rows.push(row);
     expect(rows.length).toBe(3);
+  });
+
+  it("streams with tenant, entity, and user filters", () => {
+    const db = makeDb();
+    writeAuditEntry(
+      {
+        tenant_id: "default-tenant",
+        actor_id: "user-stream",
+        actor_role: "operator",
+        event_type: "agent.flagged",
+        entity_type: "agent",
+        entity_id: "agent:stream-1",
+        metadata_json: JSON.stringify({ user_id: "stream-user" }),
+      },
+      db,
+    );
+    const rows = Array.from(
+      streamAuditEntries(
+        { tenantId: "default-tenant", entityType: "agent", userId: "stream-user" },
+        db,
+      ),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entity_id).toBe("agent:stream-1");
   });
 });
 
@@ -315,5 +385,32 @@ describe("audit: checkSlaBreaches", () => {
 
     const count = checkSlaBreaches(db);
     expect(count).toBe(0);
+  });
+});
+
+describe("audit: queryEscalations", () => {
+  it("returns overdue open escalations and filters by status/tenant", () => {
+    const db = makeDb();
+    const pastDeadline = new Date(Date.now() - 3600_000).toISOString();
+    const futureDeadline = new Date(Date.now() + 3600_000).toISOString();
+
+    db.prepare(
+      `INSERT INTO hil_escalations
+        (id, tenant_id, entity_type, entity_id, escalation_type, sla_seconds, sla_deadline, status, opened_by, created_at)
+       VALUES (?, 'default-tenant', 'agent', 'agent:a-001', 'agent_escalate', 14400, ?, 'open', 'system', ?)`,
+    ).run("esc-overdue", pastDeadline, new Date().toISOString());
+
+    db.prepare(
+      `INSERT INTO hil_escalations
+        (id, tenant_id, entity_type, entity_id, escalation_type, sla_seconds, sla_deadline, status, opened_by, created_at)
+       VALUES (?, 'default-tenant', 'agent', 'agent:a-002', 'agent_escalate', 14400, ?, 'resolved', 'system', ?)`,
+    ).run("esc-resolved", futureDeadline, new Date().toISOString());
+
+    const overdue = queryEscalations({ status: "open", tenantId: "default-tenant", limit: 10 }, db);
+    expect(overdue).toHaveLength(1);
+    expect(overdue[0]).toMatchObject({ id: "esc-overdue", isOverdue: true });
+
+    const resolved = queryEscalations({ status: "resolved", limit: 10 }, db);
+    expect(resolved[0]?.isOverdue).toBe(false);
   });
 });

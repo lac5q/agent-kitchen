@@ -953,3 +953,38 @@ describe("listImportProposals / listAgentVersionPins filters", () => {
     expect(xPins[0].skill_name).toBe("sk-x");
   });
 });
+
+describe("getImportProposal and listImportProposals", () => {
+  it("getImportProposal returns null for invalid ids and the row when present", async () => {
+    const { detectSkillChange, getImportProposal } = await importSyncModule();
+    expect(getImportProposal(db, "")).toBeNull();
+    const created = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "lookup-skill",
+      detected_content_body: "body",
+      proposed_by: "scanner",
+    });
+    const found = getImportProposal(db, created.proposal.id);
+    expect(found?.id).toBe(created.proposal.id);
+    expect(found?.status).toBe("pending");
+  });
+
+  it("listImportProposals filters by status and harness", async () => {
+    const { detectSkillChange, listImportProposals } = await importSyncModule();
+    detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "listed-skill",
+      detected_content_body: "listed body",
+      proposed_by: "scanner",
+    });
+    const pending = listImportProposals(db, {
+      status: "pending",
+      source_harness: "claude",
+      skill_name: "listed-skill",
+    });
+    expect(pending).toHaveLength(1);
+    expect(() => listImportProposals(db, { status: "bogus" as "pending" })).toThrow(
+      /Invalid proposal status/
+    );
+  });
+});

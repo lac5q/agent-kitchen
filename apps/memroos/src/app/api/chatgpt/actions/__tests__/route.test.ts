@@ -267,4 +267,85 @@ describe("ChatGPT Actions bridge", () => {
       { ok: true, id: "mem-1" }
     );
   });
+
+  it("authorizes bearer tokens and clamps search limits", async () => {
+    process.env.MEMROOS_CHATGPT_ACTIONS_API_KEY = "secret-key";
+    const {
+      authorizeChatGptAction,
+      parseActionLimit,
+      readJsonBody,
+      decodeChatGptActionResult,
+    } = await import("@/lib/chatgpt-actions");
+
+    const unauthorized = authorizeChatGptAction(
+      new Request("https://memroos.example/api/chatgpt/actions/search", {
+        headers: { authorization: "Bearer wrong" },
+      }),
+    );
+    expect(unauthorized?.status).toBe(401);
+
+    const authorized = authorizeChatGptAction(
+      new Request("https://memroos.example/api/chatgpt/actions/search", {
+        headers: { authorization: "Bearer secret-key" },
+      }),
+    );
+    expect(authorized).toBeNull();
+
+    expect(parseActionLimit("99")).toBe(20);
+    expect(parseActionLimit("0")).toBe(1);
+    expect(parseActionLimit(undefined, 5)).toBe(5);
+
+    await expect(readJsonBody(new Request("https://x", { method: "POST", body: "not-json" }))).resolves.toEqual({});
+    await expect(readJsonBody(new Request("https://x", { method: "POST", body: JSON.stringify({ q: 1 }) }))).resolves.toEqual({ q: 1 });
+
+    expect(() => decodeChatGptActionResult("bad-id")).toThrow(/Invalid MemRoOS result id/);
+  });
+
+  it("surfaces backend failures and policy denials", async () => {
+    process.env.MEMROOS_CHATGPT_ACTIONS_API_KEY = "secret-key";
+    const backends = await import("@/lib/memory/backends");
+    const policy = await import("@/lib/security-policy");
+    const audit = await import("@/lib/audit");
+
+    vi.mocked(backends.searchVectorMemory).mockRejectedValue(new Error("vector down"));
+    vi.mocked(backends.queryGraphMemory).mockResolvedValue([
+      {
+        id: "g2",
+        content: "graph hit from cypher",
+        metadata: { visibility: "internal", policy: "agent_visible" },
+      },
+    ]);
+    vi.mocked(policy.checkMemoryWritePolicy).mockReturnValue({
+      allowed: false,
+      code: "DENIED",
+      message: "blocked by policy",
+    });
+    vi.mocked((await import("@/lib/agent-registry")).registerAgent).mockReturnValue({
+      agent: { id: "chatgpt-mobile", capabilities: [] },
+    } as never);
+
+    const { POST: searchPost } = await loadSearchRoute();
+    const searchResponse = await searchPost(
+      new Request("https://memroos.example/api/chatgpt/actions/search", {
+        method: "POST",
+        headers: { "x-api-key": "secret-key" },
+        body: JSON.stringify({ query: "graph", limit: 3 }),
+      }),
+    );
+    const searchBody = await searchResponse.json();
+    expect(searchBody.ok).toBe(true);
+    expect(searchBody.tiers.find((tier: { tier: string }) => tier.tier === "vector")?.error).toBe("vector down");
+    expect(searchBody.results.some((item: { tier: string }) => item.tier === "graph")).toBe(true);
+
+    const { POST: savePost } = await loadSaveRoute();
+    const saveResponse = await savePost(
+      new Request("https://memroos.example/api/chatgpt/actions/save", {
+        method: "POST",
+        headers: { "x-api-key": "secret-key", "content-type": "application/json" },
+        body: JSON.stringify({ text: "remember this" }),
+      }),
+    );
+    expect(saveResponse.status).toBe(502);
+    expect(audit.writeAuditLog).toHaveBeenCalled();
+  });
 });

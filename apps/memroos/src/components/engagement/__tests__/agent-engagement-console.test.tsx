@@ -246,6 +246,151 @@ describe("AgentEngagementConsole", () => {
     expect(screen.getByText(/Room session/i)).toBeInTheDocument();
   });
 
+  it("shows recent delegations in the sidebar", () => {
+    render(<AgentEngagementConsole />);
+
+    expect(screen.getByText("existing task")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Timeline t1" })).toBeInTheDocument();
+    expect(screen.getByText("pending")).toBeInTheDocument();
+  });
+
+  it("runs a conference round with the default prompt when the room message is blank", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Conference summary from the room."));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start conference round/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/chat", expect.objectContaining({ method: "POST" }));
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(String(init?.body));
+      expect(body.message).toContain("group conference round");
+      expect(screen.getByText("Conference summary from the room.")).toBeInTheDocument();
+    });
+  });
+
+  it("includes standup blockers and operator ask in the standup prompt", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Blocked on deploy access."));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.change(screen.getByLabelText(/Standup focus/i), { target: { value: "Dispatch reliability" } });
+    fireEvent.change(screen.getByPlaceholderText(/Anything blocked or stale/i), {
+      target: { value: "Heroku token expired" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Reply with status, next step/i), {
+      target: { value: "Name the next unblocker" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Run 15-minute standup/i }));
+
+    await waitFor(() => {
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(String(init?.body));
+      expect(body.message).toContain("Known blockers: Heroku token expired");
+      expect(body.message).toContain("Operator ask: Name the next unblocker");
+    });
+  });
+
+  it("surfaces chat stream failures in the transcript", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('{"error":{"message":"Provider unavailable"}}', { status: 503 }),
+    );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "ping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chat unavailable: Provider unavailable/)).toBeInTheDocument();
+    });
+  });
+
+  it("surfaces engagement test network failures", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: /test primary agents/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("network down")).toBeInTheDocument();
+    });
+  });
+
+  it("runs diagnostics for a single agent from the roster card", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      json: async () => ({
+        results: [{
+          agentId: "codex-cli-agent",
+          name: "Codex CLI",
+          status: "idle",
+          chat: { status: "ready", runner: "codex", model: "gpt-4.1", detail: "ready" },
+          dispatch: { status: "ready", adapter: "hive-poll", detail: "queued" },
+          voice: { status: "ready", detail: "ok" },
+        }],
+      }),
+    } as Response);
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[1]);
+
+    await waitFor(() => {
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(String(init?.body)).toContain("codex-cli-agent");
+    });
+  });
+
+  it("toggles room participation from an agent card", () => {
+    render(<AgentEngagementConsole />);
+
+    expect(screen.getByText(/1 participant/)).toBeInTheDocument();
+    const roomButtons = screen.getAllByRole("button", { name: /Room/i });
+    fireEvent.click(roomButtons[1]);
+
+    expect(screen.getByText(/2 participants/)).toBeInTheDocument();
+  });
+
+  it("can hide system agents again after showing them", () => {
+    render(<AgentEngagementConsole />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Show system \(2\)/i }));
+    expect(screen.getByText("CEO")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hide system/i }));
+    expect(screen.queryByText("CEO")).not.toBeInTheDocument();
+  });
+
+  it("sends direct chat on Enter without Shift", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(chatStream("Enter key works"));
+
+    render(<AgentEngagementConsole />);
+    const textarea = screen.getByLabelText("Direct message");
+    fireEvent.change(textarea, { target: { value: "via enter" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      expect(screen.getByText("Enter key works")).toBeInTheDocument();
+    });
+  });
+
+  it("records a system message when voice capture is unsupported in room mode", () => {
+    const originalSpeechRecognition = window.SpeechRecognition;
+    // @ts-expect-error test cleanup
+    delete window.SpeechRecognition;
+    // @ts-expect-error test cleanup
+    delete window.webkitSpeechRecognition;
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Speak to room" }));
+
+    expect(
+      screen.getByText(/Voice capture is not supported in this browser/i),
+    ).toBeInTheDocument();
+
+    window.SpeechRecognition = originalSpeechRecognition;
+  });
+
   it("scopes direct chat history and payload to the selected agent", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(chatStream("Claude response"))
