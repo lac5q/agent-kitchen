@@ -217,7 +217,7 @@ require_server_memory_access() {
           '[.tiers[]?
             | (.status | tostring) as $status
             | select($status != "up" and ($allowed | contains("," + $status + ",") | not))
-            | "\(.tier)=\($status)"
+            | "\(.tier)=\($status)" + (if (.detail|type)=="string" and (.detail|length)>0 then "(\(.detail))" else "" end)
           ] | join(", ")' "$health_file")"
         if [[ -z "$unhealthy_tiers" ]]; then
           if [[ "$attempt" -gt 1 ]]; then
@@ -225,7 +225,18 @@ require_server_memory_access() {
           fi
           return 0
         fi
-        last_error="memory tiers are not healthy: ${unhealthy_tiers}"
+        last_error="memory tiers are not healthy: ${unhealthy_tiers} (attempt ${attempt}/${attempts}; health HTTP ${code})"
+        # Extra compact diagnostics from health JSON (never print API keys / Authorization).
+        extra_diag="$(jq -r '
+          [
+            (.tiers[]? | select(.tier=="vector") | "vector_detail=\(.detail // "none")"),
+            (.tiers[]? | select(.tier=="graph") | "graph=\(.status)"),
+            (.tiers[]? | select(.tier=="episodic") | "episodic=\(.status)")
+          ] | map(select(length>0)) | join("; ")
+        ' "$health_file" 2>/dev/null || true)"
+        if [[ -n "$extra_diag" && "$extra_diag" != "null" ]]; then
+          last_error="${last_error}; ${extra_diag}"
+        fi
       fi
     fi
 

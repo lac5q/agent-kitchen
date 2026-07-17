@@ -1,5 +1,6 @@
 {
   "_comment": "Copy to ~/.memroos/context-sources.local.json (never commit). Deep-merged over context-sources.config.json. Pair with ~/.memroos/meeting-sources.json + scripts/meet-sync/meet-sync.sh.",
+  "_dual_account_fathom_note": "Fathom dual-account provider (luis@epiloguecapital.com + luis.calderon@gmail.com). Prefer: bash scripts/integrations/fathom/install-local.sh. Sets MEETINGS_INGEST_COMMAND to scripts/integrations/fathom/fathom-ingest.sh and reads API keys from 1Password via ~/.memroos/integrations/fathom-accounts.json. Circleback remains a private alternative.",
   "sources": [
     {
       "id": "meet-recordings",

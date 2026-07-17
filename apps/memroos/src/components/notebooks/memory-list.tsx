@@ -46,6 +46,12 @@ export function MemoryList({ entries, onSelect, selected }: MemoryListProps) {
                 ? "border-amber-300 bg-amber-50"
                 : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
             ].join(" ")}
+            data-row-id={entry.id}
+            data-category={entry.category}
+            data-backend={entry.backend}
+            data-source={entry.source}
+            data-timestamp={entry.timestamp ?? null}
+            data-consolidation-state={entry.consolidationState}
           >
             <div className="flex items-center gap-2 mb-1.5">
               <span

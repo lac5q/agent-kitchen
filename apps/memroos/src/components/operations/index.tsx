@@ -122,6 +122,7 @@ export function OperationsNoc() {
         <MemoryNotDigested filters={filters} />
       </div>
 
+
       {/* Row 3 — Agent workload + Model utility + Activity heatmap */}
       <div
         style={{
@@ -131,13 +132,13 @@ export function OperationsNoc() {
           gap: 14,
         }}
       >
-        <AgentWorkload />
+        <AgentWorkload filters={filters} />
         <ModelUtility filters={filters} />
-        <ActivityHeatmap />
+        <ActivityHeatmap filters={filters} />
       </div>
 
       {/* Row 4 — Skills lifecycle */}
-      <SkillsLifecycle />
+      <SkillsLifecycle filters={filters} />
 
       {/* Row 5 — Behavior signals */}
       <div
@@ -145,7 +146,7 @@ export function OperationsNoc() {
           padding: "0 28px 14px",
         }}
       >
-        <BehaviorSignals />
+        <BehaviorSignals filters={filters} />
       </div>
 
       {/* Row 6 — Governance + Savings + Waste */}
@@ -157,10 +158,9 @@ export function OperationsNoc() {
           gap: 14,
         }}
       >
-        <GovernanceStrip />
-        <Savings />
-        <Waste />
-      </div>
-    </div>
+        <GovernanceStrip filters={filters} />
+        <Savings filters={filters} />
+        <Waste filters={filters} />
+      </div>    </div>
   );
 }

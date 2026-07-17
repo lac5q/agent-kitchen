@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
-stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary.
-last_updated: "2026-07-16T21:45:00.000Z"
+stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
+last_updated: "2026-07-16T23:05:00.000Z"
 progress:
   total_phases: 115
   completed_phases: 79
@@ -17,27 +17,29 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-04 for v2.0)
+See: .planning/PROJECT.md
 
 **Core value:** Any agent framework plugs into Memroos — and every agent, knowledge system, and skill becomes visible, connected, and self-improving.
-**Current focus:** Hermes dual-mode memory — opt-in MemRoOS observe provider; built-in MEMORY.md remains default.
+**Current focus:** Hermes dual-mode memory — opt-in MemRoOS observe provider; built-in MEMORY.md remains default. (v8.12 MCP Memory Gate Resilience COMPLETE.)
 
 ## Current Position
 
 Phase: 159 Hermes dual-mode memory (observe) — 2026-07-16
 Plan: ENTOPS-07 Hermes opt-in slice complete; Claude/Codex still open
 Status: **Hermes MEMORY.md unchanged by default** · **MemRoOS provider available when `memory.provider: memroos`** · Voyage clarified as cloud API (not implemented)
+Completed recently: **v8.12** Phases 154–156 (GATE-RESILE-01..03) — Mem0 probe honesty, hang immunity, path-scoped disk diagnostics.
 
 **Still open:**
 - **MSIQ-06** — GraphRAG spike (Luis approval)
 - **ENTOPS-04/05** — IdP/MDM
 - **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred
 - **v8.9** — Voyage/LLM scoring (cloud API if approved)
+- **MEETREL-FOLLOWUP-05** — Source-to-index evidence (Cordant investigation)
 
 ## Session Continuity
 
-Last session: 2026-07-16T21:45:00.000Z
-Stopped at: Hermes dual-mode observe provider installed (inactive by default).
+Last session: 2026-07-16T23:05:00.000Z
+Stopped at: Merging diverged origin/main (incl. v8.12 + Fathom dual-account) into local main.
 Resume file: `.planning/goals/2026-07-16-hermes-dual-mode-memory.md`
 Next action: Local Hermes trial with `MEMROOS_HERMES_DRY_RUN=1`, then live ingest; `hermes memory off` until satisfied.
 

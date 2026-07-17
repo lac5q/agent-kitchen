@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useEscalations, useResolveEscalation } from "@/lib/api-client";
 import type { EscalationWithCountdown } from "@/lib/api-client";
 import { SlaCountdown } from "@/components/escalations/sla-countdown";
 import { Btn, Card, PageHeader, Pill } from "@/components/shared/ui";
-import { NOC } from "@/lib/noc-theme";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 
 type TabStatus = "open" | "resolved" | "sla_breached" | "all";
 
@@ -138,6 +139,10 @@ const TABS: { label: string; value: TabStatus }[] = [
 ];
 
 export default function EscalationsPage() {
+  const search = useSearchParams();
+  const fromWindow = search?.get("from_window") ?? null;
+  const fromWorkspace = search?.get("from_workspace") ?? null;
+  const fromScopeNote = search?.get("from_scope_note") ?? null;
   const [activeTab, setActiveTab] = useState<TabStatus>("open");
   const { data, isLoading, isError } = useEscalations({ status: activeTab });
   const resolveEscalation = useResolveEscalation();
@@ -157,6 +162,19 @@ export default function EscalationsPage() {
         title="Escalations"
         hint="Human-in-the-loop queue with SLA countdowns and operator resolution flow."
       />
+
+      {fromWindow && (
+        <Card pad="sm" data-drilldown-from="escalations">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.warn }}>
+            Drilldown from Operations NOC
+          </div>
+          <div className="mt-1 text-xs" style={{ color: NOC.muted }}>
+            Originating NOC filters: <span style={{ fontFamily: NOC_FONT_MONO }}>window={fromWindow}, workspace={fromWorkspace ?? "unknown"}</span>.
+            {" "}
+            {fromScopeNote ?? "Escalations has its own status tab filter; the originating scope is shown for reference only and is NOT applied."}
+          </div>
+        </Card>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1" style={{ borderBottom: `1px solid ${NOC.rule}` }}>

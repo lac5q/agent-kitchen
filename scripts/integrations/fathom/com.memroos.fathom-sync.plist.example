@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Prefer: bash scripts/integrations/fathom/install-local.sh --schedule
+  which installs via scripts/install-runtime-services.mjs (com.memroos.fathom-sync every 3h).
+
+  This file is a manual fallback template only.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.memroos.fathom-sync</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/YOUR_USER/github/memroos</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOUR_USER/github/memroos/scripts/integrations/fathom/fathom-sync.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>10800</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USER/.memroos/logs/fathom-sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USER/.memroos/logs/fathom-sync-error.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MEMROOS_ROOT</key>
+    <string>/Users/YOUR_USER/github/memroos</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>QMD_FORCE_CPU</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

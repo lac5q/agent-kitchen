@@ -2390,3 +2390,67 @@ Plans:
 
 **Tests:** `apps/memroos/src/lib/skills/__tests__/` (signing, quarantine, sync, lifecycle, dependencies, trust-chain, registry).
 
+### v8.11 Follow-up — MEETREL-FOLLOWUP-05: Source-to-Index Evidence
+
+**Goal:** Make a missing meeting diagnosable from one operator-visible receipt rather than leaving ambiguity between provider absence, OAuth scope failure, capture, routing, indexing, and recall.
+
+**Trigger:** July 16 Cordant investigation: Circleback had no July 15 Eric meeting and Fathom had only an unrelated meeting. Spark Desktop did capture the complete `Eric <> Luis` transcript (July 15, row 325), and direct `qmd search "Douglas fintech" -c spark-recordings` retrieved it at 96%. However, MCP `memory_recall` enumerated `spark-recordings` and returned zero QMD results for the same content. Separately, the Cordant Google account returned insufficient scopes for both Meet conference records and Drive meeting-note search; the scheduled Google/Spark sync then reported `ok: true` with zero Google documents. The system has both a unified-recall parity defect and a false-healthy provider-auth state.
+
+**Depends on:** Phases 151–153.
+
+**Success criteria:**
+1. A meeting lookup by stable provider ID, Meet code, or calendar-event identity returns one bounded status: `provider_absent`, `provider_auth_blocked`, `captured_unrouted`, `routed_unindexed`, `indexed_unrecalled`, or `recalled`.
+2. Provider adapters preflight their required scopes and return an actionable, secret-free reauthorization remedy; an OAuth failure is never reported as an empty provider result or a successful ingest.
+3. A transcript returned by direct QMD collection search is returned by `memory_recall` under the same authorization context, with a receipt that names the searched collection and any lane-level failure.
+4. Every successful capture records provider identity, raw-capture receipt, routing decision, index receipt, and recall proof without committing transcript bodies or provider credentials.
+5. Operator health shows enabled-but-empty sources separately from auth-blocked sources, reports the aggregate sync as degraded when a configured source is blocked or behind, and supports a date-window trace for a single meeting.
+6. Regression fixtures cover Circleback absent, Fathom unrelated-result, Google Meet/Drive scope denial, Spark-captured-but-unified-recall-missing, and the full captured-to-recalled path.
+
+**Investigation gate:** Repair the unified-recall Spark parity first, then restore the Cordant Google Meet scopes and compare the provider record and Google-generated notes against the raw-capture, routing, QMD-index, and `memory_recall` receipts.
+
+
+## v8.12 MemRoOS MCP Memory Gate Resilience (Codex) (Phases 154–156)
+
+*Added: 2026-07-15 · Version: 2026-07-15.1*
+
+**Branch:** `beastmode/v8.12-mcp-memory-gate-resilience`  
+**Kickoff:** `.planning/milestones/v8.12-mcp-memory-gate-resilience-KICKOFF.md`  
+**Depends on:** Phase 153 / v8.11 complete; Codex strict memory gate remains on.
+
+### Phase 154 — Probe Timeout Honesty
+
+**Goal:** Stop false `vector=down` when Mem0 `/health` is slow-but-healthy (9–31s) by raising the operator probe default to 15s and exposing `MEM0_HEALTH_TIMEOUT_MS`.
+**Requirements:** GATE-RESILE-01
+**Success criteria:**
+1. `backends.ts` Mem0 health fetch default timeout is 15_000ms (not 3_000).
+2. `MEM0_HEALTH_TIMEOUT_MS` overrides the probe timeout when set to a positive integer.
+3. `/api/memory/health` inherits the new probe timeout via `checkVectorHealth`.
+4. Unit tests prove default 15s and env override behavior (including TimeoutError → down detail).
+
+### Phase 155 — Mem0 Hang Immunity
+
+**Goal:** Eliminate self-HTTP health loops that can hang Mem0; keep Qdrant probe caching; add `/livez`; auto-restart hung Mem0 from healthcheck with cooldown.
+**Requirements:** GATE-RESILE-02
+**Success criteria:**
+1. Background recovery no longer `GET http://localhost:3201/health` / self-POST reset via HTTP loop that can deadlock the event loop.
+2. Qdrant connectivity checks remain interval-cached (not every request / every health call uncached).
+3. Optional `GET /livez` returns process-alive without full Qdrant/disk/runtime suite.
+4. `healthcheck.sh` detects hung Mem0 (health timeout / no response) and restarts with cooldown.
+
+### Phase 156 — Strict-Gate Diagnostics + Path-Scoped Disk
+
+**Goal:** Failure messages diagnose disk vs vector vs runtime; path-scoped disk so home `df%` alone does not force vector tier down under strict gate.
+**Requirements:** GATE-RESILE-03
+**Success criteria:**
+1. Strict gate stderr includes actionable detail (HTTP code, tier statuses, mem0 detail when present) without secrets.
+2. Disk checks are path-scoped to Mem0-relevant paths (queue/logs/data), not home alone as vector killer.
+3. Home volume pressure alone does not map to `vector=down` when Qdrant vector_store is connected.
+4. Tests cover disk-vs-vector separation and diagnostic string shape.
+
+### Progress Table (v8.12 MCP gate)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 154. Probe Timeout Honesty | 1/1 | Complete | 2026-07-15 |
+| 155. Mem0 Hang Immunity | 1/1 | Complete | 2026-07-15 |
+| 156. Strict-Gate Diagnostics + Path-Scoped Disk | 1/1 | Complete | 2026-07-15 |

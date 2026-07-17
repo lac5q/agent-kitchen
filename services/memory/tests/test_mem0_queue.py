@@ -277,7 +277,7 @@ def test_health_degrades_when_memory_queue_has_pending_saves(monkeypatch, tmp_pa
 
     monkeypatch.setattr(module, "QDRANT_AVAILABLE", False)
     monkeypatch.setattr(module, "QUEUE_DB_PATH", tmp_path / "queue.db")
-    monkeypatch.setattr(module, "check_disk_space", lambda: {"critical": False})
+    monkeypatch.setattr(module, "check_disk_space", lambda *args, **kwargs: {"critical": False})
     monkeypatch.setattr(module, "check_sqlite_db", lambda: {"status": "healthy"})
     monkeypatch.setattr(
         module,
@@ -321,7 +321,7 @@ def test_health_degrades_when_mem0_runtime_is_unavailable(monkeypatch, tmp_path)
     monkeypatch.setattr(module, "QDRANT_AVAILABLE", True)
     monkeypatch.setattr(module, "check_qdrant_vector_store", lambda _vector_cfg: "connected")
     monkeypatch.setattr(module, "QUEUE_DB_PATH", tmp_path / "queue.db")
-    monkeypatch.setattr(module, "check_disk_space", lambda: {"critical": False})
+    monkeypatch.setattr(module, "check_disk_space", lambda *args, **kwargs: {"critical": False})
     monkeypatch.setattr(module, "check_sqlite_db", lambda: {"status": "healthy"})
     monkeypatch.setattr(
         module,

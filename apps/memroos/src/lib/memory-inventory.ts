@@ -1,6 +1,12 @@
 import path from "path";
 
 import { MEM0_URL } from "@/lib/constants";
+import {
+  classifyScalar,
+  metricEnvelope,
+  type MetricEnvelope,
+  type MetricScope,
+} from "@/lib/metric-status";
 import { getDb } from "@/lib/db";
 import { collectCollectionFiles, loadCollections } from "@/lib/knowledge-collections";
 import { neo4jConfig } from "@/lib/memory/backends";
@@ -13,7 +19,15 @@ export type MemoryInventoryCategoryId =
   | "graph_fact"
   | "knowledge_file";
 
-export type MemoryInventoryStatus = "live" | "empty" | "degraded" | "missing";
+export type MemoryInventoryStatus =
+  | "live"
+  | "zero"
+  | "empty"
+  | "stale"
+  | "blocked"
+  | "unavailable"
+  | "degraded"
+  | "error";
 
 export interface MemoryInventoryCategory {
   id: MemoryInventoryCategoryId;
@@ -25,6 +39,8 @@ export interface MemoryInventoryCategory {
   status: MemoryInventoryStatus;
   lastUpdated: string | null;
   warnings: string[];
+  /** Truthful metric envelope for the count/status pair. */
+  metric: MetricEnvelope<number | null>;
 }
 
 export interface MemoryInventoryRow {
@@ -157,7 +173,16 @@ function parseOptionalState(value: string | null): MemoryInventoryRow["consolida
 }
 
 function parseOptionalStatus(value: string | null): MemoryInventoryStatus | null {
-  const states: MemoryInventoryStatus[] = ["live", "empty", "degraded", "missing"];
+  const states: MemoryInventoryStatus[] = [
+    "live",
+    "zero",
+    "empty",
+    "stale",
+    "blocked",
+    "unavailable",
+    "degraded",
+    "error",
+  ];
   return states.includes(value as MemoryInventoryStatus) ? (value as MemoryInventoryStatus) : null;
 }
 
@@ -255,6 +280,53 @@ function category(
   lastUpdated: string | null,
   warnings: string[] = []
 ): MemoryInventoryCategory {
+  const scope: MetricScope = { window: "all", workspace: "all" };
+  const source = CATEGORY_BACKENDS[id];
+  let metric: MetricEnvelope<number | null>;
+  if (warnings.length > 0) {
+    // Source failed or returned partial data — never coerce to zero.
+    const classification = classifyScalar({
+      rowCount: count ?? 0,
+      sourceOk: false,
+      latestAt: lastUpdated,
+      freshnessMs: null,
+    });
+    metric = metricEnvelope<number | null>({
+      value: null,
+      status: classification.status === "live" || classification.status === "zero" ? "degraded" : classification.status,
+      source,
+      observedAt: lastUpdated,
+      scope,
+      reason: warnings.join("; "),
+    });
+  } else if (count === null) {
+    metric = metricEnvelope<number | null>({
+      value: null,
+      status: "unavailable",
+      source,
+      observedAt: lastUpdated,
+      scope,
+      reason: "Source did not return a countable measurement",
+    });
+  } else if (count > 0) {
+    metric = metricEnvelope<number | null>({
+      value: count,
+      status: "live",
+      source,
+      observedAt: lastUpdated,
+      scope,
+      reason: "Counted N rows from ${source}".replace("N", String(count)),
+    });
+  } else {
+    metric = metricEnvelope<number | null>({
+      value: 0,
+      status: "zero",
+      source,
+      observedAt: lastUpdated,
+      scope,
+      reason: "Source returned a successful empty count",
+    });
+  }
   return {
     id,
     label: CATEGORY_LABELS[id],
@@ -265,6 +337,7 @@ function category(
     status: countStatus(count, warnings),
     lastUpdated,
     warnings,
+    metric,
   };
 }
 

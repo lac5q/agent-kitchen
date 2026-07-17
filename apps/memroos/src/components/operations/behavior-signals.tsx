@@ -1,10 +1,56 @@
 "use client";
 
+
 import { useState } from "react";
 import { useEscalations, useMemoryStats, useModelRoutingDashboard, useSecurityReport, useSkills } from "@/lib/api-client";
+import { type NocFilters, type NocWindow, type NocWorkspace } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { PillBtn, severityColor } from "./noc-primitives";
 import type { SignalSeverity } from "./noc-primitives";
+
+interface DrilldownDestination {
+  href: string;
+  scopeNote: string;
+}
+
+const BEHAVIOR_DRILLDOWNS: Record<string, DrilldownDestination> = {
+  "/audit": {
+    href: "/audit",
+    scopeNote:
+      "Audit page has its own date-range selector; originating NOC filters are shown for reference only and are NOT applied to the audit query.",
+  },
+  "/escalations": {
+    href: "/escalations",
+    scopeNote:
+      "Escalations page has its own status filter; originating NOC filters are shown for reference only and are NOT applied.",
+  },
+  "/skills": {
+    href: "/skills",
+    scopeNote:
+      "Skills registry is a cumulative snapshot; originating NOC filters are shown for reference only and are NOT applied.",
+  },
+  "/ledger": {
+    href: "/ledger",
+    scopeNote:
+      "Ledger has its own date-range selector; originating NOC filters are shown for reference only and are NOT applied.",
+  },
+  "/notebooks": {
+    href: "/notebooks",
+    scopeNote:
+      "Memory page has its own filters; originating NOC filters are shown for reference only and are NOT applied.",
+  },
+};
+
+function buildDrilldownHref(
+  destination: DrilldownDestination,
+  filters: { window: NocWindow; workspace: NocWorkspace }
+): string {
+  const params = new URLSearchParams();
+  params.set("from_window", filters.window);
+  params.set("from_workspace", filters.workspace);
+  params.set("from_scope_note", destination.scopeNote);
+  return `${destination.href}?${params.toString()}`;
+}
 
 interface LiveSignal {
   severity: SignalSeverity;
@@ -14,8 +60,8 @@ interface LiveSignal {
   href: string;
 }
 
-export function BehaviorSignals() {
-  const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
+export function BehaviorSignals({ filters }: { filters?: NocFilters }) {
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };  const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
   const security = useSecurityReport(20);
   const escalations = useEscalations({ status: "all", limit: 20 });
   const skills = useSkills();
@@ -30,7 +76,7 @@ export function BehaviorSignals() {
       title: `${highSecurity} high-severity security events`,
       body: "Open the audit trail before trusting this surface.",
       tag: "security · audit",
-      href: "/audit",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/audit"], effectiveFilters),
     });
   }
   const openEscalations = escalations.data?.escalations.filter((e) => e.status !== "resolved") ?? [];
@@ -40,7 +86,7 @@ export function BehaviorSignals() {
       title: `${openEscalations.length} open HIL escalations`,
       body: "Review pending human decisions and SLA deadlines.",
       tag: "hil · escalation",
-      href: "/escalations",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/escalations"], effectiveFilters),
     });
   }
   const driftingSkills = skills.data?.skillDetails.filter((skill) => skill.health !== "ready") ?? [];
@@ -50,7 +96,7 @@ export function BehaviorSignals() {
       title: `${driftingSkills.length} skills need review`,
       body: "Coverage gaps, stale sources, or needs-source health are present in the skill registry.",
       tag: "skills · review",
-      href: "/skills",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/skills"], effectiveFilters),
     });
   }
   const failedRoutes = modelRouting.data?.events.filter((event) => !event.success).length ?? 0;
@@ -60,7 +106,7 @@ export function BehaviorSignals() {
       title: `${failedRoutes} model-routing failures`,
       body: "Model routing telemetry contains failed runs in the loaded window.",
       tag: "models · routing",
-      href: "/ledger",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/ledger"], effectiveFilters),
     });
   }
   const pendingMemory = memory.data?.pendingUnconsolidated ?? 0;
@@ -70,7 +116,7 @@ export function BehaviorSignals() {
       title: `${pendingMemory} messages pending consolidation`,
       body: "New memories will not appear until consolidation succeeds.",
       tag: "memory · consolidation",
-      href: "/notebooks",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/notebooks"], effectiveFilters),
     });
   }
   const sourceFailed = security.isError || escalations.isError || skills.isError || modelRouting.isError || memory.isError;
@@ -80,7 +126,7 @@ export function BehaviorSignals() {
       title: "One or more NOC sources failed",
       body: "At least one of /api/security/report, /api/escalations, /api/skills, /api/model-routing/telemetry, or /api/memory-stats failed to load.",
       tag: "source · failed",
-      href: "/audit",
+      href: buildDrilldownHref(BEHAVIOR_DRILLDOWNS["/audit"], effectiveFilters),
     });
   }
 
@@ -114,8 +160,39 @@ export function BehaviorSignals() {
           {visibleSignals.length} visible · {signals.length} live sources
         </span>
         <div style={{ marginLeft: "auto" }}>
-          <PillBtn href="/evals">Tune thresholds</PillBtn>
+          <PillBtn
+            href={(() => {
+              const params = new URLSearchParams();
+              params.set("from_window", effectiveFilters.window);
+              params.set("from_workspace", effectiveFilters.workspace);
+              params.set(
+                "from_scope_note",
+                "Evals page has its own config; originating NOC filters are shown for reference only and are NOT applied."
+              );
+              return `/evals?${params.toString()}`;
+            })()}
+          >
+            Tune thresholds
+          </PillBtn>
         </div>
+      </div>
+      <div
+        style={{
+          padding: "8px 16px",
+          fontSize: 10.5,
+          color: NOC.soft,
+          fontFamily: NOC_FONT_MONO,
+          background: NOC.fog,
+          borderBottom: `1px solid ${NOC.rule}`,
+          lineHeight: 1.4,
+        }}
+        data-scope-disclosure="behavior-signals"
+      >
+        Fixed-scope feeds — /api/security/report, /api/escalations, /api/skills,
+        /api/model-routing/telemetry, and /api/memory-stats do not partition by
+        the selected NOC window or workspace. window={effectiveFilters.window},
+        workspace={effectiveFilters.workspace} are forwarded to drilldowns for
+        destination-side disclosure but are NOT applied here.
       </div>
 
       {visibleSignals.length === 0 && (

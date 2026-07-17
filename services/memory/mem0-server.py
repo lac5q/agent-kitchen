@@ -483,7 +483,7 @@ def vector_store_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def check_disk_space(path: str = "~") -> dict:
-    """Check disk space and return status.
+    """Check disk space for a single path and return status.
 
     Defaults are sized for local Docker Desktop volumes. The old absolute
     thresholds (critical <10GB, warning <20GB) made a 23.5GB Docker disk look
@@ -498,6 +498,7 @@ def check_disk_space(path: str = "~") -> dict:
         critical_percent = float(os.environ.get("MEM0_DISK_CRITICAL_PERCENT", "95"))
         warning_percent = float(os.environ.get("MEM0_DISK_WARNING_PERCENT", "85"))
         return {
+            "path": os.path.expanduser(path),
             "total_gb": round(usage.total / (1024**3), 1),
             "used_gb": round(usage.used / (1024**3), 1),
             "free_gb": round(gb_free, 1),
@@ -506,7 +507,45 @@ def check_disk_space(path: str = "~") -> dict:
             "warning": percent_used > warning_percent or gb_free < warning_free_gb,
         }
     except Exception as e:
-        return {"error": str(e), "critical": True}
+        return {"path": path, "error": str(e), "critical": True}
+
+
+def mem0_disk_paths() -> list[str]:
+    """Paths whose free space actually gates Mem0 durability (not home alone)."""
+    paths = [
+        str(Path(QUEUE_DB_PATH).expanduser().resolve().parent),
+        str(LOG_DIR.resolve()),
+    ]
+    # Dedupe while preserving order (home may share the same mount — still path-scoped).
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        ordered.append(path)
+    return ordered
+
+
+def check_mem0_disk_space() -> dict:
+    """Aggregate path-scoped disk status for Mem0-relevant paths.
+
+    Home `df%` alone must not be treated as a vector-store failure when Qdrant is
+    remote. Critical/warning flags here reflect QUEUE_DB / LOG_DIR mounts only.
+    An advisory home sample is included for operators when it differs.
+    """
+    scoped = [check_disk_space(path) for path in mem0_disk_paths()]
+    home = check_disk_space("~")
+    critical = any(entry.get("critical") for entry in scoped)
+    warning = any(entry.get("warning") for entry in scoped) or bool(home.get("warning"))
+    return {
+        "critical": critical,
+        "warning": warning,
+        "paths": scoped,
+        "home_advisory": home,
+        # Backward-compatible flat fields from the worst scoped path (or first).
+        **(next((e for e in scoped if e.get("critical")), scoped[0] if scoped else home)),
+    }
 
 
 def check_sqlite_db(db_path: str | None = None) -> dict:
@@ -626,6 +665,30 @@ def check_qdrant_vector_store(vector_cfg: dict[str, Any]) -> str:
     response = httpx.get(endpoint, headers=headers, timeout=5)
     response.raise_for_status()
     return "connected"
+
+
+def cached_qdrant_vector_status(vector_cfg: dict[str, Any], *, force: bool = False) -> str:
+    """Interval-cached Qdrant connectivity for /health (avoids probing on every request)."""
+    global _qdrant_probe_ok, _qdrant_probe_last
+    import time
+
+    now = time.time()
+    if (
+        not force
+        and _qdrant_probe_ok is not None
+        and (now - _qdrant_probe_last) < _QDRANT_PROBE_INTERVAL
+    ):
+        return "connected" if _qdrant_probe_ok else "disconnected"
+
+    _qdrant_probe_last = now
+    try:
+        status = check_qdrant_vector_store(vector_cfg)
+        _qdrant_probe_ok = status == "connected"
+        return status
+    except Exception as exc:
+        logger.warning(f"Qdrant health check failed: {exc}")
+        _qdrant_probe_ok = False
+        return "disconnected"
 
 
 # ---------------------------------------------------------------------------
@@ -778,6 +841,12 @@ def delete_memory(memory_id: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/livez")
+def livez():
+    """Process liveness only — no Qdrant/disk/runtime suite (hang-safe for supervisors)."""
+    return {"status": "ok", "service": "mem0-server"}
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """Health check — verifies mem0 runtime, vector store, disk, SQLite, and queued writes."""
@@ -791,11 +860,7 @@ def health():
         if not QDRANT_AVAILABLE:
             vector_status = "disconnected"
         else:
-            try:
-                vector_status = check_qdrant_vector_store(vector_cfg)
-            except Exception as e:
-                logger.warning(f"Qdrant health check failed: {e}")
-                vector_status = "disconnected"
+            vector_status = cached_qdrant_vector_status(vector_cfg)
     elif vector_provider == "chroma":
         # Chroma is embedded — if the server is running at all, it's healthy
         try:
@@ -807,7 +872,7 @@ def health():
         # Unknown provider — assume healthy if no exception thrown during init
         vector_status = "unknown"
 
-    disk_status = check_disk_space()
+    disk_status = check_mem0_disk_space()
     sqlite_status = check_sqlite_db()
     try:
         from mem0_queue import Mem0Queue
@@ -816,7 +881,7 @@ def health():
     except Exception as exc:
         queue_status = {"status": "error", "error": str(exc), "queued": None}
 
-    # Log warnings for concerning states
+    # Log warnings for concerning states (path-scoped critical only — not home advisory alone)
     if disk_status.get("critical"):
         log_failure("disk_critical", disk_status)
     elif disk_status.get("warning"):
@@ -830,6 +895,8 @@ def health():
 
     queued_count = queue_status.get("queued")
     queue_ok = queued_count in (0, None) and queue_status.get("status") != "error"
+    # Path-scoped disk critical can degrade overall health, but vector_store stays
+    # independent — home advisory alone never flips is_ok via disk_status.critical.
     is_ok = (
         runtime_status.get("status") == "available"
         and vector_status == "connected"
@@ -952,7 +1019,9 @@ async def _qdrant_health_checker():
     Background task that:
     - Detects when Qdrant has recovered from an outage
     - Auto-resets the memory client so requests succeed again
-    - Silences old failure alerts once the system is healthy for a while
+
+    Phase 155: in-process only — never self-HTTP to the local mem0 /health or /memory/reset
+    endpoints (self-HTTP can hang the event loop when /health itself is blocked on Qdrant).
     """
     consecutive_healthy = 0
     HEALTH_THRESHOLD = 3  # must be healthy N consecutive checks before clearing
@@ -960,22 +1029,28 @@ async def _qdrant_health_checker():
     while True:
         await asyncio.sleep(60)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get("http://localhost:3201/health")
-                data = resp.json()
+            cfg = await asyncio.to_thread(load_config)
+            vector_cfg = cfg.get("vector_store", {}).get("config", {})
+            vector_provider = cfg.get("vector_store", {}).get("provider", "unknown")
 
-            qdrant_ok = data.get("vector_store") == "connected"
-            disk_ok = not data.get("disk", {}).get("critical", False)
+            if vector_provider == "qdrant":
+                vector_status = await asyncio.to_thread(
+                    lambda: cached_qdrant_vector_status(vector_cfg, force=True)
+                )
+                qdrant_ok = vector_status == "connected"
+            else:
+                qdrant_ok = True
+
+            disk_status = await asyncio.to_thread(check_mem0_disk_space)
+            disk_ok = not disk_status.get("critical", False)
 
             if qdrant_ok and disk_ok:
                 consecutive_healthy += 1
                 if consecutive_healthy >= HEALTH_THRESHOLD:
-                    # System is healthy — try to reset the memory client to pick up Qdrant
-                    # This recovers from the "frozen" state where get_memory()
-                    # never retries after a transient Qdrant outage
+                    # Recover frozen Memory client after Qdrant blips — in-process reset.
                     try:
-                        await client.post("http://localhost:3201/memory/reset")
-                        logger.info("Auto-reset memory client after Qdrant recovery")
+                        await asyncio.to_thread(reset_memory)
+                        logger.info("Auto-reset memory client after Qdrant recovery (in-process)")
                     except Exception:
                         pass
                     consecutive_healthy = 0  # reset counter after recovery action

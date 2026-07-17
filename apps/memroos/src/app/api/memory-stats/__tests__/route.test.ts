@@ -127,3 +127,50 @@ describe('GET /api/memory-stats', () => {
     expect(remoteBody.sources).toEqual([{ agent_id: 'zapier', cnt: 1 }]);
   });
 });
+
+describe("GET /api/memory-stats truthful metric contract (VAL-LIB-002)", () => {
+  beforeEach(() => {
+    testDb.exec('DELETE FROM memory_meta_insights');
+    testDb.exec('DELETE FROM memory_consolidation_runs');
+    testDb.exec('DELETE FROM memory_salience');
+    testDb.exec('DELETE FROM messages');
+  });
+
+  it("returns metric envelopes for pendingUnconsolidated, recentFailures24h, and lastRun", async () => {
+    seedMessage('s1', 0, 'agent', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+    testDb.prepare(
+      "INSERT INTO memory_consolidation_runs(started_at, batch_size, insights_written, status, error_message) VALUES(strftime('%Y-%m-%dT%H:%M:%SZ','now'), 0, 0, 'failed', '429 usage limit exceeded')"
+    ).run();
+
+    const { GET } = await import('../route');
+    const res = await GET(new Request('http://localhost/api/memory-stats?window=week&workspace=all') as unknown as import('next/server').NextRequest);
+    const body = await res.json();
+
+    expect(body.metrics).toBeDefined();
+    expect(body.metrics.pendingUnconsolidated).toMatchObject({
+      status: 'live',
+      value: 1,
+      source: 'sqlite://messages',
+      scope: expect.objectContaining({ window: 'week', workspace: 'all' }),
+    });
+    expect(body.metrics.recentFailures24h).toMatchObject({
+      status: expect.stringMatching(/^(live|empty|error)$/),
+      value: expect.any(Number),
+      source: 'sqlite://memory_consolidation_runs',
+    });
+    // lastRun (a failed run) -> degraded with reason, not zero
+    expect(body.metrics.lastRun).toMatchObject({
+      status: 'degraded',
+      value: null,
+      reason: expect.stringMatching(/429|fail|error/i),
+    });
+    // No consolidation at all should produce lastRun.status === unavailable
+    testDb.exec('DELETE FROM memory_consolidation_runs');
+    vi.resetModules();
+    const { GET: GET2 } = await import('../route');
+    const emptyBody = await (await GET2(new Request('http://localhost/api/memory-stats?window=week&workspace=all') as unknown as import('next/server').NextRequest)).json();
+    expect(emptyBody.metrics.lastRun.status).toBe('unavailable');
+    expect(emptyBody.metrics.lastRun.value).toBeNull();
+    expect(emptyBody.metrics.lastRun.reason).toBeTruthy();
+  });
+});

@@ -45,8 +45,14 @@ jobs:
       - name: Check future spikes
         run: npm run check:future-spikes
 
-      - name: Run Memroos tests
+      - name: Run Memroos tests (fast suite)
         run: npm test -- --run
+
+      - name: Run Memroos tests (slow suite)
+        # Onboarding routes + bcrypt password hashing. Mirrors the local
+        # `npm run test:slow -- --run` so CI preserves coverage while the
+        # default milestone gate stays fast and deterministic.
+        run: npm run test:slow -- --run
 
       - name: Build Memroos
         run: npm run build

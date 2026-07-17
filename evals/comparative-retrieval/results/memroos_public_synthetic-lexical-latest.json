@@ -1,6 +1,6 @@
 {
-  "runId": "bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
-  "runDate": "2026-07-12T08:28:37.350Z",
+  "runId": "bench-dcbe4d2c-bd64-4c57-8781-180e57526c94",
+  "runDate": "2026-07-12T10:07:47.076Z",
   "dataset": "memroos_public_synthetic",
   "adapter": "lexical",
   "lane": "external_retrieval",
@@ -30,21 +30,17 @@
     "failedTaskCount": 0
   },
   "publicationGate": {
-    "ok": false,
-    "status": "blocked_for_publication",
-    "reason": "blocked_for_publication:receipt_verification_missing",
-    "caveats": [
-      "receipt_verification_missing",
-      "contamination_failed:runId_mismatch:foreign-run!=expected:bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5"
-    ],
-    "decisionHash": "sha256:0407470ab8409f00cb9c87dd1672d286a82a510eb304c3c1113bfbedda80f16a",
-    "decidedAtIso": "2026-07-12T08:28:37.351Z"
+    "ok": true,
+    "status": "ready_for_publication",
+    "reason": "ready_for_publication",
+    "caveats": [],
+    "decisionHash": "sha256:b426d8b8667f578993921990099f8fcf76d1b507fcdb82db904ebf21962ff1fd",
+    "decidedAtIso": "2026-07-12T10:07:47.077Z"
   },
   "contamination": {
-    "ok": false,
-    "reason": "runId_mismatch:foreign-run!=expected:bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
+    "ok": true,
     "expected": {
-      "runId": "bench-8bcd54c0-9467-4d62-83ea-10c14f91f4b5",
+      "runId": "bench-dcbe4d2c-bd64-4c57-8781-180e57526c94",
       "lane": "external_retrieval",
       "dataset": "memroos_public_synthetic",
       "adapter": "lexical",
@@ -53,7 +49,7 @@
       "seed": 0
     },
     "actual": {
-      "runId": "foreign-run",
+      "runId": "bench-dcbe4d2c-bd64-4c57-8781-180e57526c94",
       "lane": "external_retrieval",
       "dataset": "memroos_public_synthetic",
       "adapter": "lexical",
