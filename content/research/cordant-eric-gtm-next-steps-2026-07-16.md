@@ -8,6 +8,7 @@ sources:
   - "/Users/lcalderon/github/cordant/artifacts/docs/2026-07-15-cordant-gtm-use-case-coverage-review.md"
   - "/Users/lcalderon/github/cordant/artifacts/docs/2026-07-06-cordant-gtm-use-case-requirements.md"
   - "Desktop chronology: 2026-07-16 Cordant review-request send verification"
+  - "Circleback live lookup: 2026-07-17"
 derived_from: "July 15 Eric/Luis Spark transcript, July 15 meeting agenda and GTM platform review materials; July 16 review request sent to Eric with Brendan Miller and Juan Huezo copied."
 regen_prompt: "Review the July 15 Eric/Luis Spark transcript and the July 16 GTM review request. Separate confirmed operating evidence from unapproved tooling proposals, then define owner-based next steps."
 ---
@@ -17,6 +18,7 @@ regen_prompt: "Review the July 15 Eric/Luis Spark transcript and the July 16 GTM
 ## Evidence and decision status
 
 - The Spark transcript is the meeting record: Eric described a successful 12-person pitch to a fintech team spanning accounting, data, and finance. The account had delayed the discussion while it organized its data structure and new team members.
+- Circleback was checked live on July 17: no Eric/Luis meeting, linked calendar event, or transcript was returned for July 15 (including an attendee-profile search across July 14-16). Its action-item lookup failed at the connector with a Prisma query error. Therefore Circleback cannot substantiate any July 15 decision or next step; Spark is the available meeting evidence.
 - Eric attributes a conversion rate above 50% to founder-led selling, C-suite relationships, endorsements, and his ability to explain the offer. Cordant remains in design partnerships and has not formally opened for business.
 - The July 15 agenda proposed: pass Monaco for now, trial Reevo, retain HubSpot plus Sales Navigator as fallback rails, and always retain Cordant-owned GTM context. Those are proposals, not meeting-approved decisions; the Spark transcript does not confirm a platform choice.
 - On July 16, a review request was sent from the Cordant account to Eric Rosenthal, with Brendan Miller and Juan Huezo copied, under the subject `Review requested: Cordant GTM use cases, requirements, and coverage`.
