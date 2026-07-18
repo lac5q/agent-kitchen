@@ -211,4 +211,69 @@ describe("agent context bus routes", () => {
       severity: "high",
     });
   });
+
+  it("validates and blocks unsafe agent-context replies before saving", async () => {
+    const { replyRoute, getDb, registerAgent } = await loadRoutes();
+    const beta = registerAgent({
+      id: "agent-beta",
+      name: "Agent Beta",
+      role: "Recipient",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const invalidPayload = await replyRoute.POST(
+      new Request("http://localhost/api/agent-context/messages/msg-1/reply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not-json",
+      }) as any,
+      { params: Promise.resolve({ id: "msg-1" }) }
+    );
+    expect(invalidPayload.status).toBe(400);
+
+    const unauthorized = await replyRoute.POST(
+      new Request("http://localhost/api/agent-context/messages/msg-1/reply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fromAgent: "agent-beta", body: "reply" }),
+      }) as any,
+      { params: Promise.resolve({ id: "msg-1" }) }
+    );
+    expect(unauthorized.status).toBe(401);
+
+    const missingBody = await replyRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages/msg-1/reply", beta.apiKey!, {
+        from_agent: "agent-beta",
+      }) as any,
+      { params: Promise.resolve({ id: "msg-1" }) }
+    );
+    expect(missingBody.status).toBe(400);
+
+    const selfDeclared = await replyRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages/msg-1/reply", beta.apiKey!, {
+        agentId: "agent-beta",
+        text: "I can access the user's OAuth data.",
+        oauth: { accessToken: "raw-token" },
+      }) as any,
+      { params: Promise.resolve({ id: "msg-1" }) }
+    );
+    expect(selfDeclared.status).toBe(403);
+    expect((await selfDeclared.json()).code).toBe("CONTROL_LAYER_REQUIRED");
+
+    const blocked = await replyRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages/msg-1/reply", beta.apiKey!, {
+        agentId: "agent-beta",
+        content: "Do not store AWS key AKIA1234567890ABCDEF",
+      }) as any,
+      { params: Promise.resolve({ id: "msg-1" }) }
+    );
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toMatchObject({ ok: false, error: "Content blocked by security scanner" });
+    expect(getDb().prepare("SELECT action, severity FROM audit_log WHERE action = 'content_blocked'").get()).toEqual({
+      action: "content_blocked",
+      severity: "high",
+    });
+  });
 });

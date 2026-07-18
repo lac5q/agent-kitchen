@@ -81,6 +81,40 @@ describe('GET /api/recall', () => {
     expect(body.timestamp).toBeDefined();
   });
 
+  it('returns recent messages for an agent when q is blank', async () => {
+    const { getDb } = await import('@/lib/db');
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+       VALUES(?,?,?,?,?,?,?,?)`
+    ).run(
+      'sess-agent-recall',
+      'project-agent',
+      'agent-listing',
+      'assistant',
+      'recent agent-only recall row',
+      '2026-01-01T00:00:00Z',
+      'public_approved',
+      'indexable'
+    );
+
+    vi.resetModules();
+    const { GET } = await import('../route');
+    const req = new Request('http://localhost/api/recall?agent_id=agent-listing&limit=500');
+    const res = await GET(req as unknown as import('next/server').NextRequest);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.agent_id).toBe('agent-listing');
+    expect(body.recall_scope).toBe('single');
+    expect(body.results).toEqual([
+      expect.objectContaining({
+        agent_id: 'agent-listing',
+        content: 'recent agent-only recall row',
+      }),
+    ]);
+  });
+
   it('persists last_recall_query to meta table', async () => {
     const { GET } = await import('../route');
     const { getDb } = await import('@/lib/db');

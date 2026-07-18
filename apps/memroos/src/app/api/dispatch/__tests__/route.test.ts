@@ -7,6 +7,9 @@ vi.mock("@/lib/agent-registry", () => ({
   getRemoteAgents: vi.fn(),
   listRegisteredAgents: vi.fn(),
 }));
+vi.mock("@/lib/auth/session", () => ({
+  authenticateUser: vi.fn(),
+}));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
 vi.mock("@/lib/content-scanner", () => ({ scanContent: vi.fn() }));
 vi.mock("@/lib/iris-scanner", () => ({ scanIrisPreflight: vi.fn() }));
@@ -25,6 +28,7 @@ vi.mock("@/lib/skills/skill-sync-governance", () => ({
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
 const { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } = await import("@/lib/agent-registry");
+const { authenticateUser } = await import("@/lib/auth/session");
 const { writeAuditLog } = await import("@/lib/audit");
 const { scanContent } = await import("@/lib/content-scanner");
 const { scanIrisPreflight } = await import("@/lib/iris-scanner");
@@ -35,6 +39,7 @@ const { getAgentVersionPin } = await import("@/lib/skills/skill-sync-governance"
 
 const mockGetDb = vi.mocked(getDb);
 const mockAuthenticateAgentHeaders = vi.mocked(authenticateAgentHeaders);
+const mockAuthenticateUser = vi.mocked(authenticateUser);
 const mockGetRemoteAgents = vi.mocked(getRemoteAgents);
 const mockListRegisteredAgents = vi.mocked(listRegisteredAgents);
 const mockWriteAuditLog = vi.mocked(writeAuditLog);
@@ -74,6 +79,7 @@ const hivePollStub = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetDb.mockReturnValue(makeDb() as any);
+  mockAuthenticateUser.mockResolvedValue(null as any);
   mockAuthenticateAgentHeaders.mockReturnValue(null);
   mockGetRemoteAgents.mockReturnValue([sophiaAgent]);
   mockListRegisteredAgents.mockReturnValue([{
@@ -135,6 +141,19 @@ describe("POST /api/dispatch", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.code).toBe("INVALID_BODY");
+  });
+
+  it("400 INVALID_BODY — malformed JSON body", async () => {
+    const res = await POST(new Request("http://localhost/api/dispatch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not-json",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe("INVALID_BODY");
+    expect(mockAuthenticateAgentHeaders).not.toHaveBeenCalled();
   });
 
   it("400 INVALID_BODY — missing to_agent", async () => {
@@ -288,6 +307,27 @@ describe("POST /api/dispatch", () => {
     expect(res.status).toBe(401);
     expect(body.code).toBe("AUTH_REQUIRED");
     expect(mockAuthenticateAgentHeaders).toHaveBeenCalled();
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
+  });
+
+  it("403 — rejects authenticated users below operator role", async () => {
+    mockAuthenticateUser.mockResolvedValue({
+      userId: "reviewer-1",
+      role: "reviewer",
+      email: "reviewer@example.com",
+      displayName: "Reviewer",
+      tenantId: "default-tenant",
+    } as any);
+
+    const res = await POST(makeRemoteRequest({
+      to_agent: "sophia",
+      task_summary: "Draft blog post",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe("FORBIDDEN");
+    expect(mockAuthenticateAgentHeaders).not.toHaveBeenCalled();
     expect(mockSelectAdapter).not.toHaveBeenCalled();
   });
 

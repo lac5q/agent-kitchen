@@ -139,4 +139,25 @@ describe("GET /api/knowledge truthful metric contract (VAL-LIB-001)", () => {
       source: expect.any(String),
     });
   });
+
+  it("reports unavailable collection metrics when no collections are configured", async () => {
+    writeFileSync(configPath, JSON.stringify({ collections: [] }));
+
+    const { GET } = await loadRoute();
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.collections).toEqual([]);
+    expect(body.totalCollections).toBe(0);
+    expect(body.totalFiles).toBe(0);
+    expect(body.metrics.totalCollections).toMatchObject({
+      status: "unavailable",
+      value: null,
+    });
+    expect(body.metrics.totalFiles).toMatchObject({
+      status: "zero",
+      value: 0,
+    });
+  });
 });

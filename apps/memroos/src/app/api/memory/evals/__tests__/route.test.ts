@@ -65,4 +65,39 @@ describe("memory eval API routes", () => {
     expect(body.run.summary.tierFailures).toEqual(["vector"]);
     expect(evals.runMemoryRecallEvalSuite).toHaveBeenCalledWith(expect.objectContaining({ mode: "canary" }));
   });
+
+  it("rejects remote eval runs without operator authorization", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "eval-secret";
+    const { runRoute, evals } = await loadRoutes();
+
+    const response = await runRoute.POST(
+      new Request("https://memroos.example/api/memory/evals/run?mode=full", { method: "POST" })
+    );
+
+    expect(response.status).toBe(403);
+    expect(evals.runMemoryRecallEvalSuite).not.toHaveBeenCalled();
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
+  });
+
+  it("defaults unknown run modes to gold", async () => {
+    const { runRoute, evals } = await loadRoutes();
+    vi.mocked(evals.runMemoryRecallEvalSuite).mockResolvedValue({
+      id: "run-3",
+      mode: "gold",
+      status: "passed",
+      startedAt: "2026-05-15T00:00:00.000Z",
+      completedAt: "2026-05-15T00:01:00.000Z",
+      summary: { totalCases: 1, passedCases: 1, failedCases: 0, passRate: 1, p95LatencyMs: 100, tierFailures: [] },
+      results: [],
+    });
+
+    const response = await runRoute.POST(
+      new Request("http://localhost/api/memory/evals/run?mode=surprise", { method: "POST" })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.run.mode).toBe("gold");
+    expect(evals.runMemoryRecallEvalSuite).toHaveBeenCalledWith({ mode: "gold" });
+  });
 });

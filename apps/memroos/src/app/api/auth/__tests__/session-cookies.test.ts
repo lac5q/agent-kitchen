@@ -29,6 +29,56 @@ beforeEach(() => {
 });
 
 describe('auth session cookies', () => {
+  it('login rejects malformed and incomplete request bodies', async () => {
+    const { POST } = await import('../login/route');
+
+    const malformed = await POST(
+      new Request('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{not-json',
+      }) as never
+    );
+    expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toEqual({ error: 'invalid request body' });
+
+    const missingPassword = await POST(
+      new Request('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'luis@example.com' }),
+      }) as never
+    );
+    expect(missingPassword.status).toBe(400);
+    expect(await missingPassword.json()).toEqual({ error: 'email and password are required' });
+    expect(mocks.db.prepare).not.toHaveBeenCalled();
+  });
+
+  it('login rejects unknown users after running dummy password verification', async () => {
+    mocks.db.prepare.mockImplementation((sql: string) => {
+      if (sql.includes('FROM users WHERE email = ?')) {
+        return { get: () => undefined };
+      }
+      return { run: vi.fn() };
+    });
+
+    const { POST } = await import('../login/route');
+    const response = await POST(
+      new Request('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'missing@example.com', password: 'secret' }),
+      }) as never
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'invalid email or password' });
+    expect(mocks.verifyPassword).toHaveBeenCalledWith(
+      'secret',
+      '$2a$12$invalidhashfortimingprotection000000000000000000000000',
+    );
+  });
+
   it('login issues longer-lived HttpOnly access and refresh cookies', async () => {
     mocks.db.prepare.mockImplementation((sql: string) => {
       if (sql.includes('FROM users WHERE email = ?')) {
@@ -63,6 +113,38 @@ describe('auth session cookies', () => {
     expect(cookies).toContain('access_token=');
     expect(cookies).toContain('HttpOnly');
     expect(cookies).toContain('Max-Age=43200');
+  });
+
+  it('login defaults users without an explicit role to reviewer', async () => {
+    mocks.db.prepare.mockImplementation((sql: string) => {
+      if (sql.includes('FROM users WHERE email = ?')) {
+        return {
+          get: () => ({
+            id: 'user-no-role',
+            email: 'norole@example.com',
+            display_name: 'No Role',
+            password_hash: 'hash',
+          }),
+        };
+      }
+      if (sql.includes('FROM user_roles WHERE user_id = ?')) {
+        return { get: () => undefined };
+      }
+      return { run: vi.fn() };
+    });
+
+    const { POST } = await import('../login/route');
+    const response = await POST(
+      new Request('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'norole@example.com', password: 'secret' }),
+      }) as never
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.user).toMatchObject({ id: 'user-no-role', role: 'reviewer' });
   });
 
   it('refresh rotates the refresh token and also refreshes the HttpOnly access cookie', async () => {

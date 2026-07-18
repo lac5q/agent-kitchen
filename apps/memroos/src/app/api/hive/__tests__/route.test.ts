@@ -168,6 +168,21 @@ describe("GET /api/hive — action queries", () => {
 });
 
 describe("POST /api/hive — delegations", () => {
+  it("returns 400 for an invalid delegation status before scanning content", async () => {
+    const res = await POST(makePostRequest({
+      type: "delegation",
+      task_id: `task-invalid-status-${Date.now()}`,
+      from_agent: "claude-code",
+      to_agent: "paperclip",
+      task_summary: "Should not be accepted",
+      status: "waiting",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/Invalid status/);
+  });
+
   it("Test 8 (HIVE-03): POST type=delegation creates row; GET ?type=delegation retrieves it", async () => {
     const taskId = `task-${Date.now()}`;
     const postReq = makePostRequest({
@@ -246,6 +261,41 @@ describe("POST /api/hive — delegations", () => {
     expect(row).toBeDefined();
     const parsed = JSON.parse(row.checkpoint);
     expect(parsed).toEqual(checkpoint);
+  });
+
+  it("returns task and context lineage before applying other filters", async () => {
+    const taskId = `task-lineage-${Date.now()}`;
+    const contextId = `context-lineage-${Date.now()}`;
+    await POST(makePostRequest({
+      type: "delegation",
+      task_id: taskId,
+      context_id: contextId,
+      from_agent: "claude-code",
+      to_agent: "paperclip",
+      task_summary: "Trace lineage branch",
+      status: "active",
+      result: { checkpoint: "ready" },
+    }) as any);
+    await POST(makePostRequest({
+      agent_id: "claude-code",
+      action_type: "checkpoint",
+      summary: "Lineage action",
+      artifacts: { task_id: taskId, context_id: contextId },
+    }) as any);
+
+    const taskRes = await GET(makeGetRequest({ task_id: taskId, type: "delegation", status: "not-a-status" }) as any);
+    const taskBody = await taskRes.json();
+    expect(taskRes.status).toBe(200);
+    expect(taskBody.task_id).toBe(taskId);
+    expect(taskBody.context_id).toBe(contextId);
+    expect(taskBody.actions[0].artifacts).toMatchObject({ task_id: taskId, context_id: contextId });
+
+    const contextRes = await GET(makeGetRequest({ context_id: contextId }) as any);
+    const contextBody = await contextRes.json();
+    expect(contextRes.status).toBe(200);
+    expect(contextBody.context_id).toBe(contextId);
+    expect(contextBody.delegations.some((row: any) => row.task_id === taskId)).toBe(true);
+    expect(contextBody.actions[0].artifacts).toMatchObject({ context_id: contextId });
   });
 });
 

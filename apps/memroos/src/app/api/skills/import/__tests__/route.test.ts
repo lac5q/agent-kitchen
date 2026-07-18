@@ -164,6 +164,32 @@ describe("POST /api/skills/import", () => {
     expect((await res.json()).error).toMatch(/content is required/i);
   });
 
+  it("400 when body is not an object or source_harness is missing", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "import-key";
+    await loadDb();
+    const route = await loadRoute();
+
+    const nonObject = await route.POST(
+      makePost(
+        "https://example.com/api/skills/import",
+        null,
+        { authorization: "Bearer import-key" }
+      )
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
+
+    const missingHarness = await route.POST(
+      makePost(
+        "https://example.com/api/skills/import",
+        { content: FULL_SKILL_MD },
+        { authorization: "Bearer import-key" }
+      )
+    );
+    expect(missingHarness.status).toBe(400);
+    expect((await missingHarness.json()).error).toMatch(/source_harness is required/i);
+  });
+
   it("200 imports SKILL.md and always quarantines dispatch_status", async () => {
     process.env["MEMROOS_OPERATOR_API_KEY"] = "import-key";
     const db = await loadDb();

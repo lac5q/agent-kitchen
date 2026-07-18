@@ -78,4 +78,27 @@ describe("GET /api/knowledge/trends", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("uses day buckets and clamps invalid limits to the default", async () => {
+    mkdirSync(path.join(root, "skills"), { recursive: true });
+    touch(path.join(root, "skills", "hourly.md"), new Date());
+    writeFileSync(configPath, JSON.stringify({
+      collections: [
+        { name: "skills", category: "agents" },
+        { name: "empty", category: "business" },
+      ],
+    }));
+
+    const { GET } = await loadRoute();
+    const response = await GET(new Request("http://localhost/api/knowledge/trends?window=day&limit=not-a-number") as any);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.window).toBe("day");
+    expect(body.buckets).toHaveLength(24);
+    expect(body.collections).toHaveLength(2);
+    expect(body.collections[0].points).toHaveLength(24);
+    expect(body.collections[0].recentFiles).toBe(1);
+    expect(body.collections[1]).toMatchObject({ name: "empty", totalFiles: 0, recentFiles: 0 });
+  });
 });

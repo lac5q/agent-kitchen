@@ -205,6 +205,44 @@ describe("POST /api/skills/quarantine/approve", () => {
 });
 
 describe("POST /api/skills/quarantine/reject", () => {
+  it("400 for invalid JSON, non-object bodies, and invalid skill ids", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    await loadDb();
+    const route = await import("../reject/route");
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/quarantine/reject", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: "{",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+
+    const nonObject = await route.POST(
+      makePost(
+        "https://example.com/api/skills/quarantine/reject",
+        null,
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
+
+    const invalidSkillId = await route.POST(
+      makePost(
+        "https://example.com/api/skills/quarantine/reject",
+        { skill_id: "abc", operator: "bob", reason: "unsafe" },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(invalidSkillId.status).toBe(400);
+    expect((await invalidSkillId.json()).error).toMatch(/skill_id/);
+  });
+
   it("400 when reason is missing", async () => {
     process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
     await loadDb();
@@ -217,6 +255,24 @@ describe("POST /api/skills/quarantine/reject", () => {
       )
     );
     expect(res.status).toBe(400);
+  });
+
+  it("404 when no quarantine record exists for the skill", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const db = await loadDb();
+    const skillId = insertSkill(db);
+    const route = await import("../reject/route");
+
+    const res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/quarantine/reject",
+        { skill_id: skillId, operator: "bob", reason: "not safe" },
+        { authorization: "Bearer right-key" }
+      )
+    );
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toContain(`skill_id=${skillId}`);
   });
 
   it("409 when the skill was already approved", async () => {

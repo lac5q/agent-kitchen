@@ -65,6 +65,71 @@ function seedReview(): string {
 }
 
 describe("/api/classification/reviews/:id/decision", () => {
+  it("rejects unauthenticated decision attempts", async () => {
+    sessionRole = null;
+    const { POST } = await import("../route");
+
+    const res = await POST(
+      new Request("http://localhost/api/classification/reviews/review-1/decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: "approve" }),
+      }) as never,
+      { params: Promise.resolve({ reviewId: "review-1" }) }
+    );
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "authentication required" });
+  });
+
+  it("validates review id, JSON body, and decision value before resolving", async () => {
+    const { POST } = await import("../route");
+
+    const missingId = await POST(
+      new Request("http://localhost/api/classification/reviews//decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: "approve" }),
+      }) as never,
+      { params: Promise.resolve({ reviewId: "" }) }
+    );
+    expect(missingId.status).toBe(400);
+    expect((await missingId.json()).error).toBe("review id is required");
+
+    const invalidJson = await POST(
+      new Request("http://localhost/api/classification/reviews/review-1/decision", {
+        method: "POST",
+        body: "{not-json",
+      }) as never,
+      { params: Promise.resolve({ reviewId: "review-1" }) }
+    );
+    expect(invalidJson.status).toBe(400);
+    expect((await invalidJson.json()).error).toBe("invalid json body");
+
+    const invalidDecision = await POST(
+      new Request("http://localhost/api/classification/reviews/review-1/decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: "maybe" }),
+      }) as never,
+      { params: Promise.resolve({ reviewId: "review-1" }) }
+    );
+    expect(invalidDecision.status).toBe(400);
+    expect((await invalidDecision.json()).error).toMatch(/decision must be/i);
+  });
+
+  it("maps missing reviews to 404 responses", async () => {
+    const { POST } = await import("../route");
+
+    const res = await POST(
+      new Request("http://localhost/api/classification/reviews/missing-review/decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: "approve" }),
+      }) as never,
+      { params: Promise.resolve({ reviewId: "missing-review" }) }
+    );
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toMatch(/not found/i);
+  });
+
   it("records reviewer approval, appends a label version, updates message labels, and audits", async () => {
     const reviewId = seedReview();
     const { POST } = await import("../route");

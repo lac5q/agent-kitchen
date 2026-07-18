@@ -169,4 +169,42 @@ describe("orchestration API routes", () => {
     expect(fetchMock.mock.calls[2][0]).toBe("http://localhost:3210/runs/run-1/evidence");
   });
 
+  it("maps orchestration evidence auth, missing bundle, and service failures", async () => {
+    vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
+    vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, status: "not_found", bundle: null })))
+      .mockRejectedValueOnce(new Error("evidence offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const evidenceRoute = await import("../runs/[id]/evidence/route");
+
+    const denied = await evidenceRoute.GET(
+      new Request("https://memroos.example/api/orchestration/runs/run-1/evidence"),
+      { params: Promise.resolve({ id: "run-1" }) }
+    );
+    const missing = await evidenceRoute.GET(
+      new Request("https://memroos.example/api/orchestration/runs/run-2/evidence", {
+        headers: { authorization: "Bearer operator-secret" },
+      }),
+      { params: Promise.resolve({ id: "run-2" }) }
+    );
+    const unavailable = await evidenceRoute.GET(
+      new Request("https://memroos.example/api/orchestration/runs/run-3/evidence", {
+        headers: { authorization: "Bearer operator-secret" },
+      }),
+      { params: Promise.resolve({ id: "run-3" }) }
+    );
+
+    expect(denied.status).toBe(403);
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ ok: true, bundle: null });
+    expect(unavailable.status).toBe(502);
+    expect(await unavailable.json()).toMatchObject({
+      ok: false,
+      success: false,
+      status: "unavailable",
+      error: "evidence offline",
+    });
+  });
+
 });

@@ -93,6 +93,29 @@ describe("GSD command routes", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns a safe 400 when a valid agent submits malformed goal JSON", async () => {
+    const { goal, registerAgent } = await loadRoutes();
+    const agent = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const res = await goal.POST(
+      request("http://localhost/api/gsd/goal", agent.apiKey, {
+        method: "POST",
+        body: "{not-json",
+      }) as any
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body).toMatchObject({ ok: false, error: expect.any(String) });
+  });
+
   it("creates a goal, blocks missing shipcheck proof, then resumes and reports standup", async () => {
     const { goal, resume, shipcheck, standup, registerAgent } = await loadRoutes();
     const agent = registerAgent({

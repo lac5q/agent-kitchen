@@ -184,6 +184,56 @@ describe("GET /api/skills/sync/proposals", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("normalizes filters, falls back pagination, and ignores malformed diff payloads", async () => {
+    const db = await loadDb();
+    insertSkillRow(db, {
+      name: "filtered-skill",
+      source_harness: "claude",
+      content_hash: "0".repeat(64),
+    });
+    const skillSync = await import("@/lib/skills/skill-sync");
+    skillSync.createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "filtered-skill",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: "new body",
+        content_hash: "2".repeat(64),
+        file_path: "/tmp/skills/claude/filtered-skill.md",
+      },
+      proposed_by: "scanner",
+      diff_summary: "filtered proposal",
+      source_root: "/tmp/skills/claude",
+    });
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET pending_diff_payload = '{not-json'
+        WHERE skill_name = 'filtered-skill' AND source_harness = 'claude'`
+    ).run();
+
+    const route = await loadRoute();
+    const res = await route.GET(
+      makeGet("https://example.com/api/skills/sync/proposals?status=%20PENDING%20&source_harness=claude&skill_name=filtered-skill&limit=nan&offset=-10")
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.limit).toBe(50);
+    expect(json.offset).toBe(0);
+    expect(json.filters).toMatchObject({
+      status: "pending",
+      source_harness: "claude",
+      skill_name: "filtered-skill",
+    });
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({
+      skill_name: "filtered-skill",
+      status: "pending",
+      diff: null,
+    });
+  });
 });
 
 describe("POST /api/skills/sync/proposals/:proposalId/approve", () => {
