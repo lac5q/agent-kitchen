@@ -206,6 +206,30 @@ describe("VAL-SKILL-034 dependency view — observation provenance", () => {
     expect(view.trusted.find((r) => r.provenance === "report")).toBeUndefined();
   });
 
+  it("matches agent reports stored by skill name as observation provenance", async () => {
+    const { getSkillDependencyView } = await import("../skill-dependencies");
+    const id = insertRegistry({ id: 24, name: "named-report" });
+    insertRegisteredAgent("observer-name");
+    db.prepare(
+      `INSERT INTO agent_skill_reports (agent_id, skill_id, action, metadata, reported_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      "observer-name",
+      "named-report",
+      "report",
+      JSON.stringify({ observed_state: "name-match" }),
+      new Date().toISOString()
+    );
+
+    const view = getSkillDependencyView(db, id);
+    const report = view.observed.find((r) => r.provenance === "report");
+    expect(report).toMatchObject({
+      is_observation: true,
+      is_trusted: false,
+      scope: { agent_id: "observer-name", skill_id: id, skill_name: "named-report" },
+    });
+  });
+
   it("agent capability names referencing the skill are observation-only", async () => {
     const { getSkillDependencyView } = await import("../skill-dependencies");
     const id = insertRegistry({ id: 22, name: "capability-skill" });

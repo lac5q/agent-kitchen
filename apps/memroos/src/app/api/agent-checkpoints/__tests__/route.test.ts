@@ -141,4 +141,15 @@ describe("/api/agent-checkpoints", () => {
     expect(data.metrics.avgWriteLatencyMs).toBeDefined();
     expect(data.metrics.avgCheckpointSize).toBeDefined();
   });
+
+  it("returns a metrics error envelope when checkpoint tables are unavailable", async () => {
+    db.exec("DROP TABLE agent_checkpoints");
+    const req = new Request("http://localhost/api/agent-checkpoints/metrics?tenantId=tenant-x");
+    const res = await metricsRoute.GET(req);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({
+      status: "error",
+      message: expect.stringMatching(/agent_checkpoints/i),
+    });
+  });
 });

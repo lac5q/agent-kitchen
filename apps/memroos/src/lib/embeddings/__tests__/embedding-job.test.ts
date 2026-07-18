@@ -126,4 +126,18 @@ describe("embedding background job", () => {
     infoSpy.mockRestore();
     intervalSpy.mockRestore();
   });
+
+  it("schedules the enabled job once", () => {
+    const intervalSpy = vi
+      .spyOn(global, "setInterval")
+      .mockImplementation(() => 0 as unknown as ReturnType<typeof setInterval>);
+    mockEmbedText.mockResolvedValue({ embedding: [0.1, 0.2, 0.3], degraded: false });
+
+    startEmbeddingJob();
+    startEmbeddingJob();
+
+    expect(intervalSpy).toHaveBeenCalledTimes(1);
+    expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), EMBEDDING_INTERVAL_MS);
+    intervalSpy.mockRestore();
+  });
 });

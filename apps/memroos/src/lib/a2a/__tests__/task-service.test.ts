@@ -47,6 +47,16 @@ describe("A2A task service", () => {
     });
   });
 
+  it("requires a message before creating a task", async () => {
+    const { registerAgent, sendA2aMessage } = await loadService();
+    const { agent } = registerAgent({ id: "no-message", name: "No Message", role: "Caller", platform: "codex", protocol: "a2a" });
+
+    await expect(sendA2aMessage(agent, {})).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      message: "message is required",
+    });
+  });
+
   it("ignores body-provided caller identity unless it matches the authenticated agent", async () => {
     const { getA2aTask, registerAgent, sendA2aMessage } = await loadService();
     const { agent } = registerAgent({ id: "caller", name: "Caller", role: "Caller", platform: "codex", protocol: "a2a" });
@@ -71,6 +81,45 @@ describe("A2A task service", () => {
 
     expect(task.status.state).toBe("submitted");
     expect(record?.events[0]).toMatchObject({ eventType: "task.created", sequence: 1 });
+  });
+
+  it("streams and subscribes only to tasks visible to the authenticated agent", async () => {
+    const {
+      getA2aTaskForAgent,
+      registerAgent,
+      streamA2aMessage,
+      subscribeA2aTask,
+    } = await loadService();
+    const { agent: caller } = registerAgent({ id: "caller-visible", name: "Caller Visible", role: "Caller", platform: "codex", protocol: "a2a" });
+    const { agent: target } = registerAgent({ id: "target-visible", name: "Target Visible", role: "Target", platform: "codex", protocol: "a2a" });
+    const { agent: stranger } = registerAgent({ id: "stranger", name: "Stranger", role: "Stranger", platform: "codex", protocol: "a2a" });
+
+    const streamed = await streamA2aMessage(caller, {
+      targetAgentId: target.id,
+      message: {
+        messageId: crypto.randomUUID(),
+        role: "user",
+        parts: [
+          { kind: "data", data: { request: "summarize" } },
+          { kind: "file", file: { name: "brief.md", uri: "file://brief.md" } },
+        ],
+      },
+    });
+
+    expect(streamed.events[0]).toMatchObject({ eventType: "task.created" });
+    await expect(getA2aTaskForAgent(target, streamed.task.id)).resolves.toMatchObject({
+      id: streamed.task.id,
+    });
+    await expect(subscribeA2aTask(caller, streamed.task.id)).resolves.toMatchObject({
+      task: { id: streamed.task.id },
+      events: expect.arrayContaining([expect.objectContaining({ eventType: "task.created" })]),
+    });
+    await expect(getA2aTaskForAgent(stranger, streamed.task.id)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(subscribeA2aTask(stranger, streamed.task.id)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("cancels non-terminal tasks and appends task.canceled", async () => {

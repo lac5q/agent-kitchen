@@ -137,6 +137,18 @@ describe("identity/lifecycle.ts (Phase 131 / TEAMSCALE-02..04)", () => {
       ).toThrow(/email/);
     });
 
+    it("throws when displayName is missing", () => {
+      expect(() =>
+        onboardUser(db, {
+          email: "ok@example.com",
+          displayName: " ",
+          role: "operator",
+          spaceIds: [],
+          agentKit: { name: "agent-x" },
+        })
+      ).toThrow(/displayName/);
+    });
+
     it("throws when agentKit.name is missing", () => {
       expect(() =>
         onboardUser(db, {
@@ -147,6 +159,37 @@ describe("identity/lifecycle.ts (Phase 131 / TEAMSCALE-02..04)", () => {
           agentKit: { name: "" },
         })
       ).toThrow(/agentKit\.name/);
+    });
+
+    it("defaults blank platform to custom and skips blank spaces/capabilities", () => {
+      const receipt = onboardUser(db, {
+        email: "defaults@example.com",
+        displayName: "Defaults",
+        role: "reviewer",
+        spaceIds: [" ", ""],
+        agentKit: {
+          name: "defaults-agent",
+          platform: " ",
+          capabilities: [
+            { id: "", name: "skip me" },
+            { id: "memory.read" },
+          ],
+        },
+      });
+
+      const agent = db
+        .prepare(`SELECT platform, metadata FROM registered_agents WHERE id = ?`)
+        .get(receipt.agentId) as { platform: string; metadata: string };
+      expect(agent.platform).toBe("custom");
+      expect(JSON.parse(agent.metadata)).toMatchObject({ onboarded: true, skills: [] });
+      const caps = db
+        .prepare(`SELECT capability_id, name, description FROM agent_capabilities WHERE agent_id = ?`)
+        .all(receipt.agentId) as Array<{ capability_id: string; name: string; description: string }>;
+      expect(caps).toEqual([
+        { capability_id: "memory.read", name: "memory.read", description: "" },
+      ]);
+      expect(db.prepare(`SELECT COUNT(*) AS n FROM space_members WHERE member_id IN (?, ?)`)
+        .get(receipt.userId, receipt.agentId)).toEqual({ n: 0 });
     });
   });
 

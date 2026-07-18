@@ -202,6 +202,32 @@ describe("POST /api/skills/quarantine/approve", () => {
     expect(json.stage).toBe("enabled");
     expect(json.dispatch_status).toBe("enabled");
   });
+
+  it("200 accepts numeric-string skill ids and trims operator names", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const db = await loadDb();
+    const skillId = insertSkill(db, { name: "numeric-string-skill" });
+    const { upsertQuarantineRecord } = await import("@/lib/skills/skill-quarantine");
+    upsertQuarantineRecord(db, {
+      skillId,
+      stage: "pending_approval",
+      approvalStatus: "pending",
+    });
+
+    const route = await import("../approve/route");
+    const res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/quarantine/approve",
+        { skill_id: String(skillId), operator: "  alice  " },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.skill_id).toBe(skillId);
+    expect(json.approved_by).toBe("alice");
+    expect(json.record.skill_id).toBe(skillId);
+  });
 });
 
 describe("POST /api/skills/quarantine/reject", () => {

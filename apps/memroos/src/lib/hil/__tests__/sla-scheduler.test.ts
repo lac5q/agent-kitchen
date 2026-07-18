@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initSchema } from "@/lib/db-schema";
 
 // HIL-05: imports from file that does not exist yet — RED until Plan 71-03 implements it
-import { SLA_POLL_INTERVAL_MS, startSlaScheduler, runSlaPoll } from "@/lib/hil/sla-scheduler";
+import { SLA_POLL_INTERVAL_MS, startSlaScheduler, runSlaPoll, _resetSlaSchedulerForTest } from "@/lib/hil/sla-scheduler";
 
 let testDb: Database.Database;
 
@@ -37,6 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  _resetSlaSchedulerForTest();
   testDb.close();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -60,6 +61,13 @@ describe("startSlaScheduler (HIL-05)", () => {
     startSlaScheduler();
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), SLA_POLL_INTERVAL_MS);
   });
+
+  it("does not start more than one scheduler interval", () => {
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    startSlaScheduler();
+    startSlaScheduler();
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("runSlaPoll (HIL-05)", () => {
@@ -74,7 +82,12 @@ describe("runSlaPoll (HIL-05)", () => {
     const closedDb = new Database(":memory:");
     initSchema(closedDb);
     closedDb.close();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     // runSlaPoll must catch the error internally
     expect(() => runSlaPoll(closedDb)).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[sla-scheduler] Unhandled error during SLA poll:",
+      expect.any(Error)
+    );
   });
 });

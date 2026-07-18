@@ -209,6 +209,75 @@ describe("businessOpsL3Scorer — happy path", () => {
     expect(result.metadata?.tenantId).toBe("tenant-alpha");
     expect(result.metadata?.eventCount).toBe(1);
   });
+
+  it("uses tenant_id metadata and company-specific L3 sub-weights", () => {
+    insertEvent(testDb, {
+      tenantId: "tenant-alpha",
+      correlationId: "trace-company",
+      kpiKey: "completion_rate",
+      kpiValue: 1.0,
+      eventType: "completion",
+      polledAt: "2026-07-18T10:00:00.000Z",
+    });
+    insertEvent(testDb, {
+      tenantId: "tenant-alpha",
+      correlationId: "trace-company",
+      kpiKey: "cost_per_task",
+      kpiValue: 0.25,
+      eventType: "task_cost",
+      polledAt: "2026-07-18T10:00:01.000Z",
+    });
+    insertEvent(testDb, {
+      tenantId: "tenant-beta",
+      correlationId: "trace-company",
+      kpiKey: "cost_per_task",
+      kpiValue: 1.0,
+      eventType: "task_cost",
+      polledAt: "2026-07-18T10:00:02.000Z",
+    });
+
+    const config = buildDefaultEvalConfig();
+    config.companies.acme = {
+      l3_sub_weights: {
+        completion_rate: 0,
+        escalation_rate: 0,
+        ttr_p50: 0,
+        operator_approval_rate: 0,
+        cost_per_task: 1,
+      } as typeof config.companies.default.l3_sub_weights,
+    };
+    const result = businessOpsL3Scorer.score(
+      {
+        traceId: "trace-company",
+        agentId: "agent-1",
+        agentModelFamily: "openai",
+        input: "Do the thing",
+        output: "Done",
+        metadata: { tenant_id: "tenant-alpha", company_id: "acme" },
+      },
+      {
+        config,
+        judge: {
+          score: 0.8,
+          rubricScores: { faithful: 0.8, useful: 0.9, policy: 1.0 },
+          model: "claude-haiku",
+          provider: "anthropic",
+          modelFamily: "anthropic",
+          promptTemplateVersion: "v1",
+          promptHash: "abc",
+          positionBiasMitigation: { swapAugmentation: false, orderAgreement: true },
+        },
+        goldenSet: [],
+      }
+    );
+
+    expect(result.score).toBe(0.25);
+    expect(result.metadata).toMatchObject({
+      tenantId: "tenant-alpha",
+      companyId: "acme",
+      eventCount: 2,
+    });
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

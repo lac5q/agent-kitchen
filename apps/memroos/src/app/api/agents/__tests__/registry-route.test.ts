@@ -76,6 +76,76 @@ describe("agent registry routes", () => {
     expect((await afterDelete.json()).agents).toHaveLength(0);
   });
 
+  it("validates registration bodies and filters optional capability fields", async () => {
+    const { agentsRoute, registerRoute } = await loadRoutes();
+
+    const invalidJson = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: "{",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+
+    const invalidPlatform = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "bad-platform",
+          name: "Bad Platform",
+          role: "Worker",
+          platform: "unknown",
+          protocol: "rest",
+        }),
+      })
+    );
+    expect(invalidPlatform.status).toBe(400);
+
+    const registered = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "optional-agent",
+          name: "Optional Agent",
+          role: "Worker",
+          platform: "codex",
+          protocol: "rest",
+          company: 123,
+          location: "mars",
+          host: "agent.example.invalid",
+          port: "3000",
+          healthEndpoint: "/health",
+          tunnelUrl: "https://tunnel.example.com",
+          capabilities: [
+            null,
+            { id: "", name: "ignored" },
+            { id: "memory.read", tags: ["safe", 1] },
+          ],
+          metadata: ["not-object"],
+          issueApiKey: false,
+        }),
+      })
+    );
+    const body = await registered.json();
+    expect(registered.status).toBe(200);
+    expect(body.apiKey).toBeUndefined();
+
+    const list = await agentsRoute.GET();
+    const agent = (await list.json()).agents.find((item: { id: string }) => item.id === "optional-agent");
+    expect(agent).toMatchObject({
+      id: "optional-agent",
+      host: "agent.example.invalid",
+      healthEndpoint: "/health",
+      tunnelUrl: "https://tunnel.example.com",
+      capabilities: [
+        { id: "memory.read", name: "memory.read", description: "", tags: ["safe", "1"] },
+      ],
+    });
+    expect(agent.location).toBe("local");
+    expect(agent.port).toBeNull();
+    expect(agent.company).toBeUndefined();
+  });
+
   it("registers then accepts a curl-like authenticated heartbeat", async () => {
     const { agentsRoute, registerRoute, heartbeatRoute } = await loadRoutes();
 

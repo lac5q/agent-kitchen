@@ -234,6 +234,45 @@ describe("POST /api/skills/lifecycle", () => {
     expect(res.status).toBe(401);
   });
 
+  it("400 for invalid JSON, non-object body, and invalid skill_id", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    await loadDb();
+    const route = await loadRoute();
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/lifecycle", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer secret-key",
+        },
+        body: "{",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+    expect((await invalidJson.json()).error).toBe("Invalid JSON body");
+
+    const nonObject = await route.POST(
+      makePost(
+        "https://example.com/api/skills/lifecycle",
+        null,
+        { authorization: "Bearer secret-key" }
+      )
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
+
+    const invalidSkillId = await route.POST(
+      makePost(
+        "https://example.com/api/skills/lifecycle",
+        { skill_id: "abc", to_state: "enabled", actor: "alice" },
+        { authorization: "Bearer secret-key" }
+      )
+    );
+    expect(invalidSkillId.status).toBe(400);
+    expect((await invalidSkillId.json()).error).toMatch(/skill_id/);
+  });
+
   it("400 when to_state is invalid", async () => {
     process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
     const db = await loadDb();

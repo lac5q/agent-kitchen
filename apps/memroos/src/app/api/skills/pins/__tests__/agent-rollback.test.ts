@@ -228,4 +228,32 @@ describe("POST /api/skills/pins/:agent/rollback", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("400 — missing skill_name and blank agent are rejected before rollback", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    await loadDb();
+    const route = await import("../[agent]/rollback/route");
+
+    const missingSkill = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins/a/rollback",
+        { operator: "alice" },
+        { authorization: "Bearer right-key" }
+      ),
+      { params: Promise.resolve({ agent: "a" }) }
+    );
+    expect(missingSkill.status).toBe(400);
+    expect((await missingSkill.json()).error).toMatch(/skill_name/);
+
+    const blankAgent = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins/%20/rollback",
+        { skill_name: "x", operator: "alice" },
+        { authorization: "Bearer right-key" }
+      ),
+      { params: Promise.resolve({ agent: "" }) }
+    );
+    expect(blankAgent.status).toBe(400);
+    expect((await blankAgent.json()).error).toMatch(/agent is required/);
+  });
 });

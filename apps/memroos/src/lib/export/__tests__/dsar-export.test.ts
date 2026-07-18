@@ -31,14 +31,14 @@ afterEach(() => {
 
 function seedKnowledgeWrite(
   database: Database.Database,
-  opts: { tenantId: string; userId: string; path: string }
+  opts: { tenantId: string; userId: string; path: string; operation?: "read" | "write" | "delete" }
 ): void {
   const entry = buildKnowledgeAuditEntry(database, {
     tenantId: opts.tenantId,
     actorId: "operator-1",
     actorRole: "operator",
     path: opts.path,
-    operation: "write",
+    operation: opts.operation ?? "write",
     agentId: "agent-1",
     userId: opts.userId,
     opHash: `sha256:${crypto.createHash("sha256").update(opts.path).digest("hex")}`,
@@ -153,6 +153,50 @@ describe("dsar-export (ENTOPS-08)", () => {
 
     expect(result.fileCount).toBe(1);
     expect(result.vaultPaths).toEqual(["safe/notes.md"]);
+  });
+
+  it("includes read/delete audit paths and normalizes blank tenant id", () => {
+    const vaultRoot = path.join(tmpRoot, "knowledge");
+    const tenantVault = path.join(vaultRoot, "tenants", "default-tenant");
+    fs.mkdirSync(path.join(tenantVault, "read"), { recursive: true });
+    fs.writeFileSync(path.join(tenantVault, "read", "note.md"), "# read\n");
+    fs.mkdirSync(path.join(tenantVault, "deleted"), { recursive: true });
+    fs.writeFileSync(path.join(tenantVault, "deleted", "note.md"), "# deleted\n");
+
+    seedKnowledgeWrite(db, {
+      tenantId: "default-tenant",
+      userId: "user-ops",
+      path: "read/note.md",
+      operation: "read",
+    });
+    seedKnowledgeWrite(db, {
+      tenantId: "default-tenant",
+      userId: "user-ops",
+      path: "deleted/note.md",
+      operation: "delete",
+    });
+
+    expect(listVaultPathsForUser(db, "default-tenant", "user-ops")).toEqual([
+      "deleted/note.md",
+      "read/note.md",
+    ]);
+
+    const result = exportDsarPackage({
+      tenantId: " ",
+      userId: " user-ops ",
+      outDir: path.join(tmpRoot, "out-ops"),
+      vaultRoot,
+      db,
+      now: new Date("2026-07-18T12:00:00.000Z"),
+    });
+
+    expect(result.fileCount).toBe(2);
+    expect(result.vaultPaths).toEqual(["deleted/note.md", "read/note.md"]);
+    const manifest = JSON.parse(fs.readFileSync(result.manifestPath, "utf8")) as {
+      tenantId: string;
+      userId: string;
+    };
+    expect(manifest).toMatchObject({ tenantId: "default-tenant", userId: "user-ops" });
   });
 
   it("requires a non-empty user id for exports", () => {

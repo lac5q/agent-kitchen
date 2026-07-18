@@ -261,6 +261,82 @@ describe("POST /api/skills/pins", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400 — rejects malformed bodies and required pin fields", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const { route } = await loadRouteAndDb();
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/pins", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: "{",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+
+    const nonObject = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        [],
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
+
+    const missingSkillName = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: "a-1",
+          skill_name: " ",
+          current_version: "1.0.0",
+          current_content_hash: "a".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingSkillName.status).toBe(400);
+    expect((await missingSkillName.json()).error).toMatch(/skill_name/);
+
+    const missingVersion = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: "a-1",
+          skill_name: "pin",
+          current_version: "",
+          current_content_hash: "a".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingVersion.status).toBe(400);
+    expect((await missingVersion.json()).error).toMatch(/current_version/);
+
+    const badSkillId = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: "a-1",
+          skill_name: "pin",
+          skill_id: "nope",
+          current_version: "1.0.0",
+          current_content_hash: "a".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(badSkillId.status).toBe(400);
+    expect((await badSkillId.json()).error).toMatch(/skill_id/);
+  });
+
   it("400 — pin against unknown agent is rejected", async () => {
     process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
     const { route } = await loadRouteAndDb();
@@ -330,6 +406,44 @@ describe("GET /api/skills/pins (read-only)", () => {
     const json = await res.json();
     expect(json.items).toHaveLength(1);
     expect(json.items[0].agent_id).toBe("ax");
+  });
+
+  it("filters by skill_name and normalizes invalid pagination", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const { route, db } = await loadRouteAndDb();
+    insertAgent(db, "filter-agent", "Filter Agent");
+    const skillId = insertSkillRow(db, {
+      name: "filter-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+    });
+
+    await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: "filter-agent",
+          skill_name: "filter-skill",
+          skill_id: skillId,
+          current_version: "1.0.0",
+          current_content_hash: "0".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+
+    const res = await route.GET(
+      new Request("https://example.com/api/skills/pins?skill_name=filter-skill&limit=NaN&offset=-1", {
+        method: "GET",
+      })
+    );
+    const json = await res.json();
+    expect(json.limit).toBe(50);
+    expect(json.offset).toBe(0);
+    expect(json.filters.skill_name).toBe("filter-skill");
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0].skill_name).toBe("filter-skill");
   });
 });
 

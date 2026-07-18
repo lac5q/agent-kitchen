@@ -189,6 +189,30 @@ describe("POST /api/public/v1/traces", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when the trace request body is missing or invalid JSON", async () => {
+    const missingBody = await tracesRoute.POST(
+      new Request("http://localhost/api/public/v1/traces", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${VALID_API_KEY}` },
+      }) as Parameters<typeof tracesRoute.POST>[0]
+    );
+    expect(missingBody.status).toBe(400);
+    expect(await missingBody.json()).toEqual({ error: "Request body is required" });
+
+    const invalidJson = await tracesRoute.POST(
+      new Request("http://localhost/api/public/v1/traces", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${VALID_API_KEY}`,
+        },
+        body: "{",
+      }) as Parameters<typeof tracesRoute.POST>[0]
+    );
+    expect(invalidJson.status).toBe(400);
+    expect(await invalidJson.json()).toEqual({ error: "Request body is required" });
+  });
+
   it("returns X-RateLimit-* headers on success", async () => {
     const req = makeRequest("http://localhost/api/public/v1/traces", {
       method: "POST",

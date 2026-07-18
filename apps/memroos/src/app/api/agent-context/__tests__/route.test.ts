@@ -109,6 +109,16 @@ describe("agent context bus routes", () => {
       postRequest(`http://localhost/api/agent-context/messages/${sent.message.id}/reply`, beta.apiKey!, {
         fromAgent: "agent-beta",
         body: "Context synced. Use the agent-context route tests as proof.",
+        subject: "Sync complete",
+        priority: 2,
+        context_refs: [{ type: "phase", id: "107-reply" }],
+        artifacts: { route: "reply" },
+        visibility: "team",
+        policy: "agent_visible",
+        expires_at: "2026-07-19T00:00:00.000Z",
+        save_to_memory: true,
+        memory_type: "semantic",
+        memory_metadata: { reply: true },
       }) as any,
       { params: Promise.resolve({ id: sent.message.id }) }
     );
@@ -116,6 +126,14 @@ describe("agent context bus routes", () => {
     const reply = await replyRes.json();
     expect(reply.original.status).toBe("replied");
     expect(reply.reply.parentId).toBe(sent.message.id);
+    expect(reply.reply.savedMemoryId).toMatch(/^agent_memory_writes:/);
+    expect(reply.reply).toMatchObject({
+      subject: "Sync complete",
+      priority: 2,
+      visibility: "team",
+      policy: "agent_visible",
+      expiresAt: "2026-07-19T00:00:00.000Z",
+    });
 
     const waitRes = await getRoute.GET(
       new Request(
@@ -326,6 +344,58 @@ describe("agent context bus routes", () => {
     );
     expect(invalidMessageType.status).toBe(400);
     expect(await invalidMessageType.json()).toMatchObject({ ok: false, error: "Invalid messageType: carrier-pigeon" });
+  });
+
+  it("supports snake_case send aliases and thread/correlation filters", async () => {
+    const { listRoute, registerAgent } = await loadRoutes();
+    const alpha = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Sender",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+    const beta = registerAgent({
+      id: "agent-beta",
+      name: "Agent Beta",
+      role: "Recipient",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const sendRes = await listRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages", alpha.apiKey!, {
+        from_agent: "agent-alpha",
+        to_agent: "agent-beta",
+        content: "Threaded alias message",
+        message_type: "message",
+        thread_id: "thread-1",
+        correlation_id: "corr-1",
+        context_refs: [{ type: "ticket", id: "T-1" }],
+        save_to_memory: true,
+        memory_type: "semantic",
+        memory_metadata: { sourceTest: "batch-g" },
+      }) as any
+    );
+    expect(sendRes.status).toBe(200);
+    const sent = await sendRes.json();
+    expect(sent.message.savedMemoryId).toMatch(/^agent_memory_writes:/);
+
+    const filtered = await listRoute.GET(
+      new Request("http://localhost/api/agent-context/messages?agent=agent-beta&box=all&thread_id=thread-1&correlation_id=corr-1&limit=5", {
+        headers: { authorization: `Bearer ${beta.apiKey}` },
+      }) as any
+    );
+    expect(filtered.status).toBe(200);
+    const payload = await filtered.json();
+    expect(payload.messages).toHaveLength(1);
+    expect(payload.messages[0]).toMatchObject({
+      id: sent.message.id,
+      threadId: "thread-1",
+      correlationId: "corr-1",
+    });
   });
 
   it("denies self-declared user, OAuth, credential, and data-access claims", async () => {

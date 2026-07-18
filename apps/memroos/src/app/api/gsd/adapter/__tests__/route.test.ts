@@ -132,6 +132,40 @@ describe("POST /api/gsd/adapter", () => {
     expect(payload.policyReceipt).toBeUndefined();
   });
 
+  it("accepts snake_case adapter ids and derives safety content from payload", async () => {
+    process.env.MEMROOS_ALLOW_LEGACY_UNDECLARED_CAPABILITIES = "on";
+    const { route, registerAgent } = await loadRoute();
+    const agent = registerAgent({
+      id: "agent-context",
+      name: "Agent Context",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const res = await route.POST(
+      request("http://localhost/api/gsd/adapter", agent.apiKey, {
+        method: "POST",
+        body: JSON.stringify({
+          adapter_id: "hermes",
+          action: "request_context",
+          payload: { content: "Need context for a safe task", goal_id: "goal-context" },
+          estimatedCostUsd: 0.01,
+          costCapUsd: 1,
+          sharedMode: true,
+        }),
+      }) as any
+    );
+
+    const payload = await res.json();
+    expect(res.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.adapterId).toBe("hermes");
+    expect(payload.action).toBe("request_context");
+    expect(payload.safety.allowed).toBe(true);
+  });
+
   it("exposes the adapter contract only to authenticated agents", async () => {
     const { route, registerAgent } = await loadRoute();
     const agent = registerAgent({

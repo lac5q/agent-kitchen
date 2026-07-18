@@ -234,6 +234,98 @@ describe("GET /api/skills/sync/proposals", () => {
       diff: null,
     });
   });
+
+  it("lists approved, rejected, and no-change statuses with parsed diff summaries", async () => {
+    const db = await loadDb();
+    insertSkillRow(db, {
+      name: "approved-filter",
+      source_harness: "claude",
+      content_hash: "0".repeat(64),
+    });
+    insertSkillRow(db, {
+      name: "rejected-filter",
+      source_harness: "claude",
+      content_hash: "0".repeat(64),
+    });
+    const skillSync = await import("@/lib/skills/skill-sync");
+    const approved = skillSync.createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "approved-filter",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: "approved body",
+        content_hash: "a".repeat(64),
+        file_path: "/tmp/skills/claude/approved-filter.md",
+      },
+      proposed_by: "scanner",
+      diff_summary: "approved proposal",
+      source_root: "/tmp/skills/claude",
+    });
+    const rejected = skillSync.createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "rejected-filter",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: "rejected body",
+        content_hash: "b".repeat(64),
+      },
+      proposed_by: "scanner",
+      diff_summary: "rejected proposal",
+    });
+
+    skillSync.approveSyncProposalById(db, {
+      proposal_id: approved.proposal.pending_proposal_id!,
+      operator: "alice",
+    });
+    skillSync.rejectSyncProposalById(db, {
+      proposal_id: rejected.proposal.pending_proposal_id!,
+      operator: "bob",
+      reason: "duplicate",
+    });
+    db.prepare(
+      `INSERT INTO skill_sync_state (
+        source_harness, skill_name, last_synced_hash, pending_proposal_id,
+        pending_detected_hash, pending_diff_summary, pending_diff_payload,
+        pending_proposed_by, pending_proposed_at, last_check_at, updated_at
+      ) VALUES (?, ?, ?, NULL, NULL, '', '{}', NULL, NULL, ?, ?)`
+    ).run("claude", "no-change-filter", "c".repeat(64), new Date().toISOString(), new Date().toISOString());
+
+    const route = await loadRoute();
+    const approvedRes = await route.GET(
+      makeGet("https://example.com/api/skills/sync/proposals?status=approved&skill_name=approved-filter")
+    );
+    const approvedJson = await approvedRes.json();
+    expect(approvedJson.items).toHaveLength(1);
+    expect(approvedJson.items[0]).toMatchObject({
+      status: "approved",
+      skill_name: "approved-filter",
+      diff: {
+        detected_hash: "a".repeat(64),
+        current_hash: "0".repeat(64),
+        detected_version: "2.0.0",
+        source_file_path: "/tmp/skills/claude/approved-filter.md",
+        source_root: "/tmp/skills/claude",
+      },
+    });
+
+    const rejectedRes = await route.GET(
+      makeGet("https://example.com/api/skills/sync/proposals?status=rejected")
+    );
+    const rejectedJson = await rejectedRes.json();
+    expect(rejectedJson.items.some((item: { skill_name: string; status: string }) =>
+      item.skill_name === "rejected-filter" && item.status === "rejected"
+    )).toBe(true);
+
+    const noChangeRes = await route.GET(
+      makeGet("https://example.com/api/skills/sync/proposals?status=no_change")
+    );
+    const noChangeJson = await noChangeRes.json();
+    expect(noChangeJson.items.some((item: { skill_name: string; status: string }) =>
+      item.skill_name === "no-change-filter" && item.status === "no_change"
+    )).toBe(true);
+  });
 });
 
 describe("POST /api/skills/sync/proposals/:proposalId/approve", () => {

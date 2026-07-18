@@ -428,7 +428,13 @@ describe("memory lifecycle API routes", () => {
       })
     );
     expect(write.status).toBe(200);
-    expect(await write.json()).toMatchObject({ ok: true, tombstone: { subjectHash: "subject-route-tombstone" } });
+    expect(await write.json()).toMatchObject({
+      ok: true,
+      tombstone: {
+        subjectHash: "subject-route-tombstone",
+        derivativeInventoryHash: expect.any(String),
+      },
+    });
 
     const verify = await tombstonesPost(
       jsonRequest({
@@ -448,5 +454,11 @@ describe("memory lifecycle API routes", () => {
       ok: true,
       tombstones: [expect.objectContaining({ subjectHash: "subject-route-tombstone" })],
     });
+
+    const listedWithTenant = await tombstonesGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/tombstones?tenantId=default-tenant&subjectHash=subject-route-tombstone")
+    );
+    expect(listedWithTenant.status).toBe(200);
+    expect((await listedWithTenant.json()).report.tombstonesChecked).toBe(1);
   });
 });

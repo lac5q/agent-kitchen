@@ -128,6 +128,32 @@ function makeRequest(body: Record<string, unknown>): Request {
 }
 
 describe("POST /api/policy/knowledge", () => {
+  it("rejects invalid JSON and missing action before policy evaluation", async () => {
+    const { POST } = await import("../route");
+    const invalidJson = await POST(
+      new Request("https://memroos.example.com/api/policy/knowledge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{",
+      }) as never,
+    );
+    expect(invalidJson.status).toBe(400);
+    expect(await invalidJson.json()).toEqual({ error: "invalid json body" });
+
+    const missingAction = await POST(
+      makeRequest({
+        ontologyReference: {
+          tenantId: "default-tenant",
+          spaceId: "space",
+          recordType: "knowledge",
+          recordId: "record",
+        },
+      }) as never,
+    );
+    expect(missingAction.status).toBe(400);
+    expect(await missingAction.json()).toEqual({ error: "action is required" });
+  });
+
   it("rejects caller-supplied ontology context (forged hash)", async () => {
     const { POST } = await import("../route");
     const response = await POST(

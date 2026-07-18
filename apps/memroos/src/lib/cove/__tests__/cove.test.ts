@@ -12,6 +12,29 @@ import {
 } from "../index";
 
 describe("CoVe pipeline", () => {
+  it("returns the draft unchanged when disabled or no client is configured", async () => {
+    await expect(runCovePipeline({
+      input: "Question",
+      draft: "Draft answer",
+      config: { enabled: false, maxVerificationQuestions: 3, parallelVerification: true },
+    })).resolves.toEqual({
+      revisedAnswer: "Draft answer",
+      trace: {
+        input: "Question",
+        draft: "Draft answer",
+        questions: [],
+        factChecks: [],
+        revisedAnswer: "Draft answer",
+      },
+    });
+
+    await expect(runCovePipeline({
+      input: "Question",
+      draft: "Draft answer",
+      config: { enabled: true, maxVerificationQuestions: 3, parallelVerification: true },
+    })).resolves.toMatchObject({ revisedAnswer: "Draft answer" });
+  });
+
   it("runs draft, verification questions, checks, and revision through injected clients", async () => {
     const calls: string[] = [];
     const client = async (prompt: string) => {
@@ -73,6 +96,36 @@ describe("CoVe pipeline", () => {
       }),
     ]);
   });
+
+  it("uses chat completion endpoints as-is and reports provider failures", async () => {
+    const urls: string[] = [];
+    const okClient = createOpenAICompatibleCoveClient({
+      endpoint: "http://localhost:11434/v1/chat/completions/",
+      model: "hermes3",
+      apiKey: "test-key",
+      fetchImpl: async (url, init) => {
+        urls.push(String(url));
+        expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer test-key");
+        return new Response(JSON.stringify({ choices: [] }));
+      },
+    });
+    await expect(okClient("hello")).resolves.toBe("");
+    expect(urls).toEqual(["http://localhost:11434/v1/chat/completions"]);
+
+    const failingClient = createOpenAICompatibleCoveClient({
+      endpoint: "http://localhost:11434/v1",
+      model: "hermes3",
+      fetchImpl: async () => new Response("nope", { status: 503 }),
+    });
+    let providerError: unknown;
+    try {
+      await failingClient("hello");
+    } catch (error) {
+      providerError = error;
+    }
+    expect(providerError).toBeInstanceOf(Error);
+    expect((providerError as Error).message).toBe("CoVe provider failed: 503");
+  });
 });
 
 describe("CoVe eval scorer", () => {
@@ -124,6 +177,68 @@ describe("CoVe eval scorer", () => {
       coveUnsupportedClaims: 0,
       corrections: 1,
     });
+  });
+
+  it("returns a neutral score when no baseline evidence is available", () => {
+    const trace: AgentEvalTrace = {
+      traceId: "no-baseline",
+      agentId: "agent",
+      input: "Prompt",
+      output: "Answer",
+      expectedFacts: [],
+      metadata: {},
+    };
+
+    const result = coveHallucinationDeltaScorer.score(trace, {
+      config: buildDefaultEvalConfig(),
+      judge: {
+        score: 0.5,
+        rubricScores: { faithful: 0.5, useful: 0.5, policy: 1 },
+        model: "judge",
+        provider: "local",
+        modelFamily: "local",
+        promptTemplateVersion: "v1",
+        promptHash: "hash",
+        positionBiasMitigation: { swapAugmentation: true, orderAgreement: true },
+      },
+      goldenSet: [],
+    });
+
+    expect(result.score).toBe(0.5);
+    expect(result.detail).toMatch(/No baseline trace/);
+  });
+
+  it("clamps negative hallucination reductions at zero", () => {
+    const trace: AgentEvalTrace = {
+      traceId: "worse-cove",
+      agentId: "agent",
+      input: "Prompt",
+      output: "Answer",
+      expectedFacts: [],
+      metadata: {
+        baselineUnsupportedClaims: ["one"],
+        cove: {
+          unsupportedClaims: ["one", "two", "three"],
+        },
+      },
+    };
+
+    const result = coveHallucinationDeltaScorer.score(trace, {
+      config: buildDefaultEvalConfig(),
+      judge: {
+        score: 0.5,
+        rubricScores: { faithful: 0.5, useful: 0.5, policy: 1 },
+        model: "judge",
+        provider: "local",
+        modelFamily: "local",
+        promptTemplateVersion: "v1",
+        promptHash: "hash",
+        positionBiasMitigation: { swapAugmentation: true, orderAgreement: true },
+      },
+      goldenSet: [],
+    });
+
+    expect(result.score).toBe(0);
   });
 
   it("parses CoVe config from eval yaml", () => {

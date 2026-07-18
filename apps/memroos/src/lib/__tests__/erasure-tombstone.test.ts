@@ -13,6 +13,7 @@ import {
   ERASURE_TOMBSTONE_AUDIT_POLICY,
   insertErasureTombstone,
   listErasureTombstones,
+  scheduledPurgeAtFrom,
   tombstoneUserForDsar,
 } from "@/lib/erasure-tombstone";
 
@@ -128,5 +129,34 @@ describe("erasure-tombstone (ENTOPS-08)", () => {
     expect(second.id).toBe(first.id);
     const listed = listErasureTombstones(db, { tenantId: "t", entityId: "u" });
     expect(listed).toHaveLength(1);
+  });
+
+  it("honors custom compliance windows and filters by reason", () => {
+    const now = new Date("2026-07-18T00:00:00.000Z");
+    const custom = insertErasureTombstone(db, {
+      tenantId: "tenant-window",
+      entityType: "message",
+      entityId: "m-1",
+      tombstonedBy: "operator",
+      reason: " ",
+      complianceWindowMs: 60_000,
+      now,
+    });
+    insertErasureTombstone(db, {
+      tenantId: "tenant-window",
+      entityType: "message",
+      entityId: "m-2",
+      tombstonedBy: "operator",
+      reason: "legal_hold_release",
+      now,
+    });
+
+    expect(custom.reason).toBe("dsar");
+    expect(custom.scheduledPurgeAt).toBe("2026-07-18T00:01:00.000Z");
+    expect(scheduledPurgeAtFrom(now, 2)).toBe("2026-07-20T00:00:00.000Z");
+    expect(listErasureTombstones(db, {
+      tenantId: "tenant-window",
+      reason: "legal_hold_release",
+    })).toHaveLength(1);
   });
 });

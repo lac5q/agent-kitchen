@@ -169,6 +169,36 @@ describe("POST /api/skills/sync/approve", () => {
     );
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/skill_name/i);
+
+    const missingHarness = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/approve",
+        { skill_name: "x", operator: "alice" },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingHarness.status).toBe(400);
+    expect((await missingHarness.json()).error).toMatch(/source_harness/i);
+
+    const missingOperator = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/approve",
+        { skill_name: "x", source_harness: "claude", operator: " " },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingOperator.status).toBe(400);
+    expect((await missingOperator.json()).error).toMatch(/operator/i);
+
+    const nonObject = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/approve",
+        [],
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
   });
 
   it("200 approves a pending sync proposal and quarantines registry row", async () => {

@@ -66,6 +66,37 @@ describe("message memory adapters", () => {
     expect(normalized?.timestamp).toBe("2026-06-29T20:00:00.123Z");
   });
 
+  it("falls back for invalid timestamps and Slack authorization workspaces", () => {
+    const discord = discordMessageMemoryAdapter.normalize({
+      id: "invalid-time",
+      guild_id: "guild-1",
+      channel_id: "channel-1",
+      timestamp: "not-a-date",
+      author: { id: "user-1", username: "luis" },
+    });
+    expect(discord?.timestamp).toEqual(expect.any(String));
+    expect(Number.isNaN(Date.parse(discord?.timestamp ?? ""))).toBe(false);
+
+    const slack = normalizeSlackEvent({
+      authorizations: [{ team_id: " " }, { team_id: "team-auth" }],
+      event: {
+        type: "message",
+        channel: "C123",
+        bot_id: "B123",
+        username: "deploy-bot",
+        text: "Fallback workspace",
+        ts: "not-a-number",
+        files: [{ id: "F1", url_private: "https://files.example/private", name: "log.txt", mimetype: "text/plain" }],
+      },
+    });
+    expect(slack).toMatchObject({
+      workspaceId: "team-auth",
+      author: { id: "B123", username: "deploy-bot", isBot: true },
+      attachments: [{ id: "F1", filename: "log.txt", contentType: "text/plain" }],
+    });
+    expect(Number.isNaN(Date.parse(slack?.timestamp ?? ""))).toBe(false);
+  });
+
   it("rejects invalid platform payloads before persistence", () => {
     expect(discordMessageMemoryAdapter.normalize({ id: "missing-required-fields" })).toBeNull();
     expect(normalizeSlackEvent({ team_id: "team-1", event: { type: "reaction_added" } })).toBeNull();

@@ -226,6 +226,47 @@ describe("GSD command routes", () => {
     });
   });
 
+  it("accepts snake_case shipcheck aliases and invalid JSON fallback", async () => {
+    const { goal, shipcheck, registerAgent } = await loadRoutes();
+    const agent = registerAgent({
+      id: "agent-alias",
+      name: "Agent Alias",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+    await goal.POST(
+      request("http://localhost/api/gsd/goal", agent.apiKey, {
+        method: "POST",
+        body: JSON.stringify({ goalId: "goal-alias", title: "Alias check", lane: "code" }),
+      }) as any
+    );
+
+    const aliasRes = await shipcheck.POST(
+      request("http://localhost/api/gsd/shipcheck", agent.apiKey, {
+        method: "POST",
+        body: JSON.stringify({
+          goal_id: "goal-alias",
+          lane: "code",
+          proof: { focused_tests: "vitest alias test passed" },
+          bypass_reason: "not used because proof is present",
+        }),
+      }) as any
+    );
+    expect(aliasRes.status).toBe(200);
+    expect(await aliasRes.json()).toMatchObject({ ok: true, status: "verified" });
+
+    const fallbackRes = await shipcheck.POST(
+      request("http://localhost/api/gsd/shipcheck", agent.apiKey, {
+        method: "POST",
+        body: "{not-json",
+      }) as any
+    );
+    expect(fallbackRes.status).toBe(400);
+    expect(await fallbackRes.json()).toMatchObject({ ok: false, error: expect.any(String) });
+  });
+
   it("guards shipcheck auth and reports invalid goal receipts safely", async () => {
     const { shipcheck, registerAgent } = await loadRoutes();
     const agent = registerAgent({
