@@ -236,7 +236,15 @@ export async function GET() {
       return checkMem0();
     }),
     checkService("QMD", async () => {
-      await execFileStdout("which", ["qmd"], { timeout: 2000 });
+      try {
+        await execFileStdout("which", ["qmd"], { timeout: 2000 });
+      } catch {
+        // Optional on cloud operators (oracle-1); vector/graph/SQLite are canonical.
+        return {
+          status: "degraded",
+          detail: "optional — qmd binary not installed (local library search only)",
+        };
+      }
     }),
     checkService("Knowledge Index", async () => {
       return checkKnowledgeIndexing();

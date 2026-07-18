@@ -52,4 +52,15 @@ describe("storage-health", () => {
   it("panics on mem0 down", () => {
     expect(hasStoragePanic([svc("mem0", "down", "HTTP 503")])).toBe(true);
   });
+
+  it("does not panic when optional QMD is down or missing", () => {
+    expect(
+      hasStoragePanic([svc("QMD", "down", "Command failed: which qmd")])
+    ).toBe(false);
+    expect(
+      classifyStorageAlerts([
+        svc("QMD", "degraded", "optional — qmd binary not installed"),
+      ])
+    ).toEqual([]);
+  });
 });

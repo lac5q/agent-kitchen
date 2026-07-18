@@ -1,11 +1,14 @@
 import type { HealthStatus } from "@/types";
 
-/** Operator-facing storage backends — these must panic when not up. */
+/**
+ * Operator-facing storage backends — these must panic when not up.
+ * QMD is optional local search indexing (Mac/dev); missing `qmd` must not
+ * panic cloud operators that rely on mem0/Qdrant + Neo4j + SQLite.
+ */
 export const STORAGE_SERVICE_NAMES = [
   "mem0",
   "Graph Memory",
   "Knowledge Index",
-  "QMD",
 ] as const;
 
 export type StorageServiceName = (typeof STORAGE_SERVICE_NAMES)[number];

@@ -89,10 +89,11 @@ npm run first-run:check
 
 `setup.sh` validates required tools, copies `.env.example` when needed, validates the selected profile, checks Qdrant unless `SKIP_QDRANT_CHECK=1`, and installs the memory-service Python requirements into `.venv`. Set `START_SERVICES=0` for cloud-first/no-Docker setup, or start the Docker profile explicitly when testing the public repo locally. Set `INSTALL_MEMORY_SERVICE_DEPS=0` only when you intentionally manage that virtualenv yourself.
 
-On macOS, setup installs two launchd-backed Memory Resilience jobs unless `INSTALL_MEMORY_RESILIENCE=0` is set:
+On macOS, setup installs launchd-backed Memory Resilience jobs unless `INSTALL_MEMORY_RESILIENCE=0` is set:
 
 - `com.memroos.memory-healthcheck` runs every 5 minutes and alerts when memory infrastructure degrades, including when recent knowledge artifacts exist on disk but are missing from QMD.
 - `com.memroos.memory-degradation-evals` runs daily at 9:15 AM and verifies the degradation scenarios stay covered by tests.
+- `com.memroos.graph-catchup` runs every 30 minutes and triggers incremental Neo4j projection (`POST /api/memory-lifecycle/graph-catchup`) when the MemRoOS app is up. The in-app scheduler also starts the same `graph-catchup` cron-health job on Node boot when Neo4j is configured.
 
 Manage them directly with:
 
@@ -100,6 +101,19 @@ Manage them directly with:
 npm run install:memory-resilience
 node scripts/install-memory-resilience.mjs status
 node scripts/install-memory-resilience.mjs uninstall
+```
+
+One-shot Qdrant→Neo4j catchup (ops / backfill) is separate:
+
+```bash
+npm run graph:catchup
+```
+
+Verify scheduled catchup health via cron registry (`graph-catchup` job) or:
+
+```bash
+curl -s http://127.0.0.1:3000/api/memory-lifecycle/graph-catchup
+curl -s http://127.0.0.1:3000/api/cron-health | jq '.jobs[] | select(.id=="graph-catchup")'
 ```
 
 The healthcheck reads `services/memory/.env` when present. Configure `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` or `DISCORD_KNOWLEDGE_WEBHOOK` for remote notifications; otherwise macOS local notifications are used.

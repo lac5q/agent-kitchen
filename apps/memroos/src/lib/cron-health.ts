@@ -66,6 +66,14 @@ const DEFAULT_JOBS: CronHealthJobInput[] = [
     expectedIntervalMinutes: 5,
   },
   {
+    id: "graph-catchup",
+    name: "Graph memory catchup",
+    sourceFamily: "memory",
+    schedule: "every 30 minutes when Neo4j configured",
+    expectedIntervalMinutes: 30,
+    healthEndpoint: "/api/memory-lifecycle/graph-catchup",
+  },
+  {
     id: "apo-skill-improvement",
     name: "APO skill improvement",
     sourceFamily: "skills",

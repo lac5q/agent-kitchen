@@ -74,11 +74,12 @@ committed to the repo. They take precedence over public skills with the same nam
 
 Read `docs/production-deployment.md` before any deploy or onboarding task.
 
-- **Operator production** is `https://memroos.epiloguecapital.com` on **Heroku** (`memroos-agent-onboarding`).
+- **Operator production** is `https://memroos.epiloguecapital.com` on **oracle-1** (Cloudflare Tunnel `memroos-oracle` → `:3000`).
 - **Marketing site** is `https://memroos.com` on **Vercel** — not the operator app.
+- **Heroku** (`memroos-agent-onboarding`) is decommissioned as operator (`web=0`); do not treat it as the brain.
 - Never treat Vercel PR checks as operator production deploy.
 - After deploy, run `bash scripts/verify-onboarding-deploy.sh`. Onboarding script with a bad token must return **403**, not **401**.
-- Onboarding token signatures use `MEMROOS_ONBOARDING_SECRET` (or `MEMROOS_OPERATOR_API_KEY`). If invites fail with **Invalid onboarding token signature**, regenerate the invite after aligning Heroku config vars.
+- Onboarding token signatures use `MEMROOS_ONBOARDING_SECRET` (or `MEMROOS_OPERATOR_API_KEY`) on oracle-1 `/etc/memroos/web.env`. If invites fail with **Invalid onboarding token signature**, regenerate the invite after aligning that secret.
 
 ## Cursor Cloud Development
 

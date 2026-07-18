@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 30;
+export const CURRENT_SCHEMA_VERSION = 31;
 
 type SchemaMigration = {
   version: number;
@@ -235,6 +235,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 30,
     name: 'dsar-erasure-tombstones',
     up: applyDsarErasureTombstonesSchema,
+  },
+  {
+    version: 31,
+    name: 'graph-catchup-checkpoints',
+    up: applyGraphCatchupCheckpointsSchema,
   },
 ];
 
@@ -2232,6 +2237,22 @@ function applyDsarErasureTombstonesSchema(db: Database.Database): void {
       ON erasure_tombstones(tenant_id, scheduled_purge_at)
       WHERE purged_at IS NULL;
   `);
+}
+
+function applyGraphCatchupCheckpointsSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS graph_catchup_checkpoints (
+      id                      TEXT PRIMARY KEY,
+      episodic_last_id        INTEGER NOT NULL DEFAULT 0,
+      vector_last_created_at  TEXT,
+      vector_last_id          TEXT,
+      updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO graph_catchup_checkpoints (id, episodic_last_id)
+     VALUES ('default', 0)`
+  ).run();
 }
 
 function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {

@@ -340,7 +340,8 @@ function category(
       scope,
       reason: warnings.join("; "),
     });
-  } else if (count === null) {
+  } else {
+    // count === null and no warnings — honest unavailable (not zero).
     metric = metricEnvelope<number | null>({
       value: null,
       status: "unavailable",
@@ -348,16 +349,6 @@ function category(
       observedAt: lastUpdated,
       scope,
       reason: "Source did not return a countable measurement",
-    });
-  } else {
-    // Exhaustiveness guard — count is narrowed above; keep typed fallback.
-    metric = metricEnvelope<number | null>({
-      value: count,
-      status: count > 0 ? "live" : "zero",
-      source,
-      observedAt: lastUpdated,
-      scope,
-      reason: count > 0 ? `${count.toLocaleString()} rows from ${source}.` : `Successful ${source} measured exactly zero rows.`,
     });
   }
   return {

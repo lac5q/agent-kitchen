@@ -38,6 +38,21 @@ const jobs = [
       PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     },
   },
+  {
+    label: "com.memroos.graph-catchup",
+    args: [
+      process.execPath,
+      path.join(root, "scripts", "run-graph-catchup-cron.mjs"),
+    ],
+    stdout: path.join(root, "services", "memory", "logs", "graph-catchup-launchd.log"),
+    stderr: path.join(root, "services", "memory", "logs", "graph-catchup-launchd-error.log"),
+    interval: 1800,
+    runAtLoad: false,
+    env: {
+      PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      MEMROOS_BASE_URL: process.env.MEMROOS_BASE_URL || "http://127.0.0.1:3000",
+    },
+  },
 ];
 
 function xmlEscape(value) {
@@ -137,17 +152,33 @@ function install() {
   if (!requireMacOs()) return;
   fs.mkdirSync(launchAgentsDir, { recursive: true });
   fs.mkdirSync(path.join(root, "services", "memory", "logs"), { recursive: true });
+  const failures = [];
   for (const job of jobs) {
     const target = plistPath(job);
     fs.writeFileSync(target, renderJob(job));
     run("plutil", ["-lint", target], { stdio: "inherit" });
     run("launchctl", ["bootout", domain, target], { stdio: "ignore", allowFailure: true });
-    run("launchctl", ["bootstrap", domain, target], { stdio: "inherit" });
+    try {
+      run("launchctl", ["bootstrap", domain, target], { stdio: "inherit" });
+    } catch (error) {
+      // Already-loaded / transient launchctl I/O errors must not block later jobs
+      // (e.g. graph-catchup after an existing healthcheck/evals agent).
+      failures.push(`${job.label}: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`warn: bootstrap failed for ${job.label}; plist written to ${target}`);
+      continue;
+    }
     if (job.runAtLoad) {
-      run("launchctl", ["kickstart", "-k", `${domain}/${job.label}`], { stdio: "inherit" });
+      run("launchctl", ["kickstart", "-k", `${domain}/${job.label}`], {
+        stdio: "inherit",
+        allowFailure: true,
+      });
     }
   }
-  console.log("Installed Memroos memory resilience jobs.");
+  if (failures.length > 0) {
+    console.warn("Installed plists with bootstrap warnings:\n- " + failures.join("\n- "));
+  } else {
+    console.log("Installed Memroos memory resilience jobs.");
+  }
 }
 
 function uninstall() {
