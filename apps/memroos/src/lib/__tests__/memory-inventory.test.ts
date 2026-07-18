@@ -7,6 +7,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const testDb = new Database(":memory:");
 const knowledgeDir = mkdtempSync(path.join(tmpdir(), "memroos-lib-inventory-"));
+let mockCollections = [{ name: "ops", category: "business", basePath: knowledgeDir }];
+let mockCollectionError: Error | null = null;
 
 vi.mock("@/lib/db", () => ({
   getDb: () => testDb,
@@ -19,7 +21,11 @@ vi.mock("@/lib/knowledge-collections", async () => {
   );
   return {
     ...actual,
-    loadCollections: () => [{ name: "ops", category: "business", basePath: knowledgeDir }],
+    loadCollections: () => mockCollections,
+    collectCollectionFiles: (collection: Parameters<typeof actual.collectCollectionFiles>[0]) => {
+      if (mockCollectionError) throw mockCollectionError;
+      return actual.collectCollectionFiles(collection);
+    },
   };
 });
 
@@ -55,12 +61,16 @@ function seedMessage(content: string, consolidated = 0) {
 describe("buildMemoryInventory", () => {
   beforeEach(() => {
     vi.resetModules();
+    testDb.exec("DELETE FROM memory_salience");
     testDb.exec("DELETE FROM messages");
     testDb.exec("DELETE FROM memory_meta_insights");
     testDb.exec("DELETE FROM memory_consolidation_runs");
     testDb.exec("DELETE FROM agent_memory_writes");
     testDb.exec("DELETE FROM registered_agents");
     delete process.env.MEMORY_INVENTORY_CATEGORY_TTL_MS;
+    mockCollections = [{ name: "ops", category: "business", basePath: knowledgeDir }];
+    mockCollectionError = null;
+    mkdirSync(knowledgeDir, { recursive: true });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -259,5 +269,149 @@ describe("buildMemoryInventory", () => {
     const row = response.rows.find((r) => r.category === "episodic_write" && r.source === "agent-bad-meta");
     expect(row).toBeTruthy();
     expect(row?.project).toBeNull();
+  });
+
+  it("parses Neo4j transactional response counts including nested arrays", async () => {
+    const previousPassword = process.env.NEO4J_PASSWORD;
+    process.env.NEO4J_PASSWORD = "test-password";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string | URL) => {
+        const href = String(url);
+        if (href.includes("/db/neo4j/tx/commit")) {
+          return {
+            ok: true,
+            json: async () => ({
+              results: [{ data: [{ row: [[null, { total: 7 }]] }] }],
+              errors: [],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({ memory_count: 0, timestamp: "2026-05-24T08:00:00Z" }),
+        };
+      })
+    );
+
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const graph = response.categories.find((c) => c.id === "graph_fact");
+    expect(graph?.count).toBe(7);
+    expect(graph?.status).toBe("live");
+    if (previousPassword === undefined) delete process.env.NEO4J_PASSWORD;
+    else process.env.NEO4J_PASSWORD = previousPassword;
+  });
+
+  it("marks Neo4j degraded when configured graph count is unavailable or throws a non-error", async () => {
+    const previousPassword = process.env.NEO4J_PASSWORD;
+    process.env.NEO4J_PASSWORD = "test-password";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string | URL) => {
+        const href = String(url);
+        if (href.includes("/db/neo4j/tx/commit")) {
+          return {
+            ok: true,
+            json: async () => ({ results: [{ data: [{ row: [{}] }] }], errors: [] }),
+          };
+        }
+        return { ok: true, json: async () => ({ memory_count: 0 }) };
+      })
+    );
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const noCount = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    expect(noCount.categories.find((c) => c.id === "graph_fact")?.warnings).toContain(
+      "Neo4j count unavailable"
+    );
+
+    vi.resetModules();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string | URL) => {
+        const href = String(url);
+        if (href.includes("/db/neo4j/tx/commit")) {
+          return Promise.reject("offline");
+        }
+        return { ok: true, json: async () => ({ memory_count: 0 }) };
+      })
+    );
+    const { buildMemoryInventory: buildAgain } = await import("../memory-inventory");
+    const thrown = await buildAgain(new URL("http://localhost/api/memory-inventory"));
+    expect(thrown.categories.find((c) => c.id === "graph_fact")?.warnings).toContain("Neo4j unavailable");
+    if (previousPassword === undefined) delete process.env.NEO4J_PASSWORD;
+    else process.env.NEO4J_PASSWORD = previousPassword;
+  });
+
+  it("surfaces vector warnings when health JSON is missing count data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ vector_store: "connected" }),
+      })
+    );
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const connected = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    expect(connected.categories.find((c) => c.id === "vector_memory")?.warnings).toContain(
+      "Vector store connected but memory_count/points_count missing from mem0 health"
+    );
+
+    vi.resetModules();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => {
+          throw new Error("bad json");
+        },
+      })
+    );
+    const { buildMemoryInventory: buildAgain } = await import("../memory-inventory");
+    const malformed = await buildAgain(new URL("http://localhost/api/memory-inventory"));
+    expect(malformed.categories.find((c) => c.id === "vector_memory")?.warnings).toContain(
+      "Vector memory count unavailable from mem0 health"
+    );
+  });
+
+  it("filters rows by agent and carries salience metadata", async () => {
+    const targetId = seedMessage("agent filter target");
+    seedMessage("agent filter other");
+    testDb.prepare(`UPDATE messages SET agent_id = ? WHERE content = ?`).run("other-agent", "agent filter other");
+    testDb
+      .prepare(
+        `INSERT OR REPLACE INTO memory_salience(message_id, salience_score, access_count)
+         VALUES (?, ?, ?)`
+      )
+      .run(targetId, 0.42, 3);
+
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(
+      new URL("http://localhost/api/memory-inventory?category=ingested_message&agent=codex")
+    );
+    expect(response.rows.every((row) => row.source === "codex")).toBe(true);
+    const row = response.rows.find((entry) => entry.content === "agent filter target");
+    expect(row?.salienceScore).toBe(0.42);
+    expect(row?.accessCount).toBe(3);
+  });
+
+  it("uses deferred knowledge counts from cache until the knowledge category is selected", async () => {
+    process.env.MEMORY_INVENTORY_CATEGORY_TTL_MS = "60000";
+    writeFileSync(path.join(knowledgeDir, "deferred-cache.md"), "# deferred\n", "utf8");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    mockCollections = [];
+
+    const cached = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    expect(cached.categories.find((c) => c.id === "knowledge_file")?.count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("records knowledge category warnings when collection scanning fails", async () => {
+    mockCollectionError = new Error("scan failed");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const knowledge = response.categories.find((c) => c.id === "knowledge_file");
+    expect(knowledge?.count).toBe(0);
+    expect(knowledge?.warnings).toContain("scan failed");
   });
 });

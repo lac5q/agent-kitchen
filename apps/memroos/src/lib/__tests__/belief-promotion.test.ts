@@ -15,7 +15,7 @@ import {
   promoteCandidate,
   resolveReview,
 } from "../belief/promotion";
-import type { ClaimCategory } from "../belief/types";
+import type { ClaimCategory, PromotionReceiptSummary } from "../belief/types";
 import { DEFAULT_BELIEF_PROMOTION_CONFIG } from "../belief/config";
 import { ensureCanonicalUpperOntology } from "../ontology/registry";
 import { revokeOntologySource } from "../ontology/validity";
@@ -1053,6 +1053,15 @@ describe("belief promotion pipeline", () => {
     expect(decision.failedCheck).toBe("freshness");
   });
 
+  it("freshness_check_denies_unparseable_capture_timestamps", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.prepare(`UPDATE agent_session_captures SET captured_at = ? WHERE id = ?`).run("not-a-date", f.captureId);
+
+    const freshness = evaluatePromotionChecks(db, TENANT, f.candidateId).find((check) => check.name === "freshness");
+    expect(freshness?.pass).toBe(false);
+    expect(freshness?.evidence).toMatchObject({ reason: "unparseable_capture_timestamp" });
+  });
+
   it("provenance_check_denies_missing_capture_hash", () => {
     const captureId = crypto.randomUUID();
     const artifactId = `artifact-no-hash-${captureId}`;
@@ -1317,6 +1326,354 @@ describe("belief promotion pipeline", () => {
       .get(demote.decisionId) as { metadata_json: string };
     const parsed = JSON.parse(meta.metadata_json) as Record<string, unknown>;
     expect(parsed.supersedesCandidateId).toBe(f2.candidateId);
+  });
+
+  it("throws when a requested candidate does not exist", () => {
+    expect(() => evaluatePromotionChecks(db, TENANT, "missing-candidate")).toThrow(
+      /candidate not found: missing-candidate/
+    );
+  });
+
+  it("treats blank, malformed, and non-object metadata as empty policy labels", () => {
+    const f = insertFixture(db, { category: "operational" });
+    for (const raw of ["", "not-json", JSON.stringify(["array-label"])]) {
+      db.prepare(`UPDATE agent_memory_candidates SET metadata_json = ? WHERE id = ?`).run(raw, f.candidateId);
+      const policy = evaluatePromotionChecks(db, TENANT, f.candidateId).find((check) => check.name === "policy");
+      expect(policy?.evidence).toMatchObject({
+        decision: "deny",
+        policy: "sealed",
+        visibility: "private",
+        sensitivity: null,
+      });
+    }
+  });
+
+  it("reports already-gold candidates without promotion receipts as malformed state", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.prepare(`UPDATE agent_memory_candidates SET belief_stage = 'gold_operational_truth' WHERE id = ?`).run(
+      f.candidateId
+    );
+
+    expect(() =>
+      canAdmitToGold(db, TENANT, f.candidateId, {
+        actor: { id: "test-operator", role: "operator" },
+        category: "operational",
+      })
+    ).toThrow(/candidate is gold but no promotion decision row exists/);
+  });
+
+  it("dedupe check fails for already-gold candidates", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.prepare(`UPDATE agent_memory_candidates SET belief_stage = 'gold_operational_truth' WHERE id = ?`).run(
+      f.candidateId
+    );
+
+    const dedupe = evaluatePromotionChecks(db, TENANT, f.candidateId).find((check) => check.name === "dedupe");
+    expect(dedupe?.pass).toBe(false);
+    expect(dedupe?.evidence).toMatchObject({ reason: "already_gold", candidateId: f.candidateId });
+  });
+
+  it("fails closed when high-stakes ontology lookup throws", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    db.exec(`DROP TABLE ontology_versioned_records`);
+
+    const decision = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+
+    expect(decision.kind).toBe("denied");
+    expect(decision.reason).toBe("ontology_context_unavailable");
+    expect(decision.failedCheck).toBe("ontology");
+  });
+
+  it("rejects stale explicit ontology references before ordinary admission", () => {
+    const f = insertFixture(db, { category: "operational" });
+
+    expect(() =>
+      canAdmitToGold(db, TENANT, f.candidateId, {
+        actor: { id: "test-operator", role: "operator" },
+        category: "operational",
+        ontologyReference: {
+          tenantId: TENANT,
+          spaceId: "belief-review-space",
+          recordType: "belief_candidate",
+          recordId: "not-this-candidate",
+        },
+      })
+    ).toThrow("ontology_context_unavailable");
+  });
+
+  it("rejects caller-supplied ontology when candidate re-resolution fails", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.prepare(`DELETE FROM ontology_versioned_records WHERE record_id = ?`).run(f.candidateId);
+
+    expect(() =>
+      canAdmitToGold(db, TENANT, f.candidateId, {
+        actor: { id: "test-operator", role: "operator" },
+        category: "operational",
+        ontology: {
+          ontologyId: "forged",
+          ontologyVersion: "1.0.0",
+          ontologyContentHash: "sha256:forged",
+          namespace: "forged",
+          canonicalId: "forged",
+          aliasMigrationPath: [],
+          sourceId: "forged-source",
+          sourceHash: "sha256:source",
+          derivativeId: "forged-derivative",
+        } as PromotionReceiptSummary["ontology"],
+      })
+    ).toThrow("ontology_context_unavailable");
+  });
+
+  it("rejects structurally incomplete caller-supplied ontology receipts", () => {
+    const f = insertFixture(db, { category: "operational" });
+
+    expect(() =>
+      canAdmitToGold(db, TENANT, f.candidateId, {
+        actor: { id: "test-operator", role: "operator" },
+        category: "operational",
+        ontology: { ontologyId: "missing-hash" } as PromotionReceiptSummary["ontology"],
+      })
+    ).toThrow("ontology_context_unavailable");
+  });
+
+  it("does not accept an unapproved reviewedQueueId", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queued = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected queue");
+
+    expect(() =>
+      canAdmitToGold(db, TENANT, f.candidateId, {
+        actor: { id: "operator-2", role: "operator" },
+        category: "pricing",
+        reviewedQueueId: queued.queueId,
+      })
+    ).toThrow(/queue item is not approved/);
+  });
+
+  it("rethrows non-ontology admission failures from promoteCandidate", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queued = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected queue");
+
+    expect(() =>
+      promoteCandidate(db, {
+        candidateId: f.candidateId,
+        tenantId: TENANT,
+        actor: { id: "operator-2", role: "operator" },
+        category: "pricing",
+        reviewedQueueId: queued.queueId,
+      })
+    ).toThrow(/queue item is not approved/);
+  });
+
+  it("invalidates approved review when queued ontology fields are missing or mismatched", () => {
+    const missing = insertFixture(db, {
+      category: "pricing",
+      memoryType: "runbook",
+      content: "queued ontology missing source hash",
+    });
+    const missingQueued = promoteCandidate(db, {
+      candidateId: missing.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(missingQueued.kind).toBe("queued_for_review");
+    if (missingQueued.kind !== "queued_for_review") throw new Error("expected queue");
+    db.prepare(`UPDATE belief_review_queue SET ontology_source_hash = '' WHERE id = ?`).run(missingQueued.queueId);
+    const missingResult = resolveReview(db, {
+      queueId: missingQueued.queueId,
+      tenantId: TENANT,
+      resolution: "approved",
+      operatorId: "operator-2",
+      category: "pricing",
+    });
+    expect(missingResult.admission?.kind).toBe("denied");
+    expect(missingResult.admission?.reason).toBe("ontology_context_invalidated");
+
+    const mismatch = insertFixture(db, {
+      category: "pricing",
+      memoryType: "runbook",
+      content: "queued ontology version mismatch",
+    });
+    const mismatchQueued = promoteCandidate(db, {
+      candidateId: mismatch.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(mismatchQueued.kind).toBe("queued_for_review");
+    if (mismatchQueued.kind !== "queued_for_review") throw new Error("expected queue");
+    db.prepare(`UPDATE belief_review_queue SET ontology_version = 'wrong-version' WHERE id = ?`).run(
+      mismatchQueued.queueId
+    );
+    const mismatchResult = resolveReview(db, {
+      queueId: mismatchQueued.queueId,
+      tenantId: TENANT,
+      resolution: "approved",
+      operatorId: "operator-2",
+      category: "pricing",
+    });
+    expect(mismatchResult.admission?.kind).toBe("denied");
+    expect(mismatchResult.admission?.reason).toBe("ontology_context_invalidated");
+
+    const staleReference = insertFixture(db, {
+      category: "pricing",
+      memoryType: "runbook",
+      content: "queued ontology stale reference",
+    });
+    const staleQueued = promoteCandidate(db, {
+      candidateId: staleReference.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(staleQueued.kind).toBe("queued_for_review");
+    if (staleQueued.kind !== "queued_for_review") throw new Error("expected queue");
+    db.prepare(`UPDATE belief_review_queue SET ontology_record_id = ? WHERE id = ?`).run(
+      "missing-record-id",
+      staleQueued.queueId
+    );
+    const staleResult = resolveReview(db, {
+      queueId: staleQueued.queueId,
+      tenantId: TENANT,
+      resolution: "approved",
+      operatorId: "operator-2",
+      category: "pricing",
+    });
+    expect(staleResult.admission?.kind).toBe("denied");
+    expect(staleResult.admission?.reason).toBe("ontology_context_invalidated");
+  });
+
+  it("refuses malformed review queues and invalid resolution values", () => {
+    const malformed = insertFixture(db, { category: "pricing", memoryType: "runbook", content: "malformed queue" });
+    const malformedQueue = promoteCandidate(db, {
+      candidateId: malformed.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(malformedQueue.kind).toBe("queued_for_review");
+    if (malformedQueue.kind !== "queued_for_review") throw new Error("expected queue");
+    db.prepare(`UPDATE belief_review_queue SET category = '' WHERE id = ?`).run(malformedQueue.queueId);
+    expect(() =>
+      resolveReview(db, {
+        queueId: malformedQueue.queueId,
+        tenantId: TENANT,
+        resolution: "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/review queue item is malformed/);
+
+    const invalid = insertFixture(db, { category: "pricing", memoryType: "runbook", content: "invalid resolution" });
+    const invalidQueue = promoteCandidate(db, {
+      candidateId: invalid.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(invalidQueue.kind).toBe("queued_for_review");
+    if (invalidQueue.kind !== "queued_for_review") throw new Error("expected queue");
+    expect(() =>
+      resolveReview(db, {
+        queueId: invalidQueue.queueId,
+        tenantId: TENANT,
+        resolution: "deferred" as "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/invalid resolution: deferred/);
+  });
+
+  it("rethrows reviewer-approved gate denials that are not ontology failures", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queued = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "operator-1", role: "operator" },
+      category: "pricing",
+    });
+    expect(queued.kind).toBe("queued_for_review");
+    if (queued.kind !== "queued_for_review") throw new Error("expected queue");
+    db.prepare(`UPDATE agent_memory_candidates SET metadata_json = ? WHERE id = ?`).run(
+      JSON.stringify({ visibility: "internal", policy: "agent_restricted" }),
+      f.candidateId
+    );
+
+    expect(() =>
+      resolveReview(db, {
+        queueId: queued.queueId,
+        tenantId: TENANT,
+        resolution: "approved",
+        operatorId: "operator-2",
+        category: "pricing",
+      })
+    ).toThrow(/review-approved candidate failed admission gate/);
+  });
+
+  it("rolls back promotion when the candidate update affects no rows", () => {
+    const f = insertFixture(db, { category: "operational" });
+    db.exec(`
+      CREATE TEMP TRIGGER ignore_gold_update
+      BEFORE UPDATE OF belief_stage ON agent_memory_candidates
+      WHEN NEW.belief_stage = 'gold_operational_truth'
+      BEGIN
+        SELECT RAISE(IGNORE);
+      END
+    `);
+
+    expect(() =>
+      promoteCandidate(db, {
+        candidateId: f.candidateId,
+        tenantId: TENANT,
+        actor: { id: "test-operator", role: "operator" },
+        category: "operational",
+      })
+    ).toThrow(/promotion UPDATE affected 0 rows; expected 1/);
+  });
+
+  it("rolls back demotion when the candidate update affects no rows", () => {
+    const f = insertFixture(db, { category: "operational" });
+    const promoted = promoteCandidate(db, {
+      candidateId: f.candidateId,
+      tenantId: TENANT,
+      actor: { id: "test-operator", role: "operator" },
+      category: "operational",
+    });
+    expect(promoted.kind).toBe("admitted");
+    db.exec(`
+      CREATE TEMP TRIGGER ignore_silver_update
+      BEFORE UPDATE OF belief_stage ON agent_memory_candidates
+      WHEN NEW.belief_stage = 'silver_candidate_claim'
+      BEGIN
+        SELECT RAISE(IGNORE);
+      END
+    `);
+
+    expect(() =>
+      demoteCandidate(db, {
+        candidateId: f.candidateId,
+        tenantId: TENANT,
+        reason: "manual_operator",
+        actor: { id: "test-operator", role: "operator" },
+      })
+    ).toThrow(/demotion UPDATE affected 0 rows; expected 1/);
   });
 
 });

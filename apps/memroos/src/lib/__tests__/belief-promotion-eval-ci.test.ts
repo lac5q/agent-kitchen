@@ -55,6 +55,22 @@ describe("BELIEF-05 promotion eval CI canary", () => {
     expect(cases.every((c) => typeof c.id === "string" && c.expectations)).toBe(true);
   });
 
+  it("loadBeliefPromotionEvalCases uses the repo-root fallback when cwd has no evals tree", () => {
+    const previousCwd = process.cwd();
+    const previousOverride = process.env.BELIEF_PROMOTION_EVAL_CASES_PATH;
+    const isolated = fs.mkdtempSync(path.join(os.tmpdir(), "belief-eval-cwd-"));
+    delete process.env.BELIEF_PROMOTION_EVAL_CASES_PATH;
+    try {
+      process.chdir(isolated);
+      expect(() => loadBeliefPromotionEvalCases()).toThrow(/ENOENT|no such file/i);
+    } finally {
+      process.chdir(previousCwd);
+      if (previousOverride === undefined) delete process.env.BELIEF_PROMOTION_EVAL_CASES_PATH;
+      else process.env.BELIEF_PROMOTION_EVAL_CASES_PATH = previousOverride;
+      fs.rmSync(isolated, { recursive: true, force: true });
+    }
+  });
+
   it("reports failure when no db is injected into the runner", async () => {
     const run = await runBeliefPromotionEvalSuite({ mode: "gold" });
     expect(run.pass).toBe(false);
