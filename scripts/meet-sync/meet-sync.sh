@@ -298,8 +298,27 @@ run_source() {
     echo "$LOG_PREFIX WARN: envFile missing: $env_file" >&2
   fi
 
+  # MEETREL-FOLLOWUP-05 pre-flight gate (kills the "OAuth failure -> successful
+  # empty sync" defect). Provider must clear its scope + env check before ingest
+  # proceeds; otherwise we record the blocked status and skip ingest.
+  local preflight_blocked=""
+  local preflight_detail=""
+  if [[ -n "$provider" && "$SKIP_INGEST" -eq 0 ]]; then
+    mkdir -p "$STATUS_DIR" 2>/dev/null || true
+    local preflight_log="$STATUS_DIR/${id}.preflight.log"
+    : > "$preflight_log" 2>/dev/null || true
+    if ! "$SCRIPT_DIR/preflight.sh" "$provider" "$env_file" >>"$preflight_log" 2>&1; then
+      preflight_blocked="blocked"
+      preflight_detail="$(head -1 "$preflight_log" 2>/dev/null || echo 'preflight returned non-zero')"
+      echo "$LOG_PREFIX preflight blocked for provider=$provider: $preflight_detail" >&2
+    fi
+  fi
+
   if [[ "$SKIP_INGEST" -eq 0 ]]; then
-    if [[ -z "$ingest" ]]; then
+    if [[ -n "$preflight_blocked" ]]; then
+      echo "$LOG_PREFIX WARN: $id pre-flight blocked; skipping ingest to avoid false-healthy sync" >&2
+      exit_code=1
+    elif [[ -z "$ingest" ]]; then
       echo "$LOG_PREFIX ERROR: $id has no ingestCommand" >&2
       exit_code=1
     elif [[ ! -x "$ingest" && ! -f "$ingest" ]]; then
@@ -365,10 +384,10 @@ run_source() {
   local cols_joined qmd_joined
   cols_joined="${COLLECTIONS[*]}"
   qmd_joined="${qmd_lines[*]}"
-  detail="$(python3 - "$id" "$provider" "$started" "$ingest_rc" "$output_dir" "$cols_joined" "$qmd_joined" <<'PY'
+  detail="$(python3 - "$id" "$provider" "$started" "$ingest_rc" "$output_dir" "$cols_joined" "$qmd_joined" "$preflight_blocked" "$preflight_detail" <<'PY'
 import json, sys, os
 from pathlib import Path
-sid, provider, started, ingest_rc, output_dir, cols, qmd = sys.argv[1:8]
+sid, provider, started, ingest_rc, output_dir, cols, qmd, blocked, blocked_detail = sys.argv[1:10]
 doc_count = 0
 if output_dir and Path(output_dir).is_dir():
     doc_count = sum(1 for p in Path(output_dir).glob("*.md"))
@@ -380,6 +399,9 @@ print(json.dumps({
     "documentCount": doc_count,
     "qmdCollections": [c for c in cols.split() if c],
     "qmdUpdate": qmd,
+    "preflightBlocked": bool(blocked),
+    "preflightStatus": "provider_auth_blocked" if blocked else None,
+    "preflightDetail": blocked_detail if blocked else None,
 }))
 PY
 )"

@@ -12,6 +12,12 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from .source_status import (
+    PIPELINE_ORDER,
+    SourceStatus,
+    coerce_status,
+)
+
 # Known meeting QMD collections when meeting-sources.json is absent.
 DEFAULT_MEETING_COLLECTIONS = [
     "meet-recordings",
@@ -174,16 +180,45 @@ def recall(
     lanes: dict[str, Any] = {"qmd": {"collections": cols, "count": 0, "ok": True}}
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
-
+    # MEETREL-FOLLOWUP-05: track per-collection recall status so a meeting lookup
+    # returns a bounded status per source. Operators can now distinguish
+    # `recalled` (>=1 hit) from `indexed_unrecalled` (qmd ran but returned 0).
+    collections_status: dict[str, dict[str, Any]] = {}
     for col in cols:
-        hits = qmd_search_collection(q, col, limit=per_collection, runner=qmd_runner)
+        try:
+            hits = qmd_search_collection(q, col, limit=per_collection, runner=qmd_runner)
+        except Exception as exc:  # noqa: BLE001
+            collections_status[col] = {
+                "status": SourceStatus.INDEXED_UNRECALLED.value,
+                "count": 0,
+                "lastIndexAt": None,
+                "error": str(exc),
+            }
+            continue
+        retained = 0
+        last_indexed_hint: str | None = None
         for hit in hits:
             key = hit.get("id") or f"{col}:{hit.get('path')}:{hit.get('content', '')[:80]}"
             if key in seen:
                 continue
             seen.add(str(key))
             results.append(hit)
+            retained += 1
+            meta = hit.get("metadata") or {}
+            indexed_at = meta.get("indexed_at") or meta.get("indexedAt") or meta.get("updated_at")
+            if isinstance(indexed_at, str) and not last_indexed_hint:
+                last_indexed_hint = indexed_at
         lanes["qmd"]["count"] = lanes["qmd"].get("count", 0) + len(hits)
+        # `recalled` only when at least one *retained* hit made it past dedup.
+        # raw `len(hits)` can mask the parity defect when qmd returns dup ids.
+        collection_status_value = (
+            SourceStatus.RECALLED.value if retained > 0 else SourceStatus.INDEXED_UNRECALLED.value
+        )
+        collections_status[col] = {
+            "status": collection_status_value,
+            "count": retained,
+            "lastIndexAt": last_indexed_hint,
+        }
 
     # Knowledge literal (KNOWLEDGE_ROOT) — secondary lane
     knowledge_hits: list[dict[str, Any]] = []
@@ -282,11 +317,44 @@ def recall(
     results.sort(key=sort_key)
     trimmed = results[: max(1, min(int(limit), 25))]
 
+    # Aggregate per-collection evidence bundle for operators. The dominant
+    # status is the deepest-stage value reached across any collection, so a
+    # single mixed-state recall (e.g. spark recalled, circleback absent) still
+    # returns the most-failed stage the operator must act on first.
+    aggregate = compute_aggregate_status(collections_status)
     return {
         "status": "ok",
         "query": q,
         "results": trimmed,
         "lanes": lanes,
         "collections_searched": cols,
+        "collections": collections_status,
+        "aggregateStatus": aggregate,
         "count": len(trimmed),
     }
+
+
+def compute_aggregate_status(
+    collections_status: dict[str, dict[str, Any]],
+) -> str:
+    """Roll up per-collection statuses into the weakest-pipeline-stage seen.
+
+    Pipeline order is defined in source_status.PIPELINE_ORDER. `recalled`
+    is the only terminal status; mixed runs return the EARLIEST (shallowest)
+    stage that needs operator attention. This matches operator expectation:
+    if even one collection is `provider_absent` while another is `recalled`,
+    the operator must first re-authorize the absent provider — `recalled`
+    cannot mask a stopped pre-flight.
+    """
+    if not collections_status:
+        return SourceStatus.PROVIDER_ABSENT.value
+    weakest_idx = len(PIPELINE_ORDER)
+    for payload in collections_status.values():
+        status = coerce_status((payload or {}).get("status"))
+        try:
+            weakest_idx = min(weakest_idx, PIPELINE_ORDER.index(status))
+        except ValueError:
+            continue
+    if weakest_idx >= len(PIPELINE_ORDER):
+        return SourceStatus.PROVIDER_ABSENT.value
+    return PIPELINE_ORDER[weakest_idx]
