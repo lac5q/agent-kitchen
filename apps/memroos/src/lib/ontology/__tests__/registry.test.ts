@@ -523,4 +523,99 @@ describe("ontology registry validation", () => {
     expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_versions WHERE version = '1.1.0'`).get()).toMatchObject({ count: 0 });
     expect(mod.discoverOntology(db).version).toBe("1.0.0");
   });
+
+  it("rejects non-canonical projection sets before publishing ontology versions", async () => {
+    const { mod, ontology } = await canonical();
+    const document = nextDocument(mod, ontology);
+    const hash = mod.canonicalContentHash(document);
+    const projections = mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: hash }));
+    const base = { ...document, actor: "operator", suppliedHash: hash };
+
+    expect(() => mod.publishOntologyVersion(db, { ...base, projections: projections.slice(1) })).toThrow(/All canonical projections/);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...base,
+      projections: projections.map((projection, index) =>
+        index === 0 ? { projection: "unknown" as never, contentHash: hash } : projection
+      ),
+    })).toThrow(/Unknown projection/);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...base,
+      projections: projections.map((projection, index) =>
+        index === 1 ? { projection: "git" as const, contentHash: hash } : projection
+      ),
+    })).toThrow(/Duplicate projection/);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...base,
+      projections: projections.map((projection, index) =>
+        index === 0 ? { ...projection, status: "stale" as const } : projection
+      ),
+    })).toThrow(/requires current git projection/);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...base,
+      projections: projections.map((projection, index) =>
+        index === 0 ? { ...projection, contentHash: SOURCE_HASH } : projection
+      ),
+    })).toThrow(/requires current git projection/);
+  });
+
+  it("enforces initial and successor parent coordinates and semver prerelease advancement", async () => {
+    const mod = await registry();
+    const initial = {
+      id: mod.UPPER_ONTOLOGY_ID,
+      version: "1.0.0",
+      definitions: [...mod.CORE_VOCABULARY],
+      relationships: [...mod.CORE_RELATIONSHIPS],
+      parent: { ontologyId: mod.UPPER_ONTOLOGY_ID, version: "0.9.0", contentHash: SOURCE_HASH },
+    };
+    const initialHash = mod.canonicalContentHash(initial);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...initial,
+      actor: "operator",
+      suppliedHash: initialHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: initialHash })),
+    })).toThrow(/Initial ontology cannot declare a parent/);
+
+    const ontology = mod.ensureCanonicalUpperOntology(db, "operator");
+    const successor = nextDocument(mod, ontology);
+    const successorHash = mod.canonicalContentHash(successor);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...successor,
+      parent: undefined,
+      actor: "operator",
+      suppliedHash: successorHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: successorHash })),
+    })).toThrow(/Successor must reference/);
+    expect(() => mod.publishOntologyVersion(db, {
+      ...successor,
+      parent: { ...successor.parent, version: "0.9.0" },
+      actor: "operator",
+      suppliedHash: successorHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: successorHash })),
+    })).toThrow(/Successor must reference/);
+
+    const prerelease = { ...successor, version: "1.1.0-alpha" };
+    const prereleaseHash = mod.canonicalContentHash(prerelease);
+    const publishedPrerelease = mod.publishOntologyVersion(db, {
+      ...prerelease,
+      actor: "operator",
+      suppliedHash: prereleaseHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: prereleaseHash })),
+    });
+    const stable = {
+      ...nextDocument(mod, publishedPrerelease),
+      version: "1.1.0",
+      parent: {
+        ontologyId: publishedPrerelease.ontologyId,
+        version: publishedPrerelease.version,
+        contentHash: publishedPrerelease.contentHash,
+      },
+    };
+    const stableHash = mod.canonicalContentHash(stable);
+    expect(mod.publishOntologyVersion(db, {
+      ...stable,
+      actor: "operator",
+      suppliedHash: stableHash,
+      projections: mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: stableHash })),
+    }).version).toBe("1.1.0");
+  });
 });

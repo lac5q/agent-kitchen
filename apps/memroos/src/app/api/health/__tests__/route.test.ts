@@ -163,6 +163,41 @@ describe("runtime health route", () => {
     expect(mem0.detail).toContain("ECONNREFUSED");
   });
 
+  it("marks mem0 down when the health endpoint returns a non-OK response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("unavailable", { status: 503 }))
+    );
+    const { GET } = await loadRoute();
+
+    const response = await GET();
+    const body = await response.json();
+    const mem0 = body.services.find((service: { service: string }) => service.service === "mem0");
+
+    expect(mem0.status).toBe("down");
+    expect(mem0.detail).toBe("HTTP 503");
+  });
+
+  it("marks mem0 degraded when its JSON payload cannot be parsed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => {
+          throw new Error("invalid json");
+        },
+      }))
+    );
+    const { GET } = await loadRoute();
+
+    const response = await GET();
+    const body = await response.json();
+    const mem0 = body.services.find((service: { service: string }) => service.service === "mem0");
+
+    expect(mem0.status).toBe("degraded");
+    expect(mem0.detail).toContain("vector store unknown");
+  });
+
   it("includes the source-to-QMD knowledge indexing contract in app health", async () => {
     vi.stubGlobal(
       "fetch",
@@ -183,6 +218,73 @@ describe("runtime health route", () => {
 
     expect(knowledge.status).toBe("up");
     expect(knowledge.detail).toBe("0 pending embeddings");
+  });
+
+  it("treats missing qmd as optional for knowledge indexing while flagging QMD degraded", async () => {
+    vi.mocked(execFile).mockImplementation((command, args, options, callback) => {
+      const done = typeof options === "function" ? options : callback;
+      if (!done) throw new Error("missing callback");
+      if (command === "which" && Array.isArray(args) && args[0] === "qmd") {
+        done(new Error("not found"), "", "");
+        return {} as ReturnType<typeof execFile>;
+      }
+      done(null, "", "");
+      return {} as ReturnType<typeof execFile>;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+    const { GET } = await loadRoute();
+
+    const response = await GET();
+    const body = await response.json();
+    const qmd = body.services.find((service: { service: string }) => service.service === "QMD");
+    const knowledge = body.services.find((service: { service: string }) => service.service === "Knowledge Index");
+
+    expect(qmd.status).toBe("degraded");
+    expect(qmd.detail).toContain("optional");
+    expect(knowledge.status).toBe("up");
+    expect(knowledge.detail).toContain("qmd not installed");
+  });
+
+  it("marks knowledge indexing down when the JSON contract output is malformed", async () => {
+    vi.mocked(execFile).mockImplementation((_command, args, options, callback) => {
+      const done = typeof options === "function" ? options : callback;
+      if (!done) throw new Error("missing callback");
+      if (Array.isArray(args) && args.includes("--json")) {
+        done(null, "not-json", "");
+        return {} as ReturnType<typeof execFile>;
+      }
+      done(null, "", "");
+      return {} as ReturnType<typeof execFile>;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+    const { GET } = await loadRoute();
+
+    const response = await GET();
+    const body = await response.json();
+    const knowledge = body.services.find((service: { service: string }) => service.service === "Knowledge Index");
+
+    expect(knowledge.status).toBe("down");
+    expect(knowledge.detail).toEqual(expect.any(String));
   });
 
   it("marks knowledge indexing degraded when the contract report has failures", async () => {

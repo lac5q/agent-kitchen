@@ -435,4 +435,59 @@ describe("ontology registry route", () => {
       code: "invalid",
     });
   });
+
+  it("rejects remote ontology reads and writes without operator credentials", async () => {
+    const get = ontologyRoute.GET(new Request("https://memroos.example/api/ontology"));
+    expect(get.status).toBe(403);
+
+    const post = await ontologyRoute.POST(new Request("https://memroos.example/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({ action: "ensure_canonical", actor: "operator" }),
+    }));
+    expect(post.status).toBe(403);
+  });
+
+  it("normalizes malformed POST bodies and unknown actions into safe invalid responses", async () => {
+    const malformed = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: "{not-json",
+    }));
+    expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toMatchObject({
+      ok: false,
+      error: "ontology request rejected",
+      code: "invalid",
+    });
+
+    const nonObject = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify(null),
+    }));
+    expect(nonObject.status).toBe(400);
+    expect(await nonObject.json()).toMatchObject({ ok: false, code: "invalid" });
+
+    const unknown = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({ action: "not_a_real_action" }),
+    }));
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toMatchObject({
+      ok: false,
+      error: "ontology request rejected",
+      code: "invalid",
+    });
+  });
+
+  it("returns safe GET errors for incomplete alias resolution requests", async () => {
+    await ensureCanonical();
+
+    const response = ontologyRoute.GET(operatorRequest("/api/ontology?alias=invoice&namespace=finance"));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: "ontology request rejected",
+      code: "invalid",
+    });
+  });
 });

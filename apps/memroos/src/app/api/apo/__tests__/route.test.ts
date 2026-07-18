@@ -381,4 +381,62 @@ describe("POST /api/apo validation and errors", () => {
       tracking: { label: "Archived", applied: false },
     });
   });
+
+  it("falls back to default approved tracking when the sidecar JSON is corrupt", async () => {
+    const { GET, POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename, executorCli: "codex" }));
+    writeFileSync(path.join(proposalsPath, "approved", `${proposalFilename}.json`), "{not-json");
+
+    const body = await (await GET()).json();
+    const approved = body.proposals.find((proposal: { status: string }) => proposal.status === "approved");
+
+    expect(approved.tracking).toMatchObject({
+      phase: "queued",
+      executorCli: "qwen",
+    });
+  });
+
+  it("returns apply-approved validation errors before archiving", async () => {
+    const { POST } = await loadRoute();
+
+    const missing = await POST(makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename }));
+    expect(missing.status).toBe(404);
+
+    const approvedDir = path.join(proposalsPath, "approved");
+    mkdirSync(approvedDir, { recursive: true });
+    writeFileSync(path.join(approvedDir, proposalFilename), "# Missing constraint block\n");
+
+    const noConstraint = await POST(makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename }));
+    expect(noConstraint.status).toBe(422);
+  });
+
+  it("counts invalid approved queue entries as failed work items", async () => {
+    const { POST } = await loadRoute();
+    const approvedDir = path.join(proposalsPath, "approved");
+    mkdirSync(approvedDir, { recursive: true });
+    writeFileSync(path.join(approvedDir, "not-a-proposal.md"), "# Invalid approved file\n");
+
+    const response = await POST(makeApproveRequest({ action: "process-approved" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      processed: 0,
+      failed: 1,
+      results: [{ ok: false, error: "Invalid proposal id" }],
+    });
+  });
+
+  it("returns a safe 500 when a candidate target cannot be read", async () => {
+    rmSync(path.join(skillsPath, "ceo", "SKILL.md"), { force: true });
+    mkdirSync(path.join(skillsPath, "ceo", "SKILL.md"), { recursive: true });
+    const { POST } = await loadRoute();
+
+    const response = await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.ok).toBe(false);
+    expect(body.error).toEqual(expect.any(String));
+  });
 });
