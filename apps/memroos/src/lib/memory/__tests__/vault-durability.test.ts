@@ -341,4 +341,31 @@ describe("VAL-MEM-026: vault durability and replay are tenant-safe", () => {
       spy.mockRestore();
     }
   });
+
+  it("throws for missing durability rows and reconciles missing artifacts as failed", () => {
+    const database = freshDb();
+    expect(() =>
+      replayVaultArtifactWithDurability(database, "default-tenant", "missing-artifact", "operator")
+    ).toThrow(/vault durability row missing/);
+
+    database.prepare("INSERT OR IGNORE INTO tenants(id, name, created_at) VALUES (?, ?, ?)").run(
+      "default-tenant",
+      "default",
+      "2026-01-01T00:00:00.000Z"
+    );
+    database
+      .prepare(
+        `INSERT INTO memory_vault_durability
+         (id, tenant_id, artifact_id, artifact_uri, content_hash, classification_json, label_version,
+          write_state, replay_state, created_at, updated_at)
+         VALUES (?, 'default-tenant', 'missing-complete-art', 'vault://missing', ?, '{}', 1,
+          'complete', 'complete', ?, ?)`
+      )
+      .run("vdr-missing-complete", "c".repeat(64), "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+
+    const summary = reconcileVaultDurability(database, "default-tenant", "operator");
+
+    expect(summary.ok).toBe(0);
+    expect(summary.failed).toContain("missing-complete-art");
+  });
 });

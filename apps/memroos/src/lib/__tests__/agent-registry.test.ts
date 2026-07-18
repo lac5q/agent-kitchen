@@ -394,4 +394,26 @@ describe("agent registry service", () => {
     expect(() => createAgentApiKey("gone-agent")).toThrow(/unknown or deregistered/);
     expect(() => createAgentApiKey("missing-agent")).toThrow(/unknown or deregistered/);
   });
+
+  it("falls back for malformed metadata, capability tags, and non-bearer headers", async () => {
+    const { authenticateAgentHeaders, getDb, getRegisteredAgent, registerAgent } = await loadRegistry();
+
+    registerAgent({
+      id: "malformed-agent",
+      name: "Malformed Agent",
+      role: "Has corrupt stored JSON",
+      platform: "codex",
+      protocol: "rest",
+      capabilities: [{ id: "cap-1", name: "Cap One", description: "Capability", tags: ["ok"] }],
+    });
+    getDb().prepare("UPDATE registered_agents SET metadata = ? WHERE id = ?").run("{", "malformed-agent");
+    getDb().prepare("UPDATE agent_capabilities SET tags = ? WHERE agent_id = ?").run("{", "malformed-agent");
+
+    const agent = getRegisteredAgent("malformed-agent");
+
+    expect(agent?.metadata).toEqual({});
+    expect(agent?.capabilities[0]?.tags).toEqual([]);
+    expect(authenticateAgentHeaders(new Headers({ authorization: "Basic nope" }))).toBeNull();
+    expect(authenticateAgentHeaders(new Headers())).toBeNull();
+  });
 });

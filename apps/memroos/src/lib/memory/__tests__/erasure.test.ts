@@ -648,4 +648,69 @@ describe("coordinateErasure idempotency and scope", () => {
     const indirect = traverseIndirectDerivatives(db, identity);
     expect(indirect.some((d) => d.storeId === "snapshot")).toBe(true);
   });
+
+  it("dedupes implicit cache neighbors already present in embedding provenance", () => {
+    db.exec(`
+      CREATE TABLE memory_embedding_provenance (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        adapter_kind TEXT NOT NULL,
+        source_hash TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        model_version TEXT,
+        dimensionality INTEGER NOT NULL DEFAULT 0,
+        provenance TEXT NOT NULL,
+        lifecycle_state TEXT NOT NULL DEFAULT 'active',
+        removability TEXT NOT NULL DEFAULT 'erasable',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const identity = buildCanonicalIdentity("cache duplicate", "memory", "ingress", "vector");
+    db.prepare(
+      `INSERT INTO memory_embedding_provenance
+       (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+        dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+       VALUES (?, 'default-tenant', ?, 'cache', 'cache', ?, 'm', NULL, 0, 'p', 'active', 'erasable', '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+    ).run("cache-indirect", identity.id, "indirect");
+
+    const indirect = traverseIndirectDerivatives(db, identity);
+    expect(indirect.filter((d) => d.storeId === "cache")).toHaveLength(1);
+    expect(indirect.find((d) => d.storeId === "cache")?.provenance).toBe("embedding_provenance:cache-indirect");
+  });
+
+  it("reports linked platform and vault stores honestly when backing tables are absent", async () => {
+    const database = new Database(":memory:");
+    const identity = buildCanonicalIdentity("missing backing stores", "memory", "ingress", "platform", {
+      tenantId: "tenant1",
+    });
+    identity.derivatives.push({
+      storeId: "vault",
+      sourceHash: identity.canonicalHash,
+      provenance: "test",
+    });
+
+    await expect(
+      getErasureStoreAdapter("platform")!.erase(database, "tenant1", identity, {
+        erasureId: "erasure_missing_platform",
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    ).resolves.toMatchObject({
+      status: "zero_match",
+      reason: "no_platform_rows_for_canonical",
+    });
+    await expect(
+      getErasureStoreAdapter("vault")!.erase(database, "tenant1", identity, {
+        erasureId: "erasure_missing_vault",
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    ).resolves.toMatchObject({
+      status: "zero_match",
+      reason: "vault_table_missing",
+    });
+    database.close();
+  });
 });

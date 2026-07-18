@@ -2466,5 +2466,62 @@ describe("skill-sync validation and failure paths", () => {
       })
     ).toThrow(SkillSyncError);
   });
+
+  it("sanitizes unserializable proposal payloads and rejects missing proposal ids", async () => {
+    const { createImportProposal, approveSyncProposalById, SkillSyncError } =
+      await import("../skill-sync");
+    const circular: Record<string, unknown> = {};
+    circular["self"] = circular;
+
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "circular-payload",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: VALID_SKILL_MD("circular-payload", "1.0.0"),
+      },
+      proposed_by: "scanner",
+      diff_payload: circular,
+    });
+
+    expect(proposal.pending_diff_payload).toBe("{}");
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: "",
+        operator: "alice",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("proposal-id approval skips source reverify when source root is absent", async () => {
+    const { createImportProposal, approveSyncProposalById, computeContentHash } =
+      await import("../skill-sync");
+    const body = VALID_SKILL_MD("no-source-root", "1.0.0");
+    const filePath = path.join(TMP_ROOT, "no-source-root.md");
+    fs.writeFileSync(filePath, body, "utf8");
+
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "no-source-root",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: body,
+        content_hash: computeContentHash(body),
+        file_path: filePath,
+      },
+      proposed_by: "scanner",
+    });
+
+    const approved = approveSyncProposalById(db, {
+      proposal_id: proposal.pending_proposal_id!,
+      operator: "alice",
+      apply_to_registry: false,
+    });
+
+    expect(approved.status).toBe("approved");
+    expect(approved.reverified_hash).toBeNull();
+  });
 });
 

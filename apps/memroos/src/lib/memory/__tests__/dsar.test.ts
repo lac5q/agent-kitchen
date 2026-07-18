@@ -449,4 +449,82 @@ describe("VAL-MEM-027: DSAR export/delete is identity-verified and complete", ()
       spy.mockRestore();
     }
   });
+
+  it("materializes completed rows even when stored result JSON is malformed", () => {
+    const database = freshDb();
+    database
+      .prepare(
+        `INSERT INTO memory_dsar_requests
+          (id, tenant_id, request_type, subject_hash, selector_hashes_json, verification_method,
+           verification_hash, scope_json, scope_hash, status, result_json, created_by, created_at,
+           completed_at, manifest_hash, manifest_artifact_id)
+         VALUES (?, 'default-tenant', 'export', 'subject-hash', '{}', 'email_token',
+           ?, '{}', 'scope-hash', 'exported', ?, 'operator', ?, ?, ?, ?)`
+      )
+      .run(
+        "existing-exported",
+        "a".repeat(64),
+        "{",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        "b".repeat(64),
+        "artifact-1"
+      );
+
+    const result = submitDsarRequest(database, {
+      tenantId: "default-tenant",
+      requestId: "existing-exported",
+      requestType: "export",
+      subject: { subjectId: "existing-subject" },
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      verificationMethod: "email_token",
+      verificationHash: "a".repeat(64),
+      actorId: "operator",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "exported",
+      reason: "exported",
+      manifestHash: "b".repeat(64),
+      manifestArtifactId: "artifact-1",
+    });
+  });
+
+  it("fails closed when delete execution receives a mismatched plan hash", async () => {
+    const database = freshDb();
+    seedMessage(database, "subject-delete-fail", "DSAR_DELETE_FAIL_PAYLOAD");
+    const verificationHash = computeDsarVerificationHash({
+      subject: { subjectId: "subject-delete-fail" },
+      verificationMethod: "email_token",
+      actorId: "operator",
+      tenantId: "default-tenant",
+    });
+    const request = submitDsarRequest(database, {
+      tenantId: "default-tenant",
+      requestType: "delete",
+      subject: { subjectId: "subject-delete-fail" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      verificationMethod: "email_token",
+      verificationHash,
+      actorId: "operator",
+    });
+    expect(request.status).toBe("pending");
+
+    let error: Error | undefined;
+    try {
+      await executeDsarDelete(database, {
+        tenantId: "default-tenant",
+        requestId: request.requestId,
+        planHash: "wrong-plan-hash",
+        actorId: "operator",
+      });
+    } catch (err) {
+      error = err as Error;
+    }
+    expect(error?.message).toBe("subject erasure plan hash mismatch");
+    expect(database.prepare("SELECT status FROM memory_dsar_requests WHERE id = ?").get(request.requestId)).toMatchObject({
+      status: "pending",
+    });
+  });
 });
