@@ -166,6 +166,44 @@ describe("POST /api/paperclip — dispatch", () => {
     const data = await res.json();
     expect(data.sessionId).toBe(customSessionId);
   });
+
+  it("Batch M: rejects invalid JSON and missing requestedBy before dispatch", async () => {
+    const invalidJson = await POST(new Request("http://localhost/api/paperclip", {
+      method: "POST",
+      body: "{",
+    }) as any);
+    expect(invalidJson.status).toBe(400);
+    await expect(invalidJson.json()).resolves.toMatchObject({ error: "Invalid JSON body" });
+
+    const missingRequestedBy = await POST(makePostRequest({ taskSummary: "Run without requester" }) as any);
+    expect(missingRequestedBy.status).toBe(400);
+    await expect(missingRequestedBy.json()).resolves.toMatchObject({
+      error: expect.stringMatching(/requestedBy is required/),
+    });
+  });
+
+  it("Batch M: maps upstream dispatch failures and preserves numeric priority", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 503 })));
+    const failed = await POST(makePostRequest({
+      taskSummary: "Upstream fails",
+      requestedBy: "dashboard",
+      priority: 2,
+    }) as any);
+    expect(failed.status).toBe(502);
+    await expect(failed.json()).resolves.toMatchObject({ error: "Upstream dispatch failed: 503" });
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("connection reset");
+    }));
+    const unreachable = await POST(makePostRequest({
+      taskSummary: "Upstream throws",
+      requestedBy: "dashboard",
+    }) as any);
+    expect(unreachable.status).toBe(502);
+    await expect(unreachable.json()).resolves.toMatchObject({
+      error: expect.stringContaining("connection reset"),
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -275,5 +313,39 @@ describe("GET /api/paperclip — fleet status and recovery", () => {
     for (let i = 0; i < ops.length - 1; i++) {
       expect(ops[i].updatedAt >= ops[i + 1].updatedAt).toBe(true);
     }
+  });
+
+  it("Batch M: falls back for malformed checkpoints and reports degraded/error fleets", async () => {
+    testDb.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, priority, status, checkpoint, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("task-bad-checkpoint", "agent", "paperclip", "bad checkpoint", 5, "paused", "{", "2026-04-17T13:00:00Z");
+
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({
+        agents: [
+          { id: "err", name: "Error Agent", status: "error", autonomyMode: "hybrid", activeTask: null, lastHeartbeat: null },
+        ],
+      }), { status: 200 })
+    ));
+
+    const degraded = await GET(makeGetRequest() as any);
+    const degradedBody = await degraded.json();
+    expect(degradedBody.summary.fleetStatus).toBe("degraded");
+    const malformed = degradedBody.operations.find((op: any) => op.taskId === "task-bad-checkpoint");
+    expect(malformed).toMatchObject({
+      sessionId: "",
+      completedSteps: [],
+      resumeFrom: null,
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ agents: "not-an-array" }), { status: 200 })
+    ));
+    const offline = await GET(makeGetRequest() as any);
+    await expect(offline.json()).resolves.toMatchObject({
+      agents: [],
+      summary: expect.objectContaining({ fleetStatus: "offline" }),
+    });
   });
 });

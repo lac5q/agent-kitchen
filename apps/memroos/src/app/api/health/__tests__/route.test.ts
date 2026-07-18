@@ -430,4 +430,34 @@ describe("runtime health route", () => {
     expect(graph.status).toBe("down");
     expect(graph.detail).toMatch(/not configured|NOT storing/i);
   });
+
+  it("Batch M: promotes degraded graph memory to down with fallback detail", async () => {
+    vi.doMock("@/lib/memory/backends", () => ({
+      checkGraphHealth: vi.fn(async () => ({ status: "degraded", backend: "neo4j" })),
+      mem0HealthTimeoutMs: vi.fn(() => 15_000),
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+
+    try {
+      const { GET } = await loadRoute();
+      const response = await GET();
+      const body = await response.json();
+      const graph = body.services.find((service: { service: string }) => service.service === "Graph Memory");
+
+      expect(graph.status).toBe("down");
+      expect(graph.detail).toContain("neo4j graph memory degraded");
+    } finally {
+      vi.doUnmock("@/lib/memory/backends");
+    }
+  });
 });

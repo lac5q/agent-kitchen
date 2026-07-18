@@ -126,6 +126,38 @@ describe('GET /api/memory-stats', () => {
     expect(remoteBody.pendingUnconsolidated).toBe(1);
     expect(remoteBody.sources).toEqual([{ agent_id: 'zapier', cnt: 1 }]);
   });
+
+  it('Batch M: rejects missing sessions and role failures before reading stats', async () => {
+    const auth = await import('@/lib/auth/session');
+    const roles = await import('@/lib/auth/middleware-roles');
+    vi.mocked(auth.authenticateUser).mockResolvedValueOnce(null);
+    const { GET } = await import('../route');
+
+    const unauthenticated = await GET(new Request('http://localhost/api/memory-stats') as unknown as import('next/server').NextRequest);
+    expect(unauthenticated.status).toBe(401);
+
+    vi.mocked(auth.authenticateUser).mockResolvedValueOnce({ userId: 'viewer', role: 'viewer', email: '', displayName: '', tenantId: 'default' });
+    vi.mocked(roles.requireRole).mockReturnValueOnce(Response.json({ error: 'forbidden' }, { status: 403 }));
+    const forbidden = await GET(new Request('http://localhost/api/memory-stats') as unknown as import('next/server').NextRequest);
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('Batch M: reports running consolidation runs as degraded metric envelopes', async () => {
+    testDb.prepare(
+      "INSERT INTO memory_consolidation_runs(started_at, batch_size, insights_written, status) VALUES(strftime('%Y-%m-%dT%H:%M:%SZ','now'), 0, 0, 'running')"
+    ).run();
+
+    const { GET } = await import('../route');
+    const res = await GET(new Request('http://localhost/api/memory-stats?window=month&workspace=all') as unknown as import('next/server').NextRequest);
+    const body = await res.json();
+
+    expect(body.lastRun.status).toBe('running');
+    expect(body.metrics.lastRun).toMatchObject({
+      status: 'degraded',
+      value: null,
+      reason: 'Last consolidation run is still in progress',
+    });
+  });
 });
 
 describe("GET /api/memory-stats truthful metric contract (VAL-LIB-002)", () => {

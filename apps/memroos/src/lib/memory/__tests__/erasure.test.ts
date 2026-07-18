@@ -713,4 +713,68 @@ describe("coordinateErasure idempotency and scope", () => {
     });
     database.close();
   });
+
+  it("reuses completed reports with malformed outcome JSON as an empty idempotent result", async () => {
+    const identity = buildCanonicalIdentity("completed malformed report", "memory", "ingress", "vector", {
+      tenantId: "tenant1",
+    });
+    const erasureId = "erasure_completed_malformed";
+    db.prepare(
+      `INSERT INTO memory_erasure_reports
+       (id, tenant_id, canonical_id, status, store_outcomes_json, actor_id, scope_hash, started_at, completed_at)
+       VALUES (?, 'tenant1', ?, 'completed', ?, 'actor1', 'scope', '2026-01-01T00:00:00.000Z', NULL)`
+    ).run(erasureId, identity.id, "not json");
+
+    const report = await coordinateErasure(db, identity, {
+      tenantId: "tenant1",
+      actorId: "actor1",
+      scope: { tenantId: "tenant1" },
+      erasureId,
+    });
+
+    expect(report.status).toBe("completed");
+    expect(report.storeOutcomes).toEqual([]);
+    expect(report.completedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("reports direct and snapshot stores with no adapter without marking false completion", async () => {
+    const identity = buildCanonicalIdentity("unknown store", "memory", "ingress", "vector", {
+      tenantId: "tenant1",
+    });
+    identity.derivatives.push({
+      storeId: "legacy_direct",
+      sourceHash: identity.canonicalHash,
+      provenance: "test",
+    });
+    db.prepare(
+      `INSERT INTO memory_erasure_reports
+       (id, tenant_id, canonical_id, status, store_outcomes_json, actor_id, scope_hash, started_at, completed_at)
+       VALUES (?, 'tenant1', ?, 'incomplete', ?, 'actor1', 'scope', '2026-01-01T00:00:00.000Z', NULL)`
+    ).run(
+      "erasure_prior_snapshot",
+      identity.id,
+      JSON.stringify([{ storeId: "legacy_snapshot", status: "tombstoned", sourceHash: identity.canonicalHash }])
+    );
+
+    const report = await coordinateErasure(db, identity, {
+      tenantId: "tenant1",
+      actorId: "actor1",
+      scope: { tenantId: "tenant1" },
+      erasureId: "erasure_unknown_stores",
+    });
+
+    expect(report.status).toBe("incomplete");
+    expect(report.storeOutcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        storeId: "legacy_direct",
+        status: "unavailable",
+        reason: "no_adapter_for_linked_store",
+      }),
+      expect.objectContaining({
+        storeId: "legacy_snapshot",
+        status: "zero_match",
+        reason: "not_linked",
+      }),
+    ]));
+  });
 });

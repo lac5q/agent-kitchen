@@ -252,6 +252,26 @@ describe('GET /api/time-series — skill_failures (JSONL)', () => {
     const total = body.points.reduce((sum: number, pt: { value: number }) => sum + pt.value, 0);
     expect(total).toBe(2);
   });
+
+  it('Batch M: ignores malformed, missing timestamp, and out-of-window JSONL entries', async () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const old = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString();
+    mockReadFileSync.mockReturnValue([
+      '',
+      'not-json',
+      JSON.stringify({ skill: 'missing-ts' }),
+      JSON.stringify({ timestamp: old, skill: 'old' }),
+      JSON.stringify({ ts: recent, skill: 'recent-ts' }),
+    ].join('\n'));
+
+    const { GET } = await import('../route');
+    const req = new Request('http://localhost/api/time-series?metric=skill_failures&window=month');
+    const res = await GET(req as unknown as import('next/server').NextRequest);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.points).toHaveLength(1);
+    expect(body.points[0].value).toBe(1);
+  });
 });
 
 describe('GET /api/time-series — empty tables', () => {

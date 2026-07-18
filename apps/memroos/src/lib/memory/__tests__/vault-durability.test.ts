@@ -368,4 +368,61 @@ describe("VAL-MEM-026: vault durability and replay are tenant-safe", () => {
     expect(summary.ok).toBe(0);
     expect(summary.failed).toContain("missing-complete-art");
   });
+
+  it("marks write durability failed when the chained audit receipt cannot be written", () => {
+    const database = freshDb();
+    database.prepare(
+      `CREATE TRIGGER vault_write_audit_failure
+       BEFORE INSERT ON audit_entries
+       BEGIN
+         SELECT RAISE(ABORT, 'audit offline');
+       END`
+    ).run();
+
+    expect(() =>
+      writeVaultArtifactWithDurability(database, {
+        tenantId: "default-tenant",
+        sourceType: "memory.test",
+        sourceId: "audit-fail-write",
+        body: "audit failure",
+        label: { visibility: "private", policy: "sealed" },
+        actorId: "operator",
+      })
+    ).toThrow(/audit offline/);
+
+    const row = database
+      .prepare("SELECT replay_state, failure_reason FROM memory_vault_durability ORDER BY created_at DESC LIMIT 1")
+      .get() as { replay_state: string; failure_reason: string };
+    expect(row.replay_state).toBe("failed");
+    expect(row.failure_reason).toContain("audit_receipt_failure:audit offline");
+  });
+
+  it("marks replay durability failed when the replay audit receipt cannot be written", () => {
+    const database = freshDb();
+    const written = writeVaultArtifactWithDurability(database, {
+      tenantId: "default-tenant",
+      sourceType: "memory.test",
+      sourceId: "audit-fail-replay",
+      body: "replay audit failure",
+      label: { visibility: "private", policy: "sealed" },
+      actorId: "operator",
+    });
+    database.prepare(
+      `CREATE TRIGGER vault_replay_audit_failure
+       BEFORE INSERT ON audit_entries
+       BEGIN
+         SELECT RAISE(ABORT, 'replay audit offline');
+       END`
+    ).run();
+
+    expect(() =>
+      replayVaultArtifactWithDurability(database, "default-tenant", written.id, "operator")
+    ).toThrow(/replay audit offline/);
+
+    const row = database
+      .prepare("SELECT replay_state, failure_reason FROM memory_vault_durability WHERE artifact_id = ?")
+      .get(written.id) as { replay_state: string; failure_reason: string };
+    expect(row.replay_state).toBe("failed");
+    expect(row.failure_reason).toContain("audit_receipt_failure:replay audit offline");
+  });
 });

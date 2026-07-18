@@ -297,6 +297,35 @@ describe("POST /api/hive — delegations", () => {
     expect(contextBody.delegations.some((row: any) => row.task_id === taskId)).toBe(true);
     expect(contextBody.actions[0].artifacts).toMatchObject({ context_id: contextId });
   });
+
+  it("Batch M: lineage precedence and delegation filters combine", async () => {
+    const taskId = `task-filter-artifacts-${Date.now()}`;
+    const contextId = `context-filter-${Date.now()}`;
+    testDb.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id)
+       VALUES (?, 'claude-code', 'paperclip', 'Malformed artifact lineage', 'paused', ?)`
+    ).run(taskId, contextId);
+    testDb.prepare(
+      `INSERT INTO hive_actions(agent_id, action_type, summary, artifacts)
+       VALUES ('claude-code', 'checkpoint', 'Malformed artifact action', ?)`
+    ).run(JSON.stringify({ task_id: taskId, context_id: contextId }));
+
+    const taskRes = await GET(makeGetRequest({ task_id: taskId }) as any);
+    const taskBody = await taskRes.json();
+    expect(taskBody.actions[0].artifacts).toMatchObject({ task_id: taskId, context_id: contextId });
+
+    const byAgentAndStatus = await GET(makeGetRequest({
+      type: "delegation",
+      to_agent: "paperclip",
+      status: "paused",
+      limit: "10",
+    }) as any);
+    const filteredBody = await byAgentAndStatus.json();
+    expect(filteredBody.delegations.some((row: any) => row.task_id === taskId)).toBe(true);
+
+    const invalidStatus = await GET(makeGetRequest({ type: "delegation", status: "waiting" }) as any);
+    expect(invalidStatus.status).toBe(400);
+  });
 });
 
 describe("HIVE-05: Paperclip agent_id round-trip", () => {

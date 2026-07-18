@@ -497,4 +497,88 @@ describe("Batch L long-tail API route branches", () => {
       results: [expect.objectContaining({ agentId: "a1", chat: expect.objectContaining({ status: "warning" }) })],
     });
   });
+
+  it("Batch M covers compact API error and fallback branches", async () => {
+    const register = await import("../a2a/agents/register/route");
+    mocks.authorizeRegistryWrite.mockReturnValueOnce(false);
+    const unauthorizedRegister = await register.POST(jsonRequest("https://memroos.test/api/a2a/agents/register", {
+      cardUrl: "https://agent.test/card.json",
+      source: "manual",
+    }));
+    expect(unauthorizedRegister.status).toBe(403);
+    const malformedRegister = await register.POST(
+      new Request("https://memroos.test/api/a2a/agents/register", { method: "POST", body: "{" })
+    );
+    expect(malformedRegister.status).toBe(400);
+    mocks.ingestA2aAgentCard.mockRejectedValueOnce(new Error("card fetch exploded"));
+    const genericRegisterFailure = await register.POST(jsonRequest("https://memroos.test/api/a2a/agents/register", {
+      cardUrl: "https://agent.test/card.json",
+    }));
+    expect(genericRegisterFailure.status).toBe(500);
+
+    const checkpoints = await import("../agent-checkpoints/route");
+    mocks.createAgentCheckpoint.mockImplementationOnce(() => {
+      throw new Error("checkpoint invalid");
+    });
+    const checkpointPostError = await checkpoints.POST(jsonRequest("https://memroos.test/api/agent-checkpoints", {
+      runId: "run-1",
+    }));
+    expect(checkpointPostError.status).toBe(400);
+    mocks.resumeFromCheckpoint.mockImplementationOnce(() => {
+      throw new Error("resume db offline");
+    });
+    const checkpointGetError = await checkpoints.GET(new Request("https://memroos.test/api/agent-checkpoints?runId=run-1") as never);
+    expect(checkpointGetError.status).toBe(500);
+
+    const traces = await import("../agent-memory/traces/route");
+    mocks.recordMemoryTrace.mockImplementationOnce(() => {
+      throw new Error("trace invalid");
+    });
+    const tracePostError = await traces.POST(jsonRequest("https://memroos.test/api/agent-memory/traces", {
+      runId: "run-1",
+    }));
+    expect(tracePostError.status).toBe(400);
+    mocks.getMemoryTrace.mockImplementationOnce(() => {
+      throw new Error("trace db offline");
+    });
+    const traceGetError = await traces.GET(new Request("https://memroos.test/api/agent-memory/traces?runId=run-1") as never);
+    expect(traceGetError.status).toBe(500);
+
+    const versions = await import("../agents/versions/route");
+    mocks.createAgentVersion.mockImplementationOnce(() => {
+      throw new Error("version invalid");
+    });
+    const versionPostError = await versions.POST(jsonRequest("https://memroos.test/api/agents/versions", {
+      agentId: "agent-1",
+    }));
+    expect(versionPostError.status).toBe(400);
+    mocks.listAgentVersions.mockImplementationOnce(() => {
+      throw new Error("versions offline");
+    });
+    const versionGetError = await versions.GET(new Request("https://memroos.test/api/agents/versions?agentId=agent-1") as never);
+    expect(versionGetError.status).toBe(500);
+
+    const recommendations = await import("../model-routing/recommendations/route");
+    mocks.recommendModels.mockReturnValueOnce([{ model: "fallback" }]);
+    const badRecommendations = await recommendations.POST(
+      new Request("https://memroos.test/api/model-routing/recommendations", { method: "POST", body: "{" }) as never
+    );
+    expect(badRecommendations.status).toBe(200);
+    await expect(badRecommendations.json()).resolves.toMatchObject({
+      taskType: "engineering",
+      strategy: "balanced",
+      recommendations: [{ model: "fallback" }],
+    });
+
+    const expiry = await import("../memory-lifecycle/expiry/route");
+    mocks.runRetentionExpiry.mockImplementationOnce(() => {
+      throw new Error("expiry failed");
+    });
+    const expiryError = await expiry.POST(jsonRequest("https://memroos.test/api/memory-lifecycle/expiry", {
+      runKey: "batch-m",
+      scope: { tenantId: "tenant-1" },
+    }));
+    expect(expiryError.status).toBe(400);
+    await expect(expiryError.json()).resolves.toMatchObject({ ok: false, error: "expiry failed" });
+  });
 });
