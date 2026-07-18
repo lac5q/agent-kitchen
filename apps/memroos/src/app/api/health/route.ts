@@ -122,6 +122,17 @@ async function checkMem0(): Promise<ServiceCheckResult> {
 }
 
 async function checkKnowledgeIndexing(): Promise<ServiceCheckResult> {
+  // QMD-backed knowledge indexing is optional on cloud operators (oracle-1).
+  // Missing qmd must not look like storage failure when mem0 + Neo4j are healthy.
+  try {
+    await execFileStdout("which", ["qmd"], { timeout: 2000 });
+  } catch {
+    return {
+      status: "up",
+      detail: "skipped — qmd not installed (optional local knowledge index)",
+    };
+  }
+
   const now = Date.now();
   const ttlMs = positiveNumber(process.env.KNOWLEDGE_INDEX_HEALTH_TTL_MS, 5 * 60 * 1000);
   if (knowledgeIndexCache && now - knowledgeIndexCache.checkedAt < ttlMs) {
