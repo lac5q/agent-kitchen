@@ -210,12 +210,13 @@ describe("buildMemoryInventory", () => {
     expect(secondCount).toBe(firstCount);
   });
 
-  it("returns zero metric envelope for empty sqlite categories", async () => {
+  it("returns empty metric envelope for empty sqlite categories", async () => {
     const { buildMemoryInventory } = await import("../memory-inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const writes = response.categories.find((c) => c.id === "episodic_write");
     expect(writes?.count).toBe(0);
-    expect(writes?.metric.status).toBe("zero");
+    // Measured empty SQLite category is truthful "empty" (not fabricated "zero").
+    expect(writes?.metric.status).toBe("empty");
   });
 
   it("filters by backend, source, date range, and degraded category status", async () => {

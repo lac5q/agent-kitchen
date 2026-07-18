@@ -136,7 +136,9 @@ describe("Ledger page truthful metric rendering", () => {
 
     expect(document.querySelectorAll('[data-ledger-kpi-badge="live"]').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Model Mix" }));
-    expect(screen.getByText(/Aggregated from Claude Code session logs/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Aggregated from Claude JSONL and efficiency token_ledger events/i)
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/date range/i), { target: { value: "30" } });
     expect(document.querySelector("[data-ledger-filter-scope]")?.textContent).toContain("window=30d");
@@ -158,7 +160,9 @@ describe("Ledger page truthful metric rendering", () => {
     expect(screen.getByText(/Drilldown from Operations NOC/i)).toBeInTheDocument();
     expect(screen.getByText(/Originating scope is informational only/i)).toBeInTheDocument();
     expect(document.querySelectorAll('[data-ledger-kpi-badge="blocked"]').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Loading RTK token stats/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Loading multi-model usage and optional RTK savings/i)
+    ).toBeInTheDocument();
 
     searchParamsMock.params = new URLSearchParams();
   });

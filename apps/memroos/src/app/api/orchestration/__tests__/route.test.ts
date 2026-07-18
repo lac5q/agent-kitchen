@@ -109,7 +109,8 @@ describe("orchestration API routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({ ok: false, decisions: [], status: "unavailable" });
+    // Orchestration HIL is optional on cloud operators — empty unavailable is healthy (ok: true).
+    expect(body).toMatchObject({ ok: true, decisions: [], status: "unavailable" });
   });
   it("guards multi-hop plan validation and forwards to the orchestration service", async () => {
     vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
