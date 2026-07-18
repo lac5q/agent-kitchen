@@ -2532,9 +2532,10 @@ Plans:
 
 ## v8.15 Always-On Cloud Operator — oracle-1 (Phases 163–166)
 
-*Added: 2026-07-17 · Version: 2026-07-18.1 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-18*
+*Added: 2026-07-17 · Version: 2026-07-18.2 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-18 15:20 UTC*
 
-**Status:** 🟡 READINESS DOCS COMPLETE (2026-07-18) — runbook + local readiness checker landed; live cutover blocked pending Luis/operator SSH/Tailscale credentials and production access.
+**Status:** 🟢 LIVE CUTOVER VERIFIED (2026-07-18) — Tailscale SSH to oracle-1, Cloudflare tunnel healthy, Heroku web=0, onboarding verify 403; Phase 166 Voyage still out of scope.  
+**Evidence:** `docs/uat/2026-07-18-oracle1-live-cutover-verification.md` (commit `5969968` + follow-on Tailscale SSH enablement `201cbe2`).  
 **Plan:** `~/.cursor/plans/mac-as-prod_memroos_d4133d54.plan.md` (Always-on Oracle MemRoOS)  
 **Depends on:** v8.13 graph catchup paths; Aura + Qdrant Cloud credentials; Tailscale reachability to `oracle-1`  
 **Note:** Phase numbers 160–162 are reserved for v8.14 Human Wiki Surface — do not collide.
@@ -2584,9 +2585,9 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 163. Oracle readiness + nomic embeds | 1/2 docs | Runbook + local readiness checker landed 2026-07-18; on-host Ollama/disk/RAM smoke blocked pending Luis/operator SSH/Tailscale credentials | 2026-07-18 (docs/readiness) |
-| 164. Operator deploy + data cutover | 1/2 docs | Deploy/cutover checklist landed 2026-07-18; live deploy, secrets validation, and SQLite migration blocked pending host access/production credentials | 2026-07-18 (docs/readiness) |
-| 165. Tunnel + Heroku decommission | 1/2 docs | Tunnel + Heroku decommission checklist landed 2026-07-18; Cloudflare/Heroku live changes blocked pending operator credentials | 2026-07-18 (docs/readiness) |
+| 163. Oracle readiness + nomic embeds | 1/2 docs + live | Live cutover verified 2026-07-18 via Tailscale SSH; see `docs/uat/2026-07-18-oracle1-live-cutover-verification.md` | 2026-07-18 |
+| 164. Operator deploy + data cutover | 1/2 docs + live | Host `main` ff + rebuild/restart verified on oracle-1 2026-07-18 | 2026-07-18 |
+| 165. Tunnel + Heroku decommission | 1/2 docs + live | CF `memroos-oracle` healthy; Heroku `web=0`; onboarding verify 403 | 2026-07-18 |
 | 166. Voyage embed provider | 0/? | Out of scope for active goal; do not implement Voyage in this pass | — |
 
 ## v8.14 Human Wiki Surface + Memory Digest (Phases 160–162)

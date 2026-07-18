@@ -2,21 +2,21 @@
 
 - **Document version:** 2026-07-18.2
 - **Creation date/time (UTC):** 2026-07-18T07:24:42Z
-- **Update date/time (UTC):** 2026-07-18T15:12:00Z
-- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); focused suite log `/tmp/cov-gate-surface.log`; fast `/tmp/test-fast-coverage.log`; slow `/tmp/test-slow-coverage.log`
+- **Update date/time (UTC):** 2026-07-18T15:22:00Z
+- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); focused suite log `/tmp/cov-resume2.log`; fast `/tmp/test-fast-coverage.log`; slow `/tmp/test-slow-coverage.log`
 
 ## Measured (focused quality-gate surface)
 
 | Metric | Value |
 |--------|-------|
-| Statements | 68.75% (1452/2112) |
-| Branches | 51.44% (1015/1973) |
-| Functions | 63.51% (235/370) |
-| Lines | 71.88% (1368/1903) |
+| Statements | 69.74% (1473/2112) |
+| Branches | 53.11% (1048/1973) |
+| Functions | 64.05% (237/370) |
+| Lines | 72.51% (1380/1903) |
 
 Scope: `wiki-*` (vault/digest/scheduler/graph/API/page), `observe-*`, `agent-memory-continuity`, `graph-catchup`, policy helpers, and their direct deps pulled into the coverage graph.
 
-Delta vs 2026-07-18.1: statements **61.82% → 68.75%** (+6.93pp) after expanding wiki/observe/graph-catchup/page/continuity tests.
+Delta vs 2026-07-18.1: statements **61.82% → 69.74%** (+7.92pp) after expanding wiki/observe/graph-catchup/page/continuity tests.
 
 ### High coverage modules
 - `noc-filters.ts` 100% statements

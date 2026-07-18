@@ -153,6 +153,33 @@ describe("WikiPageView", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Hello" })).toBeTruthy();
     });
+
+    // Enter-key search should hit the search endpoint and render hits.
+    const callsBefore = fetchMock.mock.calls.length;
+    fireEvent.change(screen.getByPlaceholderText(/Search wiki/i), {
+      target: { value: "again" },
+    });
+    fireEvent.keyDown(screen.getByPlaceholderText(/Search wiki/i), {
+      key: "Enter",
+      code: "Enter",
+    });
+    await waitFor(() => {
+      const searchCalls = fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("view=search")
+      );
+      expect(searchCalls.length).toBeGreaterThan(0);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    // Wait for search hit UI before clicking (avoids racing in-flight fetch).
+    const hitButton = await screen.findByRole("button", { name: /Hello\s+Body\./i });
+    expect(hitButton).toBeTruthy();
+    fireEvent.click(hitButton);
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).includes("hello.md"))
+      ).toBe(true);
+      expect(screen.getByRole("heading", { name: "Hello" })).toBeTruthy();
+    });
   });
 
   it("shows select-page and page errors", async () => {

@@ -1,10 +1,10 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T15:18:00Z
-- **Version:** 2026-07-18.13
+- **Update date:** 2026-07-18T15:22:00Z
+- **Version:** 2026-07-18.14
 - **Lane:** code
-- **Status:** complete-with-blockers (2026-07-18); v8.15 oracle-1 live cutover verified (Tailscale SSH + CF); quality-gate focused coverage raised to **68.75% stmts** (see docs/uat/2026-07-18-coverage-report.md); app-wide 100% coverage remains measured-gap
+- **Status:** in-progress (resume); quality-gate focused coverage **69.74% stmts**; oracle-1 live cutover verified with evidence; app-wide 100% coverage remains measured-gap; MiniMax validator latest `PASS_WITH_NOTES` (must-fix: none)
 - **Orchestrator:** Cursor Grok (plan, author/apply, merge gate, run verification)
 - **Validator (priority):** **MiniMax-M3 via direct API** — independent review of diffs before treating work as done. Smoke: `MINIMAX OK`. Latest: `PASS_WITH_NOTES` (must-fix: none) on coverage tests.
 - **Optional workers:** may draft bounded slices; MiniMax remains validator even when Grok authors.
@@ -36,7 +36,7 @@ Complete the remaining MemRoOS GSD roadmap (not Voyage), then raise quality thro
 - [x] ROADMAP includes the refactor/live-test/autoreview/commit standing mandate; `/tmp/refactor-memroos.md` exists and is updated after significant steps.
 - [x] v8.13 Phases 157–159 closed with verification evidence (or blocked with infra deps documented).
 - [x] v8.14 Phases 160–162 implemented + verified (or blocked handoff).
-- [x] v8.15 Phases 163–165 docs/readiness complete; live cutover blocked pending Luis/operator SSH/Tailscale credentials; Phase 166 Voyage explicitly skipped.
+- [x] v8.15 Phases 163–165 docs/readiness complete; **oracle-1 live cutover verified** via Tailscale SSH + CF (2026-07-18); evidence: `docs/uat/2026-07-18-oracle1-live-cutover-verification.md`; Phase 166 Voyage explicitly skipped.
 - [x] v8.16 Phases 167–171 code/docs complete in cloud (live capture/operator keys may remain blocked).
 
 - [x] Test coverage improved toward 100% with measured report; remaining gaps listed if blocked.

@@ -284,6 +284,36 @@ describe("graph-catchup incremental checkpointing", () => {
         { vectorLastCreatedAt: "2026-07-17T11:00:00.000Z", vectorLastId: "a" }
       )
     ).toBe(false);
+    expect(
+      isAfterVectorCursor(
+        { id: "vector:older", createdAt: "2026-07-17T10:00:00.000Z" },
+        { vectorLastCreatedAt: "2026-07-17T11:00:00.000Z", vectorLastId: "x" }
+      )
+    ).toBe(false);
+    expect(
+      isAfterVectorCursor(
+        { id: "vector:c", createdAt: "2026-07-17T11:00:00.000Z" },
+        { vectorLastCreatedAt: "2026-07-17T11:00:00.000Z", vectorLastId: "b" }
+      )
+    ).toBe(true);
+    expect(
+      isAfterVectorCursor(
+        { id: "vector:only-id", createdAt: null },
+        { vectorLastCreatedAt: null, vectorLastId: "aaa" }
+      )
+    ).toBe(true);
+    expect(
+      isAfterVectorCursor(
+        { id: "vector:aaa", createdAt: null },
+        { vectorLastCreatedAt: null, vectorLastId: "bbb" }
+      )
+    ).toBe(false);
+  });
+
+  it("normalizeVectorMemoryPoint returns null for unusable payloads", () => {
+    expect(normalizeVectorMemoryPoint(null)).toBeNull();
+    expect(normalizeVectorMemoryPoint({ payload: { data: "   " } })).toBeNull();
+    expect(normalizeVectorMemoryPoint("not-an-object")).toBeNull();
   });
 
   it("scheduler heartbeats cron_health and skips when Neo4j missing", async () => {
@@ -660,5 +690,45 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(summary.status).toBe("completed");
     expect(summary.projected).toBe(2);
     expect(seen).toEqual(["vector:max-1", "vector:max-2"]);
+  });
+
+  it("skips empty episodic content and pages oneshot across batches", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    // Insert empty + two real messages; batchSize=1 forces multi-loop oneshot paging.
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', '   ', '2026-07-17T09:00:00.000Z')`
+      )
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'First real episodic memory.', '2026-07-17T10:00:00.000Z')`
+      )
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'Second real episodic memory.', '2026-07-17T11:00:00.000Z')`
+      )
+      .run();
+
+    const seen: string[] = [];
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: true,
+      skipVector: true,
+      batchSize: 1,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      projectFact: async (item) => {
+        seen.push(item.id);
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.skipped).toBeGreaterThanOrEqual(1);
+    expect(summary.projected).toBe(2);
+    expect(seen).toEqual(["episodic:2", "episodic:3"]);
+    expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(3);
   });
 });
