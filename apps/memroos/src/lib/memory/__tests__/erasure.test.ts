@@ -4,6 +4,7 @@ import {
   coordinateErasure,
   deriveErasureId,
   ErasureAuthorizationError,
+  getErasureStoreAdapter,
   registerErasureStoreAdapter,
   traverseIndirectDerivatives,
 } from "../erasure";
@@ -439,6 +440,119 @@ describe("coordinateErasure idempotency and scope", () => {
     expect(stores).toContain("embeddings");
     expect(getErasureStoreAdapter("vector")).toBeTruthy();
     expect(getErasureStoreAdapter("nonexistent-store")).toBeUndefined();
+  });
+
+  it("exercises direct adapter zero-match and missing-table branches", async () => {
+    const database = new Database(":memory:");
+    const identity = buildCanonicalIdentity("adapter branches", "message", "ingress", "message");
+
+    await expect(
+      getErasureStoreAdapter("graph")!.erase(database, "tenant1", identity, {
+        erasureId: "erasure_graph_zero",
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    ).resolves.toMatchObject({ status: "zero_match", reason: "not_linked:graph" });
+
+    identity.derivatives.push({
+      storeId: "salience",
+      sourceHash: identity.canonicalHash,
+      provenance: "test",
+      metadata: { message_id: 123 },
+    });
+    database.exec("CREATE TABLE memory_salience (message_id INTEGER)");
+    await expect(
+      getErasureStoreAdapter("salience")!.erase(database, "tenant1", identity, {
+        erasureId: "erasure_salience_zero",
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    ).resolves.toMatchObject({ status: "zero_match", reason: "no_salience_rows_for_canonical" });
+
+    await expect(
+      getErasureStoreAdapter("federation")!.erase(database, "tenant1", identity, {
+        erasureId: "erasure_federation_zero",
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    ).resolves.toMatchObject({ status: "zero_match", reason: "federation_derivative_table_missing" });
+    database.close();
+  });
+
+  it("marks coordinator status from pending, unavailable, and thrown adapter outcomes", async () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE audit_entries (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT,
+        actor_id TEXT,
+        actor_role TEXT,
+        event_type TEXT,
+        entity_type TEXT,
+        entity_id TEXT,
+        reason TEXT,
+        metadata_json TEXT,
+        created_at TEXT
+      );
+      CREATE TABLE memory_erasure_reports (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT,
+        canonical_id TEXT,
+        status TEXT,
+        store_outcomes_json TEXT,
+        actor_id TEXT,
+        scope_hash TEXT,
+        started_at TEXT,
+        completed_at TEXT
+      );
+    `);
+    const priorCache = getErasureStoreAdapter("cache")!;
+    const priorContext = getErasureStoreAdapter("context")!;
+    const priorVault = getErasureStoreAdapter("vault")!;
+    try {
+      registerErasureStoreAdapter({
+        storeId: "cache",
+        async erase() {
+          return { status: "pending", reason: "cache_pending_test" };
+        },
+      });
+      registerErasureStoreAdapter({
+        storeId: "context",
+        async erase() {
+          return { status: "unavailable", reason: "context_unavailable_test" };
+        },
+      });
+      registerErasureStoreAdapter({
+        storeId: "vault",
+        async erase() {
+          throw new Error("vault boom");
+        },
+      });
+      const identity = buildCanonicalIdentity("adapter failures", "message", "ingress", "cache", {
+        tenantId: "tenant1",
+      });
+      identity.derivatives.push(
+        { storeId: "context", sourceHash: identity.canonicalHash, provenance: "test" },
+        { storeId: "vault", sourceHash: identity.canonicalHash, provenance: "test" }
+      );
+
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "tenant1",
+        actorId: "actor1",
+        scope: { tenantId: "tenant1", purpose: "dsar" },
+      });
+
+      expect(report.status).toBe("failed");
+      expect(report.storeOutcomes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ storeId: "cache", status: "pending" }),
+          expect.objectContaining({ storeId: "context", status: "unavailable" }),
+          expect.objectContaining({ storeId: "vault", status: "failed", reason: "vault boom" }),
+        ])
+      );
+    } finally {
+      registerErasureStoreAdapter(priorCache);
+      registerErasureStoreAdapter(priorContext);
+      registerErasureStoreAdapter(priorVault);
+      database.close();
+    }
   });
 
   it("persists erasure report even when memory_erasure_reports table is missing", async () => {

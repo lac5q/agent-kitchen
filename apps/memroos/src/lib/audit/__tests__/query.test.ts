@@ -187,6 +187,34 @@ describe("audit query service", () => {
     expect(rows.map((row) => row.id)).toEqual(["match"]);
   });
 
+  it("filters paginated audit rows by direct entity and scalar event fields", () => {
+    insertAudit({
+      id: "direct-entity",
+      event: AUDIT_EVENT_TYPES.SEAL_APPROVED,
+      entityType: ENTITY_TYPES.SEAL_PROPOSAL,
+      entityId: "proposal:direct",
+      createdAt: "2026-01-02T00:00:00.000Z",
+    });
+    insertAudit({
+      id: "wrong-entity",
+      event: AUDIT_EVENT_TYPES.SEAL_APPROVED,
+      entityType: ENTITY_TYPES.SEAL_PROPOSAL,
+      entityId: "proposal:other",
+      createdAt: "2026-01-02T00:00:01.000Z",
+    });
+
+    const rows = queryAuditEntries(
+      {
+        entityType: ENTITY_TYPES.SEAL_PROPOSAL,
+        entityId: "proposal:direct",
+        eventType: AUDIT_EVENT_TYPES.SEAL_APPROVED,
+      },
+      db,
+    );
+
+    expect(rows.entries.map((row) => row.id)).toEqual(["direct-entity"]);
+  });
+
   it("queries HIL escalations with status filters and overdue state", () => {
     db.prepare(
       `INSERT INTO hil_escalations

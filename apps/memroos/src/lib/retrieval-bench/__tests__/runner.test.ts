@@ -2,6 +2,8 @@
  * End-to-end runner tests (VAL-RETR-001, VAL-RETR-005, VAL-RETR-008, VAL-RETR-013).
  */
 import path from "node:path";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import {
   runBenchmark,
@@ -485,6 +487,28 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
     }
   });
 
+  it("returns fixture validation issues for malformed synthetic tasks", async () => {
+    const fixturesDir = mkdtempSync(path.join(tmpdir(), "runner-invalid-fixtures-"));
+    writeFileSync(
+      path.join(fixturesDir, "memroos-public-smoke.json"),
+      JSON.stringify([{ id: "invalid-task", dataset: "memroos_public_synthetic", corpus: [] }]),
+      "utf-8",
+    );
+
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      bypassCliParser: true,
+      fixturesDir,
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("fixture_validation_failed");
+      expect(r.issues.length).toBeGreaterThan(0);
+    }
+  });
+
   it("reproduces reports across runs (VAL-RETR-013)", async () => {
     const a = await runBenchmark({
       dataset: "memroos_public_synthetic",
@@ -594,12 +618,17 @@ describe("writeReport + renderTextReport", () => {
         tokensRerank: 4,
         tokensPack: 5,
         tokensJudge: 6,
+        laneMetrics: {
+          ...r.report.aggregate.laneMetrics,
+          skipped: null as never,
+        },
       },
     };
     const text = renderTextReport(report);
     expect(text).toContain("abstention_accuracy");
     expect(text).toContain("answerable_failure_count");
     expect(text).toContain("tokens_judge");
+    expect(text).not.toContain("### skipped");
 
     const writeGuard = {
       armed: true,

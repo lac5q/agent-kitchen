@@ -112,6 +112,12 @@ describe("ontology registry validation", () => {
     const { mod, ontology } = await canonical();
     const valid = nextDocument(mod, ontology);
     const hash = mod.canonicalContentHash(valid);
+    const wrongId = { ...valid, id: "not-upper" };
+    expect(() => mod.publishOntologyVersion(db, { ...wrongId, actor: "operator", suppliedHash: mod.canonicalContentHash(wrongId), projections: [] })).toThrow(/canonical upper ontology/);
+    const emptyDefinitions = { ...valid, definitions: [] };
+    expect(() => mod.publishOntologyVersion(db, { ...emptyDefinitions, actor: "operator", suppliedHash: mod.canonicalContentHash(emptyDefinitions), projections: [] })).toThrow(/definitions must be/);
+    const badRelationships = { ...valid, relationships: null as never };
+    expect(() => mod.publishOntologyVersion(db, { ...badRelationships, actor: "operator", suppliedHash: mod.canonicalContentHash(badRelationships), projections: [] })).toThrow(/relationships must be/);
     expect(() => mod.publishOntologyVersion(db, { ...valid, actor: "operator", suppliedHash: "sha256:bad", projections: [] })).toThrow(/suppliedHash/);
     expect(() => mod.publishOntologyVersion(db, { ...valid, version: "wat", actor: "operator", suppliedHash: hash, projections: [] })).toThrow(/semantic version/);
     const projections = mod.ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash: hash }));
@@ -487,6 +493,32 @@ describe("ontology registry validation", () => {
       relationships: [],
       actor: "operator",
     })).toThrow(/preserve its inherited is_a relationship/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.badalias", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_badalias", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_badalias"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.badalias.child", { aliases: ["bad alias"] })],
+      actor: "operator",
+    })).toThrow(/Pack alias/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.invalid", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_invalid", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_invalid"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.invalid.child")],
+      relationships: [null] as never,
+      actor: "operator",
+    })).toThrow(/Pack relationship is invalid/);
+
+    expect(() => mod.registerDomainPack(db, {
+      namespace: "rel.badtype", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,
+      provenanceSummary: { sourceId: "src_rel_badtype", classification: "internal", importedAt: "2026-07-12T00:00:00Z", references: ["ref_rel_badtype"] },
+      ontology: base.ontology,
+      types: [packType(ontology, "rel.badtype.child")],
+      relationships: [{ from: "rel.badtype.child", to: "entity", type: "part_of" }],
+      actor: "operator",
+    })).toThrow(/relationship type/);
 
     expect(() => mod.registerDomainPack(db, {
       namespace: "coords.bad", owner: "ops", version: "1.0.0", sourceHash: SOURCE_HASH,

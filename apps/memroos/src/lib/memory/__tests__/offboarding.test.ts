@@ -197,6 +197,84 @@ describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
       actorId: "admin",
     });
     expect(completed?.status).toBe("completed");
+
+    const again = completeOffboardingReview(database, {
+      tenantId: "default-tenant",
+      reviewId: receipt.reviewId,
+      actorId: "admin",
+    });
+    expect(again).toMatchObject({ status: "completed", idempotent: true });
+  });
+
+  it("fails closed for missing plans, unavailable plan state, and malformed results", () => {
+    const database = freshDb();
+    const receipt = triggerOffboardingPendingErasure(database, {
+      tenantId: "default-tenant",
+      subjectHash: "subject-hash-guard",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      actorId: "admin",
+    });
+
+    expect(() =>
+      completeOffboardingReview(database, {
+        tenantId: "default-tenant",
+        reviewId: receipt.reviewId,
+        actorId: "admin",
+      })
+    ).toThrow(/without an attached subject erasure plan/);
+
+    attachPendingPlanToReview(database, {
+      tenantId: "default-tenant",
+      reviewId: receipt.reviewId,
+      planId: "plan-unavailable",
+      actorId: "admin",
+    });
+    database.exec("DROP TABLE memory_subject_erasure_plans");
+    expect(() =>
+      completeOffboardingReview(database, {
+        tenantId: "default-tenant",
+        reviewId: receipt.reviewId,
+        actorId: "admin",
+      })
+    ).toThrow(/subject erasure state is unavailable/);
+    database.close();
+
+    const malformedDb = freshDb();
+    const malformed = triggerOffboardingPendingErasure(malformedDb, {
+      tenantId: "default-tenant",
+      subjectHash: "subject-hash-malformed",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      actorId: "admin",
+    });
+    attachPendingPlanToReview(malformedDb, {
+      tenantId: "default-tenant",
+      reviewId: malformed.reviewId,
+      planId: "plan-malformed",
+      actorId: "admin",
+    });
+    malformedDb.prepare(
+      `INSERT INTO memory_subject_erasure_plans (
+        id, tenant_id, subject_hash, scope_hash, plan_hash, source_version_hash,
+        created_by, status, result_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?)`
+    ).run(
+      "plan-malformed",
+      "default-tenant",
+      "subject-hash-malformed",
+      "scope-hash",
+      "plan-hash",
+      "source-hash",
+      "operator",
+      "{not-json"
+    );
+
+    expect(() =>
+      completeOffboardingReview(malformedDb, {
+        tenantId: "default-tenant",
+        reviewId: malformed.reviewId,
+        actorId: "admin",
+      })
+    ).toThrow(/result is unavailable/);
   });
 });
 
@@ -349,5 +427,32 @@ describe("VAL-MEM-030: tombstones preserve continuity without payload", () => {
     expect(tombstones).toHaveLength(2);
     expect(tombstones[0]!.canonicalId).toBe("canon-a");
     expect(tombstones[1]!.canonicalId).toBe("canon-b");
+  });
+
+  it("handles missing tombstone tables conservatively", () => {
+    const database = freshDb();
+    database.exec("DROP TABLE memory_tombstones");
+
+    expect(() =>
+      writeTombstoneForErasure(database, {
+        tenantId: "default-tenant",
+        subjectHash: "subject-no-table",
+        canonicalId: "canon-no-table",
+        recordType: "message",
+        recordId: "msg-no-table",
+        recordIdHash: crypto.createHash("sha256").update("msg-no-table").digest("hex"),
+        derivativeInventory: makeDerivativeInventory(),
+        erasureId: "erasure_no_table",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        outcome: "erased",
+        actorId: "operator",
+      })
+    ).toThrow(/memory_tombstones table missing/);
+
+    expect(listTombstones(database, { tenantId: "default-tenant", subjectHash: "subject-no-table" })).toEqual([]);
+    expect(verifyTombstoneContinuity(database, { tenantId: "default-tenant" })).toEqual({
+      valid: true,
+      tombstonesChecked: 0,
+    });
   });
 });

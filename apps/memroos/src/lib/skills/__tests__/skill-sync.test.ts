@@ -2070,6 +2070,18 @@ describe("skill-sync validation and failure paths", () => {
     ).toThrow(/already approved/);
   });
 
+  it("proposal-id rejection refuses missing proposals", async () => {
+    const { rejectSyncProposalById, SkillSyncError } = await import("../skill-sync");
+
+    expect(() =>
+      rejectSyncProposalById(db, {
+        proposal_id: "missing-proposal-id",
+        operator: "bob",
+        reason: "not found",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
   it("proposal-id approval tolerates malformed diff payloads on ledger-only approvals", async () => {
     const { createImportProposal, approveSyncProposalById } = await import("../skill-sync");
     const { proposal } = createImportProposal(db, {
@@ -2160,6 +2172,56 @@ describe("skill-sync validation and failure paths", () => {
       (entry) => entry.skill_name === "terminal-rejected"
     );
     expect(item?.status).toBe("rejected");
+  });
+
+  it("detects filename-fallback skills as parse errors when frontmatter is absent", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    writeHarnessSkill(harnessRoots.claude, "fallback-only", "# Missing frontmatter name\n");
+
+    const result = detectHarnessSkills({ roots: harnessRoots });
+
+    expect(result.entries[0]).toMatchObject({
+      skill_name: "fallback-only",
+      parse_error: "No `name:` frontmatter field; using filename as fallback",
+    });
+    expect(result.errors[0]?.reason).toContain("No `name:` frontmatter");
+  });
+
+  it("computes proposal hashes from raw bodies and ignores unreadable source payloads", async () => {
+    const { createImportProposal, approveSyncProposalById, computeContentHash } =
+      await import("../skill-sync");
+    const rawBody = VALID_SKILL_MD("raw-body-only", "1.0.0");
+    const hash = computeContentHash(rawBody);
+    insertSkillRow({
+      name: "raw-body-only",
+      content_hash: "0".repeat(64),
+      version: "0.9.0",
+      raw_body: VALID_SKILL_MD("raw-body-only", "0.9.0"),
+    });
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "raw-body-only",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: rawBody,
+      },
+      proposed_by: "scanner",
+      diff_payload: {
+        source_file_path: path.join(TMP_ROOT, "missing-source.md"),
+        source_root: TMP_ROOT,
+      },
+    });
+
+    expect(proposal.pending_detected_hash).toBe(hash);
+
+    const approved = approveSyncProposalById(db, {
+      proposal_id: proposal.pending_proposal_id!,
+      operator: "alice",
+    });
+    expect(approved.status).toBe("approved");
+    expect(approved.reverified_hash).toBeNull();
   });
 
   it("rollbackToPriorVersion validates missing rows and vanished post-update rows", async () => {

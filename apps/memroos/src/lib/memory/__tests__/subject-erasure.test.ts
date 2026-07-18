@@ -114,6 +114,94 @@ describe("subject erasure planning and execution", () => {
     expect(result.plan?.planHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("includes raw vault and federation derivatives in subject inventory", () => {
+    const database = freshDb();
+    registerRetentionRecord(database, {
+      recordType: "message",
+      recordId: "4242",
+      ontologyType: "memory.contact_event",
+      securityLabel: { visibility: "internal" },
+      purpose: "recall",
+      scope: {
+        tenantId: "default-tenant",
+        purpose: "recall",
+        project: "alpha",
+        subjectId: "subject-derivatives",
+        canonicalId: "canon-derivatives",
+        sessionId: "sess-derivatives",
+      },
+      contentHash: "hash-derivatives",
+      actorId: "operator",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    database.prepare(
+      `INSERT INTO raw_artifacts
+        (id, tenant_id, project, source_type, source_id, session_id, artifact_uri, artifact_path, content_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "raw-derivative",
+      "default-tenant",
+      "alpha",
+      "message",
+      "4242",
+      "sess-derivatives",
+      "vault://raw-derivative",
+      "/tmp/raw-derivative",
+      "hash-derivatives",
+      "2026-01-01T00:00:00.000Z"
+    );
+    database.prepare(
+      `INSERT INTO federation_action_artifacts
+        (id, tenant_id, space_id, federation_run_id, pack_hash, pack_bytes, pack_item_count,
+         bound_status, scope_hash, policy_hash, ontology_hash, artifact_hash, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "fed-artifact",
+      "default-tenant",
+      "alpha",
+      "run-1",
+      "pack-hash",
+      1,
+      1,
+      "bounded",
+      "scope-hash",
+      "policy-hash",
+      "ontology-hash",
+      "artifact-hash",
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z"
+    );
+    database.prepare(
+      `INSERT INTO federation_action_derivatives
+        (id, tenant_id, artifact_id, canonical_id, canonical_hash, source_id, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`
+    ).run(
+      "fed-derivative",
+      "default-tenant",
+      "fed-artifact",
+      "canon-derivatives",
+      "hash-derivatives",
+      "4242",
+      "2026-01-01T00:00:00.000Z"
+    );
+
+    const result = createSubjectErasurePlan(database, {
+      id: "plan-derivatives",
+      subject: { subjectId: "subject-derivatives" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      actorId: "operator",
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.plan?.coverage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ storeId: "vault", action: "tombstone" }),
+        expect.objectContaining({ storeId: "federation", action: "tombstone" }),
+      ])
+    );
+  });
+
   it("VAL-MEM-020: colliding names and missing scope fail closed without mutation", () => {
     const database = freshDb();
     seedMessage(database, "RAW_ALICE_ONE", "subject-one", "Shared Name");
@@ -221,6 +309,43 @@ describe("subject erasure planning and execution", () => {
     expect(ftsResidual).toHaveLength(0);
     const tombstones = database.prepare("SELECT COUNT(*) AS count FROM memory_erasure_tombstones WHERE subject_plan_id = ?").get("plan-mixed") as { count: number };
     expect(tombstones.count).toBe(1);
+  });
+
+  it("records coordinator failures per target without aborting execution", async () => {
+    const database = freshDb();
+    seedMessage(database, "FAIL_COORDINATOR_SECRET", "subject-fail");
+    const plan = createSubjectErasurePlan(database, {
+      id: "plan-fail",
+      subject: { subjectId: "subject-fail" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      actorId: "operator",
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    expect(plan.ok).toBe(true);
+    approveSubjectErasurePlan(database, {
+      planId: "plan-fail",
+      planHash: plan.plan!.planHash,
+      actorId: "reviewer",
+      now: new Date("2026-01-02T00:10:00.000Z"),
+    });
+    database.exec(`
+      CREATE TRIGGER reject_subject_erasure_report
+      BEFORE INSERT ON memory_erasure_reports
+      BEGIN SELECT RAISE(ABORT, 'report boom'); END;
+    `);
+
+    const execution = await executeSubjectErasurePlan(database, {
+      planId: "plan-fail",
+      planHash: plan.plan!.planHash,
+      actorId: "operator",
+      now: new Date("2026-01-02T00:20:00.000Z"),
+    });
+
+    expect(execution.status).toBe("failed");
+    expect(execution.failed).toBe(1);
+    expect(execution.storeOutcomes[0]?.outcomes).toEqual([
+      expect.objectContaining({ storeId: "coordinator", status: "failed", reason: "report boom" }),
+    ]);
   });
 
   it("revokes a versioned ontology record during approved subject erasure", async () => {

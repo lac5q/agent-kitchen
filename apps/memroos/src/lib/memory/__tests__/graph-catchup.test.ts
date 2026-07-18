@@ -614,6 +614,43 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(summary.checkpointAfter.vectorLastId).toBe("c");
   });
 
+  it("breaks cleanly on an empty vector page with no cursor", async () => {
+    const log = vi.fn();
+    const summary = await runGraphCatchup(testDb, {
+      dryRun: true,
+      skipEpisodic: true,
+      pageSize: 2,
+      fetchVectorPage: async () => ({ items: [{ id: "empty", memory: "   " }], nextCursor: null }),
+      now: new Date("2026-07-17T13:00:00.000Z"),
+      log,
+    });
+
+    expect(summary.status).toBe("completed");
+    expect(summary.pages).toBe(1);
+    expect(summary.skipped).toBe(1);
+    expect(log).not.toHaveBeenCalledWith("vector page", expect.anything());
+  });
+
+  it("uses default log and sleep hooks when projecting writable pages", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const summary = await runGraphCatchup(testDb, {
+      dryRun: false,
+      skipEpisodic: true,
+      pageSize: 1,
+      fetchVectorPage: async () => ({
+        items: [{ id: "sleepy", memory: "Sleepy vector memory.", created_at: "2026-07-17T12:00:00.000Z" }],
+        nextCursor: null,
+      }),
+      writeDelayMs: 1,
+      now: new Date("2026-07-17T13:00:00.000Z"),
+      projectFact: async () => undefined,
+    });
+
+    expect(summary.projected).toBe(1);
+    expect(logSpy).toHaveBeenCalledWith("[graph-catchup] vector page", expect.any(Object));
+  });
+
   it("projects legacy mem0 memories in cursor order with incremental batch limits", async () => {
     writeGraphCatchupCheckpoint(testDb, {
       id: "default",
@@ -646,6 +683,33 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(summary.pages).toBe(1);
     expect(projected).toEqual(["vector:m2", "vector:m3"]);
     expect(summary.checkpointAfter.vectorLastId).toBe("m3");
+  });
+
+  it("stops incremental legacy mem0 projection after an item failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const summary = await runGraphCatchup(testDb, {
+      dryRun: true,
+      skipEpisodic: true,
+      useQdrantScroll: false,
+      fetchVectorMemories: async () => [
+        { id: "m1", memory: "First legacy memory.", created_at: "2026-07-17T10:00:00.000Z" },
+        { id: "m2", memory: "Second legacy memory.", created_at: "2026-07-17T11:00:00.000Z" },
+      ],
+      now: new Date("2026-07-17T13:00:00.000Z"),
+      projectFact: async (item) => {
+        throw new Error(`legacy boom:${item.id}`);
+      },
+      log: () => undefined,
+    });
+
+    expect(summary.status).toBe("failed");
+    expect(summary.errors).toBe(1);
+    expect(summary.errorSamples).toEqual(["legacy boom:vector:m1"]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[graph-catchup] vector project failed",
+      "vector:m1",
+      expect.any(Error)
+    );
   });
 
   it("uses the default mem0 fetcher shapes and surfaces fetch failures", async () => {

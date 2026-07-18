@@ -410,6 +410,34 @@ describe("POST /api/apo validation and errors", () => {
     expect(noConstraint.status).toBe(422);
   });
 
+  it("returns apply-approved target lookup details when the queued target disappears", async () => {
+    const { POST } = await loadRoute();
+    await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    rmSync(path.join(skillsPath, "ceo"), { recursive: true, force: true });
+
+    const response = await POST(makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename }));
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toContain("No SKILL.md or AGENTS.md target found");
+    expect(body.searched.skillRoots).toEqual(expect.any(Array));
+  });
+
+  it("surfaces non-ENOENT proposal and approved-file read errors safely", async () => {
+    rmSync(path.join(proposalsPath, proposalFilename), { force: true });
+    mkdirSync(path.join(proposalsPath, proposalFilename), { recursive: true });
+    const { POST } = await loadRoute();
+
+    const approve = await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
+    expect(approve.status).toBe(500);
+
+    rmSync(path.join(proposalsPath, proposalFilename), { recursive: true, force: true });
+    const approvedDir = path.join(proposalsPath, "approved");
+    mkdirSync(path.join(approvedDir, proposalFilename), { recursive: true });
+    const apply = await POST(makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename }));
+    expect(apply.status).toBe(500);
+  });
+
   it("counts invalid approved queue entries as failed work items", async () => {
     const { POST } = await loadRoute();
     const approvedDir = path.join(proposalsPath, "approved");
@@ -438,5 +466,17 @@ describe("POST /api/apo validation and errors", () => {
     expect(response.status).toBe(500);
     expect(body.ok).toBe(false);
     expect(body.error).toEqual(expect.any(String));
+  });
+
+  it("skips proposals that cannot be parsed during listing", async () => {
+    mkdirSync(path.join(proposalsPath, "APO_PROPOSAL_dir_dir_20260505_120000.md"), { recursive: true });
+    const { GET } = await loadRoute();
+
+    const body = await (await GET()).json();
+
+    expect(body.proposals.map((proposal: { id: string }) => proposal.id)).toContain(proposalFilename);
+    expect(body.proposals.map((proposal: { id: string }) => proposal.id)).not.toContain(
+      "APO_PROPOSAL_dir_dir_20260505_120000.md"
+    );
   });
 });

@@ -389,6 +389,37 @@ describe("VAL-SYNC-004 approveImportProposal / rejectImportProposal", () => {
     expect(approved.decision_reason).toBe("ok to import");
   });
 
+  it("falls back to a plain audit insert when chained skill audit construction fails", async () => {
+    vi.doMock("@/lib/audit/skill-chain", () => ({
+      buildSkillAuditEntry: () => {
+        throw new Error("chain unavailable");
+      },
+    }));
+    try {
+      const { detectSkillChange, approveImportProposal } = await importSyncModule();
+      insertSkillRow({ name: "plain-audit-fallback", content_hash: "0".repeat(64) });
+      const det = detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "plain-audit-fallback",
+        detected_content_hash: "9".repeat(64),
+        proposed_by: "scanner",
+      });
+
+      const approved = approveImportProposal(db, det.proposal.id, "alice", "plain fallback");
+
+      expect(approved.status).toBe("approved");
+      const audit = db
+        .prepare(
+          `SELECT metadata_json FROM audit_entries
+           WHERE event_type = 'skill.proposal.approved' AND entity_id = ?`
+        )
+        .get(det.proposal.id) as { metadata_json: string };
+      expect(JSON.parse(audit.metadata_json)).toMatchObject({ skill_name: "plain-audit-fallback" });
+    } finally {
+      vi.doUnmock("@/lib/audit/skill-chain");
+    }
+  });
+
   it("rejects on empty reason and empty operator", async () => {
     const { detectSkillChange, rejectImportProposal, SyncGovernanceError } =
       await importSyncModule();
