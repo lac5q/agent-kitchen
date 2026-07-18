@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +22,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe("MemoryIntelligencePanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mockUseMemoryStats.mockReturnValue({
       data: {
         lastRun: null,
@@ -101,5 +102,79 @@ describe("MemoryIntelligencePanel", () => {
 
     expect(screen.getByText("degraded")).toBeTruthy();
     expect(screen.getByText("3 queued memory saves")).toBeTruthy();
+  });
+
+  it("shows the loading spinner and placeholder KPI values while memory stats load", () => {
+    mockUseMemoryStats.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    } as ReturnType<typeof useMemoryStats>);
+    mockUseMemoryTierHealth.mockReturnValue({
+      data: { tiers: [], timestamp: "2026-05-05T00:00:00.000Z" },
+      isLoading: false,
+    } as ReturnType<typeof useMemoryTierHealth>);
+
+    render(<MemoryIntelligencePanel />, { wrapper });
+
+    expect(screen.getByText("Memory Intelligence")).toBeTruthy();
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.queryByText("Recall Quality")).toBeNull();
+  });
+
+  it("surfaces failed consolidation status, fallback eval copy, and indexed sources", () => {
+    mockUseMemoryStats.mockReturnValue({
+      data: {
+        lastRun: {
+          id: "run-failed",
+          status: "failed",
+          started_at: new Date(Date.now() - 90_000).toISOString(),
+          completed_at: null,
+          insights_written: 0,
+          batch_size: 7,
+          error_message: "provider timed out\nwhile writing insights",
+        },
+        pendingUnconsolidated: 4,
+        tierStats: [{ tier: "episodic", count: 9, avg_score: 0.42 }],
+        consolidationModel: null,
+        sources: [{ agent_id: "claude", cnt: 12 }],
+        recentFailures24h: 3,
+        timestamp: "2026-05-05T00:00:00.000Z",
+      },
+      isLoading: false,
+    } as ReturnType<typeof useMemoryStats>);
+    mockUseMemoryEvalLatest.mockReturnValue({
+      data: { ok: true, run: null, timestamp: "2026-05-15T00:01:00.000Z" },
+      isLoading: false,
+    } as ReturnType<typeof useMemoryEvalLatest>);
+
+    render(<MemoryIntelligencePanel />, { wrapper });
+
+    expect(screen.getByText("failed")).toBeTruthy();
+    expect(screen.getByText(/Latest error: provider timed out while writing insights/)).toBeTruthy();
+    expect(screen.getByText(/3 failures recorded in the last 24h/)).toBeTruthy();
+    expect(screen.getByText("No eval run recorded yet.")).toBeTruthy();
+    expect(screen.getByText("Indexed Sources")).toBeTruthy();
+    expect(screen.getByText("claude")).toBeTruthy();
+    expect(screen.getAllByText("episodic").length).toBeGreaterThan(0);
+    expect(screen.getByText(/42%/)).toBeTruthy();
+  });
+
+  it("runs consolidation on demand and reports retryable failures", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MemoryIntelligencePanel />, { wrapper });
+    fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/memory-consolidate", { method: "POST" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Run Now" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Failed — click to retry/i })).toBeTruthy();
+    });
   });
 });

@@ -377,4 +377,66 @@ describe("VoicePanel", () => {
       expect(screen.getByText(/upstream exploded/i)).toBeInTheDocument();
     });
   });
+
+  it("alerts when speech recognition is unavailable", () => {
+    const alert = vi.fn();
+    vi.stubGlobal("alert", alert);
+    vi.stubGlobal("SpeechRecognition", undefined);
+    vi.stubGlobal("webkitSpeechRecognition", undefined);
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+
+    expect(alert).toHaveBeenCalledWith("Speech recognition not supported in this browser. Use Chrome.");
+  });
+
+  it("keeps the chat reply visible when TTS playback fails", async () => {
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        const result = {
+          isFinal: true,
+          0: { transcript: "voice tts failure" },
+        } as unknown as SpeechRecognitionResult;
+        this.onresult?.({ results: [result] } as unknown as SpeechRecognitionEvent);
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode('data: {"text":"Reply without audio"}\n\ndata: [DONE]\n\n'),
+              );
+              controller.close();
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          blob: async () => new Blob([""]),
+        }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Reply without audio")).toBeInTheDocument();
+      expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
+    });
+  });
 });

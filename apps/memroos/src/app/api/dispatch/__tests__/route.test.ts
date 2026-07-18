@@ -24,6 +24,9 @@ vi.mock("@/lib/dispatch/skill-lookup", async (importOriginal) => {
 vi.mock("@/lib/skills/skill-sync-governance", () => ({
   getAgentVersionPin: vi.fn(),
 }));
+vi.mock("@/lib/auth/rate-limit", () => ({
+  checkAuthRateLimit: vi.fn(() => null),
+}));
 
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
@@ -220,6 +223,58 @@ describe("POST /api/dispatch", () => {
     }));
   });
 
+  it("maps registered local capabilities into dispatch adapter skill descriptors", async () => {
+    mockGetRemoteAgents.mockReturnValue([]);
+    mockListRegisteredAgents.mockReturnValue([{
+      id: "local-skilled-agent",
+      name: "Local Skilled",
+      role: "Engineer",
+      platform: "codex",
+      protocol: "local",
+      status: "active",
+      location: null,
+      host: null,
+      port: null,
+      healthEndpoint: null,
+      currentTask: null,
+      lastHeartbeat: null,
+      lessonsCount: 0,
+      todayMemoryCount: 0,
+      isRemote: false,
+      latencyMs: null,
+      capabilities: [{
+        id: "cap-review",
+        name: "Review",
+        description: "Review pull requests",
+        tags: ["code"],
+      }],
+      metadata: { runtime: "test" },
+      tunnelUrl: null,
+      createdAt: "2026-04-19T10:00:00Z",
+      updatedAt: "2026-04-19T10:00:00Z",
+      deregisteredAt: null,
+    } as any]);
+
+    const res = await POST(makeRequest({
+      to_agent: "local-skilled-agent",
+      task_summary: "review this",
+    }) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockSelectAdapter).toHaveBeenCalledWith(expect.objectContaining({
+      id: "local-skilled-agent",
+      location: "local",
+      host: "localhost",
+      port: 0,
+      healthEndpoint: "/health",
+      skills: [expect.objectContaining({
+        id: "cap-review",
+        inputModes: ["text"],
+        outputModes: ["text"],
+      })],
+    }));
+  });
+
   it("403 CONTENT_BLOCKED — scanContent blocks", async () => {
     mockScanContent.mockReturnValue({ blocked: true, matches: [], cleanContent: "" });
     const res = await POST(makeRequest({ to_agent: "sophia", task_summary: "rm -rf /" }) as any);
@@ -295,6 +350,40 @@ describe("POST /api/dispatch", () => {
     expect(mockWriteAuditLog).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       actor: "evil-client",
     }));
+  });
+
+  it("uses authenticated operator sessions and audits non-blocking scanner matches", async () => {
+    mockAuthenticateUser.mockResolvedValue({
+      userId: "operator-1",
+      role: "operator",
+      email: "operator@example.com",
+      displayName: "Operator",
+      tenantId: "default-tenant",
+    } as any);
+    mockScanContent.mockReturnValue({
+      blocked: false,
+      matches: [{ patternName: "secret-like-token" }],
+      cleanContent: "Draft blog post",
+    } as any);
+
+    const res = await POST(makeRemoteRequest({
+      to_agent: "sophia",
+      task_summary: "Draft blog post",
+      input: { memory: [{ id: "visible", metadata: { visibility: "internal", policy: "agent_visible" } }] },
+    }) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockAuthenticateAgentHeaders).not.toHaveBeenCalled();
+    expect(mockCheckDispatchPolicy).toHaveBeenCalledWith("user:operator-1", expect.anything());
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actor: "user:operator-1",
+      action: "content_flagged",
+      severity: "medium",
+    }));
+    expect(hivePollStub.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ from_agent: "user:operator-1" }),
+      expect.anything()
+    );
   });
 
   it("401 — rejects spoofed x-agent-id without a valid agent API key", async () => {
@@ -432,6 +521,78 @@ describe("POST /api/dispatch", () => {
     });
     expect(mockSelectAdapter).not.toHaveBeenCalled();
     expect(hivePollStub.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("derives source harness for legacy version pins without a skill_id", async () => {
+    const fallbackStatement = {
+      run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }),
+      get: vi.fn().mockReturnValue({ source_harness: "codex" }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    mockGetDb.mockReturnValue({ prepare: vi.fn().mockReturnValue(fallbackStatement) } as any);
+    mockGetAgentVersionPin.mockReturnValue({
+      id: 2,
+      agent_id: "memroos",
+      skill_name: "legacy-pin",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "d".repeat(64),
+      prior_version: null,
+      prior_content_hash: null,
+      prior_skill_id: null,
+      actor: "operator",
+      created_at: "2026-07-12T00:00:00Z",
+      updated_at: "2026-07-12T00:00:00Z",
+      rolled_back_at: null,
+      rolled_back_by: null,
+      last_rollback_event_id: null,
+    });
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Use legacy pin",
+      skill_name: "legacy-pin",
+    }) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockLookupSkillContract).toHaveBeenCalledWith(
+      expect.anything(),
+      "legacy-pin",
+      expect.objectContaining({
+        pinned: expect.objectContaining({
+          source_harness: "codex",
+          current_version: "1.0.0",
+          current_content_hash: "d".repeat(64),
+        }),
+      })
+    );
+  });
+
+  it("409 SKILL_AMBIGUOUS — refuses same-name skills without harness binding", async () => {
+    mockLookupSkillContract.mockReturnValue({
+      kind: "ambiguous",
+      skill_name: "duplicate-skill",
+      reason: "multiple harnesses match",
+      candidate_harnesses: ["claude", "codex"],
+    } as any);
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Use duplicate skill",
+      skill_name: "duplicate-skill",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body).toMatchObject({
+      ok: false,
+      code: "SKILL_AMBIGUOUS",
+    });
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      action: "policy_denied",
+      severity: "high",
+    }));
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
   });
 
   it("502 ADAPTER_REJECTED — adapter returns accepted:false", async () => {

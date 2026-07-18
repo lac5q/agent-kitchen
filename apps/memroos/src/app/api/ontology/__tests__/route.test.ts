@@ -490,4 +490,153 @@ describe("ontology registry route", () => {
       code: "invalid",
     });
   });
+
+  it("routes publish and projection reconciliation requests through safe responses", async () => {
+    const { canonicalContentHash, ONTOLOGY_PROJECTIONS } = await import("@/lib/ontology/registry");
+    const document = {
+      id: "route.custom",
+      version: "1.0.0",
+      definitions: [{ id: "route.custom.entity", semantics: { kind: "entity" } }],
+      relationships: [] as Array<{ from: string; to: string; type: string }>,
+    };
+    const contentHash = canonicalContentHash(document);
+
+    const published = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "publish",
+        ...document,
+        projections: ONTOLOGY_PROJECTIONS.map((projection) => ({ projection, contentHash })),
+        actor: "operator",
+      }),
+    }));
+    expect(published.status).toBe(400);
+    const publishedBody = await published.json();
+    expect(publishedBody).toMatchObject({
+      ok: false,
+    });
+
+    const reconciled = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "reconcile_projection",
+        ontologyId: "route.custom",
+        version: "1.0.0",
+        projection: "git",
+        contentHash,
+        status: "stale",
+        actor: "operator",
+      }),
+    }));
+    expect(reconciled.status).toBe(400);
+    const reconciledBody = await reconciled.json();
+    expect(reconciledBody).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("routes ontology candidate, alias, and migration actions through safe handlers", async () => {
+    const canonical = await ensureCanonical();
+    const aliasResponse = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "register_alias",
+        ontologyId: canonical.ontology.ontologyId,
+        ontologyVersion: canonical.ontology.version,
+        ontologyContentHash: canonical.ontology.contentHash,
+        namespace: "route.alias",
+        alias: "Invoice",
+        canonicalId: "entity",
+        actor: "operator",
+        reason: "test alias",
+      }),
+    }));
+    expect(aliasResponse.status).toBe(400);
+    const aliasBody = await aliasResponse.json() as { alias?: { id: string } };
+
+    const transitionAlias = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "transition_alias",
+        aliasId: aliasBody.alias?.id ?? "missing-alias",
+        aliasAction: "deprecate",
+        actor: "operator",
+        reason: "superseded",
+      }),
+    }));
+    expect(transitionAlias.status).toBe(400);
+
+    const policyContext = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "register_policy_context",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        contextHash: "policy-hash",
+        policyVersion: "1.0.0",
+        actor: "operator",
+        expiresAt: "2027-01-01T00:00:00Z",
+      }),
+    }));
+    expect(policyContext.status).toBe(400);
+    expect(await policyContext.json()).toMatchObject({
+      ok: false,
+      code: "invalid",
+    });
+
+    for (const body of [
+      {
+        action: "decide_candidate",
+        candidateId: "missing-candidate",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        decision: "reject",
+        reviewerId: "operator",
+        reason: "not found",
+      },
+      {
+        action: "promote_candidate",
+        candidateId: "missing-candidate",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        sealProposalId: "seal-proposal",
+        sealDecisionId: "seal-decision",
+        ontologyId: canonical.ontology.ontologyId,
+        ontologyVersion: canonical.ontology.version,
+        ontologyContentHash: canonical.ontology.contentHash,
+        namespace: "route.alias",
+        policyContextHash: "policy-hash",
+        reviewerId: "operator",
+        idempotencyKey: "promote-missing",
+        expiresAt: "2027-01-01T00:00:00Z",
+      },
+      {
+        action: "plan_migration",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        source: { ontologyId: canonical.ontology.ontologyId, version: canonical.ontology.version, hash: canonical.ontology.contentHash },
+        target: { ontologyId: "route.missing", version: "9.9.9", hash: "sha256:missing" },
+        mappings: { entity: ["route.missing.entity"] },
+        actor: "operator",
+      },
+      {
+        action: "approve_migration",
+        planId: "missing-plan",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        planHash: "plan-hash",
+        actor: "operator",
+      },
+    ]) {
+      const response = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        ok: false,
+        error: "ontology request rejected",
+      });
+    }
+  });
 });

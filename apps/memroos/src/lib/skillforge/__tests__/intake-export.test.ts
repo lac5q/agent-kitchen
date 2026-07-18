@@ -279,7 +279,7 @@ describe("VAL-SKILL-036 hash helpers and listing", () => {
   });
 
   it("normalizes blank scope keys and ignores malformed stored notes", async () => {
-    const { intakeProposal, loadIntakeRow } = await import("../intake-export");
+    const { computeEditHash, intakeProposal, loadIntakeRow, loadIntakeRowByKey } = await import("../intake-export");
     intakeProposal(db, {
       proposalId: "blank-scope",
       sourceSkillId: "skill-508",
@@ -297,6 +297,7 @@ describe("VAL-SKILL-036 hash helpers and listing", () => {
     expect(row?.scopeKey).toBe("default");
     expect(row?.notes).toEqual([]);
     expect(loadIntakeRow(db, "does-not-exist")).toBeNull();
+    expect(loadIntakeRowByKey(db, "skill-508", "1.0.0", computeEditHash("different diff"))).toBeNull();
   });
 
   it("advanceProposalState appends notes and exported proposals stay terminal", async () => {
@@ -613,6 +614,9 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     const { recordIntakeRedaction, intakeProposal, advanceProposalState, SkillForgeIntakeError } =
       await import("../intake-export");
     expect(() =>
+      advanceProposalState(db, { proposalId: "missing-advance", actor: "operator", toState: "analyzing" })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
       recordIntakeRedaction(db, {
         proposalId: "missing",
         actor: "operator",
@@ -656,5 +660,31 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     expect(updated.redactedEntryCount).toBe(3);
     expect(updated.scopeKey).toBe("tenant/default");
     expect(loadIntakeRow(db, "redact-ok")?.scopeKey).toBe("tenant/default");
+  });
+
+  it("rollback is status-only when exported state has no runtime export row", async () => {
+    const { intakeProposal, rollbackExport } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "exported-without-record",
+      sourceSkillId: "skill-510",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    db.prepare(`UPDATE skillforge_intake_proposals SET state = 'exported' WHERE id = ?`).run(
+      "exported-without-record"
+    );
+
+    const result = rollbackExport(db, {
+      proposalId: "exported-without-record",
+      actor: "operator",
+      reason: "runtime row missing",
+    });
+
+    expect(result).toMatchObject({
+      proposalId: "exported-without-record",
+      outcome: "status_only",
+      reason: "no prior runtime export found",
+    });
   });
 });

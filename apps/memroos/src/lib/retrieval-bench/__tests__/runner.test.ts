@@ -2,13 +2,16 @@
  * End-to-end runner tests (VAL-RETR-001, VAL-RETR-005, VAL-RETR-008, VAL-RETR-013).
  */
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   runBenchmark,
   writeReport,
   renderTextReport,
   loadDataset,
 } from "../runner";
+import { registerAdapter } from "../adapters";
+import { lexicalAdapterEntry } from "../adapters/lexical";
+import { liveAdapterEntry } from "../adapters/live";
 import { canonicalOutputPath } from "../redaction";
 import { hashScopeIdentity, normalizeScopeIdentity } from "@/lib/msiq/scope-identity";
 import { resolveFromRepoRoot } from "@/lib/paths";
@@ -192,6 +195,142 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
     )).toBe(true);
   });
 
+  it("rejects malformed live adapter candidates before stage publication", async () => {
+    const normalized = normalizeScopeIdentity(LIVE_SCOPE);
+    if (!normalized) throw new Error("expected complete live test scope");
+    const scopeHash = hashScopeIdentity(normalized);
+    await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "no-memory",
+      limit: 1,
+      bypassCliParser: true,
+      fixturesDir: FIXTURES_DIR,
+    });
+    registerAdapter("live", {
+      provider: null,
+      providerVersion: null,
+      adapter: {
+        id: "live",
+        version: "test-live",
+        isBaselineControl: false,
+        async run(init) {
+          const makeItem = (id: string, authorizationResult: "allowed" | "denied" | "stale", extra = {}) => ({
+            id,
+            score: id === "allowed-live" ? 100 : 90,
+            text: `${id} text`,
+            tier: "live" as const,
+            source: "custom-live",
+            authorizationResult,
+            whyEntered: "test",
+            scopeHash,
+            rankPosition: 1,
+            ...extra,
+          });
+          return {
+            taskId: init.task.id,
+            adapterName: "live",
+            status: "ok",
+            statusDetail: "custom",
+            retrieved: [
+              makeItem("allowed-live", "allowed"),
+              makeItem("stale-live", "stale"),
+              makeItem("denied-live", "denied"),
+              makeItem("missing-scope-live", "allowed", { scopeHash: undefined }),
+            ],
+            injected: ["allowed-live", "stale-live", "denied-live", "missing-scope-live"],
+            ignored: [],
+            latencyMs: 1,
+            receipt: {
+              adapterName: "live",
+              adapterVersion: "test-live",
+              status: "ok",
+              statusDetail: "custom",
+              latencyMs: 1,
+              authorization: { evaluated: true, allowed: true, scopeHash },
+              provenance: {
+                provider: null,
+                providerVersion: null,
+                retrievalPolicyVersion: init.retrievalPolicyVersion,
+                configHash: init.configHash,
+                fixtureHash: init.fixtureHash,
+              },
+              metrics: {
+                tokensRetrieval: null,
+                tokensRerank: null,
+                tokensPack: null,
+                tokensJudge: null,
+                contextPackBytes: null,
+                contextPackHash: null,
+              },
+            },
+          };
+        },
+      },
+    });
+
+    try {
+      const r = await runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter: "live",
+        limit: 1,
+        k: 4,
+        seed: 0,
+        bypassCliParser: true,
+        fixturesDir: FIXTURES_DIR,
+        scope: LIVE_SCOPE,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.tasks[0]).toMatchObject({
+        status: "provider_failed",
+      });
+      expect(r.report.tasks[0].receipt.statusDetail).toContain("invalid_adapter_result");
+    } finally {
+      registerAdapter("live", liveAdapterEntry);
+    }
+  });
+
+  it("turns adapter exceptions and invalid adapter output into typed task failures", async () => {
+    await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "no-memory",
+      limit: 1,
+      bypassCliParser: true,
+      fixturesDir: FIXTURES_DIR,
+    });
+    registerAdapter("lexical", {
+      ...lexicalAdapterEntry,
+      adapter: {
+        id: "lexical",
+        version: "throws",
+        isBaselineControl: true,
+        async run() {
+          throw new Error("adapter boom");
+        },
+      },
+    });
+
+    try {
+      const thrown = await runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter: "lexical",
+        limit: 1,
+        k: 1,
+        seed: 0,
+        bypassCliParser: true,
+        fixturesDir: FIXTURES_DIR,
+      });
+      expect(thrown.ok).toBe(true);
+      if (!thrown.ok) return;
+      expect(thrown.report.tasks[0]).toMatchObject({
+        status: "provider_failed",
+      });
+      expect(thrown.failureSummary.failedTaskCount).toBeGreaterThan(0);
+    } finally {
+      registerAdapter("lexical", lexicalAdapterEntry);
+    }
+  });
+
   it("reports an explicit error for unknown adapters", async () => {
     const r = await runBenchmark({
       dataset: "memroos_public_synthetic",
@@ -301,6 +440,49 @@ describe("writeReport + renderTextReport", () => {
     expect(text).toContain("precision@k");
     expect(text).toContain("recall@k");
     expect(text).toContain("Lane:");
+  });
+
+  it("renders optional aggregate metrics and refuses guarded writes", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 1,
+      k: 1,
+      seed: 0,
+      bypassCliParser: true,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const report = {
+      ...r.report,
+      aggregate: {
+        ...r.report.aggregate,
+        abstentionAccuracy: 1,
+        abstentionAnswerableFailureCount: 2,
+        contextPackBytes: 128,
+        contextPackHash: "sha256:pack",
+        tokensRetrieval: 3,
+        tokensRerank: 4,
+        tokensPack: 5,
+        tokensJudge: 6,
+      },
+    };
+    const text = renderTextReport(report);
+    expect(text).toContain("abstention_accuracy");
+    expect(text).toContain("answerable_failure_count");
+    expect(text).toContain("tokens_judge");
+
+    const writeGuard = {
+      armed: true,
+      ensureWritable: vi.fn(() => {
+        throw new Error("write blocked");
+      }),
+    };
+    expect(() =>
+      writeReport({ report, outputDir: "/tmp/bench-guarded", writeGuard })
+    ).toThrow("write blocked");
+    expect(writeGuard.ensureWritable).toHaveBeenCalledWith(expect.objectContaining({ reason: "report_write" }));
   });
 });
 

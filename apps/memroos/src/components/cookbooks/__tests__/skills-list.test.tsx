@@ -99,4 +99,77 @@ describe("SkillsList", () => {
     });
     expect(screen.getByText("Skill approved for general use.")).toBeTruthy();
   });
+
+  it("renders an empty state when no skill names are available", () => {
+    render(<SkillsList totalSkills={0} allSkills={[]} coverageGaps={[]} />);
+
+    expect(screen.getByText("No skills found.")).toBeTruthy();
+  });
+
+  it("builds fallback items from names and marks coverage as untracked", () => {
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["gap-skill", "ready-skill"]}
+        coverageGaps={["gap-skill"]}
+        coverageTelemetryStatus="untracked"
+      />
+    );
+
+    expect(screen.getByText("coverage untracked")).toBeTruthy();
+    expect(screen.getAllByText("Skill metadata is still being indexed.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("35%").length).toBeGreaterThan(0);
+  });
+
+  it("can start from current content and save a draft", async () => {
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["agent-standup", "enterprise-review"]}
+        skillDetails={skillDetails}
+        coverageGaps={[]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /start from current content/i }));
+    expect(screen.getByLabelText("Skill edit draft")).toHaveValue(skillDetails[0].bodyPreview);
+    fireEvent.change(screen.getByLabelText("Reason for this change"), {
+      target: { value: "Clarify the repeatable workflow." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        skillName: "agent-standup",
+        action: "save-draft",
+        notes: "",
+        draftBody: skillDetails[0].bodyPreview,
+        changeReason: "Clarify the repeatable workflow.",
+      });
+    });
+    expect(screen.getByText("Draft saved.")).toBeTruthy();
+  });
+
+  it("surfaces mutation failures and enterprise promotion notices", async () => {
+    mutateAsync.mockRejectedValueOnce(new Error("review service unavailable"));
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["agent-standup", "enterprise-review"]}
+        skillDetails={skillDetails}
+        coverageGaps={[]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /request changes/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Error: review service unavailable")).toBeTruthy();
+    });
+
+    mutateAsync.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(screen.getByRole("button", { name: /promote enterprise/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Skill promoted to enterprise review.")).toBeTruthy();
+    });
+  });
 });

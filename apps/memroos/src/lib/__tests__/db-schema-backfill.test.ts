@@ -151,4 +151,72 @@ describe("db-schema audit backfill", () => {
     expect(row).toEqual({ tenant_id: "tenant-a", correlation_id: "corr-1" });
     db.close();
   });
+
+  it("backfills legacy skill registry evidence requirements during v11 migration", () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE skill_registry (
+        id                  INTEGER PRIMARY KEY,
+        name                TEXT    NOT NULL,
+        description         TEXT,
+        owner               TEXT,
+        source_harness      TEXT    NOT NULL,
+        risk_tier           TEXT,
+        dispatch_status     TEXT    NOT NULL DEFAULT 'incomplete',
+        version             TEXT,
+        preconditions       TEXT,
+        allowed_tools       TEXT,
+        verification_checks TEXT,
+        rollback_behavior   TEXT,
+        raw_body            TEXT    NOT NULL DEFAULT '',
+        completeness_pct    INTEGER NOT NULL DEFAULT 0,
+        missing_fields_json TEXT    NOT NULL DEFAULT '[]',
+        imported_by         TEXT    NOT NULL,
+        imported_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        UNIQUE(name, source_harness)
+      );
+      INSERT INTO skill_registry
+        (name, source_harness, dispatch_status, raw_body, completeness_pct, missing_fields_json, imported_by)
+      VALUES
+        ('malformed-complete', 'claude', 'enabled', 'body', 100, 'not-json', 'legacy'),
+        ('already-missing-evidence', 'codex', 'review', 'body', 88, '["evidence_examples","owner",7]', 'legacy');
+      PRAGMA user_version = 10;
+    `);
+
+    expect(() => initSchema(db)).toThrow(/task_evidence_bundles/);
+
+    const rows = db.prepare(
+      `SELECT name, completeness_pct, missing_fields_json, trust_level
+         FROM skill_registry
+        ORDER BY name`
+    ).all() as Array<{
+      name: string;
+      completeness_pct: number;
+      missing_fields_json: string;
+      trust_level: string;
+    }>;
+
+    expect(rows).toEqual([
+      {
+        name: "already-missing-evidence",
+        completeness_pct: 88,
+        missing_fields_json: JSON.stringify(["evidence_examples", "owner"]),
+        trust_level: "unsigned",
+      },
+      {
+        name: "malformed-complete",
+        completeness_pct: 91,
+        missing_fields_json: JSON.stringify(["evidence_examples"]),
+        trust_level: "unsigned",
+      },
+    ]);
+    const flag = db.prepare("SELECT value FROM meta WHERE key = 'skill_registry_quarantine_check_v1'").get() as { value: string };
+    expect(flag.value).toBe("1");
+    expect(getSchemaVersion(db)).toBeGreaterThanOrEqual(11);
+    db.close();
+  });
 });

@@ -2162,5 +2162,166 @@ describe("skill-sync validation and failure paths", () => {
       })
     ).toThrow(SkillSyncError);
   });
+
+  it("detectHarnessSkills reports scanner edge cases without aborting valid files", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+    fs.writeFileSync(path.join(harnessRoots.claude, "notes.txt"), "ignore", "utf8");
+    fs.mkdirSync(path.join(harnessRoots.claude, "folder.md"));
+    fs.writeFileSync(
+      path.join(harnessRoots.claude, "fallback-name.md"),
+      "---\nversion: 1.2.3\n---\n\nbody",
+      "utf8"
+    );
+
+    const detected = detectHarnessSkills({
+      roots: {
+        ...harnessRoots,
+        codex: undefined,
+      } as unknown as ReturnType<typeof buildHarnessRoots>,
+    });
+
+    expect(detected.entries).toEqual([
+      expect.objectContaining({
+        skill_name: "fallback-name",
+        source_harness: "claude",
+        version: "1.2.3",
+        parse_error: "No `name:` frontmatter field; using filename as fallback",
+      }),
+    ]);
+    expect(detected.errors).toEqual([
+      expect.objectContaining({
+        file_path: path.join(harnessRoots.claude, "fallback-name.md"),
+        reason: "No `name:` frontmatter field; using filename as fallback",
+        source_harness: "claude",
+      }),
+    ]);
+  });
+
+  it("approveSyncProposalById reverifies safe files and refuses unsafe source paths", async () => {
+    const { createImportProposal, approveSyncProposalById, computeContentHash } =
+      await import("../skill-sync");
+    const harnessRoot = path.join(TMP_ROOT, "safe-root");
+    fs.mkdirSync(harnessRoot, { recursive: true });
+    const body = VALID_SKILL_MD("brand-new-sync", "1.0.0");
+    const filePath = path.join(harnessRoot, "brand-new-sync.md");
+    fs.writeFileSync(filePath, body, "utf8");
+
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "brand-new-sync",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: body,
+        content_hash: computeContentHash(body),
+        file_path: filePath,
+      },
+      source_root: harnessRoot,
+      proposed_by: "scanner",
+    });
+
+    const approved = approveSyncProposalById(db, {
+      proposal_id: proposal.pending_proposal_id!,
+      operator: "alice",
+      reason: "new skill",
+      apply_to_registry: false,
+    });
+
+    expect(approved).toMatchObject({
+      status: "approved",
+      registry_updated: false,
+      reverified_hash: computeContentHash(body),
+    });
+
+    const outsidePath = path.join(TMP_ROOT, "outside.md");
+    fs.writeFileSync(outsidePath, VALID_SKILL_MD("outside-sync", "1.0.0"), "utf8");
+    const unsafe = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "outside-sync",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: VALID_SKILL_MD("outside-sync", "1.0.0"),
+        content_hash: "9".repeat(64),
+        file_path: outsidePath,
+      },
+      source_root: harnessRoot,
+      proposed_by: "scanner",
+    });
+
+    const unsafeApproved = approveSyncProposalById(db, {
+      proposal_id: unsafe.proposal.pending_proposal_id!,
+      operator: "alice",
+      apply_to_registry: false,
+    });
+    expect(unsafeApproved.reverified_hash).toBeNull();
+  });
+
+  it("proposal-id rejection enforces stale updated_at concurrency", async () => {
+    const { createImportProposal, rejectSyncProposalById, SkillSyncError } =
+      await import("../skill-sync");
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "reject-stale-by-id",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("reject-stale-by-id", "1.0.0"),
+        content_hash: "a".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+
+    expect(() =>
+      rejectSyncProposalById(db, {
+        proposal_id: proposal.pending_proposal_id!,
+        operator: "alice",
+        reason: "stale UI",
+        expected_updated_at: "2020-01-01T00:00:00.000Z",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("pinVersion updates existing sync rows and clearVersionPin rejects rows without pins", async () => {
+    const { createImportProposal, pinVersion, clearVersionPin, SkillSyncError } =
+      await import("../skill-sync");
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "pin-existing-state",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("pin-existing-state", "1.0.0"),
+        content_hash: "b".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+
+    const pinned = pinVersion(db, {
+      skill_name: "pin-existing-state",
+      source_harness: "claude",
+      version: "1.0.0",
+      actor: "alice",
+    });
+    expect(pinned.version_pinned_to).toBe("1.0.0");
+
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "row-without-pin",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("row-without-pin", "1.0.0"),
+        content_hash: "c".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    expect(() =>
+      clearVersionPin(db, {
+        skill_name: "row-without-pin",
+        source_harness: "claude",
+        actor: "alice",
+      })
+    ).toThrow(SkillSyncError);
+  });
 });
 
