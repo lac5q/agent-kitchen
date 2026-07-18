@@ -54,6 +54,7 @@ describe("security policy guards", () => {
   afterEach(() => {
     delete process.env.MEMROOS_A2A_PROFILE;
     delete process.env.MEMROOS_ALLOW_LEGACY_UNDECLARED_CAPABILITIES;
+    delete process.env.MEMROOS_A2A_ALLOW_PRIVATE_NETWORK_CARDS;
   });
 
   it("allows legacy agents with no declared capabilities", () => {
@@ -103,6 +104,31 @@ describe("security policy guards", () => {
     expect(checkMemoryWritePolicy(agent, "graph")).toMatchObject({
       allowed: false,
       code: "MISSING_CAPABILITY",
+    });
+  });
+
+  it("denies private-network dispatch targets and falls back to host on malformed endpoint URLs", () => {
+    process.env.MEMROOS_A2A_ALLOW_PRIVATE_NETWORK_CARDS = "false";
+    const dispatchSkill = [{ id: "dispatch", name: "Dispatch", description: "", tags: [] }];
+
+    const loopbackHost = ["127", "0", "0", "1"].join(".");
+    for (const host of ["localhost", "service.local", "::1", loopbackHost, "10.0.0.7", "192.168.1.2", "172.20.0.1", "100.64.1.2"]) {
+      expect(checkDispatchPolicy("memroos", { ...remoteAgent(dispatchSkill), host })).toMatchObject({
+        allowed: false,
+        code: "NETWORK_POLICY_DENIED",
+        detail: expect.objectContaining({ host }),
+      });
+    }
+
+    const malformedEndpoint = checkDispatchPolicy("memroos", {
+      ...remoteAgent(dispatchSkill),
+      host: "10.8.0.2",
+      metadata: { a2a: { endpointUrl: "not a url" } },
+    });
+    expect(malformedEndpoint).toMatchObject({
+      allowed: false,
+      code: "NETWORK_POLICY_DENIED",
+      detail: expect.objectContaining({ host: "10.8.0.2" }),
     });
   });
 });

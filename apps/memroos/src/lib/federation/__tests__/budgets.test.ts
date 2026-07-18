@@ -2,7 +2,7 @@
 /**
  * VAL-ORCH-007: federation global + per-source budgets.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BudgetTracker, validateFederationBudget } from "../budgets";
 
 function okBudget() {
@@ -34,6 +34,10 @@ describe("VAL-ORCH-007 -- validateFederationBudget", () => {
 });
 
 describe("VAL-ORCH-007 -- BudgetTracker", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("enforces global source_count", () => {
     const t = new BudgetTracker(okBudget());
     expect(t.startSource("a").ok).toBe(true);
@@ -73,5 +77,33 @@ describe("VAL-ORCH-007 -- BudgetTracker", () => {
     if (!r.ok) expect(r.reason).toBe("global_byte_budget_exceeded");
     const r2 = t.startSource("c");
     expect(r2.ok).toBe(false);
+  });
+
+  it("enforces deadline, global call count, global result count, and unknown sources", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-05T00:00:00.000Z"));
+
+    const deadline = new BudgetTracker({ ...okBudget(), deadlineMs: 10 });
+    vi.advanceTimersByTime(11);
+    const late = deadline.startSource("late");
+    expect(late.ok).toBe(false);
+    if (!late.ok) expect(late.reason).toBe("deadline_exceeded");
+
+    const calls = new BudgetTracker({ ...okBudget(), maxCalls: 1 });
+    expect(calls.startSource("a").ok).toBe(true);
+    const overCalls = calls.startSource("a");
+    expect(overCalls.ok).toBe(false);
+    if (!overCalls.ok) expect(overCalls.reason).toBe("global_call_count_exceeded");
+
+    const results = new BudgetTracker({ ...okBudget(), globalResultCount: 1 });
+    results.startSource("a");
+    expect(results.recordResult("a", 1).ok).toBe(true);
+    const overResults = results.recordResult("a", 1);
+    expect(overResults.ok).toBe(false);
+    if (!overResults.ok) expect(overResults.reason).toBe("global_result_count_exceeded");
+
+    const unknown = new BudgetTracker(okBudget()).recordResult("missing", 1);
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.reason).toBe("unknown_source");
   });
 });

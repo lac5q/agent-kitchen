@@ -106,9 +106,40 @@ describe("redaction (VAL-RETR-004)", () => {
     expect(p1).toBe(p2);
     expect(p1).toBe("/tmp/results/locomo-lexical-external_retrieval-latest.json");
   });
+
+  it("detects additional sensitive sentinels and uses default output lane/extension", () => {
+    const r = scanForForbiddenContent({
+      nested: [
+        { marker: "[longmemeval-raw] conversation" },
+        { key: "-----BEGIN PRIVATE KEY-----\nabc" },
+        { note: "password=super-secret" },
+      ],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.violations.map((violation) => violation.reason)).toEqual(
+      expect.arrayContaining(["longmemeval_raw_marker", "private_key_block", "password_literal"]),
+    );
+
+    expect(canonicalOutputPath({ resultsDir: "/tmp/results///", dataset: "x", adapter: "y" })).toBe(
+      "/tmp/results/x-y-external_retrieval-latest.json",
+    );
+  });
 });
 
 describe("failure handling (VAL-RETR-009, VAL-RETR-022)", () => {
+  it("classifies null and non-Error throws without losing details", () => {
+    expect(classifyFailure(null)).toMatchObject({
+      status: "provider_failed",
+      reasonCode: "unknown_error",
+      detail: "no error detail provided",
+    });
+    expect(classifyFailure({ code: "E_CUSTOM", nested: true })).toMatchObject({
+      status: "provider_failed",
+      reasonCode: "non_error_throw",
+    });
+    expect(classifyFailure("plain string failure").detail).toBe("plain string failure");
+  });
+
   it("classifies timeouts as provider_timeout", () => {
     const c = classifyFailure(new Error("ETIMEDOUT calling provider"));
     expect(c.status).toBe("provider_timeout");
@@ -123,6 +154,15 @@ describe("failure handling (VAL-RETR-009, VAL-RETR-022)", () => {
     const c = checkProviderConfig({ provider: "mem0", envValue: "" });
     expect(c.ok).toBe(false);
     expect(c.status).toBe("credential_missing");
+  });
+
+  it("checkProviderConfig rejects missing provider names", () => {
+    const c = checkProviderConfig({ provider: "", envValue: "key" });
+    expect(c).toMatchObject({
+      ok: false,
+      reason: "provider_name_required",
+      status: "configuration_error",
+    });
   });
 
   it("checkProviderConfig returns ok when credential is present", () => {
@@ -152,6 +192,35 @@ describe("failure handling (VAL-RETR-009, VAL-RETR-022)", () => {
     if (!v.ok) {
       expect(v.reasons).toContain("live_injected_id_not_retrieved");
     }
+  });
+
+  it("rejects live retrievals missing scope hashes or carrying denied authorization", () => {
+    const missingScope = fakeResult();
+    missingScope.adapterName = "live";
+    missingScope.receipt.adapterName = "live";
+    missingScope.receipt.authorization = { evaluated: true, allowed: true };
+    missingScope.retrieved = [
+      { id: "mem-1", text: "x", score: 1, rankPosition: 1 },
+    ];
+    expect(validateAdapterResult(missingScope).reasons).toEqual(
+      expect.arrayContaining(["live_retrieval_missing_scope_hash", "live_retrieval_scope_mismatch"]),
+    );
+
+    const denied = fakeResult();
+    denied.adapterName = "live";
+    denied.receipt.adapterName = "live";
+    denied.receipt.authorization = { evaluated: true, allowed: true, scopeHash: "sha256:ok" };
+    denied.retrieved = [
+      {
+        id: "mem-2",
+        text: "y",
+        score: 1,
+        rankPosition: 1,
+        authorizationResult: "denied",
+        scopeHash: "sha256:ok",
+      },
+    ];
+    expect(validateAdapterResult(denied).reasons).toContain("live_retrieval_scope_mismatch");
   });
 
   it("summarizeFailures counts failures by status", () => {

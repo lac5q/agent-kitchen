@@ -80,6 +80,37 @@ describe("Erasure Coordinator", () => {
     expect(indirect.some(i => i.storeId === "context")).toBe(true);
   });
 
+  it("dedupes raw artifact vault neighbors during indirect traversal", () => {
+    const identity = buildCanonicalIdentity("vault content", "test_type", "artifact-1", "vector");
+    db.exec(`
+      CREATE TABLE raw_artifacts (
+        id TEXT PRIMARY KEY,
+        content_hash TEXT,
+        source_id TEXT
+      );
+    `);
+    db.prepare("INSERT INTO raw_artifacts (id, content_hash, source_id) VALUES (?, ?, ?)").run(
+      "artifact-1",
+      identity.canonicalHash,
+      identity.id,
+    );
+    db.prepare("INSERT INTO raw_artifacts (id, content_hash, source_id) VALUES (?, ?, ?)").run(
+      "artifact-duplicate",
+      identity.canonicalHash,
+      identity.id,
+    );
+
+    const indirect = traverseIndirectDerivatives(db, identity);
+    const vault = indirect.filter((item) => item.storeId === "vault");
+
+    expect(vault).toHaveLength(1);
+    expect(vault[0]).toMatchObject({
+      sourceHash: identity.canonicalHash,
+      provenance: "raw_artifacts:artifact-1",
+      metadata: { artifact_id: "artifact-1" },
+    });
+  });
+
   it("VAL-MEM-015: Erasure failures produce failed/pending/incomplete status, never false-complete", async () => {
     const identity = buildCanonicalIdentity("test content", "test_type", "ingress/test", "unavailable_adapter", { tenantId: "tenant1" });
     

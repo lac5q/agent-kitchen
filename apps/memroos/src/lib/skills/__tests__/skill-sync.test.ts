@@ -1539,6 +1539,28 @@ describe("skill-sync validation and failure paths", () => {
     expect(entry?.parse_error).toMatch(/No `name:` frontmatter/);
   });
 
+  it("createImportProposal sanitizes circular diff payloads instead of throwing", async () => {
+    const { createImportProposal } = await import("../skill-sync");
+    const circular: Record<string, unknown> = { reason: "scanner attached circular metadata" };
+    circular.self = circular;
+
+    const result = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "circular-payload",
+        source_harness: "claude",
+        version: "",
+        raw_body: VALID_SKILL_MD("circular-payload", "1.0.0"),
+        parse_error: null,
+      },
+      diff_payload: circular,
+      proposed_by: "scanner",
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.proposal.pending_diff_payload).toBe("{}");
+  });
+
   it("detectHarnessSkills rejects symlinked roots and skill files", async () => {
     const { detectHarnessSkills } = await import("../skill-sync");
     const harnessRoots = buildHarnessRoots(TMP_ROOT);

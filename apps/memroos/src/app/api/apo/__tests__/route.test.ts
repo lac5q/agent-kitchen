@@ -315,6 +315,30 @@ describe("POST /api/apo validation and errors", () => {
     expect((await apply.json()).applied).toBe(false);
   });
 
+  it("falls back when approved work item sidecar is missing and normalizes non-string executors", async () => {
+    const { POST } = await loadRoute();
+
+    const approve = await POST(
+      makeApproveRequest({
+        action: "approve",
+        proposalId: proposalFilename,
+        executorCli: 42,
+      }),
+    );
+    expect(approve.status).toBe(200);
+    expect((await approve.json()).executorCli).toBe("qwen");
+
+    rmSync(path.join(proposalsPath, "approved", `${proposalFilename}.json`), { force: true });
+    const apply = await POST(makeApproveRequest({ action: "apply-approved", proposalId: proposalFilename }));
+    expect(apply.status).toBe(200);
+    expect(await apply.json()).toMatchObject({
+      ok: true,
+      targetKind: "skill",
+      executorCli: "qwen",
+      archived: true,
+    });
+  });
+
   it("process-approved with an empty queue returns zero processed items", async () => {
     const { POST } = await loadRoute();
     const response = await POST(makeApproveRequest({ action: "process-approved" }));

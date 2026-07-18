@@ -421,6 +421,64 @@ describe("retrieval-bench fixture validation (VAL-RETR-002)", () => {
     }
   });
 
+  it("rejects malformed nested objects and incomplete candidate scopes", () => {
+    const malformed = validateTask(
+      makeTask({
+        corpus: ["not-object"],
+        sessions: [
+          "not-object",
+          {
+            session_id: "s2",
+            turns: "not-array",
+          },
+        ],
+        temporal_metadata: "not-object",
+        license: "",
+        citation: "",
+      }),
+      { seenIds: new Set() },
+    );
+
+    expect(malformed.ok).toBe(false);
+    if (!malformed.ok) {
+      expect(malformed.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: "corpus[0].entry", reason: "corpus_entry_not_object" }),
+          expect.objectContaining({ field: "sessions[0]", reason: "session_not_object" }),
+          expect.objectContaining({ field: "sessions[1].turns", reason: "session_turns_not_array" }),
+          expect.objectContaining({ field: "temporal_metadata", reason: "temporal_metadata_not_object" }),
+          expect.objectContaining({ field: "license", reason: "license_missing_or_empty" }),
+          expect.objectContaining({ field: "citation", reason: "citation_missing_or_empty" }),
+        ]),
+      );
+    }
+
+    const incompleteScope = validateTask(
+      makeTask({
+        corpus: [
+          {
+            id: "mem-1",
+            text: "Scoped memory.",
+            scope: {
+              tenantId: "tenant",
+              userId: "",
+              agentId: "agent",
+              spaceId: "space",
+              label: { visibility: "internal" },
+            },
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(incompleteScope.ok).toBe(false);
+    if (!incompleteScope.ok) {
+      expect(incompleteScope.issues).toContainEqual(
+        expect.objectContaining({ field: "corpus[0].scope", reason: "candidate_scope_invalid" }),
+      );
+    }
+  });
+
   it("rejects missing or non-object provenance explicitly", () => {
     const missing = validateTask(makeTask({ provenance: undefined }), { seenIds: new Set() });
     expect(missing.ok).toBe(false);

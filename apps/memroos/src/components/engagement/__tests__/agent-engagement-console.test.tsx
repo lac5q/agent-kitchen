@@ -566,6 +566,38 @@ describe("AgentEngagementConsole", () => {
     expect(screen.getAllByText("error").length).toBeGreaterThan(0);
   });
 
+  it("handles circular metadata and unknown status values while classifying support agents", () => {
+    const circular: Record<string, unknown> = { source: "pmo_agents" };
+    circular.self = circular;
+    vi.mocked(useAgents).mockReturnValue({
+      data: {
+        agents: [
+          {
+            ...mockAgents[1],
+            id: "unknown-status",
+            name: "Unknown Status",
+            role: "Directory",
+            status: "paused" as never,
+            metadata: {},
+          },
+          {
+            ...mockAgents[2],
+            id: "circular-support",
+            name: "Circular Support",
+            metadata: circular,
+          },
+        ],
+      },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    render(<AgentEngagementConsole />);
+    expect(screen.getAllByText("Unknown Status").length).toBeGreaterThan(0);
+    expect(screen.getByText("paused")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Show system \(1\)/i }));
+    expect(screen.getAllByText("Circular Support").length).toBeGreaterThan(0);
+  });
+
   it("uses active and all participant presets in room mode", async () => {
     vi.mocked(fetch).mockResolvedValue(chatStream("Room preset reply"));
 

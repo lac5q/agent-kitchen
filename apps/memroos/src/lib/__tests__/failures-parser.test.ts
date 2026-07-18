@@ -105,6 +105,24 @@ describe("parseFailuresLog", () => {
     expect(entries[0].agent_id).toBe("hermes");
     expect(entries[1].agent_id).toBe("gwen");
   });
+
+  it("handles escaped quotes and braces inside JSON strings", async () => {
+    mockReadFile.mockResolvedValue(
+      [
+        makeEntry({
+          agent_id: "quote-agent",
+          error_type: "permission_denied",
+          message: "escaped quote: \\\" and literal brace { not structure }",
+        }),
+        "{malformed}",
+        makeEntry({ agent_id: "after-malformed", error_type: "timeout" }),
+      ].join("\n") as never,
+    );
+
+    const entries = await parseFailuresLog("/fake/failures.log");
+
+    expect(entries.map((entry) => entry.agent_id)).toEqual(["quote-agent", "after-malformed"]);
+  });
 });
 
 describe("aggregateFailures", () => {

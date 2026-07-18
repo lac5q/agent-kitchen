@@ -485,4 +485,44 @@ describe("AgentRegistryPage", () => {
       expect(screen.getByText("Clipboard unavailable. Copy it from the box below.")).toBeInTheDocument();
     });
   });
+
+  it("handles thrown selection-copy fallbacks and successful rendered invite copies", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: vi.fn(() => {
+        throw new Error("blocked");
+      }),
+    });
+
+    const { rerender } = render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    let [, options] = mutateInvite.mock.calls[0];
+    await act(async () => {
+      await options.onSuccess({ command: "curl -fsSL https://memroos.example.test/invite | bash" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Invite created. Copy it from the box below.")).toBeInTheDocument();
+    });
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    vi.clearAllMocks();
+    rerender(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    [, options] = mutateInvite.mock.calls[0];
+    await act(async () => {
+      await options.onSuccess({ command: "curl -fsSL https://memroos.example.test/second | bash" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Agent onboarding prompt")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => {
+      expect(screen.getByText("Onboarding prompt copied to clipboard.")).toBeInTheDocument();
+    });
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://memroos.example.test/second"));
+  });
 });

@@ -166,6 +166,47 @@ describe("ChatGPT Actions bridge", () => {
     });
   });
 
+  it("validates required search, fetch, and save request fields", async () => {
+    const searchRoute = await loadSearchRoute();
+    const missingQuery = await searchRoute.POST(
+      new Request("http://localhost/api/chatgpt/actions/search", {
+        method: "POST",
+        body: JSON.stringify({ query: "   " }),
+      }),
+    );
+    expect(missingQuery.status).toBe(400);
+    await expect(missingQuery.json()).resolves.toMatchObject({ error: "query is required" });
+
+    const fetchRoute = await loadFetchRoute();
+    const missingId = await fetchRoute.POST(
+      new Request("http://localhost/api/chatgpt/actions/fetch", {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(missingId.status).toBe(400);
+    await expect(missingId.json()).resolves.toMatchObject({ error: "id is required" });
+
+    const invalidId = await fetchRoute.POST(
+      new Request("http://localhost/api/chatgpt/actions/fetch", {
+        method: "POST",
+        body: JSON.stringify({ id: "bad-id" }),
+      }),
+    );
+    expect(invalidId.status).toBe(400);
+    await expect(invalidId.json()).resolves.toMatchObject({ error: "Invalid MemRoOS result id" });
+
+    const saveRoute = await loadSaveRoute();
+    const missingText = await saveRoute.POST(
+      new Request("http://localhost/api/chatgpt/actions/save", {
+        method: "POST",
+        body: JSON.stringify({ text: "   ", metadata: ["not-object"] }),
+      }),
+    );
+    expect(missingText.status).toBe(400);
+    await expect(missingText.json()).resolves.toMatchObject({ error: "text is required" });
+  });
+
   it("fetches an encoded search result id", async () => {
     const search = await loadSearchRoute();
     const searchResponse = await search.POST(

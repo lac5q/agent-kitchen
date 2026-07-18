@@ -696,4 +696,95 @@ describe("VoicePanel", () => {
     fireEvent.click(screen.getByText("Stop speaking"));
     expect(pause).toHaveBeenCalled();
   });
+
+  it("uses webkit speech recognition, shows interim text, and cleans up when audio ends", async () => {
+    let recognition: {
+      onresult: ((event: SpeechRecognitionEvent) => void) | null;
+      start: () => void;
+      stop: () => void;
+    } | null = null;
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn(() => {
+        recognition = this;
+        const interim = {
+          isFinal: false,
+          0: { transcript: "partial words" },
+        } as unknown as SpeechRecognitionResult;
+        this.onresult?.({ results: [interim] } as unknown as SpeechRecognitionEvent);
+      });
+      stop = vi.fn();
+      constructor() {
+        recognition = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", undefined);
+    vi.stubGlobal("webkitSpeechRecognition", MockRecognition);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: {"text":"Audio done reply"}\n\ndata: [DONE]\n\n'));
+              controller.close();
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: async () => new Blob(["audio"], { type: "audio/mpeg" }),
+        }),
+    );
+    const revokeObjectURL = vi.fn();
+    let audioInstance: { onended: (() => void) | null; onerror: (() => void) | null } | null = null;
+    vi.stubGlobal(
+      "Audio",
+      class {
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        pause = vi.fn();
+        play = vi.fn().mockResolvedValue(undefined);
+        constructor() {
+          audioInstance = this;
+        }
+      },
+    );
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:voice-end"),
+      revokeObjectURL,
+    });
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+
+    expect(screen.getByText(/partial words/)).toBeInTheDocument();
+
+    await act(async () => {
+      const final = {
+        isFinal: true,
+        0: { transcript: "send final" },
+      } as unknown as SpeechRecognitionResult;
+      recognition?.onresult?.({ results: [final] } as unknown as SpeechRecognitionEvent);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Audio done reply")).toBeInTheDocument();
+      expect(screen.getByText("Stop speaking")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      audioInstance?.onended?.();
+    });
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:voice-end");
+    expect(screen.queryByText("Stop speaking")).not.toBeInTheDocument();
+  });
 });

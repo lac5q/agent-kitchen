@@ -73,6 +73,27 @@ describe("finance reconciliation parsing", () => {
     });
   });
 
+  it("parses quoted CSV fields, CRLF rows, source row aliases, and invalid status fallbacks", () => {
+    const csv = [
+      "transaction_id,correlation_id,tenant_id,agent_id,amount,expected_amount,status,confidence,reason,occurred_at,sourceRowId",
+      "\"txn,quoted\",corr-quoted,tenant-q,agent-q,not-a-number,15.50,unexpected,1.7,\"escaped \"\"reason\"\"\",2026-05-17T10:02:00Z,row-7",
+      "",
+    ].join("\r\n");
+
+    const [event] = parseTransactionCsv(csv);
+
+    expect(event).toMatchObject({
+      transactionId: "txn,quoted",
+      tenantId: "tenant-q",
+      amount: 0,
+      expectedAmount: 15.5,
+      status: "exception",
+      confidence: 1,
+      reason: 'escaped "reason"',
+      sourceRowId: "row-7",
+    });
+  });
+
   it("normalizes webhook payloads without trusting extra fields", () => {
     const event = normalizeWebhookTransaction({
       transaction_id: "txn-webhook",
