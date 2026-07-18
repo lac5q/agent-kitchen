@@ -642,9 +642,9 @@
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| OBSERVE-01 | Capture depth enum `summary` \| `relevant` \| `full` with default `relevant`; documented in `docs/integrations/observe-capture.md` | 167 | pending |
-| OBSERVE-02 | Server ingest enforces depth: `relevant` indexes summaries/candidates only; `full` may seal transcripts in vault under retention labels — not dump into mem0 by default | 167 | pending |
-| OBSERVE-03 | Org/env can raise depth later without schema break; secrets redacted; elevated sensitivity for jobhunt/PII paths | 167 | pending |
+| OBSERVE-01 | Capture depth enum `summary` \| `relevant` \| `full` with default `relevant`; documented in `docs/integrations/observe-capture.md` | 167 | complete |
+| OBSERVE-02 | Server ingest enforces depth: `relevant` indexes summaries/candidates only; `full` may seal transcripts in vault under retention labels — not dump into mem0 by default | 167 | complete |
+| OBSERVE-03 | Org/env can raise depth later without schema break; secrets redacted; elevated sensitivity for jobhunt/PII paths | 167 | complete |
 | OBSERVE-04 | Remote MCP onboard installer writes config for detected harnesses **including Pi**; no local MemRoOS clone required for Streamable HTTP | 168 | pending |
 | OBSERVE-05 | Employee uninstall + API key revoke path documented; onboard ≤5 minutes; observe prefers MemRoOS-registered agents (incl. `platform=pi`) | 168 | pending |
 | OBSERVE-06 | Observe sidecar watches session artifacts and POSTs to capture/ingest with heartbeat | 169 | pending |

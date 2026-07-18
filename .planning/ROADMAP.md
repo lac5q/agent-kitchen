@@ -2642,7 +2642,7 @@ Plans:
 
 *Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 21:10 PDT · Updated: 2026-07-17 21:10 PDT*
 
-**Status:** 📋 PLANNED  
+**Status:** 🔄 IN PROGRESS (Phase 167 code complete 2026-07-18)  
 **Depends on:** remote MCP (`docs/integrations/mcp.md`); `POST /api/agent-memory/capture` + `POST /api/native-memory/ingest` (Phase 96 / ENTOPS-07 sink); Hermes observe plugin as reference; `db-ingest.ts` session paths for Claude/Hermes/Codex/Qwen; fleet maturity matrix `docs/runtime-adapter-maturity.md`  
 **Why now:** MemRoOS is a strong store when fed, but onboarded agents (incl. **Pi**, Codex, Cursor, Claude, etc.) do work that never lands. Goal: every **already-onboarded** MemRoOS agent’s relevant work is captured autonomously.  
 **Product story (S13):** Remote MCP = company brain for onboarded agents; observe sidecar = autonomous capture. MCP alone is **not** a wiretap.  
@@ -2742,7 +2742,7 @@ Operator host
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 167. Capture policy + tiered retention | 0/0 | Planned | — |
+| 167. Capture policy + tiered retention | 1/1 code | Code complete — depth policy + capture wiring + tests | 2026-07-18 |
 | 168. Remote MCP employee onboard | 0/0 | Planned | — |
 | 169. Observe sidecar + Wave 1 (incl. Pi) | 0/0 | Planned | — |
 | 170. Wave 2 Cursor/Factory | 0/0 | Planned | — |

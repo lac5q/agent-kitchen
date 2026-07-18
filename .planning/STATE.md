@@ -4,7 +4,7 @@ milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
 stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
-last_updated: "2026-07-18T06:55:53Z"
+last_updated: "2026-07-18T07:07:31Z"
 progress:
   total_phases: 115
   completed_phases: 79
@@ -48,7 +48,7 @@ Completed recently: Goal lock + ROADMAP quality gate + `/tmp/refactor-memroos.md
 Last session: 2026-07-18T06:55:53Z
 Stopped at: Locked GSD quality-gate goal; MiniMax-M3 adaptive smoke OK; MemRoOS goal API unauthorized (local fallback).
 Resume file: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Next action: Beastmode-plan + execute v8.13 Phase 157 closeout, then continue roadmap excl. Voyage.
+Next action: Continue v8.16 Phases 168–171; ask Luis before v8.15 oracle-1 production cutover / Aura live write / Heroku decommission.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
