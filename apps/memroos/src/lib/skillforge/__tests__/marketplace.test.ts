@@ -2,6 +2,7 @@
  * SkillForge Marketplace tests — Phase 92
  */
 
+import { createHash } from "crypto";
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { publishSkill, searchListings, submitReview, recordDownload, deprecateSkill, checkDispatchEligibility, publishGovernedSkill } from "../marketplace";
@@ -48,6 +49,22 @@ function setupDb(): Database.Database {
     CREATE TABLE skill_reviews (
       id TEXT PRIMARY KEY, listing_id TEXT NOT NULL, reviewer TEXT NOT NULL,
       rating INTEGER NOT NULL, text TEXT NOT NULL, verified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE skill_quarantine (
+      skill_id INTEGER PRIMARY KEY,
+      stage TEXT NOT NULL
+    );
+    CREATE TABLE audit_entries (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      reason TEXT,
+      metadata_json TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
   `);
@@ -310,5 +327,106 @@ describe("marketplace", () => {
     });
     expect(missingId.success).toBe(false);
     expect(missingId.code).toBe("missing_skill_id");
+  });
+
+  it("rejects retired, tampered, rejected, and unsigned governed publishes", () => {
+    registerSkill(db, "retired");
+    db.prepare(`UPDATE skill_registry SET lifecycle_state = 'retired' WHERE name = ?`).run("retired");
+    expect(publishGovernedSkill(db, "retired", {
+      name: "Retired",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    })).toMatchObject({ success: false, code: "retired" });
+
+    registerSkill(db, "tampered");
+    db.prepare(`UPDATE skill_registry SET content_hash = ? WHERE name = ?`).run("bad-hash", "tampered");
+    expect(publishGovernedSkill(db, "tampered", {
+      name: "Tampered",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    })).toMatchObject({ success: false, code: "tampered" });
+
+    registerSkill(db, "rejected");
+    const rejectedId = db.prepare(`SELECT id FROM skill_registry WHERE name = ?`).get("rejected") as { id: number };
+    db.prepare(`INSERT INTO skill_quarantine (skill_id, stage) VALUES (?, 'rejected')`).run(rejectedId.id);
+    expect(publishGovernedSkill(db, "rejected", {
+      name: "Rejected",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    })).toMatchObject({ success: false, code: "quarantine_rejected" });
+
+    registerSkill(db, "unsigned");
+    expect(publishGovernedSkill(db, "unsigned", {
+      name: "Unsigned",
+      description: "Desc",
+      author: "a",
+      tags: [],
+      category: "cat",
+      changelog: "",
+    }, { requireSigned: true })).toMatchObject({ success: false, code: "unsigned" });
+  });
+
+  it("publishes signed governed skills with audit metadata and explicit harness", () => {
+    const rawBody = "signed body";
+    const contentHash = createHash("sha256").update(rawBody, "utf8").digest("hex");
+    db.prepare(
+      `INSERT INTO skill_registry
+        (name, source_harness, dispatch_status, raw_body, imported_by, version, signature, content_hash)
+       VALUES ('signed-skill', 'codex', 'enabled', ?, 'op', '3.0.0', 'sig', ?)`
+    ).run(rawBody, contentHash);
+
+    const result = publishGovernedSkill(db, "signed-skill", {
+      name: "Signed Skill",
+      description: "Desc",
+      author: "a",
+      tags: ["signed"],
+      category: "cat",
+      changelog: "signed",
+    }, { requireSigned: true, sourceHarness: "codex", actor: "operator-1" });
+
+    expect(result.success).toBe(true);
+    const listing = searchListings(db, { query: "Signed Skill" }).listings[0];
+    expect(listing.version).toBe("3.0.0");
+    expect(listing.isDispatchable).toBe(true);
+
+    const audit = db.prepare(`SELECT actor_id, metadata_json FROM audit_entries WHERE event_type = ?`).get("skill_marketplace_published") as {
+      actor_id: string;
+      metadata_json: string;
+    };
+    expect(audit.actor_id).toBe("operator-1");
+    expect(JSON.parse(audit.metadata_json)).toMatchObject({
+      skill_name: "signed-skill",
+      source_harness: "codex",
+      version: "3.0.0",
+    });
+  });
+
+  it("searchListings marks rejected registry rows and failed eligibility checks as non-dispatchable", () => {
+    registerSkill(db, "listed-rejected");
+    const rejectedId = db.prepare(`SELECT id FROM skill_registry WHERE name = ?`).get("listed-rejected") as { id: number };
+    db.prepare(`INSERT INTO skill_quarantine (skill_id, stage) VALUES (?, 'rejected')`).run(rejectedId.id);
+    db.prepare(
+      `INSERT INTO skill_marketplace
+       (id, skill_id, name, description, author, tags, version, changelog, rating, review_count, download_count, category, published_at, updated_at, deprecated)
+       VALUES ('listed-rejected', ?, 'Rejected Listing', 'd', 'a', '[]', '1.0.0', '', 0, 0, 0, 'cat', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0)`
+    ).run(String(rejectedId.id));
+
+    const rejectedListing = searchListings(db, { query: "Rejected Listing" }).listings[0];
+    expect(rejectedListing.isDispatchable).toBe(false);
+    expect(rejectedListing.dispatchDenialReason).toBe("quarantine stage='rejected'");
+
+    db.prepare(`DROP TABLE skill_registry`).run();
+    const failedCheck = searchListings(db, { query: "Rejected Listing" }).listings[0];
+    expect(failedCheck.isDispatchable).toBe(false);
+    expect(failedCheck.dispatchDenialReason).toBe("dispatch eligibility check failed");
   });
 });

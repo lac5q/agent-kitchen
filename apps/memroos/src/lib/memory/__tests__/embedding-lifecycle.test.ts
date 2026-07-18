@@ -9,6 +9,7 @@ import {
   removeEmbeddingForCanonical,
   LocalMessageEmbeddingAdapter,
   type EmbeddingLifecycleAdapter,
+  type EmbeddingProvenanceRow,
 } from "../embedding-lifecycle";
 
 function freshDb(): Database.Database {
@@ -218,5 +219,159 @@ describe("VAL-MEM-011: embedding lifecycle is provenance-linked and removable", 
   it("getEmbeddingProvenance returns null when the row is absent", () => {
     const result = getEmbeddingProvenance(db, "tenant1", "missing", "vector", "model-1", "local");
     expect(result).toBeNull();
+  });
+
+  it("returns empty/null values when the provenance table is missing", () => {
+    const missingDb = new Database(":memory:");
+    try {
+      expect(() =>
+        registerEmbeddingProvenance(missingDb, {
+          tenantId: "tenant1",
+          canonicalId: "canon",
+          storeId: "vector",
+          sourceHash: "h1",
+          modelId: "model-1",
+          provenance: "ingress/test",
+        }),
+      ).toThrow("memory_embedding_provenance table is missing");
+      expect(getEmbeddingProvenance(missingDb, "tenant1", "canon", "vector", "model-1", "local")).toBeNull();
+      expect(listEmbeddingProvenanceForCanonical(missingDb, "tenant1", "canon")).toEqual([]);
+      expect(markEmbeddingStale(missingDb, { tenantId: "tenant1", id: "missing", reason: "x" })).toBeNull();
+      expect(markEmbeddingDegraded(missingDb, { tenantId: "tenant1", id: "missing", reason: "x" })).toBeNull();
+
+      const fakeRow: EmbeddingProvenanceRow = {
+        id: "row",
+        tenantId: "tenant1",
+        canonicalId: "canon",
+        storeId: "vector",
+        adapterKind: "local",
+        sourceHash: "h",
+        modelId: "model",
+        modelVersion: null,
+        dimensionality: 0,
+        provenance: "test",
+        lifecycleState: "active",
+        removability: "erasable",
+        externalRef: null,
+        lastRefreshedAt: null,
+        metadata: {},
+        erasureId: null,
+        removedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      };
+      expect(removeEmbeddingForCanonical(missingDb, {
+        tenantId: "tenant1",
+        row: fakeRow,
+        erasureId: "erase",
+      })).toMatchObject({ status: "failed", reason: expect.stringContaining("table missing") });
+    } finally {
+      missingDb.close();
+    }
+  });
+
+  it("handles deferred, adapter mismatch, zero-match, and unavailable removal outcomes", () => {
+    const deferred = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-deferred",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+      removability: "deferred",
+    });
+    expect(removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row: deferred,
+      erasureId: "erase-deferred",
+    })).toMatchObject({ status: "tombstoned", reason: "deferred_tombstoned" });
+
+    const mismatch = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-mismatch",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+    });
+    expect(removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row: mismatch,
+      erasureId: "erase-mismatch",
+      adapter: {
+        storeId: "cache",
+        delete: () => true,
+      },
+    })).toMatchObject({ status: "failed", reason: "adapter_store_mismatch:cache" });
+
+    const zeroMatch = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-zero",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+    });
+    expect(removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row: zeroMatch,
+      erasureId: "erase-zero",
+      adapter: {
+        storeId: "vector",
+        delete: () => false,
+      },
+    })).toMatchObject({ status: "zero_match", reason: "adapter_zero_match" });
+
+    const unavailable = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-unavailable",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+    });
+    expect(removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row: unavailable,
+      erasureId: "erase-unavailable",
+      adapter: {
+        storeId: "vector",
+        delete: () => {
+          throw new Error("provider down");
+        },
+      },
+    })).toMatchObject({ status: "unavailable", reason: "provider down" });
+  });
+
+  it("does not rewrite removed rows when marking stale or degraded", () => {
+    const row = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-removed",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+    });
+    const removed = removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row,
+      erasureId: "erase-removed",
+    }).row;
+
+    expect(markEmbeddingStale(db, {
+      tenantId: "tenant1",
+      id: removed.id,
+      reason: "late-stale",
+    })?.lifecycleState).toBe("removed");
+    expect(markEmbeddingDegraded(db, {
+      tenantId: "tenant1",
+      id: removed.id,
+      reason: "late-degraded",
+    })?.lifecycleState).toBe("removed");
+    expect(markEmbeddingStale(db, {
+      tenantId: "tenant1",
+      id: "missing",
+      reason: "no-row",
+    })).toBeNull();
   });
 });

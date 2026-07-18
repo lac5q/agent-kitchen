@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -132,5 +132,52 @@ describe("Hermes memory client v2", () => {
     const purged = purgeExpiredMemories(hermesRoot, new Date());
     expect(purged.archived).toContain(expired.id);
     expect(searchMemories(hermesRoot, "legacy compatible fact")).toHaveLength(1);
+  });
+
+  it("recovers from a corrupt store by treating it as empty", () => {
+    const hermesRoot = root();
+    mkdirSync(path.join(hermesRoot, "memory", "v2"), { recursive: true });
+    writeFileSync(path.join(hermesRoot, "memory", "v2", "memories.json"), "not-json");
+
+    expect(searchMemories(hermesRoot, "anything")).toEqual([]);
+
+    const added = addMemory(hermesRoot, { content: "fresh memory after corruption" });
+    expect(added.content).toBe("fresh memory after corruption");
+    expect(JSON.parse(readFileSync(path.join(hermesRoot, "memory", "v2", "memories.json"), "utf8"))).toHaveLength(1);
+  });
+
+  it("keeps ttlDays=0 memories and supports replace/remove tool actions", () => {
+    const hermesRoot = root();
+    const retained = addMemory(hermesRoot, {
+      content: "do not expire this runtime memory",
+      ttlDays: 0,
+      createdAt: new Date(Date.now() - 365 * 86_400_000).toISOString(),
+    });
+    const replace = memoryTool(hermesRoot, {
+      action: "replace",
+      id: retained.id,
+      content: "updated non-expiring runtime memory",
+    });
+    expect(replace).toEqual({ ok: true });
+
+    const purged = purgeExpiredMemories(hermesRoot, new Date());
+    expect(purged.archived).not.toContain(retained.id);
+    expect(searchMemories(hermesRoot, "updated non-expiring runtime memory", { threshold: 0.1 })).toHaveLength(1);
+
+    const remove = memoryTool(hermesRoot, { action: "remove", id: retained.id });
+    expect(remove).toEqual({ ok: true });
+    expect(searchMemories(hermesRoot, "updated non-expiring runtime memory", { threshold: 0.1 })).toEqual([]);
+  });
+
+  it("rejects incomplete memory tool mutations", () => {
+    const hermesRoot = root();
+    expect(memoryTool(hermesRoot, { action: "add" })).toEqual({
+      ok: false,
+      error: "content is required",
+    });
+    expect(memoryTool(hermesRoot, { action: "replace", id: "missing" })).toEqual({
+      ok: false,
+      error: "id and content are required",
+    });
   });
 });

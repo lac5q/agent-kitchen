@@ -379,4 +379,63 @@ describe("retrieval-bench fixture validation (VAL-RETR-002)", () => {
     expect(ok).toMatchObject({ ok: true, invalid: 0, valid: expect.any(Array) });
     expect(ok.valid).toHaveLength(2);
   });
+
+  it("rejects malformed collection fields without treating them as wildcards", () => {
+    const sessions = validateTask(
+      makeTask({
+        sessions: "not-array",
+      }),
+      { seenIds: new Set() },
+    );
+    expect(sessions.ok).toBe(false);
+    if (!sessions.ok) {
+      expect(sessions.issues).toContainEqual(
+        expect.objectContaining({ field: "sessions", reason: "sessions_not_array" }),
+      );
+    }
+
+    const turnShape = validateTask(
+      makeTask({
+        sessions: [
+          {
+            session_id: "s1",
+            turns: ["not-object"],
+          },
+        ],
+      }),
+      { seenIds: new Set() },
+    );
+    expect(turnShape.ok).toBe(false);
+    if (!turnShape.ok) {
+      expect(turnShape.issues).toContainEqual(
+        expect.objectContaining({ field: "sessions[0].turns[0]", reason: "turn_not_object" }),
+      );
+    }
+
+    const corpusShape = validateTask(makeTask({ corpus: "not-array" }), { seenIds: new Set() });
+    expect(corpusShape.ok).toBe(false);
+    if (!corpusShape.ok) {
+      expect(corpusShape.issues).toContainEqual(
+        expect.objectContaining({ field: "corpus", reason: "corpus_missing_or_not_array" }),
+      );
+    }
+  });
+
+  it("rejects missing or non-object provenance explicitly", () => {
+    const missing = validateTask(makeTask({ provenance: undefined }), { seenIds: new Set() });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.issues).toContainEqual(
+        expect.objectContaining({ field: "provenance", reason: "provenance_missing" }),
+      );
+    }
+
+    const wrongShape = validateTask(makeTask({ provenance: "synthetic" }), { seenIds: new Set() });
+    expect(wrongShape.ok).toBe(false);
+    if (!wrongShape.ok) {
+      expect(wrongShape.issues).toContainEqual(
+        expect.objectContaining({ field: "provenance", reason: "provenance_not_object" }),
+      );
+    }
+  });
 });

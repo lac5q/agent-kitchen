@@ -212,3 +212,88 @@ describe("matchDimensions — wildcard rules", () => {
     ).toBe(true);
   });
 });
+
+describe("matchDimensions — scalar and extended fields", () => {
+  it("matches role, userId, and agentId only when each specified subject field matches", () => {
+    const rule: PolicyDimensionRule = {
+      subject: {
+        role: ["reviewer"],
+        userId: "user-1",
+        agentId: "agent-1",
+      },
+      effect: "deny",
+    };
+
+    expect(
+      matchDimensions(rule, {
+        subject: {
+          role: ["reviewer"],
+          userId: "user-1",
+          agentId: "agent-1",
+        },
+      })
+    ).toBe(true);
+
+    expect(
+      matchDimensions(rule, {
+        subject: {
+          role: ["reviewer"],
+          userId: "user-2",
+          agentId: "agent-1",
+        },
+      })
+    ).toBe(false);
+    expect(
+      matchDimensions(rule, {
+        subject: {
+          role: ["operator"],
+          userId: "user-1",
+          agentId: "agent-1",
+        },
+      })
+    ).toBe(false);
+  });
+
+  it("matches object visibility, belief stage, and ontology type with scalar request values", () => {
+    const rule: PolicyDimensionRule = {
+      object: {
+        visibility: ["private"],
+        beliefStage: ["silver_candidate_claim"],
+        ontologyType: ["memory.contact_event"],
+      },
+      effect: "deny",
+    };
+
+    expect(
+      matchDimensions(rule, {
+        object: {
+          visibility: "private" as never,
+          beliefStage: "silver_candidate_claim" as never,
+          ontologyType: "memory.contact_event" as never,
+        },
+      })
+    ).toBe(true);
+
+    expect(
+      matchDimensions(rule, {
+        object: {
+          visibility: "internal" as never,
+          beliefStage: "silver_candidate_claim" as never,
+          ontologyType: "memory.contact_event" as never,
+        },
+      })
+    ).toBe(false);
+  });
+
+  it("requires supplied request action and purpose when rules specify them", () => {
+    const rule: PolicyDimensionRule = {
+      action: ["export"],
+      purpose: ["dsar"],
+      effect: "deny",
+    };
+
+    expect(matchDimensions(rule, { action: "export", purpose: "dsar" })).toBe(true);
+    expect(matchDimensions(rule, { action: "export" })).toBe(false);
+    expect(matchDimensions(rule, { purpose: "dsar" })).toBe(false);
+  });
+});

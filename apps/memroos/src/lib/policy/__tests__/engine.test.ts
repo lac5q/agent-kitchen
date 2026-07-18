@@ -16,7 +16,11 @@ import {
 } from "@/lib/audit/event-types";
 import { initSchema } from "@/lib/db-schema";
 import { authorizeMemoryUse } from "@/lib/memory/policy-gate";
-import { checkDispatchPolicy } from "@/lib/security-policy";
+import {
+  checkA2aSendPolicy,
+  checkDispatchPolicy,
+  checkMemoryWritePolicy,
+} from "@/lib/security-policy";
 import type { RemoteAgentConfig } from "@/types";
 
 import {
@@ -172,6 +176,47 @@ describe("policy engine — capability domain", () => {
     // Sanity: the underlying decision is also a deny so the wrapper didn't
     // accidentally flip the outcome.
     expect(evaluation.capability?.allowed).toBe(false);
+  });
+
+  it("a2a-send and memory-write capabilities return the wrapped decisions unchanged", () => {
+    const agent = {
+      id: "agent:capability",
+      name: "Capability Agent",
+      role: "worker",
+      platform: "claude",
+      protocol: "a2a",
+      metadata: {
+        capabilities: {
+          a2aSend: true,
+          memoryWrite: ["short"],
+        },
+      },
+    };
+
+    const a2a = evaluatePolicy({
+      domain: "capability",
+      action: "a2a.send",
+      actor: { id: agent.id, role: "agent" },
+      capability: {
+        kind: "a2a-send",
+        agent,
+      },
+    });
+    expect(a2a.receipt.ruleMatched).toBe("capability.a2a-send");
+    expect(a2a.capability).toEqual(checkA2aSendPolicy(agent));
+
+    const memoryWrite = evaluatePolicy({
+      domain: "capability",
+      action: "memory.write",
+      actor: { id: agent.id, role: "agent" },
+      capability: {
+        kind: "memory-write",
+        agent,
+        tier: "short",
+      },
+    });
+    expect(memoryWrite.receipt.ruleMatched).toBe("capability.memory-write");
+    expect(memoryWrite.capability).toEqual(checkMemoryWritePolicy(agent, "short"));
   });
 });
 
@@ -436,5 +481,45 @@ describe("policy engine — knowledge domain (declarative pass-through)", () => 
     expect(evaluation.receipt.reason).toBe("ontology_context_unavailable");
 
     db.exec(`DROP TRIGGER deny_policy_receipt_audit;`);
+  });
+});
+
+describe("policy engine — request validation", () => {
+  it("rejects missing required fields and mismatched domain payloads", () => {
+    expect(() => evaluatePolicy({ domain: "" as never, action: "x" })).toThrow("domain is required");
+    expect(() => evaluatePolicy({ domain: "knowledge", action: "" })).toThrow("action is required");
+    expect(() => evaluatePolicy({ domain: "memory-use", action: "x" })).toThrow("memory-use domain requires memoryUse payload");
+    expect(() => evaluatePolicy({ domain: "capability", action: "x" })).toThrow("capability domain requires capability payload");
+    expect(() => evaluatePolicy({ domain: "knowledge", action: "x" })).toThrow("knowledge domain requires an actor");
+    expect(() => evaluatePolicy({ domain: "unknown" as never, action: "x" })).toThrow("unsupported domain");
+  });
+
+  it("requires persisted ontology resolution for ontology-sensitive requests", () => {
+    expect(() =>
+      evaluateKnowledgePolicy({
+        action: "knowledge.read",
+        actor: { id: "agent:test", role: "agent" },
+        ontologyReference: {
+          tenantId: "default-tenant",
+          spaceId: "knowledge-space",
+          recordType: "knowledge",
+          recordId: "record-1",
+        },
+      }),
+    ).toThrow("ontology-sensitive decisions require persistence");
+
+    expect(() =>
+      evaluatePolicy({
+        domain: "knowledge",
+        action: "knowledge.read",
+        actor: { id: "agent:test", role: "agent" },
+        ontologyReference: {
+          tenantId: "default-tenant",
+          spaceId: "knowledge-space",
+          recordType: "knowledge",
+          recordId: "record-1",
+        },
+      }),
+    ).toThrow("ontology-sensitive decisions require persistence");
   });
 });
