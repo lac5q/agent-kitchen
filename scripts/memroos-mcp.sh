@@ -15,7 +15,7 @@ MEMROOS_REQUIRE_SERVER_MEMORY="${MEMROOS_REQUIRE_SERVER_MEMORY:-0}"
 MEMROOS_ALLOWED_MEMORY_TIER_STATUSES="${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}"
 MEMROOS_MCP_STRICT_CHECK_ATTEMPTS="${MEMROOS_MCP_STRICT_CHECK_ATTEMPTS:-5}"
 MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC="${MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC:-2}"
-MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC:-10}"
+MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC="${MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC:-25}"
 
 run_with_timeout() {
   local seconds="$1"
@@ -185,7 +185,7 @@ require_server_memory_access() {
   allowed_tier_statuses=",${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES//[[:space:]]/},"
   attempts="$(positive_int_or_default "$MEMROOS_MCP_STRICT_CHECK_ATTEMPTS" 5)"
   delay="$(nonnegative_int_or_default "$MEMROOS_MCP_STRICT_CHECK_RETRY_DELAY_SEC" 2)"
-  timeout="$(positive_int_or_default "$MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC" 10)"
+  timeout="$(positive_int_or_default "$MEMROOS_MCP_STRICT_CHECK_TIMEOUT_SEC" 25)"
 
   [[ -n "$agent_id" ]] || strict_fail "MEMROOS_AGENT_ID could not be resolved"
   [[ -n "$key" ]] || strict_fail "MEMROOS_AGENT_API_KEY could not be loaded for ${agent_id}"

@@ -14,22 +14,37 @@ mkdir -p "$SCRIPT_DIR/logs"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Mem0 server..." | tee -a "$LOG_FILE"
 
-# Load environment variables
+# Load .env without clobbering secrets already injected by launchd/runtime.
+# Observed failure mode (2026-07-16): a stale/short QDRANT_API_KEY in .env
+# overwrote the working launchd JWT and Qdrant Cloud returned 403 Forbidden.
 if [ -f "$SCRIPT_DIR/.env" ]; then
-    set -a
-    source "$SCRIPT_DIR/.env"
-    set +a
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      ''|*[!A-Za-z0-9_]* ) continue ;;
+    esac
+    # Only set if unset or empty — preserve launchd EnvironmentVariables.
+    if [ -z "${!key+x}" ] || [ -z "${!key}" ]; then
+      export "$key=$value"
+    fi
+  done < "$SCRIPT_DIR/.env"
 fi
 
 # Activate virtual environment — prefer memroos venv, fall back to knowledge venv for backward compat
 if [ -f "$SCRIPT_DIR/../../.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/../../.venv/bin/activate"
 elif [ -f "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate" ]; then
+    # shellcheck disable=SC1091
     source "${KNOWLEDGE_VENV:-$HOME/github/knowledge/.venv}/bin/activate"
 fi
 
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || command -v python)}"
-MEM0_DEP_CHECK_TIMEOUT_SEC="${MEM0_DEP_CHECK_TIMEOUT_SEC:-180}"
+MEM0_DEP_CHECK_TIMEOUT_SEC="${MEM0_DEP_CHECK_TIMEOUT_SEC:-30}"
 
 run_with_timeout() {
     local seconds="$1"
@@ -40,25 +55,32 @@ run_with_timeout() {
     elif command -v gtimeout >/dev/null 2>&1; then
         gtimeout "$seconds" "$@"
     else
-        "$@"
+        # macOS often lacks GNU timeout — use Python so dep checks cannot hang forever.
+        "$PYTHON_BIN" - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+seconds = float(sys.argv[1])
+cmd = sys.argv[2:]
+try:
+    raise SystemExit(subprocess.call(cmd, timeout=seconds))
+except subprocess.TimeoutExpired:
+    print(f"dependency check timed out after {seconds:.0f}s", file=sys.stderr)
+    raise SystemExit(124)
+PY
     fi
 }
 
+# Lightweight check only — avoid importing heavy mem0/qdrant at boot (slow + flaky).
 if ! run_with_timeout "$MEM0_DEP_CHECK_TIMEOUT_SEC" "$PYTHON_BIN" - <<'PY' >> "$LOG_FILE" 2>&1
-import importlib
+import importlib.util
 import sys
 
-missing = []
-for module in ("fastapi", "uvicorn", "yaml", "qdrant_client", "httpx", "mem0"):
-    try:
-        importlib.import_module(module)
-    except Exception as exc:
-        missing.append(f"{module}: {exc}")
-
+missing = [name for name in ("fastapi", "uvicorn", "yaml", "httpx") if importlib.util.find_spec(name) is None]
 if missing:
     print("Mem0 service dependency check failed:")
     for item in missing:
-        print(f"- {item}")
+        print(f"- {item}: not installed")
     sys.exit(1)
 PY
 then
