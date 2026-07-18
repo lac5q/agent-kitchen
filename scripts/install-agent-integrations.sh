@@ -136,6 +136,13 @@ declare -a TARGETS=(
   "grok|$HOME_DIR/.grok/AGENTS.md|$HOME_DIR/.grok/skills|json"
   "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|yaml"
   "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|yaml"
+  # Antigravity: OBSERVE-12. No capture path is verified for this harness
+  # (no CLI, no JSONL, no MCP surface we have observed). The TARGETS row
+  # below routes its AGENTS.md + skill to a MemRoOS-owned stub directory
+  # under ~/.config so it cannot collide with a future Antigravity install
+  # and the install run prints a clear honest signal instead of pretending
+  # to wire something we have not proven.
+  "antigravity|$HOME_DIR/.config/memroos/observe/antigravity/AGENTS.md|$HOME_DIR/.config/memroos/observe/antigravity/skills|none"
 )
 
 # OpenClaw workspaces (discovered)
@@ -455,15 +462,20 @@ case "$MODE" in
     echo ""
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
-      install_agents_md "$agents_file"
-      install_skill "$skills_dir"
       case "$mcp_style" in
-        yaml) upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
-        toml) upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
-        json) upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
-        cursor-json) upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
-        zcode-json) upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
-        factory-json) upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
+        none)
+          # OBSERVE-12: Antigravity has no installer surface we have verified.
+          # Print the honest signal; do not write AGENTS.md/skill for a CLI
+          # that does not exist on the host.
+          warn "$name: no installer surface; observe via MCP only (verify-by-design)"
+          continue
+          ;;
+        yaml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
+        toml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
+        json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
+        cursor-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
+        zcode-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
+        factory-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
       esac
       log "$name → $agents_file"
     done
@@ -478,6 +490,10 @@ case "$MODE" in
     missing=0
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
+      if [[ "$mcp_style" == "none" ]]; then
+        warn "$name: no installer surface; verify-by-design (no AGENTS.md/skill expected)"
+        continue
+      fi
       if [[ ! -f "$agents_file" ]] || ! diff -q "$TEMPLATE" "$agents_file" >/dev/null 2>&1; then
         warn "$name: AGENTS.md missing or drifted ($agents_file)"
         missing=$((missing+1))
@@ -501,6 +517,12 @@ case "$MODE" in
     echo ""
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
+      case "$mcp_style" in
+        none)
+          warn "$name: no installer surface; nothing to remove"
+          continue
+          ;;
+      esac
       uninstall_agents_md "$agents_file"
       uninstall_skill "$skills_dir"
       case "$mcp_style" in
