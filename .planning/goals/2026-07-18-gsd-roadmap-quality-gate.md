@@ -1,8 +1,8 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T07:07:31Z
-- **Version:** 2026-07-18.4
+- **Update date:** 2026-07-18T07:08:51Z
+- **Version:** 2026-07-18.5
 - **Lane:** code
 - **Status:** active (local-only; MemRoOS `/api/gsd/goal` unauthorized — no `MEMROOS_AGENT_API_KEY`)
 - **Worker lane:** Beastmode MiniMax-M3 (`thinking.type=adaptive` high reasoning) — smoke verified `MINIMAX OK`
@@ -28,8 +28,8 @@ Complete the remaining MemRoOS GSD roadmap (not Voyage), then raise quality thro
 - [x] v8.13 Phases 157–159 closed with verification evidence (or blocked with infra deps documented).
 - [x] v8.14 Phases 160–162 implemented + verified (or blocked handoff).
 - [ ] v8.15 Phases 163–165 advanced only with explicit approval for production/destructive steps; Phase 166 Voyage explicitly skipped.
-- [~] v8.16 Phase 167 capture-depth complete; Phases 168–171 remain (or blocked handoff).
-- [ ] v8.16 Phases 168–171 implemented + verified for Wave scope achievable in cloud (or blocked handoff).
+- [x] v8.16 Phases 167–169 code/docs complete in cloud; Phases 170–171 (Wave2/3 + NOC visibility) remain.
+- [ ] v8.16 Phases 170–171 implemented + verified for Wave scope achievable in cloud (or blocked handoff).
 - [ ] Test coverage improved toward 100% with measured report; remaining gaps listed if blocked.
 - [ ] Feature inventory + UAT pack exists; clean pass or blocked handoff.
 - [ ] `npm test -- --run` and `npm run test:slow -- --run` (as applicable) green after fixes.

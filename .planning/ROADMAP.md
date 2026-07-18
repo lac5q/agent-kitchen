@@ -2743,8 +2743,8 @@ Operator host
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 167. Capture policy + tiered retention | 1/1 code | Code complete — depth policy + capture wiring + tests | 2026-07-18 |
-| 168. Remote MCP employee onboard | 0/0 | Planned | — |
-| 169. Observe sidecar + Wave 1 (incl. Pi) | 0/0 | Planned | — |
+| 168. Remote MCP employee onboard | 1/1 docs+installer | Pi already in TARGETS; onboard doc shipped | 2026-07-18 |
+| 169. Observe sidecar + Wave 1 (incl. Pi) | 1/1 code | Sidecar + path policy + dry-run; live capture needs operator key | 2026-07-18 |
 | 170. Wave 2 Cursor/Factory | 0/0 | Planned | — |
 | 171. Wave 3 Antigravity + onboarded-agent visibility | 0/0 | Planned | — |
 

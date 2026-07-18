@@ -645,12 +645,12 @@
 | OBSERVE-01 | Capture depth enum `summary` \| `relevant` \| `full` with default `relevant`; documented in `docs/integrations/observe-capture.md` | 167 | complete |
 | OBSERVE-02 | Server ingest enforces depth: `relevant` indexes summaries/candidates only; `full` may seal transcripts in vault under retention labels — not dump into mem0 by default | 167 | complete |
 | OBSERVE-03 | Org/env can raise depth later without schema break; secrets redacted; elevated sensitivity for jobhunt/PII paths | 167 | complete |
-| OBSERVE-04 | Remote MCP onboard installer writes config for detected harnesses **including Pi**; no local MemRoOS clone required for Streamable HTTP | 168 | pending |
-| OBSERVE-05 | Employee uninstall + API key revoke path documented; onboard ≤5 minutes; observe prefers MemRoOS-registered agents (incl. `platform=pi`) | 168 | pending |
-| OBSERVE-06 | Observe sidecar watches session artifacts and POSTs to capture/ingest with heartbeat | 169 | pending |
-| OBSERVE-07 | Wave 1 adapters: Claude Code JSONL, Codex JSONL, Hermes sessions, OpenClaw sessions, **Pi `~/.pi/agent/sessions/**/*.jsonl`** attributed to onboarded Pi agents | 169 | pending |
-| OBSERVE-08 | Hermes memory observe plugin shares the same depth policy | 169 | pending |
-| OBSERVE-09 | Capture reuses Phase 96 `captureCodingAgentSession` (no parallel schema); dry-run receipts; Pi Wave-1 smoke without manual `knowledge_write` | 169 | pending |
+| OBSERVE-04 | Remote MCP onboard installer writes config for detected harnesses **including Pi**; no local MemRoOS clone required for Streamable HTTP | 168 | complete |
+| OBSERVE-05 | Employee uninstall + API key revoke path documented; onboard ≤5 minutes; observe prefers MemRoOS-registered agents (incl. `platform=pi`) | 168 | complete |
+| OBSERVE-06 | Observe sidecar watches session artifacts and POSTs to capture/ingest with heartbeat | 169 | complete |
+| OBSERVE-07 | Wave 1 adapters: Claude Code JSONL, Codex JSONL, Hermes sessions, OpenClaw sessions, **Pi `~/.pi/agent/sessions/**/*.jsonl`** attributed to onboarded Pi agents | 169 | complete |
+| OBSERVE-08 | Hermes memory observe plugin shares the same depth policy | 169 | complete |
+| OBSERVE-09 | Capture reuses Phase 96 `captureCodingAgentSession` (no parallel schema); dry-run receipts; Pi Wave-1 smoke without manual `knowledge_write` | 169 | complete |
 | OBSERVE-10 | Cursor adapter: MCP + best-available hook/export; honest partial status if capture incomplete | 170 | pending |
 | OBSERVE-11 | Factory/Droid MCP + capture path; map to `platform=droid` when registered; **do not demote Pi out of Wave 1** | 170 | pending |
 | OBSERVE-12 | Antigravity: MCP if available else documented limitation — no false full-capture claim | 171 | pending |
