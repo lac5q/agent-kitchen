@@ -30,6 +30,9 @@ Status: **Hermes MEMORY.md unchanged by default** · **MemRoOS provider availabl
 Completed recently: **v8.12** Phases 154–156 (GATE-RESILE-01..03) — Mem0 probe honesty, hang immunity, path-scoped disk diagnostics.
 
 **Still open:**
+- **v8.16** — Multi-Harness Observe Plane (Phases 167–171, OBSERVE-01..14) — planned 2026-07-17; default capture depth `relevant`; MCP + sidecar; **Pi in Wave 1** (already-onboarded `AgentPlatform`); Waves Cursor/Factory → Antigravity
+- **v8.15** — Always-On Cloud Operator oracle-1 (Phases 163–166, CLOUDOPS-01..08)
+- **v8.14** — Human Wiki Surface + Memory Digest (Phases 160–162, WIKISURF-01..08) — Obsidian seed digest done
 - **MSIQ-06** — GraphRAG spike (Luis approval)
 - **ENTOPS-04/05** — IdP/MDM
 - **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred

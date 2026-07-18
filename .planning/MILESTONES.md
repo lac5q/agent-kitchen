@@ -2,6 +2,38 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
+## Planned: v8.16 Multi-Harness Observe Plane (Added 2026-07-17)
+
+**Scope:**
+
+1. Tiered capture policy (`summary` / **`relevant` default** / `full`) — store useful learning without drowning in chat dumps; depth upgradable later.
+2. Remote MCP onboard for harnesses; **support agents already onboarded** to MemRoOS (incl. **Pi** as first-class `AgentPlatform`).
+3. Observe sidecar + Wave 1 (Claude/Codex/Hermes/OpenClaw/**Pi**) → Wave 2 (Cursor/Factory) → Wave 3 (Antigravity + visibility).
+4. Operator visibility of per-onboarded-agent capture health.
+
+**Phases:** 167–171.  
+**Requirements:** OBSERVE-01..14.  
+**Kickoff:** `.planning/milestones/v8.16-multi-harness-observe-KICKOFF.md` (v2026-07-17.2).  
+**Scenario:** S13.  
+**Pi:** Wave 1 — sessions `~/.pi/agent/sessions/**/*.jsonl`.
+
+---
+
+## Planned: v8.14 Human Wiki Surface + Memory Digest (Added 2026-07-17)
+
+**Scope:**
+
+1. Regular memory→`llm-wiki` digest job (Obsidian-readable pages stay current).
+2. MemRoOS authenticated `/wiki` reader (folder tree, markdown, wikilinks, search).
+3. Light graph panel over compiled wiki JSON.
+
+**Phases:** 160–162.  
+**Requirements:** WIKISURF-01..08.  
+**Kickoff:** `.planning/milestones/v8.14-human-wiki-surface-KICKOFF.md`.  
+**Seed:** Manual digest 2026-07-17 in `~/github/knowledge/llm-wiki/wiki/07-memroos-platform/`.
+
+---
+
 ## Current Position: v8.6 Skill Trust Chain (Completed 2026-07-16)
 
 **Scope:**

@@ -43,6 +43,11 @@
 - ✅ **v8.5 Agent Fleet Plane** — Phases 142-147 (completed 2026-07-10; MemroOS as top-layer fleet plane across runtimes, LangGraph as peer orchestration runtime, Paperclip as parallel tenant; FLEET-01..26 shipped; sources: Discord #devops fleet research + Paperclip audit + OSS control-plane survey)
 - ✅ **v8.6 Skill Trust Chain** — Phases 148-150 (completed 2026-07-16; contracts, Ed25519 signing/provenance, quarantine lane, governed sync + pins, lifecycle/dependencies; SKILLTRUST-01..05 shipped; planning closeout after code-first land)
 - ✅ **v8.11 Unified Meeting Memory** — Phases 151-153 (completed 2026-07-14; meeting ingest reliability + federated `memory_recall` + operator surfaces; MEETREL-01..04 + URECALL-01..06)
+- ✅ **v8.12 MemRoOS MCP Memory Gate Resilience** — Phases 154-156 (completed 2026-07-15; probe timeout honesty + Mem0 hang immunity + path-scoped disk / strict-gate diagnostics)
+- 🔄 **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (added 2026-07-17; synergistic Qdrant→Neo4j graph projection, durable catchup jobs for all memory tiers, setup/install wiring so new installs keep tiers filled)
+- 📋 **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (added 2026-07-17; nightly memory→llm-wiki digest job, MemRoOS Obsidian-like `/wiki` reader, light knowledge graph over compiled pages)
+- 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
+- 📋 **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (added 2026-07-17; remote MCP + observe for **already-onboarded** agents; tiered capture default=relevant; Wave 1 includes Pi + Claude/Codex/Hermes/OpenClaw; Wave 2 Cursor/Factory; Wave 3 Antigravity)
 
 ## Phases
 
@@ -930,12 +935,21 @@ Priority order (each is a candidate milestone; requirements in `.planning/REQUIR
 10. **P2 — v8.9 Retrieval Quality + External Benchmark Proof — PARTIAL (2026-07-16).** (was v8.8). LoCoMo/LongMemEval lanes + comparative bench plan (`BENCH-01..03`) already done. **Voyage embedding upgrade + LLM recall scoring remain deferred / approval-gated** (Backlog / Later Ideas).
 11. **P2 — v8.10 Governed Ontology Foundation — COMPLETE (code + REQUIREMENTS closeout 2026-07-16).** `ONTO-01..06` (was v8.9). Fixed upper ontology + domain packs + SEAL-governed promotion + typed receipt refs. Evidence: `apps/memroos/src/lib/ontology/*`.
 12. **P1 — v8.11 Unified Meeting Memory — COMPLETE (Phases 151-153 complete 2026-07-14).** `MEETREL-01..04`, `URECALL-01..06`. Idempotent meeting ingest + federated `memory_recall` so agents find Circleback/Fathom/Zoom without knowing collection names. Kickoff: `.planning/milestones/v8.11-unified-meeting-memory-KICKOFF.md`.
-13. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
+13. **P0 — v8.13 Memory Tier Catchup + Install Wiring — IN PROGRESS (Phases 157-159 added 2026-07-17).** `MEMTIER-01..06`. Close the gap where vector (Qdrant/mem0) can be live while graph (Neo4j) stays empty: one-shot + scheduled synergistic projection (entities/relationships, not duplicate blob store), cron-health registration, and `setup.sh` / memory-resilience install so catchup jobs are part of product install—not ops folklore. Also covers operator honesty when NOC Last-24h is empty while inventory still has historical data. Observed gap 2026-07-17: ~628 Qdrant points vs 2 Neo4j probe nodes; install only wired healthcheck/degradation-evals, not tier fill.
+14. **P1 — v8.14 Human Wiki Surface + Memory Digest — PLANNED (Phases 160-162 added 2026-07-17).** `WIKISURF-01..08`. Regular job digests mem0/journals into `llm-wiki` pages (Obsidian already reads the vault). MemRoOS ships Obsidian-like `/wiki` browse (folder tree, markdown, wikilinks, search) plus light graph from compiled `knowledge-graph.json`. Seed digest landed manually 2026-07-17 in `~/github/knowledge/llm-wiki/wiki/07-memroos-platform/`. Kickoff: `.planning/milestones/v8.14-human-wiki-surface-KICKOFF.md`.
+15. **P0 — v8.15 Always-On Cloud Operator (oracle-1) — PLANNED (Phases 163-166 added 2026-07-17).** `CLOUDOPS-01..08`. One MemRoOS brain without laptop or paid Heroku: deploy operator+mem0+SQLite on Tailscale host `oracle-1` (10Gi aarch64, checked idle 2026-07-17), Cloudflare Tunnel for `memroos.epiloguecapital.com`, shared Aura+Qdrant, Ollama `nomic-embed-text` on-box ($0), Voyage provider as cheap cloud embed fallback phase, Heroku operator domain removed / web scaled to 0. Mac = dev only. Plan: `~/.cursor/plans/mac-as-prod_memroos_d4133d54.plan.md`.
+16. **P0 — v8.16 Multi-Harness Observe Plane — PLANNED (Phases 167-171 added 2026-07-17).** `OBSERVE-01..14`. Capture work from **agents already onboarded to MemRoOS** (registry + MCP), not only greenfield installs. Employee story: remote MCP + observe sidecar; default depth **relevant** (upgradable later). Wave 1: Claude, Codex, Hermes, OpenClaw, **Pi** (first-class `AgentPlatform`; sessions under `~/.pi/agent/sessions/`). Wave 2: Cursor, Factory/Droid. Wave 3: Antigravity + any remaining gaps. MCP alone is not a wiretap. Kickoff: `.planning/milestones/v8.16-multi-harness-observe-KICKOFF.md`.
+17. **P2/P3 — carried forward**: Evaluation + Safety Expansion, Meeting Ingestion Expansion, Integration Modernization, commercial/product expansion (two-SKU), deferred hardening sweep, service navigation/install profiles.
 
 **Renumbering note (2026-07-08):** inserted **v8.5 Agent Fleet Plane** after completed v8.4. Prior P1/P2 candidates shift: Skill Trust Chain v8.5→**v8.6**, Memory Lifecycle v8.6→**v8.7**, Orchestration Evidence v8.7→**v8.8**, Retrieval Quality v8.8→**v8.9**, Ontology v8.9→**v8.10**. Earlier 2026-07-07 note (Ontology v8.4→v8.9 for MemClaw UX) is superseded by this ordering for future planning.
 
+**Renumbering note (2026-07-17):** Cloud Operator detail + REQUIREMENTS phase numbers aligned to **v8.15 / 163–166** (had collided with Human Wiki 160–162). Multi-Harness Observe added as **v8.16 / 167–171**.
+
 **Scenario add (2026-07-08):**
 - **S12 — Multi-machine fleet under one operator:** A human runs agents on a home Mac plus remote Hermes/OpenClaw gateways; MemroOS is the registry/governance source of truth; Paperclip may run a company with budgets; LangGraph handles multi-step HIL; no second control plane is required above MemroOS.
+
+**Scenario add (2026-07-17):**
+- **S13 — Employee harness → company brain:** An employee (or already-onboarded agent such as **Pi**) runs a harness with MemRoOS MCP; observe capture lands tiered session learning in the company brain without manual `knowledge_write`. Depth stays relevant-by-default and can be raised org-wide later.
 
 Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays cloud and canonical; no spike-to-adoption without Luis approval; no raw sensitive payloads in any receipt; fail-closed defaults everywhere.
 
@@ -2454,3 +2468,270 @@ Plans:
 | 154. Probe Timeout Honesty | 1/1 | Complete | 2026-07-15 |
 | 155. Mem0 Hang Immunity | 1/1 | Complete | 2026-07-15 |
 | 156. Strict-Gate Diagnostics + Path-Scoped Disk | 1/1 | Complete | 2026-07-15 |
+
+## v8.13 Memory Tier Catchup + Install Wiring (Phases 157–159)
+
+*Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 19:30 PDT · Updated: 2026-07-17 19:30 PDT*
+
+**Status:** 🔄 IN PROGRESS (implementation agents running one-shot catchup + install wiring)  
+**Depends on:** Phase 37 three-tier memory API; Neo4j Query API v2 path in `backends.ts`; memory-resilience install profile  
+**Why now:** Operator saw healthy Qdrant (~628 points) with Neo4j up but empty (2 probe nodes). Catchup was ops-manual; install only shipped healthcheck/evals—not tier-fill jobs. NOC Last-24h empty is a separate honesty/window issue once streams are quiet.
+
+### Phase 157 — Graph Catchup Projection (one-shot + shared lib)
+
+**Goal:** Idempotent synergistic projection from mem0/Qdrant vector memories into Neo4j (`MemoryFact` / relationships), runnable as a one-shot operator script without duplicating full text blobs.
+**Requirements:** MEMTIER-01, MEMTIER-02, MEMTIER-03
+**Success criteria:**
+1. Shared projection module used by CLI/script (and later by the scheduled worker).
+2. Paginated read from mem0/Qdrant; MERGE by stable id; rate-limited for Aura Free.
+3. One-shot run raises Neo4j beyond probe-only labels; progress logged (processed/written/skipped/errors).
+4. Focused unit coverage for mapping + idempotency; secrets never printed.
+
+### Phase 158 — Durable `graph-catchup` Job + Cron Health
+
+**Goal:** Incremental scheduled catchup with checkpoint/cursor so graph stays caught up after install, visible in NOC cron health.
+**Requirements:** MEMTIER-04, MEMTIER-05
+**Success criteria:**
+1. `graph-catchup` registered in `cron-health` DEFAULT_JOBS with expected interval.
+2. Worker heartbeats success/failure/`itemsProcessed`; skips cleanly when Neo4j not configured.
+3. Checkpoint prevents full reprocess every tick; safe to re-run.
+
+### Phase 159 — Install Wiring + Operator Docs
+
+**Goal:** New MemRoOS installs get memory-tier catchup jobs automatically (or via documented `install:memory-resilience` path), not tribal knowledge.
+**Requirements:** MEMTIER-06
+**Success criteria:**
+1. `scripts/install-memory-resilience.mjs` and/or `setup.sh` path enables the job (launchd and/or in-app scheduler).
+2. `docs/install-profiles.md` documents enable/status/uninstall and that tiers are complementary (vector ≠ graph duplicate).
+3. Operator can verify job status with existing resilience status command or cron health API.
+
+### Progress Table (v8.13 memory tier catchup)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 157. Graph Catchup Projection | 0/? | In progress (CLI landed; one-shot run in progress 2026-07-17) | — |
+| 158. Durable graph-catchup Job | 1/1 code | Code complete — cron + in-app scheduler + API | 2026-07-17 |
+| 159. Install Wiring + Docs | 1/1 code | Code complete — install-memory-resilience + docs; launchd bootstrap may need retry on already-loaded agents | 2026-07-17 |
+
+## v8.15 Always-On Cloud Operator — oracle-1 (Phases 163–166)
+
+*Added: 2026-07-17 · Version: 2026-07-17.2 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-17 21:10 PDT*
+
+**Status:** 📋 PLANNED (host capacity verified; cutover not executed)  
+**Plan:** `~/.cursor/plans/mac-as-prod_memroos_d4133d54.plan.md` (Always-on Oracle MemRoOS)  
+**Depends on:** v8.13 graph catchup paths; Aura + Qdrant Cloud credentials; Tailscale reachability to `oracle-1`  
+**Note:** Phase numbers 160–162 are reserved for v8.14 Human Wiki Surface — do not collide.
+
+**Host evidence (2026-07-17 SSH):** `oracle-1` aarch64, 2 CPU, **10Gi RAM (~8.7Gi avail)**, 30G disk (~13G free), load 0.00, Docker+Node present, Ollama not yet installed. Sufficient for Next+mem0+SQLite+`nomic-embed-text`; not sized as a multi-LLM box.
+
+### Phase 163 — Oracle host readiness + local embeds
+
+**Goal:** Make `oracle-1` ready to run $0 local embeddings without starving the operator.
+**Requirements:** CLOUDOPS-01, CLOUDOPS-02
+**Success criteria:**
+1. Ollama installed on aarch64; `nomic-embed-text` pulled; embed smoke succeeds.
+2. ≥5G disk free after model install.
+3. Documented RAM budget: operator + mem0 + nomic only (no heavy chat LLM required day-1).
+
+### Phase 164 — Operator deploy + data cutover
+
+**Goal:** Single production brain on oracle-1 with same Aura/Qdrant and migrated SQLite kernel.
+**Requirements:** CLOUDOPS-03, CLOUDOPS-04, CLOUDOPS-05
+**Success criteria:**
+1. MemRoOS + mem0 running on oracle-1 with Neo4j Aura + Qdrant env.
+2. Mac `conversations.db` migrated/synced to persistent disk; inventory non-zero on-host.
+3. Graph-catchup scheduler enabled on the operator host.
+
+### Phase 165 — Public tunnel + Heroku decommission
+
+**Goal:** Public hostname serves oracle-1; stop paying/confusion for empty Heroku operator.
+**Requirements:** CLOUDOPS-06, CLOUDOPS-07
+**Success criteria:**
+1. Cloudflare Tunnel: `memroos.epiloguecapital.com` → oracle-1 `:3000`; health/inventory match on-host.
+2. Heroku custom domain removed; `web` scaled to 0 (or app destroyed later).
+3. Exposed Heroku backend secrets rotated; agents/MCP point at the tunnel URL.
+4. Docs state Mac = dev only; oracle-1 = operator.
+
+### Phase 166 — Voyage cloud embed provider (cheap alternative)
+
+**Goal:** Optional cloud embeddings without local model RAM (package-options Option C / v8.9 residue).
+**Requirements:** CLOUDOPS-08
+**Success criteria:**
+1. `MEMROOS_EMBEDDING_PROVIDER=voyage` accepted by env + provider implementation.
+2. Ollama remains default on oracle-1; Voyage is opt-in with degraded-safe failures.
+3. No second Qdrant collection required.
+
+### Progress Table (v8.15 cloud operator)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 163. Oracle readiness + nomic embeds | 0/? | Planned | — |
+| 164. Operator deploy + data cutover | 0/? | Planned | — |
+| 165. Tunnel + Heroku decommission | 0/? | Planned | — |
+| 166. Voyage embed provider | 0/? | Planned | — |
+
+## v8.14 Human Wiki Surface + Memory Digest (Phases 160–162)
+
+*Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 20:16 PDT · Updated: 2026-07-17 20:16 PDT*
+
+**Status:** 📋 PLANNED (seed Obsidian digest done manually; product UI + job not started)  
+**Depends on:** knowledge vault at `KNOWLEDGE_BASE_PATH` / `~/github/knowledge`; existing `llm-wiki` + `mem0-export.sh` + `knowledge_system.compiler`; blog already uses `react-markdown`  
+**Why now:** Humans cannot browse raw mem0. First digest pages exist under `llm-wiki/wiki/07-memroos-platform/` for Obsidian. Next: keep them fresh with a regular job, then expose the same files in MemRoOS as an Obsidian-like reader (option B) with light graph (option C).  
+**Out of scope:** Full Obsidian clone (live plugins, canvas editor, mobile sync). Do not dump every mem0 bullet into the wiki — synthesize by entity/topic.
+
+### Phase 160 — Memory → Wiki Digest Job
+
+**Goal:** Scheduled/idempotent job clusters new mem0 memories (and optionally journals) into durable `llm-wiki` pages with provenance, watermark, and index/log updates — same files Obsidian already opens.  
+**Requirements:** WIKISURF-01, WIKISURF-02, WIKISURF-03  
+**Success criteria:**
+1. Digest script/module with mtime or content-hash watermark (pattern from `obsidian-to-mem0.py` / `mem0-export.sh`).
+2. Writes/updates pages under `llm-wiki/wiki/` (entities/topics/domain MOCs); updates `index.md` + `log.md`.
+3. Wired into `knowledge-curator.sh` (or MemRoOS cron-health job) on a regular interval; non-fatal on failure.
+4. Redaction rules: skip/high-sensitivity personal-legal scraps; never write secrets.
+5. Focused tests for clustering/idempotency; dry-run mode.
+
+### Phase 161 — MemRoOS `/wiki` Reader (Obsidian-like B)
+
+**Goal:** Authenticated operator UI to browse compiled wiki markdown: folder tree, page view, `[[wikilink]]` navigation, full-text search — not Library analytics.  
+**Requirements:** WIKISURF-04, WIKISURF-05, WIKISURF-06  
+**Success criteria:**
+1. Route(s) under `/wiki` (index + `[[...]]` page path) with operator auth.
+2. Renders markdown (reuse `react-markdown` or shared MD component); resolves wikilinks within vault wiki root.
+3. Sidebar or tree for `llm-wiki/wiki/` (and configurable root); search by title/content via existing knowledge/QMD API or lightweight index.
+4. Read-only in v1 (edits stay in Obsidian/git); clear empty/missing-vault states.
+5. Smoke tests for route auth + link resolution.
+
+### Phase 162 — Light Wiki Graph (Obsidian-like C)
+
+**Goal:** Graph panel over compiled wiki relationships using existing `wiki/graph/knowledge-graph.json` (or regenerated on digest), linked from `/wiki`.  
+**Requirements:** WIKISURF-07, WIKISURF-08  
+**Success criteria:**
+1. Digest or compile step refreshes graph JSON when pages change.
+2. `/wiki` UI shows a light interactive graph (nodes = pages/entities; edges = wikilinks or compiler edges).
+3. Clicking a node opens the page view; no requirement for Obsidian plugin parity.
+4. Degrades gracefully if graph file missing.
+
+### Progress Table (v8.14 human wiki surface)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 160. Memory → Wiki Digest Job | 0/0 | Planned (manual seed 2026-07-17) | — |
+| 161. MemRoOS `/wiki` Reader | 0/0 | Planned | — |
+| 162. Light Wiki Graph | 0/0 | Planned | — |
+
+## v8.16 Multi-Harness Observe Plane (Phases 167–171)
+
+*Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 21:10 PDT · Updated: 2026-07-17 21:10 PDT*
+
+**Status:** 📋 PLANNED  
+**Depends on:** remote MCP (`docs/integrations/mcp.md`); `POST /api/agent-memory/capture` + `POST /api/native-memory/ingest` (Phase 96 / ENTOPS-07 sink); Hermes observe plugin as reference; `db-ingest.ts` session paths for Claude/Hermes/Codex/Qwen; fleet maturity matrix `docs/runtime-adapter-maturity.md`  
+**Why now:** MemRoOS is a strong store when fed, but onboarded agents (incl. **Pi**, Codex, Cursor, Claude, etc.) do work that never lands. Goal: every **already-onboarded** MemRoOS agent’s relevant work is captured autonomously.  
+**Product story (S13):** Remote MCP = company brain for onboarded agents; observe sidecar = autonomous capture. MCP alone is **not** a wiretap.  
+**Pi note:** `pi` is already a first-class `AgentPlatform` in MemRoOS (`apps/memroos/src/types/index.ts`). Live sessions land at `~/.pi/agent/sessions/**/*.jsonl`. Treat Pi as **Wave 1** (support the onboarded agent), not deferred.
+
+### Capture depth policy (balance — expandable later)
+
+Default must store **relevant** company learning, not every token. Depth is org/config upgradable without redesign.
+
+| Depth | Env / policy | What is stored | Vector/index | Vault (sealed) |
+|-------|--------------|----------------|--------------|----------------|
+| `summary` | Minimal | Session TLDR, workspace/repo, exit status | Yes (small) | Optional receipt only |
+| **`relevant` (DEFAULT)** | Balanced | Summary + decisions/actions/blockers + durable candidates + errors; redacted | Yes (candidates) | Sealed raw artifact pointer / hash; not full chat in mem0 |
+| `full` | Later / opt-in | Relevant + fuller transcript slices | Summaries/candidates only by default | Sealed full session allowed under retention labels |
+
+**Rules:**
+1. Default depth = `relevant` (`MEMROOS_CAPTURE_DEPTH=relevant`).
+2. Raising depth is a config/policy change (tenant or org), not a new architecture.
+3. Secrets never enter indexes; jobhunt/PII paths get elevated sensitivity labels (MEMSEC).
+4. Prefer bronze→silver→gold belief stages for admitted truth; raw observe stays bronze until consolidation.
+5. Do not dump every mem0 bullet or every chat turn into llm-wiki (pairs with v8.14 digest).
+
+### Architecture
+
+```text
+Employee laptop
+  ├─ Agent harness (Claude/Codex/Cursor/Hermes/OpenClaw/Factory/Pi/Antigravity)
+  ├─ Remote MemRoOS MCP  ──────────────► company knowledge + memory tools
+  └─ MemRoOS Observe sidecar ──────────► POST capture/ingest (tiered)
+         adapters: jsonl | hooks | memory-plugin | export
+Operator host
+  └─ MemRoOS vault + mem0 + consolidation + (later) wiki digest
+```
+
+### Phase 167 — Capture policy + tiered retention contract
+
+**Goal:** Define and enforce capture depth (`summary` | `relevant` | `full`) in server ingest so all adapters share one throttle.  
+**Requirements:** OBSERVE-01, OBSERVE-02, OBSERVE-03  
+**Success criteria:**
+1. Documented policy table (above) in `docs/integrations/observe-capture.md`.
+2. `POST /api/agent-memory/capture` (and/or native-memory ingest) accepts `captureDepth` and applies default `relevant`.
+3. Tests prove `relevant` does not index full transcript text into mem0; `full` vaults sealed raw under retention labels.
+4. Org/env override to raise depth later without schema break.
+5. Redaction + sensitivity labels applied before index write.
+
+### Phase 168 — Remote MCP employee onboard (minimal client)
+
+**Goal:** One-install / one-config path: employee adds remote MemRoOS MCP (URL + scoped API key) across detected harnesses.  
+**Requirements:** OBSERVE-04, OBSERVE-05  
+**Success criteria:**
+1. Installer or `scripts/install-agent-integrations.sh` extension writes MCP config for detected clients, including **Pi** (`~/.pi/…`) plus Claude, Codex, Cursor, Factory `~/.factory/mcp.json`, Hermes/OpenClaw.
+2. Docs: employee / agent onboard steps ≤5 minutes; no local MemRoOS clone required when using Streamable HTTP.
+3. Strict memory gate remains operator-side; laptop uses remote operator URL.
+4. Uninstall / key revoke path documented.
+5. Onboarded-agent inventory: observe targets prefer agents already in MemRoOS registry (`platform` includes `pi`) over inventing parallel identity.
+
+### Phase 169 — Observe sidecar + Wave 1 adapters (Claude, Codex, Hermes, OpenClaw, Pi)
+
+**Goal:** Autonomous capture for onboarded / high-ROI session harnesses with minimal ongoing client updates. **Pi is in Wave 1** because it is already a MemRoOS-onboarded platform with local session JSONL.  
+**Requirements:** OBSERVE-06, OBSERVE-07, OBSERVE-08, OBSERVE-09  
+**Success criteria:**
+1. Sidecar process (launchd/systemd or user-level) watches known session paths and POSTs to capture API at session end / idle watermark.
+2. Wave 1 adapters:
+   - Claude (`~/.claude/projects/**/*.jsonl`)
+   - Codex (`~/.codex/sessions/**/*.jsonl`)
+   - Hermes (`~/.hermes/sessions/*.jsonl`)
+   - OpenClaw (Hermes-family / OpenClaw session paths)
+   - **Pi (`~/.pi/agent/sessions/**/*.jsonl`)** — attribute to registered `platform=pi` agent when present
+3. Hermes memory observe plugin remains supported and shares the same depth policy.
+4. Reuses/extends Phase 96 `captureCodingAgentSession` — no parallel capture schema.
+5. Cron-health or sidecar heartbeat visible to operator; failures non-fatal to the harness.
+6. Default depth `relevant`; dry-run mode writes local receipts only.
+7. Smoke: a Pi session produces ≥1 relevant capture attributed to a MemRoOS-onboarded Pi agent without manual `knowledge_write`.
+
+### Phase 170 — Wave 2 adapters (Cursor, Factory/Droid)
+
+**Goal:** Extend observe to IDE/enterprise harnesses that need hooks or documented export paths.  
+**Requirements:** OBSERVE-10, OBSERVE-11  
+**Success criteria:**
+1. Cursor adapter: MCP onboard + best-available session/hook/SDK export path; honest “partial” status if only MCP writes land.
+2. Factory (Droid) adapter: MCP via `~/.factory/mcp.json` + capture via hooks/OTEL/session export when available; map to `platform=droid` when registered.
+3. Maturity matrix rows updated for Factory/Droid + Cursor capture evidence.
+4. Pi remains Wave 1 (do not regress Pi to “via OpenClaw only”).
+
+### Phase 171 — Wave 3 (Antigravity + gaps) + operator visibility
+
+**Goal:** Close remaining clients where feasible; surface capture health for **all onboarded agents** (incl. Pi); lock promises.  
+**Requirements:** OBSERVE-12, OBSERVE-13, OBSERVE-14  
+**Success criteria:**
+1. Antigravity: MCP if exposed; otherwise documented limitation + optional export path — no false “full capture” claim.
+2. Operator UI or NOC panel: per-harness / per-onboarded-agent last capture time, depth setting, volume (sessions/day), error rate — **including Pi**.
+3. `docs/runtime-adapter-maturity.md` lists Claude, Codex, Hermes, OpenClaw, **Pi**, Cursor, Factory/Droid, Antigravity with capture method (MCP / jsonl / hook / plugin / limited).
+4. Eval or smoke: Wave 1 session (Pi or Claude/Codex) produces ≥1 relevant candidate in MemRoOS without manual `knowledge_write`.
+5. Installer TARGETS include Pi so future machines get the same onboard path as existing Pi installs.
+
+### Progress Table (v8.16 multi-harness observe)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 167. Capture policy + tiered retention | 0/0 | Planned | — |
+| 168. Remote MCP employee onboard | 0/0 | Planned | — |
+| 169. Observe sidecar + Wave 1 (incl. Pi) | 0/0 | Planned | — |
+| 170. Wave 2 Cursor/Factory | 0/0 | Planned | — |
+| 171. Wave 3 Antigravity + onboarded-agent visibility | 0/0 | Planned | — |
+
+### Out of scope (v8.16)
+
+- Full MemRoOS-first MEMORY.md rewrite for all harnesses (ENTOPS-07 governed mode — separate).
+- Promising 100% Cursor/Antigravity transcript fidelity without vendor hooks.
+- Indexing full chat dumps at default depth.
+- Replacing v8.14 wiki digest (observe feeds memory; wiki synthesizes later).
