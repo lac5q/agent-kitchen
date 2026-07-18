@@ -19,10 +19,11 @@ const ROUTE_TABS: Array<{ match: string[]; tabs: SectionTab[] }> = [
     ],
   },
   {
-    match: ["/notebooks", "/library"],
+    match: ["/notebooks", "/library", "/wiki"],
     tabs: [
       { label: "Notebooks", href: "/notebooks", hint: "Browse retained memory entries" },
       { label: "Knowledge", href: "/library", hint: "Inspect the searchable knowledge library" },
+      { label: "Wiki", href: "/wiki", hint: "Browse digested human wiki pages" },
     ],
   },
   {

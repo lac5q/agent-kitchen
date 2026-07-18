@@ -108,3 +108,4 @@ apps/memroos/data/skill-signing-key.*
 # to read on first run; the gate treats baseline as NOT pass.
 reports/operator-load/latest.json
 reports/operator-load/latest.md
+etc/

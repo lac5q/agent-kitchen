@@ -94,6 +94,7 @@ On macOS, setup installs launchd-backed Memory Resilience jobs unless `INSTALL_M
 - `com.memroos.memory-healthcheck` runs every 5 minutes and alerts when memory infrastructure degrades, including when recent knowledge artifacts exist on disk but are missing from QMD.
 - `com.memroos.memory-degradation-evals` runs daily at 9:15 AM and verifies the degradation scenarios stay covered by tests.
 - `com.memroos.graph-catchup` runs every 30 minutes and triggers incremental Neo4j projection (`POST /api/memory-lifecycle/graph-catchup`) when the MemRoOS app is up. The in-app scheduler also starts the same `graph-catchup` cron-health job on Node boot when Neo4j is configured.
+- `wiki-digest` (in-app every 6 hours + `npm run wiki:digest:cron`) clusters recent memories into `llm-wiki/wiki/` for the authenticated `/wiki` reader. See `docs/wiki-surface.md`.
 
 Manage them directly with:
 

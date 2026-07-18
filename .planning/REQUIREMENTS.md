@@ -596,20 +596,20 @@
 ## v8.15 Always-On Cloud Operator (oracle-1) — 2026-07-17
 
 **Created:** 2026-07-17T21:07:00-07:00  
-**Updated:** 2026-07-17T21:10:00-07:00  
-**Version:** 2026-07-17.2  
-**Sources:** SSH inventory of `oracle-1` (10Gi aarch64, ~8.7Gi avail, 13G free disk, Ollama absent); `docs/package-options-embeddings-hermes-memory.md`; operator dual-brain incident (Heroku empty vs Mac live) 2026-07-17
+**Updated:** 2026-07-18T09:06:00Z  
+**Version:** 2026-07-18.3  
+**Sources:** SSH inventory of `oracle-1` (10Gi aarch64, ~8.7Gi avail, 13G free disk, Ollama absent); `docs/package-options-embeddings-hermes-memory.md`; operator dual-brain incident (Heroku empty vs Mac live) 2026-07-17; live re-verify 2026-07-18 (`docs/uat/2026-07-18-oracle1-live-cutover-verification.md`)
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| CLOUDOPS-01 | Install Ollama on oracle-1 (aarch64) and pull `nomic-embed-text` only; embed smoke test passes | 163 | pending |
-| CLOUDOPS-02 | Keep ≥5G free disk after model install; document RAM budget (Next+mem0+nomic; no heavy chat LLM required) | 163 | pending |
-| CLOUDOPS-03 | Deploy MemRoOS + mem0 on oracle-1 with shared Neo4j Aura + Qdrant Cloud credentials | 164 | pending |
-| CLOUDOPS-04 | Migrate/sync Mac `conversations.db` to persistent disk on oracle-1; on-host inventory non-zero | 164 | pending |
-| CLOUDOPS-05 | Enable graph-catchup (scheduler/cron) on the oracle-1 operator host | 164 | pending |
-| CLOUDOPS-06 | Cloudflare Tunnel serves `memroos.epiloguecapital.com` → oracle-1 `:3000`; public health/inventory match host | 165 | pending |
-| CLOUDOPS-07 | Remove Heroku operator custom domain; scale web=0; rotate any backend secrets exposed on Heroku; agents/MCP use tunnel URL; Mac documented as dev-only | 165 | pending |
-| CLOUDOPS-08 | Ship optional `MEMROOS_EMBEDDING_PROVIDER=voyage` (env + provider); Ollama remains default on oracle-1 | 166 | pending |
+| CLOUDOPS-01 | Install Ollama on oracle-1 (aarch64) and pull `nomic-embed-text` only; embed smoke test passes | 163 | complete (kickoff 2026-07-18; on-host re-smoke pending SSH pubkey) |
+| CLOUDOPS-02 | Keep ≥5G free disk after model install; document RAM budget (Next+mem0+nomic; no heavy chat LLM required) | 163 | complete (kickoff evidence; re-check pending SSH) |
+| CLOUDOPS-03 | Deploy MemRoOS + mem0 on oracle-1 with shared Neo4j Aura + Qdrant Cloud credentials | 164 | complete (public health mem0+graph live 2026-07-18) |
+| CLOUDOPS-04 | Migrate/sync Mac `conversations.db` to persistent disk on oracle-1; on-host inventory non-zero | 164 | complete (inventory 128,597 messages / 34,507 graph facts 2026-07-18) |
+| CLOUDOPS-05 | Enable graph-catchup (scheduler/cron) on the oracle-1 operator host | 164 | complete (kickoff; graph live; scheduler unit re-check pending SSH) |
+| CLOUDOPS-06 | Cloudflare Tunnel serves `memroos.epiloguecapital.com` → oracle-1 `:3000`; public health/inventory match host | 165 | complete (tunnel `memroos-oracle` healthy 2026-07-18) |
+| CLOUDOPS-07 | Remove Heroku operator custom domain; scale web=0; rotate any backend secrets exposed on Heroku; agents/MCP use tunnel URL; Mac documented as dev-only | 165 | complete (Heroku `web=0`, custom domain absent 2026-07-18) |
+| CLOUDOPS-08 | Ship optional `MEMROOS_EMBEDDING_PROVIDER=voyage` (env + provider); Ollama remains default on oracle-1 | 166 | pending (explicitly out of scope this goal) |
 
 **Locked:** One operator brain (oracle-1). Do not keep Heroku as a second empty MemRoOS. Do not create a second Qdrant collection or Neo4j database for “prod.” Embeddings day-1 = Ollama nomic on oracle-1; Voyage is opt-in cloud alternative, not a blocker for cutover.
 
@@ -622,14 +622,14 @@
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| WIKISURF-01 | Idempotent memory→wiki digest with watermark; clusters mem0 (optional journals) into entity/topic pages with provenance | 160 | pending |
-| WIKISURF-02 | Digest updates `llm-wiki/wiki/index.md` + `log.md`; wired to curator or cron-health on a regular schedule; non-fatal failures | 160 | pending |
-| WIKISURF-03 | Redaction: no secrets; skip/high-sensitivity personal-legal scraps from human wiki pages; dry-run mode | 160 | pending |
-| WIKISURF-04 | Authenticated `/wiki` index + page routes browse compiled markdown from knowledge vault | 161 | pending |
-| WIKISURF-05 | Wikilink resolution + folder tree navigation; read-only v1 | 161 | pending |
-| WIKISURF-06 | Title/content search over wiki pages (QMD or lightweight index) | 161 | pending |
-| WIKISURF-07 | Graph JSON refreshed when digest/compile runs | 162 | pending |
-| WIKISURF-08 | Light interactive graph in `/wiki` linked to page view; degrades if graph missing | 162 | pending |
+| WIKISURF-01 | Idempotent memory→wiki digest with watermark; clusters mem0 (optional journals) into entity/topic pages with provenance | 160 | complete |
+| WIKISURF-02 | Digest updates `llm-wiki/wiki/index.md` + `log.md`; wired to curator or cron-health on a regular schedule; non-fatal failures | 160 | complete |
+| WIKISURF-03 | Redaction: no secrets; skip/high-sensitivity personal-legal scraps from human wiki pages; dry-run mode | 160 | complete |
+| WIKISURF-04 | Authenticated `/wiki` index + page routes browse compiled markdown from knowledge vault | 161 | complete |
+| WIKISURF-05 | Wikilink resolution + folder tree navigation; read-only v1 | 161 | complete |
+| WIKISURF-06 | Title/content search over wiki pages (QMD or lightweight index) | 161 | complete |
+| WIKISURF-07 | Graph JSON refreshed when digest/compile runs | 162 | complete |
+| WIKISURF-08 | Light interactive graph in `/wiki` linked to page view; degrades if graph missing | 162 | complete |
 
 **Locked:** Wiki is a compiled human view — not a dump of raw mem0 bullets. Same files serve Obsidian and MemRoOS. No full Obsidian clone (plugins/canvas/mobile sync).
 
@@ -642,15 +642,15 @@
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| OBSERVE-01 | Capture depth enum `summary` \| `relevant` \| `full` with default `relevant`; documented in `docs/integrations/observe-capture.md` | 167 | pending |
-| OBSERVE-02 | Server ingest enforces depth: `relevant` indexes summaries/candidates only; `full` may seal transcripts in vault under retention labels — not dump into mem0 by default | 167 | pending |
-| OBSERVE-03 | Org/env can raise depth later without schema break; secrets redacted; elevated sensitivity for jobhunt/PII paths | 167 | pending |
-| OBSERVE-04 | Remote MCP onboard installer writes config for detected harnesses **including Pi**; no local MemRoOS clone required for Streamable HTTP | 168 | pending |
-| OBSERVE-05 | Employee uninstall + API key revoke path documented; onboard ≤5 minutes; observe prefers MemRoOS-registered agents (incl. `platform=pi`) | 168 | pending |
-| OBSERVE-06 | Observe sidecar watches session artifacts and POSTs to capture/ingest with heartbeat | 169 | pending |
-| OBSERVE-07 | Wave 1 adapters: Claude Code JSONL, Codex JSONL, Hermes sessions, OpenClaw sessions, **Pi `~/.pi/agent/sessions/**/*.jsonl`** attributed to onboarded Pi agents | 169 | pending |
-| OBSERVE-08 | Hermes memory observe plugin shares the same depth policy | 169 | pending |
-| OBSERVE-09 | Capture reuses Phase 96 `captureCodingAgentSession` (no parallel schema); dry-run receipts; Pi Wave-1 smoke without manual `knowledge_write` | 169 | pending |
+| OBSERVE-01 | Capture depth enum `summary` \| `relevant` \| `full` with default `relevant`; documented in `docs/integrations/observe-capture.md` | 167 | complete |
+| OBSERVE-02 | Server ingest enforces depth: `relevant` indexes summaries/candidates only; `full` may seal transcripts in vault under retention labels — not dump into mem0 by default | 167 | complete |
+| OBSERVE-03 | Org/env can raise depth later without schema break; secrets redacted; elevated sensitivity for jobhunt/PII paths | 167 | complete |
+| OBSERVE-04 | Remote MCP onboard installer writes config for detected harnesses **including Pi**; no local MemRoOS clone required for Streamable HTTP | 168 | complete |
+| OBSERVE-05 | Employee uninstall + API key revoke path documented; onboard ≤5 minutes; observe prefers MemRoOS-registered agents (incl. `platform=pi`) | 168 | complete |
+| OBSERVE-06 | Observe sidecar watches session artifacts and POSTs to capture/ingest with heartbeat | 169 | complete |
+| OBSERVE-07 | Wave 1 adapters: Claude Code JSONL, Codex JSONL, Hermes sessions, OpenClaw sessions, **Pi `~/.pi/agent/sessions/**/*.jsonl`** attributed to onboarded Pi agents | 169 | complete |
+| OBSERVE-08 | Hermes memory observe plugin shares the same depth policy | 169 | complete |
+| OBSERVE-09 | Capture reuses Phase 96 `captureCodingAgentSession` (no parallel schema); dry-run receipts; Pi Wave-1 smoke without manual `knowledge_write` | 169 | complete |
 | OBSERVE-10 | Cursor adapter: MCP + best-available hook/export; honest partial status if capture incomplete | 170 | pending |
 | OBSERVE-11 | Factory/Droid MCP + capture path; map to `platform=droid` when registered; **do not demote Pi out of Wave 1** | 170 | pending |
 | OBSERVE-12 | Antigravity: MCP if available else documented limitation — no false full-capture claim | 171 | pending |

@@ -41,6 +41,7 @@ function rtkUsageFromStats(): ModelUsageResult {
         cacheRead: 0,
         cacheCreation: 0,
         requests,
+        totalTokens: inputTokens + outputTokens,
       },
     ],
     total: {
