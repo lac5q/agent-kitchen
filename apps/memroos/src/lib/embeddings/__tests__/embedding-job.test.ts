@@ -7,6 +7,7 @@ import {
   EMBEDDING_CYCLE_LIMIT,
   EMBEDDING_INTERVAL_MS,
   runEmbeddingCycle,
+  startEmbeddingJob,
 } from "../embedding-job";
 
 vi.mock("../provider", () => ({
@@ -14,7 +15,7 @@ vi.mock("../provider", () => ({
   embeddingProviderEnabled: vi.fn(() => true),
 }));
 
-import { embedText } from "../provider";
+import { embedText, embeddingProviderEnabled } from "../provider";
 
 function makeDb(): Database.Database {
   const db = new Database(":memory:");
@@ -44,10 +45,12 @@ function insertMessage(db: Database.Database, index: number): number {
 describe("embedding background job", () => {
   let db: Database.Database;
   const mockEmbedText = vi.mocked(embedText);
+  const mockEmbeddingProviderEnabled = vi.mocked(embeddingProviderEnabled);
 
   beforeEach(() => {
     db = makeDb();
     vi.clearAllMocks();
+    mockEmbeddingProviderEnabled.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -76,5 +79,51 @@ describe("embedding background job", () => {
 
     await expect(runEmbeddingCycle(db)).resolves.toEqual({ embedded: 0, degraded: true });
     expect(getEmbedding(db, id)).toBeNull();
+  });
+
+  it("returns the partial count when a later embedding degrades", async () => {
+    const firstId = insertMessage(db, 1);
+    const secondId = insertMessage(db, 2);
+    mockEmbedText
+      .mockResolvedValueOnce({ embedding: [0.1, 0.2, 0.3], degraded: false })
+      .mockResolvedValueOnce({ embedding: null, degraded: true });
+
+    await expect(runEmbeddingCycle(db)).resolves.toEqual({ embedded: 1, degraded: true });
+    expect(getEmbedding(db, secondId)).toBeTruthy();
+    expect(getEmbedding(db, firstId)).toBeNull();
+  });
+
+  it("marks the cycle degraded when message lookup fails", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const brokenDb = {
+      prepare() {
+        throw new Error("db unavailable");
+      },
+    } as unknown as Database.Database;
+
+    await expect(runEmbeddingCycle(brokenDb)).resolves.toEqual({
+      embedded: 0,
+      degraded: true,
+    });
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[embeddings] embedding cycle failed:",
+      expect.any(Error)
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it("does not schedule the job when the provider is disabled", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const intervalSpy = vi.spyOn(global, "setInterval");
+    mockEmbeddingProviderEnabled.mockReturnValue(false);
+
+    startEmbeddingJob();
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      "[embeddings] provider disabled; embedding job not scheduled"
+    );
+    expect(intervalSpy).not.toHaveBeenCalled();
+    infoSpy.mockRestore();
+    intervalSpy.mockRestore();
   });
 });

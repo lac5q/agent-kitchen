@@ -871,10 +871,83 @@ describe("lifecycle dependency helpers", () => {
         registeredBy: "alice",
       })
     ).toThrow(LifecycleTransitionError);
+    expect(() =>
+      addSkillDependency(db, {
+        skillId: 1,
+        dependentAgentId: "   ",
+        skillVersion: "1.0.0",
+        registeredBy: "alice",
+      })
+    ).toThrow(LifecycleTransitionError);
+    expect(() =>
+      addSkillDependency(db, {
+        skillId: 1,
+        dependentAgentId: "agent",
+        skillVersion: "",
+        registeredBy: "alice",
+      })
+    ).toThrow(LifecycleTransitionError);
+    expect(() =>
+      addSkillDependency(db, {
+        skillId: 1,
+        dependentAgentId: "agent",
+        skillVersion: "1.0.0",
+        registeredBy: "   ",
+      })
+    ).toThrow(LifecycleTransitionError);
   });
 
   it("getLifecycleAuditTrail returns empty for invalid skill ids", async () => {
     const { getLifecycleAuditTrail } = await importLifecycleModule();
     expect(getLifecycleAuditTrail(db, { skillId: 0 })).toEqual([]);
+  });
+
+  it("dependency helpers trim agent ids and ignore invalid removals/lookups", async () => {
+    const { addSkillDependency, removeSkillDependency, getDependents } =
+      await importLifecycleModule();
+    const id = insertSkillRow({ lifecycle_state: "enabled" });
+    const dep = addSkillDependency(db, {
+      skillId: id,
+      dependentAgentId: "  agent-trim  ",
+      skillVersion: " 1.0.0 ",
+      registeredBy: " alice ",
+    });
+
+    expect(dep.dependent_agent_id).toBe("agent-trim");
+    expect(dep.skill_version).toBe("1.0.0");
+    expect(dep.registered_by).toBe("alice");
+    expect(getDependents(db, -1)).toEqual([]);
+    expect(removeSkillDependency(db, 0, "agent-trim")).toBe(false);
+    expect(removeSkillDependency(db, id, "")).toBe(false);
+    expect(removeSkillDependency(db, id, "  agent-trim  ")).toBe(true);
+  });
+
+  it("transitions still commit when unified audit table is absent", async () => {
+    const { transitionLifecycleState } = await importLifecycleModule();
+    const { upsertQuarantineRecord } = await importQuarantineModule();
+    const id = insertSkillRow({ lifecycle_state: "draft" });
+    upsertQuarantineRecord(db, {
+      skillId: id,
+      stage: "enabled",
+      approvalStatus: "approved",
+    });
+    db.prepare(`DROP TABLE audit_entries`).run();
+
+    const result = transitionLifecycleState(db, id, "enabled", "alice", "auditless");
+    expect(result.lifecycle_state).toBe("enabled");
+    expect(result.notifications).toBe(0);
+    const row = db
+      .prepare(`SELECT lifecycle_state FROM skill_registry WHERE id = ?`)
+      .get(id) as { lifecycle_state: string };
+    expect(row.lifecycle_state).toBe("enabled");
+  });
+
+  it("getLifecycleAuditTrail clamps invalid limits to the default result set", async () => {
+    const { transitionLifecycleState, getLifecycleAuditTrail } = await importLifecycleModule();
+    const id = insertSkillRow({ lifecycle_state: "enabled" });
+    transitionLifecycleState(db, id, "deprecated", "alice", "sunset");
+
+    expect(getLifecycleAuditTrail(db, { skillId: id, limit: -1 })).toHaveLength(1);
+    expect(getLifecycleAuditTrail(db, { skillId: id, limit: 500 })).toHaveLength(1);
   });
 });

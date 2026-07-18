@@ -1934,6 +1934,139 @@ describe("skill-sync validation and failure paths", () => {
     expect(pinned.version_pinned_to).toBe("1.0.0");
   });
 
+  it("proposal-id approval rejects invalid hashes and rejected proposals", async () => {
+    const { createImportProposal, approveSyncProposalById, SkillSyncError } =
+      await import("../skill-sync");
+
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "bad-proposal-hash",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("bad-proposal-hash", "1.0.0"),
+        content_hash: "4".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    const badProposal = db
+      .prepare(
+        `SELECT pending_proposal_id FROM skill_sync_state WHERE skill_name = ?`
+      )
+      .get("bad-proposal-hash") as { pending_proposal_id: string };
+    db.prepare(
+      `UPDATE skill_sync_state SET pending_detected_hash = ? WHERE pending_proposal_id = ?`
+    ).run("not-a-hash", badProposal.pending_proposal_id);
+
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: badProposal.pending_proposal_id,
+        operator: "alice",
+      })
+    ).toThrow(SkillSyncError);
+
+    const rejected = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "rejected-approval-id",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("rejected-approval-id", "1.0.0"),
+        content_hash: "5".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `UPDATE skill_sync_state SET rejected_at = ? WHERE pending_proposal_id = ?`
+    ).run(new Date().toISOString(), rejected.proposal.pending_proposal_id);
+
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: rejected.proposal.pending_proposal_id!,
+        operator: "alice",
+      })
+    ).toThrow(/was rejected/);
+  });
+
+  it("proposal-id rejection refuses already approved rows", async () => {
+    const { createImportProposal, rejectSyncProposalById } = await import("../skill-sync");
+    const approved = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "approved-reject-id",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("approved-reject-id", "1.0.0"),
+        content_hash: "6".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `UPDATE skill_sync_state SET approved_at = ? WHERE pending_proposal_id = ?`
+    ).run(new Date().toISOString(), approved.proposal.pending_proposal_id);
+
+    expect(() =>
+      rejectSyncProposalById(db, {
+        proposal_id: approved.proposal.pending_proposal_id!,
+        operator: "bob",
+        reason: "too late",
+      })
+    ).toThrow(/already approved/);
+  });
+
+  it("proposal-id approval tolerates malformed diff payloads on ledger-only approvals", async () => {
+    const { createImportProposal, approveSyncProposalById } = await import("../skill-sync");
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "malformed-payload-approval",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: VALID_SKILL_MD("malformed-payload-approval", "1.0.0"),
+        content_hash: "7".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `UPDATE skill_sync_state SET pending_diff_payload = ? WHERE pending_proposal_id = ?`
+    ).run("{not valid json", proposal.pending_proposal_id);
+
+    const approved = approveSyncProposalById(db, {
+      proposal_id: proposal.pending_proposal_id!,
+      operator: "alice",
+      apply_to_registry: false,
+    });
+    expect(approved.status).toBe("approved");
+    expect(approved.registry_updated).toBe(false);
+    expect(approved.reverified_hash).toBeNull();
+  });
+
+  it("rejects empty operators and reasons on proposal-id decisions", async () => {
+    const { createImportProposal, approveSyncProposalById, rejectSyncProposalById, SkillSyncError } =
+      await import("../skill-sync");
+    const { proposal } = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "empty-decision-fields",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("empty-decision-fields", "1.0.0"),
+        content_hash: "8".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: proposal.pending_proposal_id!,
+        operator: " ",
+      })
+    ).toThrow(SkillSyncError);
+    expect(() =>
+      rejectSyncProposalById(db, {
+        proposal_id: proposal.pending_proposal_id!,
+        operator: "bob",
+        reason: "",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
   it("listSyncObservability marks rejected terminal rows without pending proposals", async () => {
     const { listSyncObservability } = await import("../skill-sync");
     db.prepare(

@@ -240,6 +240,63 @@ describe("VAL-SKILL-036 hash helpers and listing", () => {
         actor: "operator",
       })
     ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "missing-source",
+        sourceSkillId: " ",
+        sourceVersion: "1.0.0",
+        proposedDiff: "## Preconditions\nnone",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "missing-version",
+        sourceSkillId: "skill-502",
+        sourceVersion: "",
+        proposedDiff: "## Preconditions\nnone",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "missing-diff",
+        sourceSkillId: "skill-502",
+        sourceVersion: "1.0.0",
+        proposedDiff: "",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      intakeProposal(db, {
+        proposalId: "missing-actor",
+        sourceSkillId: "skill-502",
+        sourceVersion: "1.0.0",
+        proposedDiff: "## Preconditions\nnone",
+        actor: "",
+      })
+    ).toThrow(SkillForgeIntakeError);
+  });
+
+  it("normalizes blank scope keys and ignores malformed stored notes", async () => {
+    const { intakeProposal, loadIntakeRow } = await import("../intake-export");
+    intakeProposal(db, {
+      proposalId: "blank-scope",
+      sourceSkillId: "skill-508",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      scopeKey: "   ",
+      actor: "operator",
+    });
+    db.prepare(`UPDATE skillforge_intake_proposals SET notes = ? WHERE id = ?`).run(
+      "not-json",
+      "blank-scope"
+    );
+
+    const row = loadIntakeRow(db, "blank-scope");
+    expect(row?.scopeKey).toBe("default");
+    expect(row?.notes).toEqual([]);
+    expect(loadIntakeRow(db, "does-not-exist")).toBeNull();
   });
 
   it("advanceProposalState appends notes and exported proposals stay terminal", async () => {
@@ -435,6 +492,64 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
     ).toThrow(SkillForgeIntakeError);
   });
 
+  it("exportProposal validates required runtime fields and missing proposals", async () => {
+    const { exportProposal, SkillForgeIntakeError } = await import("../intake-export");
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "",
+        runtimeSkillId: "skill",
+        runtimeVersion: "1.0.0",
+        runtimeContentHash: "hash",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "missing-export-proposal",
+        runtimeSkillId: "",
+        runtimeVersion: "1.0.0",
+        runtimeContentHash: "hash",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "missing-export-proposal",
+        runtimeSkillId: "skill",
+        runtimeVersion: "",
+        runtimeContentHash: "hash",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "missing-export-proposal",
+        runtimeSkillId: "skill",
+        runtimeVersion: "1.0.0",
+        runtimeContentHash: "",
+        actor: "operator",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "missing-export-proposal",
+        runtimeSkillId: "skill",
+        runtimeVersion: "1.0.0",
+        runtimeContentHash: "hash",
+        actor: "",
+      })
+    ).toThrow(SkillForgeIntakeError);
+    expect(() =>
+      exportProposal(db, {
+        proposalId: "missing-export-proposal",
+        runtimeSkillId: "skill",
+        runtimeVersion: "1.0.0",
+        runtimeContentHash: "hash",
+        actor: "operator",
+      })
+    ).toThrow(/not found/);
+  });
+
   it("rollbackExport throws when the proposal id does not exist", async () => {
     const { rollbackExport, SkillForgeIntakeError } = await import("../intake-export");
     expect(() =>
@@ -478,6 +593,20 @@ describe("VAL-SKILL-037 export binds hashes and prevents runtime when not approv
       actor: "operator",
     });
     expect(loadIntakeRow(db, "applied-path")?.state).toBe("exported");
+  });
+
+  it("loadExportRecord returns null before export and listIntakeProposals clamps limits", async () => {
+    const { intakeProposal, loadExportRecord, listIntakeProposals } = await import("../intake-export");
+    expect(loadExportRecord(db, "missing-export")).toBeNull();
+    intakeProposal(db, {
+      proposalId: "limit-clamp",
+      sourceSkillId: "skill-509",
+      sourceVersion: "1.0.0",
+      proposedDiff: "## Preconditions\nnone",
+      actor: "operator",
+    });
+    expect(listIntakeProposals(db, { limit: 0 }).some((row) => row.proposalId === "limit-clamp")).toBe(true);
+    expect(listIntakeProposals(db, { limit: 999 }).length).toBeGreaterThanOrEqual(1);
   });
 
   it("recordIntakeRedaction rejects missing proposals and invalid states", async () => {

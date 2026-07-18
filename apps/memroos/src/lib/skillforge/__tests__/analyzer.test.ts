@@ -2,6 +2,7 @@
  * SkillForge Analyzer tests — Phase 86
  */
 
+import Database from "better-sqlite3";
 import { describe, it, expect } from "vitest";
 import { analyzeTelemetry, logFailure } from "../analyzer";
 import type { SkillForgeIntakeEntry, SkillForgeConfig } from "../types";
@@ -88,5 +89,100 @@ describe("SkillForge Analyzer", () => {
 
     const results = analyzeTelemetry(entries, config);
     expect(results[0].confidence).toBeGreaterThanOrEqual(results[1]?.confidence ?? 0);
+  });
+
+  it("uses input and JSON payload fallbacks and caps generated tests per pattern", () => {
+    const entries = [
+      makeEntry("skill-1", "failure", { input: "  NEED   HELP  ", actual: "answer 1" }),
+      makeEntry("skill-1", "failure", { input: "need help", actual: "answer 2" }),
+      makeEntry("skill-1", "failure", { input: "need help", actual: "answer 3" }),
+      makeEntry("skill-1", "failure", { input: "need help", actual: "answer 4" }),
+      makeEntry("skill-1", "failure", { nested: { value: true }, actual: "json answer" }),
+      makeEntry("skill-1", "failure", { query: "missing expected" }),
+    ];
+
+    const [result] = analyzeTelemetry(entries, config);
+    expect(result.patterns.some((pattern) => pattern.pattern === "need help")).toBe(true);
+    expect(result.patterns.some((pattern) => pattern.pattern.includes('"nested"'))).toBe(true);
+    const needHelpTests = result.testCases.filter((test) => test.input.toLowerCase().includes("need help"));
+    expect(needHelpTests.length).toBeGreaterThan(1);
+    expect(needHelpTests.length).toBeLessThanOrEqual(3);
+    expect(result.testCases.some((test) => test.input === "missing expected")).toBe(false);
+  });
+
+  it("suggests fixes for dispatch-disabled, eval, and unknown failures", () => {
+    const results = analyzeTelemetry(
+      [
+        makeEntry("skill-disabled", "failure", { query: "disabled", dispatchStatus: "disabled" }),
+        makeEntry("skill-eval", "failure", { query: "eval", passed: false, actual: "no" }),
+        makeEntry("skill-unknown", "failure", { query: "unknown", actual: "no expected" }),
+      ],
+      config
+    );
+
+    const bySkill = new Map(results.map((result) => [result.skillId, result]));
+    expect(bySkill.get("skill-disabled")?.patterns[0].suggestedFix).toMatch(/dispatch_status/);
+    expect(bySkill.get("skill-eval")?.patterns[0].suggestedFix).toMatch(/eval candidate/);
+    expect(bySkill.get("skill-unknown")?.patterns[0].suggestedFix).toMatch(/Review skill implementation/);
+  });
+
+  it("limits total generated tests to ten across patterns", () => {
+    const entries = Array.from({ length: 12 }, (_, index) =>
+      makeEntry("skill-many", "failure", {
+        query: `query ${index}`,
+        expected: `expected ${index}`,
+        actual: `actual ${index}`,
+      })
+    );
+
+    const [result] = analyzeTelemetry(entries, config);
+    expect(result.testCases).toHaveLength(10);
+  });
+
+  it("logs failures when the replay table exists and skips when absent", () => {
+    const db = new Database(":memory:");
+    try {
+      expect(() =>
+        logFailure(db, {
+          operation: "dispatch",
+          input: "hello",
+          deterministicResult: null,
+          llmResult: "fallback",
+          pattern: "hello",
+          skillId: "skill-log",
+        })
+      ).not.toThrow();
+
+      db.exec(`
+        CREATE TABLE skillforge_failure_log (
+          id TEXT PRIMARY KEY,
+          operation TEXT,
+          input TEXT,
+          deterministic_result TEXT,
+          llm_result TEXT,
+          pattern TEXT,
+          skill_id TEXT,
+          timestamp TEXT
+        );
+      `);
+      logFailure(db, {
+        operation: "dispatch",
+        input: "hello",
+        deterministicResult: "det",
+        llmResult: "fallback",
+        pattern: "hello",
+        skillId: "skill-log",
+      });
+      const row = db
+        .prepare("SELECT operation, deterministic_result, llm_result FROM skillforge_failure_log")
+        .get() as { operation: string; deterministic_result: string; llm_result: string };
+      expect(row).toMatchObject({
+        operation: "dispatch",
+        deterministic_result: "det",
+        llm_result: "fallback",
+      });
+    } finally {
+      db.close();
+    }
   });
 });
