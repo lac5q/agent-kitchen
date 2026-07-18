@@ -183,6 +183,18 @@ describe("AgentEngagementConsole", () => {
     expect(screen.getByText("No agents match the current filters.")).toBeInTheDocument();
   });
 
+  it("renders loading and empty roster states from the agents source", () => {
+    vi.mocked(useAgents).mockReturnValue({ data: undefined, isLoading: true } as ReturnType<typeof useAgents>);
+    const { rerender } = render(<AgentEngagementConsole />);
+    expect(screen.getByText("Loading agents...")).toBeInTheDocument();
+
+    vi.mocked(useAgents).mockReturnValue({ data: { agents: [] }, isLoading: false } as ReturnType<typeof useAgents>);
+    rerender(<AgentEngagementConsole />);
+
+    expect(screen.getByText("No agents match the current filters.")).toBeInTheDocument();
+    expect(screen.getByText("0 active / 0 registered")).toBeInTheDocument();
+  });
+
   it("runs diagnostics for primary agents without testing hidden Paperclip agents", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       json: async () => ({

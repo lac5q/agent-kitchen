@@ -7,7 +7,7 @@ import { buildDefaultEvalConfig } from "@/lib/evals/config";
 import { persistEvalRun } from "@/lib/evals/persistence";
 import type { EvalRunResult, GoldenSetExample } from "@/lib/evals/types";
 import { applyProposalWithService } from "../apply";
-import { rescorePostApply } from "../rescore";
+import { buildModeledPostApplyTrace, rescorePostApply, sealRescoreMetadata } from "../rescore";
 import { SealService } from "../service";
 import type { ProposalDraft, SealProposal } from "../types";
 
@@ -195,6 +195,33 @@ describe("SEAL post-apply re-scoring", () => {
 
     expect(post.compositeW).toBe(baselineRun().compositeW);
     expect(marker?.metadata?.reason).toMatch(/behavioral effect not modeled/);
+    expect(sealRescoreMetadata(post)).toMatchObject({ wLiftModeled: false });
+  });
+
+  it("builds deterministic modeled traces and handles zero forecast deltas", () => {
+    const baseline = baselineRun({ compositeW: 0.75 });
+    const trace = buildModeledPostApplyTrace({
+      baseline,
+      proposalType: "salience_update",
+      diff: { memoryId: "mem-zero" },
+      forecastWDelta: 0,
+    });
+    const post = rescorePostApply({
+      baseline,
+      proposalType: "salience_update",
+      diff: { memoryId: "mem-zero" },
+      forecastWDelta: 0,
+      config,
+      goldenSet,
+    });
+
+    expect(trace.metadata?.modeledDelta).toBe(0);
+    expect(String(trace.output)).toContain("modeled seal outcome");
+    expect(sealRescoreMetadata(post)).toMatchObject({
+      wLiftModeled: true,
+      forecastWDelta: 0,
+    });
+    expect(sealRescoreMetadata(baselineRun())).toBeNull();
   });
 
   it("undoes shadow mutations when post-apply W regresses", async () => {

@@ -9,6 +9,7 @@ import {
   decryptVaultBody,
   encryptVaultBody,
   rewrapVaultEnvelope,
+  shouldEncryptVaultLabel,
 } from "../envelope";
 
 let tmpDir: string;
@@ -44,5 +45,32 @@ describe("vault envelope encryption", () => {
 
     expect(rewrapped.keyId).toBe("local-v2");
     expect(decryptVaultBody(rewrapped, provider).toString("utf8")).toBe("rotation survives replay");
+  });
+
+  it("classifies which vault labels require encryption", () => {
+    expect(
+      shouldEncryptVaultLabel({
+        visibility: "public_safe",
+        policy: "indexable",
+        domain: "engineering",
+        sensitivity: null,
+      })
+    ).toBe(false);
+    expect(
+      shouldEncryptVaultLabel({
+        visibility: "internal",
+        policy: "requires_redaction",
+        domain: "client",
+        sensitivity: null,
+      })
+    ).toBe(true);
+    expect(
+      shouldEncryptVaultLabel({
+        visibility: "internal",
+        policy: "indexable",
+        domain: "finance",
+        sensitivity: "payment",
+      })
+    ).toBe(true);
   });
 });

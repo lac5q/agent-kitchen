@@ -272,6 +272,16 @@ describe("memory lifecycle API routes", () => {
     expect(decayJson.summary.skippedProtected).toBe(1);
     expect(decayJson.summary.decayed).toBe(0);
 
+    const invalidDecayResponse = await decayPost(
+      jsonRequest({
+        actorId: "system",
+        now: 123,
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      })
+    );
+    expect(invalidDecayResponse.status).toBe(400);
+    expect((await invalidDecayResponse.json()).error).toBe("now is required");
+
     const planResponse = await subjectErasurePost(
       jsonRequest({
         action: "create_plan",

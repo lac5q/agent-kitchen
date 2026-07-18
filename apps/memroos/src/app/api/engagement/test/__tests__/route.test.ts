@@ -150,4 +150,40 @@ describe("POST /api/engagement/test", () => {
       chat: { status: "blocked", runner: "opencode", model: "bailian/qwen3.5-plus" },
     });
   });
+
+  it("tests all agents by default and discloses remote dispatch plus muted voice", async () => {
+    vi.stubEnv("ELEVENLABS_API_KEY", "");
+    mockGetRemoteAgents.mockReturnValue([
+      {
+        id: "qwen-engineer",
+        name: "Qwen Remote",
+        role: "remote",
+        platform: "qwen",
+        protocol: "a2a",
+        location: "remote",
+        host: "qwen.example.com",
+        port: 443,
+        healthEndpoint: "/health",
+        skills: [],
+      } as any,
+    ]);
+    mockSelectAdapter.mockReturnValueOnce({ name: "hive-poll", dispatch: vi.fn() } as any).mockReturnValueOnce({
+      name: "a2a",
+      dispatch: vi.fn(),
+    } as any);
+
+    const res = await POST(makeRequest({}) as any);
+    const body = await res.json();
+
+    expect(body.results).toHaveLength(2);
+    expect(body.results[0].voice).toMatchObject({ status: "warning" });
+    expect(body.results[1]).toMatchObject({
+      agentId: "qwen-engineer",
+      dispatch: {
+        status: "ready",
+        adapter: "a2a",
+      },
+    });
+    expect(body.results[1].dispatch.detail).toMatch(/Remote transport is registered/);
+  });
 });

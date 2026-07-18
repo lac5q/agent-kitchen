@@ -101,6 +101,13 @@ describe("identity/delegation.ts (Phase 131 / TEAMSCALE-04)", () => {
       expect(buildDelegationChain(db, userId, "agt_missing")).toBeNull();
     });
 
+    it("returns null for blank user or agent identifiers", () => {
+      const { userId, agentId } = seedUserWithAgent(db, "blank", ["memory.read"]);
+
+      expect(buildDelegationChain(db, "", agentId)).toBeNull();
+      expect(buildDelegationChain(db, userId, "")).toBeNull();
+    });
+
     it("includes the sub-agent hop when subAgentId is provided and parent matches", () => {
       const { userId, agentId } = seedUserWithAgent(db, "carol", ["memory.read"]);
       seedSubAgent(db, userId, agentId, "agt_carol_sub", ["policy.evaluate"]);
@@ -131,9 +138,49 @@ describe("identity/delegation.ts (Phase 131 / TEAMSCALE-04)", () => {
 
       expect(buildDelegationChain(db, userId, agentId, "agt_dave_sub_orphan")).toBeNull();
     });
+
+    it("returns null when sub-agent metadata is malformed or owner mismatches", () => {
+      const alice = seedUserWithAgent(db, "malformed-alice", ["memory.read"]);
+      const bob = seedUserWithAgent(db, "malformed-bob", ["search"]);
+      seedSubAgent(db, alice.userId, alice.agentId, "agt_bad_metadata", ["search"]);
+      seedSubAgent(db, bob.userId, bob.agentId, "agt_wrong_owner", ["search"]);
+      db.prepare(`UPDATE registered_agents SET metadata = ? WHERE id = ?`).run("{not-json", "agt_bad_metadata");
+      db.prepare(`UPDATE registered_agents SET metadata = ? WHERE id = ?`).run(
+        JSON.stringify({ parent_agent_id: alice.agentId }),
+        "agt_wrong_owner"
+      );
+
+      expect(buildDelegationChain(db, alice.userId, alice.agentId, "agt_bad_metadata")).toBeNull();
+      expect(buildDelegationChain(db, alice.userId, alice.agentId, "agt_wrong_owner")).toBeNull();
+    });
   });
 
   describe("verifyDelegationChain", () => {
+    it("rejects chains missing user or agent identities", () => {
+      const base: DelegationChain = {
+        user: { id: "u1", role: "operator" },
+        agent: { id: "a1", capabilities: ["x"] },
+        hops: [
+          {
+            fromId: "u1",
+            fromType: "user",
+            toId: "a1",
+            toType: "agent",
+            capabilities: ["x"],
+          },
+        ],
+      };
+
+      expect(verifyDelegationChain({ ...base, user: { id: "", role: "operator" } })).toEqual({
+        valid: false,
+        reason: "missing_user",
+      });
+      expect(verifyDelegationChain({ ...base, agent: { id: "", capabilities: ["x"] } })).toEqual({
+        valid: false,
+        reason: "missing_agent",
+      });
+    });
+
     it("accepts a valid user -> agent chain", () => {
       const { userId, agentId } = seedUserWithAgent(db, "eve", ["memory.read"]);
       const chain = buildDelegationChain(db, userId, agentId);
@@ -212,6 +259,35 @@ describe("identity/delegation.ts (Phase 131 / TEAMSCALE-04)", () => {
       expect(verifyDelegationChain(chain)).toEqual({
         valid: false,
         reason: "missing_subagent_hop",
+      });
+    });
+
+    it("rejects invalid or capability-empty sub-agent hops", () => {
+      const base: DelegationChain = {
+        user: { id: "u1", role: "operator" },
+        agent: { id: "a1", capabilities: ["x"] },
+        subAgent: { id: "s1", capabilities: ["y"] },
+        hops: [
+          { fromId: "u1", fromType: "user", toId: "a1", toType: "agent", capabilities: ["x"] },
+          { fromId: "a1", fromType: "agent", toId: "wrong", toType: "sub-agent", capabilities: ["y"] },
+        ],
+      };
+
+      expect(verifyDelegationChain(base)).toEqual({
+        valid: false,
+        reason: "invalid_subagent_hop",
+      });
+      expect(
+        verifyDelegationChain({
+          ...base,
+          hops: [
+            base.hops[0],
+            { fromId: "a1", fromType: "agent", toId: "s1", toType: "sub-agent", capabilities: [] },
+          ],
+        })
+      ).toEqual({
+        valid: false,
+        reason: "subagent_has_no_capabilities",
       });
     });
   });

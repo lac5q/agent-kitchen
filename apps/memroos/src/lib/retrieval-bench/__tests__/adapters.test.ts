@@ -2,8 +2,8 @@
  * Adapter behavior tests (VAL-RETR-005, VAL-RETR-006, VAL-RETR-007).
  */
 import { describe, expect, it } from "vitest";
-import { lexicalAdapter, lexicalRank } from "../adapters/lexical";
-import { noMemoryAdapter } from "../adapters/no-memory";
+import { buildLexicalUnavailable, lexicalAdapter, lexicalRank } from "../adapters/lexical";
+import { buildNoMemoryUnavailable, noMemoryAdapter } from "../adapters/no-memory";
 import { evaluateLivePolicy, liveAdapter } from "../adapters/live";
 import {
   mem0AdapterEntry,
@@ -75,6 +75,23 @@ describe("lexical adapter (VAL-RETR-006)", () => {
     expect(ranked[0].score).toBeGreaterThan(0);
   });
 
+  it("orders equal lexical scores by id and exposes unavailable fallback", () => {
+    const task = makeTask({
+      corpus: [
+        { id: "mem-b", text: "alpha beta", scope: MATCHING_SCOPE },
+        { id: "mem-a", text: "alpha beta", scope: MATCHING_SCOPE },
+      ],
+      question: "alpha beta",
+    });
+
+    expect(lexicalRank(task, 2).map((item) => item.id)).toEqual(["mem-a", "mem-b"]);
+    expect(buildLexicalUnavailable(task, "v1", "cfg", "fix")).toMatchObject({
+      adapterName: "lexical",
+      status: "unavailable",
+      statusDetail: "lexical_adapter_not_registered",
+    });
+  });
+
   it("returns full AdapterResult with receipt even on zero matches", () => {
     const task = makeTask({ question: "no overlap at all xyzzy" });
     const result = lexicalRank(task, 3);
@@ -128,6 +145,16 @@ describe("no-memory adapter (VAL-RETR-006)", () => {
     expect(result.retrieved.length).toBe(0);
     expect(result.ignored.length).toBe(task.corpus.length);
     expect(result.ignored.every((i) => i.reasonCode === "baseline_control_no_injection")).toBe(true);
+  });
+
+  it("builds an explicit unavailable result when no-memory adapter is absent", () => {
+    const result = buildNoMemoryUnavailable(makeTask(), "v1", "cfg", "fix");
+
+    expect(result).toMatchObject({
+      adapterName: "no-memory",
+      status: "unavailable",
+      statusDetail: "no_memory_adapter_not_registered",
+    });
   });
 });
 

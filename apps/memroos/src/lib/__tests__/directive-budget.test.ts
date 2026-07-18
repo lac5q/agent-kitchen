@@ -51,6 +51,15 @@ describe("directiveDiff", () => {
     expect(diff.removed).toEqual([]);
     expect(diff.changed).toEqual([]);
   });
+
+  it("normalizes CRLF input and reports canonical-only removals", () => {
+    const diff = directiveDiff("one\r\ntwo\r\n", "one\ntwo\nthree\n");
+
+    expect(diff.identical).toBe(false);
+    expect(diff.added).toEqual([]);
+    expect(diff.changed).toEqual([]);
+    expect(diff.removed).toEqual([{ lineNumber: 3, content: "three" }]);
+  });
 });
 
 describe("computeDirectiveBudget", () => {
@@ -86,6 +95,15 @@ describe("computeDirectiveBudget", () => {
     expect(report.diff?.identical).toBe(false);
     expect(local).toBe("a\nb\nc\n");
   });
+
+  it("treats empty directives as zero lines and falls back from invalid budgets", () => {
+    const report = computeDirectiveBudget("", { budgetLines: 0 });
+
+    expect(report.status).toBe("ok");
+    expect(report.lineCount).toBe(0);
+    expect(report.budgetLines).toBe(200);
+    expect(report.overByLines).toBe(0);
+  });
 });
 
 describe("loadDirectiveBudgetConfig / tenant override", () => {
@@ -106,6 +124,21 @@ describe("loadDirectiveBudgetConfig / tenant override", () => {
       tenants: Record<string, { budgetLines: number }>;
     };
     expect(raw.tenants.acme.budgetLines).toBe(320);
+  });
+
+  it("ignores invalid env and corrupt tenant stores while validating writes", () => {
+    process.env.MEMROOS_DIRECTIVE_BUDGET_LINES = "-10";
+    fs.mkdirSync(path.dirname(STORE), { recursive: true });
+    fs.writeFileSync(STORE, "{not-json", "utf8");
+
+    expect(loadDirectiveBudgetConfig("acme")).toEqual({
+      tenantId: "acme",
+      budgetLines: 200,
+    });
+    expect(() => setTenantDirectiveBudget("   ", 100)).toThrow("tenantId required");
+    expect(() => setTenantDirectiveBudget("acme", Number.NaN)).toThrow(
+      "budgetLines must be a positive number"
+    );
   });
 });
 

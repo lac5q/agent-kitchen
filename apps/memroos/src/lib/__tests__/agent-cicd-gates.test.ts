@@ -68,4 +68,19 @@ describe("agent CI/CD release gates", () => {
     const rolled = db.prepare("SELECT status FROM agent_versions WHERE version = '1.1.0'").get() as { status: string };
     expect(rolled.status).toBe("rolled_back");
   });
+
+  it("validates required fields and missing version operations", () => {
+    expect(() =>
+      createAgentVersion(db, {
+        agentId: "",
+        version: "1.0.0",
+        profile: "test",
+        modelRoute: {},
+        systemInstructions: "instructions",
+      })
+    ).toThrow("agentId is required");
+    expect(() => evaluateReleaseGates(db, "default-tenant", "missing", "9.9.9")).toThrow(/not found/);
+    expect(() => promoteAgentVersion(db, "default-tenant", "missing", "9.9.9", "prod", "operator")).toThrow(/not found/);
+    expect(() => rollbackAgentVersion(db, "default-tenant", "missing", "prod", "operator")).toThrow(/No prior promoted/);
+  });
 });

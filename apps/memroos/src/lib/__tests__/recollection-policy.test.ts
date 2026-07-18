@@ -76,6 +76,35 @@ describe("recollection policy trigger decisions", () => {
     });
     expect(queries[0].tiers).toEqual(expect.arrayContaining(["episodic", "vector", "qmd"]));
   });
+
+  it("requires search for explicit recall requests with source refs and rediscovery risk", () => {
+    const decision = decideRecollection({
+      taskText: "Recall what changed in the customer renewal brief last month.",
+      timing: "before_tool_use",
+      sourceRefs: ["crm", "email"],
+      rediscoveryRisk: true,
+      requestedLimit: 0,
+      now: NOW,
+    });
+
+    expect(decision).toMatchObject({
+      decision: "search_required",
+      timing: "before_tool_use",
+      skipReason: null,
+    });
+    expect(decision.reasons).toEqual(
+      expect.arrayContaining([
+        "task_has_recency_ref",
+        "task_has_source_ref",
+        "rediscovery_risk",
+        "explicit_memory_request",
+      ])
+    );
+    expect(decision.queries[0]).toMatchObject({
+      limit: 1,
+      scope: { sources: ["crm", "email"], timeWindowDays: 45 },
+    });
+  });
 });
 
 describe("recollection candidate scoring and context packing", () => {
@@ -203,5 +232,52 @@ describe("recollection candidate scoring and context packing", () => {
       ])
     );
     expect(pack.injected.every((item) => item.reliance !== "direct_truth" || item.beliefStage === "gold_operational_truth")).toBe(true);
+  });
+
+  it("scores degraded redacted candidates and records max-item exclusions", () => {
+    const redacted: RecollectionCandidate = {
+      id: "redacted-medium-risk",
+      tier: "graph",
+      content: "Renewal brief mentions Cordant pricing risk and latest source references.",
+      beliefStage: "gold_operational_truth",
+      capturedAt: null,
+      importance: 2,
+      sourceHealth: "degraded",
+      priorUsefulness: Number.NaN,
+      authorization: "redacted",
+      policyRisk: "medium",
+      provenance: "graph",
+    };
+    const missingHighRisk: RecollectionCandidate = {
+      ...redacted,
+      id: "missing-high-risk",
+      sourceHealth: "missing",
+      policyRisk: "high",
+      authorization: "allowed",
+      provenance: "disabled-source",
+    };
+
+    const score = scoreRecollectionCandidate(redacted, {
+      taskText: "Cordant renewal pricing risk source references",
+      now: NOW,
+    });
+    expect(score.components).toMatchObject({
+      importance: 1,
+      freshness: 0.25,
+      usefulness: 0,
+      policy: 0.55,
+      riskPenalty: 0.5,
+    });
+
+    const pack = assembleRecollectionContextPack([redacted, missingHighRisk], {
+      taskText: "Cordant renewal pricing risk source references",
+      now: NOW,
+      threshold: 0,
+      maxItems: 1,
+    });
+    expect(pack.injected).toHaveLength(1);
+    expect(pack.ignored).toContainEqual(
+      expect.objectContaining({ id: "missing-high-risk", reason: "below_threshold" })
+    );
   });
 });

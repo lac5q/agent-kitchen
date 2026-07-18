@@ -119,6 +119,15 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(body.filters).toMatchObject({ window: "7d", workspace: "remote" });
   });
 
+  it("normalizes invalid filters back to the truthful default scope", async () => {
+    const { GET } = await loadRoute();
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=forever&workspace=mars"));
+    const body = await response.json();
+
+    expect(body.filters).toMatchObject({ window: "24h", workspace: "all" });
+    expect(body.metrics.memoryRows.scope).toEqual({ window: "24h", workspace: "all" });
+  });
+
   it("reports efficiency as degraded (not zero) when some streams are missing", async () => {
     const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
     recordEfficiencyEvent(getDb(), {

@@ -91,6 +91,30 @@ describe("MemoryConsumption truthful rendering", () => {
     expect(screen.getAllByText(/last 24 hours/i).length).toBeGreaterThan(0);
   });
 
+  it("renders live chart status when either time-series source has points", () => {
+    api.useMemoryStats.mockReturnValue({
+      data: {
+        lastRun: null,
+        pendingUnconsolidated: 3,
+        tierStats: [],
+        sources: [],
+        recentFailures24h: 1,
+        timestamp: "2026-07-13T12:00:00Z",
+      },
+      isLoading: false,
+      isError: false,
+    });
+    api.useTimeSeries
+      .mockReturnValueOnce(tsMockReturn([0, 5]))
+      .mockReturnValueOnce(emptyTs());
+
+    render(<MemoryConsumption filters={{ window: "30d", workspace: "remote" }} />);
+
+    expect(document.querySelector('[data-status="live"]')).toBeTruthy();
+    expect(screen.queryByText(/Chart withheld/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/last 30 days/i).length).toBeGreaterThan(0);
+  });
+
   it("renders a banner with reason when memory-stats fails", () => {
     api.useMemoryStats.mockReturnValue({
       data: undefined,

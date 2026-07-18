@@ -10,9 +10,18 @@ describe("memory tier routing", () => {
 
   it("maps legacy memory types to stable tiers", () => {
     expect(resolveMemoryTier({ type: "semantic" })).toBe("vector");
+    expect(resolveMemoryTier({ type: "fact" })).toBe("vector");
     expect(resolveMemoryTier({ type: "relationship" })).toBe("graph");
+    expect(resolveMemoryTier({ type: "entity" })).toBe("graph");
     expect(resolveMemoryTier({ type: "event" })).toBe("episodic");
+    expect(resolveMemoryTier({ type: "conversation" })).toBe("episodic");
     expect(resolveMemoryTier({ type: "note" })).toBe("episodic");
+  });
+
+  it("falls back to metadata tier and defaults malformed payloads to episodic", () => {
+    expect(resolveMemoryTier({ metadata: { tier: "FACT" } })).toBe("vector");
+    expect(resolveMemoryTier({ metadata: { tier: "unknown" } })).toBe("episodic");
+    expect(resolveMemoryTier({ metadata: ["not", "record"] })).toBe("episodic");
   });
 
   it("adds tier metadata without dropping caller metadata", () => {

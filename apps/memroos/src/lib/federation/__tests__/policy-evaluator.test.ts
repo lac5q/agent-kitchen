@@ -62,12 +62,38 @@ describe("VAL-ORCH-008 -- evaluateFederationPolicy", () => {
     expect(r.kind).toBe("deny");
   });
 
+  it("denies cross-space actors before authorizing label access", () => {
+    const r = evaluateFederationPolicy({
+      source: okSource({ spaceId: "space-a" }),
+      context: {
+        ...okContext(),
+        actor: { ...okContext().actor, project: "space-b" },
+      },
+    });
+
+    expect(r).toEqual({
+      kind: "deny",
+      reason: "space_mismatch",
+      policyVersion: FEDERATION_POLICY_VERSION,
+    });
+  });
+
   it("denies when source requires_human_review", () => {
     const r = evaluateFederationPolicy({
       source: okSource(),
       context: { ...okContext(), label: { visibility: "internal", policy: "requires_human_review" } },
     });
     expect(r.kind).toBe("review_required");
+  });
+
+  it("redacts rather than denies when the memory policy allows redaction", () => {
+    const r = evaluateFederationPolicy({
+      source: okSource(),
+      context: { ...okContext(), label: { visibility: "internal", policy: "requires_redaction" } },
+    });
+
+    expect(r.kind).toBe("redact");
+    if (r.kind === "redact") expect(r.policyVersion).toBe(FEDERATION_POLICY_VERSION);
   });
 
   it("marks result stale when maxFreshnessSeconds exceeded", () => {

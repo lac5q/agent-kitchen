@@ -214,6 +214,26 @@ describe("PulseStrip truthful metric rendering", () => {
 
     expect(screen.getByText(/failed to load \/api\/operations\/noc/i)).toBeInTheDocument();
   });
+
+  it("marks model token card blocked while /api/model-usage is loading", () => {
+    api.useOperationsNoc.mockReturnValue({ data: baseMockResponse(), isLoading: false, isError: false });
+    api.useHiveFeed.mockReturnValue({ data: { actions: [] }, isError: false });
+    api.useDelegations.mockReturnValue({ data: { delegations: [] }, isError: false });
+    api.useModelUsage.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    render(<PulseStrip filters={{ window: "7d", workspace: "remote" }} />);
+
+    const tokenCard = screen.getByText(/Model tokens/i).closest("[data-card-label]");
+    expect(tokenCard).not.toBeNull();
+    if (tokenCard) {
+      expect(within(tokenCard).getByText(/Loading \/api\/model-usage/)).toBeInTheDocument();
+      expect(tokenCard.querySelector('[data-status="blocked"]')).toBeTruthy();
+    }
+  });
 });
 
 

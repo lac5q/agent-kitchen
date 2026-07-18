@@ -163,4 +163,24 @@ describe("shared-space.ts (Phase 139 / SHAREDRO-01..03)", () => {
       setSpaceShared(db, { spaceId: "spc_missing", isShared: true, actorId }),
     ).toThrow(/not found/);
   });
+
+  it("15) validates blank toggle inputs and tolerates corrupt history metadata", () => {
+    expect(() => setSpaceShared(db, { spaceId: "  ", isShared: true, actorId })).toThrow(/spaceId/);
+    expect(() => setSpaceShared(db, { spaceId, isShared: true, actorId: " " })).toThrow(/actorId/);
+
+    db.prepare(
+      `INSERT INTO audit_entries
+         (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, metadata_json, created_at)
+       VALUES ('corrupt-toggle', 'default-tenant', ?, 'operator', 'space.shared_toggle', 'space', ?, ?, ?)`
+    ).run(actorId, `space:${spaceId}`, "{not-json", "2026-07-18T10:00:00.000Z");
+
+    expect(getSharedToggleHistory(db, " ")).toEqual([]);
+    expect(getSharedToggleHistory(db, spaceId)).toContainEqual(
+      expect.objectContaining({
+        actorId,
+        isShared: false,
+        reason: null,
+      })
+    );
+  });
 });

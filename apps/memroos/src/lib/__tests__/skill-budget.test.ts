@@ -175,6 +175,23 @@ describe("readSkillBudgetReport", () => {
     expect(report.sources[0]?.id).toBe("env-root-1");
   });
 
+  it("loads plugin-cache skills from default roots and ignores malformed extraDirs", async () => {
+    const home = makeTempDir("skill-budget-plugin-home-");
+    const pluginRoot = path.join(home, ".codex", "plugins", "cache", "plug", "skill-one");
+    fs.mkdirSync(pluginRoot, { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginRoot, "SKILL.md"),
+      "---\nname: plugin-skill\ndescription: plugin cache\n---\n"
+    );
+    fs.mkdirSync(path.join(home, ".openclaw"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".openclaw", "openclaw.json"), JSON.stringify({ skills: { load: { extraDirs: "not-array" } } }));
+
+    const report = await readSkillBudgetReport({ home, budgetTokens: 500 });
+
+    expect(report.uniqueSkills).toBe(1);
+    expect(report.sources.some((source) => source.id === "codex-plugin-cache")).toBe(true);
+  });
+
   it("falls back to home default roots when env roots are unset", async () => {
     const home = makeTempDir("skill-budget-default-home-");
     const codexSkills = path.join(home, ".codex", "skills", "demo");

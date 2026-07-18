@@ -19,6 +19,7 @@ import {
   evaluatePublicationGate,
   extractEntities,
   packContext,
+  defaultContextBudget,
   performTemporalRetrieval,
   performTierFanout,
   reconcileStages,
@@ -107,6 +108,48 @@ describe("end-to-end pipeline (VAL-RETR-015..030)", () => {
     expect(fanout.items.length).toBeGreaterThanOrEqual(pack.items.length);
     void ent;
     void temporal;
+  });
+
+  it("records tier fanout omissions and context-pack token coverage gaps", async () => {
+    const ticks = [0, 5, 10, 20, 25, 30, 40];
+    const fanout = await performTierFanout({
+      query: "q",
+      sources: [
+        { tier: "lexical", state: "registered", trust: 1 },
+        { tier: "mem0", state: "registered", trust: 1 },
+        { tier: "qdrant", state: "registered", trust: 1 },
+        { tier: "live", state: "expired" },
+      ],
+      budget: { maxSources: 2, maxItemsPerSource: 1, deadlineMs: 100 },
+      allowedTiers: ["lexical", "mem0", "qdrant", "live"],
+      now: () => ticks.shift() ?? 40,
+      caller: async ({ tier }) => ({
+        items: [{ id: tier, score: 1, text: `${tier} text`, tier, source: tier, authorizationResult: "allowed", whyEntered: "ok" }],
+      }),
+    });
+
+    expect(fanout.receipt.calledCount).toBe(2);
+    expect(fanout.perSource).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tier: "qdrant", status: "omitted", reasonCode: "budget_exhausted" }),
+        expect.objectContaining({ tier: "live", status: "stale", reasonCode: "source_state:expired" }),
+      ])
+    );
+
+    const pack = packContext({
+      items: [
+        { id: "must-have", score: 1, text: "required evidence", tier: "lexical", source: "fixture", authorizationResult: "allowed", whyEntered: "evidence", rankPosition: 1 },
+        { id: "too-many-tokens", score: 0.9, text: "x".repeat(80), tier: "live", source: "fixture", authorizationResult: "allowed", whyEntered: "budget", rankPosition: 2 },
+      ],
+      evidenceSpanIds: ["must-have", "too-many-tokens"],
+      temporalCaveats: [{ code: "conflicting_facts", message: "latest was ambiguous", candidateIds: ["must-have"] }],
+      budget: { maxBytes: 200, maxTokens: 5 },
+    });
+
+    expect(defaultContextBudget()).toEqual({ maxBytes: 8192, maxTokens: 2048 });
+    expect(pack.receipt.coverageMet).toBe(false);
+    expect(pack.receipt.temporalCaveatCodes).toEqual(["conflicting_facts"]);
+    expect(pack.omitted).toContainEqual({ id: "too-many-tokens", reason: "over_token_budget" });
   });
 
   it("stage reconciliation tracks IDs across every stage", async () => {

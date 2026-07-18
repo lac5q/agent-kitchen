@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import { writeVaultArtifact } from "@/lib/vault/writer";
-import { classifyText, classifyVaultArtifact } from "../cascade";
+import {
+  classifyText,
+  classifyVaultArtifact,
+  decideClassificationReview,
+  listClassificationReviews,
+} from "../cascade";
 
 let db: Database.Database;
 let vaultRoot: string;
@@ -214,5 +219,84 @@ describe("classification cascade", () => {
       sensitivity: "pii",
       policy: "requires_human_review",
     });
+  });
+
+  it("lists reviews and records reviewer denial without appending a label", () => {
+    const artifact = writeVaultArtifact(db, {
+      sourceType: "messages",
+      sourceId: "session-deny",
+      sessionId: "session-deny",
+      project: "client-onboarding",
+      body: "Customer SSN 123-45-6789\n",
+    });
+    const classified = classifyVaultArtifact(db, artifact.id);
+
+    expect(listClassificationReviews(db, { tenantId: "default-tenant", status: "all", limit: 999 })).toHaveLength(1);
+    const before = db
+      .prepare("SELECT COUNT(*) AS count FROM artifact_labels WHERE artifact_id = ?")
+      .get(artifact.id) as { count: number };
+
+    const decision = decideClassificationReview(db, classified.reviewId!, {
+      reviewerId: "reviewer-missing",
+      decision: "deny",
+      note: "Not enough evidence to relabel",
+    });
+
+    expect(decision.label).toBeNull();
+    expect(decision.review).toMatchObject({
+      status: "denied",
+      decision: "deny",
+      decisionNote: "Not enough evidence to relabel",
+    });
+    const after = db
+      .prepare("SELECT COUNT(*) AS count FROM artifact_labels WHERE artifact_id = ?")
+      .get(artifact.id) as { count: number };
+    expect(after.count).toBe(before.count);
+  });
+
+  it("applies reviewer redaction overrides and blocks repeated decisions", () => {
+    db.prepare(
+      `INSERT INTO users (id, email, display_name, password_hash, tenant_id)
+       VALUES ('reviewer-1', 'reviewer@example.com', 'Reviewer', 'hash', 'default-tenant')`
+    ).run();
+    const artifact = writeVaultArtifact(db, {
+      sourceType: "messages",
+      sourceId: "session-redact",
+      sessionId: "session-redact",
+      project: "finance",
+      body: "Finance card 4111 1111 1111 1111\n",
+    });
+    const classified = classifyVaultArtifact(db, artifact.id);
+
+    const decision = decideClassificationReview(db, classified.reviewId!, {
+      reviewerId: "reviewer-1",
+      decision: "redact",
+      note: "Owner-scoped redaction accepted",
+      label: { visibility: "private", domain: "finance", sensitivity: null, policy: "sealed" },
+    });
+
+    expect(decision.review).toMatchObject({
+      status: "redacted",
+      reviewerId: "reviewer-1",
+      decision: "redact",
+    });
+    expect(decision.label).toEqual({
+      visibility: "private",
+      domain: "finance",
+      sensitivity: null,
+      policy: "sealed",
+    });
+    expect(() =>
+      decideClassificationReview(db, classified.reviewId!, {
+        reviewerId: "reviewer-1",
+        decision: "approve",
+      })
+    ).toThrow(/already redacted/);
+    expect(() =>
+      decideClassificationReview(db, "missing-review", {
+        reviewerId: "reviewer-1",
+        decision: "approve",
+      })
+    ).toThrow(/classification review not found/);
   });
 });

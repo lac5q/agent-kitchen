@@ -156,6 +156,36 @@ describe("agent context packet", () => {
     db.close();
   });
 
+  it("marks failed delegations blocked and empty retrieval traces below threshold", () => {
+    const db = seedDb();
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id)
+       VALUES(?, 'agent-alpha', 'agent-beta', 'Recover blocked work', 'failed', ?)`
+    ).run(GOAL_ID, GOAL_ID);
+    db.prepare(
+      `INSERT INTO efficiency_events
+       (tenant_id, task_id, event_type, payload, created_at)
+       VALUES ('default-tenant', ?, 'retrieval_trace', ?, '2026-07-06T11:05:00Z')`
+    ).run(GOAL_ID, JSON.stringify({ sources: [] }));
+
+    const result = buildAgentContextPacket(db, {
+      goalId: GOAL_ID,
+      actorAgentId: "agent-alpha",
+      now: () => FIXED_NOW,
+    });
+
+    expect(result.packet.goal.status).toBe("blocked");
+    expect(result.packet.receipts).toContainEqual(
+      expect.objectContaining({
+        source: "efficiency_events",
+        status: "below_threshold",
+        reason: "retrieval trace had no source references",
+      })
+    );
+    expect(result.packet.recentRunState.latestProofReceipts).toContain("efficiency_events:1");
+    db.close();
+  });
+
   it("denies ontology-tagged context when server-derived coordinates are missing", () => {
     const db = seedDb();
     db.prepare(
