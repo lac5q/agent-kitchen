@@ -55,7 +55,7 @@ function Tree({
               onClick={() => onOpen(node.path)}
               className="block w-full rounded px-1 py-0.5 text-left hover:bg-white/5"
               style={{
-                color: activePath === node.path ? NOC.accent : NOC.text,
+                color: activePath === node.path ? NOC.terra : NOC.ink,
                 background: activePath === node.path ? "rgba(255,255,255,0.06)" : undefined,
               }}
             >

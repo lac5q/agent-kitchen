@@ -15,7 +15,7 @@
 | `memroos.epiloguecapital.com` | **Operator app** (login, APIs, agent onboarding) | **oracle-1** via Cloudflare Tunnel | Deploy on `oracle-1`; tunnel `memroos-oracle` |
 | Mac (`localhost`) | Dev / burst only | Local `npm run dev` | Not production |
 
-**Canonical operator host:** `oracle-1` (Tailscale `100.90.196.33`)  
+**Canonical operator host:** `oracle-1` (Tailscale hostname `oracle-1`)  
 **Public URL:** `https://memroos.epiloguecapital.com`  
 **Tunnel:** Cloudflare `memroos-oracle` (`b63251cf-f9d1-41b5-a85e-9d6b792301db`) → `http://127.0.0.1:3000`  
 **Shared stores:** Neo4j Aura + Qdrant Cloud (same collections as before)  
