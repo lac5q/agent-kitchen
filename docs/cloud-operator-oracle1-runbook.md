@@ -1,10 +1,12 @@
 # Always-On Cloud Operator Runbook (oracle-1)
 
-**Version:** v8.15 readiness draft 2026-07-18.1  
+**Version:** v8.15 live verification 2026-07-18.2  
 **Created:** 2026-07-18  
 **Last updated:** 2026-07-18  
 **Scope:** v8.15 Phases 163-165 only: oracle host readiness, operator deploy/data cutover, public tunnel, and Heroku operator decommission.  
 **Out of scope:** Phase 166 / Voyage / `MEMROOS_EMBEDDING_PROVIDER=voyage`. Do not implement or enable Voyage as part of this runbook.
+
+**Live status (2026-07-18):** Public cutover is **verified** (see `docs/uat/2026-07-18-oracle1-live-cutover-verification.md`). Cursor Cloud can join Tailscale and reach `oracle-1:22`, but `opc` SSH still needs the agent pubkey installed (or Tailscale SSH enabled on the host).
 
 ## Sources
 
@@ -34,23 +36,25 @@ This script only checks local files, local process environment names, and expect
 
 ## STOP gates
 
-The following steps require Luis/operator credentials and must not be marked complete until the operator has executed or witnessed them:
+| Gate | 2026-07-18 status |
+|------|-------------------|
+| Tailscale reachability to oracle-1 | **PASS** (Cursor Cloud userspace Tailscale; ping + TCP 22) |
+| `opc` SSH shell / Tailscale SSH | **STOP** — install agent pubkey (below) or enable `sudo tailscale set --ssh` |
+| Cloudflare tunnel / DNS | **PASS** (API: `memroos-oracle` healthy → `:3000`) |
+| Heroku operator decommission | **PASS** (API: `web=0`, custom domain removed) |
+| Production secrets file read on host | **STOP** until SSH shell works |
+| Destructive SQLite overwrite | **STOP** — not required; inventory already non-zero |
 
-1. **STOP - oracle-1 host access required.**
-   - Requires SSH/Tailscale access to oracle-1.
-   - Required to install/pull Ollama `nomic-embed-text`, inspect disk/RAM after install, deploy code, restart systemd units, and run on-host smoke tests.
-2. **STOP - production secrets required.**
-   - Requires access to `/etc/memroos/web.env` and `/etc/memroos/mem0.env` or the approved secret manager.
-   - Required to confirm Aura, Qdrant, JWT, onboarding, API, and base URL values on the host.
-3. **STOP - data migration approval required.**
-   - Requires operator-approved source SQLite path and target persistent path.
-   - Required before copying or overwriting any `conversations.db` file.
-4. **STOP - Cloudflare credentials required.**
-   - Required before creating/updating DNS or tunnel ingress for `memroos.epiloguecapital.com`.
-5. **STOP - Heroku owner credentials required.**
-   - Required before removing custom domains, scaling dynos, destroying apps, or rotating exposed backend secrets.
+### Agent SSH pubkey install (unblocks Cursor Cloud)
 
-This runbook is ready for the credentialed operator handoff, but the above gates are not executed by this cloud agent.
+```bash
+# on oracle-1 as opc
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEIkdPLarR4WZK0dOPkOuZzKkymjLQMoo97nNseAx2tG cursor-cloud-memroos-2026-07-18' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+1Password: AgentWritable notes `Cursor Cloud oracle-1 SSH pubkey 2026-07-18` + private key sibling item.
 
 ## Phase 163 - host readiness checklist
 

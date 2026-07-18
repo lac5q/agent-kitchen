@@ -1,10 +1,10 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T08:16:00Z
-- **Version:** 2026-07-18.9
+- **Update date:** 2026-07-18T09:08:00Z
+- **Version:** 2026-07-18.10
 - **Lane:** code
-- **Status:** complete-with-blockers (2026-07-18); local-only durable goal; live oracle-1 cutover + app-wide 100% coverage remain blocked with evidence
+- **Status:** complete-with-blockers (2026-07-18); v8.15 public cutover verified via Tailscale/CF/Heroku APIs; opc SSH shell blocked on pubkey install; app-wide 100% coverage remains measured-gap
 - **Worker lane:** Beastmode MiniMax-M3 (`thinking.type=adaptive` high reasoning) — smoke verified `MINIMAX OK`
 - **Droid MiniMax:** not live (FACTORY_API_KEY auth failed)
 - **Out of scope:** Voyage / Phase 166 / CLOUDOPS-08 / v8.9 Voyage embedding upgrade
@@ -54,4 +54,4 @@ Complete the remaining MemRoOS GSD roadmap (not Voyage), then raise quality thro
 
 ## Next action
 
-Goal closed for cloud-executable scope. Merge PR #28. Remaining infra (oracle-1 SSH/Tailscale live cutover, Aura/mem0 live write, app-wide 100% coverage) is Luis-gated / measured-gap only — no further code work without those credentials.
+Luis: install Cursor Cloud SSH pubkey on `opc@oracle-1` (see `docs/uat/2026-07-18-oracle1-live-cutover-verification.md`), then agents can `git pull`/restart units. Merge PR #28. Voyage/100% coverage remain out of scope / measured-gap.

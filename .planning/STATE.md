@@ -4,7 +4,7 @@ milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
 stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
-last_updated: "2026-07-18T08:16:00Z"
+last_updated: "2026-07-18T09:08:00Z"
 progress:
   total_phases: 115
   completed_phases: 79
@@ -35,7 +35,7 @@ Completed recently: Standing Quality Gate; v8.13–v8.16 cloud-executable work; 
 - Fast 3168 + slow 19 green; prod-log triage: no actionable cloud-reachable errors
 
 **Still open (outside this goal / approval-gated):**
-- **v8.15 live** — oracle-1 / Cloudflare / Heroku (needs Luis SSH/Tailscale)
+- **v8.15 live** — public cutover verified 2026-07-18; opc SSH shell needs pubkey install for on-host re-smoke/deploy
 - **MSIQ-06** — GraphRAG spike (Luis approval)
 - **ENTOPS-04/05** — IdP/MDM
 - **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred
@@ -47,7 +47,7 @@ Completed recently: Standing Quality Gate; v8.13–v8.16 cloud-executable work; 
 Last session: 2026-07-18T08:16:00Z
 Stopped at: Goal complete-with-blockers; PR #28 updated with wiki-digest fallback + live UAT evidence.
 Resume file: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Next action: Merge PR #28; Luis provides oracle-1 SSH for v8.15 live waves if desired.
+Next action: Luis installs Cursor Cloud SSH pubkey on opc@oracle-1; then deploy PR branch and re-smoke systemd/Ollama.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
