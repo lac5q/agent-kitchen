@@ -91,4 +91,50 @@ describe("OKF memory bundle support", () => {
       ])
     );
   });
+
+  it("uses a safe default description and serializes optional governance fields", () => {
+    const concept = buildOkfConceptFromMemory(
+      {
+        ...memory,
+        id: "../unsafe//empty",
+        content: "   ",
+      },
+      {
+        title: "Governed Memory",
+        classification: "internal",
+        authorizationPolicy: "agent_visible",
+        receiptId: "receipt-1",
+        rawArtifactId: "vault-1",
+      },
+    );
+
+    expect(concept.path).toBe("memory/unsafe/empty");
+    expect(concept.content).toContain('description: "MemRoOS memory entry."');
+    expect(concept.content).toContain('classification: "internal"');
+    expect(concept.content).toContain('authorization_policy: "agent_visible"');
+    expect(parseOkfDocument(concept.content).body).toBe("");
+  });
+
+  it("reports invalid bundle paths and reserved frontmatter misuse", () => {
+    const validation = validateOkfBundle({
+      "/absolute.md": "---\ntype: Thing\n---\nBody",
+      "nested/../traversal.md": "---\ntype: Thing\n---\nBody",
+      "nested/log.md": "---\ntype: Log\n---\n# should not have frontmatter",
+      "concept.md": "---\ntype: Concept\n---\nSee [index](./index.md) and [missing](./missing.md).",
+    });
+
+    expect(validation.conformant).toBe(false);
+    expect(validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "/absolute.md", code: "invalid_path" }),
+        expect.objectContaining({ path: "nested/../traversal.md", code: "invalid_path" }),
+        expect.objectContaining({ path: "nested/log.md", code: "reserved_frontmatter" }),
+      ]),
+    );
+    expect(validation.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "concept.md", code: "broken_link", target: "missing.md" }),
+      ]),
+    );
+  });
 });

@@ -75,4 +75,88 @@ describe("multi-agent", () => {
     expect(result.synced).toBe(1);
     expect(result.errors).toHaveLength(0);
   });
+
+  it("returns typed export failures for missing skills and malformed registry rows", () => {
+    expect(exportSkillPackage(db, "404")).toMatchObject({
+      success: false,
+      error: "Skill not found",
+    });
+
+    db.prepare("INSERT INTO skill_registry (id, name, content, version, author, tags, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(2, "Broken Tags", "content", "1.0", "author", "{not-json", new Date().toISOString());
+
+    const result = exportSkillPackage(db, "2");
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+
+  it("collects validation errors before import and surfaces insert failures separately", () => {
+    const invalid = importSkillPackage(db, {
+      id: "pkg-invalid",
+      skillId: "",
+      name: "Missing",
+      content: "",
+      metadata: { version: "", author: "a", tags: [], evalReceipts: [] },
+      compatibility: ["codex"],
+      exportedAt: new Date().toISOString(),
+    });
+
+    expect(invalid).toMatchObject({
+      success: false,
+      validationPassed: false,
+    });
+    expect(invalid.errors).toEqual(
+      expect.arrayContaining([
+        "Missing required fields: skillId, content",
+        "Missing metadata.version",
+        "Skill not compatible with memroos",
+        "Eval validation failed: no passing eval receipts",
+      ]),
+    );
+
+    db.prepare("INSERT INTO skill_registry (id, name, content, version, author, tags, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(3, "Existing", "content", "1.0", "author", "[]", new Date().toISOString());
+
+    const duplicate = importSkillPackage(db, {
+      id: "pkg-dup",
+      skillId: "3",
+      name: "Duplicate",
+      content: "content",
+      metadata: {
+        version: "1.0",
+        author: "author",
+        tags: ["x"],
+        evalReceipts: [
+          {
+            provider: "fixture",
+            model: "model",
+            dimensions: { goal: 0.6, depth: 0.7 },
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+      compatibility: ["memroos"],
+      exportedAt: new Date().toISOString(),
+    });
+
+    expect(duplicate.success).toBe(false);
+    expect(duplicate.validationPassed).toBe(true);
+    expect(duplicate.errors.join("\n")).toMatch(/UNIQUE|constraint/i);
+  });
+
+  it("syncSkillsWithAgent reports export and sync-log failures without stopping the batch", () => {
+    db.prepare("INSERT INTO skill_registry (id, name, content, version, author, tags, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(4, "Syncable", "content", "1.0", "a", "[]", new Date().toISOString());
+    db.prepare("DROP TABLE skill_sync_log").run();
+
+    const result = syncSkillsWithAgent(db, "http://agent.local", ["missing", "4"]);
+
+    expect(result).toMatchObject({ success: false, synced: 0 });
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        "Failed to export missing: Skill not found",
+        expect.stringContaining("Failed to log sync for 4:"),
+      ]),
+    );
+  });
 });

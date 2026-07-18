@@ -227,4 +227,78 @@ describe("A2A card ingestion", () => {
     expect(() => validateA2aAgentCard({ ...ADK_CARD, url: "not-a-url" })).toThrow(/valid URL/);
     expect(() => validateA2aAgentCard({ ...ADK_CARD, version: "" })).toThrow(/version/i);
   });
+
+  it("allows private card URLs only when explicitly configured", async () => {
+    const { isAllowedAgentCardUrl } = await loadIngestion();
+
+    expect(
+      isAllowedAgentCardUrl("http://10.0.0.2/.well-known/agent-card.json", {
+        profile: "cloud-https",
+        publicBaseUrl: "https://operator.example.test",
+        endpointBaseUrl: "https://operator.example.test/a2a",
+        canonicalCardPath: "/.well-known/agent-card.json",
+        compatCardPath: "/.well-known/agent.json",
+        remoteCardTimeoutMs: 1000,
+        allowPrivateNetworkCards: false,
+        adkFixtureCardUrl: "",
+      }),
+    ).toBe(false);
+    expect(
+      isAllowedAgentCardUrl("http://10.0.0.2/.well-known/agent-card.json", {
+        profile: "private-network",
+        publicBaseUrl: "https://operator.example.test",
+        endpointBaseUrl: "https://operator.example.test/a2a",
+        canonicalCardPath: "/.well-known/agent-card.json",
+        compatCardPath: "/.well-known/agent.json",
+        remoteCardTimeoutMs: 1000,
+        allowPrivateNetworkCards: true,
+        adkFixtureCardUrl: "",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects oversized response bodies even without a content-length header", async () => {
+    const { fetchA2aAgentCard } = await loadIngestion();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("x".repeat(262_145), { status: 200 })),
+    );
+
+    await expect(fetchA2aAgentCard("https://agent.example.test/.well-known/agent-card.json")).rejects.toMatchObject({
+      message: "A2A agent card response is too large",
+    });
+  });
+
+  it("honors requested ids and manual source for non-ADK cards", async () => {
+    mockFetchCard({
+      ...ADK_CARD,
+      name: "Manual Remote",
+      url: "https://manual.example.test/a2a",
+      extensions: { memroos: { id: "card-id", profile: "custom", cardPaths: { canonical: "", compatibility: "" } } },
+      skills: [{ id: "summarize", name: "Summarize" }],
+    });
+    const { ingestA2aAgentCard } = await loadIngestion();
+
+    const { agent } = await ingestA2aAgentCard({
+      cardUrl: "https://manual.example.test/.well-known/agent-card.json",
+      requestedId: "requested-id",
+      source: "manual",
+      issueApiKey: true,
+    });
+
+    expect(agent).toMatchObject({
+      id: "requested-id",
+      platform: "openclaw",
+      location: "cloudflare",
+      host: "manual.example.test",
+      port: 443,
+      tunnelUrl: "https://manual.example.test/a2a",
+    });
+    expect(agent.capabilities[0]).toMatchObject({
+      id: "summarize",
+      name: "Summarize",
+      description: "",
+      tags: ["a2a"],
+    });
+  });
 });

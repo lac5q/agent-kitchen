@@ -178,4 +178,49 @@ describe("space.ts (Phase 130 / TEAMSCALE-01)", () => {
     // Empty name -> null (don't fall back to a wrong row).
     expect(resolveSpaceId(db, "default-tenant", "")).toBeNull();
   });
+
+  it("validates required space and member inputs", () => {
+    expect(() => createSpace(db, { tenantId: "  ", name: "   " })).toThrow(/name is required/);
+
+    const space = createSpace(db, { tenantId: "  ", name: "trimmed" });
+    expect(space.tenantId).toBe("default-tenant");
+
+    expect(() =>
+      addSpaceMember(db, { spaceId: "", memberId: "user-1", memberType: "human" }),
+    ).toThrow(/spaceId is required/);
+    expect(() =>
+      addSpaceMember(db, { spaceId: space.id, memberId: " ", memberType: "human" }),
+    ).toThrow(/memberId is required/);
+    expect(() =>
+      addSpaceMember(db, { spaceId: space.id, memberId: "user-1", memberType: "robot" as "human" }),
+    ).toThrow(/memberType must be/);
+  });
+
+  it("falls back to empty labels for missing, corrupt, or non-object label JSON", () => {
+    const space = createSpace(db, {
+      tenantId: "default-tenant",
+      name: "corrupt-labels",
+      defaultLabels: { ok: true },
+    });
+
+    db.prepare("UPDATE spaces SET default_labels_json = ? WHERE id = ?").run("{not-json", space.id);
+    expect(getSpaceDefaultLabels(db, space.id)).toEqual({});
+    expect(getSpacesForUser(db, "nobody")).toEqual([]);
+
+    db.prepare("UPDATE spaces SET default_labels_json = ? WHERE id = ?").run("[1,2,3]", space.id);
+    expect(getSpaceDefaultLabels(db, space.id)).toEqual({});
+
+    expect(getSpaceDefaultLabels(db, "missing-space")).toEqual({});
+    expect(isSpaceMember(db, "", "user-1")).toBe(false);
+    expect(isSpaceMember(db, space.id, "")).toBe(false);
+  });
+
+  it("filterBySpace returns all rows when no target space name is provided", () => {
+    const rows = [
+      { id: 1, project: "growth", space_id: null },
+      { id: 2, project: "other", space_id: "spc_other" },
+    ];
+
+    expect(filterBySpace(rows, " ")).toBe(rows);
+  });
 });

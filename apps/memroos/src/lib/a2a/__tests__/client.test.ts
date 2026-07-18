@@ -144,5 +144,33 @@ describe("A2A outbound client", () => {
     const { redactUrlForDisplay } = await import("../client");
 
     expect(redactUrlForDisplay("https://user:pass@example.com/path")).toBe("https://example.com/path");
+    expect(redactUrlForDisplay("https://user:pass@not a url/path")).toBe("https://not a url/path");
+  });
+
+  it("uses fallback endpoint sources for get and cancel task requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ task: { id: TASK.task_id, status: { state: "canceled" } } })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { cancelRemoteA2aTask, getRemoteA2aTask } = await import("../client");
+
+    await getRemoteA2aTask(makeAgent({ a2a: { messageSendUrl: "https://agent.example/message:send" } }), TASK.task_id);
+    await cancelRemoteA2aTask({ ...makeAgent(), tunnelUrl: "https://tunnel.example/a2a" }, TASK.task_id);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("http://worker.tailnet:8001/tasks/task-outbound-1");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "GET" });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://tunnel.example/a2a/tasks/task-outbound-1:cancel");
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST" });
+  });
+
+  it("rejects missing endpoint configuration before issuing a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { sendMessageToA2aAgent } = await import("../client");
+
+    await expect(
+      sendMessageToA2aAgent({ id: "no-endpoint", host: null, port: null, tunnelUrl: null, metadata: {} }, TASK),
+    ).rejects.toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
