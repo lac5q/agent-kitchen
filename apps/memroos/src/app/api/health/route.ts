@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { stat as fsStat } from "fs/promises";
 import path from "path";
 import { MEM0_URL, AGENT_CONFIGS_PATH } from "@/lib/constants";
-import { checkGraphHealth } from "@/lib/memory/backends";
+import { checkGraphHealth, mem0HealthTimeoutMs } from "@/lib/memory/backends";
 import { getRepoRoot } from "@/lib/paths";
 import type { HealthStatus } from "@/types";
 
@@ -87,7 +87,11 @@ async function checkService(
 }
 
 async function checkMem0(): Promise<ServiceCheckResult> {
-  const response = await fetch(`${MEM0_URL}/health`, { signal: AbortSignal.timeout(2000) });
+  // Share the vector-tier probe budget (default 15s, MEM0_HEALTH_TIMEOUT_MS) so
+  // operator /api/health does not false-down Mem0 when Qdrant Cloud /health is slow.
+  const response = await fetch(`${MEM0_URL}/health`, {
+    signal: AbortSignal.timeout(mem0HealthTimeoutMs()),
+  });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
@@ -207,16 +211,19 @@ async function checkGraphMemory(): Promise<ServiceCheckResult> {
     return { status: "up", detail: graph.backend };
   }
 
+  // Not configured / offline must panic in the operator UI — never soft-hide as "degraded".
   if (graph.status === "not_configured") {
     return {
-      status: "degraded",
-      detail: "Neo4j is not configured; graph memory tier is offline",
+      status: "down",
+      detail: "Neo4j is not configured; graph memory is NOT storing",
     };
   }
 
   return {
-    status: graph.status,
-    detail: graph.detail ?? `${graph.backend} graph memory ${graph.status}`,
+    status: graph.status === "degraded" ? "down" : graph.status,
+    detail:
+      graph.detail ??
+      `${graph.backend} graph memory ${graph.status} — graph writes may be failing`,
   };
 }
 

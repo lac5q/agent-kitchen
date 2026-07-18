@@ -25,6 +25,10 @@ vi.mock("../section-tabs", () => ({
   SectionTabs: () => <div>SectionTabs</div>,
 }));
 
+vi.mock("../storage-panic-banner", () => ({
+  StoragePanicBanner: () => <div>StoragePanicBanner</div>,
+}));
+
 describe("Shell", () => {
   beforeEach(() => {
     mockUseHealth.mockClear();

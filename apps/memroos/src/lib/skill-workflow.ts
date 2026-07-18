@@ -49,6 +49,8 @@ interface BuildSkillWorkflowItemsInput {
   coverageGaps: string[];
   skillUsage: Record<string, unknown>;
   reviewState: ReviewState;
+  /** Optional per-skill root override (for multi-root inventory). */
+  skillPathByName?: Record<string, string>;
 }
 
 export interface UpdateSkillReviewInput {
@@ -159,11 +161,13 @@ export async function buildSkillWorkflowItems({
   coverageGaps,
   skillUsage,
   reviewState,
+  skillPathByName,
 }: BuildSkillWorkflowItemsInput): Promise<SkillWorkflowItem[]> {
   const gapSet = new Set(coverageGaps);
   const items = await Promise.all(
     skillNames.map(async (name) => {
-      const skillPath = path.join(skillsPath, name, "SKILL.md");
+      const root = skillPathByName?.[name] || skillsPath;
+      const skillPath = path.join(root, name, "SKILL.md");
       const raw = await readSkillBody(skillPath);
       const metadata = parseMetadata(raw);
       const title = metadata.name || firstHeading(raw) || name;

@@ -1,11 +1,102 @@
 {
   "agent-onboard": {
-    "stage": "general",
-    "status": "approved",
-    "notes": "",
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
     "draftBody": "Skill: Agent Onboard Durable Work Principle — Two Ask Rule If you ask twice, the agent failed. First request is discovery. Second means it should already be a skill on cron. Every new agent MUST be taught this from day one: The Lifecycle 1. Prototype — do it manually 3 10 times, show output 2. Evaluate — get approval, revise 3. Codify — write SKILL.md or ext",
-    "updatedAt": "2026-05-22T07:16:56.604Z",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.135Z",
     "updatedBy": "7be68d5f827b63e5be66",
-    "approvedAt": "2026-05-22T07:16:56.604Z"
+    "approvedAt": "2026-07-17T16:24:38.135Z"
+  },
+  "memroos-save": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.015Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.015Z"
+  },
+  "gitnexus": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.032Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.032Z"
+  },
+  "qwen-cloud": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.046Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.046Z"
+  },
+  "beastmode-qwen-cloud": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.065Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.065Z"
+  },
+  "agent-shield": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.091Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.091Z"
+  },
+  "multica-memroos": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.104Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.104Z"
+  },
+  "1password": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.116Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.116Z"
+  },
+  "skill-creator": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.149Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.149Z"
+  },
+  "browser": {
+    "stage": "enterprise",
+    "status": "enterprise-ready",
+    "notes": "Bulk promotion for operator console readiness",
+    "draftBody": "",
+    "changeReason": "Promote top MemRoOS skills to enterprise (dashboard populate 2026-07-17)",
+    "updatedAt": "2026-07-17T16:24:38.160Z",
+    "updatedBy": "7be68d5f827b63e5be66",
+    "approvedAt": "2026-07-17T16:24:38.160Z"
   }
 }

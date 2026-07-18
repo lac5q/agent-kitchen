@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { KangarooMark } from "./brand-mark";
 import { NOC } from "@/lib/noc-theme";
+import { hasStoragePanic, storagePanicAlerts } from "@/lib/storage-health";
 import type { HealthStatus } from "@/types";
 
 interface TopBarProps {
@@ -33,6 +34,8 @@ export function TopBar({ services, onMenuClick }: TopBarProps) {
   const clock = useClock();
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const storagePanic = hasStoragePanic(services);
+  const panicServices = storagePanicAlerts(services);
   const degraded = services.filter((s) => s.status !== "up").length;
   const healthy = degraded === 0;
 
@@ -42,6 +45,14 @@ export function TopBar({ services, onMenuClick }: TopBarProps) {
     if (!trimmed) return;
     router.push(`/notebooks?q=${encodeURIComponent(trimmed)}`);
   }
+
+  const healthLabel = storagePanic
+    ? `STORAGE PANIC · ${panicServices.map((s) => s.service).join(", ")}`
+    : healthy
+      ? "All services healthy"
+      : `${degraded} service${degraded > 1 ? "s" : ""} degraded`;
+
+  const healthColor = storagePanic ? NOC.terra : healthy ? NOC.success : NOC.warn;
 
   return (
     <header
@@ -118,14 +129,19 @@ export function TopBar({ services, onMenuClick }: TopBarProps) {
 
       {/* Right cluster: health · clock · avatar */}
       <div className="flex shrink-0 items-center gap-2.5 text-[12px]" style={{ color: NOC.muted }}>
-        <span className="hidden items-center gap-1.5 sm:flex">
+        <span
+          className="hidden items-center gap-1.5 sm:flex"
+          data-topbar-health
+          data-storage-panic={storagePanic ? "true" : "false"}
+          title={panicServices.map((s) => `${s.service}: ${s.detail}`).join("\n") || undefined}
+        >
           <span
             className="h-1.5 w-1.5 rounded-full"
-            style={{ background: healthy ? NOC.success : NOC.warn }}
+            style={{ background: healthColor }}
           />
-          {healthy
-            ? "All services healthy"
-            : `${degraded} service${degraded > 1 ? "s" : ""} degraded`}
+          <span style={{ color: storagePanic ? NOC.terraDeep : undefined, fontWeight: storagePanic ? 700 : undefined }}>
+            {healthLabel}
+          </span>
         </span>
         <span className="hidden h-4 w-px sm:block" style={{ background: NOC.rule }} />
         <span className="hidden font-mono sm:inline">{clock}</span>

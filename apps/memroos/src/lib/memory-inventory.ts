@@ -9,7 +9,7 @@ import {
 } from "@/lib/metric-status";
 import { getDb } from "@/lib/db";
 import { collectCollectionFiles, loadCollections } from "@/lib/knowledge-collections";
-import { neo4jConfig } from "@/lib/memory/backends";
+import { mem0HealthTimeoutMs, neo4jConfig, neo4jHttpQuery } from "@/lib/memory/backends";
 
 export type MemoryInventoryCategoryId =
   | "vector_memory"
@@ -157,9 +157,9 @@ function cloneCategories(categories: MemoryInventoryCategory[]): MemoryInventory
 }
 
 function countStatus(count: number | null, warnings: string[] = []): MemoryInventoryStatus {
+  if (count !== null) return count > 0 ? "live" : "empty";
   if (warnings.length > 0) return "degraded";
-  if (count === null) return "degraded";
-  return count > 0 ? "live" : "empty";
+  return "degraded";
 }
 
 function parseOptionalCategory(value: string | null): MemoryInventoryCategoryId | null {
@@ -212,6 +212,24 @@ function parseCount(value: unknown): number | null {
   }
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
+
+  // Neo4j HTTP transactional response: { results: [{ data: [{ row: [N] }] }] }
+  if (Array.isArray(record.results)) {
+    for (const result of record.results) {
+      if (!result || typeof result !== "object") continue;
+      const data = (result as Record<string, unknown>).data;
+      if (!Array.isArray(data)) continue;
+      for (const entry of data) {
+        if (!entry || typeof entry !== "object") continue;
+        const row = (entry as Record<string, unknown>).row;
+        if (Array.isArray(row) && row.length > 0) {
+          const count = parseCount(row[0]);
+          if (count !== null) return count;
+        }
+      }
+    }
+  }
+
   for (const key of ["memory_count", "memories_count", "vector_count", "count", "points_count", "total"]) {
     const count = parseCount(record[key]);
     if (count !== null) return count;
@@ -238,12 +256,24 @@ async function vectorCategory(): Promise<MemoryInventoryCategory> {
   let lastUpdated: string | null = null;
 
   try {
-    const response = await fetch(`${MEM0_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`${MEM0_URL}/health`, {
+      signal: AbortSignal.timeout(mem0HealthTimeoutMs()),
+    });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) warnings.push(`mem0 health returned HTTP ${response.status}`);
     count = parseCount(body);
     lastUpdated = timestampFrom(body);
-    if (count === null) warnings.push("Vector memory count unavailable from mem0 health");
+    const vectorStore =
+      body && typeof body === "object" && typeof (body as Record<string, unknown>).vector_store === "string"
+        ? String((body as Record<string, unknown>).vector_store)
+        : null;
+    if (count === null) {
+      if (vectorStore === "connected") {
+        warnings.push("Vector store connected but memory_count/points_count missing from mem0 health");
+      } else {
+        warnings.push("Vector memory count unavailable from mem0 health");
+      }
+    }
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "mem0 health unavailable");
   }
@@ -256,17 +286,7 @@ async function graphCategory(): Promise<MemoryInventoryCategory> {
   if (!config.password) return category("graph_fact", null, null, ["Neo4j password is not configured"]);
 
   try {
-    const response = await fetch(`${config.url}/db/${encodeURIComponent(config.database)}/tx/commit`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`,
-      },
-      body: JSON.stringify({ statements: [{ statement: "MATCH (n) RETURN count(n) AS count" }] }),
-      signal: AbortSignal.timeout(3000),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) return category("graph_fact", null, null, [`Neo4j count returned HTTP ${response.status}`]);
+    const body = await neo4jHttpQuery("MATCH (n) RETURN count(n) AS count", {}, 5000);
     const count = parseCount(body);
     return category("graph_fact", count, null, count === null ? ["Neo4j count unavailable"] : []);
   } catch (error) {
@@ -283,10 +303,31 @@ function category(
   const scope: MetricScope = { window: "all", workspace: "all" };
   const source = CATEGORY_BACKENDS[id];
   let metric: MetricEnvelope<number | null>;
-  if (warnings.length > 0) {
+  if (count !== null) {
+    // Measured count wins even if soft warnings exist (e.g. disk advisory).
+    const classification = classifyScalar({
+      rowCount: count,
+      sourceOk: true,
+      latestAt: lastUpdated,
+      freshnessMs: null,
+    });
+    metric = metricEnvelope<number | null>({
+      value: count,
+      status: classification.status,
+      source,
+      observedAt: lastUpdated,
+      scope,
+      reason:
+        warnings.length > 0
+          ? `${classification.status === "zero" ? "Measured zero" : "Live count"} with warnings: ${warnings.join("; ")}`
+          : classification.status === "zero"
+            ? `Successful ${source} measured exactly zero rows.`
+            : `${count.toLocaleString()} rows from ${source}.`,
+    });
+  } else if (warnings.length > 0) {
     // Source failed or returned partial data — never coerce to zero.
     const classification = classifyScalar({
-      rowCount: count ?? 0,
+      rowCount: 0,
       sourceOk: false,
       latestAt: lastUpdated,
       freshnessMs: null,
@@ -308,23 +349,15 @@ function category(
       scope,
       reason: "Source did not return a countable measurement",
     });
-  } else if (count > 0) {
+  } else {
+    // Exhaustiveness guard — count is narrowed above; keep typed fallback.
     metric = metricEnvelope<number | null>({
       value: count,
-      status: "live",
+      status: count > 0 ? "live" : "zero",
       source,
       observedAt: lastUpdated,
       scope,
-      reason: "Counted N rows from ${source}".replace("N", String(count)),
-    });
-  } else {
-    metric = metricEnvelope<number | null>({
-      value: 0,
-      status: "zero",
-      source,
-      observedAt: lastUpdated,
-      scope,
-      reason: "Source returned a successful empty count",
+      reason: count > 0 ? `${count.toLocaleString()} rows from ${source}.` : `Successful ${source} measured exactly zero rows.`,
     });
   }
   return {
@@ -663,7 +696,9 @@ function filterOptions(rows: MemoryInventoryRow[], categories: MemoryInventoryCa
 
 export async function buildMemoryInventory(url: URL): Promise<MemoryInventoryResponse> {
   const filters = parseFilters(url);
-  const categories = await categoryCounts(filters.category === "knowledge_file");
+  // Always resolve knowledge counts so notebooks/inventory surfaces show live
+  // file totals when collections are configured (not permanently deferred).
+  const categories = await categoryCounts(true);
   const rows = [
     ...messageRows(filters),
     ...insightRows(filters),

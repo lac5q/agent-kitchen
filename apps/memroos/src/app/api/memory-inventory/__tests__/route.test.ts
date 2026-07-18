@@ -120,10 +120,9 @@ describe("GET /api/memory-inventory", () => {
         expect.objectContaining({
           id: "knowledge_file",
           label: "Knowledge files",
-          count: null,
+          count: 1,
           backend: "qmd / knowledge collections",
-          status: "degraded",
-          warnings: expect.arrayContaining([expect.stringMatching(/deferred/i)]),
+          status: "live",
         }),
       ])
     );
@@ -179,7 +178,7 @@ describe("GET /api/memory-inventory", () => {
       expect.objectContaining({
         count: null,
         status: "degraded",
-        warnings: expect.arrayContaining([expect.stringMatching(/count unavailable/i)]),
+        warnings: expect.arrayContaining([expect.stringMatching(/memory_count|points_count|count unavailable/i)]),
       })
     );
   });

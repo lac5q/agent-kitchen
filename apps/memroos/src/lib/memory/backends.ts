@@ -32,6 +32,76 @@ export function neo4jConfig() {
   };
 }
 
+/** Aura Free blocks legacy /tx/commit (403); use Query API v2 there. */
+export function neo4jUsesQueryApi(url: string): boolean {
+  return /databases\.neo4j\.io/i.test(url);
+}
+
+/**
+ * Run a Cypher statement against Neo4j HTTP.
+ * Returns a tx/commit-compatible shape: { results: [{ columns, data: [{ row }] }], errors: [] }
+ * so callers/inventory parseCount keep working.
+ */
+export async function neo4jHttpQuery(
+  statement: string,
+  parameters: Record<string, unknown> = {},
+  timeoutMs = 5000
+): Promise<{ results: Array<{ columns?: string[]; data: Array<{ row: unknown[] }> }>; errors: unknown[] }> {
+  const config = neo4jConfig();
+  if (!config.password) throw new Error("Neo4j password is not configured");
+
+  const auth = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
+  const db = encodeURIComponent(config.database);
+
+  if (neo4jUsesQueryApi(config.url)) {
+    const response = await fetch(`${config.url}/db/${db}/query/v2`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: auth,
+      },
+      body: JSON.stringify({ statement, parameters }),
+      signal: timeoutSignal(timeoutMs),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail =
+        typeof body === "object" && body && Array.isArray((body as { errors?: unknown[] }).errors)
+          ? JSON.stringify((body as { errors: unknown[] }).errors)
+          : `HTTP ${response.status}`;
+      throw new Error(`Neo4j query/v2 failed: ${detail}`);
+    }
+    const data = (body as { data?: { fields?: string[]; values?: unknown[][] } }).data;
+    const columns = Array.isArray(data?.fields) ? data.fields : [];
+    const values = Array.isArray(data?.values) ? data.values : [];
+    return {
+      results: [
+        {
+          columns,
+          data: values.map((row) => ({ row: Array.isArray(row) ? row : [row] })),
+        },
+      ],
+      errors: [],
+    };
+  }
+
+  const response = await fetch(`${config.url}/db/${db}/tx/commit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: auth,
+    },
+    body: JSON.stringify({ statements: [{ statement, parameters }] }),
+    signal: timeoutSignal(timeoutMs),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || (Array.isArray((result as { errors?: unknown[] }).errors) && (result as { errors: unknown[] }).errors.length > 0)) {
+    throw new Error("Graph memory backend unavailable");
+  }
+  return result as { results: Array<{ columns?: string[]; data: Array<{ row: unknown[] }> }>; errors: unknown[] };
+}
+
 // ─── Direct backend implementations ──────────────────────────────────────────
 //
 // These are the canonical direct implementations used by shims (below) and by
@@ -50,9 +120,6 @@ async function _searchVectorMemoryDirect(query: string, limit: number) {
 }
 
 async function _queryGraphMemoryDirect(query: string, limit: number) {
-  const config = neo4jConfig();
-  if (!config.password) throw new Error("Neo4j password is not configured");
-
   const cypher = query
     ? `MATCH (n)
        WHERE toLower(coalesce(n.name, n.title, n.id, '')) CONTAINS $q
@@ -64,20 +131,7 @@ async function _queryGraphMemoryDirect(query: string, limit: number) {
        RETURN properties(n) AS node, collect(DISTINCT type(r)) AS relationships, collect(DISTINCT properties(m)) AS neighbors
        LIMIT $limit`;
 
-  const response = await fetch(`${config.url}/db/${encodeURIComponent(config.database)}/tx/commit`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`,
-    },
-    body: JSON.stringify({ statements: [{ statement: cypher, parameters: { q: query.toLowerCase(), limit } }] }),
-    signal: timeoutSignal(5000),
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || (Array.isArray(result.errors) && result.errors.length > 0)) {
-    throw new Error("Graph memory backend unavailable");
-  }
-  return result;
+  return neo4jHttpQuery(cypher, { q: query.toLowerCase(), limit }, 5000);
 }
 
 async function _checkVectorHealthDirect(): Promise<MemoryTierHealth> {
@@ -139,10 +193,22 @@ async function _checkGraphHealthDirect(): Promise<MemoryTierHealth> {
   const config = neo4jConfig();
   if (!config.password) return { tier: "graph", backend: "neo4j", status: "not_configured" };
   try {
-    await _queryGraphMemoryDirect("", 1);
+    // Read + write probe: proves Aura/local can actually store graph facts.
+    await neo4jHttpQuery(
+      `MERGE (n:MemRoOSHealthProbe {id: 'operator-health'})
+       SET n.lastOk = datetime(), n.source = 'memroos-health'
+       RETURN n.id AS id`,
+      {},
+      8000
+    );
     return { tier: "graph", backend: "neo4j", status: "up" };
   } catch (error) {
-    return { tier: "graph", backend: "neo4j", status: "down", detail: error instanceof Error ? error.message : undefined };
+    return {
+      tier: "graph",
+      backend: "neo4j",
+      status: "down",
+      detail: error instanceof Error ? error.message : "Neo4j write/read probe failed — graph is NOT storing",
+    };
   }
 }
 
@@ -242,7 +308,34 @@ export class GraphMemoryAdapter implements MemoryAdapter {
   }
 
   async write(payload: Record<string, unknown>): Promise<void> {
-    // Graph writes go through mem0 HTTP with neo4j graph tier metadata
+    // Prefer direct Neo4j write when configured (Aura / local graph).
+    // Fall back to mem0 HTTP with graph tier metadata for legacy paths.
+    const config = neo4jConfig();
+    if (config.password) {
+      const content =
+        typeof payload.content === "string"
+          ? payload.content
+          : typeof payload.memory === "string"
+            ? payload.memory
+            : JSON.stringify(payload);
+      const id =
+        typeof payload.id === "string"
+          ? payload.id
+          : `graph-${Date.now().toString(36)}`;
+      await neo4jHttpQuery(
+        `MERGE (n:MemoryFact {id: $id})
+         SET n.content = $content, n.updatedAt = datetime(), n.source = coalesce($source, 'memroos')
+         RETURN n.id AS id`,
+        {
+          id,
+          content,
+          source: typeof payload.agent_id === "string" ? payload.agent_id : "memroos",
+        },
+        8000
+      );
+      return;
+    }
+
     const response = await fetch(`${MEM0_URL}/memory/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

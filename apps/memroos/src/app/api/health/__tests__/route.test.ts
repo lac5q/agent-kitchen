@@ -33,11 +33,53 @@ describe("runtime health route", () => {
 
   afterEach(() => {
     delete process.env.MEM0_URL;
+    delete process.env.MEM0_HEALTH_TIMEOUT_MS;
     delete process.env.KNOWLEDGE_INDEX_HEALTH_TTL_MS;
     delete process.env.KNOWLEDGE_INDEX_HEALTH_REQUEST_TIMEOUT_MS;
     delete process.env.NEO4J_PASSWORD;
     vi.unstubAllGlobals();
     vi.resetModules();
+  });
+
+  it("probes mem0 with the shared MEM0_HEALTH_TIMEOUT_MS budget (default 15s)", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+    const { GET } = await loadRoute();
+    await GET();
+
+    expect(timeoutSpy).toHaveBeenCalledWith(15_000);
+    timeoutSpy.mockRestore();
+  });
+
+  it("honors MEM0_HEALTH_TIMEOUT_MS for the operator mem0 probe", async () => {
+    process.env.MEM0_HEALTH_TIMEOUT_MS = "12500";
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+    const { GET } = await loadRoute();
+    await GET();
+
+    expect(timeoutSpy).toHaveBeenCalledWith(12_500);
+    timeoutSpy.mockRestore();
   });
 
   it("marks mem0 degraded when the health payload reports queued writes", async () => {
@@ -235,7 +277,7 @@ describe("runtime health route", () => {
     const body = await response.json();
     const graph = body.services.find((service: { service: string }) => service.service === "Graph Memory");
 
-    expect(graph.status).toBe("degraded");
-    expect(graph.detail).toContain("Neo4j is not configured");
+    expect(graph.status).toBe("down");
+    expect(graph.detail).toMatch(/not configured|NOT storing/i);
   });
 });

@@ -618,6 +618,11 @@ class HealthResponse(BaseModel):
     disk: Optional[dict] = None
     sqlite: Optional[dict] = None
     queue: Optional[dict] = None
+    # Inventory-facing counts (Qdrant collection points). Optional so older
+    # clients keep working; MemRoOS memory-inventory reads these fields.
+    memory_count: Optional[int] = None
+    points_count: Optional[int] = None
+    collection_name: Optional[str] = None
 
 
 class FailureEntry(BaseModel):
@@ -649,22 +654,50 @@ def check_mem0_runtime() -> dict:
         return {"status": "unavailable", "error": str(exc)}
 
 
-def check_qdrant_vector_store(vector_cfg: dict[str, Any]) -> str:
-    """Check Qdrant over HTTP without relying on qdrant-client package metadata."""
+def _qdrant_headers(vector_cfg: dict[str, Any]) -> dict[str, str]:
     api_key_env = vector_cfg.get("api_key_env")
     api_key = vector_cfg.get("api_key") or (os.environ.get(api_key_env) if api_key_env else None)
-    headers = {"api-key": api_key} if api_key else {}
+    return {"api-key": api_key} if api_key else {}
+
+
+def _qdrant_base_url(vector_cfg: dict[str, Any]) -> str:
     url = vector_cfg.get("url")
     if url:
-        endpoint = urljoin(str(url).rstrip("/") + "/", "collections")
-    else:
-        host = vector_cfg.get("host", "localhost")
-        port = vector_cfg.get("port", 6333)
-        endpoint = f"http://{host}:{port}/collections"
+        return str(url).rstrip("/") + "/"
+    host = vector_cfg.get("host", "localhost")
+    port = vector_cfg.get("port", 6333)
+    return f"http://{host}:{port}/"
 
-    response = httpx.get(endpoint, headers=headers, timeout=5)
+
+def check_qdrant_vector_store(vector_cfg: dict[str, Any]) -> str:
+    """Check Qdrant over HTTP without relying on qdrant-client package metadata."""
+    endpoint = urljoin(_qdrant_base_url(vector_cfg), "collections")
+    response = httpx.get(endpoint, headers=_qdrant_headers(vector_cfg), timeout=5)
     response.raise_for_status()
     return "connected"
+
+
+def qdrant_collection_points_count(vector_cfg: dict[str, Any]) -> tuple[Optional[int], Optional[str]]:
+    """Return (points_count, collection_name) for the configured Qdrant collection."""
+    collection_name = vector_cfg.get("collection_name")
+    if not collection_name:
+        return None, None
+    endpoint = urljoin(_qdrant_base_url(vector_cfg), f"collections/{collection_name}")
+    try:
+        response = httpx.get(endpoint, headers=_qdrant_headers(vector_cfg), timeout=5)
+        response.raise_for_status()
+        payload = response.json()
+        result = payload.get("result") if isinstance(payload, dict) else None
+        if not isinstance(result, dict):
+            result = payload if isinstance(payload, dict) else {}
+        points = result.get("points_count")
+        if isinstance(points, (int, float)) and points >= 0:
+            return int(points), str(collection_name)
+        # Some Qdrant versions nest counts under indexed/vectors — still honest null.
+        return None, str(collection_name)
+    except Exception as exc:
+        logger.warning(f"Qdrant points_count probe failed for {collection_name}: {exc}")
+        return None, str(collection_name)
 
 
 def cached_qdrant_vector_status(vector_cfg: dict[str, Any], *, force: bool = False) -> str:
@@ -903,6 +936,12 @@ def health():
         and not disk_status.get("critical")
         and queue_ok
     )
+
+    memory_count: Optional[int] = None
+    collection_name: Optional[str] = None
+    if vector_provider == "qdrant" and vector_status == "connected":
+        memory_count, collection_name = qdrant_collection_points_count(vector_cfg)
+
     return HealthResponse(
         status="ok" if is_ok else "degraded",
         vector_store=vector_status,
@@ -910,6 +949,9 @@ def health():
         disk=disk_status,
         sqlite=sqlite_status,
         queue=queue_status,
+        memory_count=memory_count,
+        points_count=memory_count,
+        collection_name=collection_name,
     )
 
 
