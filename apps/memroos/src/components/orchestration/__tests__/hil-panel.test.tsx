@@ -45,6 +45,9 @@ describe("OrchestrationHilPanel", () => {
     fireEvent.click(screen.getByText("Approve"));
 
     expect(mutateDecision).toHaveBeenCalledWith({ id: "hil-1", decision: "approve" });
+
+    fireEvent.click(screen.getByText("Reject"));
+    expect(mutateDecision).toHaveBeenCalledWith({ id: "hil-1", decision: "reject" });
   });
 
   it("wires the HIL edit UI into each pending approval before resume", () => {
@@ -60,5 +63,19 @@ describe("OrchestrationHilPanel", () => {
       id: "hil-1",
       patch: { taskSummary: "Deploy production change with rollback note" },
     });
+  });
+
+  it("renders loading, error, and empty HIL queue states", () => {
+    mockUseHil.mockReturnValueOnce({ data: undefined, isLoading: true, isError: false } as ReturnType<typeof useOrchestrationHil>);
+    const { rerender } = render(<OrchestrationHilPanel />);
+    expect(screen.getByText(/checking orchestration decisions/i)).toBeInTheDocument();
+
+    mockUseHil.mockReturnValueOnce({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useOrchestrationHil>);
+    rerender(<OrchestrationHilPanel />);
+    expect(screen.getByText(/approval queue unavailable/i)).toBeInTheDocument();
+
+    mockUseHil.mockReturnValueOnce({ data: { decisions: [] }, isLoading: false, isError: false } as ReturnType<typeof useOrchestrationHil>);
+    rerender(<OrchestrationHilPanel />);
+    expect(screen.getByText(/no pending approvals/i)).toBeInTheDocument();
   });
 });

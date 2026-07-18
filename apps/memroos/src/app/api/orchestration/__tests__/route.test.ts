@@ -136,6 +136,48 @@ describe("orchestration API routes", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ plan: { id: "plan-1" } });
   });
 
+  it("maps invalid and unavailable orchestration route and plan validation requests", async () => {
+    vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
+    vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("route offline"))
+      .mockRejectedValueOnce(new Error("validate offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const route = await import("../route");
+    const validateRoute = await import("../plans/validate/route");
+
+    const invalidRouteBody = await route.POST(
+      jsonRequest("https://memroos.example/api/orchestration", [], { authorization: "Bearer operator-secret" })
+    );
+    const routeUnavailable = await route.POST(
+      jsonRequest(
+        "https://memroos.example/api/orchestration",
+        { taskSummary: "Route work" },
+        { authorization: "Bearer operator-secret" }
+      )
+    );
+    const invalidPlanBody = await validateRoute.POST(
+      jsonRequest("https://memroos.example/api/orchestration/plans/validate", [], { authorization: "Bearer operator-secret" })
+    );
+    const validateUnavailable = await validateRoute.POST(
+      jsonRequest(
+        "https://memroos.example/api/orchestration/plans/validate",
+        { plan: { id: "plan-offline" } },
+        { authorization: "Bearer operator-secret" }
+      )
+    );
+
+    expect(invalidRouteBody.status).toBe(400);
+    expect(await invalidRouteBody.json()).toMatchObject({ error: "taskSummary is required" });
+    expect(routeUnavailable.status).toBe(502);
+    expect(await routeUnavailable.json()).toMatchObject({ ok: false, error: "route offline" });
+    expect(invalidPlanBody.status).toBe(400);
+    expect(await invalidPlanBody.json()).toMatchObject({ status: "plan_invalid" });
+    expect(validateUnavailable.status).toBe(502);
+    expect(await validateUnavailable.json()).toMatchObject({ status: "unavailable", error: "validate offline" });
+  });
+
   it("guards run resume rollback and evidence routes", async () => {
     vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
     vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
@@ -222,6 +264,27 @@ describe("orchestration API routes", () => {
     expect(await resumeUnavailable.json()).toMatchObject({ status: "unavailable", error: "resume offline" });
     expect(rollbackUnavailable.status).toBe(502);
     expect(await rollbackUnavailable.json()).toMatchObject({ status: "unavailable", error: "rollback offline" });
+  });
+
+  it("maps HIL decision validation and unavailable resolution", async () => {
+    vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
+    vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("hil offline")));
+    const decisionRoute = await import("../hil/[id]/route");
+
+    const invalid = await decisionRoute.POST(
+      jsonRequest("https://memroos.example/api/orchestration/hil/hil-1", { decision: "maybe" }, { authorization: "Bearer operator-secret" }),
+      { params: Promise.resolve({ id: "hil-1" }) }
+    );
+    const unavailable = await decisionRoute.POST(
+      jsonRequest("https://memroos.example/api/orchestration/hil/hil-2", { decision: "reject" }, { authorization: "Bearer operator-secret" }),
+      { params: Promise.resolve({ id: "hil-2" }) }
+    );
+
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ error: "decision must be approve or reject" });
+    expect(unavailable.status).toBe(502);
+    expect(await unavailable.json()).toMatchObject({ error: "hil offline" });
   });
 
   it("maps orchestration evidence auth, missing bundle, and service failures", async () => {

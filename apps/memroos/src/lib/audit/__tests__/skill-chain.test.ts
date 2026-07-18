@@ -68,6 +68,34 @@ import {
 } from "@/lib/audit/skill-chain";
 
 describe("VAL-039 hash-chain verification", () => {
+  it("validates tenant and skill event prefix before building entries", () => {
+    const db = createMemDb();
+
+    expect(() =>
+      buildSkillAuditEntry(db, {
+        tenantId: " ",
+        actorId: "op",
+        actorRole: "operator",
+        eventType: "skill.pin.created",
+        entityType: "skill_version_pin",
+        entityId: "pin:1",
+        metadata: {},
+      })
+    ).toThrow(/tenantId/);
+
+    expect(() =>
+      buildSkillAuditEntry(db, {
+        tenantId: "tenant",
+        actorId: "op",
+        actorRole: "operator",
+        eventType: "agent.updated",
+        entityType: "agent",
+        entityId: "agent:1",
+        metadata: {},
+      })
+    ).toThrow(/eventType/);
+  });
+
   it("returns valid for clean chain and detects tamper", () => {
     const db = createMemDb();
 
@@ -169,6 +197,42 @@ describe("VAL-039 hash-chain verification", () => {
     expect(meta.raw_body).toBeUndefined();
     expect(meta.evidence_examples).toBeUndefined();
     expect(JSON.stringify(built.metadata_json)).not.toContain("SECRET_BODY_SHOULD_BE_STRIPPED");
+  });
+
+  it("redacts long body-like metadata and rejects malformed stored chain metadata", () => {
+    const db = createMemDb();
+    const built = buildSkillAuditEntry(db, {
+      tenantId: "default-tenant",
+      actorId: "op",
+      actorRole: "operator",
+      eventType: "skill.pin.created",
+      entityType: "skill_version_pin",
+      entityId: "pin:1",
+      metadata: {
+        safe: "kept",
+        generatedContent: "x".repeat(501),
+      },
+    });
+    const meta = JSON.parse(built.metadata_json);
+    expect(meta.safe).toBe("kept");
+    expect(meta.generatedContent).toBeUndefined();
+
+    db.prepare(
+      `INSERT INTO audit_entries (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+    ).run("bad-json", "default-tenant", "op", "operator", "skill.pin.created", "skill_version_pin", "pin:bad", null, "{", "2026-01-01T00:00:00.000Z");
+
+    expect(verifySkillAuditChain(db, "default-tenant")).toMatchObject({
+      valid: false,
+      firstBrokenEntryId: "bad-json",
+      reason: "metadata_json is not valid JSON",
+    });
+
+    db.prepare(`UPDATE audit_entries SET metadata_json = ? WHERE id = ?`).run(JSON.stringify({ previousEntryHash: null }), "bad-json");
+    expect(verifySkillAuditChain(db, "default-tenant")).toMatchObject({
+      valid: false,
+      firstBrokenEntryId: "bad-json",
+      reason: "missing entryHash",
+    });
   });
 });
 

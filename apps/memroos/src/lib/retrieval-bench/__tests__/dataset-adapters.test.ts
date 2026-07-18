@@ -17,7 +17,7 @@ import {
   hashLongMemEvalSource,
   type LongMemEvalRawSample,
 } from "../adapters/longmemeval";
-import { loadSyntheticSmoke } from "../adapters/synthetic";
+import { hashSyntheticSmoke, loadSyntheticSmoke } from "../adapters/synthetic";
 import { resolveFromRepoRoot } from "@/lib/paths";
 
 describe("LoCoMo dataset adapter (VAL-RETR-003, VAL-RETR-004)", () => {
@@ -186,5 +186,61 @@ describe("Synthetic dataset adapter (VAL-RETR-001)", () => {
     // Also verify the parsed tasks themselves carry the canonical provenance
     // without having overwritten any caller-provided provenance field.
     expect(r.tasks?.[0].provenance.dataset).toBe("memroos_public_synthetic");
+  });
+
+  it("returns typed errors for malformed JSON and non-array roots", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bench-fixture-bad-"));
+    const fixturePath = path.join(tmpDir, "memroos-public-smoke.json");
+    fs.writeFileSync(fixturePath, "{");
+    const malformed = loadSyntheticSmoke({ fixturesDir: tmpDir });
+    expect(malformed).toMatchObject({ ok: false });
+    if (!malformed.ok) expect(malformed.reason).toContain("fixture_json_malformed");
+
+    fs.writeFileSync(fixturePath, JSON.stringify({ id: "not-array" }));
+    const nonArray = loadSyntheticSmoke({ fixturesDir: tmpDir });
+    expect(nonArray).toEqual({ ok: false, reason: "fixture_root_not_array" });
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("preserves primitives and caller provenance while hashing task identities", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bench-fixture-primitive-"));
+    const fixturePath = path.join(tmpDir, "memroos-public-smoke.json");
+    fs.writeFileSync(
+      fixturePath,
+      JSON.stringify([
+        "primitive-task",
+        {
+          id: "task-1",
+          dataset: "memroos_public_synthetic",
+          task_type: "single_hop",
+          question: "Question?",
+          expected_answer: "Answer.",
+          evidence_spans: [],
+          license: "custom",
+          citation: "custom citation",
+          provenance: { dataset: "caller" },
+        },
+        {
+          id: "task-2",
+          dataset: "memroos_public_synthetic",
+          task_type: "single_hop",
+          question: "Another question?",
+          expected_answer: "Another answer.",
+          evidence_spans: [],
+        },
+      ])
+    );
+
+    const loaded = loadSyntheticSmoke({ fixturesDir: tmpDir, limit: 2 });
+
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.truncated).toBe(true);
+    expect(loaded.tasks?.[0]).toBe("primitive-task");
+    expect(loaded.tasks?.[1]).toMatchObject({ license: "custom", citation: "custom citation", provenance: { dataset: "caller" } });
+    expect(() => hashSyntheticSmoke(loaded.tasks!.slice(1))).not.toThrow();
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

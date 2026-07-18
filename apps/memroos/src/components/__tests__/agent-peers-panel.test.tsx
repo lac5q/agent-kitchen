@@ -89,4 +89,35 @@ describe("AgentPeersPanel", () => {
     render(<AgentPeersPanel />);
     expect(screen.getByText(/No active peers/)).toBeTruthy();
   });
+
+  it("falls back for unknown statuses and non-relative timestamps", () => {
+    mockUseAgentPeers.mockReturnValue({
+      data: {
+        peers: [
+          {
+            agent_id: "old-agent",
+            current_task: "Archiving notes",
+            status: "custom-status",
+            last_seen: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+          {
+            agent_id: "bad-time",
+            current_task: "Bad timestamp",
+            status: "error",
+            last_seen: "not-a-date-value",
+          },
+        ],
+        window_minutes: 5,
+        timestamp: new Date().toISOString(),
+      },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useAgentPeers>);
+
+    render(<AgentPeersPanel windowMinutes={5} />);
+
+    expect(screen.getByText("custom-status").className).toContain("text-stone-500");
+    expect(screen.getByText("3d ago")).toBeTruthy();
+    expect(screen.getByText("not-a-date-value")).toBeTruthy();
+  });
 });

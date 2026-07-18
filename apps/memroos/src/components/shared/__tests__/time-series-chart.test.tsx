@@ -12,7 +12,15 @@ vi.mock("recharts", () => ({
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
-  Tooltip: () => null,
+  Tooltip: ({ content }: { content: React.ReactElement }) => (
+    <div data-testid="tooltip">
+      {React.cloneElement(content, {
+        active: true,
+        label: "Mon",
+        payload: [{ value: 1234 }],
+      })}
+    </div>
+  ),
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -71,6 +79,8 @@ describe("TimeSeriesChart", () => {
   it("renders line-chart when points has data", () => {
     render(<TimeSeriesChart {...defaultProps} />);
     expect(screen.getByTestId("line-chart")).toBeDefined();
+    expect(screen.getByText("Mon")).toBeDefined();
+    expect(screen.getByText("1,234")).toBeDefined();
   });
 
   it("accepts optional lineColor prop without error", () => {

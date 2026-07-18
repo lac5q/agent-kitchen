@@ -87,6 +87,20 @@ describe("A2A task route handlers", () => {
     expect(await res.json()).toMatchObject({ status: { state: "canceled" } });
   });
 
+  it("maps cancel route typed and unexpected failures", async () => {
+    const { POST } = await import("../[id]:cancel/route");
+
+    mocks.cancelA2aTask.mockRejectedValueOnce(new A2aError("INVALID_REQUEST", "already terminal"));
+    const typed = await POST(new Request("https://example.test/tasks/task-4:cancel", { method: "POST" }));
+    expect(typed.status).toBe(400);
+    expect(await typed.json()).toMatchObject({ code: "INVALID_REQUEST", error: "already terminal" });
+
+    mocks.cancelA2aTask.mockRejectedValueOnce(new Error("database unavailable"));
+    const unexpected = await POST(new Request("https://example.test/tasks/task-5:cancel", { method: "POST" }));
+    expect(unexpected.status).toBe(500);
+    expect(await unexpected.json()).toMatchObject({ code: "INTERNAL", error: "A2A task cancellation failed" });
+  });
+
   it("streams task and event payloads for subscriptions", async () => {
     mocks.subscribeA2aTask.mockResolvedValueOnce({
       task: { id: "task-3", status: { state: "submitted" } },
