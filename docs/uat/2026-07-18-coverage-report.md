@@ -2,8 +2,8 @@
 
 - **Document version:** 2026-07-18.2
 - **Creation date/time (UTC):** 2026-07-18T07:24:42Z
-- **Update date/time (UTC):** 2026-07-18T15:08:00Z
-- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); focused suite log `/tmp/cov-gate-surface.log`
+- **Update date/time (UTC):** 2026-07-18T15:12:00Z
+- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); focused suite log `/tmp/cov-gate-surface.log`; fast `/tmp/test-fast-coverage.log`; slow `/tmp/test-slow-coverage.log`
 
 ## Measured (focused quality-gate surface)
 
