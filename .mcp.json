@@ -4,8 +4,11 @@
       "command": "/bin/bash",
       "args": [
         "-lc",
-        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-auto}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
-      ]
+        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-cursor}\"; export MEMROOS_APP_URL=\"${MEMROOS_APP_URL:-https://memroos.epiloguecapital.com}\"; export MEMROOS_OPERATOR_URL=\"${MEMROOS_OPERATOR_URL:-$MEMROOS_APP_URL}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; export MEMROOS_ALLOWED_MEMORY_TIER_STATUSES=\"${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
+      ],
+      "env": {
+        "MEMROOS_AGENT_ID": "cursor-desktop-luis-mbp"
+      }
     }
   }
 }

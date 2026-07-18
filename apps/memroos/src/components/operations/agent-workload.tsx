@@ -196,10 +196,12 @@ export function AgentWorkload({ filters }: { filters?: NocFilters }) {
           </div>
         )}
         {agentsOk && agentsData!.agents.length > 0 ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 72, overflow: "hidden" }}>
             {agentsData!.agents
-              .filter((a) => a.liveness.state !== "live")
-              .slice(0, 6)
+              // Prefer actionable non-live states; skip the long "never" flood that
+              // overlaps badges in dense registries.
+              .filter((a) => a.liveness.state === "stale" || a.liveness.state === "error")
+              .slice(0, 4)
               .map((a) => (
                 <AgentLivenessBadge key={a.id} observation={a.liveness} />
               ))}

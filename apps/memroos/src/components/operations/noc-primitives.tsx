@@ -63,15 +63,21 @@ export function SourceStatusBadge({
   return (
     <span
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        flexShrink: 0,
+        alignSelf: "flex-start",
         fontSize: 9,
         fontWeight: 700,
         letterSpacing: "0.1em",
+        lineHeight: 1.2,
         padding: "2px 6px",
         background,
         color,
         textTransform: "uppercase",
         fontFamily: NOC_FONT_MONO,
         whiteSpace: "nowrap",
+        maxWidth: "100%",
       }}
       data-status={status}
     >
@@ -190,8 +196,12 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
         fontSize: 10,
         fontWeight: 600,
         letterSpacing: "0.14em",
+        lineHeight: 1.35,
         color: NOC.soft,
         textTransform: "uppercase",
+        minWidth: 0,
+        maxWidth: "100%",
+        overflowWrap: "anywhere",
       }}
     >
       {children}

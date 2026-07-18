@@ -72,6 +72,9 @@ detect_mcp_client() {
       *zcode*) printf "zcode"; return 0 ;;
       *droid*|*factory*) printf "droid"; return 0 ;;
       *grok*) printf "grok"; return 0 ;;
+      # Cursor Desktop / Cursor Helper / cursor-agent — before bare *pi* so we
+      # do not mis-classify Cursor Helper process names.
+      *Cursor*|*cursor-agent*|*cursor\ *) printf "cursor"; return 0 ;;
       */pi\ *|*[[:space:]]pi[[:space:]]*|[[:space:]]pi$|*/pi$) printf "pi"; return 0 ;;
     esac
     pid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]')"

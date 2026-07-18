@@ -13,7 +13,7 @@ scripts/memroos-mcp.sh
 
 It keeps stdout clean for MCP JSON-RPC, installs missing Python MCP dependencies into `.venv` if needed, and defaults `KNOWLEDGE_ROOT` to `~/github/knowledge` when present.
 
-When `MEMROOS_AGENT_API_KEY` is not inherited, the launcher can load a local scoped agent key from `~/.memroos/agent-keys/<agent-id>.key`. Set `MEMROOS_AGENT_ID` explicitly when possible. Codex configs should set `MEMROOS_MCP_CLIENT=codex`; the launcher then prefers `codex-desktop-luis-mbp` when that key exists and falls back to the older `opencode` local key.
+When `MEMROOS_AGENT_API_KEY` is not inherited, the launcher can load a local scoped agent key from `~/.memroos/agent-keys/<agent-id>.key`. Set `MEMROOS_AGENT_ID` explicitly when possible. Codex configs should set `MEMROOS_MCP_CLIENT=codex`; the launcher then prefers `codex-desktop-luis-mbp` when that key exists and falls back to the older `opencode` local key. Cursor Desktop configs should set `MEMROOS_MCP_CLIENT=cursor` and `MEMROOS_APP_URL=https://memroos.epiloguecapital.com` (operator production on oracle-1) so the launcher uses `cursor-desktop-luis-mbp` and does not default to `http://localhost:3002`.
 
 Set `MEMROOS_REQUIRE_SERVER_MEMORY=1` when the agent must fail actively if server-backed memory is unavailable. In strict mode, `scripts/memroos-mcp.sh` exits before starting MCP unless the scoped agent can authenticate to the MemRoOS app and `/api/memory/health` reports every memory tier as `up`. The strict gate retries transient failures before exiting so short vector-memory health flaps do not permanently hide MCP tools from a session. Set `MEMROOS_REQUIRE_SERVER_MEMORY=0` only for intentional repo-local/offline MCP work.
 
@@ -45,6 +45,27 @@ Use this when the agent client can run commands on the same filesystem as the Me
   }
 }
 ```
+
+For Cursor Desktop (`~/.cursor/mcp.json` and the repo `.cursor/mcp.json`), point at operator production:
+
+```json
+{
+  "mcpServers": {
+    "memroos": {
+      "command": "/bin/bash",
+      "args": [
+        "-lc",
+        "export MEMROOS_MCP_CLIENT=\"${MEMROOS_MCP_CLIENT:-cursor}\"; export MEMROOS_APP_URL=\"${MEMROOS_APP_URL:-https://memroos.epiloguecapital.com}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; export MEMROOS_ALLOWED_MEMORY_TIER_STATUSES=\"${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}\"; exec \"${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh\""
+      ],
+      "env": {
+        "MEMROOS_AGENT_ID": "cursor-desktop-luis-mbp"
+      }
+    }
+  }
+}
+```
+
+Keep the matching key at `~/.memroos/agent-keys/cursor-desktop-luis-mbp.key`. Reload MCP (or restart Cursor) after changing the config.
 
 For Hermes, the equivalent config is:
 

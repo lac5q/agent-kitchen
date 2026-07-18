@@ -127,7 +127,7 @@ declare -a TARGETS=(
   # name | AGENTS.md path | skills dir | MCP config style
   "claude|$HOME_DIR/.claude/CLAUDE.md|$HOME_DIR/.claude/skills|yaml"
   "codex|$HOME_DIR/.codex/AGENTS.md|$HOME_DIR/.codex/skills|toml"
-  "cursor|$HOME_DIR/.cursorrules|$HOME_DIR/.cursor/skills|json"
+  "cursor|$HOME_DIR/.cursorrules|$HOME_DIR/.cursor/skills|cursor-json"
   "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|yaml"
   "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|yaml"
   "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|zcode-json"
@@ -461,6 +461,7 @@ case "$MODE" in
         yaml) upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
         toml) upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
         json) upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
+        cursor-json) upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
         zcode-json) upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
         factory-json) upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
       esac
@@ -506,6 +507,7 @@ case "$MODE" in
         yaml) uninstall_yaml_mcp_block "${agents_file%.md}.mcp.yaml" ;;
         toml) uninstall_toml_mcp_block "${agents_file%.md}.mcp.toml" ;;
         json) uninstall_json_mcp_block "${agents_file%.md}.mcp.json" ;;
+        cursor-json) uninstall_json_mcp_block "$HOME_DIR/.cursor/mcp.json" ;;
         zcode-json) uninstall_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" ;;
         factory-json) uninstall_json_mcp_block "$HOME_DIR/.factory/mcp.json" ;;
       esac

@@ -318,7 +318,11 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       timestamp,
     });
 
-    replaceCapabilities(input.id, input.capabilities ?? []);
+    // Only replace capabilities when the caller explicitly sends them.
+    // `capabilities ?? []` wiped durable write caps on re-register heartbeats.
+    if (input.capabilities !== undefined) {
+      replaceCapabilities(input.id, input.capabilities);
+    }
   });
   tx();
 

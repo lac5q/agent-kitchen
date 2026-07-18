@@ -115,16 +115,21 @@ export function GovernanceStrip({ filters }: { filters?: NocFilters }) {
           return (
             <div
               key={label}
-              style={{ borderLeft: `2px solid ${color}`, paddingLeft: 10, minWidth: 0 }}
+              style={{
+                borderLeft: `2px solid ${color}`,
+                paddingLeft: 10,
+                minWidth: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
               data-gov-row={label}
               data-gov-state={state}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Eyebrow>{label}</Eyebrow>
-                <SourceStatusBadge status={state} />
-              </div>
+              <Eyebrow>{label}</Eyebrow>
+              <SourceStatusBadge status={state} />
               <Mono size={20}>{ok && value !== null ? String(value) : "—"}</Mono>
-              <div style={{ fontSize: 11, color: NOC.soft, overflowWrap: "anywhere" }}>
+              <div style={{ fontSize: 11, color: NOC.soft, overflowWrap: "anywhere", lineHeight: 1.4 }}>
                 {ok
                   ? `${sub} · ${value === 0 ? "measured zero" : "measured"} · ${source}`
                   : errored
