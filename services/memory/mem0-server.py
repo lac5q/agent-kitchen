@@ -1090,11 +1090,20 @@ async def _qdrant_health_checker():
                 consecutive_healthy += 1
                 if consecutive_healthy >= HEALTH_THRESHOLD:
                     # Recover frozen Memory client after Qdrant blips — in-process reset.
-                    try:
-                        await asyncio.to_thread(reset_memory)
-                        logger.info("Auto-reset memory client after Qdrant recovery (in-process)")
-                    except Exception:
-                        pass
+                    # Only reset when the client is actually in a broken state
+                    # (_memory is None or last init errored). Without this guard we
+                    # thrash on every healthy tick: reset → next API request lazily
+                    # re-inits → health checker sees a healthy client and resets again
+                    # after the threshold elapses, logging
+                    # "Auto-reset memory client after Qdrant recovery" every ~3 min.
+                    if _memory is None or _init_error is not None:
+                        try:
+                            await asyncio.to_thread(reset_memory)
+                            logger.info("Auto-reset memory client after Qdrant recovery (in-process)")
+                        except Exception:
+                            pass
+                    else:
+                        logger.debug("Qdrant healthy; skipping redundant reset (memory client already initialized)")
                     consecutive_healthy = 0  # reset counter after recovery action
             else:
                 consecutive_healthy = 0
