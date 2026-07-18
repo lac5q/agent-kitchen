@@ -79,6 +79,22 @@ describe("embedText — Ollama nomic-embed-text provider (RECALL-01)", () => {
     expect(result.embedding).toBeNull();
   });
 
+  it("returns degraded when Ollama omits a usable embedding array", async () => {
+    process.env.MEMROOS_EMBEDDING_PROVIDER = "ollama";
+    process.env.OLLAMA_URL = "http://localhost:11434";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ embedding: [] }),
+      }),
+    );
+
+    const result = await embedText("empty vector");
+
+    expect(result).toEqual({ embedding: null, degraded: true });
+  });
+
   it("returns degraded result WITHOUT any network call when MEMROOS_EMBEDDING_PROVIDER is null/unset", async () => {
     // Provider disabled — must short-circuit without fetch
     process.env.MEMROOS_EMBEDDING_PROVIDER = "null";

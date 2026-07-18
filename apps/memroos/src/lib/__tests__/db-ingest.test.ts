@@ -89,6 +89,10 @@ describe('db-ingest: deriveAgentId', () => {
   it('Test 3: deriveAgentId("") returns "claude-code" (fallback)', () => {
     expect(deriveAgentId('')).toBe('claude-code');
   });
+
+  it('derives the last decoded path component when the project path is short', () => {
+    expect(deriveAgentId('-tmp-short')).toBe('short');
+  });
 });
 
 describe('db-ingest: extractContent', () => {
@@ -146,6 +150,15 @@ describe('db-ingest: extractContent', () => {
     expect(extractContent({ type: 'system', content: 'system prompt' })).toBeNull();
     expect(extractContent({ type: 'file-history-snapshot', data: {} })).toBeNull();
     expect(extractContent({ type: 'unknown-type' })).toBeNull();
+  });
+
+  it('returns null for user entries without messages or text blocks', () => {
+    expect(extractContent({ type: 'user' })).toBeNull();
+    expect(extractContent({ type: 'user', message: { role: 'user', content: [{ type: 'text' }] } })).toBeNull();
+  });
+
+  it('returns null for assistant entries without text content', () => {
+    expect(extractContent(makeAssistantEntry([{ type: 'text' }]))).toBeNull();
   });
 });
 
@@ -422,6 +435,25 @@ describe('db-ingest: direct provider file ingestion', () => {
     expect(rows).toEqual([{ content: 'keep me' }]);
   });
 
+  it('ingestQwenFile skips malformed JSON and missing parts', () => {
+    const filePath = path.join(TEST_DB_DIR, 'qwen-projects', 'sess-q-malformed.jsonl');
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(
+      filePath,
+      [
+        '{bad-json',
+        JSON.stringify({ type: 'user', message: {} }),
+        JSON.stringify({ type: 'assistant', message: { parts: [{}, { text: 'valid qwen' }] } }),
+      ].join('\n'),
+    );
+
+    const inserted = ingestQwenFile(db, filePath, '-Users-jdoe-github-memroos');
+
+    expect(inserted).toBe(1);
+    const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-q-malformed') as Array<{ content: string }>;
+    expect(rows).toEqual([{ content: 'valid qwen' }]);
+  });
+
   it('ingestCodexFile inserts response_item rows with project=codex', () => {
     const filePath = path.join(TEST_DB_DIR, 'codex-sessions', 'sess-c1.jsonl');
     writeJsonl(filePath, [
@@ -467,6 +499,25 @@ describe('db-ingest: direct provider file ingestion', () => {
 
     const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-c2') as Array<{ content: string }>;
     expect(rows).toEqual([{ content: 'yes' }]);
+  });
+
+  it('ingestCodexFile skips malformed JSON and missing content arrays', () => {
+    const filePath = path.join(TEST_DB_DIR, 'codex-sessions', 'sess-c-malformed.jsonl');
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(
+      filePath,
+      [
+        '{bad-json',
+        JSON.stringify({ type: 'response_item', payload: { role: 'user' } }),
+        JSON.stringify({ type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text' }, { type: 'output_text', text: 'valid codex' }] } }),
+      ].join('\n'),
+    );
+
+    const inserted = ingestCodexFile(db, filePath, 'sess-c-malformed');
+
+    expect(inserted).toBe(1);
+    const rows = db.prepare('SELECT content FROM messages WHERE session_id = ?').all('sess-c-malformed') as Array<{ content: string }>;
+    expect(rows).toEqual([{ content: 'valid codex' }]);
   });
 });
 

@@ -158,6 +158,58 @@ describe("memory retention expiry runner and legal holds", () => {
     expect(database.prepare("SELECT status FROM memory_retention_records WHERE record_id = ?").get("held-1")).toMatchObject({ status: "expired" });
   });
 
+  it("generates legal hold ids, accepts string expiry dates, and records system actor role", () => {
+    const database = freshDb();
+    const hold = createLegalHold(database, {
+      scope: { tenantId: "default-tenant", project: "*" },
+      reasonCode: "audit",
+      actorId: "system",
+      expiresAt: "2026-01-05T00:00:00.000Z",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    expect(hold.id).toMatch(/^hold_/);
+    expect(hold.expires_at).toBe("2026-01-05T00:00:00.000Z");
+    expect(
+      database
+        .prepare("SELECT actor_role FROM audit_entries WHERE entity_id = ?")
+        .get(`legal_hold:${hold.id}`),
+    ).toMatchObject({ actor_role: "system" });
+  });
+
+  it("validates legal hold timestamps and active status mutations", () => {
+    const database = freshDb();
+
+    expect(() =>
+      createLegalHold(database, {
+        scope: { tenantId: "default-tenant" },
+        reasonCode: "",
+        actorId: "operator-legal",
+      }),
+    ).toThrow(/reasonCode is required/);
+    expect(() =>
+      createLegalHold(database, {
+        scope: { tenantId: "default-tenant" },
+        reasonCode: "audit",
+        actorId: "operator-legal",
+        expiresAt: "not-a-date",
+      }),
+    ).toThrow(/Invalid UTC timestamp/);
+    expect(() =>
+      updateLegalHoldScope(database, {
+        holdId: "missing",
+        scope: { tenantId: "default-tenant" },
+        actorId: "operator-legal",
+      }),
+    ).toThrow(/active legal hold not found/);
+    expect(() =>
+      releaseLegalHold(database, {
+        holdId: "missing",
+        actorId: "operator-legal",
+      }),
+    ).toThrow(/active legal hold not found/);
+  });
+
   it("retention receipts are complete enough for validation and exclude sensitive payloads", () => {
     const database = freshDb();
     registerRecord(database, "receipt-1", "2026-01-01T00:00:00.000Z");

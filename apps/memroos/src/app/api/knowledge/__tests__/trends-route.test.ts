@@ -101,4 +101,31 @@ describe("GET /api/knowledge/trends", () => {
     expect(body.collections[0].recentFiles).toBe(1);
     expect(body.collections[1]).toMatchObject({ name: "empty", totalFiles: 0, recentFiles: 0 });
   });
+
+  it("uses month buckets, default limits, and ignores files outside buckets", async () => {
+    mkdirSync(path.join(root, "skills"), { recursive: true });
+    const old = new Date();
+    old.setUTCDate(old.getUTCDate() - 45);
+    const future = new Date();
+    future.setUTCDate(future.getUTCDate() + 1);
+    touch(path.join(root, "skills", "old.md"), old);
+    touch(path.join(root, "skills", "future.md"), future);
+    touch(path.join(root, "skills", "current.md"), new Date());
+    writeFileSync(configPath, JSON.stringify({
+      collections: [{ name: "skills", category: "agents" }],
+    }));
+
+    const { GET } = await loadRoute();
+    const response = await GET(new Request("http://localhost/api/knowledge/trends?window=month") as any);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.window).toBe("month");
+    expect(body.buckets).toHaveLength(30);
+    expect(body.collections[0]).toMatchObject({
+      totalFiles: 3,
+      recentFiles: 1,
+    });
+    expect(body.collections[0].points.at(-1).value).toBeGreaterThanOrEqual(1);
+  });
 });

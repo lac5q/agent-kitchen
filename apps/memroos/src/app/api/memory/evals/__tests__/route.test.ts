@@ -43,6 +43,35 @@ describe("memory eval API routes", () => {
     expect(body.run.summary.passRate).toBe(1);
   });
 
+  it("rejects remote latest eval requests without operator authorization", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "eval-secret";
+    const { latestRoute, evals } = await loadRoutes();
+
+    const response = await latestRoute.GET(new Request("https://memroos.example/api/memory/evals/latest"));
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("Registry write authorization required");
+    expect(evals.getLatestMemoryEvalRun).not.toHaveBeenCalled();
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
+  });
+
+  it("allows remote latest eval requests with the operator header", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "eval-secret";
+    const { latestRoute, evals } = await loadRoutes();
+    vi.mocked(evals.getLatestMemoryEvalRun).mockReturnValue({ ok: true, run: null, timestamp: null });
+
+    const response = await latestRoute.GET(
+      new Request("https://memroos.example/api/memory/evals/latest", {
+        headers: { "x-memroos-operator-key": "eval-secret" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(evals.getLatestMemoryEvalRun).toHaveBeenCalled();
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
+  });
+
   it("runs the suite on demand", async () => {
     const { runRoute, evals } = await loadRoutes();
     vi.mocked(evals.runMemoryRecallEvalSuite).mockResolvedValue({

@@ -10,6 +10,7 @@ import {
   isAnswerSupported,
   normalizeForAnswerCheck,
   resolveLane,
+  round,
   scoreTask,
 } from "../metrics";
 import type { AdapterResult, NormalizedTask } from "../schema";
@@ -223,6 +224,12 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
   it("answer support requires full normalized containment", () => {
     expect(isAnswerSupported("Qdrant Cloud", "We chose Qdrant Cloud today.")).toBe(true);
     expect(isAnswerSupported("Qdrant Cloud", "We chose Qdrant.")).toBe(false);
+    expect(isAnswerSupported("Qdrant Cloud", "   ")).toBe(false);
+  });
+
+  it("preserves non-finite values when rounding", () => {
+    expect(round(Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+    expect(round(Number.NaN)).toBeNaN();
   });
 
   it("abstention_correct task is never scored as answerSupported", () => {
@@ -279,6 +286,43 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
     });
     const agg = aggregateTaskScores(scores);
     expect(agg.tokensRetrieval).toBeNull();
+  });
+
+  it("treats non-numeric token spend as unavailable", () => {
+    const score = scoreTask({
+      task: makeTask(),
+      result: makeResult({
+        injected: ["mem-1"],
+        retrieved: [],
+        receipt: {
+          ...makeResult().receipt,
+          metrics: {
+            ...makeResult().receipt.metrics,
+            tokensRetrieval: "42" as unknown as number,
+          },
+        },
+      }),
+      k: 1,
+      lane: "external_retrieval",
+    });
+
+    expect(aggregateTaskScores([score]).tokensRetrieval).toBeNull();
+  });
+
+  it("allows omitted evidence_spans at the scorer boundary", () => {
+    const task = {
+      ...makeTask(),
+      evidence_spans: undefined,
+    } as unknown as NormalizedTask;
+    const score = scoreTask({
+      task,
+      result: makeResult({ injected: [] }),
+      k: 1,
+      lane: "external_retrieval",
+    });
+
+    expect(score.evidenceSpanCount).toBe(0);
+    expect(score.recallAtK).toBe(1);
   });
 
   it("token spend is summed when all tasks report it", () => {

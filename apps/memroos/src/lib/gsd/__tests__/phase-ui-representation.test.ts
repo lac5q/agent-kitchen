@@ -28,4 +28,17 @@ ui_representation_note: Backend-only migration; operator proof is exposed throug
     expect(result.ok).toBe(true);
     expect(result.kind).toBe("api_only");
   });
+
+  it("rejects unsupported UI decisions and missing notes", () => {
+    const result = validatePhaseUiRepresentation(`# Phase 99 Summary
+
+status: complete
+ui_representation: telepathy
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBeNull();
+    expect(result.missing).toContain("ui_representation_note");
+    expect(result.errors[0]).toMatch(/ui_representation must be one of/);
+  });
 });

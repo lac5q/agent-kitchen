@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { trajectoryMultiStepScorer } from "../trajectory-scorer";
+import { registerTrajectoryScorer, trajectoryMultiStepScorer } from "../trajectory-scorer";
 import type { TrajectoryTrace } from "../trajectory-types";
 import { buildDefaultEvalConfig } from "../config";
 import type { AgentEvalTrace, EvalScoringContext, EvalJudgeResult } from "../types";
@@ -211,5 +211,13 @@ describe("trajectory_multi_step scorer", () => {
   it("is registered as an L2 scorer", () => {
     expect(trajectoryMultiStepScorer.layer).toBe("l2");
     expect(trajectoryMultiStepScorer.id).toBe("trajectory_multi_step");
+  });
+
+  it("registers itself into scorer registries", () => {
+    const registry = new Map();
+
+    registerTrajectoryScorer(registry);
+
+    expect(registry.get("trajectory_multi_step")).toBe(trajectoryMultiStepScorer);
   });
 });

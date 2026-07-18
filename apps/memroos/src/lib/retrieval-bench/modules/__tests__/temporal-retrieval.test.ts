@@ -82,4 +82,43 @@ describe("temporal retrieval", () => {
     expect(truncated.receipt.truncated).toBe(true);
     expect(truncated.caveats.some((c) => c.code === "direction_underspecified")).toBe(true);
   });
+
+  it("falls back to now when reference timestamps are invalid", () => {
+    const result = performTemporalRetrieval({
+      candidates: [
+        { id: "valid", timestamp_iso: "2026-01-02T00:00:00.000Z", text: "valid timestamp" },
+        { id: "invalid", timestamp_iso: "not-a-date", text: "invalid timestamp" },
+      ],
+      metadata: { reference_time_iso: "not-a-date", temporal_direction: "latest" },
+      scopeReferenceIso: "also-invalid",
+      options: { nowIso: "2026-01-03T00:00:00.000Z" },
+    });
+
+    expect(result.referenceTimeIso).toBe("2026-01-03T00:00:00.000Z");
+    expect(result.selected).toEqual(["valid"]);
+    expect(result.candidates.map((candidate) => candidate.id)).toEqual(["valid"]);
+  });
+
+  it("returns no selection for empty directional windows", () => {
+    const before = performTemporalRetrieval({
+      candidates: [{ id: "later", timestamp_iso: "2026-01-05T00:00:00.000Z", text: "later" }],
+      metadata: { reference_time_iso: "2026-01-01T00:00:00.000Z", temporal_direction: "before" },
+    });
+    const after = performTemporalRetrieval({
+      candidates: [{ id: "earlier", timestamp_iso: "2026-01-01T00:00:00.000Z", text: "earlier" }],
+      metadata: { reference_time_iso: "2026-01-05T00:00:00.000Z", temporal_direction: "after" },
+    });
+    const between = performTemporalRetrieval({
+      candidates: [{ id: "outside", timestamp_iso: "2026-01-05T00:00:00.000Z", text: "outside" }],
+      metadata: {
+        reference_time_iso: "2026-01-01T00:00:00.000Z",
+        fact_valid_until_iso: "2026-01-02T00:00:00.000Z",
+        temporal_direction: "between",
+      },
+    });
+
+    expect(before.selected).toEqual([]);
+    expect(after.selected).toEqual([]);
+    expect(between.selected).toEqual([]);
+  });
 });

@@ -106,4 +106,22 @@ describe("a2aAdapter", () => {
     expect(record?.task.status.state).toBe("completed");
     expect(record?.task.artifacts?.[0]).toMatchObject({ artifactId: "result" });
   });
+
+  it("rejects dispatches for unknown A2A agents without a network call", async () => {
+    const { a2aAdapter } = await loadAdapterModules();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await a2aAdapter.dispatch({
+      ...TASK,
+      to_agent: "missing-a2a-agent",
+    });
+
+    expect(result).toMatchObject({
+      accepted: false,
+      mode: "rejected",
+      detail: "Unknown A2A agent: missing-a2a-agent",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

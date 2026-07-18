@@ -114,6 +114,37 @@ describe("Hermes memory client v2", () => {
     );
   });
 
+  it("persists optional recollection metadata on memories", () => {
+    const hermesRoot = root();
+    const memory = addMemory(hermesRoot, {
+      content: "High-value memory with explicit source metadata.",
+      tier: "semantic",
+      sourceHealth: "stale",
+      importance: 0.9,
+      priorUsefulness: 0.7,
+      provenance: "operator:test",
+    });
+
+    expect(memory).toMatchObject({
+      tier: "semantic",
+      sourceHealth: "stale",
+      importance: 0.9,
+      priorUsefulness: 0.7,
+      provenance: "operator:test",
+    });
+  });
+
+  it("skips recollection when the topic has no entities", () => {
+    const hermesRoot = root();
+    addMemory(hermesRoot, { content: "Entity-free prompts should not retrieve memory." });
+
+    const injection = buildContextInjection(hermesRoot, "   ");
+
+    expect(injection.text).toBe("");
+    expect(injection.memories).toEqual([]);
+    expect(injection.contextPack.injected).toEqual([]);
+  });
+
   it("archives expired memories and keeps backward-compatible memory tool calls", () => {
     const hermesRoot = root();
     const expired = addMemory(hermesRoot, {

@@ -193,4 +193,14 @@ describe("activatePolicyVersion", () => {
     expect(result.activated).toBe(false);
     expect(result.reason).toBe("invalid_proposed_version");
   });
+
+  it("refuses to activate when the proposed manifest is null", () => {
+    const result = activatePolicyVersion(null as never, "2026.07.129");
+
+    expect(result).toEqual({
+      activated: false,
+      newVersion: "2026.07.129",
+      reason: "invalid_proposed_version",
+    });
+  });
 });

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { selectAdapter } from "../adapter-factory";
 import { hivePollAdapter } from "../hive-poll-adapter";
 import { openclawAdapter } from "../openclaw-adapter";
+import { a2aAdapter } from "../a2a-adapter";
 import type { RemoteAgentConfig } from "@/types";
 
 function makeAgent(id: string, platform: RemoteAgentConfig["platform"]): RemoteAgentConfig {
@@ -57,5 +58,15 @@ describe("selectAdapter", () => {
 
   it("zcode platform -> hive-poll", () => {
     expect(selectAdapter(makeAgent("zcode-agent", "zcode"))).toBe(hivePollAdapter);
+  });
+
+  it("a2a protocol takes precedence over platform", () => {
+    expect(selectAdapter({ ...makeAgent("a2a-agent", "openclaw"), protocol: "a2a" })).toBe(a2aAdapter);
+  });
+
+  it("falls back to hive-poll for unknown platforms", () => {
+    expect(selectAdapter(makeAgent("unknown-agent", "future-runtime" as RemoteAgentConfig["platform"]))).toBe(
+      hivePollAdapter,
+    );
   });
 });

@@ -256,4 +256,19 @@ describe("GET /api/memory-inventory truthful metric contract (VAL-MEM-001/003/00
     expect(body).not.toHaveProperty("categories");
     expect(body).not.toHaveProperty("rows");
   });
+
+  it("returns 401 for unauthenticated callers without invoking role checks", async () => {
+    const auth = await import("@/lib/auth/session");
+    const { requireRole } = await import("@/lib/auth/middleware-roles");
+    vi.mocked(auth.authenticateUser).mockResolvedValueOnce(null);
+    vi.mocked(requireRole).mockClear();
+
+    const { GET } = await import("../route");
+    const res = await GET(new Request("http://localhost/api/memory-inventory") as unknown as import("next/server").NextRequest);
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body).toEqual({ error: "authentication required" });
+    expect(requireRole).not.toHaveBeenCalled();
+  });
 });

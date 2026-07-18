@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { responseCache } from "@/lib/response-cache";
 
@@ -8,6 +8,10 @@ const purgeRoute = await import("../purge/route");
 const prewarmRoute = await import("../prewarm/route");
 
 describe("cache operations API", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("exposes stats, prewarm, and purge controls", async () => {
     const prewarm = await prewarmRoute.POST();
     expect(prewarm.status).toBe(200);
@@ -40,5 +44,17 @@ describe("cache operations API", () => {
     expect(purge.status).toBe(200);
     expect(purgeData).toMatchObject({ ok: true, purged: 1, tag: "route-tag" });
     expect(stats.stats.entries).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns a structured error when purge throws", async () => {
+    vi.spyOn(responseCache, "purge").mockImplementationOnce(() => {
+      throw new Error("cache exploded");
+    });
+
+    const purge = await purgeRoute.POST(new Request("http://localhost/api/cache/purge", { method: "POST" }) as any);
+    const body = await purge.json();
+
+    expect(purge.status).toBe(500);
+    expect(body.error).toBe("cache exploded");
   });
 });

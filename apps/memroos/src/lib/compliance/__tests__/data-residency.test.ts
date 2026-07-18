@@ -101,4 +101,10 @@ compliance:
       enabledAdapters: ["quickbooks", "bank_reconciliation"],
     });
   });
+
+  it("honors configured local hosts and rejects malformed endpoints", () => {
+    expect(isLocalEndpoint("http://gpu-box.internal:8000/v1", ["gpu-box.internal"])).toBe(true);
+    expect(isLocalEndpoint("not a url", ["gpu-box.internal"])).toBe(false);
+    expect(isLocalEndpoint(null, ["gpu-box.internal"])).toBe(false);
+  });
 });

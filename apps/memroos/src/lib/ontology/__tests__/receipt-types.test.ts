@@ -25,6 +25,13 @@ describe("ONTO-06 ontology type receipt refs", () => {
     expect(ontologyTypeFromCanonicalId("memroos.claim")).toBe("claim");
   });
 
+  it("validates required ontology type coordinates", () => {
+    expect(() => buildOntologyTypeReceiptRef({ ontologyType: "   " })).toThrow(
+      /ontologyType is required/,
+    );
+    expect(ontologyTypeFromCanonicalId("   ")).toBe("");
+  });
+
   it("enriches policy receipts with ontologyType + aboutType", () => {
     const receipt = buildReceipt(
       {

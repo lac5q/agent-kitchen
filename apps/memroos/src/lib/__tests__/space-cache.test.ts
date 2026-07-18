@@ -118,6 +118,28 @@ describe("space-cache.ts (Phase 140 / CACHEADMIN-01..05)", () => {
     expect(state.entries).toEqual([]);
   });
 
+  it("returns empty summaries for blank cache queries", () => {
+    expect(getCacheState(db, "  ")).toEqual({
+      totalResources: 0,
+      totalCachedSize: 0,
+      totalRetrievals: 0,
+      entries: [],
+    });
+    expect(getInvalidationHistory(db, "")).toEqual([]);
+  });
+
+  it("defaults cached size and invalidation reasons when omitted", () => {
+    recordCacheFetch(db, { spaceId, resourceId: "doc-default" });
+    invalidateResource(db, { spaceId, resourceId: "doc-default", actorId });
+    invalidateSpace(db, { spaceId, actorId });
+
+    const state = getCacheState(db, spaceId);
+    expect(state.entries.find((entry) => entry.resourceId === "doc-default")?.cachedSize).toBe(0);
+    expect(
+      getInvalidationHistory(db, spaceId).map((entry) => entry.reason),
+    ).toEqual(expect.arrayContaining([null]));
+  });
+
   it("4) invalidateResource stamps invalidated_at and writes cache.invalidated audit", () => {
     recordCacheFetch(db, { spaceId, resourceId: "doc-1", cachedSize: 100 });
     invalidateResource(db, { spaceId, resourceId: "doc-1", actorId, reason: "stale" });
