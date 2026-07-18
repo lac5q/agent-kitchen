@@ -51,3 +51,20 @@ A CI note can be added to the Phase 143 verification step: after any installer e
 3. **Claude Code / Codex / Cursor → T1**: add runtime-specific adapter modules (similar to `openclaw-adapter.ts`) or A2A-first onboarding, and add targeted GSD adapter tests for each identity.
 4. **Qwen / Gemini / ZCode → T1/T2**: promote to T2 by adding a `GsdAdapterId` entry and at least one GSD adapter test; promote to T1 by adding a dedicated transport adapter or verified A2A path plus safety-gate coverage.
 5. **Cross-cutting**: ensure every T1 adapter has a pre-execution policy gate that delegates to the existing POLGOV engine (per the Phase 145 reconciliation note in `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`), rather than adding a second policy engine per adapter.
+
+## Observe capture maturity (v8.16)
+
+*Updated: 2026-07-18*
+
+| Harness | Wave | Capture method | Status |
+|---------|------|----------------|--------|
+| Claude | 1 | jsonl `~/.claude/projects` | supported |
+| Codex | 1 | jsonl `~/.codex/sessions` | supported |
+| Hermes | 1 | plugin + jsonl | supported |
+| OpenClaw | 1 | jsonl / Hermes-family | supported |
+| Pi | 1 | jsonl `~/.pi/agent/sessions` | supported (first-class) |
+| Cursor | 2 | MCP + partial session/export | partial |
+| Factory/Droid | 2 | MCP `~/.factory/mcp.json` + hooks | partial |
+| Antigravity | 3 | MCP if exposed; else limited | limited |
+
+Operator visibility: `GET /api/observe/health`.

@@ -63,7 +63,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (code complete 2026-07-18; live Aura oneshot Luis-gated)
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
-- 📋 **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (added 2026-07-17; remote MCP + observe for **already-onboarded** agents; tiered capture default=relevant; Wave 1 includes Pi + Claude/Codex/Hermes/OpenClaw; Wave 2 Cursor/Factory; Wave 3 Antigravity)
+- ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 
 ## Phases
 
@@ -2532,9 +2532,9 @@ Plans:
 
 ## v8.15 Always-On Cloud Operator — oracle-1 (Phases 163–166)
 
-*Added: 2026-07-17 · Version: 2026-07-17.2 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-17 21:10 PDT*
+*Added: 2026-07-17 · Version: 2026-07-18.1 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-18*
 
-**Status:** 📋 PLANNED (host capacity verified; cutover not executed)  
+**Status:** 🟡 READINESS DOCS COMPLETE (2026-07-18) — runbook + local readiness checker landed; live cutover blocked pending Luis/operator SSH/Tailscale credentials and production access.
 **Plan:** `~/.cursor/plans/mac-as-prod_memroos_d4133d54.plan.md` (Always-on Oracle MemRoOS)  
 **Depends on:** v8.13 graph catchup paths; Aura + Qdrant Cloud credentials; Tailscale reachability to `oracle-1`  
 **Note:** Phase numbers 160–162 are reserved for v8.14 Human Wiki Surface — do not collide.
@@ -2584,10 +2584,10 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 163. Oracle readiness + nomic embeds | 0/? | Planned | — |
-| 164. Operator deploy + data cutover | 0/? | Planned | — |
-| 165. Tunnel + Heroku decommission | 0/? | Planned | — |
-| 166. Voyage embed provider | 0/? | Planned | — |
+| 163. Oracle readiness + nomic embeds | 1/2 docs | Runbook + local readiness checker landed 2026-07-18; on-host Ollama/disk/RAM smoke blocked pending Luis/operator SSH/Tailscale credentials | 2026-07-18 (docs/readiness) |
+| 164. Operator deploy + data cutover | 1/2 docs | Deploy/cutover checklist landed 2026-07-18; live deploy, secrets validation, and SQLite migration blocked pending host access/production credentials | 2026-07-18 (docs/readiness) |
+| 165. Tunnel + Heroku decommission | 1/2 docs | Tunnel + Heroku decommission checklist landed 2026-07-18; Cloudflare/Heroku live changes blocked pending operator credentials | 2026-07-18 (docs/readiness) |
+| 166. Voyage embed provider | 0/? | Out of scope for active goal; do not implement Voyage in this pass | — |
 
 ## v8.14 Human Wiki Surface + Memory Digest (Phases 160–162)
 
@@ -2642,7 +2642,7 @@ Plans:
 
 *Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 21:10 PDT · Updated: 2026-07-17 21:10 PDT*
 
-**Status:** 🔄 IN PROGRESS (Phase 167 code complete 2026-07-18)  
+**Status:** ✅ CODE COMPLETE (2026-07-18) — Waves 1–3 policy/sidecar/visibility; live capture still needs operator keys  
 **Depends on:** remote MCP (`docs/integrations/mcp.md`); `POST /api/agent-memory/capture` + `POST /api/native-memory/ingest` (Phase 96 / ENTOPS-07 sink); Hermes observe plugin as reference; `db-ingest.ts` session paths for Claude/Hermes/Codex/Qwen; fleet maturity matrix `docs/runtime-adapter-maturity.md`  
 **Why now:** MemRoOS is a strong store when fed, but onboarded agents (incl. **Pi**, Codex, Cursor, Claude, etc.) do work that never lands. Goal: every **already-onboarded** MemRoOS agent’s relevant work is captured autonomously.  
 **Product story (S13):** Remote MCP = company brain for onboarded agents; observe sidecar = autonomous capture. MCP alone is **not** a wiretap.  
@@ -2745,8 +2745,8 @@ Operator host
 | 167. Capture policy + tiered retention | 1/1 code | Code complete — depth policy + capture wiring + tests | 2026-07-18 |
 | 168. Remote MCP employee onboard | 1/1 docs+installer | Pi already in TARGETS; onboard doc shipped | 2026-07-18 |
 | 169. Observe sidecar + Wave 1 (incl. Pi) | 1/1 code | Sidecar + path policy + dry-run; live capture needs operator key | 2026-07-18 |
-| 170. Wave 2 Cursor/Factory | 0/0 | Planned | — |
-| 171. Wave 3 Antigravity + onboarded-agent visibility | 0/0 | Planned | — |
+| 170. Wave 2 Cursor/Factory | 1/1 code | Partial maturity + sidecar wave2 roots + docs | 2026-07-18 |
+| 171. Wave 3 Antigravity + onboarded-agent visibility | 1/1 code | /api/observe/health + maturity matrix incl. Pi | 2026-07-18 |
 
 ### Out of scope (v8.16)
 

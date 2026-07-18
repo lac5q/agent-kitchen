@@ -19,6 +19,11 @@ const WAVE1 = [
   { harness: "pi", root: ".pi/agent/sessions" },
 ];
 
+const WAVE2 = [
+  { harness: "cursor", root: ".cursor/projects" },
+  { harness: "factory", root: ".factory" },
+];
+
 function parseArgs(argv) {
   const out = { dryRun: false, help: false };
   for (const arg of argv) {
@@ -129,7 +134,9 @@ async function postCapture(payload) {
 
 const state = readState();
 const results = [];
-for (const entry of WAVE1) {
+const wave = Number(process.env.MEMROOS_OBSERVE_WAVE || 2);
+const targets = wave >= 2 ? [...WAVE1, ...WAVE2] : WAVE1;
+for (const entry of targets) {
   const root = path.join(os.homedir(), entry.root);
   for (const file of listJsonl(root)) {
     const fp = fingerprint(file);

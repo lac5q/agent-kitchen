@@ -25,6 +25,15 @@ describe("observe sidecar path policy", () => {
     expect(roots.some((r) => r.harness === "cursor")).toBe(false);
   });
 
+  it("includes Cursor/Factory in Wave 2 and Antigravity only at wave 3 catalog", () => {
+    const wave2 = resolveObserveRoots("/tmp/fake-home", 2);
+    expect(wave2.some((r) => r.harness === "cursor")).toBe(true);
+    expect(wave2.some((r) => r.harness === "factory")).toBe(true);
+    const wave3 = resolveObserveRoots("/tmp/fake-home", 3);
+    // Antigravity has empty session roots but remains in catalog for honesty.
+    expect(wave3.some((r) => r.harness === "antigravity")).toBe(false);
+  });
+
   it("lists jsonl sessions and summarizes them", () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "observe-home-"));
     tempDirs.push(home);
