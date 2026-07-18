@@ -159,4 +159,29 @@ describe("wiki-digest", () => {
     const graph = loadWikiGraph({ knowledgeBasePath: kb });
     expect(graph.nodes.some((n) => n.path === summary.pages[0])).toBe(true);
   });
+
+  it("falls back to sqlite episodic memories when mem0 fetch fails", async () => {
+    const kb = makeVault();
+    const db = new Database(":memory:");
+    initSchema(db);
+    db.prepare(
+      `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+       VALUES ('s1', 'p1', 'luis', 'user', 'Episodic fallback memory about wiki digest resilience.', '2026-07-18T11:00:00.000Z')`
+    ).run();
+
+    const summary = await runWikiDigest({
+      knowledgeBasePath: kb,
+      dryRun: false,
+      agentId: "luis",
+      now: new Date("2026-07-18T12:00:00.000Z"),
+      db,
+      fetchMemories: async () => {
+        throw new Error("mem0_down");
+      },
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("completed");
+    expect(summary.written).toBe(1);
+    expect(summary.pages[0]).toContain("memroos-digest/");
+  });
 });

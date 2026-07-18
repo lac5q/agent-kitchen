@@ -8,7 +8,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
+import type Database from "better-sqlite3";
+
 import { MEM0_URL } from "@/lib/constants";
+import { getDb } from "@/lib/db";
 import {
   getKnowledgeBasePath,
   getWikiRoot,
@@ -45,6 +48,9 @@ export interface WikiDigestRunOptions {
   agentId?: string;
   limit?: number;
   now?: Date;
+  /** When mem0 fetch fails, fall back to SQLite messages (default true). */
+  allowEpisodicFallback?: boolean;
+  db?: Database.Database;
   fetchMemories?: (agentId: string) => Promise<WikiDigestMemoryItem[]>;
   log?: (message: string, extra?: Record<string, unknown>) => void;
 }
@@ -233,6 +239,59 @@ async function defaultFetchMemories(agentId: string): Promise<WikiDigestMemoryIt
     .filter((item) => item.id && item.content);
 }
 
+/** Local SQLite episodic fallback when mem0/Qdrant are unavailable. */
+export function fetchEpisodicMemoriesForDigest(
+  db: Database.Database,
+  options: { agentId?: string; limit?: number } = {}
+): WikiDigestMemoryItem[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
+  const agentId = options.agentId?.trim();
+  const rows = agentId
+    ? (db
+        .prepare(
+          `SELECT id, content, timestamp, agent_id
+           FROM messages
+           WHERE role IN ('user', 'assistant')
+             AND content IS NOT NULL
+             AND trim(content) != ''
+             AND agent_id = ?
+           ORDER BY id DESC
+           LIMIT ?`
+        )
+        .all(agentId, limit) as Array<{
+        id: number;
+        content: string;
+        timestamp: string | null;
+        agent_id: string | null;
+      }>)
+    : (db
+        .prepare(
+          `SELECT id, content, timestamp, agent_id
+           FROM messages
+           WHERE role IN ('user', 'assistant')
+             AND content IS NOT NULL
+             AND trim(content) != ''
+           ORDER BY id DESC
+           LIMIT ?`
+        )
+        .all(limit) as Array<{
+        id: number;
+        content: string;
+        timestamp: string | null;
+        agent_id: string | null;
+      }>);
+
+  return rows
+    .map((row) => ({
+      id: `episodic:${row.id}`,
+      content: String(row.content ?? ""),
+      createdAt: row.timestamp,
+      agentId: row.agent_id,
+      sensitivity: null,
+    }))
+    .filter((item) => item.content.trim());
+}
+
 function isAfterWatermark(
   item: WikiDigestMemoryItem,
   watermark: WikiDigestWatermark
@@ -357,14 +416,39 @@ export async function runWikiDigest(
   };
 
   let memories: WikiDigestMemoryItem[] = [];
+  let usedEpisodicFallback = false;
   try {
     memories = await (options.fetchMemories ?? defaultFetchMemories)(agentId);
   } catch (err) {
-    summary.status = "failed";
-    summary.reason = err instanceof Error ? err.message : String(err);
-    summary.errors = 1;
-    log("fetch failed", { reason: summary.reason });
-    return summary;
+    const reason = err instanceof Error ? err.message : String(err);
+    const allowFallback = options.allowEpisodicFallback !== false;
+    if (!allowFallback) {
+      summary.status = "failed";
+      summary.reason = reason;
+      summary.errors = 1;
+      log("fetch failed", { reason: summary.reason });
+      return summary;
+    }
+    try {
+      const db = options.db ?? getDb();
+      memories = fetchEpisodicMemoriesForDigest(db, {
+        agentId,
+        limit: options.limit ?? 200,
+      });
+      usedEpisodicFallback = true;
+      log("mem0 unavailable; using sqlite episodic fallback", {
+        reason,
+        episodicCount: memories.length,
+      });
+    } catch (fallbackErr) {
+      summary.status = "failed";
+      summary.reason = `${reason}; episodic_fallback_failed:${
+        fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+      }`;
+      summary.errors = 1;
+      log("fetch failed", { reason: summary.reason });
+      return summary;
+    }
   }
 
   const limit = Math.max(1, options.limit ?? 200);
@@ -397,7 +481,13 @@ export async function runWikiDigest(
 
   if (clusters.size === 0) {
     summary.status = "skipped";
-    summary.reason = wikiRootExists(wikiRoot) ? "nothing_new" : "nothing_new_missing_vault_ok";
+    summary.reason = usedEpisodicFallback
+      ? wikiRootExists(wikiRoot)
+        ? "nothing_new_episodic_fallback"
+        : "nothing_new_missing_vault_ok_episodic_fallback"
+      : wikiRootExists(wikiRoot)
+        ? "nothing_new"
+        : "nothing_new_missing_vault_ok";
     return summary;
   }
 

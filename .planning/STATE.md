@@ -4,7 +4,7 @@ milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
 stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
-last_updated: "2026-07-18T07:07:31Z"
+last_updated: "2026-07-18T08:16:00Z"
 progress:
   total_phases: 115
   completed_phases: 79
@@ -26,17 +26,16 @@ See: .planning/PROJECT.md
 
 Phase: Quality gate over open GSD (v8.13→v8.16 excl. Voyage) — 2026-07-18
 Plan: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Status: **Standing refactor/live-test/autoreview mandate added** · **Voyage/Phase 166 excluded** · Beastmode MiniMax-M3 adaptive verified
-Completed recently: Goal lock + ROADMAP quality gate + `/tmp/refactor-memroos.md` init
+Status: **complete-with-blockers** · wiki digest episodic fallback + live UAT 32/32 · Voyage/Phase 166 excluded
+Completed recently: Standing Quality Gate; v8.13–v8.16 cloud-executable work; live UAT pass; wiki-digest mem0 fallback fix
 
-**Still open (this goal, ordered):**
-- **v8.13** — Memory Tier Catchup (157 closeout; 158–159 code largely landed)
-- **v8.14** — Human Wiki Surface + Memory Digest (160–162)
-- **v8.15** — Always-On Cloud Operator (163–165 only; **skip 166 Voyage**)
-- **v8.16** — Multi-Harness Observe Plane (167–171)
-- Then: 100% coverage drive → sanitized local UAT inventory → fix-all → production log triage
+**This goal (cloud-executable):** DONE with documented infra blockers.
+- **v8.13–v8.16** code/docs landed (Phase 166 Voyage skipped; v8.15 live cutover blocked on oracle SSH)
+- Coverage improved with measured gaps; feature inventory + live UAT clean pass
+- Fast 3168 + slow 19 green; prod-log triage: no actionable cloud-reachable errors
 
 **Still open (outside this goal / approval-gated):**
+- **v8.15 live** — oracle-1 / Cloudflare / Heroku (needs Luis SSH/Tailscale)
 - **MSIQ-06** — GraphRAG spike (Luis approval)
 - **ENTOPS-04/05** — IdP/MDM
 - **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred
@@ -45,10 +44,10 @@ Completed recently: Goal lock + ROADMAP quality gate + `/tmp/refactor-memroos.md
 
 ## Session Continuity
 
-Last session: 2026-07-18T06:55:53Z
-Stopped at: Locked GSD quality-gate goal; MiniMax-M3 adaptive smoke OK; MemRoOS goal API unauthorized (local fallback).
+Last session: 2026-07-18T08:16:00Z
+Stopped at: Goal complete-with-blockers; PR #28 updated with wiki-digest fallback + live UAT evidence.
 Resume file: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Next action: Continue v8.16 Phases 168–171; ask Luis before v8.15 oracle-1 production cutover / Aura live write / Heroku decommission.
+Next action: Merge PR #28; Luis provides oracle-1 SSH for v8.15 live waves if desired.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
