@@ -79,7 +79,23 @@ They are NOT yet pushed or PR'd.
 - Service management: systemd units `memroos-web.service`,
   `memroos-mem0.service`, `cloudflared.service`, `ollama.service`.
 
-## What I did NOT do (needs your approval)
+## Deployment verification (post-merge, post-restart)
+
+- PR #31 (`cb33e3ea`, `services/memory/mem0-server.py`) merged to `origin/main`
+  at `43d6327d`. PR #32 (`39621d72`, `apps/memroos/src/lib/memory-consolidation.ts`)
+  merged at `f9b0792c`.
+- Prod repo on `oracle-1:/home/opc/github/memroos` reset to `origin/main` and
+  both services restarted (`memroos-web.service`, `memroos-mem0.service`).
+- 240-second post-deploy observation: `Resetting Mem0 Memory instance` count
+  = 0 (was ~22/hr pre-fix). `Auto-reset memory client` count = 0 (was
+  ~22/hr). `Failed to parse LLM response` count = 0. Fixes verified live.
+- Disk-prune on `/home/opc`: cleared `/tmp/pip-unpack-*` (~447 MB),
+  `/tmp/op_extracted` (23 MB), `/tmp/node-compile-cache` (7.8 MB),
+  `/home/opc/.npm/_logs/*.log` (12 files), four 4-day-old rotated
+  `/home/opc/.factory/logs/droid-log-single.log.2026-07-*` (~20 MB).
+  Disk 79% -> 77%, free 6.5 GB -> 7.0 GB.
+
+## What I did NOT do (out of scope)
 
 - `git push` of either hotfix branch.
 - `gh pr create` against `origin/main`.
