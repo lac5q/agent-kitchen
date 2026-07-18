@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { initSchema } from "@/lib/db-schema";
 import { createLegalHold } from "../retention-expiry";
 import { createRetentionPolicy, registerRetentionRecord } from "../retention-policy";
-import { approveSubjectErasurePlan, createSubjectErasurePlan, executeSubjectErasurePlan } from "../subject-erasure";
+import {
+  approveSubjectErasurePlan,
+  createSubjectErasurePlan,
+  executeSubjectErasurePlan,
+  listSubjectErasurePlans,
+} from "../subject-erasure";
 
 let db: Database.Database | null = null;
 
@@ -222,5 +227,36 @@ describe("subject erasure planning and execution", () => {
 
     expect(database.prepare(`SELECT status FROM ontology_derivative_validity WHERE derivative_type = 'versioned_record'`).get())
       .toMatchObject({ status: "revoked" });
+  });
+
+  it("lists subject erasure plans with parsed execution result payloads", async () => {
+    const database = freshDb();
+    seedMessage(database, "LIST_PLAN_SECRET", "subject-list");
+    const plan = createSubjectErasurePlan(database, {
+      id: "plan-list",
+      subject: { subjectId: "subject-list" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      actorId: "operator",
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    expect(plan.ok).toBe(true);
+    approveSubjectErasurePlan(database, {
+      planId: "plan-list",
+      planHash: plan.plan!.planHash,
+      actorId: "reviewer",
+      now: new Date("2026-01-02T00:10:00.000Z"),
+    });
+    const execution = await executeSubjectErasurePlan(database, {
+      planId: "plan-list",
+      planHash: plan.plan!.planHash,
+      actorId: "operator",
+      now: new Date("2026-01-02T00:20:00.000Z"),
+    });
+
+    const rows = listSubjectErasurePlans(database, { tenantId: "default-tenant", limit: 1 });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "plan-list", status: execution.status });
+    expect(rows[0].result).toMatchObject({ planId: "plan-list", status: execution.status, erased: 1 });
   });
 });
