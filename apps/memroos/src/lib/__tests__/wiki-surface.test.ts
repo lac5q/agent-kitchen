@@ -4,11 +4,12 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   clusterKeyForMemory,
   readWikiDigestWatermark,
+  redactSecrets,
   runWikiDigest,
   shouldSkipMemory,
   WIKI_DIGEST_CRON_ID,
@@ -21,6 +22,7 @@ import {
   resolveWikilink,
   resolveWikiPath,
   searchWikiPages,
+  wikiRootExists,
 } from "@/lib/wiki-vault";
 import { loadWikiGraph } from "@/lib/wiki-graph";
 import { listCronHealthJobs } from "@/lib/cron-health";
@@ -76,6 +78,12 @@ describe("wiki-vault", () => {
 
     const hits = searchWikiPages(wikiRoot, "reader smoke");
     expect(hits[0]?.path).toBe("memroos-digest/hello.md");
+    expect(resolveWikilink(wikiRoot, "hello")).toBe("memroos-digest/hello.md");
+    expect(resolveWikilink(wikiRoot, "")).toBeNull();
+    expect(resolveWikilink(wikiRoot, "does-not-exist-anywhere")).toBeNull();
+    expect(searchWikiPages(wikiRoot, "   ")).toEqual([]);
+    expect(searchWikiPages(wikiRoot, "reader smoke", 1)).toHaveLength(1);
+    expect(wikiRootExists(wikiRoot)).toBe(true);
   });
 
   it("loads wiki graph and degrades when missing", () => {
@@ -183,5 +191,178 @@ describe("wiki-digest", () => {
     expect(summary.status).toBe("completed");
     expect(summary.written).toBe(1);
     expect(summary.pages[0]).toContain("memroos-digest/");
+  });
+
+  it("fails when mem0 is down and episodic fallback is disabled", async () => {
+    const kb = makeVault();
+    const summary = await runWikiDigest({
+      knowledgeBasePath: kb,
+      allowEpisodicFallback: false,
+      fetchMemories: async () => {
+        throw new Error("mem0_down");
+      },
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("failed");
+    expect(summary.errors).toBe(1);
+    expect(summary.reason).toContain("mem0_down");
+  });
+
+  it("skips already-watermarked memories as nothing_new", async () => {
+    const kb = makeVault();
+    await runWikiDigest({
+      knowledgeBasePath: kb,
+      now: new Date("2026-07-18T12:00:00.000Z"),
+      fetchMemories: async () => [
+        {
+          id: "m-old",
+          content: "Older note that sets the watermark baseline.",
+          createdAt: "2026-07-18T10:00:00.000Z",
+        },
+      ],
+      log: () => undefined,
+    });
+
+    const second = await runWikiDigest({
+      knowledgeBasePath: kb,
+      now: new Date("2026-07-18T13:00:00.000Z"),
+      fetchMemories: async () => [
+        {
+          id: "m-old",
+          content: "Older note that sets the watermark baseline.",
+          createdAt: "2026-07-18T10:00:00.000Z",
+        },
+      ],
+      log: () => undefined,
+    });
+    expect(second.status).toBe("skipped");
+    expect(second.reason).toBe("nothing_new");
+    expect(second.written).toBe(0);
+    expect(second.skipped).toBeGreaterThan(0);
+  });
+
+  it("uses hash cluster keys for short headings and skips empty content", async () => {
+    expect(clusterKeyForMemory({ id: "short-1", content: "Hi" })).toMatch(/^memory-[a-f0-9]+$/);
+    expect(shouldSkipMemory({ id: "e", content: "   " }).reason).toBe("empty");
+    expect(
+      shouldSkipMemory({ id: "legal", content: "attorney-client privileged note" }).reason
+    ).toBe("personal_legal_scrap");
+    expect(redactSecrets("Authorization: Bearer super-secret-token-value")).toMatch(
+      /\[REDACTED\]/i
+    );
+  });
+
+  it("skips secret memories during digest and marks write failures as partial", async () => {
+    const kb = makeVault();
+    const skipped = await runWikiDigest({
+      knowledgeBasePath: kb,
+      dryRun: true,
+      now: new Date("2026-07-18T12:00:00.000Z"),
+      fetchMemories: async () => [
+        {
+          id: "secret-1",
+          content: "api_key=abc123 should be skipped",
+          createdAt: "2026-07-18T11:00:00.000Z",
+        },
+      ],
+      log: () => undefined,
+    });
+    expect(skipped.status).toBe("skipped");
+    expect(skipped.skipped).toBeGreaterThan(0);
+    expect(skipped.written).toBe(0);
+
+    const realWrite = fs.writeFileSync.bind(fs);
+    const writeSpy = vi.spyOn(fs, "writeFileSync").mockImplementation(((
+      file: fs.PathOrFileDescriptor,
+      data: string | NodeJS.ArrayBufferView,
+      options?: fs.WriteFileOptions
+    ) => {
+      const target = String(file);
+      if (target.includes(`${path.sep}memroos-digest${path.sep}`) && target.endsWith(".md")) {
+        throw new Error("disk_full");
+      }
+      return realWrite(file, data, options);
+    }) as typeof fs.writeFileSync);
+
+    try {
+      const partial = await runWikiDigest({
+        knowledgeBasePath: kb,
+        dryRun: false,
+        now: new Date("2026-07-18T12:00:00.000Z"),
+        fetchMemories: async () => [
+          {
+            id: "m-write-fail",
+            content: "This cluster should fail to write because disk is full.",
+            createdAt: "2026-07-18T11:15:00.000Z",
+            agentId: "luis",
+          },
+        ],
+        log: () => undefined,
+      });
+      expect(partial.errors).toBeGreaterThan(0);
+      expect(["partial", "failed"]).toContain(partial.status);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("fails when episodic fallback itself throws", async () => {
+    const kb = makeVault();
+    const summary = await runWikiDigest({
+      knowledgeBasePath: kb,
+      allowEpisodicFallback: true,
+      now: new Date("2026-07-18T12:00:00.000Z"),
+      db: {
+        prepare() {
+          throw new Error("sqlite_boom");
+        },
+      } as never,
+      fetchMemories: async () => {
+        throw new Error("mem0_down");
+      },
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("failed");
+    expect(summary.reason).toContain("episodic_fallback_failed");
+  });
+
+  it("reports graph_missing and graph_parse_failed reasons", () => {
+    const kb = makeVault();
+    const wiki = path.join(kb, "llm-wiki", "wiki");
+    fs.rmSync(path.join(wiki, "graph"), { recursive: true, force: true });
+    const missing = loadWikiGraph({ knowledgeBasePath: kb });
+    expect(missing.exists).toBe(false);
+    expect(missing.reason).toBe("graph_missing");
+
+    fs.mkdirSync(path.join(wiki, "graph"), { recursive: true });
+    fs.writeFileSync(path.join(wiki, "graph", "knowledge-graph.json"), "{not-json", "utf8");
+    const bad = loadWikiGraph({ knowledgeBasePath: kb });
+    expect(bad.exists).toBe(false);
+    expect(bad.reason).toBeTruthy();
+  });
+
+  it("filters path-traversal graph nodes and accepts from/to edges", () => {
+    const kb = makeVault();
+    const graphFile = path.join(kb, "llm-wiki", "wiki", "graph", "knowledge-graph.json");
+    fs.writeFileSync(
+      graphFile,
+      JSON.stringify({
+        generatedAt: "2026-07-18T00:00:00.000Z",
+        nodes: [
+          { id: "ok", label: "Ok", path: "index.md" },
+          { id: "escape", label: "Nope", path: "../outside.md" },
+          { id: "nolabel" },
+        ],
+        edges: [
+          { from: "ok", to: "nolabel", type: "mentions" },
+          { source: "", target: "x" },
+        ],
+      }),
+      "utf8"
+    );
+    const graph = loadWikiGraph({ knowledgeBasePath: kb });
+    expect(graph.exists).toBe(true);
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual(["nolabel", "ok"]);
+    expect(graph.edges).toEqual([{ source: "ok", target: "nolabel", type: "mentions" }]);
   });
 });

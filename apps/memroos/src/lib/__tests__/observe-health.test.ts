@@ -26,6 +26,21 @@ describe("observe harness health", () => {
     expect(rows.some((r) => r.harness === "pi" && r.captureCount === 1)).toBe(true);
     expect(rows.some((r) => r.harness === "cursor" && r.wave === 2)).toBe(true);
     expect(rows.some((r) => r.harness === "antigravity" && r.maturity === "limited")).toBe(true);
+    expect(rows.find((r) => r.harness === "cursor")?.notes).toMatch(/MCP onboard/i);
+    expect(rows.find((r) => r.harness === "factory")?.notes).toMatch(/hooks/i);
+    expect(rows.find((r) => r.harness === "pi")?.notes).toMatch(/Pi sessions/i);
     db.close();
+  });
+
+  it("defaults depthSetting from MEMROOS_CAPTURE_DEPTH", () => {
+    const prev = process.env.MEMROOS_CAPTURE_DEPTH;
+    process.env.MEMROOS_CAPTURE_DEPTH = "full";
+    const db = new Database(":memory:");
+    initSchema(db);
+    const rows = listObserveHarnessHealth(db);
+    expect(rows.every((r) => r.depthSetting === "full")).toBe(true);
+    db.close();
+    if (prev === undefined) delete process.env.MEMROOS_CAPTURE_DEPTH;
+    else process.env.MEMROOS_CAPTURE_DEPTH = prev;
   });
 });

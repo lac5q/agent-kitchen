@@ -49,4 +49,11 @@ describe("observe sidecar path policy", () => {
     expect(summary.lineCount).toBe(2);
     expect(summary.summary).toContain("hello pi");
   });
+
+  it("returns empty lists for missing roots and unreadable files", () => {
+    expect(listSessionJsonlFiles("/tmp/observe-missing-root-xyz")).toEqual([]);
+    const summary = summarizeSessionJsonl("/tmp/observe-missing-file.jsonl");
+    expect(summary.lineCount).toBe(0);
+    expect(summary.sessionId).toBe("observe-missing-file");
+  });
 });

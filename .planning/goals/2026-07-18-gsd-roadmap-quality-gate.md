@@ -1,10 +1,10 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T09:08:00Z
-- **Version:** 2026-07-18.10
+- **Update date:** 2026-07-18T15:08:00Z
+- **Version:** 2026-07-18.11
 - **Lane:** code
-- **Status:** complete-with-blockers (2026-07-18); v8.15 public cutover verified via Tailscale/CF/Heroku APIs; opc SSH shell blocked on pubkey install; app-wide 100% coverage remains measured-gap
+- **Status:** complete-with-blockers (2026-07-18); v8.15 oracle-1 live cutover verified (Tailscale SSH + CF); quality-gate focused coverage raised to **68.75% stmts** (see docs/uat/2026-07-18-coverage-report.md); app-wide 100% coverage remains measured-gap
 - **Worker lane:** Beastmode MiniMax-M3 (`thinking.type=adaptive` high reasoning) — smoke verified `MINIMAX OK`
 - **Droid MiniMax:** not live (FACTORY_API_KEY auth failed)
 - **Out of scope:** Voyage / Phase 166 / CLOUDOPS-08 / v8.9 Voyage embedding upgrade

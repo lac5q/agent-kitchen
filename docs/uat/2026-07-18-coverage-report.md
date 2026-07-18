@@ -1,26 +1,34 @@
 # Coverage Report — MemRoOS Quality Gate
 
-- **Document version:** 2026-07-18.1
+- **Document version:** 2026-07-18.2
 - **Creation date/time (UTC):** 2026-07-18T07:24:42Z
-- **Update date/time (UTC):** 2026-07-18T07:24:42Z
-- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); full fast suite log `/tmp/test-fast-full.log`
+- **Update date/time (UTC):** 2026-07-18T15:08:00Z
+- **Sources:** vitest `--coverage` on quality-gate modules (2026-07-18); focused suite log `/tmp/cov-gate-surface.log`
 
 ## Measured (focused quality-gate surface)
 
 | Metric | Value |
 |--------|-------|
-| Statements | 61.82% (1090/1763) |
-| Branches | 43.14% (705/1634) |
-| Functions | 62.28% (180/289) |
-| Lines | 65.53% (1040/1587) |
+| Statements | 68.75% (1452/2112) |
+| Branches | 51.44% (1015/1973) |
+| Functions | 63.51% (235/370) |
+| Lines | 71.88% (1368/1903) |
 
-Scope: `wiki-*`, `observe-*`, `graph-catchup`, `agent-memory-continuity` and their direct deps pulled into the coverage graph.
+Scope: `wiki-*` (vault/digest/scheduler/graph/API/page), `observe-*`, `agent-memory-continuity`, `graph-catchup`, policy helpers, and their direct deps pulled into the coverage graph.
+
+Delta vs 2026-07-18.1: statements **61.82% → 68.75%** (+6.93pp) after expanding wiki/observe/graph-catchup/page/continuity tests.
 
 ### High coverage modules
-- `observe-capture-depth.ts` ~97% statements
-- `agent-memory-continuity.ts` ~90% statements
-- `observe-sidecar.ts` ~82% statements
-- `wiki-digest.ts` ~74% statements
+- `noc-filters.ts` 100% statements
+- `wiki-graph.ts` ~97% statements
+- `app/api/wiki/route.ts` ~96% statements
+- `wiki-digest.ts` ~90% statements
+- `wiki-digest-scheduler.ts` ~90% statements
+- `wiki-vault.ts` ~90% statements
+- `cron-health.ts` ~90% statements
+- `observe-sidecar.ts` ~88% statements
+- `app/wiki/page.tsx` ~87% statements
+- `graph-catchup.ts` ~72% statements
 
 ## App-wide 100% status
 
@@ -29,17 +37,25 @@ Scope: `wiki-*`, `observe-*`, `graph-catchup`, `agent-memory-continuity` and the
 1. Python services / knowledge-mcp / voice / Pipecat not in vitest v8 surface
 2. Many API routes lack dedicated route tests beyond auth-boundary checks
 3. Optional integrations (RTK, QMD, Neo4j live, oracle-1) require host credentials
-4. E2E browser UAT against seeded fixtures not executed in this cloud agent (no interactive browser session mandated)
+4. Incidental deps pulled into the graph (`db.ts`, `backends.ts`, `policy-gate.ts`, shared UI widgets) dilute the focused surface percentage
 
 ## Next coverage increments
-1. Expand route-level tests for `/api/wiki/*`, `/api/observe/health`, `/api/wiki/digest`
-2. Raise wiki-digest failure-path + mem0 fetch error coverage
-3. Add component tests for `/wiki` page empty-vault and graph panel states
+1. Raise `graph-catchup` remaining vector/legacy branches (~72% → 85%+)
+2. Cover wiki digest HTTP catch path + observe health auth miss
+3. Add route tests for non-wiki quality-gate APIs still without handlers tests
 4. Keep fast+slow gates green as the regression floor
 
 ## Verification commands
 ```bash
-cd apps/memroos && npx vitest run --coverage src/lib/__tests__/wiki-surface.test.ts src/lib/__tests__/observe-*.test.ts src/lib/memory/__tests__/graph-catchup.test.ts
+cd apps/memroos && npx vitest run --coverage \
+  src/lib/__tests__/wiki-surface.test.ts \
+  src/lib/__tests__/wiki-digest-scheduler.test.ts \
+  src/lib/__tests__/policy-helpers.test.ts \
+  src/lib/__tests__/observe-*.test.ts \
+  src/lib/__tests__/agent-memory-continuity.test.ts \
+  src/lib/memory/__tests__/graph-catchup.test.ts \
+  src/app/api/wiki/__tests__/route.test.ts \
+  src/app/wiki/__tests__/page.test.tsx
 npm test -- --run
 npm run test:slow -- --run
 ```

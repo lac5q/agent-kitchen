@@ -312,4 +312,263 @@ describe("graph-catchup incremental checkpointing", () => {
     });
     expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(42);
   });
+
+  it("oneshot pages vector memories across fetchVectorPage cursors", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    process.env.QDRANT_URL = "http://qdrant.test";
+    const pages: Array<{
+      items: Array<Record<string, unknown>>;
+      nextCursor: string | null;
+    }> = [
+      {
+        items: [
+          {
+            id: "v1",
+            payload: {
+              data: "Vector page one about MemRoOS.",
+              user_id: "luis",
+              created_at: "2026-07-17T10:00:00.000Z",
+            },
+          },
+        ],
+        nextCursor: "c1",
+      },
+      {
+        items: [
+          {
+            id: "v2",
+            payload: {
+              data: "Vector page two about Neo4j.",
+              user_id: "luis",
+              created_at: "2026-07-17T11:00:00.000Z",
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    ];
+    let pageIdx = 0;
+    const seen: string[] = [];
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: true,
+      skipEpisodic: true,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => pages[pageIdx++]!,
+      projectFact: async (item) => {
+        seen.push(item.id);
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("completed");
+    expect(summary.projected).toBe(2);
+    expect(summary.pages).toBeGreaterThanOrEqual(2);
+    expect(seen).toEqual(["vector:v1", "vector:v2"]);
+    expect(readGraphCatchupCheckpoint(testDb).vectorLastId).toBe("v2");
+  });
+
+  it("uses legacy fetchVectorMemories when Qdrant scroll is disabled", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    delete process.env.QDRANT_URL;
+    const seen: string[] = [];
+    const summary = await runGraphCatchup(testDb, {
+      skipEpisodic: true,
+      useQdrantScroll: false,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorMemories: async () => [
+        {
+          id: "legacy-1",
+          memory: "Legacy mem0 row about catchup.",
+          user_id: "luis",
+          created_at: "2026-07-17T09:00:00.000Z",
+        },
+        {
+          id: "legacy-2",
+          data: "Second legacy shape.",
+          agent_id: "luis",
+          createdAt: "2026-07-17T09:30:00.000Z",
+        },
+      ],
+      projectFact: async (item) => {
+        seen.push(item.id);
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("completed");
+    expect(summary.projected).toBe(2);
+    expect(seen[0]).toContain("vector:");
+  });
+
+  it("marks partial status when an episodic projection throws", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'First good memory.', '2026-07-17T10:00:00.000Z')`
+      )
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'Second memory fails projection.', '2026-07-17T11:00:00.000Z')`
+      )
+      .run();
+
+    let calls = 0;
+    const summary = await runGraphCatchup(testDb, {
+      skipVector: true,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      projectFact: async () => {
+        calls += 1;
+        if (calls > 1) throw new Error("neo4j_write_failed");
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.projected).toBe(1);
+    expect(summary.errors).toBe(1);
+    expect(summary.errorSamples?.[0]).toContain("neo4j_write_failed");
+    expect(["partial", "failed", "completed"]).toContain(summary.status);
+    expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(1);
+  });
+
+  it("continues oneshot vector projection after a single item failure", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    process.env.QDRANT_URL = "http://qdrant.test";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let calls = 0;
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: true,
+      skipEpisodic: true,
+      writeDelayMs: 5,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => ({
+        items: [
+          {
+            id: "bad",
+            payload: {
+              data: "First vector fails.",
+              user_id: "luis",
+              created_at: "2026-07-17T10:00:00.000Z",
+            },
+          },
+          {
+            id: "good",
+            payload: {
+              data: "Second vector succeeds.",
+              user_id: "luis",
+              created_at: "2026-07-17T11:00:00.000Z",
+            },
+          },
+        ],
+        nextCursor: null,
+      }),
+      projectFact: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("vector_item_failed");
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.projected).toBe(1);
+    expect(summary.errors).toBe(1);
+    expect(summary.sources.vector.errors).toBe(1);
+    expect(readGraphCatchupCheckpoint(testDb).vectorLastId).toBe("good");
+    errorSpy.mockRestore();
+  });
+
+  it("stops incremental vector projection after the first failure", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    process.env.QDRANT_URL = "http://qdrant.test";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    writeGraphCatchupCheckpoint(testDb, {
+      id: "default",
+      episodicLastId: 0,
+      vectorLastCreatedAt: "2026-07-17T09:00:00.000Z",
+      vectorLastId: "older",
+      updatedAt: "2026-07-17T09:00:00.000Z",
+    });
+    let calls = 0;
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: false,
+      skipEpisodic: true,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => ({
+        items: [
+          {
+            id: "older",
+            payload: {
+              data: "Already caught up memory.",
+              user_id: "luis",
+              created_at: "2026-07-17T09:00:00.000Z",
+            },
+          },
+          {
+            id: "fail-me",
+            payload: {
+              data: "This should fail and stop the tick.",
+              user_id: "luis",
+              created_at: "2026-07-17T10:00:00.000Z",
+            },
+          },
+          {
+            id: "never",
+            payload: {
+              data: "Should not be projected in incremental mode.",
+              user_id: "luis",
+              created_at: "2026-07-17T11:00:00.000Z",
+            },
+          },
+        ],
+        nextCursor: null,
+      }),
+      projectFact: async () => {
+        calls += 1;
+        throw new Error("incremental_vector_fail");
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.skipped).toBeGreaterThanOrEqual(1);
+    expect(calls).toBe(1);
+    expect(summary.errors).toBe(1);
+    errorSpy.mockRestore();
+  });
+
+  it("uses legacy vector path and stops on incremental project failure", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    delete process.env.QDRANT_URL;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let calls = 0;
+    const summary = await runGraphCatchup(testDb, {
+      skipEpisodic: true,
+      useQdrantScroll: false,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorMemories: async () => [
+        {
+          id: "legacy-a",
+          memory: "Legacy A about catchup.",
+          user_id: "luis",
+          created_at: "2026-07-17T09:00:00.000Z",
+        },
+        {
+          id: "legacy-b",
+          memory: "Legacy B about catchup.",
+          user_id: "luis",
+          created_at: "2026-07-17T09:30:00.000Z",
+        },
+      ],
+      projectFact: async () => {
+        calls += 1;
+        throw new Error("legacy_fail");
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(calls).toBe(1);
+    expect(summary.errors).toBe(1);
+    expect(summary.sources.vector.errors).toBe(1);
+    errorSpy.mockRestore();
+  });
 });
