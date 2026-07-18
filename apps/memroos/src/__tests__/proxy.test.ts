@@ -177,6 +177,20 @@ describe("proxy", () => {
     expect(await response.json()).toEqual({ error: "insufficient permissions" });
   });
 
+  it("passes authenticated reviewer API routes through to the handler", async () => {
+    setJwtSecret();
+    const token = await signAccessToken("reviewer-user", "reviewer");
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/time-series", {
+        method: "GET",
+        headers: { host: "localhost:3002", authorization: `Bearer ${token}` },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets agent-authenticated API routes handle their own authorization", async () => {
     const addResponse = await proxy(
       new NextRequest("http://localhost:3002/api/memory/add", {
@@ -499,6 +513,19 @@ describe("proxy", () => {
     );
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://memroos.example.com/login");
+  });
+
+  it("passes UI routes through when the access_token cookie is valid", async () => {
+    setJwtSecret();
+    const token = await signAccessToken("operator-user", "operator");
+    const response = await proxy(
+      new NextRequest("https://memroos.example.com/agents", {
+        headers: { host: "memroos.example.com", cookie: `access_token=${token}` },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
   });
 
   it("redirects configured app hosts when x-forwarded-proto is http", async () => {

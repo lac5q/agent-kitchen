@@ -311,4 +311,111 @@ describe("getToolAttention", () => {
     expect(data.health.catalog).toBe("missing");
     expect(data.health.outcomes).toBe("missing");
   });
+
+  it("tolerates malformed catalog and outcome files without surfacing unsafe paths", () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tool-attention-corrupt-"));
+    const catalogPath = path.join(tempRoot, "catalog.json");
+    const outcomesPath = path.join(tempRoot, "outcomes.jsonl");
+    const home = path.join(tempRoot, "home");
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(path.join(tempRoot, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
+    fs.writeFileSync(catalogPath, "{not-json");
+    fs.writeFileSync(outcomesPath, "{not-json\n");
+    fs.writeFileSync(path.join(home, "skills-file"), "not a directory");
+
+    vi.stubEnv("MEMROOS_ROOT", tempRoot);
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(home, "skills-file"));
+
+    const data = getToolAttention("", 100);
+
+    expect(data.recentOutcomes).toEqual([]);
+    expect(data.sources.find((source) => source.id === "skills-path")?.status).toBe("degraded");
+    expect(JSON.stringify(data)).not.toContain(home);
+  });
+
+  it("reports optional Agent Lightning as available or missing from local signals", () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tool-attention-optional-"));
+    const catalogPath = path.join(tempRoot, "catalog.json");
+    const outcomesPath = path.join(tempRoot, "outcomes.jsonl");
+    const proposalsPath = path.join(tempRoot, "proposals");
+    const cronLogPath = path.join(tempRoot, "agent-lightning.log");
+
+    fs.mkdirSync(path.join(tempRoot, "apps", "memroos"), { recursive: true });
+    fs.mkdirSync(proposalsPath, { recursive: true });
+    fs.writeFileSync(path.join(tempRoot, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
+    fs.writeFileSync(path.join(tempRoot, "apps", "memroos", "package.json"), JSON.stringify({ scripts: { "apo:worker": "node worker.js" } }));
+    fs.writeFileSync(catalogPath, JSON.stringify({ capabilities: [], sources: [] }));
+    fs.writeFileSync(outcomesPath, "");
+    fs.writeFileSync(cronLogPath, "ok");
+
+    vi.stubEnv("MEMROOS_ROOT", tempRoot);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(tempRoot, "no-skills"));
+    vi.stubEnv("APO_PROPOSALS_PATH", proposalsPath);
+    vi.stubEnv("APO_CRON_LOG_PATH", cronLogPath);
+    vi.stubEnv("MEMROOS_OPTIONAL_CAPABILITIES", "agent-lightning");
+
+    const available = getToolAttention("agent lightning", 10).capabilities.find((item) => item.id === "capability:agent-lightning");
+    expect(available?.status).toBe("available");
+
+    vi.stubEnv("MEMROOS_ROOT", path.join(tempRoot, "empty-root"));
+    vi.stubEnv("APO_PROPOSALS_PATH", path.join(tempRoot, "missing-proposals"));
+    vi.stubEnv("APO_CRON_LOG_PATH", path.join(tempRoot, "missing.log"));
+    const missing = getToolAttention("agent lightning", 10).capabilities.find((item) => item.id === "capability:agent-lightning");
+    expect(missing?.status).toBe("missing");
+  });
+
+  it("normalizes home-relative catalog paths and scores neutral outcomes", () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tool-attention-home-"));
+    const repoRoot = path.join(tempRoot, "repo");
+    const home = path.join(tempRoot, "home");
+    const catalogPath = path.join(repoRoot, "catalog.json");
+    const outcomesPath = path.join(repoRoot, "outcomes.jsonl");
+    const homeCatalogPath = path.join(home, "private", "catalog.json");
+    const homeCommandPath = path.join(home, "private", "loader.md");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.mkdirSync(path.dirname(homeCatalogPath), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
+    fs.writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        capabilities: [
+          {
+            id: "tool:neutral",
+            name: "Neutral Tool",
+            type: "reference",
+            source: "home-source",
+            description: "Useful for neutral outcomes",
+            status: "available",
+            tags: ["neutral"],
+            useWhen: ["Need neutral help"],
+            topLevel: false,
+            loadCommand: `Read ${homeCommandPath}`,
+          },
+        ],
+        sources: [{ id: "home-source", label: "Home Source", type: "external", path: homeCatalogPath, status: "available" }],
+      }),
+    );
+    makeOutcomeFile(repoRoot, [
+      { timestamp: "t1", toolId: "", outcome: "helped", metadata: { task_type: "ignored" } },
+      { timestamp: "t2", toolId: "tool:neutral", outcome: "maybe", metadata: {} },
+    ]);
+
+    vi.stubEnv("MEMROOS_ROOT", repoRoot);
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("TOOL_ATTENTION_CATALOG", catalogPath);
+    vi.stubEnv("TOOL_ATTENTION_OUTCOMES", outcomesPath);
+    vi.stubEnv("SKILLS_PATH", path.join(tempRoot, "no-skills"));
+
+    const data = getToolAttention("neutral", 10);
+    expect(data.sources.find((source) => source.id === "home-source")?.path).toBe("~/private/catalog.json");
+    expect(data.capabilities.find((item) => item.id === "tool:neutral")?.loadCommand).toBe("Read ~/private/loader.md");
+
+    const rec = getSimilarTaskRecommendations({}, 10).recommendations.find((item) => item.capabilityId === "tool:neutral");
+    expect(rec?.reason).toContain("1 recorded outcome(s) with score 1");
+  });
 });

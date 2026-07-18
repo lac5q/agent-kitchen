@@ -71,7 +71,11 @@ function insertSkillRow(overrides: {
   completeness_pct?: number;
   lifecycle_state?: string;
   version?: string;
+  raw_body?: string;
+  signature?: string | null;
+  trust_level?: string;
 } = {}): number {
+  const rawBody = overrides.raw_body ?? PINNED_BODY;
   const result = db
     .prepare(
       `INSERT INTO skill_registry (
@@ -100,17 +104,17 @@ function insertSkillRow(overrides: {
       "read_file",
       "verify output",
       "revert",
-      PINNED_BODY,
+      rawBody,
       overrides.completeness_pct ?? 100,
       "[]",
       "operator",
       new Date().toISOString(),
       "check output",
       overrides.content_hash ?? PINNED_HASH,
+      overrides.signature ?? null,
       null,
       null,
-      null,
-      "unsigned",
+      overrides.trust_level ?? "unsigned",
       null,
       overrides.lifecycle_state ?? "enabled"
     );
@@ -250,6 +254,108 @@ describe("VAL-SKILL-031 pinned dispatch wins over unpinned latest", () => {
     if (result && result.kind === "denied") {
       expect(result.reason).toMatch(/dispatch_status/i);
     }
+  });
+
+  it("pin to an incomplete registry row fails closed", async () => {
+    const { lookupSkillContract } = await import("../skill-lookup");
+    insertSkillRow({
+      name: "incomplete-pin",
+      source_harness: "claude",
+      content_hash: PINNED_HASH,
+      completeness_pct: 91,
+    });
+
+    const result = lookupSkillContract(db, "incomplete-pin", {
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/incomplete/i),
+    });
+  });
+
+  it("pin still enforces lifecycle, trust, signing, and artifact integrity gates", async () => {
+    const { lookupSkillContract } = await import("../skill-lookup");
+    insertSkillRow({
+      name: "retired-pin",
+      source_harness: "claude",
+      content_hash: PINNED_HASH,
+      lifecycle_state: "retired",
+    });
+    expect(lookupSkillContract(db, "retired-pin", {
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/lifecycle_state='retired'/i),
+    });
+
+    insertSkillRow({
+      name: "low-trust-pin",
+      source_harness: "claude",
+      content_hash: PINNED_HASH,
+      trust_level: "signed",
+    });
+    expect(lookupSkillContract(db, "low-trust-pin", {
+      minTrustLevel: "verified",
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/below required minimum/i),
+    });
+
+    insertSkillRow({
+      name: "unsigned-pin",
+      source_harness: "claude",
+      content_hash: PINNED_HASH,
+    });
+    expect(lookupSkillContract(db, "unsigned-pin", {
+      requireSigned: true,
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/unsigned/i),
+    });
+
+    insertSkillRow({
+      name: "tampered-pin",
+      source_harness: "claude",
+      raw_body: "body changed after hash",
+      content_hash: PINNED_HASH,
+      signature: "signature-present",
+      trust_level: "signed",
+    });
+    expect(lookupSkillContract(db, "tampered-pin", {
+      pinned: {
+        agent_id: "a-1",
+        source_harness: "claude",
+        current_version: "1.0.0",
+        current_content_hash: PINNED_HASH,
+      },
+    })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/integrity verification failed/i),
+    });
   });
 
   it("missing registry row for the pin's source_harness fails closed", async () => {

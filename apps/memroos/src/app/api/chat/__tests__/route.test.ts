@@ -260,6 +260,93 @@ async function loadPostRouteWithOpenCodeFailure(errorMessage: string) {
   return import("../route");
 }
 
+async function loadPostRouteWithOpenCodeSpawnError(errorMessage: string) {
+  vi.resetModules();
+  vi.stubEnv("AGENT_CONFIGS_PATH", agentConfigsPath);
+  vi.stubEnv("PMO_AGENT_CONFIGS_PATH", pmoAgentsPath);
+  vi.stubEnv("PMO_MODEL_ROUTING_PATH", pmoModelRoutingPath);
+  vi.stubEnv("SQLITE_DB_PATH", testDbPath);
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+  vi.stubEnv("MEMROOS_ENABLE_OPENCODE", "true");
+  vi.doMock("@anthropic-ai/sdk", () => ({
+    default: class MockAnthropic {
+      messages = {
+        stream: vi.fn(async () => {
+          throw new Error("anthropic should not run");
+        }),
+      };
+    },
+  }));
+  vi.doMock("child_process", async () => {
+    const { EventEmitter } = await import("events");
+    return {
+      execFile: vi.fn(),
+      spawn: vi.fn(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter;
+          stderr: EventEmitter;
+          pid: number;
+          exitCode: number | null;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.pid = 12345;
+        child.exitCode = null;
+        queueMicrotask(() => {
+          child.emit("error", new Error(errorMessage));
+        });
+        return child;
+      }),
+    };
+  });
+  return import("../route");
+}
+
+async function loadPostRouteWithOpenCodeExitDetail() {
+  vi.resetModules();
+  vi.stubEnv("AGENT_CONFIGS_PATH", agentConfigsPath);
+  vi.stubEnv("PMO_AGENT_CONFIGS_PATH", pmoAgentsPath);
+  vi.stubEnv("PMO_MODEL_ROUTING_PATH", pmoModelRoutingPath);
+  vi.stubEnv("SQLITE_DB_PATH", testDbPath);
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+  vi.stubEnv("MEMROOS_ENABLE_OPENCODE", "true");
+  vi.doMock("@anthropic-ai/sdk", () => ({
+    default: class MockAnthropic {
+      messages = {
+        stream: vi.fn(async () => {
+          throw new Error("anthropic should not run");
+        }),
+      };
+    },
+  }));
+  vi.doMock("child_process", async () => {
+    const { EventEmitter } = await import("events");
+    return {
+      execFile: vi.fn((_: string, __: string[], ___: unknown, callback?: (error: Error | null, stdout: string) => void) => {
+        callback?.(new Error("ps unavailable"), "");
+      }),
+      spawn: vi.fn(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter;
+          stderr: EventEmitter;
+          pid: number;
+          exitCode: number | null;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.pid = 12345;
+        child.exitCode = null;
+        queueMicrotask(() => {
+          child.exitCode = 2;
+          child.emit("close", 2, null);
+        });
+        return child;
+      }),
+    };
+  });
+  return import("../route");
+}
+
 async function readStream(response: Response): Promise<string> {
   const raw = await response.text();
   return raw
@@ -779,6 +866,58 @@ describe("chat route model resolution", () => {
 
     expect(res.status).toBe(200);
     expect(text).toContain("opencode model unavailable");
+  });
+
+  it("surfaces OpenCode spawn errors as SSE errors", async () => {
+    mkdirSync(path.join(pmoAgentsPath, "alba"), { recursive: true });
+    writeFileSync(path.join(pmoAgentsPath, "alba", "AGENTS.md"), "# Alba\n");
+    await registerTestAgent({
+      id: "alba",
+      name: "Alba",
+      role: "Head Chef",
+      platform: "hermes",
+    });
+    const { POST } = await loadPostRouteWithOpenCodeSpawnError("spawn ENOENT opencode");
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "alba",
+        message: "status check",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    const text = await readStream(res);
+
+    expect(res.status).toBe(200);
+    expect(text).toContain("spawn ENOENT opencode");
+  });
+
+  it("uses the child exit detail when OpenCode exits without stderr", async () => {
+    mkdirSync(path.join(pmoAgentsPath, "alba"), { recursive: true });
+    writeFileSync(path.join(pmoAgentsPath, "alba", "AGENTS.md"), "# Alba\n");
+    await registerTestAgent({
+      id: "alba",
+      name: "Alba",
+      role: "Head Chef",
+      platform: "hermes",
+    });
+    const { POST } = await loadPostRouteWithOpenCodeExitDetail();
+
+    const res = await POST(new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId: "alba",
+        message: "status check",
+        history: [],
+      }),
+      headers: { "content-type": "application/json" },
+    }));
+    const text = await readStream(res);
+
+    expect(res.status).toBe(200);
+    expect(text).toContain("chat runner exited with code 2");
   });
 
   it("humanizes unregistered agent ids in the generic local fallback", async () => {

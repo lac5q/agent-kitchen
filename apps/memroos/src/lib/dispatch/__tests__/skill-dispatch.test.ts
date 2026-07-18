@@ -15,6 +15,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import crypto from "crypto";
+import Database from "better-sqlite3";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -55,8 +56,13 @@ function insertSkill(
     imported_by: string;
     imported_at: string;
     evidence_examples: string;
+    trust_level: string;
+    signature: string | null;
+    content_hash: string | null;
+    lifecycle_state: string;
   }> = {}
 ) {
+  const rawBody = overrides.raw_body ?? "## Preconditions\nnone";
   const row = {
     name: overrides.name ?? "test-skill",
     source_harness: overrides.source_harness ?? "claude",
@@ -65,11 +71,11 @@ function insertSkill(
     completeness_pct: overrides.completeness_pct ?? 100,
     // Phase 150: keep lifecycle_state aligned with dispatch_status so the
     // v14 SQL gate lets enabled+complete rows through.
-    lifecycle_state: (overrides.dispatch_status ?? "enabled") === "enabled" ? "enabled" : "draft",
+    lifecycle_state: overrides.lifecycle_state ?? ((overrides.dispatch_status ?? "enabled") === "enabled" ? "enabled" : "draft"),
     owner: overrides.owner ?? "team-a",
     description: overrides.description ?? "A test skill",
     version: overrides.version ?? "1.0",
-    raw_body: overrides.raw_body ?? "## Preconditions\nnone",
+    raw_body: rawBody,
     missing_fields_json: overrides.missing_fields_json ?? "[]",
     preconditions: overrides.preconditions ?? "none",
     allowed_tools: overrides.allowed_tools ?? "read_file",
@@ -78,6 +84,9 @@ function insertSkill(
     imported_by: overrides.imported_by ?? "operator",
     imported_at: overrides.imported_at ?? new Date().toISOString(),
     evidence_examples: overrides.evidence_examples ?? "check output",
+    trust_level: overrides.trust_level ?? "unsigned",
+    signature: overrides.signature ?? null,
+    content_hash: overrides.content_hash ?? null,
   };
 
   db.prepare(`
@@ -85,12 +94,14 @@ function insertSkill(
       (name, source_harness, risk_tier, dispatch_status, completeness_pct,
        owner, description, version, raw_body, missing_fields_json,
        preconditions, allowed_tools, verification_checks, rollback_behavior,
-       imported_by, imported_at, evidence_examples, lifecycle_state)
+       imported_by, imported_at, evidence_examples, lifecycle_state,
+       trust_level, signature, content_hash)
     VALUES
       (@name, @source_harness, @risk_tier, @dispatch_status, @completeness_pct,
        @owner, @description, @version, @raw_body, @missing_fields_json,
        @preconditions, @allowed_tools, @verification_checks, @rollback_behavior,
-       @imported_by, @imported_at, @evidence_examples, @lifecycle_state)
+       @imported_by, @imported_at, @evidence_examples, @lifecycle_state,
+       @trust_level, @signature, @content_hash)
   `).run(row);
 }
 
@@ -128,6 +139,15 @@ async function getSkillLookup() {
 // ---------------------------------------------------------------------------
 
 describe("lookupSkillContract", () => {
+  it("parses canonical trust levels case-insensitively and rejects unknown values", async () => {
+    const { parseTrustLevel } = await getSkillLookup();
+
+    expect(parseTrustLevel(" Verified ")).toBe("verified");
+    expect(parseTrustLevel("signed")).toBe("signed");
+    expect(parseTrustLevel("owner")).toBeNull();
+    expect(parseTrustLevel(undefined)).toBeNull();
+  });
+
   it("returns null when no skill_name is provided (fallback path)", async () => {
     const { lookupSkillContract } = await getSkillLookup();
     const result = lookupSkillContract(db, undefined);
@@ -306,6 +326,107 @@ describe("lookupSkillContract", () => {
     expect(bound!.kind).toBe("denied");
     if (bound!.kind !== "denied") throw new Error("narrow");
     expect(bound!.reason).toMatch(/disabled/i);
+  });
+
+  it("denies version mismatches, unsigned require-signed lookups, low trust, and artifact tampering", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, { name: "versioned", version: "1.0.0" });
+    expect(lookupSkillContract(db, "versioned", { version: "2.0.0" })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/version mismatch/i),
+    });
+
+    insertSkill(db, { name: "unsigned-policy" });
+    expect(lookupSkillContract(db, "unsigned-policy", { requireSigned: true })).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/unsigned/i),
+    });
+
+    const trustedBody = "## Preconditions\nnone";
+    insertSkill(db, {
+      name: "trust-policy",
+      raw_body: trustedBody,
+      trust_level: "signed",
+      content_hash: crypto.createHash("sha256").update(trustedBody, "utf8").digest("hex"),
+    });
+    expect(lookupSkillContract(db, "trust-policy", "verified")).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/below required minimum/i),
+    });
+
+    insertSkill(db, {
+      name: "tampered-body",
+      raw_body: "current body",
+      signature: "signature-present",
+      trust_level: "signed",
+      content_hash: "f".repeat(64),
+    });
+    expect(lookupSkillContract(db, "tampered-body")).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/integrity verification failed/i),
+    });
+  });
+
+  it("surfaces quarantine and lifecycle labels when enabled lookup is blocked", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, { name: "quarantined-skill", dispatch_status: "quarantined", completeness_pct: 100 });
+    expect(lookupSkillContract(db, "quarantined-skill")).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/quarantined/i),
+    });
+
+    insertSkill(db, {
+      name: "deprecated-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      lifecycle_state: "deprecated",
+    });
+    expect(lookupSkillContract(db, "deprecated-skill")).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/deprecated/i),
+    });
+
+    insertSkill(db, {
+      name: "draft-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      lifecycle_state: "draft",
+    });
+    expect(lookupSkillContract(db, "draft-skill")).toMatchObject({
+      kind: "denied",
+      reason: expect.stringMatching(/draft lifecycle/i),
+    });
+  });
+
+  it("falls back to legacy skill_registry columns when lifecycle/version columns are absent", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    const legacyDb = new Database(":memory:");
+    legacyDb.exec(`
+      CREATE TABLE skill_registry (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        source_harness TEXT NOT NULL,
+        risk_tier TEXT,
+        dispatch_status TEXT NOT NULL,
+        completeness_pct INTEGER NOT NULL,
+        trust_level TEXT,
+        signature TEXT,
+        imported_at TEXT NOT NULL
+      );
+      INSERT INTO skill_registry
+        (name, source_harness, risk_tier, dispatch_status, completeness_pct, trust_level, signature, imported_at)
+      VALUES
+        ('legacy-skill', 'claude', 'low', 'enabled', 100, 'unsigned', NULL, '2026-01-01T00:00:00.000Z');
+    `);
+
+    try {
+      expect(lookupSkillContract(legacyDb, "legacy-skill")).toMatchObject({
+        kind: "hit",
+        skill: { name: "legacy-skill", version: null, content_hash: null },
+      });
+    } finally {
+      legacyDb.close();
+    }
   });
 });
 

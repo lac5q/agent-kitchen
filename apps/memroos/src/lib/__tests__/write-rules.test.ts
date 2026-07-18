@@ -536,4 +536,141 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
       }),
     ).toThrow(/already exists/);
   });
+
+  it("33) updateWriteRule validates actor, target document, and fallback rule", () => {
+    const rule = createWriteRule(db, {
+      spaceId,
+      dataType: "guarded_type",
+      targetDocument: "guarded.md",
+      actorId,
+    });
+
+    expect(() =>
+      updateWriteRule(db, rule.id, {
+        targetDocument: "next.md",
+        actorId: " ",
+        expectedVersion: 1,
+      }),
+    ).toThrow(/actorId is required/);
+    expect(() =>
+      updateWriteRule(db, rule.id, {
+        targetDocument: " ",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/targetDocument cannot be empty/);
+    expect(() =>
+      updateWriteRule(db, rule.id, {
+        fallbackRule: "archive",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/fallbackRule must be/);
+  });
+
+  it("34) deleteWriteRule validates actor and missing rows", () => {
+    expect(() =>
+      deleteWriteRule(db, 99999, { actorId, expectedVersion: 1 }),
+    ).toThrow(/not found/);
+
+    const rule = createWriteRule(db, {
+      spaceId,
+      dataType: "delete_actor_guard",
+      targetDocument: "delete.md",
+      actorId,
+    });
+    expect(() =>
+      deleteWriteRule(db, rule.id, { actorId: " ", expectedVersion: 1 }),
+    ).toThrow(/actorId is required/);
+  });
+
+  it("35) createDocumentDirectoryEntry validates required fields", () => {
+    expect(() =>
+      createDocumentDirectoryEntry(db, {
+        spaceId: " ",
+        name: "doc.md",
+        actorId,
+      }),
+    ).toThrow(/spaceId is required/);
+    expect(() =>
+      createDocumentDirectoryEntry(db, {
+        spaceId,
+        name: " ",
+        actorId,
+      }),
+    ).toThrow(/name is required/);
+    expect(() =>
+      createDocumentDirectoryEntry(db, {
+        spaceId,
+        name: "doc.md",
+        actorId: " ",
+      }),
+    ).toThrow(/actorId is required/);
+  });
+
+  it("36) updateDocumentDirectoryEntry validates actor, missing rows, empty names, and duplicates", () => {
+    const entry = createDocumentDirectoryEntry(db, {
+      spaceId,
+      name: "primary.md",
+      actorId,
+    });
+    createDocumentDirectoryEntry(db, {
+      spaceId,
+      name: "existing.md",
+      actorId,
+    });
+
+    expect(() =>
+      updateDocumentDirectoryEntry(db, entry.id, {
+        name: "renamed.md",
+        actorId: " ",
+        expectedVersion: 1,
+      }),
+    ).toThrow(/actorId is required/);
+    expect(() =>
+      updateDocumentDirectoryEntry(db, 99999, {
+        name: "missing.md",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/not found/);
+    expect(() =>
+      updateDocumentDirectoryEntry(db, entry.id, {
+        name: " ",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/name cannot be empty/);
+    expect(() =>
+      updateDocumentDirectoryEntry(db, entry.id, {
+        name: "existing.md",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/already exists/);
+  });
+
+  it("37) document directory getters and delete validate empty ids and actors", () => {
+    expect(getDocumentDirectory(db, " ")).toEqual([]);
+
+    const entry = createDocumentDirectoryEntry(db, {
+      spaceId,
+      name: "delete-actor.md",
+      actorId,
+    });
+    expect(() =>
+      deleteDocumentDirectoryEntry(db, entry.id, {
+        actorId: " ",
+        expectedVersion: 1,
+      }),
+    ).toThrow(/actorId is required/);
+  });
+
+  it("38) checkWriteRuleDrift treats empty space ids as current", () => {
+    expect(checkWriteRuleDrift(db, " ", 99)).toEqual({
+      isStale: false,
+      currentVersion: 0,
+      driftReceiptReason: "current",
+    });
+  });
 });

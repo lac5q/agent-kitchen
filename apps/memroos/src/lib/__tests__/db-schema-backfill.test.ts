@@ -1,8 +1,14 @@
 // @vitest-environment node
+import { createHash } from "crypto";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
-import { CURRENT_SCHEMA_VERSION, getSchemaVersion, initSchema } from "@/lib/db-schema";
+import {
+  CURRENT_SCHEMA_VERSION,
+  getSchemaVersion,
+  initSchema,
+  rebuildMessageFtsProjection,
+} from "@/lib/db-schema";
 
 describe("db-schema audit backfill", () => {
   it("backfills legacy seal_audit_log and audit_log rows into audit_entries on first init", () => {
@@ -53,6 +59,96 @@ describe("db-schema audit backfill", () => {
 
     const flag = db.prepare("SELECT value FROM meta WHERE key = 'audit_entries_backfill_done'").get() as { value: string };
     expect(flag.value).toBe("1");
+    db.close();
+  });
+
+  it("rejects databases stamped with a future schema version", () => {
+    const db = new Database(":memory:");
+    db.pragma(`user_version = ${CURRENT_SCHEMA_VERSION + 1}`);
+
+    expect(() => initSchema(db)).toThrow(/newer than this code supports/);
+    db.close();
+  });
+
+  it("seeds the internal API key hash and rejects the known default key", () => {
+    const db = new Database(":memory:");
+    const key = "real-internal-key-for-test";
+    process.env.MEMROOS_INTERNAL_API_KEY = key;
+
+    try {
+      initSchema(db);
+      const expectedHash = createHash("sha256").update(key).digest("hex");
+      const row = db
+        .prepare("SELECT key_hash FROM tenant_api_keys WHERE id = 'tak-internal-env'")
+        .get() as { key_hash: string };
+      expect(row.key_hash).toBe(expectedHash);
+    } finally {
+      delete process.env.MEMROOS_INTERNAL_API_KEY;
+      db.close();
+    }
+
+    const defaultDb = new Database(":memory:");
+    process.env.MEMROOS_INTERNAL_API_KEY = "memroos-internal-default-key";
+    try {
+      expect(() => initSchema(defaultDb)).toThrow(/known default value/);
+    } finally {
+      delete process.env.MEMROOS_INTERNAL_API_KEY;
+      defaultDb.close();
+    }
+  });
+
+  it("rebuilds the message FTS projection with only indexable visible rows", () => {
+    const db = new Database(":memory:");
+    initSchema(db);
+    const insert = db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run("s1", "p", "a", "user", "needlevisible", "2026-01-01T00:00:00.000Z", "internal", "indexable");
+    insert.run("s1", "p", "a", "user", "needlesealed", "2026-01-01T00:00:01.000Z", "private", "sealed");
+
+    db.exec("INSERT INTO messages_fts(messages_fts) VALUES('delete-all')");
+    rebuildMessageFtsProjection(db);
+
+    expect(db.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?").all("needlevisible")).toHaveLength(1);
+    expect(db.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?").all("needlesealed")).toHaveLength(0);
+    db.close();
+  });
+
+  it("migrates legacy business outcome event uniqueness to include tenant_id", () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE business_outcome_events (
+        id              INTEGER PRIMARY KEY,
+        tenant_id       TEXT    NOT NULL DEFAULT 'default-tenant',
+        correlation_id  TEXT    NOT NULL,
+        source_system   TEXT    NOT NULL CHECK(source_system IN ('crm','helpdesk','finance')),
+        adapter         TEXT    NOT NULL,
+        event_type      TEXT    NOT NULL,
+        kpi_key         TEXT    NOT NULL,
+        kpi_value       REAL    NOT NULL,
+        raw_json        TEXT    NOT NULL,
+        agent_id        TEXT,
+        polled_at       TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        UNIQUE(correlation_id, adapter, event_type, polled_at)
+      );
+      INSERT INTO business_outcome_events
+        (tenant_id, correlation_id, source_system, adapter, event_type, kpi_key, kpi_value, raw_json, agent_id, polled_at, created_at)
+      VALUES
+        ('tenant-a', 'corr-1', 'crm', 'hubspot', 'deal_won', 'arr', 10, '{}', 'agent-1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    `);
+
+    initSchema(db);
+
+    const schema = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'business_outcome_events'")
+      .get() as { sql: string };
+    expect(schema.sql).toContain("UNIQUE(tenant_id, correlation_id, adapter, event_type, polled_at)");
+    const row = db
+      .prepare("SELECT tenant_id, correlation_id FROM business_outcome_events")
+      .get() as { tenant_id: string; correlation_id: string };
+    expect(row).toEqual({ tenant_id: "tenant-a", correlation_id: "corr-1" });
     db.close();
   });
 });

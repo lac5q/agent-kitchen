@@ -209,6 +209,35 @@ describe("VAL-MEM-025: consolidation failure and replay are safe", () => {
     expect(summaries.count).toBe(0);
   });
 
+  it("marks receipt failures on skipped runs without throwing to the caller", async () => {
+    const database = freshDb();
+    database.exec("DROP TABLE audit_entries");
+
+    const result = await runConsolidationCycle(database, {
+      runKey: "run-empty-receipt-failure",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      sources: [],
+      actorId: "operator",
+    });
+
+    expect(result.status).toBe("skipped_empty");
+    expect(result.failureReason).toMatch(/receipt_failure/);
+  });
+
+  it("rejects invalid timestamps before mutating consolidation state", async () => {
+    const database = freshDb();
+
+    await expect(
+      runConsolidationCycle(database, {
+        runKey: "run-invalid-time",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        sources: [makeSource()],
+        actorId: "operator",
+        now: "not-a-date" as never,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("completed run returns completed_replayed on the next call with same runKey", async () => {
     const database = freshDb();
     const source = makeSource();
@@ -240,6 +269,26 @@ describe("VAL-MEM-025: consolidation failure and replay are safe", () => {
     });
     expect(result.status).toBe("failed");
     expect(result.failureReason).toBe("provider_returned_empty");
+  });
+
+  it("reports vault write failures before calling the summary provider", async () => {
+    const database = freshDb();
+    const blockedRoot = path.join(VAULT_ROOT, "not-a-directory");
+    fs.writeFileSync(blockedRoot, "blocks mkdir");
+    process.env["MEMROOS_VAULT_ROOT"] = blockedRoot;
+    const provider = vi.fn(async () => ({ type: "episodic_summary" as const, content: "should not run" }));
+
+    const result = await runConsolidationCycle(database, {
+      runKey: "run-vault-write-fail",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      sources: [makeSource()],
+      actorId: "operator",
+      provider,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.failureReason).toMatch(/vault_write_failed/);
+    expect(provider).not.toHaveBeenCalled();
   });
 
   it("treats decay_protected and protected classification flags as protected sources", async () => {
