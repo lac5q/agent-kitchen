@@ -279,4 +279,71 @@ describe("VAL-SKILL-034 reverse dependency view", () => {
     expect(view.observed).toEqual([]);
     expect(view.forward_consistency.ok).toBe(false);
   });
+
+  it("lists skill dependents discovered from preconditions", async () => {
+    const { getReverseDependencyView } = await import("../skill-dependencies");
+    const id = insertRegistry({ id: 33, name: "rev-config-skill" });
+    db.prepare(
+      `INSERT INTO skill_registry (id, name, source_harness, version, content_hash, raw_body, imported_by, dispatch_status, completeness_pct, lifecycle_state, preconditions)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      34,
+      "dependent-skill",
+      "claude",
+      "1.0.0",
+      "a".repeat(64),
+      "## body",
+      "operator",
+      "enabled",
+      100,
+      "enabled",
+      "requires rev-config-skill"
+    );
+
+    const reverse = getReverseDependencyView(db, id);
+    const skillDependent = reverse.find(
+      (row) => row.dependent_kind === "skill" && row.dependent_id === "34"
+    );
+    expect(skillDependent?.via).toBe("config");
+    expect(skillDependent?.is_trusted).toBe(true);
+  });
+});
+
+describe("VAL-SKILL-034 dependency view — safe fallbacks and summaries", () => {
+  it("returns the missing-registry shape when the database read fails", async () => {
+    const { getSkillDependencyView } = await import("../skill-dependencies");
+    const throwingDb = {
+      prepare() {
+        throw new Error("schema unavailable");
+      },
+    };
+
+    const view = getSkillDependencyView(throwingDb as never, 404);
+    expect(view).toMatchObject({
+      skill_id: 404,
+      skill_name: "",
+      trusted: [],
+      observed: [],
+      forward_consistency: {
+        ok: false,
+        mismatches: ["registry row missing"],
+      },
+    });
+  });
+
+  it("summarizes dependency views with stable counts", async () => {
+    const { getSkillDependencyView, summarizeDependencyView } = await import("../skill-dependencies");
+    const id = insertRegistry({ id: 41, name: "summary-skill" });
+    insertReport(id, "summary-observer");
+
+    const summary = summarizeDependencyView(getSkillDependencyView(db, id));
+    expect(summary).toMatchObject({
+      skill_id: id,
+      skill_name: "summary-skill",
+      source_harness: "claude",
+      trusted_count: 1,
+      observed_count: 1,
+      unresolved_count: 0,
+    });
+  });
 });

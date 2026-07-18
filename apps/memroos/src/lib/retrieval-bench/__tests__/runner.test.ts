@@ -290,6 +290,115 @@ describe("runBenchmark smoke (VAL-RETR-001)", () => {
     }
   });
 
+  it("records live pipeline denials, omissions, and caller stage records", async () => {
+    const normalized = normalizeScopeIdentity(LIVE_SCOPE);
+    if (!normalized) throw new Error("expected complete live test scope");
+    const scopeHash = hashScopeIdentity(normalized);
+    const captured: unknown[] = [];
+    registerAdapter("live", {
+      provider: null,
+      providerVersion: null,
+      adapter: {
+        id: "live",
+        version: "test-live-valid",
+        isBaselineControl: false,
+        async run(init) {
+          const allowed = (id: string, score: number, text: string) => ({
+            id,
+            score,
+            text,
+            tier: "live" as const,
+            source: "custom-live",
+            authorizationResult: "allowed" as const,
+            whyEntered: "test",
+            scopeHash,
+            rankPosition: 1,
+          });
+          return {
+            taskId: init.task.id,
+            adapterName: "live",
+            status: "ok",
+            statusDetail: "custom",
+            retrieved: [
+              allowed("allowed-live", 100, "short matching live evidence"),
+              allowed("oversized-live", 99, "x".repeat(9_000)),
+            ],
+            injected: ["allowed-live", "oversized-live"],
+            ignored: [],
+            latencyMs: 1,
+            receipt: {
+              adapterName: "live",
+              adapterVersion: "test-live-valid",
+              status: "ok",
+              statusDetail: "custom",
+              latencyMs: 1,
+              authorization: { evaluated: true, allowed: true, scopeHash },
+              provenance: {
+                provider: null,
+                providerVersion: null,
+                retrievalPolicyVersion: init.retrievalPolicyVersion,
+                configHash: init.configHash,
+                fixtureHash: init.fixtureHash,
+              },
+              metrics: {
+                tokensRetrieval: null,
+                tokensRerank: null,
+                tokensPack: null,
+                tokensJudge: null,
+                contextPackBytes: null,
+                contextPackHash: null,
+              },
+            },
+          };
+        },
+      },
+    });
+
+    try {
+      const r = await runBenchmark({
+        dataset: "memroos_public_synthetic",
+        adapter: "live",
+        limit: 1,
+        k: 2,
+        seed: 0,
+        bypassCliParser: true,
+        fixturesDir: FIXTURES_DIR,
+        scope: LIVE_SCOPE,
+        fanoutItemsForTest: [
+          {
+            id: "unverified-live-fanout",
+            score: 98,
+            text: "unverified live fanout",
+            tier: "live",
+            source: "fanout",
+            authorizationResult: "allowed",
+            whyEntered: "test",
+            scopeHash,
+            rankPosition: 2,
+          },
+        ],
+        onStageRecords(records) {
+          captured.push(records);
+        },
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(captured).toHaveLength(1);
+      const task = r.report.tasks[0];
+      const stageRecords = r.pipeline?.perTaskStageRecords.get(task.taskId) ?? [];
+      const ignoredRecord = stageRecords.find((record) => record.stage === "ignored");
+      const omittedRecord = stageRecords.find((record) => record.stage === "omitted");
+      const deniedRecord = stageRecords.find((record) => record.stage === "denied");
+      expect(ignoredRecord?.ids).toEqual(
+        expect.arrayContaining(["oversized-live", "unverified-live-fanout"])
+      );
+      expect(omittedRecord?.ids).toContain("oversized-live");
+      expect(deniedRecord?.ids).toContain("unverified-live-fanout");
+    } finally {
+      registerAdapter("live", liveAdapterEntry);
+    }
+  });
+
   it("turns adapter exceptions and invalid adapter output into typed task failures", async () => {
     await runBenchmark({
       dataset: "memroos_public_synthetic",
@@ -483,6 +592,27 @@ describe("writeReport + renderTextReport", () => {
       writeReport({ report, outputDir: "/tmp/bench-guarded", writeGuard })
     ).toThrow("write blocked");
     expect(writeGuard.ensureWritable).toHaveBeenCalledWith(expect.objectContaining({ reason: "report_write" }));
+  });
+
+  it("writes markdown reports when requested", async () => {
+    const r = await runBenchmark({
+      dataset: "memroos_public_synthetic",
+      adapter: "lexical",
+      limit: 1,
+      k: 1,
+      seed: 0,
+      bypassCliParser: true,
+      fixturesDir: FIXTURES_DIR,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const tmpDir = "/tmp/bench-output-md-" + Date.now();
+    const w = writeReport({ report: r.report, outputDir: tmpDir, extension: "md" });
+    const fs = await import("node:fs");
+    expect(w.path.endsWith(".md")).toBe(true);
+    expect(fs.readFileSync(w.path, "utf8")).toContain(
+      "# MemroOS Comparative Retrieval Benchmark"
+    );
   });
 });
 

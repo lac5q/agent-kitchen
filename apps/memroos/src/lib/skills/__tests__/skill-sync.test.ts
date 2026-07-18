@@ -1539,6 +1539,65 @@ describe("skill-sync validation and failure paths", () => {
     expect(entry?.parse_error).toMatch(/No `name:` frontmatter/);
   });
 
+  it("detectHarnessSkills rejects symlinked roots and skill files", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    const realRoot = path.join(TMP_ROOT, "real-skills");
+    fs.mkdirSync(realRoot, { recursive: true });
+    fs.mkdirSync(path.dirname(harnessRoots.claude), { recursive: true });
+    fs.symlinkSync(realRoot, harnessRoots.claude);
+
+    fs.mkdirSync(harnessRoots.codex, { recursive: true });
+    const realSkill = path.join(TMP_ROOT, "real-skill.md");
+    fs.writeFileSync(realSkill, VALID_SKILL_MD("real-skill", "1.0.0"), "utf8");
+    fs.symlinkSync(realSkill, path.join(harnessRoots.codex, "linked-skill.md"));
+
+    const detected = detectHarnessSkills({ roots: harnessRoots });
+    expect(detected.entries).toHaveLength(0);
+    expect(detected.errors.map((e) => e.reason)).toEqual(
+      expect.arrayContaining([
+        "Refusing to scan: harness root is a symlink",
+        "Refusing to read: file is a symlink",
+      ])
+    );
+  });
+
+  it("approveSyncProposalById fails atomically for a reverified source file with no registry row", async () => {
+    const { createImportProposal, approveSyncProposalById, computeContentHash } =
+      await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    const body = VALID_SKILL_MD("brand-new-by-id", "1.2.3");
+    const filePath = writeHarnessSkill(harnessRoots.hermes, "brand-new-by-id", body);
+    const hash = computeContentHash(body);
+    const { proposal } = createImportProposal(db, {
+      source_harness: "hermes",
+      detected: {
+        skill_name: "brand-new-by-id",
+        source_harness: "hermes",
+        version: "1.2.3",
+        raw_body: body,
+        content_hash: hash,
+        file_path: filePath,
+      },
+      proposed_by: "scanner",
+      source_root: harnessRoots.hermes,
+    });
+
+    expect(() =>
+      approveSyncProposalById(db, {
+        proposal_id: proposal.pending_proposal_id!,
+        operator: "alice",
+      })
+    ).toThrow(/Too few parameter values/);
+    const reg = db
+      .prepare(
+        `SELECT id FROM skill_registry
+          WHERE name = ? AND source_harness = ?`
+      )
+      .get("brand-new-by-id", "hermes");
+    expect(reg).toBeUndefined();
+  });
+
   it("listSyncState and listSyncObservability expose pinned and terminal statuses", async () => {
     const {
       pinVersion,
