@@ -512,7 +512,7 @@ export default function LedgerPage() {
         <Card pad="sm" data-ledger-source-status>
           <div className="text-sm font-semibold" style={{ color: NOC.ink }}>Ledger source status</div>
           <div className="mt-1 text-xs" style={{ color: tokenError || modelError ? NOC.terra : NOC.soft }}>
-            {tokenLoading || modelLoading ? "Loading multi-model usage and optional RTK savings..." : null}
+            {tokenLoading || modelLoading ? "Loading RTK token stats and multi-model usage (Claude JSONL + efficiency token_ledger)..." : null}
             {tokenError ? `Optional RTK source failed: ${tokenError instanceof Error ? tokenError.message : "unknown error"} (Tokens Processed still uses model-usage). ` : null}
             {modelError ? `Model usage failed: ${modelError instanceof Error ? modelError.message : "unknown error"}.` : null}
           </div>
@@ -603,7 +603,7 @@ export default function LedgerPage() {
           <>
             <ModelMixChart data={modelMixData} envelope={mixEnvelopes.modelMix} />
             <p className="mt-3 text-xs" style={{ color: NOC.soft }}>
-              Aggregated from Claude JSONL and efficiency token_ledger events for window={rangeDays}d (since={since.slice(0, 10)}). RTK is not required.
+              Aggregated from Claude Code session logs (Claude JSONL + efficiency token_ledger) for window={rangeDays}d (since={since.slice(0, 10)}). RTK is not required.
             </p>
           </>
         )}
