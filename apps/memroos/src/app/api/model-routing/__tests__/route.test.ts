@@ -239,6 +239,21 @@ describe("model routing APIs", () => {
     expect(data.taskType).toBe("engineering");
     expect(data.strategy).toBe("cost");
     expect(data.recommendations).toHaveLength(1);
+    expect(data.recommendations[0].provider).toBe("minimax");
+    expect(data.recommendations[0].model).toBe("MiniMax-M3");
+  });
+
+  it("GET balanced engineering recommendations prioritize MiniMax-M3", async () => {
+    const res = await recommendationsRoute.GET(
+      new Request(
+        "http://localhost/api/model-routing/recommendations?taskType=engineering&strategy=balanced&limit=3"
+      ) as any
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.recommendations[0].provider).toBe("minimax");
+    expect(data.recommendations[0].model).toBe("MiniMax-M3");
   });
 
   it("GET recommendations clamp invalid limit values", async () => {

@@ -56,23 +56,23 @@ export const GSD_MODEL_ROUTING_POLICY: GsdModelRoutingPolicyEntry[] = [
   {
     taskClass: "extraction",
     tier: "cheap_local",
-    provider: "local",
-    model: "qwen-coder-local",
-    reason: "Cheap/local tier for extraction and formatting.",
+    provider: "minimax",
+    model: "MiniMax-M3",
+    reason: "Preferred MiniMax worker for cheap extraction and formatting.",
   },
   {
     taskClass: "classification",
     tier: "cheap_local",
-    provider: "openai",
-    model: "gpt-5.4-mini",
-    reason: "Cheap/local tier for classification and routing.",
+    provider: "minimax",
+    model: "MiniMax-M3",
+    reason: "Preferred MiniMax worker for classification and routing.",
   },
   {
     taskClass: "formatting",
     tier: "cheap_local",
-    provider: "openai",
-    model: "gpt-5.4-mini",
-    reason: "Cheap/local tier for deterministic formatting.",
+    provider: "minimax",
+    model: "MiniMax-M3",
+    reason: "Preferred MiniMax worker for deterministic formatting.",
   },
   {
     taskClass: "hard_reasoning",
@@ -93,7 +93,7 @@ export const GSD_MODEL_ROUTING_POLICY: GsdModelRoutingPolicyEntry[] = [
     tier: "private_customer_bound",
     provider: "local",
     model: "qwen-coder-local",
-    reason: "Private/customer-bound tier for sensitive data.",
+    reason: "Private/customer-bound tier for sensitive data (never MiniMax).",
   },
   {
     taskClass: "multimodal_evidence",
@@ -107,7 +107,7 @@ export const GSD_MODEL_ROUTING_POLICY: GsdModelRoutingPolicyEntry[] = [
     tier: "validator",
     provider: "anthropic",
     model: "claude-sonnet",
-    reason: "Validator tier for high-risk review.",
+    reason: "Validator tier for high-risk review (independent of MiniMax worker).",
   },
 ];
 

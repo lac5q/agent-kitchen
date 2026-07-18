@@ -15,40 +15,49 @@ claim final verification.
 
 ## Worker Lanes
 
-Choose the lane that is installed and authenticated on the host:
+**Default priority (do not skip MiniMax when it is live):**
+
+1. **MiniMax API (`MiniMax-M3`)** — preferred Beastmode worker whenever
+   `MINIMAX_API_KEY` is set. Use this for cheap/worker patches, plans, analysis,
+   and most implementation slices.
+2. **Droid MiniMax (`minimax-m3`)** — fallback when the direct API lane is down
+   or you specifically need Factory's agent runtime / tool access.
+3. **Qwen (`qwen3.7-plus`)** — last-resort external executor when neither MiniMax
+   lane is live-verified.
+4. **Droid custom** — only when an explicit non-MiniMax Droid model is required.
 
 | Lane | Default model | Command | Smoke gate |
 |------|---------------|---------|------------|
-| Qwen | `qwen3.7-plus` | `~/.local/bin/qwen-agent` | Must return `QWEN OK` |
 | MiniMax API | `MiniMax-M3` | `curl https://api.minimax.io/v1/chat/completions` | Must return `MINIMAX OK` |
 | Droid MiniMax | `minimax-m3` | `~/.local/bin/droid exec --model minimax-m3` | `droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"` |
+| Qwen | `qwen3.7-plus` | `~/.local/bin/qwen-agent` | Must return `QWEN OK` |
 | Droid custom | any `droid exec --list-tools` model id | `~/.local/bin/droid exec --model <id>` | Model-specific exact reply |
 
-Prefer the direct MiniMax API lane when `MINIMAX_API_KEY` is present and the
-worker only needs to return a patch, plan, or analysis. Use Droid MiniMax when
-you specifically need Factory's agent runtime or tool access. Prefer an
-independent validator model when the authoring worker was MiniMax.
+Do not default to Qwen or director-only coding when MiniMax smoke passes.
+Prefer an independent validator model when the authoring worker was MiniMax
+(never MiniMax self-validation for high-risk / validator tiers).
 
 ## Start Gate
 
-Before delegating, prove the selected lane is live:
+Before delegating, prove the selected lane is live. Check MiniMax first:
 
 ```bash
-# Qwen
-~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
-
-# Direct MiniMax API
+# Direct MiniMax API (preferred)
 curl -sS https://api.minimax.io/v1/chat/completions \
   -H "Authorization: Bearer $MINIMAX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
 
-# MiniMax through Droid
+# MiniMax through Droid (fallback)
 ~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
+
+# Qwen (last resort)
+~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
 ```
 
 If the smoke check fails, continue without that worker and report the lane as
-installed but not live-verified.
+installed but not live-verified. If MiniMax fails, fall through Droid MiniMax →
+Qwen and say so explicitly.
 
 ## Operating Loop
 
@@ -142,7 +151,7 @@ OUTPUT:
 - Commands run and results.
 - Risks or blockers.
 EOF
-node - "$run_dir/prompt.md" "$run_dir/output.md" <<'NODE'
+cat >"$run_dir/invoke.cjs" <<'NODE'
 const fs = require("fs");
 
 const [promptPath, outputPath] = process.argv.slice(2);
@@ -152,28 +161,34 @@ if (!apiKey) {
 }
 
 const prompt = fs.readFileSync(promptPath, "utf8");
-const response = await fetch("https://api.minimax.io/v1/chat/completions", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    model: process.env.BEASTMODE_MINIMAX_MODEL || "MiniMax-M3",
-    thinking: { type: "disabled" },
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0,
-    max_completion_tokens: 4096,
-  }),
-});
+(async () => {
+  const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.BEASTMODE_MINIMAX_MODEL || "MiniMax-M3",
+      thinking: { type: "disabled" },
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+      max_completion_tokens: 4096,
+    }),
+  });
 
-const body = await response.text();
-if (!response.ok) {
-  throw new Error(`MiniMax API ${response.status}: ${body.slice(0, 500)}`);
-}
-const parsed = JSON.parse(body);
-fs.writeFileSync(outputPath, `${parsed.choices?.[0]?.message?.content || ""}\n`);
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`MiniMax API ${response.status}: ${body.slice(0, 500)}`);
+  }
+  const parsed = JSON.parse(body);
+  fs.writeFileSync(outputPath, `${parsed.choices?.[0]?.message?.content || ""}\n`);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
 NODE
+node "$run_dir/invoke.cjs" "$run_dir/prompt.md" "$run_dir/output.md"
 ```
 
 Direct API workers cannot inspect the worktree or run tools themselves. Ask for

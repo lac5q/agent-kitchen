@@ -18,7 +18,7 @@ Maintenance script:
 bash scripts/setup-codex-cloud.sh --maintenance
 ```
 
-Use the default universal image unless a task needs a pinned runtime. The bootstrap uses native `npm ci`, installs the lightweight knowledge MCP Python dependencies, installs the GSD Codex skill set, and installs a Qwen executor lane for Codex-led Beastmode work.
+Use the default universal image unless a task needs a pinned runtime. The bootstrap uses native `npm ci`, installs the lightweight knowledge MCP Python dependencies, installs the GSD Codex skill set, and installs external Beastmode workers. Prefer MiniMax-M3 when `MINIMAX_API_KEY` is set; Qwen remains the fallback executor lane.
 
 GSD is installed with the supported Codex installer:
 
@@ -36,23 +36,40 @@ Set `CODEX_CLOUD_INSTALL_GSD=0` to skip GSD installation for a minimal environme
 
 ## External Executors And Beastmode
 
-Codex Cloud cannot make Qwen, Droid MiniMax, or another external model the
+Codex Cloud cannot make MiniMax, Qwen, Droid, or another external model the
 native Codex model for a task. The supported pattern is:
 
 - Codex is the director/reviewer in the current session.
-- External workers run through `~/.local/bin/qwen-agent` or `~/.local/bin/droid exec --model <id>`.
+- Preferred worker: direct MiniMax API (`MiniMax-M3`) when `MINIMAX_API_KEY` is set.
+- Fallbacks: `~/.local/bin/droid exec --model minimax-m3`, then `~/.local/bin/qwen-agent`.
 - Codex reviews worker output, applies acceptable patches, and runs verification.
 
 The setup script installs `@qwen-code/qwen-code` into `CODEX_HOME/qwen-node`, links `qwen` into `~/.local/bin`, and creates `~/.local/bin/qwen-agent`. It also copies these cloud skills into `CODEX_HOME/skills`:
 
 - `$goal`
-- `$qwen-cloud`
 - `$beastmode-cloud`
+- `$qwen-cloud`
 - `$beastmode-qwen-cloud`
 
 Codex skills are invoked with `$skill-name` or through `/skills`. Native custom slash prompts such as `/qwen` or `/beastmode` are not the reliable path in Codex Cloud.
 
-Set these variables when the cloud agent should use the live Qwen worker:
+For Beastmode with the direct MiniMax API (preferred), use `$beastmode-cloud`, set
+`MINIMAX_API_KEY`, and verify the API:
+
+```bash
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+```
+
+For Beastmode with Droid MiniMax as fallback, verify Droid/Factory separately:
+
+```bash
+~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
+```
+
+Set these variables when the cloud agent should use the live Qwen fallback worker:
 
 ```env
 DASHSCOPE_API_KEY=<scoped-dashscope-standard-key>
@@ -69,30 +86,13 @@ CODEX_CLOUD_QWEN_VERSION=latest
 CODEX_CLOUD_QWEN_SMOKE=1
 ```
 
-The live smoke check is intentionally opt-in. A cloud environment can have the Qwen lane installed without being authenticated. To prove live execution, run:
+The live Qwen smoke check is intentionally opt-in. A cloud environment can have the Qwen lane installed without being authenticated. To prove live execution, run:
 
 ```bash
 ~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"
 ```
 
 Do not report the Qwen worker as operational until that smoke check returns `QWEN OK`.
-
-For Beastmode with the direct MiniMax API, use `$beastmode-cloud`, set
-`MINIMAX_API_KEY`, and verify the API separately:
-
-```bash
-curl -sS https://api.minimax.io/v1/chat/completions \
-  -H "Authorization: Bearer $MINIMAX_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
-```
-
-For Beastmode with MiniMax or another Droid model, use `$beastmode-cloud` and
-verify Droid/Factory separately:
-
-```bash
-~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
-```
 
 ## Main Brain Variables
 

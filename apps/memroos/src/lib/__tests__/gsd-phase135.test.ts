@@ -49,6 +49,8 @@ describe("GSD lane evals + model routing policy", () => {
       qualityScore: 0.9,
     });
     expect(cheap.tier).toBe("cheap_local");
+    expect(cheap.provider).toBe("minimax");
+    expect(cheap.model).toBe("MiniMax-M3");
 
     const override = routeGsdModel(getDb(), {
       taskClass: "classification",

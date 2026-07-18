@@ -88,8 +88,13 @@ new environments run `bash scripts/setup-cursor-cloud.sh` automatically before e
 agent session. This wires the MemRoOS MCP "main brain" without running the
 Docker-oriented local installer. It installs the full GSD Cursor skill catalog
 (`CURSOR_CLOUD_GSD_PROFILE=full` by default), MemRoOS cloud skills (`$goal`, `$qwen-cloud`,
-`$beastmode-cloud`, `$beastmode-qwen-cloud`), and the Qwen executor lane unless disabled via
+`$beastmode-cloud`, `$beastmode-qwen-cloud`), the MiniMax API worker lane (when
+`MINIMAX_API_KEY` is set), and the Qwen executor lane unless disabled via
 `CURSOR_CLOUD_INSTALL_GSD=0` or `CURSOR_CLOUD_INSTALL_QWEN=0`.
+
+For Beastmode / cheap-worker execution, prefer MiniMax-M3 first (`$beastmode-cloud`
+with `MINIMAX_API_KEY`), then Droid MiniMax, then Qwen. Do not skip a live MiniMax
+lane for director-only coding.
 
 See `docs/cursor-cloud-development.md` for verification steps and environment knobs.
 
@@ -110,9 +115,11 @@ service startup that cloud code tasks do not need.
 If MCP tools are unavailable, continue with repo-local files and state clearly
 that the main brain is not connected for that run. When MCP is available, load
 auto-loading skills through `knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})`.
-Use `/skills`, `$goal`, `$gsd-help`, `$qwen-cloud`, `$beastmode-cloud`, or `$beastmode-qwen-cloud` to access
-cloud workflows in Codex. Qwen is an external executor in cloud; do not claim it
-is operational until `~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"`
+Use `/skills`, `$goal`, `$gsd-help`, `$beastmode-cloud`, `$qwen-cloud`, or `$beastmode-qwen-cloud` to access
+cloud workflows in Codex. Prefer MiniMax-M3 as the Beastmode worker when
+`MINIMAX_API_KEY` is live (`MINIMAX OK` smoke). Qwen remains a fallback external
+executor; do not claim it is operational until
+`~/.local/bin/qwen-agent --dangerously-skip-permissions -p "Reply with exactly: QWEN OK"`
 returns `QWEN OK`.
 
 ## Cursor Cloud specific instructions

@@ -76,6 +76,16 @@ export interface ModelCatalogEntry {
 
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
+    provider: "minimax",
+    model: "MiniMax-M3",
+    label: "Preferred cheap worker",
+    strengths: ["beastmode worker", "implementation", "summaries", "cost-efficient coding"],
+    taskTypes: ["engineering", "product", "research", "support"],
+    costScore: 0.93,
+    qualityScore: 0.84,
+    latencyScore: 0.82,
+  },
+  {
     provider: "openai",
     model: "gpt-5.4-mini",
     label: "Fast generalist",
