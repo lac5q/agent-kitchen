@@ -74,7 +74,8 @@
     "first-run:check": "node scripts/first-run-wizard.mjs --check",
     "setup": "bash install.sh",
     "check:roadmap-priority": "node scripts/check-roadmap-priority.mjs",
-    "check:onboarding-deploy": "bash scripts/verify-onboarding-deploy.sh"
+    "check:onboarding-deploy": "bash scripts/verify-onboarding-deploy.sh",
+    "check:observe-maturity-drift": "node scripts/check-observe-maturity-drift.mjs && node --test scripts/check-observe-maturity-drift.test.mjs"
   },
   "overrides": {
     "ip-address": "10.2.0",
