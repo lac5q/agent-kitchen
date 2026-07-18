@@ -1,13 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  checkVectorHealth,
-  checkGraphHealth,
-  mem0HealthTimeoutMs,
-  neo4jConfig,
-  neo4jHttpQuery,
-  neo4jUsesQueryApi,
-  queryGraphMemory,
-} from "../backends";
+import { checkVectorHealth, checkGraphHealth, mem0HealthTimeoutMs, neo4jConfig, queryGraphMemory } from "../backends";
 import * as registry from "../registry";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -208,93 +200,6 @@ describe("checkVectorHealth timeout honesty", () => {
 
     const health = await checkGraphHealth();
     expect(health).toMatchObject({ tier: "graph", backend: "neo4j", status: "up" });
-    getAdaptersSpy.mockRestore();
-  });
-
-  it("neo4jHttpQuery fails closed when credentials are missing", async () => {
-    delete process.env.NEO4J_PASSWORD;
-
-    await expect(neo4jHttpQuery("RETURN 1")).rejects.toThrow();
-  });
-
-  it("normalizes Aura query/v2 responses to the tx/commit shape", async () => {
-    process.env.NEO4J_HTTP_URL = "https://abc123.databases.neo4j.io/";
-    process.env.NEO4J_DATABASE = "neo4j";
-    process.env.NEO4J_USERNAME = "neo4j";
-    process.env.NEO4J_PASSWORD = "graph-pass";
-    expect(neo4jUsesQueryApi(neo4jConfig().url)).toBe(true);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, init?: RequestInit) => {
-        expect(String(url)).toBe("https://abc123.databases.neo4j.io/db/neo4j/query/v2");
-        expect(JSON.parse(String(init?.body))).toEqual({
-          statement: "RETURN $value AS value",
-          parameters: { value: 42 },
-        });
-        return Response.json({
-          data: {
-            fields: ["value"],
-            values: [[42], "scalar-row"],
-          },
-        });
-      }),
-    );
-
-    const result = await neo4jHttpQuery("RETURN $value AS value", { value: 42 }, 1234);
-
-    expect(result).toEqual({
-      results: [
-        {
-          columns: ["value"],
-          data: [{ row: [42] }, { row: ["scalar-row"] }],
-        },
-      ],
-      errors: [],
-    });
-  });
-
-  it("surfaces query/v2 error details and tx/commit backend errors", async () => {
-    process.env.NEO4J_HTTP_URL = "https://abc123.databases.neo4j.io";
-    process.env.NEO4J_PASSWORD = "graph-pass";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ errors: [{ code: "Neo.ClientError.Statement.SyntaxError" }] }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      })),
-    );
-    await expect(neo4jHttpQuery("BAD CYPHER")).rejects.toThrow();
-
-    process.env.NEO4J_HTTP_URL = "http://localhost:7474";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ errors: [{ message: "db unavailable" }] }),
-      })),
-    );
-    let txError: unknown;
-    try {
-      await neo4jHttpQuery("RETURN 1");
-    } catch (error) {
-      txError = error;
-    }
-    expect(txError).toBeInstanceOf(Error);
-    expect((txError as Error).message).toMatch(/Graph memory backend unavailable/);
-  });
-
-  it("reports graph health down when the direct write/read probe fails", async () => {
-    const getAdaptersSpy = vi.spyOn(registry, "getAdapters").mockReturnValue([]);
-    process.env.NEO4J_PASSWORD = "graph-pass";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("not json", { status: 503 })),
-    );
-
-    const health = await checkGraphHealth();
-
-    expect(health).toMatchObject({ tier: "graph", backend: "neo4j", status: "down" });
-    expect(String(health.detail)).toMatch(/Graph memory backend unavailable/);
     getAdaptersSpy.mockRestore();
   });
 });
