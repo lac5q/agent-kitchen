@@ -1,17 +1,17 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T15:08:00Z
-- **Version:** 2026-07-18.11
+- **Update date:** 2026-07-18T15:16:00Z
+- **Version:** 2026-07-18.12
 - **Lane:** code
 - **Status:** complete-with-blockers (2026-07-18); v8.15 oracle-1 live cutover verified (Tailscale SSH + CF); quality-gate focused coverage raised to **68.75% stmts** (see docs/uat/2026-07-18-coverage-report.md); app-wide 100% coverage remains measured-gap
-- **Worker lane:** Beastmode MiniMax-M3 (`thinking.type=adaptive` high reasoning) — smoke verified `MINIMAX OK`
-- **Droid MiniMax:** not live (FACTORY_API_KEY auth failed)
+- **Worker lane (priority):** **MiniMax-M3 via direct API** — mandatory Beastmode worker for implementation slices. Director = Cursor Grok (plan/review/merge/verify only). Smoke: `MINIMAX OK` (2026-07-18T15:13Z). Run: `.codex/beastmode-runs/20260718T151444Z-minimax-api-coverage`.
+- **Droid MiniMax:** not live (FACTORY_API_KEY auth failed) — do not use until re-authenticated
 - **Out of scope:** Voyage / Phase 166 / CLOUDOPS-08 / v8.9 Voyage embedding upgrade
 
-## Goal statement
+## Worker policy (corrected 2026-07-18T15:13Z)
 
-Complete the remaining MemRoOS GSD roadmap (not Voyage), then raise quality through architecture refactor discipline, full test coverage, sanitized production-scale local UAT, fix-all issues, and production-log triage with PRs only for actionable errors.
+Director previously shipped a coverage pass at **0% MiniMax** — that violated the preferred worker lane. Corrective action: all further bounded code/test authoring on this goal goes through MiniMax-M3 first; director only applies/reviews/verifies.
 
 ## Ordered workstreams
 

@@ -183,4 +183,41 @@ describe("wiki + observe API routes", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).ok).toBe(true);
   });
+
+  // MiniMax-M3 worker draft (Beastmode 20260718T151444Z); director-reviewed.
+  it("POST /api/wiki/digest returns HTTP 400 when runWikiDigest throws", async () => {
+    const kb = makeVault();
+    vi.resetModules();
+    vi.doMock("@/lib/wiki-digest", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/wiki-digest")>(
+        "@/lib/wiki-digest"
+      );
+      return {
+        ...actual,
+        runWikiDigest: vi.fn(async () => {
+          throw new Error("synthetic digest failure");
+        }),
+      };
+    });
+    try {
+      const { POST } = await import("@/app/api/wiki/digest/route");
+      const res = await POST(
+        new Request("http://localhost/api/wiki/digest", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            dryRun: true,
+            knowledgeBasePath: kb,
+          }),
+        })
+      );
+      const body = await res.json();
+      expect(res.status).toBe(400);
+      expect(body.ok).toBe(false);
+      expect(String(body.error)).toContain("synthetic digest failure");
+    } finally {
+      vi.doUnmock("@/lib/wiki-digest");
+      vi.resetModules();
+    }
+  });
 });

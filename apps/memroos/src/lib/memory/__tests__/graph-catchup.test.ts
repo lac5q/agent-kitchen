@@ -571,4 +571,94 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(summary.sources.vector.errors).toBe(1);
     errorSpy.mockRestore();
   });
+
+  // MiniMax-M3 worker draft (Beastmode 20260718T151444Z); director-reviewed.
+  it("increments summary.skipped when mapVectorMemoryToProjection returns null", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    process.env.QDRANT_URL = "http://qdrant.test";
+    const seen: string[] = [];
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: true,
+      skipEpisodic: true,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => ({
+        items: [
+          {
+            id: "skip-empty",
+            payload: {
+              data: "   ",
+              user_id: "luis",
+              created_at: "2026-07-17T10:00:00.000Z",
+            },
+          },
+          {
+            id: "skip-missing",
+            payload: {
+              user_id: "luis",
+              created_at: "2026-07-17T10:05:00.000Z",
+            },
+          },
+          null,
+        ],
+        nextCursor: null,
+      }),
+      projectFact: async (item) => {
+        seen.push(item.id);
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.skipped).toBeGreaterThanOrEqual(2);
+    expect(summary.projected).toBe(0);
+    expect(seen).toEqual([]);
+  });
+
+  it("honors maxPoints early-break in oneshot vector loop", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    process.env.QDRANT_URL = "http://qdrant.test";
+    const seen: string[] = [];
+    const summary = await runGraphCatchup(testDb, {
+      oneshot: true,
+      skipEpisodic: true,
+      maxPoints: 2,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => ({
+        items: [
+          {
+            id: "max-1",
+            payload: {
+              data: "Vector one for max cap.",
+              user_id: "luis",
+              created_at: "2026-07-17T10:00:00.000Z",
+            },
+          },
+          {
+            id: "max-2",
+            payload: {
+              data: "Vector two for max cap.",
+              user_id: "luis",
+              created_at: "2026-07-17T10:30:00.000Z",
+            },
+          },
+          {
+            id: "max-3",
+            payload: {
+              data: "Vector three — should not be projected.",
+              user_id: "luis",
+              created_at: "2026-07-17T11:00:00.000Z",
+            },
+          },
+        ],
+        nextCursor: null,
+      }),
+      projectFact: async (item) => {
+        seen.push(item.id);
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("completed");
+    expect(summary.projected).toBe(2);
+    expect(seen).toEqual(["vector:max-1", "vector:max-2"]);
+  });
 });
