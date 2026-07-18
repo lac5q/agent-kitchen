@@ -1172,4 +1172,541 @@ describe("pin lookup helpers and agent-scoped rollback", () => {
       SyncGovernanceError
     );
   });
+
+  it("detectSkillChange validates non-string inputs and requires detected content", async () => {
+    const { detectSkillChange, SyncGovernanceError } = await importSyncModule();
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: null as unknown as string,
+        skill_name: "x",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: null as unknown as string,
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "x",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: null as unknown as string,
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "no-content",
+        proposed_by: "scanner",
+      })
+    ).toThrow(/requires detected_content_hash or detected_content_body/);
+  });
+
+  it("detectSkillChange serializes circular payloads and reports vanished inserted proposals", async () => {
+    const { detectSkillChange, SyncGovernanceError } = await importSyncModule();
+    const circular: Record<string, unknown> = {};
+    circular["self"] = circular;
+    const created = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "circular-proposal",
+      detected_content_hash: "a".repeat(64),
+      proposed_by: "scanner",
+      diff_payload: circular,
+    });
+    expect(created.proposal.diff_payload).toBe("{}");
+
+    db.prepare(
+      `CREATE TRIGGER delete_vanish_governance_proposal
+       AFTER INSERT ON skill_import_proposals
+       WHEN NEW.skill_name = 'vanish-governance'
+       BEGIN
+         DELETE FROM skill_import_proposals WHERE id = NEW.id;
+       END`
+    ).run();
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: "vanish-governance",
+        detected_content_hash: "b".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("approve and reject proposal guards handle missing ids and idempotent rejection", async () => {
+    const {
+      detectSkillChange,
+      approveImportProposal,
+      rejectImportProposal,
+      SyncGovernanceError,
+    } = await importSyncModule();
+
+    expect(() => approveImportProposal(db, "", "alice")).toThrow(SyncGovernanceError);
+    expect(() => rejectImportProposal(db, "", "alice", "reason")).toThrow(
+      SyncGovernanceError
+    );
+
+    const pending = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "reject-idempotent",
+      detected_content_hash: "c".repeat(64),
+      proposed_by: "scanner",
+    });
+    const rejected = rejectImportProposal(db, pending.proposal.id, "alice", "not safe");
+    const rejectedAgain = rejectImportProposal(
+      db,
+      pending.proposal.id,
+      "bob",
+      "still not safe"
+    );
+    expect(rejected.status).toBe("rejected");
+    expect(rejectedAgain.decided_by).toBe("alice");
+  });
+
+  it("approveImportProposal and rejectImportProposal report rows that vanish mid-transition", async () => {
+    const {
+      detectSkillChange,
+      approveImportProposal,
+      rejectImportProposal,
+      SyncGovernanceError,
+    } = await importSyncModule();
+
+    const approveTarget = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "approve-vanishes",
+      detected_content_hash: "d".repeat(64),
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_approve_vanishing_proposal
+       AFTER UPDATE ON skill_import_proposals
+       WHEN NEW.id = '${approveTarget.proposal.id}'
+        AND NEW.status = 'approved'
+       BEGIN
+         DELETE FROM skill_import_proposals WHERE id = NEW.id;
+       END`
+    ).run();
+    expect(() =>
+      approveImportProposal(db, approveTarget.proposal.id, "alice", "ok")
+    ).toThrow(SyncGovernanceError);
+
+    const rejectTarget = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "reject-vanishes",
+      detected_content_hash: "e".repeat(64),
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_reject_vanishing_proposal
+       AFTER UPDATE ON skill_import_proposals
+       WHEN NEW.id = '${rejectTarget.proposal.id}'
+        AND NEW.status = 'rejected'
+       BEGIN
+         DELETE FROM skill_import_proposals WHERE id = NEW.id;
+       END`
+    ).run();
+    expect(() =>
+      rejectImportProposal(db, rejectTarget.proposal.id, "alice", "no")
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("createOrUpdateAgentVersionPin validates type-only edge cases and skill ids", async () => {
+    const { createOrUpdateAgentVersionPin, SyncGovernanceError } =
+      await importSyncModule();
+    insertAgent("edge-agent", "Edge Agent");
+
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "edge-agent",
+        skill_name: "edge-skill",
+        skill_id: 0,
+        current_version: "1.0.0",
+        current_content_hash: "0".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(/skill_id must be a positive integer/);
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "edge-agent",
+        skill_name: "edge-skill",
+        skill_id: 999999,
+        current_version: "1.0.0",
+        current_content_hash: "0".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(/not found in skill_registry/);
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "edge-agent",
+        skill_name: "edge-skill",
+        skill_id: null,
+        current_version: null as unknown as string,
+        current_content_hash: "0".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "edge-agent",
+        skill_name: "edge-skill",
+        skill_id: null,
+        current_version: 123 as unknown as string,
+        current_content_hash: "0".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "edge-agent",
+        skill_name: "edge-skill",
+        skill_id: null,
+        current_version: "1.0.0",
+        current_content_hash: null as unknown as string,
+        actor: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("createOrUpdateAgentVersionPin enforces optimistic concurrency and idempotency keys", async () => {
+    const { createOrUpdateAgentVersionPin } = await importSyncModule();
+    insertAgent("idem-agent", "Idem Agent");
+    const first = createOrUpdateAgentVersionPin(db, {
+      agent_id: "idem-agent",
+      skill_name: "idem-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+      idempotency_key: "same-request",
+    });
+
+    const same = createOrUpdateAgentVersionPin(db, {
+      agent_id: "idem-agent",
+      skill_name: "idem-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "1".repeat(64),
+      actor: "alice",
+      idempotency_key: "same-request",
+    });
+    expect(same.id).toBe(first.id);
+
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "idem-agent",
+        skill_name: "idem-skill",
+        skill_id: null,
+        current_version: "2.0.0",
+        current_content_hash: "2".repeat(64),
+        actor: "alice",
+        expected_current_updated_at: "stale",
+      })
+    ).toThrow(/Stale concurrent pin update/);
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "idem-agent",
+        skill_name: "idem-skill",
+        skill_id: null,
+        current_version: "2.0.0",
+        current_content_hash: "2".repeat(64),
+        actor: "alice",
+        idempotency_key: "same-request",
+      })
+    ).toThrow(/previously used with a different request body/);
+  });
+
+  it("createOrUpdateAgentVersionPin persists idempotency keys for update requests", async () => {
+    const { createOrUpdateAgentVersionPin } = await importSyncModule();
+    insertAgent("idem-update-agent", "Idem Update Agent");
+    const first = createOrUpdateAgentVersionPin(db, {
+      agent_id: "idem-update-agent",
+      skill_name: "idem-update-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "a".repeat(64),
+      actor: "alice",
+    });
+
+    const updated = createOrUpdateAgentVersionPin(db, {
+      agent_id: "idem-update-agent",
+      skill_name: "idem-update-skill",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "b".repeat(64),
+      actor: "alice",
+      idempotency_key: "update-request",
+    });
+    const sameUpdate = createOrUpdateAgentVersionPin(db, {
+      agent_id: "idem-update-agent",
+      skill_name: "idem-update-skill",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "b".repeat(64),
+      actor: "alice",
+      idempotency_key: "update-request",
+    });
+
+    expect(updated.id).toBe(first.id);
+    expect(sameUpdate.current_version).toBe("2.0.0");
+    expect(sameUpdate.prior_version).toBe("1.0.0");
+  });
+
+  it("pin audit writes fall back when audit_entries is absent", async () => {
+    const { createOrUpdateAgentVersionPin } = await importSyncModule();
+    insertAgent("auditless-agent", "Auditless Agent");
+    db.prepare(`DROP TABLE audit_entries`).run();
+
+    const pin = createOrUpdateAgentVersionPin(db, {
+      agent_id: "auditless-agent",
+      skill_name: "auditless-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "3".repeat(64),
+      actor: "alice",
+    });
+
+    expect(pin.current_version).toBe("1.0.0");
+  });
+
+  it("createOrUpdateAgentVersionPin reports inserted pins that vanish before readback", async () => {
+    const { createOrUpdateAgentVersionPin, SyncGovernanceError } =
+      await importSyncModule();
+    insertAgent("vanish-pin-agent", "Vanish Pin Agent");
+    db.prepare(
+      `CREATE TRIGGER delete_vanishing_pin
+       AFTER INSERT ON skill_version_pins
+       WHEN NEW.skill_name = 'vanishing-pin'
+       BEGIN
+         DELETE FROM skill_version_pins WHERE id = NEW.id;
+       END`
+    ).run();
+
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "vanish-pin-agent",
+        skill_name: "vanishing-pin",
+        skill_id: null,
+        current_version: "1.0.0",
+        current_content_hash: "4".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("listAgentVersionPins filters by skill_name with bounded pagination", async () => {
+    const { createOrUpdateAgentVersionPin, listAgentVersionPins } =
+      await importSyncModule();
+    insertAgent("skill-filter-agent", "Skill Filter Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "skill-filter-agent",
+      skill_name: "wanted-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "5".repeat(64),
+      actor: "alice",
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "skill-filter-agent",
+      skill_name: "other-skill",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "6".repeat(64),
+      actor: "alice",
+    });
+
+    const filtered = listAgentVersionPins(db, {
+      skill_name: "wanted-skill",
+      limit: 500,
+      offset: -1,
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].skill_name).toBe("wanted-skill");
+  });
+
+  it("rollback helpers reject invalid pin ids and missing agent-scoped pins", async () => {
+    const {
+      rollbackAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      SyncGovernanceError,
+    } = await importSyncModule();
+
+    expect(() =>
+      rollbackAgentVersionPin(db, { pin_id: 0, operator: "alice" })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "no-agent-pin",
+        skill_name: "missing",
+        operator: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("rollbackAgentVersionPinByAgent fails closed on incomplete and tampered prior rows", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      SyncGovernanceError,
+    } = await importSyncModule();
+
+    insertAgent("rollback-edge-agent", "Rollback Edge Agent");
+    const incompletePrior = insertSkillRow({
+      name: "incomplete-prior",
+      dispatch_status: "enabled",
+      completeness_pct: 80,
+      content_hash: "7".repeat(64),
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rollback-edge-agent",
+      skill_name: "incomplete-prior-pin",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "8".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET prior_version = ?, prior_content_hash = ?, prior_skill_id = ?
+        WHERE agent_id = ? AND skill_name = ?`
+    ).run(
+      "1.0.0",
+      "7".repeat(64),
+      incompletePrior,
+      "rollback-edge-agent",
+      "incomplete-prior-pin"
+    );
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "rollback-edge-agent",
+        skill_name: "incomplete-prior-pin",
+        operator: "alice",
+      })
+    ).toThrow(/completeness_pct/);
+
+    const tamperedPrior = insertSkillRow({
+      name: "tampered-prior",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      content_hash: "9".repeat(64),
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rollback-edge-agent",
+      skill_name: "tampered-prior-pin",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "a".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET prior_version = ?, prior_content_hash = ?, prior_skill_id = ?
+        WHERE agent_id = ? AND skill_name = ?`
+    ).run(
+      "1.0.0",
+      "b".repeat(64),
+      tamperedPrior,
+      "rollback-edge-agent",
+      "tampered-prior-pin"
+    );
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "rollback-edge-agent",
+        skill_name: "tampered-prior-pin",
+        operator: "alice",
+      })
+    ).toThrow(/tampering suspected/);
+  });
+
+  it("rollbackAgentVersionPinByAgent fails when the prior registry row is missing", async () => {
+    const {
+      createOrUpdateAgentVersionPin,
+      rollbackAgentVersionPinByAgent,
+      SyncGovernanceError,
+    } = await importSyncModule();
+    insertAgent("missing-prior-agent", "Missing Prior Agent");
+    const priorId = insertSkillRow({
+      name: "missing-prior-row",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+      content_hash: "e".repeat(64),
+    });
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "missing-prior-agent",
+      skill_name: "missing-prior-pin",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "f".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `UPDATE skill_version_pins
+          SET prior_version = ?, prior_content_hash = ?, prior_skill_id = ?
+        WHERE agent_id = ? AND skill_name = ?`
+    ).run(
+      "1.0.0",
+      "e".repeat(64),
+      priorId,
+      "missing-prior-agent",
+      "missing-prior-pin"
+    );
+
+    db.pragma("foreign_keys = OFF");
+    try {
+      db.prepare(`DELETE FROM skill_registry WHERE id = ?`).run(priorId);
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
+
+    expect(() =>
+      rollbackAgentVersionPinByAgent(db, {
+        agent_id: "missing-prior-agent",
+        skill_name: "missing-prior-pin",
+        operator: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
+
+  it("rollbackAgentVersionPin reports pins that vanish during rollback", async () => {
+    const { createOrUpdateAgentVersionPin, rollbackAgentVersionPin, SyncGovernanceError } =
+      await importSyncModule();
+    insertAgent("rollback-vanish-agent", "Rollback Vanish Agent");
+    createOrUpdateAgentVersionPin(db, {
+      agent_id: "rollback-vanish-agent",
+      skill_name: "rollback-vanishes",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "c".repeat(64),
+      actor: "alice",
+    });
+    const current = createOrUpdateAgentVersionPin(db, {
+      agent_id: "rollback-vanish-agent",
+      skill_name: "rollback-vanishes",
+      skill_id: null,
+      current_version: "2.0.0",
+      current_content_hash: "d".repeat(64),
+      actor: "alice",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_rollback_vanishing_pin
+       AFTER UPDATE ON skill_version_pins
+       WHEN NEW.id = ${current.id}
+        AND NEW.rolled_back_by = 'alice'
+       BEGIN
+         DELETE FROM skill_version_pins WHERE id = NEW.id;
+       END`
+    ).run();
+
+    expect(() =>
+      rollbackAgentVersionPin(db, {
+        pin_id: current.id,
+        operator: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
 });

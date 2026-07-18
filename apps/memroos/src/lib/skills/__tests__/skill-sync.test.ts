@@ -1648,5 +1648,386 @@ describe("skill-sync validation and failure paths", () => {
     expect(reg.dispatch_status).toBe("enabled");
     expect(reg.content_hash).toBe("0".repeat(64));
   });
+
+  it("validates non-string inputs for harnesses, skill names, and actors", async () => {
+    const { requireHarness, diffSkills, createImportProposal, SkillSyncError } =
+      await import("../skill-sync");
+
+    expect(() => requireHarness(null as unknown as string)).toThrow(SkillSyncError);
+    expect(() =>
+      diffSkills(null, {
+        skill_name: null as unknown as string,
+        source_harness: "claude",
+        raw_body: "body",
+      })
+    ).toThrow(SkillSyncError);
+    expect(() =>
+      createImportProposal(db, {
+        source_harness: "claude",
+        detected: {
+          skill_name: "bad-actor",
+          source_harness: "claude",
+          raw_body: "body",
+        },
+        proposed_by: null as unknown as string,
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("detectHarnessSkills records no-frontmatter fallbacks and unreadable content errors", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(harnessRoots.claude, "plain-body.md"),
+      "# Plain body without frontmatter\n",
+      "utf8"
+    );
+    fs.writeFileSync(
+      path.join(harnessRoots.claude, "name-only.md"),
+      "---\nname: name-only\n---\n\n# No version\n",
+      "utf8"
+    );
+    fs.writeFileSync(
+      path.join(harnessRoots.claude, "binary.md"),
+      Buffer.from([0xff, 0xfe, 0xff, 0xfe, 0xff, 0xfe])
+    );
+
+    const unreadable = path.join(harnessRoots.claude, "unreadable.md");
+    fs.writeFileSync(unreadable, "---\nname: unreadable\n---\n", "utf8");
+    fs.chmodSync(unreadable, 0);
+    try {
+      const detected = detectHarnessSkills({ roots: harnessRoots });
+
+      const plain = detected.entries.find((entry) => entry.skill_name === "plain-body");
+      expect(plain?.version).toBeNull();
+      expect(plain?.parse_error).toMatch(/No `name:` frontmatter/);
+
+      const nameOnly = detected.entries.find((entry) => entry.skill_name === "name-only");
+      expect(nameOnly?.version).toBeNull();
+      expect(nameOnly?.parse_error).toBeNull();
+
+      expect(detected.errors.some((err) => err.reason === "File is not valid UTF-8 text")).toBe(true);
+      expect(
+        detected.errors.some((err) => err.file_path === unreadable && err.reason.startsWith("Cannot read file:"))
+      ).toBe(true);
+    } finally {
+      fs.chmodSync(unreadable, 0o600);
+    }
+  });
+
+  it("detectHarnessSkills reports an unreadable harness directory without aborting", async () => {
+    const { detectHarnessSkills } = await import("../skill-sync");
+    const harnessRoots = buildHarnessRoots(TMP_ROOT);
+    fs.mkdirSync(harnessRoots.claude, { recursive: true });
+    fs.chmodSync(harnessRoots.claude, 0);
+    try {
+      const detected = detectHarnessSkills({ roots: harnessRoots });
+      expect(detected.errors.some((err) => err.reason.startsWith("Cannot read directory:"))).toBe(true);
+    } finally {
+      fs.chmodSync(harnessRoots.claude, 0o700);
+    }
+  });
+
+  it("createImportProposal serializes circular diff payloads and updates existing no-change markers", async () => {
+    const { createImportProposal, computeContentHash } = await import("../skill-sync");
+    const body = VALID_SKILL_MD("circular-payload", "1.0.0");
+    const hash = computeContentHash(body);
+    const circular: Record<string, unknown> = {};
+    circular["self"] = circular;
+
+    const created = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "circular-payload",
+        source_harness: "claude",
+        version: "1.0.0",
+        raw_body: body,
+        content_hash: hash,
+      },
+      proposed_by: "scanner",
+      diff_payload: circular,
+    });
+    expect(created.proposal.pending_diff_payload).toBe("{}");
+
+    insertSkillRow({
+      name: "no-change-again",
+      content_hash: "a".repeat(64),
+    });
+    const first = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "no-change-again",
+        source_harness: "claude",
+        content_hash: "a".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    const second = createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "no-change-again",
+        source_harness: "claude",
+        content_hash: "a".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    expect(first.created).toBe(false);
+    expect(second.created).toBe(false);
+    expect(second.proposal.pending_proposal_id).toBeNull();
+  });
+
+  it("surfaces createImportProposal readback failures after insert races", async () => {
+    const { createImportProposal, SkillSyncError } = await import("../skill-sync");
+    db.prepare(
+      `CREATE TRIGGER delete_vanish_create_sync_state
+       AFTER INSERT ON skill_sync_state
+       WHEN NEW.skill_name = 'vanish-create'
+       BEGIN
+         DELETE FROM skill_sync_state
+          WHERE skill_name = NEW.skill_name
+            AND source_harness = NEW.source_harness;
+       END`
+    ).run();
+
+    expect(() =>
+      createImportProposal(db, {
+        source_harness: "claude",
+        detected: {
+          skill_name: "vanish-create",
+          source_harness: "claude",
+          raw_body: VALID_SKILL_MD("vanish-create", "1.0.0"),
+          content_hash: "8".repeat(64),
+        },
+        proposed_by: "scanner",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("approveImportProposal handles missing detected hashes, payload versions, and vanished rows", async () => {
+    const { createImportProposal, approveImportProposal, SkillSyncError } =
+      await import("../skill-sync");
+
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "missing-detected-hash",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("missing-detected-hash", "2.0.0"),
+        content_hash: "9".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `UPDATE skill_sync_state
+          SET pending_detected_hash = NULL
+        WHERE skill_name = ? AND source_harness = ?`
+    ).run("missing-detected-hash", "claude");
+    expect(() =>
+      approveImportProposal(db, {
+        skill_name: "missing-detected-hash",
+        source_harness: "claude",
+        operator: "alice",
+      })
+    ).toThrow(/missing detected hash/);
+
+    insertSkillRow({ name: "payload-version", content_hash: "0".repeat(64) });
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "payload-version",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: VALID_SKILL_MD("payload-version", "2.0.0"),
+        content_hash: "1".repeat(64),
+      },
+      proposed_by: "scanner",
+      diff_payload: { version: "payload-override" },
+    });
+    approveImportProposal(db, {
+      skill_name: "payload-version",
+      source_harness: "claude",
+      operator: "alice",
+    });
+    const registry = db
+      .prepare(`SELECT version FROM skill_registry WHERE name = ? AND source_harness = ?`)
+      .get("payload-version", "claude") as { version: string };
+    expect(registry.version).toBe("payload-override");
+
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "vanish-approve",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("vanish-approve", "1.0.0"),
+        content_hash: "2".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_vanish_approve_sync_state
+       AFTER UPDATE ON skill_sync_state
+       WHEN NEW.skill_name = 'vanish-approve'
+        AND NEW.approved_by IS NOT NULL
+       BEGIN
+         DELETE FROM skill_sync_state
+          WHERE skill_name = NEW.skill_name
+            AND source_harness = NEW.source_harness;
+       END`
+    ).run();
+    expect(() =>
+      approveImportProposal(db, {
+        skill_name: "vanish-approve",
+        source_harness: "claude",
+        operator: "alice",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("rejectImportProposal reports vanished rows after rejection writes", async () => {
+    const { createImportProposal, rejectImportProposal, SkillSyncError } =
+      await import("../skill-sync");
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "vanish-reject",
+        source_harness: "claude",
+        raw_body: VALID_SKILL_MD("vanish-reject", "1.0.0"),
+        content_hash: "3".repeat(64),
+      },
+      proposed_by: "scanner",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_vanish_reject_sync_state
+       AFTER UPDATE ON skill_sync_state
+       WHEN NEW.skill_name = 'vanish-reject'
+        AND NEW.rejected_by IS NOT NULL
+       BEGIN
+         DELETE FROM skill_sync_state
+          WHERE skill_name = NEW.skill_name
+            AND source_harness = NEW.source_harness;
+       END`
+    ).run();
+
+    expect(() =>
+      rejectImportProposal(db, {
+        skill_name: "vanish-reject",
+        source_harness: "claude",
+        operator: "bob",
+        reason: "bad drift",
+      })
+    ).toThrow(SkillSyncError);
+  });
+
+  it("skill audit writes fall back when the audit table is absent", async () => {
+    const { pinVersion } = await import("../skill-sync");
+    db.prepare(`DROP TABLE audit_entries`).run();
+
+    const pinned = pinVersion(db, {
+      skill_name: "auditless-pin",
+      source_harness: "claude",
+      version: "1.0.0",
+      actor: "alice",
+    });
+
+    expect(pinned.version_pinned_to).toBe("1.0.0");
+  });
+
+  it("listSyncObservability marks rejected terminal rows without pending proposals", async () => {
+    const { listSyncObservability } = await import("../skill-sync");
+    db.prepare(
+      `INSERT INTO skill_sync_state (
+        skill_name, source_harness, last_synced_hash, pending_proposal_id,
+        pending_detected_hash, pending_detected_version, pending_diff_summary,
+        pending_diff_payload, pending_proposed_by, pending_proposed_at,
+        version_pinned_to, last_check_at, prior_version, prior_content_hash,
+        prior_skill_id, approved_by, approved_at, rejected_by, rejected_at,
+        rejection_reason, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, NULL,
+        NULL, NULL, '',
+        '{}', NULL, NULL,
+        NULL, ?, NULL, NULL,
+        NULL, NULL, NULL, ?, ?,
+        ?, ?, ?
+      )`
+    ).run(
+      "terminal-rejected",
+      "claude",
+      "0".repeat(64),
+      new Date().toISOString(),
+      "bob",
+      new Date().toISOString(),
+      "not safe",
+      new Date().toISOString(),
+      new Date().toISOString()
+    );
+
+    const item = listSyncObservability(db).find(
+      (entry) => entry.skill_name === "terminal-rejected"
+    );
+    expect(item?.status).toBe("rejected");
+  });
+
+  it("rollbackToPriorVersion validates missing rows and vanished post-update rows", async () => {
+    const {
+      createImportProposal,
+      approveImportProposal,
+      rollbackToPriorVersion,
+      SkillSyncError,
+    } = await import("../skill-sync");
+
+    expect(() =>
+      rollbackToPriorVersion(db, {
+        skill_name: "missing-rollback-row",
+        source_harness: "claude",
+        operator: "alice",
+      })
+    ).toThrow(SkillSyncError);
+
+    insertSkillRow({
+      name: "rollback-vanishes",
+      content_hash: "0".repeat(64),
+      version: "1.0.0",
+      raw_body: VALID_SKILL_MD("rollback-vanishes", "1.0.0"),
+    });
+    createImportProposal(db, {
+      source_harness: "claude",
+      detected: {
+        skill_name: "rollback-vanishes",
+        source_harness: "claude",
+        version: "2.0.0",
+        raw_body: VALID_SKILL_MD("rollback-vanishes", "2.0.0"),
+        content_hash: "1".repeat(64),
+      },
+      proposed_by: "scanner",
+      diff_payload: { prior_raw_body: null },
+    });
+    approveImportProposal(db, {
+      skill_name: "rollback-vanishes",
+      source_harness: "claude",
+      operator: "alice",
+    });
+    db.prepare(
+      `CREATE TRIGGER delete_rollback_vanish_sync_state
+       AFTER UPDATE ON skill_sync_state
+       WHEN NEW.skill_name = 'rollback-vanishes'
+        AND NEW.prior_version IS NULL
+       BEGIN
+         DELETE FROM skill_sync_state
+          WHERE skill_name = NEW.skill_name
+            AND source_harness = NEW.source_harness;
+       END`
+    ).run();
+
+    expect(() =>
+      rollbackToPriorVersion(db, {
+        skill_name: "rollback-vanishes",
+        source_harness: "claude",
+        operator: "alice",
+      })
+    ).toThrow(SkillSyncError);
+  });
 });
 
