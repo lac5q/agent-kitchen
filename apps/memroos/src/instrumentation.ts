@@ -12,6 +12,7 @@ export async function register() {
     const { startDecayScheduler } = await import('./lib/memory-decay');
     const { startRetentionExpiryScheduler } = await import('./lib/memory-retention-expiry-scheduler');
     const { startGraphCatchupScheduler } = await import('./lib/memory-graph-catchup-scheduler');
+    const { startWikiDigestScheduler } = await import('./lib/wiki-digest-scheduler');
     const { prewarmResponseCaches } = await import('./lib/response-cache');
     const { startSlaScheduler } = await import('./lib/hil/sla-scheduler');
     const { startEmbeddingJob } = await import('./lib/embeddings/embedding-job');
@@ -19,6 +20,7 @@ export async function register() {
     startDecayScheduler();
     startRetentionExpiryScheduler();
     startGraphCatchupScheduler();
+    startWikiDigestScheduler();
     startSlaScheduler();
     startEmbeddingJob();
     void prewarmResponseCaches();

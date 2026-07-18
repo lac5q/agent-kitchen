@@ -61,7 +61,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.11 Unified Meeting Memory** — Phases 151-153 (completed 2026-07-14; meeting ingest reliability + federated `memory_recall` + operator surfaces; MEETREL-01..04 + URECALL-01..06)
 - ✅ **v8.12 MemRoOS MCP Memory Gate Resilience** — Phases 154-156 (completed 2026-07-15; probe timeout honesty + Mem0 hang immunity + path-scoped disk / strict-gate diagnostics)
 - ✅ **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (code complete 2026-07-18; live Aura oneshot Luis-gated)
-- 📋 **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (added 2026-07-17; nightly memory→llm-wiki digest job, MemRoOS Obsidian-like `/wiki` reader, light knowledge graph over compiled pages)
+- ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - 📋 **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (added 2026-07-17; remote MCP + observe for **already-onboarded** agents; tiered capture default=relevant; Wave 1 includes Pi + Claude/Codex/Hermes/OpenClaw; Wave 2 Cursor/Factory; Wave 3 Antigravity)
 
@@ -2593,7 +2593,7 @@ Plans:
 
 *Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 20:16 PDT · Updated: 2026-07-17 20:16 PDT*
 
-**Status:** 📋 PLANNED (seed Obsidian digest done manually; product UI + job not started)  
+**Status:** ✅ CODE COMPLETE (2026-07-18) — digest + `/wiki` reader + light graph; live mem0 digest needs vault/mem0  
 **Depends on:** knowledge vault at `KNOWLEDGE_BASE_PATH` / `~/github/knowledge`; existing `llm-wiki` + `mem0-export.sh` + `knowledge_system.compiler`; blog already uses `react-markdown`  
 **Why now:** Humans cannot browse raw mem0. First digest pages exist under `llm-wiki/wiki/07-memroos-platform/` for Obsidian. Next: keep them fresh with a regular job, then expose the same files in MemRoOS as an Obsidian-like reader (option B) with light graph (option C).  
 **Out of scope:** Full Obsidian clone (live plugins, canvas editor, mobile sync). Do not dump every mem0 bullet into the wiki — synthesize by entity/topic.
@@ -2634,9 +2634,9 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 160. Memory → Wiki Digest Job | 0/0 | Planned (manual seed 2026-07-17) | — |
-| 161. MemRoOS `/wiki` Reader | 0/0 | Planned | — |
-| 162. Light Wiki Graph | 0/0 | Planned | — |
+| 160. Memory → Wiki Digest Job | 1/1 code | Code complete — wiki-digest + cron + dry-run tests | 2026-07-18 |
+| 161. MemRoOS `/wiki` Reader | 1/1 code | Code complete — `/wiki` + `/api/wiki` tree/page/search | 2026-07-18 |
+| 162. Light Wiki Graph | 1/1 code | Code complete — graph JSON refresh + panel | 2026-07-18 |
 
 ## v8.16 Multi-Harness Observe Plane (Phases 167–171)
 

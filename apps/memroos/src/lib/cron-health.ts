@@ -74,6 +74,14 @@ const DEFAULT_JOBS: CronHealthJobInput[] = [
     healthEndpoint: "/api/memory-lifecycle/graph-catchup",
   },
   {
+    id: "wiki-digest",
+    name: "Memory → wiki digest",
+    sourceFamily: "memory",
+    schedule: "every 6 hours",
+    expectedIntervalMinutes: 360,
+    healthEndpoint: "/api/wiki/digest",
+  },
+  {
     id: "apo-skill-improvement",
     name: "APO skill improvement",
     sourceFamily: "skills",

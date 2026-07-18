@@ -622,14 +622,14 @@
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| WIKISURF-01 | Idempotent memory→wiki digest with watermark; clusters mem0 (optional journals) into entity/topic pages with provenance | 160 | pending |
-| WIKISURF-02 | Digest updates `llm-wiki/wiki/index.md` + `log.md`; wired to curator or cron-health on a regular schedule; non-fatal failures | 160 | pending |
-| WIKISURF-03 | Redaction: no secrets; skip/high-sensitivity personal-legal scraps from human wiki pages; dry-run mode | 160 | pending |
-| WIKISURF-04 | Authenticated `/wiki` index + page routes browse compiled markdown from knowledge vault | 161 | pending |
-| WIKISURF-05 | Wikilink resolution + folder tree navigation; read-only v1 | 161 | pending |
-| WIKISURF-06 | Title/content search over wiki pages (QMD or lightweight index) | 161 | pending |
-| WIKISURF-07 | Graph JSON refreshed when digest/compile runs | 162 | pending |
-| WIKISURF-08 | Light interactive graph in `/wiki` linked to page view; degrades if graph missing | 162 | pending |
+| WIKISURF-01 | Idempotent memory→wiki digest with watermark; clusters mem0 (optional journals) into entity/topic pages with provenance | 160 | complete |
+| WIKISURF-02 | Digest updates `llm-wiki/wiki/index.md` + `log.md`; wired to curator or cron-health on a regular schedule; non-fatal failures | 160 | complete |
+| WIKISURF-03 | Redaction: no secrets; skip/high-sensitivity personal-legal scraps from human wiki pages; dry-run mode | 160 | complete |
+| WIKISURF-04 | Authenticated `/wiki` index + page routes browse compiled markdown from knowledge vault | 161 | complete |
+| WIKISURF-05 | Wikilink resolution + folder tree navigation; read-only v1 | 161 | complete |
+| WIKISURF-06 | Title/content search over wiki pages (QMD or lightweight index) | 161 | complete |
+| WIKISURF-07 | Graph JSON refreshed when digest/compile runs | 162 | complete |
+| WIKISURF-08 | Light interactive graph in `/wiki` linked to page view; degrades if graph missing | 162 | complete |
 
 **Locked:** Wiki is a compiled human view — not a dump of raw mem0 bullets. Same files serve Obsidian and MemRoOS. No full Obsidian clone (plugins/canvas/mobile sync).
 
