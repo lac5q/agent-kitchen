@@ -7,7 +7,7 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { registerFederationSource, listFederationSources, resolveEligibleSources } from "../source-registry";
+import { getFederationSource, registerFederationSource, listFederationSources, resolveEligibleSources } from "../source-registry";
 import { ensureCanonicalUpperOntology } from "@/lib/ontology/registry";
 import { revokeOntologySource } from "@/lib/ontology/validity";
 
@@ -154,6 +154,32 @@ describe("VAL-ORCH-006 -- explicit registration", () => {
     expect(list.length).toBe(1);
   });
 
+  it("returns null for missing sources and tolerates malformed persisted JSON", () => {
+    const registered = registerFederationSource(db, okInput({
+      labelPolicyJson: { visibility: "internal" },
+      descriptor: { endpoint: "local" },
+    }));
+    if (registered.kind !== "registered") throw new Error("not registered");
+
+    expect(getFederationSource(db, "default-tenant", "missing")).toBeNull();
+    db.prepare(
+      `UPDATE federation_sources
+          SET label_policy_json = ?,
+              allowed_operations_json = ?,
+              descriptor_json = ?,
+              ontology_record_type = ''
+        WHERE id = ?`
+    ).run("[]", '{"not":"an array"}', "{bad-json", registered.source.id);
+
+    const parsed = getFederationSource(db, "default-tenant", registered.source.id);
+    expect(parsed).toMatchObject({
+      labelPolicyJson: {},
+      allowedOperations: [],
+      descriptor: {},
+      ontologyContext: null,
+    });
+  });
+
   it("filters un-registered (disabled) sources out of eligibility", () => {
     registerFederationSource(db, okInput({ enabled: false }));
     const list = listFederationSources(db, "default-tenant", { enabledOnly: true });
@@ -180,6 +206,26 @@ describe("VAL-ORCH-006 -- explicit registration", () => {
     expect(eligible.length).toBe(1);
     expect(eligible[0].kind).toBe("omitted");
     if (eligible[0].kind === "omitted") expect(eligible[0].reason).toBe("source_expired");
+  });
+
+  it("keeps unexpired and expiry-less sources eligible", () => {
+    registerFederationSource(db, okInput({
+      sourceHandle: "future-expiry",
+      hasExpiry: true,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+    registerFederationSource(db, okInput({
+      sourceHandle: "missing-expiry",
+      hasExpiry: true,
+      expiresAt: null,
+    }));
+
+    const eligible = resolveEligibleSources({
+      sources: listFederationSources(db, "default-tenant"),
+      requiredOperation: "search",
+    });
+
+    expect(eligible.every((entry) => entry.kind === "eligible")).toBe(true);
   });
 
   it("filters sources whose allowedOperations do not include the operation", () => {

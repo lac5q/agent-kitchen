@@ -76,6 +76,30 @@ describe("dsar-export (ENTOPS-08)", () => {
     expect(paths).toEqual(["shared/notes.md"]);
   });
 
+  it("ignores malformed audit metadata while listing vault paths", () => {
+    seedKnowledgeWrite(db, {
+      tenantId: "default-tenant",
+      userId: "user-a",
+      path: "shared/notes.md",
+    });
+    writeAuditEntry(
+      {
+        tenant_id: "default-tenant",
+        actor_id: "operator-1",
+        actor_role: "operator",
+        event_type: "knowledge.access",
+        entity_type: "knowledge",
+        entity_id: "broken",
+        reason: "broken",
+        metadata_json: "{not-json",
+        created_at: new Date().toISOString(),
+      },
+      db
+    );
+
+    expect(listVaultPathsForUser(db, "default-tenant", "user-a")).toEqual(["shared/notes.md"]);
+  });
+
   it("exportDsarPackage archives vault files + audit NDJSON", () => {
     const vaultRoot = path.join(tmpRoot, "knowledge");
     const tenantVault = path.join(vaultRoot, "tenants", "default-tenant");
@@ -102,6 +126,44 @@ describe("dsar-export (ENTOPS-08)", () => {
     expect(result.auditEntryCount).toBeGreaterThanOrEqual(1);
     expect(result.vaultPaths).toContain("shared/notes.md");
     expect(fs.existsSync(result.manifestPath)).toBe(true);
+  });
+
+  it("skips traversal, missing, and directory vault paths during export", () => {
+    const vaultRoot = path.join(tmpRoot, "knowledge");
+    const tenantVault = path.join(vaultRoot, "tenants", "default-tenant");
+    fs.mkdirSync(path.join(tenantVault, "safe"), { recursive: true });
+    fs.writeFileSync(path.join(tenantVault, "safe", "notes.md"), "# safe\n");
+    fs.writeFileSync(path.join(tmpRoot, "outside.md"), "# outside\n");
+
+    for (const rel of ["safe/notes.md", "../outside.md", "missing.md", "safe"]) {
+      seedKnowledgeWrite(db, {
+        tenantId: "default-tenant",
+        userId: "user-a",
+        path: rel,
+      });
+    }
+
+    const result = exportDsarPackage({
+      tenantId: "default-tenant",
+      userId: "user-a",
+      outDir: path.join(tmpRoot, "out"),
+      vaultRoot,
+      db,
+    });
+
+    expect(result.fileCount).toBe(1);
+    expect(result.vaultPaths).toEqual(["safe/notes.md"]);
+  });
+
+  it("requires a non-empty user id for exports", () => {
+    expect(() =>
+      exportDsarPackage({
+        tenantId: "default-tenant",
+        userId: "  ",
+        outDir: path.join(tmpRoot, "out"),
+        db,
+      })
+    ).toThrow(/userId required/);
   });
 
   it("deleteDsarUser tombstones without removing audit rows", () => {

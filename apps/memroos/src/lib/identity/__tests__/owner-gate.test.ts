@@ -178,6 +178,34 @@ describe("identity/owner-gate.ts (Phase 131 / TEAMSCALE-06)", () => {
         .get() as { n: number };
       expect(auditCount.n).toBe(1);
     });
+
+    it("validates every required checkOwnerGate input", () => {
+      const { ownerId, agentIds } = seedOwnerAndAgents(db, "check-inputs", ["a1"]);
+      expect(() =>
+        checkOwnerGate(db, {
+          assetType: "",
+          assetId: "mem",
+          requestingAgentId: agentIds[0],
+          ownerId,
+        })
+      ).toThrow(/assetType and assetId/);
+      expect(() =>
+        checkOwnerGate(db, {
+          assetType: "memory_entry",
+          assetId: "mem",
+          requestingAgentId: "",
+          ownerId,
+        })
+      ).toThrow(/requestingAgentId/);
+      expect(() =>
+        checkOwnerGate(db, {
+          assetType: "memory_entry",
+          assetId: "mem",
+          requestingAgentId: agentIds[0],
+          ownerId: "",
+        })
+      ).toThrow(/ownerId/);
+    });
   });
 
   describe("grant functions", () => {
@@ -241,6 +269,54 @@ describe("identity/owner-gate.ts (Phase 131 / TEAMSCALE-06)", () => {
         ownerId,
       });
       expect(after.allowed).toBe(false);
+    });
+
+    it("revoke can target standing null-agent and per-use agent rows separately", () => {
+      const { ownerId, agentIds } = seedOwnerAndAgents(db, "revoke-targeted", ["a1", "a2"]);
+      grantStandingApproval(db, {
+        ownerId,
+        assetType: "memory_entry",
+        assetId: "mem_targeted",
+      });
+      grantPerUseApproval(db, {
+        ownerId,
+        assetType: "memory_entry",
+        assetId: "mem_targeted",
+        agentId: agentIds[0],
+      });
+
+      expect(
+        revokeOwnerGateApproval(db, {
+          ownerId,
+          assetType: "memory_entry",
+          assetId: "mem_targeted",
+          approvalMode: "standing",
+          agentId: null,
+        })
+      ).toBe(1);
+      expect(
+        listOwnerGateApprovals(db, {
+          ownerId,
+          assetType: "memory_entry",
+          assetId: "mem_targeted",
+        }).map((row) => row.agentId)
+      ).toEqual([agentIds[0]]);
+
+      expect(
+        revokeOwnerGateApproval(db, {
+          ownerId,
+          assetType: "memory_entry",
+          assetId: "mem_targeted",
+          agentId: agentIds[0],
+        })
+      ).toBe(1);
+      expect(
+        listOwnerGateApprovals(db, {
+          ownerId,
+          assetType: "memory_entry",
+          assetId: "mem_targeted",
+        })
+      ).toEqual([]);
     });
 
     it("validates required input fields", () => {

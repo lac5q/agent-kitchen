@@ -103,6 +103,9 @@ describe("federation action proof continuity", () => {
 
   it("denies missing, unbounded, mismatched, or persistence-failed receipts before an action can bind", async () => {
     const { persistFederationActionArtifact } = await bridge();
+    expect(persistFederationActionArtifact(db, { ...input, ontologyRecords: [] })).toEqual(
+      expect.objectContaining({ status: "denied", reason: "ontology_context_unavailable" }),
+    );
     expect(persistFederationActionArtifact(db, { ...input, packHash: "sha256:missing" })).toEqual(
       expect.objectContaining({ status: "unavailable" }),
     );
@@ -115,6 +118,23 @@ describe("federation action proof continuity", () => {
     expect(persistFederationActionArtifact(db, input)).toEqual(
       expect.objectContaining({ status: "persistence_failed", reason: "federation_artifact_persistence_failed" }),
     );
+  });
+
+  it("rejects malformed merge receipts and non-success outcome/source bindings", async () => {
+    const { persistFederationActionArtifact } = await bridge();
+
+    db.prepare("UPDATE federation_merges SET contributing_source_ids = ?").run("not-json");
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "federation_merge_malformed",
+    }));
+
+    db.prepare("UPDATE federation_merges SET contributing_source_ids = ?").run('["source-1"]');
+    db.prepare("UPDATE federation_source_outcomes SET policy_decision = 'deny'").run();
+    expect(persistFederationActionArtifact(db, input)).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "federation_outcome_or_source_unavailable",
+    }));
   });
 
   it("atomically writes only admitted coordinate derivatives with its artifact", async () => {
@@ -229,5 +249,23 @@ describe("federation action proof continuity", () => {
       spaceId: "space-a",
       artifactId: created.artifact.id,
     })).toEqual(expect.objectContaining({ status: "unavailable", reason: "federation_artifact_invalidated" }));
+  });
+
+  it("fails proof resolution when stored ontology references are malformed", async () => {
+    const { persistFederationActionArtifact, resolveFederationActionProof } = await bridge();
+    const created = persistFederationActionArtifact(db, input);
+    if (created.status !== "ready") throw new Error(created.reason);
+
+    db.prepare("UPDATE federation_action_artifacts SET ontology_refs_json = ? WHERE id = ?")
+      .run("{bad-json", created.artifact.id);
+
+    expect(resolveFederationActionProof(db, {
+      tenantId: "tenant-a",
+      spaceId: "space-a",
+      artifactId: created.artifact.id,
+    })).toEqual(expect.objectContaining({
+      status: "unavailable",
+      reason: "ontology_context_unavailable",
+    }));
   });
 });

@@ -49,6 +49,7 @@ describe('runConsolidation', () => {
     testDb.exec('DELETE FROM messages');
     delete process.env.OLLAMA_BASE_URL;
     delete process.env.CONSOLIDATION_MODEL;
+    delete process.env.CONSOLIDATION_PROVIDER_BACKOFF_MINUTES;
   });
 
   it('marks messages as consolidated=1 after successful run', async () => {
@@ -118,6 +119,21 @@ describe('runConsolidation', () => {
     expect(result).toMatchObject({ status: 'completed', insightsWritten: 0 });
   });
 
+  it('records failed runs when the provider response is not ok', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('rate limited', { status: 429, statusText: 'Too Many Requests' }));
+    seedMessage('fail1');
+
+    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const result = await runConsolidation();
+
+    expect(result).toMatchObject({ status: 'failed', reason: expect.stringContaining('429 Too Many Requests') });
+    const run = testDb
+      .prepare("SELECT status, error_message FROM memory_consolidation_runs ORDER BY id DESC LIMIT 1")
+      .get() as { status: string; error_message: string };
+    expect(run.status).toBe('failed');
+    expect(run.error_message).toContain('429 Too Many Requests');
+  });
+
   it('uses configured Ollama endpoint and model without requiring Anthropic credentials', async () => {
     process.env.OLLAMA_BASE_URL = 'http://ollama.test:11434';
     process.env.CONSOLIDATION_MODEL = 'qwen-local:test';
@@ -150,6 +166,20 @@ describe('runConsolidation', () => {
     expect(result.status).toBe('skipped');
     expect(result.reason).toBe('provider_rate_limited');
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not apply provider backoff when the configured window is disabled', async () => {
+    process.env.CONSOLIDATION_PROVIDER_BACKOFF_MINUTES = '0';
+    seedMessage('rl-disabled');
+    testDb.prepare(
+      "INSERT INTO memory_consolidation_runs(started_at, status, error_message) VALUES(strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'failed', ?)"
+    ).run('429 usage limit exceeded');
+
+    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const result = await runConsolidation();
+
+    expect(result.status).toBe('completed');
+    expect(mockFetch).toHaveBeenCalled();
   });
 });
 

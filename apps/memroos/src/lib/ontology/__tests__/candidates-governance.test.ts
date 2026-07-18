@@ -170,9 +170,16 @@ describe("ontology candidate governance", () => {
     candidates.promoteOntologyCandidate(db, { candidateId: candidate.id, tenantId: candidate.tenantId, spaceId: candidate.spaceId, ...seedPromotionContext(candidate.id, candidate.tenantId, candidates), ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash, namespace: "finance", policyContextHash: policyHash, reviewerId: "operator", idempotencyKey: "k" });
     const alias = aliases.registerOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash, namespace: "finance", alias: "invoice", canonicalId: "finance.invoice", actor: "operator", reason: "compatibility" });
     expect(aliases.resolveOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, namespace: "finance", submitted: "invoice" })).toMatchObject({ canonicalId: "finance.invoice", aliasId: alias.id, submitted: "invoice" });
+    expect(aliases.registerOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash, namespace: "finance", alias: "invoice", canonicalId: "finance.invoice", actor: "operator", reason: "idempotent" })).toEqual(alias);
+    expect(aliases.resolveOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, namespace: "finance", submitted: "finance.invoice" })).toMatchObject({ canonicalId: "finance.invoice", aliasId: null });
+    expect(() => aliases.resolveOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, namespace: "finance", submitted: "missing" })).toThrow(/unknown alias/);
     expect(() => aliases.registerOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash, namespace: "finance", alias: "invoice", canonicalId: "finance.other", actor: "operator", reason: "collision" })).toThrow(/canonical target/);
+    expect(() => aliases.transitionOntologyAlias(db, { aliasId: alias.id, action: "redirect", canonicalId: "other.invoice", actor: "operator", reason: "bad redirect" })).toThrow(/redirect target/);
     expect(aliases.transitionOntologyAlias(db, { aliasId: alias.id, action: "deprecate", actor: "operator", reason: "replace" }).status).toBe("deprecated");
-    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_alias_lifecycle_audit WHERE alias_id = ?`).get(alias.id)).toMatchObject({ count: 2 });
+    expect(aliases.transitionOntologyAlias(db, { aliasId: alias.id, action: "restore", actor: "operator", reason: "needed" }).status).toBe("active");
+    expect(aliases.transitionOntologyAlias(db, { aliasId: alias.id, action: "remove", actor: "operator", reason: "retire" }).status).toBe("removed");
+    expect(() => aliases.transitionOntologyAlias(db, { aliasId: "missing", action: "deprecate", actor: "operator", reason: "nope" })).toThrow(/alias not found/);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_alias_lifecycle_audit WHERE alias_id = ?`).get(alias.id)).toMatchObject({ count: 4 });
   });
 
   it("VAL-ONTO-019..025 plans approved additive migrations and fails closed for ambiguous mappings", async () => {

@@ -63,6 +63,14 @@ describe("VAL-ORCH-003 -- MCP JSON-RPC envelope validation", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("rejects empty methods and positional params but accepts null ids", () => {
+    expect(validateJsonRpcEnvelope({ jsonrpc: "2.0", id: null, method: "initialize" }).ok).toBe(true);
+    expect(validateJsonRpcEnvelope({ jsonrpc: "2.0", id: "1", method: "" }).ok).toBe(false);
+    const positional = validateJsonRpcEnvelope({ jsonrpc: "2.0", id: "1", method: "x", params: [] });
+    expect(positional.ok).toBe(false);
+    if (!positional.ok) expect(positional.detail).toMatch(/params/);
+  });
+
   it("rejects when id is the wrong type", () => {
     const r = validateJsonRpcEnvelope({ jsonrpc: "2.0", id: { complex: true }, method: "x" });
     expect(r.ok).toBe(false);
@@ -99,6 +107,20 @@ describe("VAL-ORCH-003 -- initialize params validation", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe("malformed_initialize_params");
+  });
+
+  it("rejects non-object params and malformed client info or capability versions", () => {
+    expect(validateInitializeParams(null).ok).toBe(false);
+    expect(validateInitializeParams({
+      protocolVersion: SUPPORTED_MCP_PROTOCOL_VERSIONS[0],
+      capabilities: okCapabilities(),
+      clientInfo: { name: "memroos" },
+    }).ok).toBe(false);
+    expect(validateInitializeParams({
+      protocolVersion: SUPPORTED_MCP_PROTOCOL_VERSIONS[0],
+      capabilities: [{ name: "memory.read", version: 1, source: "x" }],
+      clientInfo: { name: "memroos", version: "1" },
+    }).ok).toBe(false);
   });
 });
 
@@ -195,5 +217,24 @@ describe("VAL-ORCH-003 -- resolveRegisteredTool", () => {
       requestedCapabilities: ["memory.read"],
     });
     expect(r.ok).toBe(false);
+  });
+
+  it("fails closed when required scope is missing or incomplete", () => {
+    const missingScope = resolveRegisteredTool({
+      tools: okTools(),
+      name: "memory_write",
+      requestedCapabilities: ["memory.read", "memory.write", "memory.search"],
+    });
+    expect(missingScope.ok).toBe(false);
+    if (!missingScope.ok) expect(missingScope.detail).toMatch(/requires scope/);
+
+    const incompleteScope = resolveRegisteredTool({
+      tools: okTools(),
+      name: "memory_write",
+      requestedScope: ["tenantId"],
+      requestedCapabilities: ["memory.read", "memory.write", "memory.search"],
+    });
+    expect(incompleteScope.ok).toBe(false);
+    if (!incompleteScope.ok) expect(incompleteScope.detail).toMatch(/spaceId|userId|agentId|label|purpose/);
   });
 });

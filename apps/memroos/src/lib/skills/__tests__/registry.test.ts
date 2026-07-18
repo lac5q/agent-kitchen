@@ -11,9 +11,15 @@ import { describe, it, expect } from "vitest";
 import {
   parseSkillMd,
   computeCompleteness,
+  computeContentHash,
   normalizeRegistryEntry,
   REQUIRED_CONTRACT_FIELDS,
   CONTRACT_COMPLETENESS_FIELDS,
+  resolveSigningKey,
+  signRegistryEntry,
+  signSkill,
+  trustLevelRank,
+  verifySkillSignature,
 } from "../registry";
 
 const MINIMAL_SKILL_MD = `
@@ -166,6 +172,21 @@ describe("parseSkillMd", () => {
     const result = parseSkillMd("## Just a header\n\nSome body text.");
     expect(result.name).toBeNull();
     expect(result.raw_body).toBeTruthy();
+  });
+
+  it("treats unterminated frontmatter and colonless lines as inert body data", () => {
+    const unterminated = parseSkillMd("---\nname: broken\n## Body");
+    expect(unterminated.name).toBeNull();
+    expect(unterminated.raw_body).toContain("name: broken");
+
+    const parsed = parseSkillMd(`---
+name: colon-skill
+ignored line
+description: value: with: colons
+---
+body`);
+    expect(parsed.name).toBe("colon-skill");
+    expect(parsed.description).toBe("value: with: colons");
   });
 
   it("parses evidence_examples from the `## Evidence Examples` markdown section", () => {
@@ -352,6 +373,63 @@ describe("normalizeRegistryEntry", () => {
     expect(entry.evidence_examples).toContain("Verify all required fields present");
     expect(entry.evidence_examples).toContain("Output format is JSON");
     expect(entry.evidence_examples).toContain("Regression suite passes");
+  });
+
+  it("honors disabled/review statuses while quarantining complete imports otherwise", () => {
+    const disabled = normalizeRegistryEntry(
+      parseSkillMd(FULL_SKILL_MD.replace("dispatch_status: enabled", "dispatch_status: disabled")),
+      "claude",
+      "operator"
+    );
+    const review = normalizeRegistryEntry(
+      parseSkillMd(FULL_SKILL_MD.replace("dispatch_status: enabled", "dispatch_status: review")),
+      "claude",
+      "operator"
+    );
+    const quarantined = normalizeRegistryEntry(
+      parseSkillMd(FULL_SKILL_MD.replace("dispatch_status: enabled", "dispatch_status: quarantined")),
+      "claude",
+      "operator"
+    );
+
+    expect(disabled.dispatch_status).toBe("disabled");
+    expect(review.dispatch_status).toBe("review");
+    expect(quarantined.dispatch_status).toBe("quarantined");
+  });
+});
+
+describe("skill signing helpers", () => {
+  it("computes ranks, resolves fallback signing keys, signs, and verifies signatures", () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "fallback-key";
+    delete process.env["MEMROOS_SKILL_SIGNING_KEY"];
+    delete process.env["MEMROOS_SKILL_SIGNER_ID"];
+
+    expect(trustLevelRank("verified")).toBeGreaterThan(trustLevelRank("signed"));
+    expect(trustLevelRank("bogus" as never)).toBe(0);
+    expect(resolveSigningKey()).toBe("fallback-key");
+
+    const hash = computeContentHash("body");
+    const signed = signSkill(hash, "key");
+    expect(signed.signedBy).toBe("operator");
+    expect(verifySkillSignature(hash, signed.signature, "key")).toBe(true);
+    expect(verifySkillSignature(hash, signed.signature.slice(1), "key")).toBe(false);
+    expect(verifySkillSignature(hash, signed.signature, "wrong")).toBe(false);
+    expect(() => signSkill(hash, "")).toThrow(/Signing key/);
+
+    delete process.env["MEMROOS_OPERATOR_API_KEY"];
+  });
+
+  it("signRegistryEntry leaves unsigned entries unchanged without content hash or key", () => {
+    const entry = normalizeRegistryEntry(parseSkillMd(FULL_SKILL_MD), "claude", "operator");
+    expect(signRegistryEntry({ ...entry, content_hash: null }, "key")).toMatchObject({ trust_level: "unsigned" });
+    expect(signRegistryEntry(entry, "")).toMatchObject({ trust_level: "unsigned", signature: null });
+
+    process.env["MEMROOS_SKILL_SIGNER_ID"] = "security-team";
+    const signed = signRegistryEntry(entry, "key");
+    expect(signed.trust_level).toBe("signed");
+    expect(signed.signed_by).toBe("security-team");
+    expect(signed.signature).toEqual(expect.any(String));
+    delete process.env["MEMROOS_SKILL_SIGNER_ID"];
   });
 });
 

@@ -25,6 +25,28 @@ describe("scanIrisPreflight", () => {
     expect(result.cleanContent).toContain("[REDACTED]");
   });
 
+  it("classifies medium PII scanner matches without blocking", () => {
+    const result = scanIrisPreflight("Contact ops@example.com or 415-555-1212 for the handoff.");
+
+    expect(result.blocked).toBe(false);
+    expect(result.riskScore).toBe(80);
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "pii", severity: "MEDIUM", ruleId: "content.email_address" }),
+        expect.objectContaining({ category: "pii", severity: "MEDIUM", ruleId: "content.phone_us" }),
+      ])
+    );
+  });
+
+  it("scores non-PII medium content scanner matches as content findings", () => {
+    const result = scanIrisPreflight("Use token=\"abcdefghijkl\" only in the local fixture.");
+
+    expect(result.blocked).toBe(false);
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ category: "secret", severity: "MEDIUM", ruleId: "content.generic_secret_assign" })
+    );
+  });
+
   it("allows ordinary task summaries", () => {
     const result = scanIrisPreflight("Draft a concise blog post about MemroOS security milestones.");
 

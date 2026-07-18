@@ -781,6 +781,32 @@ describe("quarantine module helpers", () => {
     expect(listed[0]?.skill_id).toBe(id);
   });
 
+  it("returns null scanner_result for malformed persisted scanner JSON", async () => {
+    const { getQuarantineRecord, upsertQuarantineRecord } = await importQuarantineModule();
+    const id = insertSkill({ name: "malformed-scan" });
+    upsertQuarantineRecord(db, {
+      skillId: id,
+      stage: "scanning",
+      scannerResult: { blocked: false, matches: [], cleanContent: "ok" },
+    });
+    db.prepare("UPDATE skill_quarantine SET scanner_result = ? WHERE skill_id = ?").run("{bad-json", id);
+
+    expect(getQuarantineRecord(db, id)?.scanner_result).toBeNull();
+  });
+
+  it("applies safe default pagination when list options are invalid", async () => {
+    const { listQuarantineRecords, upsertQuarantineRecord } = await importQuarantineModule();
+    const id = insertSkill({ name: "default-list" });
+    upsertQuarantineRecord(db, {
+      skillId: id,
+      stage: "pending_approval",
+      approvalStatus: "pending",
+    });
+
+    const listed = listQuarantineRecords(db, { limit: -1, offset: -5 });
+    expect(listed.map((row) => row.skill_id)).toContain(id);
+  });
+
   it("upsert updates an existing row instead of inserting a duplicate", async () => {
     const { upsertQuarantineRecord, getQuarantineRecord } = await importQuarantineModule();
     const id = insertSkill({ name: "upsert-skill" });
@@ -800,6 +826,7 @@ describe("quarantine module helpers", () => {
   it("scoreVerificationChecks handles empty checks and token-only lines", async () => {
     const { scoreVerificationChecks } = await importQuarantineModule();
     expect(scoreVerificationChecks("body", null)).toBe(1);
+    expect(scoreVerificationChecks("body", "- of\n- and")).toBe(1);
     expect(scoreVerificationChecks("verify output json", "- verify output\n- json format")).toBe(1);
     expect(scoreVerificationChecks("unrelated body", "- must have database migration")).toBe(0);
   });
@@ -848,5 +875,13 @@ describe("quarantine module helpers", () => {
     runQuarantinePipeline(db, enabledId, "verify output json format", "- verify output\n- json format");
     approveQuarantine(db, enabledId, "alice");
     expect(() => rejectQuarantine(db, enabledId, "bob", "too late")).toThrow(QuarantineTransitionError);
+  });
+
+  it("rejectQuarantine validates operator identity and missing records", async () => {
+    const { rejectQuarantine, QuarantineTransitionError } = await importQuarantineModule();
+    const id = insertSkill({ name: "reject-operator" });
+
+    expect(() => rejectQuarantine(db, id, " ", "reason")).toThrow(QuarantineTransitionError);
+    expect(() => rejectQuarantine(db, id, "bob", "reason")).toThrow(QuarantineTransitionError);
   });
 });
