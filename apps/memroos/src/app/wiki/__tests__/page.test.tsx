@@ -27,7 +27,12 @@ function urlOf(input: RequestInfo | URL): string {
 describe("WikiPageView", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/wiki");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders empty-vault messaging when the wiki root is missing", async () => {

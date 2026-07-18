@@ -65,3 +65,9 @@ npm run test:slow -- --run
 - Focused coverage suite: **66/66** passed
 - Fast suite: **3198** passed / 19 skipped
 - Slow suite: **19** passed
+
+## MiniMax-M3 validator (2026-07-18T15:18Z)
+
+- **Role:** independent validator (orchestrator = Cursor Grok)
+- **Verdict:** `PASS_WITH_NOTES` — must-fix before merge: **none**
+- **Notes addressed by orchestrator:** wiki page `vi.unstubAllGlobals()` cleanup; graph-catchup `summary.pages` tightened to `toBe(2)`

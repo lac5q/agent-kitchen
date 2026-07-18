@@ -1,17 +1,26 @@
 # Goal: Complete GSD Roadmap Quality Gate (excl. Voyage)
 
 - **Creation date:** 2026-07-18T06:55:00Z
-- **Update date:** 2026-07-18T15:16:00Z
-- **Version:** 2026-07-18.12
+- **Update date:** 2026-07-18T15:18:00Z
+- **Version:** 2026-07-18.13
 - **Lane:** code
 - **Status:** complete-with-blockers (2026-07-18); v8.15 oracle-1 live cutover verified (Tailscale SSH + CF); quality-gate focused coverage raised to **68.75% stmts** (see docs/uat/2026-07-18-coverage-report.md); app-wide 100% coverage remains measured-gap
-- **Worker lane (priority):** **MiniMax-M3 via direct API** — mandatory Beastmode worker for implementation slices. Director = Cursor Grok (plan/review/merge/verify only). Smoke: `MINIMAX OK` (2026-07-18T15:13Z). Run: `.codex/beastmode-runs/20260718T151444Z-minimax-api-coverage`.
+- **Orchestrator:** Cursor Grok (plan, author/apply, merge gate, run verification)
+- **Validator (priority):** **MiniMax-M3 via direct API** — independent review of diffs before treating work as done. Smoke: `MINIMAX OK`. Latest: `PASS_WITH_NOTES` (must-fix: none) on coverage tests.
+- **Optional workers:** may draft bounded slices; MiniMax remains validator even when Grok authors.
 - **Droid MiniMax:** not live (FACTORY_API_KEY auth failed) — do not use until re-authenticated
 - **Out of scope:** Voyage / Phase 166 / CLOUDOPS-08 / v8.9 Voyage embedding upgrade
 
-## Worker policy (corrected 2026-07-18T15:13Z)
+## Beastmode roles (2026-07-18T15:17Z)
 
-Director previously shipped a coverage pass at **0% MiniMax** — that violated the preferred worker lane. Corrective action: all further bounded code/test authoring on this goal goes through MiniMax-M3 first; director only applies/reviews/verifies.
+| Role | Model | Duty |
+|------|-------|------|
+| Orchestrator | Cursor Grok | Scope, implement/apply, commit/push, run tests |
+| Validator | MiniMax-M3 | Independent review of diffs; PASS / PASS_WITH_NOTES / FAIL |
+
+## Goal statement
+
+Complete the remaining MemRoOS GSD roadmap (not Voyage), then raise quality through architecture refactor discipline, full test coverage, sanitized production-scale local UAT, fix-all issues, and production-log triage with PRs only for actionable errors.
 
 ## Ordered workstreams
 
@@ -40,18 +49,5 @@ Director previously shipped a coverage pass at **0% MiniMax** — that violated 
 - `npm run lint`
 - `npm run typecheck`
 - `npm test -- --run`
-- `npm run test:slow -- --run` when touching auth/onboarding or slow-tagged suites
-- Focused phase tests + live-smoke where services allow
-- Autoreview after significant steps
-- Coverage report artifact under `.codex/beastmode-runs/` or `/tmp/`
-
-## Constraints
-
-- No Voyage implementation.
-- Autonomous completion authorized 2026-07-18. Still no Voyage. Destructive prod/Heroku/Aura only if credentials+reachability exist; otherwise blocked handoff with evidence.
-- Beastmode workers must not commit/push/access secrets; director merges and verifies.
-- Prefer small auditable commits; track refactor progress in `/tmp/refactor-memroos.md`.
-
-## Next action
-
-Luis: install Cursor Cloud SSH pubkey on `opc@oracle-1` (see `docs/uat/2026-07-18-oracle1-live-cutover-verification.md`), then agents can `git pull`/restart units. Merge PR #28. Voyage/100% coverage remain out of scope / measured-gap.
+- `npm run test:slow -- --run`
+- Live UAT / oracle-1 verification docs under `docs/uat/`

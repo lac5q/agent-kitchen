@@ -362,7 +362,7 @@ describe("graph-catchup incremental checkpointing", () => {
     });
     expect(summary.status).toBe("completed");
     expect(summary.projected).toBe(2);
-    expect(summary.pages).toBeGreaterThanOrEqual(2);
+    expect(summary.pages).toBe(2);
     expect(seen).toEqual(["vector:v1", "vector:v2"]);
     expect(readGraphCatchupCheckpoint(testDb).vectorLastId).toBe("v2");
   });
