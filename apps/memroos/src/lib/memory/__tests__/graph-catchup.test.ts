@@ -105,6 +105,15 @@ describe("graph-catchup projection mapping", () => {
       projection.entities.map((e) => e.id).sort()
     );
   });
+
+  it("skips empty content with skipped:true", () => {
+    const empty = projectMemoryToGraph({
+      id: "mem-empty",
+      content: "   ",
+      userId: "luis",
+    });
+    expect(empty).toMatchObject({ skipped: true, reason: "empty_content", fact: null });
+  });
 });
 
 describe("graph-catchup incremental checkpointing", () => {
@@ -190,6 +199,7 @@ describe("graph-catchup incremental checkpointing", () => {
       log: () => undefined,
     });
     expect(first.projected).toBe(2);
+    expect(first.skipped).toBe(0);
     expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(2);
 
     const second = await runGraphCatchup(testDb, {
@@ -202,7 +212,63 @@ describe("graph-catchup incremental checkpointing", () => {
       log: () => undefined,
     });
     expect(second.projected).toBe(0);
+    expect(second.skipped).toBe(0);
     expect(seen.filter((id) => id.startsWith("again:"))).toHaveLength(0);
+  });
+
+  it("rate-limits Neo4j writes via sleep between projections", async () => {
+    process.env.NEO4J_PASSWORD = "test-secret";
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'Rate limit memory one.', '2026-07-17T10:00:00.000Z')`
+      )
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO messages (session_id, project, agent_id, role, content, timestamp)
+         VALUES ('s1', 'p1', 'luis', 'user', 'Rate limit memory two.', '2026-07-17T11:00:00.000Z')`
+      )
+      .run();
+
+    const sleepMs: number[] = [];
+    await runGraphCatchup(testDb, {
+      skipVector: true,
+      writeDelayMs: 25,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      projectFact: async () => undefined,
+      sleep: async (ms) => {
+        sleepMs.push(ms);
+      },
+      log: () => undefined,
+    });
+    expect(sleepMs.length).toBeGreaterThanOrEqual(2);
+    expect(sleepMs.every((ms) => ms === 25)).toBe(true);
+  });
+
+  it("does not leak Neo4j password in vector fetch error logs", async () => {
+    process.env.NEO4J_PASSWORD = "test-fixture-password"; // pragma: allowlist secret
+    process.env.QDRANT_URL = "http://qdrant.test.invalid:6333"; // pragma: allowlist secret
+    const logs: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    const summary = await runGraphCatchup(testDb, {
+      skipEpisodic: true,
+      now: new Date("2026-07-17T12:00:00.000Z"),
+      fetchVectorPage: async () => {
+        throw new Error("upstream failed");
+      },
+      sleep: async () => undefined,
+      log: () => undefined,
+    });
+
+    expect(summary.errors).toBeGreaterThan(0);
+    const joined = `${logs.join("\n")}\n${JSON.stringify(summary)}`;
+    expect(joined).not.toContain("test-fixture-password");
+    expect(joined.includes("NEO4J_PASSWORD=")).toBe(false);
+    errorSpy.mockRestore();
   });
 
   it("orders vector cursor comparisons correctly", () => {

@@ -1,5 +1,21 @@
 # Roadmap: Memroos
 
+## Standing Quality Gate (2026-07-18)
+
+*Added: 2026-07-18 · Version: 2026-07-18.1 · Creation: 2026-07-18 06:55 UTC · Updated: 2026-07-18 06:55 UTC*
+
+**Active goal:** Complete remaining GSD roadmap **excluding Voyage** (skip Phase 166 / CLOUDOPS-08 / v8.9 Voyage embedding upgrade).
+
+**Refactor discipline (mandatory before and during remaining GSD work):**
+Refactor until you are happy with the architecture. After each significant step, live-test the system, run autoreview, and commit. Track progress in `/tmp/refactor-memroos.md`.
+
+**Post-roadmap quality sequence (same goal):**
+1. Add tests until 100% coverage (or measured blocked gaps).
+2. Build sanitized, production-scale local data under production-like settings; inventory every user-facing feature/role/route/button/input/modal/state/workflow; define acceptance criteria + finite risk-based edge cases; test as a real user with reproduction evidence; fix shared-cause issues with regression tests; rerun until clean pass or blocked handoff. Ask before production, sensitive data, or destructive actions.
+3. Complete all test cases; fix all issues.
+4. Review production logs for errors; if actionable → root-cause → fix → verify → PR; if none → stop without changes.
+
+
 ## Milestones
 
 - ✅ **v1.1 Knowledge Architecture + Dashboard Polish** — Phases 1-5 (shipped 2026-04-11)
@@ -44,7 +60,7 @@
 - ✅ **v8.6 Skill Trust Chain** — Phases 148-150 (completed 2026-07-16; contracts, Ed25519 signing/provenance, quarantine lane, governed sync + pins, lifecycle/dependencies; SKILLTRUST-01..05 shipped; planning closeout after code-first land)
 - ✅ **v8.11 Unified Meeting Memory** — Phases 151-153 (completed 2026-07-14; meeting ingest reliability + federated `memory_recall` + operator surfaces; MEETREL-01..04 + URECALL-01..06)
 - ✅ **v8.12 MemRoOS MCP Memory Gate Resilience** — Phases 154-156 (completed 2026-07-15; probe timeout honesty + Mem0 hang immunity + path-scoped disk / strict-gate diagnostics)
-- 🔄 **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (added 2026-07-17; synergistic Qdrant→Neo4j graph projection, durable catchup jobs for all memory tiers, setup/install wiring so new installs keep tiers filled)
+- ✅ **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (code complete 2026-07-18; live Aura oneshot Luis-gated)
 - 📋 **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (added 2026-07-17; nightly memory→llm-wiki digest job, MemRoOS Obsidian-like `/wiki` reader, light knowledge graph over compiled pages)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - 📋 **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (added 2026-07-17; remote MCP + observe for **already-onboarded** agents; tiered capture default=relevant; Wave 1 includes Pi + Claude/Codex/Hermes/OpenClaw; Wave 2 Cursor/Factory; Wave 3 Antigravity)
@@ -2473,9 +2489,10 @@ Plans:
 
 *Added: 2026-07-17 · Version: 2026-07-17.1 · Creation: 2026-07-17 19:30 PDT · Updated: 2026-07-17 19:30 PDT*
 
-**Status:** 🔄 IN PROGRESS (implementation agents running one-shot catchup + install wiring)  
+**Status:** ✅ CODE COMPLETE (2026-07-18) — unit/dry-run verified; live Aura raise-beyond-probe still Luis-gated  
 **Depends on:** Phase 37 three-tier memory API; Neo4j Query API v2 path in `backends.ts`; memory-resilience install profile  
-**Why now:** Operator saw healthy Qdrant (~628 points) with Neo4j up but empty (2 probe nodes). Catchup was ops-manual; install only shipped healthcheck/evals—not tier-fill jobs. NOC Last-24h empty is a separate honesty/window issue once streams are quiet.
+**Why now:** Operator saw healthy Qdrant (~628 points) with Neo4j up but empty (2 probe nodes). Catchup was ops-manual; install only shipped healthcheck/evals—not tier-fill jobs. NOC Last-24h empty is a separate honesty/window issue once streams are quiet.  
+**Closeout evidence (2026-07-18T06:58:14Z):** `graph-catchup.test.ts` 13/13; CLI `--dry-run` + progress counters; cron-health + install-memory-resilience wiring present; secrets not printed in summary/logs. Live Aura oneshot still requires operator approval.
 
 ### Phase 157 — Graph Catchup Projection (one-shot + shared lib)
 
@@ -2509,7 +2526,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 157. Graph Catchup Projection | 0/? | In progress (CLI landed; one-shot run in progress 2026-07-17) | — |
+| 157. Graph Catchup Projection | 1/1 code | Code complete — shared lib + CLI + unit/dry-run; live Aura gated | 2026-07-18 |
 | 158. Durable graph-catchup Job | 1/1 code | Code complete — cron + in-app scheduler + API | 2026-07-17 |
 | 159. Install Wiring + Docs | 1/1 code | Code complete — install-memory-resilience + docs; launchd bootstrap may need retry on already-loaded agents | 2026-07-17 |
 
@@ -2553,6 +2570,8 @@ Plans:
 4. Docs state Mac = dev only; oracle-1 = operator.
 
 ### Phase 166 — Voyage cloud embed provider (cheap alternative)
+
+**Goal-scope note (2026-07-18):** Explicitly **out of scope** for the active GSD quality-gate goal — do not implement Voyage in this pass.
 
 **Goal:** Optional cloud embeddings without local model RAM (package-options Option C / v8.9 residue).
 **Requirements:** CLOUDOPS-08
