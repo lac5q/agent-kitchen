@@ -12,7 +12,7 @@ function pollUrl(agentId: string): string {
 }
 
 export const hivePollAdapter: AgentAdapter = {
-  platform: ["claude", "codex", "qwen", "pi", "gemini", "zcode"],
+  platform: ["claude", "codex", "qwen", "pi", "gemini", "zcode", "grok", "droid"],
   name: "hive-poll",
   async dispatch(task: DispatchTask, agent?: RemoteAgentConfig): Promise<DispatchResult> {
     const url = pollUrl(task.to_agent);

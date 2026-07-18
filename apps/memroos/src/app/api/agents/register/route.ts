@@ -17,6 +17,8 @@ const PLATFORMS = new Set([
   "hermes",
   "openclaw",
   "chatgpt",
+  "grok",
+  "droid",
 ]);
 const PROTOCOLS = new Set(["rest", "a2a", "ui", "local"]);
 

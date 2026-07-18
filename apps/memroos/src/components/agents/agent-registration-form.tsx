@@ -5,6 +5,7 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CreateAgentOnboardingInviteInput, RegisterA2aAgentCardInput } from "@/lib/api-client";
+import { PLATFORM_LABELS } from "@/lib/ui-constants";
 import type { AgentPlatform, RegisterAgentInput } from "@/types";
 
 const ONBOARDING_PLATFORMS: AgentPlatform[] = [
@@ -97,7 +98,7 @@ export function AgentRegistrationForm({
           >
             {ONBOARDING_PLATFORMS.map((item) => (
               <option key={item} value={item}>
-                {item}
+                {PLATFORM_LABELS[item] ?? item}
               </option>
             ))}
           </select>

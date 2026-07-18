@@ -20,6 +20,9 @@ const SINGLETON_CLI_AGENT_BY_PLATFORM: Partial<Record<AgentPlatform, string>> = 
   gemini: "gemini-cli-luis-mbp",
   qwen: "qwen-cli-luis-mbp",
   zcode: "zcode-desktop-luis-mbp",
+  pi: "pi-desktop-luis-mbp",
+  grok: "grok-desktop-luis-mbp",
+  droid: "droid-desktop-luis-mbp",
 };
 const PLATFORM_RUNTIME_AGENTS = new Set<AgentPlatform>(["hermes", "openclaw", "opencode"]);
 

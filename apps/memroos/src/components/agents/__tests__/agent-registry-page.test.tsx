@@ -145,7 +145,7 @@ describe("AgentRegistryPage", () => {
   it("creates a generic invite command for the selected platform", () => {
     render(<AgentRegistryPage />);
 
-    expect(screen.getByLabelText("Agent platform")).toHaveTextContent("cursor");
+    expect(screen.getByLabelText("Agent platform")).toHaveTextContent("Cursor");
     fireEvent.change(screen.getByLabelText("Agent platform"), { target: { value: "pi" } });
     fireEvent.click(screen.getByText("Copy Invite"));
 

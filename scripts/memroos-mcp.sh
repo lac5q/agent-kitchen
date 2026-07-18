@@ -69,6 +69,10 @@ detect_mcp_client() {
       *hermes*) printf "hermes"; return 0 ;;
       *claude*) printf "claude"; return 0 ;;
       *codex*) printf "codex"; return 0 ;;
+      *zcode*) printf "zcode"; return 0 ;;
+      *droid*|*factory*) printf "droid"; return 0 ;;
+      *grok*) printf "grok"; return 0 ;;
+      */pi\ *|*[[:space:]]pi[[:space:]]*|[[:space:]]pi$|*/pi$) printf "pi"; return 0 ;;
     esac
     pid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]')"
     seen=$((seen + 1))
@@ -105,6 +109,18 @@ infer_agent_id() {
       ;;
     openclaw)
       first_readable_agent_id openclaw-desktop-luis-mbp lucia sophia gwen
+      ;;
+    zcode)
+      first_readable_agent_id zcode-desktop-luis-mbp
+      ;;
+    pi)
+      first_readable_agent_id pi-desktop-luis-mbp
+      ;;
+    grok)
+      first_readable_agent_id grok-desktop-luis-mbp
+      ;;
+    droid)
+      first_readable_agent_id droid-desktop-luis-mbp lcalderon-main-mac oracle-1-droid maeve-u1-droid
       ;;
     *)
       first_readable_agent_id opencode codex-desktop-luis-mbp claude-code-luis-mbp claudebot alba

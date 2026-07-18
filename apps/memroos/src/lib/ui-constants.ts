@@ -42,4 +42,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   cortex: "Cortex",
   hermes: "Hermes",
   openclaw: "OpenClaw",
+  chatgpt: "ChatGPT",
+  grok: "Grok",
+  droid: "Droid",
 };

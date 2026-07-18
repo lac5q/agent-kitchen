@@ -342,6 +342,87 @@
         "runtimeKind": "desktop",
         "environment": "Luis MacBook Pro"
       }
+    },
+    {
+      "id": "pi-desktop-luis-mbp",
+      "name": "Pi Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "pi",
+      "protocol": "rest",
+      "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
+      "metadata": {
+        "agentFamily": "pi",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "grok-desktop-luis-mbp",
+      "name": "Grok Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "grok",
+      "protocol": "rest",
+      "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
+      "metadata": {
+        "agentFamily": "grok",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
+      "id": "droid-desktop-luis-mbp",
+      "name": "Droid Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "droid",
+      "protocol": "rest",
+      "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
+      "metadata": {
+        "agentFamily": "droid",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
     }
   ]
 }

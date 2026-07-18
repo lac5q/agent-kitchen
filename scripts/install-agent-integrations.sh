@@ -131,6 +131,9 @@ declare -a TARGETS=(
   "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|yaml"
   "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|yaml"
   "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|zcode-json"
+  "pi|$HOME_DIR/.pi/AGENTS.md|$HOME_DIR/.pi/skills|json"
+  "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|factory-json"
+  "grok|$HOME_DIR/.grok/AGENTS.md|$HOME_DIR/.grok/skills|json"
   "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|yaml"
   "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|yaml"
 )
@@ -459,6 +462,7 @@ case "$MODE" in
         toml) upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
         json) upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
         zcode-json) upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
+        factory-json) upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
       esac
       log "$name → $agents_file"
     done
@@ -503,6 +507,7 @@ case "$MODE" in
         toml) uninstall_toml_mcp_block "${agents_file%.md}.mcp.toml" ;;
         json) uninstall_json_mcp_block "${agents_file%.md}.mcp.json" ;;
         zcode-json) uninstall_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" ;;
+        factory-json) uninstall_json_mcp_block "$HOME_DIR/.factory/mcp.json" ;;
       esac
       log "$name: removed"
     done

@@ -16,6 +16,8 @@ const VALID_PLATFORMS = new Set<AgentPlatform>([
   "openclaw",
   "chatgpt",
   "cortex",
+  "grok",
+  "droid",
 ]);
 const VALID_PROTOCOLS = new Set<AgentProtocol>(["rest", "a2a", "ui", "local"]);
 const VALID_LOCATIONS = new Set<AgentLocation>(["local", "tailscale", "cloudflare"]);
