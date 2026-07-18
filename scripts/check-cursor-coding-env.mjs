@@ -132,6 +132,50 @@ function checkMiniMaxApiKey() {
     return;
   }
   record("MiniMax API key", "PASS", "set");
+
+  // Opt-in adaptive high-reasoning readiness smoke. Off by default so the
+  // env check stays fast and offline-safe. Enable with BEASTMODE_CHECK_ADAPTIVE=1
+  // to verify the default Beastmode worker reasoning mode (thinking:adaptive).
+  if (process.env.BEASTMODE_CHECK_ADAPTIVE !== "1") return;
+
+  const payload = JSON.stringify({
+    model: "MiniMax-M3",
+    thinking: { type: "adaptive" },
+    messages: [{ role: "user", content: "Reply with exactly: MINIMAX ADAPTIVE OK" }],
+    max_completion_tokens: 80,
+    temperature: 0,
+  });
+  let raw = "";
+  try {
+    raw = execSync(
+      `curl -sS --max-time 45 https://api.minimax.io/v1/chat/completions -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" -d @-`,
+      { input: payload, encoding: "utf8", timeout: 60000 }
+    ).trim();
+  } catch (e) {
+    record(
+      "MiniMax adaptive reasoning",
+      "WARN",
+      `smoke call failed: ${String(e.message || e).split("\n")[0]}`
+    );
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    record("MiniMax adaptive reasoning", "WARN", "smoke returned non-JSON response");
+    return;
+  }
+  const content = parsed?.choices?.[0]?.message?.content ?? "";
+  if (typeof content === "string" && content.includes("MINIMAX ADAPTIVE OK")) {
+    record("MiniMax adaptive reasoning", "PASS", "MINIMAX ADAPTIVE OK");
+  } else {
+    record(
+      "MiniMax adaptive reasoning",
+      "WARN",
+      `unexpected response (truncated: ${String(content).slice(0, 60)})`
+    );
+  }
 }
 
 function readSettingsKey(settingsPath, envKey) {

@@ -92,13 +92,22 @@ After creating or changing the Cursor Cloud environment:
 5. Ask it to invoke `$goal` to confirm the MemRoOS goal workflow is present.
 6. Ask it to invoke `$gsd-help` to confirm GSD skills are present under `~/.cursor/skills`.
 7. Ask it to invoke `$beastmode-cloud` for multi-model Beastmode support. Prefer the MiniMax API worker lane; use `$beastmode-qwen-cloud` only for the legacy Qwen-specific path.
-8. Verify direct MiniMax API workers when `MINIMAX_API_KEY` is configured (preferred worker smoke):
+8. Verify direct MiniMax API workers when `MINIMAX_API_KEY` is configured.
+   Exact smoke uses `thinking:disabled`. Beastmode high-reasoning workers use
+   `thinking:adaptive` (default via `BEASTMODE_MINIMAX_THINKING`):
 
 ```bash
+# Exact smoke gate
 curl -sS https://api.minimax.io/v1/chat/completions \
   -H "Authorization: Bearer $MINIMAX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+
+# High-reasoning readiness (default worker mode)
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"adaptive"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX ADAPTIVE OK"}],"max_completion_tokens":80,"temperature":0}'
 ```
 
 9. Verify Droid and the Droid MiniMax lane when using Factory/Droid workers as MiniMax fallback:

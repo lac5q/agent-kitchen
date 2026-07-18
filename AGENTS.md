@@ -93,8 +93,10 @@ Docker-oriented local installer. It installs the full GSD Cursor skill catalog
 `CURSOR_CLOUD_INSTALL_GSD=0` or `CURSOR_CLOUD_INSTALL_QWEN=0`.
 
 For Beastmode / cheap-worker execution, prefer MiniMax-M3 first (`$beastmode-cloud`
-with `MINIMAX_API_KEY`), then Droid MiniMax, then Qwen. Do not skip a live MiniMax
-worker lane and do the implementation yourself as director-only.
+with `MINIMAX_API_KEY`), then Droid MiniMax, then Qwen. Run MiniMax workers at
+high reasoning (`thinking.type: adaptive`; override only with
+`BEASTMODE_MINIMAX_THINKING=disabled` for exact smokes). Do not skip a live
+MiniMax worker lane and do the implementation yourself as director-only.
 
 See `docs/cursor-cloud-development.md` for verification steps and environment knobs.
 

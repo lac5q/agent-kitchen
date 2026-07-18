@@ -54,13 +54,28 @@ The setup script installs `@qwen-code/qwen-code` into `CODEX_HOME/qwen-node`, li
 Codex skills are invoked with `$skill-name` or through `/skills`. Native custom slash prompts such as `/qwen` or `/beastmode` are not the reliable path in Codex Cloud.
 
 For Beastmode with the direct MiniMax API (preferred), use `$beastmode-cloud`, set
-`MINIMAX_API_KEY`, and verify the API:
+`MINIMAX_API_KEY`, and verify the API. Exact smoke uses `thinking:disabled`;
+worker runs default to high reasoning via `thinking:adaptive`
+(`BEASTMODE_MINIMAX_THINKING`, default `adaptive`):
 
 ```bash
+# Exact smoke gate
 curl -sS https://api.minimax.io/v1/chat/completions \
   -H "Authorization: Bearer $MINIMAX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+
+# High-reasoning readiness (default worker mode)
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"adaptive"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX ADAPTIVE OK"}],"max_completion_tokens":80,"temperature":0}'
+```
+
+Optional fleet check for adaptive readiness:
+
+```bash
+BEASTMODE_CHECK_ADAPTIVE=1 npm run check:cursor-coding-env
 ```
 
 For Beastmode with Droid MiniMax as fallback, verify Droid/Factory separately:

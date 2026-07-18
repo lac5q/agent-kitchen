@@ -37,16 +37,41 @@ Do not default to Qwen or director-only coding when MiniMax smoke passes.
 Prefer an independent validator model when the authoring worker was MiniMax
 (never MiniMax self-validation for high-risk / validator tiers).
 
+## Reasoning Mode
+
+MiniMax-M3 accepts only `thinking.type: adaptive` or `disabled` (not `enabled`
+or `high`). For Beastmode **high reasoning**, use adaptive:
+
+| Mode | `thinking.type` | When |
+|------|-----------------|------|
+| High reasoning (default worker) | `adaptive` | Plans, reviews, patches, gap analysis |
+| Exact smoke / deterministic | `disabled` | `MINIMAX OK` gate and exact-string checks |
+
+Override with `BEASTMODE_MINIMAX_THINKING=disabled` only when you need exact
+output without chain-of-thought. Default worker runs should keep adaptive.
+
+Adaptive reasoning can consume most of `max_completion_tokens` as
+`reasoning_tokens`. For high-reasoning worker prompts: keep the task tight,
+require a short final section outside any `<think>` tags, and prefer
+`max_completion_tokens` ≥ 8192. If the transcript is think-only, re-prompt
+once for the final patches/verdict only.
+
 ## Start Gate
 
 Before delegating, prove the selected lane is live. Check MiniMax first:
 
 ```bash
-# Direct MiniMax API (preferred)
+# Direct MiniMax API smoke (exact string — thinking disabled)
 curl -sS https://api.minimax.io/v1/chat/completions \
   -H "Authorization: Bearer $MINIMAX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"MiniMax-M3","thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX OK"}],"max_completion_tokens":20,"temperature":0}'
+
+# High-reasoning readiness (adaptive)
+curl -sS https://api.minimax.io/v1/chat/completions \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MiniMax-M3","thinking":{"type":"adaptive"},"messages":[{"role":"user","content":"Reply with exactly: MINIMAX ADAPTIVE OK"}],"max_completion_tokens":80,"temperature":0}'
 
 # MiniMax through Droid (fallback)
 ~/.local/bin/droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"
@@ -170,10 +195,16 @@ const prompt = fs.readFileSync(promptPath, "utf8");
     },
     body: JSON.stringify({
       model: process.env.BEASTMODE_MINIMAX_MODEL || "MiniMax-M3",
-      thinking: { type: "disabled" },
+      // High reasoning default: adaptive. Smoke gates may set disabled.
+      thinking: {
+        type:
+          process.env.BEASTMODE_MINIMAX_THINKING === "disabled"
+            ? "disabled"
+            : "adaptive",
+      },
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
-      max_completion_tokens: 4096,
+      max_completion_tokens: 8192,
     }),
   });
 
@@ -182,19 +213,26 @@ const prompt = fs.readFileSync(promptPath, "utf8");
     throw new Error(`MiniMax API ${response.status}: ${body.slice(0, 500)}`);
   }
   const parsed = JSON.parse(body);
-  fs.writeFileSync(outputPath, `${parsed.choices?.[0]?.message?.content || ""}\n`);
+  const message = parsed.choices?.[0]?.message || {};
+  const content = message.content || "";
+  const reasoning = message.reasoning_content || message.reasoning || "";
+  fs.writeFileSync(
+    outputPath,
+    reasoning ? `<thinking>\n${reasoning}\n</thinking>\n\n${content}\n` : `${content}\n`
+  );
 })().catch((err) => {
   console.error(err);
   process.exit(1);
 });
 NODE
-node "$run_dir/invoke.cjs" "$run_dir/prompt.md" "$run_dir/output.md"
+BEASTMODE_MINIMAX_THINKING="${BEASTMODE_MINIMAX_THINKING:-adaptive}" \
+  node "$run_dir/invoke.cjs" "$run_dir/prompt.md" "$run_dir/output.md"
 ```
 
 Direct API workers cannot inspect the worktree or run tools themselves. Ask for
 patches, plans, or review findings, then have the director apply and verify.
-Use `thinking.type: disabled` for exact-output smoke tests and cleaner worker
-transcripts.
+Default worker reasoning is `thinking.type: adaptive` (high reasoning). Use
+`BEASTMODE_MINIMAX_THINKING=disabled` only for exact-output smoke tests.
 
 ## Standard Droid MiniMax Invocation
 
