@@ -303,6 +303,22 @@ describe("POST /api/skills/pins", () => {
     expect(missingSkillName.status).toBe(400);
     expect((await missingSkillName.json()).error).toMatch(/skill_name/);
 
+    const missingAgentId = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: " ",
+          skill_name: "pin",
+          current_version: "1.0.0",
+          current_content_hash: "a".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingAgentId.status).toBe(400);
+    expect((await missingAgentId.json()).error).toMatch(/agent_id/);
+
     const missingVersion = await route.POST(
       makePost(
         "https://example.com/api/skills/pins",
@@ -335,6 +351,43 @@ describe("POST /api/skills/pins", () => {
     );
     expect(badSkillId.status).toBe(400);
     expect((await badSkillId.json()).error).toMatch(/skill_id/);
+  });
+
+  it("500 — reports unexpected pin creation failures", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    vi.doMock("@/lib/skills/skill-sync-governance", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/skills/skill-sync-governance")>(
+        "@/lib/skills/skill-sync-governance"
+      );
+      return {
+        ...actual,
+        createOrUpdateAgentVersionPin: () => {
+          throw new Error("pin store exploded");
+        },
+      };
+    });
+    const { getDb } = await import("@/lib/db");
+    const { initSchema } = await import("@/lib/db-schema");
+    const route = await import("../route");
+    initSchema(getDb());
+
+    const res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/pins",
+        {
+          agent_id: "a-1",
+          skill_name: "pin",
+          current_version: "1.0.0",
+          current_content_hash: "a".repeat(64),
+          actor: "alice",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toContain("pin store exploded");
+    vi.doUnmock("@/lib/skills/skill-sync-governance");
   });
 
   it("400 — pin against unknown agent is rejected", async () => {

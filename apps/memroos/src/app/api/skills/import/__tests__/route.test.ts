@@ -112,7 +112,7 @@ function insertRegistryRow(
     overrides.name ?? "listed-skill",
     overrides.source_harness ?? "claude",
     overrides.dispatch_status ?? "quarantined",
-    overrides.verification_checks ?? '["verify output"]',
+    "verification_checks" in overrides ? overrides.verification_checks : '["verify output"]',
     overrides.missing_fields_json ?? "[]",
     new Date().toISOString()
   );
@@ -232,6 +232,56 @@ describe("POST /api/skills/import", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).ok).toBe(true);
   });
+
+  it("falls back to HMAC signing when the Ed25519 keypair is unavailable", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "import-key";
+    process.env["MEMROOS_SKILL_SIGNING_KEY"] = "legacy-hmac-secret";
+    vi.doMock("@/lib/skills/skill-signing", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/skills/skill-signing")>(
+        "@/lib/skills/skill-signing"
+      );
+      return {
+        ...actual,
+        loadOrCreateOperatorKeyPair: () => {
+          throw new Error("no ed25519 key");
+        },
+      };
+    });
+    await loadDb();
+    const route = await loadRoute();
+
+    const res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/import",
+        { content: FULL_SKILL_MD, source_harness: "claude", imported_by: "legacy" },
+        { authorization: "Bearer import-key" }
+      )
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.trust_level).toBe("signed");
+    expect(json.signed_by).toBe("operator");
+    vi.doUnmock("@/lib/skills/skill-signing");
+  });
+
+  it("returns a database error when registry persistence fails", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "import-key";
+    const db = await loadDb();
+    db.exec("DROP TABLE skill_registry");
+    const route = await loadRoute();
+
+    const res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/import",
+        { content: FULL_SKILL_MD, source_harness: "claude" },
+        { authorization: "Bearer import-key" }
+      )
+    );
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/Database error/i);
+  });
 });
 
 describe("GET /api/skills/import", () => {
@@ -290,6 +340,27 @@ describe("GET /api/skills/import", () => {
     const item = json.items.find((it: { name: string }) => it.name === "parse-edge");
     expect(item.missing_fields).toEqual([]);
     expect(item.verification_checks_list).toEqual(["step one", "step two"]);
+  });
+
+  it("tolerates missing and malformed verification checks", async () => {
+    const db = await loadDb();
+    insertRegistryRow(db, {
+      name: "missing-checks",
+      verification_checks: null,
+    });
+    insertRegistryRow(db, {
+      name: "bad-checks",
+      verification_checks: "not-json",
+    });
+
+    const route = await loadRoute();
+    const res = await route.GET(makeGet("https://example.com/api/skills/import"));
+    const json = await res.json();
+    const missing = json.items.find((it: { name: string }) => it.name === "missing-checks");
+    const malformed = json.items.find((it: { name: string }) => it.name === "bad-checks");
+
+    expect(missing.verification_checks_list).toEqual([]);
+    expect(malformed.verification_checks_list).toEqual([]);
   });
 
   it("caps limit at 100 and handles invalid pagination", async () => {

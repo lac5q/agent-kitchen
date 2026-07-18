@@ -273,6 +273,114 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     // Governance observedAt should reflect the audit_entries row we inserted.
     expect(body.metrics.governanceEvents.observedAt).toBe(auditTimestamp);
   });
+
+  it("computes live efficiency metrics across all streams and ignores malformed payloads", async () => {
+    const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    recordEfficiencyEvent(db, {
+      eventType: "retrieval_trace",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: {
+        usedInFirstResponse: true,
+        recollectionDecision: "search_required",
+        recollectionTiming: "before_plan",
+        recollectionReasons: ["operator asked"],
+        recollectionInjected: [
+          { beliefStage: "bronze_raw_source", reliance: "direct_truth" },
+          "ignored",
+        ],
+        recollectionIgnored: [
+          { reason: "policy_denied" },
+          { reason: "below_threshold" },
+        ],
+      },
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "source_read",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: { sourceHash: "sha256:source" },
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "source_read",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: { sourceHash: "sha256:source" },
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "token_ledger",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: { rawContextTokens: 25, cachedTokens: 10, totalTokens: 100 },
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "operator_question",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: { priorAnswerMatch: true },
+    });
+    recordEfficiencyEvent(db, {
+      eventType: "memory_write",
+      taskId: "task-eff",
+      agentId: "codex",
+      createdAt: now,
+      payload: { isRediscovery: true },
+    });
+    db.prepare(
+      `INSERT INTO efficiency_events(tenant_id, event_type, task_id, agent_id, payload, created_at)
+       VALUES ('default-tenant', 'retrieval_trace', 'bad-payload', 'codex', '{', ?)`
+    ).run(now);
+
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
+    const body = await response.json();
+    const env = body.metrics.efficiency;
+
+    expect(env.status).toBe("live");
+    expect(env.value.retrievalUsedInFirstResponse).toBe(1);
+    expect(env.value.repeatedSourceReads).toBe(1);
+    expect(env.value.rawContextTokenShare).toBe(0.25);
+    expect(env.value.operatorReaskRate).toBe(1);
+    expect(env.value.rediscoveredFactRate).toBe(1);
+    expect(env.value.recollection.policyDeniedCandidates).toBe(1);
+    expect(env.value.recollection.belowThresholdCandidates).toBe(1);
+    expect(body.panels.efficiency.status).toBe("live");
+  });
+
+  it("reads operator load reports from ancestor repo roots and normalizes bad statuses", async () => {
+    const { GET } = await loadRoute();
+    fs.mkdirSync(path.join(TEST_DIR, "reports", "operator-load"), { recursive: true });
+    fs.writeFileSync(path.join(TEST_DIR, "reports", "operator-load", "latest.json"), JSON.stringify({
+      status: "weird",
+      p95Ms: "nope",
+      errorRate: 0.01,
+      generatedAt: "not-a-date",
+      targetHost: "https://operator.example.test",
+      endpoint: "/api/health",
+      findings: ["investigate"],
+      manifest: { gitSha: "abc123" },
+    }));
+    const originalCwd = process.cwd();
+    process.chdir(path.join(TEST_DIR));
+    try {
+      const response = await GET(new Request("http://localhost/api/operations/noc"));
+      const body = await response.json();
+
+      expect(body.operatorLoadStatus.status).toBe("missing");
+      expect(body.operatorLoadStatus.p95Ms).toBeNull();
+      expect(body.operatorLoadStatus.gitSha).toBe("abc123");
+      expect(body.panels.operatorLoad.status).toBe("missing");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });
 describe("Round 2 blocking fixes", () => {
   beforeEach(() => {

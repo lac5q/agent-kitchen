@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // JSDOM doesn't implement scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -407,6 +407,48 @@ describe("VoicePanel", () => {
     expect(screen.getByRole("option", { name: "PC (Knowledge) - Knowledge Agent" })).toBeInTheDocument();
   });
 
+  it("labels Cursor IDE, fallback platform CLI, and company-backed Paperclip agents", () => {
+    mockUseAgents.mockReturnValue({
+      data: {
+        agents: [
+          {
+            id: "cursor-ide-agent",
+            name: "Cursor Agent",
+            role: "IDE bridge",
+            company: null,
+            platform: "cursor",
+            protocol: "local",
+            metadata: {},
+          },
+          {
+            id: "unknown-cli",
+            name: "Unknown CLI",
+            role: "native cli worker",
+            company: null,
+            platform: "custom-runtime",
+            protocol: "local",
+            metadata: {},
+          },
+          {
+            id: "client-agent",
+            name: "Client Agent",
+            role: "Client helper",
+            company: "ClientCo",
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "pmo-agents" },
+          },
+        ],
+      },
+    } as ReturnType<typeof useAgents>);
+
+    render(<VoicePanel />);
+
+    expect(screen.getByRole("option", { name: "Cursor IDE - Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom Runtime CLI - Unknown CLI" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "PC (ClientCo) - Client Agent" })).toBeInTheDocument();
+  });
+
   it("ignores malformed stream chunks and surfaces raw JSON chat errors", async () => {
     vi.stubGlobal(
       "fetch",
@@ -433,6 +475,27 @@ describe("VoicePanel", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/plain failure/)).toBeInTheDocument();
+    });
+  });
+
+  it("falls back to the raw chat error when embedded JSON cannot be parsed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        text: async () => "upstream {not-json",
+      }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "bad json" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/upstream \{not-json/)).toBeInTheDocument();
     });
   });
 
@@ -466,6 +529,65 @@ describe("VoicePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
 
     expect(alert).toHaveBeenCalledWith("Speech recognition not supported in this browser. Use Chrome.");
+  });
+
+  it("stops an active voice capture when the mic is clicked again", () => {
+    const stop = vi.fn();
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = stop;
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition);
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop listening" }));
+
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it("clears listening state when recognition reports an error or end", async () => {
+    let instance: {
+      onerror: (() => void) | null;
+      onend: (() => void) | null;
+      start: () => void;
+      stop: () => void;
+    } | null = null;
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      constructor() {
+        instance = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition);
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+    await act(async () => {
+      instance?.onerror?.();
+    });
+    expect(screen.getByRole("button", { name: "Start listening" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+    await act(async () => {
+      instance?.onend?.();
+    });
+    expect(screen.getByRole("button", { name: "Start listening" })).toBeInTheDocument();
   });
 
   it("keeps the chat reply visible when TTS playback fails", async () => {
@@ -515,5 +637,63 @@ describe("VoicePanel", () => {
       expect(screen.getByText("Reply without audio")).toBeInTheDocument();
       expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
     });
+  });
+
+  it("can stop active TTS playback after audio starts", async () => {
+    class MockRecognition {
+      continuous = false;
+      interimResults = true;
+      lang = "en-US";
+      onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        const result = { isFinal: true, 0: { transcript: "voice tts" } } as unknown as SpeechRecognitionResult;
+        this.onresult?.({ results: [result] } as unknown as SpeechRecognitionEvent);
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: {"text":"Audio reply"}\n\ndata: [DONE]\n\n'));
+              controller.close();
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: async () => new Blob(["audio"], { type: "audio/mpeg" }),
+        }),
+    );
+    const pause = vi.fn();
+    vi.stubGlobal(
+      "Audio",
+      class {
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        pause = pause;
+        play = vi.fn().mockResolvedValue(undefined);
+      },
+    );
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:voice"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(<VoicePanel />);
+    fireEvent.click(screen.getByRole("button", { name: "voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start listening" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Stop speaking")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Stop speaking"));
+    expect(pause).toHaveBeenCalled();
   });
 });

@@ -609,17 +609,30 @@ describe("AgentEngagementConsole", () => {
     });
   });
 
-  it("ignores TTS failures without blocking chat", async () => {
+  it("ignores TTS failures without blocking a spoken direct chat", async () => {
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        this.onresult?.({ results: [{ 0: { transcript: "spoken hello" } }] });
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
     vi.mocked(fetch)
       .mockResolvedValueOnce(chatStream("spoken reply"))
       .mockResolvedValueOnce(new Response("tts down", { status: 503 }));
 
     render(<AgentEngagementConsole />);
-    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "hello" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
 
     await waitFor(() => {
       expect(screen.getByText("spoken reply")).toBeInTheDocument();
+      expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
     });
   });
 
@@ -643,5 +656,96 @@ describe("AgentEngagementConsole", () => {
     fireEvent.click(screen.getByLabelText("Speak to agent"));
 
     expect(stop).toHaveBeenCalled();
+  });
+
+  it("falls back on malformed stream errors and records recognition errors", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response("upstream {not-json", { status: 500 }),
+    );
+
+    render(<AgentEngagementConsole />);
+    fireEvent.change(screen.getByLabelText("Direct message"), { target: { value: "broken" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chat unavailable: upstream \{not-json/)).toBeInTheDocument();
+    });
+
+    const stop = vi.fn();
+    let instance: { onerror: (() => void) | null; start: () => void; stop: () => void } | null = null;
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0: { transcript: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = stop;
+      constructor() {
+        instance = this;
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+    instance?.onerror?.();
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+    fireEvent.click(screen.getByLabelText("Speak to agent"));
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it("runs spoken room prompts with unknown participants and skips empty transcripts", async () => {
+    vi.mocked(useAgents).mockReturnValue({
+      data: {
+        agents: [
+          { ...mockAgents[0], status: "active" as const },
+          { ...mockAgents[1], id: "mystery-agent", name: "", status: "active" as const },
+        ],
+      },
+      isLoading: false,
+    } as ReturnType<typeof useAgents>);
+
+    const play = vi.fn().mockResolvedValue(undefined);
+    class MockAudio {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play = play;
+      pause = vi.fn();
+    }
+    vi.stubGlobal("Audio", MockAudio as unknown as typeof Audio);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:room"),
+      revokeObjectURL: vi.fn(),
+    });
+    let transcript = "room update";
+    class MockRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "en-US";
+      onresult: ((event: { results: Array<{ 0?: { transcript?: string } }> }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        this.onresult?.({ results: [{ 0: { transcript } }] });
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", MockRecognition as unknown as typeof SpeechRecognition);
+    vi.mocked(fetch).mockResolvedValue(chatStream("room voice reply"));
+
+    render(<AgentEngagementConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Group Room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Speak to room" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("room voice reply").length).toBeGreaterThan(0);
+      expect(fetch).toHaveBeenCalledWith("/api/tts", expect.objectContaining({ method: "POST" }));
+    });
+
+    const callsBeforeEmptyTranscript = vi.mocked(fetch).mock.calls.length;
+    transcript = "   ";
+    fireEvent.click(screen.getByRole("button", { name: "Speak to room" }));
+    expect(vi.mocked(fetch).mock.calls.length).toBe(callsBeforeEmptyTranscript);
   });
 });

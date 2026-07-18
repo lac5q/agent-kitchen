@@ -265,6 +265,57 @@ describe("POST /api/skills/proposals", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400 — rejects invalid JSON, non-object bodies, missing proposed_by, and invalid version", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const { route } = await loadRouteAndDb();
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/proposals", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: "{",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+
+    const nonObject = await route.POST(
+      makePost([], { authorization: "Bearer right-key" })
+    );
+    expect(nonObject.status).toBe(400);
+    expect((await nonObject.json()).error).toBe("Body must be an object");
+
+    const missingProposer = await route.POST(
+      makePost(
+        {
+          source_harness: "claude",
+          skill_name: "x",
+          detected_content_hash: "a".repeat(64),
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(missingProposer.status).toBe(400);
+    expect((await missingProposer.json()).error).toMatch(/proposed_by/);
+
+    const invalidVersion = await route.POST(
+      makePost(
+        {
+          source_harness: "claude",
+          skill_name: "x",
+          version: " ",
+          detected_content_hash: "a".repeat(64),
+          proposed_by: "scanner",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(invalidVersion.status).toBe(400);
+    expect((await invalidVersion.json()).error).toMatch(/version/);
+  });
+
   it("400 — malformed detected_content_hash", async () => {
     process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
     const { route } = await loadRouteAndDb();
@@ -298,6 +349,96 @@ describe("POST /api/skills/proposals", () => {
       )
     );
     expect(res.status).toBe(400);
+  });
+
+  it("400 — detected hash and body must be strings when present", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const { route } = await loadRouteAndDb();
+
+    const badHash = await route.POST(
+      makePost(
+        {
+          source_harness: "claude",
+          skill_name: "x",
+          detected_content_hash: 123,
+          proposed_by: "scanner",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(badHash.status).toBe(400);
+    expect((await badHash.json()).error).toMatch(/detected_content_hash/);
+
+    const badBody = await route.POST(
+      makePost(
+        {
+          source_harness: "claude",
+          skill_name: "x",
+          detected_content_body: 123,
+          proposed_by: "scanner",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(badBody.status).toBe(400);
+    expect((await badBody.json()).error).toMatch(/detected_content_body/);
+  });
+
+  it("passes optional version and diff payload through proposal creation", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    const { route } = await loadRouteAndDb();
+    const res = await route.POST(
+      makePost(
+        {
+          source_harness: " claude ",
+          skill_name: " proposal-rich ",
+          version: " 2.0.0 ",
+          detected_content_body: "body v2",
+          proposed_by: " scanner ",
+          diff_summary: "changed",
+          diff_payload: { files: ["SKILL.md"] },
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.proposal.version).toBe("2.0.0");
+    expect(json.proposal.diff_payload).toBe(JSON.stringify({ files: ["SKILL.md"] }));
+  });
+
+  it("500 — reports unexpected proposal creation failures", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    vi.doMock("@/lib/skills/skill-sync-governance", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/skills/skill-sync-governance")>(
+        "@/lib/skills/skill-sync-governance"
+      );
+      return {
+        ...actual,
+        detectSkillChange: () => {
+          throw new Error("db write exploded");
+        },
+      };
+    });
+    const { getDb } = await import("@/lib/db");
+    const { initSchema } = await import("@/lib/db-schema");
+    const route = await import("../route");
+    initSchema(getDb());
+
+    const res = await route.POST(
+      makePost(
+        {
+          source_harness: "claude",
+          skill_name: "explode",
+          detected_content_hash: "a".repeat(64),
+          proposed_by: "scanner",
+        },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toContain("db write exploded");
+    vi.doUnmock("@/lib/skills/skill-sync-governance");
   });
 
   it("no raw skill body is leaked back in the response", async () => {

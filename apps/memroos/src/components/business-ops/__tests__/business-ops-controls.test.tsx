@@ -16,11 +16,17 @@ vi.mock("@/lib/api-client", () => apiMock);
 
 vi.mock("recharts", () => ({
   LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Line: () => null,
+  Line: ({ dataKey }: { dataKey?: string | (() => unknown) }) => {
+    if (typeof dataKey === "function") dataKey();
+    return null;
+  },
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
-  Tooltip: () => null,
+  Tooltip: ({ formatter }: { formatter?: (value: unknown, name: unknown) => [string, string] }) => {
+    const formatted = formatter?.(0.81234, "W");
+    return formatted ? <div data-testid="mock-tooltip">{formatted.join(":")}</div> : null;
+  },
   Legend: () => null,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -221,6 +227,76 @@ describe("Business Ops controls", () => {
     expect(l1).toBeChecked();
     fireEvent.click(l1!);
     expect(l1).not.toBeChecked();
+
+    const l2 = container.querySelector<HTMLInputElement>("[data-kpi-layer-toggle='l2']");
+    const l3 = container.querySelector<HTMLInputElement>("[data-kpi-layer-toggle='l3']");
+    expect(l2).toBeChecked();
+    expect(l3).toBeChecked();
+    fireEvent.click(l2!);
+    fireEvent.click(l3!);
+    expect(l2).not.toBeChecked();
+    expect(l3).not.toBeChecked();
+    expect(screen.getByTestId("mock-tooltip")).toHaveTextContent("0.8123:W");
+  });
+
+  it("KpiTimelinePanel applies until filters and renders unavailable L3 fallback line", () => {
+    apiMock.useEvalHistory.mockReturnValue({
+      data: {
+        runs: [
+          {
+            id: "run-after",
+            traceId: "trace-after",
+            agentId: "agent-1",
+            role: "default",
+            compositeW: 0.7,
+            trusted: true,
+            completedAt: "2026-05-22T00:00:00.000Z",
+            layers: {
+              l1: { score: 0.7, scorers: [] },
+              l2: { score: 0.7, scorers: [] },
+              l3: { score: null, scorers: [{ metadata: { unavailable: true } }] },
+            },
+            scorerResults: [],
+            judge: {},
+            driftGuard: { status: "passed" },
+          },
+          {
+            id: "run-inside",
+            traceId: "trace-inside",
+            agentId: "agent-1",
+            role: "default",
+            compositeW: 0.6,
+            trusted: true,
+            completedAt: "2026-05-20T00:00:00.000Z",
+            layers: {
+              l1: { score: 0.6, scorers: [] },
+              l2: { score: 0.6, scorers: [] },
+              l3: { score: null, scorers: [{ metadata: { unavailable: true } }] },
+            },
+            scorerResults: [],
+            judge: {},
+            driftGuard: { status: "passed" },
+          },
+        ],
+        timestamp: "2026-05-22T00:00:00.000Z",
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    const { container } = render(
+      <KpiTimelinePanel
+        agentId="agent-1"
+        dateRange={{ since: "2026-05-01T00:00:00.000Z", until: "2026-05-21T00:00:00.000Z" }}
+      />,
+    );
+
+    expect(screen.getByText(/1 run shown/i)).toBeInTheDocument();
+    expect(screen.getByText(/l3: unavailable/i)).toBeInTheDocument();
+    expect(container.querySelector("[data-kpi-timeline-scope]")).toHaveAttribute(
+      "data-kpi-timeline-scope",
+      "agentId=agent-1, since=2026-05-01",
+    );
   });
 
   it("AdapterStatusPanel renders loading and error states with truthful status badges", () => {

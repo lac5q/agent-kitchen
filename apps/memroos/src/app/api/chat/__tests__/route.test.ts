@@ -475,6 +475,45 @@ describe("chat route model resolution", () => {
     ]));
   });
 
+  it("assembles knowledge-agent context sections and strips SOUL frontmatter", async () => {
+    mkdirSync(path.join(agentConfigsPath, "knowledge-agent"), { recursive: true });
+    writeFileSync(
+      path.join(agentConfigsPath, "knowledge-agent", "SOUL.md"),
+      "---\ntitle: Knowledge\n---\n\n# Knowledge Agent\n",
+    );
+    writeFileSync(path.join(agentConfigsPath, "knowledge-agent", "AGENTS.md"), "model: claude-haiku-4-5\n");
+    writeFileSync(path.join(agentConfigsPath, "knowledge-agent", "HEARTBEAT_STATE.md"), "Current: indexing docs\n");
+    writeFileSync(path.join(agentConfigsPath, "knowledge-agent", "HEARTBEAT.md"), "Older activity should be skipped\n");
+    writeFileSync(path.join(agentConfigsPath, "knowledge-agent", "MEMORY.md"), "Memory note\n");
+    writeFileSync(path.join(agentConfigsPath, "knowledge-agent", "LESSONS.md"), "Lesson note\n");
+    const { buildAgentContext, resolveChatRuntime } = await loadRoute();
+
+    const context = await buildAgentContext("knowledge-agent");
+    const runtime = await resolveChatRuntime("knowledge-agent", context);
+
+    expect(context.source).toBe("knowledge");
+    expect(context.systemPrompt).toContain("# Knowledge Agent");
+    expect(context.systemPrompt).not.toContain("title: Knowledge");
+    expect(context.systemPrompt).toContain("## Agent Instructions");
+    expect(context.systemPrompt).toContain("## Current Status");
+    expect(context.systemPrompt).not.toContain("## Recent Activity");
+    expect(context.systemPrompt).toContain("## Memory");
+    expect(context.systemPrompt).toContain("## Lessons Learned");
+    expect(runtime).toEqual({ runner: "anthropic", model: "claude-haiku-4-5" });
+  });
+
+  it("uses heartbeat activity when no heartbeat state is present", async () => {
+    mkdirSync(path.join(agentConfigsPath, "heartbeat-agent"), { recursive: true });
+    writeFileSync(path.join(agentConfigsPath, "heartbeat-agent", "SOUL.md"), "# Heartbeat Agent\n");
+    writeFileSync(path.join(agentConfigsPath, "heartbeat-agent", "HEARTBEAT.md"), "Recent: shipped a fix\n");
+    const { buildAgentContext } = await loadRoute();
+
+    const context = await buildAgentContext("heartbeat-agent");
+
+    expect(context.systemPrompt).toContain("## Recent Activity");
+    expect(context.systemPrompt).toContain("Recent: shipped a fix");
+  });
+
   it("still routes registered OpenCode-class agents through OpenCode", async () => {
     mkdirSync(path.join(pmoAgentsPath, "qwen-engineer"), { recursive: true });
     writeFileSync(path.join(pmoAgentsPath, "qwen-engineer", "AGENTS.md"), "# Qwen Engineer\n");
@@ -490,6 +529,21 @@ describe("chat route model resolution", () => {
     const runtime = await resolveChatRuntime("qwen-engineer", context);
 
     expect(runtime).toEqual({ runner: "opencode", model: "bailian/qwen3.5-plus" });
+  });
+
+  it("routes registered Opus-named Claude agents to the Opus alias", async () => {
+    const { buildAgentContext, resolveChatRuntime } = await loadRoute();
+    await registerTestAgent({
+      id: "claude-opus-reviewer",
+      name: "Claude Opus Reviewer",
+      role: "Opus reviewer",
+      platform: "claude",
+    });
+
+    const context = await buildAgentContext("claude-opus-reviewer");
+    const runtime = await resolveChatRuntime("claude-opus-reviewer", context);
+
+    expect(runtime).toEqual({ runner: "anthropic", model: "claude-opus-4-6" });
   });
 
   it("keeps PMO routing ahead of registered Claude name hints", async () => {
@@ -547,6 +601,19 @@ describe("chat route model resolution", () => {
     expect(source).toContain("MEMROOS_OPENCODE_MAX_RSS_MB");
     expect(source).toContain("OpenCode chat runner exceeded");
     expect(source).toContain("stopProcessGroup");
+  });
+
+  it("reports recent provider-limit failures as blocked runtime status", async () => {
+    const { chatRuntimeStatus, recordChatRuntimeFailure, recordChatRuntimeSuccess } = await loadRoute();
+    const runtime = { runner: "anthropic" as const, model: "claude-haiku-4-5" };
+
+    recordChatRuntimeFailure(runtime, "credit balance is too low");
+    const status = chatRuntimeStatus(runtime);
+
+    expect(status.status).toBe("blocked");
+    expect(status.detail).toContain("quota-blocked");
+    expect(status.lastError).toBe("credit balance is too low");
+    recordChatRuntimeSuccess(runtime);
   });
 
   it("allows an explicit operator chat model override", async () => {

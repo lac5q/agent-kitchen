@@ -361,6 +361,54 @@ describe("runtime health route", () => {
     expect(knowledge.detail).toContain("still running");
   });
 
+  it("returns cached knowledge-index results while a refresh is still running", async () => {
+    process.env.KNOWLEDGE_INDEX_HEALTH_TTL_MS = "1";
+    process.env.KNOWLEDGE_INDEX_HEALTH_REQUEST_TIMEOUT_MS = "1";
+    let jsonRuns = 0;
+    vi.mocked(execFile).mockImplementation((_command, args, options, callback) => {
+      const done = typeof options === "function" ? options : callback;
+      if (!done) throw new Error("missing callback");
+      if (Array.isArray(args) && args.includes("--json")) {
+        jsonRuns += 1;
+        if (jsonRuns === 1) {
+          done(
+            null,
+            Buffer.from(JSON.stringify({ ok: true, pendingEmbeddings: 4, failures: [], warnings: ["minor lag"] })),
+            ""
+          );
+        }
+        return {} as ReturnType<typeof execFile>;
+      }
+      done(null, "", "");
+      return {} as ReturnType<typeof execFile>;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          memory_runtime: { status: "available" },
+          queue: { queued: 0 },
+        })
+      )
+    );
+    const { GET } = await loadRoute();
+
+    const first = await GET();
+    const firstBody = await first.json();
+    expect(firstBody.services.find((service: { service: string }) => service.service === "Knowledge Index").detail)
+      .toContain("4 pending embeddings");
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await GET();
+    const secondBody = await second.json();
+    const knowledge = secondBody.services.find((service: { service: string }) => service.service === "Knowledge Index");
+
+    expect(knowledge.status).toBe("up");
+    expect(knowledge.detail).toContain("refresh still running");
+  });
+
   it("includes graph memory status in app health", async () => {
     vi.stubGlobal(
       "fetch",

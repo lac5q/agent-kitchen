@@ -528,6 +528,17 @@ describe("proxy", () => {
     expect(await response.text()).toBe("");
   });
 
+  it("redirects UI routes when the access_token cookie is invalid", async () => {
+    const response = await proxy(
+      new NextRequest("https://memroos.example.com/agents", {
+        headers: { host: "memroos.example.com", cookie: "access_token=not.a.jwt" },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://memroos.example.com/login");
+  });
+
   it("redirects configured app hosts when x-forwarded-proto is http", async () => {
     process.env.MEMROOS_HTTPS_APP_HOSTS = "secure.memroos.test";
     const response = await proxy(

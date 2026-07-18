@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RegisteredAgent } from "@/types";
 
@@ -385,5 +385,104 @@ describe("AgentRegistryPage", () => {
     expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent("stale heartbeat");
     expect(screen.getByText(/unavailable — source=scan/)).toBeInTheDocument();
     expect(screen.getByText(/rest — \(unavailable\)/)).toBeInTheDocument();
+  });
+
+  it("shows warning and alert liveness tones and filters by status and liveness", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents: [
+          { ...agents[0], status: "idle", liveness: { state: "stale", ageMs: 120_000, label: "stale" } },
+          { ...agents[1], status: "error", liveness: { state: "error", ageMs: null, label: "error" } },
+        ],
+        timestamp: "",
+        liveness: { value: 1, status: "stale", source: "heartbeat", reason: "stale" },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+
+    const { rerender } = render(<AgentRegistryPage />);
+    expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent("stale");
+
+    fireEvent.click(screen.getByRole("button", { name: "idle", exact: true }));
+    expect(screen.getByText("REST Agent")).toBeInTheDocument();
+    expect(screen.queryByText("ADK Prime Agent")).not.toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-agents-filter-row="status"] [data-filter-value="all"]') as HTMLElement);
+    fireEvent.click(document.querySelector('[data-agents-filter-row="status"] [data-filter-value="error"]') as HTMLElement);
+    expect(screen.getByText("ADK Prime Agent")).toBeInTheDocument();
+    expect(screen.queryByText("REST Agent")).not.toBeInTheDocument();
+
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents,
+        timestamp: "",
+        liveness: { value: 0, status: "error", source: "heartbeat", reason: "offline" },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+    rerender(<AgentRegistryPage />);
+    expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent("offline");
+  });
+
+  it("captures registration success keys and closes the detail drawer", async () => {
+    render(<AgentRegistryPage />);
+
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "Key Agent" } });
+    fireEvent.change(screen.getByLabelText("Agent role"), { target: { value: "Does work" } });
+    fireEvent.click(screen.getByText("Register"));
+    const [, registerOptions] = mutateRegister.mock.calls[0];
+    await act(async () => {
+      registerOptions.onSuccess({ apiKey: "ak_one_time" });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("ak_one_time")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("A2A card URL"));
+    fireEvent.change(screen.getByLabelText("A2A agent-card URL"), {
+      target: { value: "https://example.test/.well-known/agent-card.json" },
+    });
+    fireEvent.click(screen.getByText("Register A2A Agent"));
+    const [, a2aOptions] = mutateRegisterA2a.mock.calls[0];
+    await act(async () => {
+      a2aOptions.onSuccess({ apiKey: "ak_a2a_once" });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("ak_a2a_once")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("REST Agent"));
+    expect(screen.getAllByText("Reports liveness").length).toBeGreaterThan(1);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.getAllByText("Reports liveness")).toHaveLength(1);
+    });
+  });
+
+  it("lets the rendered invite Copy button fall back when clipboard APIs fail", async () => {
+    const execCommand = vi.fn(() => false);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    const [, options] = mutateInvite.mock.calls[0];
+    await options.onSuccess({ command: "curl -fsSL https://memroos.example.test/invite | bash" });
+
+    await waitFor(() => {
+      expect(screen.getByText("Invite created. Copy it from the box below.")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => {
+      expect(screen.getByText("Clipboard unavailable. Copy it from the box below.")).toBeInTheDocument();
+    });
   });
 });
