@@ -130,6 +130,109 @@ describe("agent context bus routes", () => {
     expect(waitPayload.reply.id).toBe(reply.reply.id);
   });
 
+  it("guards individual message fetch and ack boundaries", async () => {
+    const { listRoute, getRoute, ackRoute, registerAgent } = await loadRoutes();
+    const alpha = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Sender",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+    const beta = registerAgent({
+      id: "agent-beta",
+      name: "Agent Beta",
+      role: "Recipient",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+    const gamma = registerAgent({
+      id: "agent-gamma",
+      name: "Agent Gamma",
+      role: "Observer",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const sendRes = await listRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages", alpha.apiKey!, {
+        fromAgent: "agent-alpha",
+        toAgent: "agent-beta",
+        body: "Please respond when ready.",
+        replyRequired: true,
+      }) as any
+    );
+    const sent = await sendRes.json();
+
+    const unauthorizedFetch = await getRoute.GET(
+      new Request(`http://localhost/api/agent-context/messages/${sent.message.id}?agent=agent-alpha`) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(unauthorizedFetch.status).toBe(401);
+
+    const missingFetch = await getRoute.GET(
+      new Request("http://localhost/api/agent-context/messages/missing?agent=agent-alpha", {
+        headers: { authorization: `Bearer ${alpha.apiKey}` },
+      }) as any,
+      { params: Promise.resolve({ id: "missing" }) }
+    );
+    expect(missingFetch.status).toBe(404);
+
+    const forbiddenFetch = await getRoute.GET(
+      new Request(`http://localhost/api/agent-context/messages/${sent.message.id}?agent=agent-gamma`, {
+        headers: { authorization: `Bearer ${gamma.apiKey}` },
+      }) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(forbiddenFetch.status).toBe(403);
+
+    const directFetch = await getRoute.GET(
+      new Request(`http://localhost/api/agent-context/messages/${sent.message.id}?agent=agent-alpha`, {
+        headers: { authorization: `Bearer ${alpha.apiKey}` },
+      }) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(directFetch.status).toBe(200);
+    expect((await directFetch.json()).message.id).toBe(sent.message.id);
+
+    const timedOutFetch = await getRoute.GET(
+      new Request(`http://localhost/api/agent-context/messages/${sent.message.id}?agent=agent-alpha&wait_for=reply&wait_ms=1`, {
+        headers: { authorization: `Bearer ${alpha.apiKey}` },
+      }) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(timedOutFetch.status).toBe(200);
+    expect(await timedOutFetch.json()).toMatchObject({ reply: null, timedOut: true });
+
+    const unauthorizedAck = await ackRoute.POST(
+      new Request(`http://localhost/api/agent-context/messages/${sent.message.id}/ack`, {
+        method: "POST",
+        body: JSON.stringify({ agentId: "agent-beta" }),
+      }) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(unauthorizedAck.status).toBe(401);
+
+    const wrongAgentAck = await ackRoute.POST(
+      postRequest(`http://localhost/api/agent-context/messages/${sent.message.id}/ack`, gamma.apiKey!, {
+        agentId: "agent-gamma",
+      }) as any,
+      { params: Promise.resolve({ id: sent.message.id }) }
+    );
+    expect(wrongAgentAck.status).toBe(404);
+
+    const missingAck = await ackRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages/missing/ack", beta.apiKey!, {
+        agent_id: "agent-beta",
+      }) as any,
+      { params: Promise.resolve({ id: "missing" }) }
+    );
+    expect(missingAck.status).toBe(404);
+  });
+
   it("rejects unauthorized and blocked context messages", async () => {
     const { listRoute, getDb, registerAgent } = await loadRoutes();
     const alpha = registerAgent({

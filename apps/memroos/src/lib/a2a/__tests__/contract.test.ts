@@ -10,6 +10,9 @@ import {
   a2aTaskEventSchema,
   a2aTaskSchema,
   buildA2aOpenApiDocument,
+  parseA2aAgentCard,
+  parseA2aTask,
+  parseA2aTaskEvent,
 } from "../contract";
 import {
   A2A_CANONICAL_AGENT_CARD_PATH,
@@ -22,6 +25,29 @@ describe("A2A contract", () => {
     const card = buildMemroosAgentCard();
 
     expect(a2aAgentCardSchema.parse(card)).toEqual(card);
+  });
+
+  it("builds a MemRoOS agent card from explicit endpoint config", () => {
+    const card = buildMemroosAgentCard({
+      publicBaseUrl: "https://memroos.example",
+      endpointBaseUrl: "https://agents.example/a2a",
+      canonicalCardPath: A2A_CANONICAL_AGENT_CARD_PATH,
+      compatCardPath: A2A_COMPAT_AGENT_CARD_PATH,
+      profile: "cloud-https",
+      remoteCardTimeoutMs: 1000,
+      allowPrivateNetworkCards: false,
+      adkFixtureCardUrl: "https://agents.example/card.json",
+    });
+
+    expect(card.url).toBe("https://agents.example/a2a");
+    expect(card.extensions.memroos.profile).toBe("cloud-https");
+    expect(card.securitySchemes.bearerAuth.type).toBe("http");
+    expect(card.skills.map((skill) => skill.id)).toEqual([
+      "agent_registry",
+      "task_delegation",
+      "memory_reporting",
+    ]);
+    expect(parseA2aAgentCard(card)).toEqual(card);
   });
 
   it("rejects invalid task state values", () => {
@@ -53,6 +79,30 @@ describe("A2A contract", () => {
     };
 
     expect(a2aTaskEventSchema.parse(event)).toEqual(event);
+    expect(parseA2aTask(event.task)).toEqual(event.task);
+    expect(parseA2aTaskEvent(event)).toEqual(event);
+  });
+
+  it("accepts supported agent-card security scheme variants and rejects bad cards", () => {
+    const card = buildMemroosAgentCard();
+    expect(
+      parseA2aAgentCard({
+        ...card,
+        securitySchemes: {
+          apiKeyAuth: { type: "apiKey", in: "header", name: "X-Agent-Key" },
+          oauth: { type: "oauth2", description: "delegated flow" },
+          oidc: { type: "openIdConnect", description: "OIDC discovery" },
+        },
+        security: [{ apiKeyAuth: [] }],
+      }).securitySchemes
+    ).toHaveProperty("apiKeyAuth");
+
+    expect(() =>
+      parseA2aAgentCard({
+        ...card,
+        url: "not a url",
+      })
+    ).toThrow();
   });
 
   it("builds an OpenAPI contract from the shared route constants", () => {

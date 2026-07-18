@@ -59,6 +59,29 @@ describe("native-memory sink (ENTOPS-07 code slice)", () => {
     expect(result.budget.overByLines).toBeGreaterThan(0);
   });
 
+  it("surfaces content-filter alerts and pattern names from processed ingests", () => {
+    const secret = "ghp_" + "b".repeat(36);
+    const result = processNativeMemoryIngest({
+      source: "codex",
+      agentId: "codex-agent",
+      userId: "user-2",
+      content: `Keep this note but redact ${secret}`,
+      memoryPath: "~/.codex/memory.md",
+      canonicalContent: `Keep this note but redact ${secret}`,
+    });
+
+    expect(result.replay).not.toContain(secret);
+    expect(result.filter.redacted).toBe(true);
+    expect(result.filter.matchCount).toBeGreaterThan(0);
+    expect(result.filter.patternNames).toContain("github_token_pat");
+    expect(result.alerts).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("content_filter: redacted"),
+      ])
+    );
+    expect(result.diff).not.toBeNull();
+  });
+
   it("Hermes MEMORY.md skills-routing layer is untouched (grep-proof)", () => {
     const repo = getRepoRoot();
     const candidates = [

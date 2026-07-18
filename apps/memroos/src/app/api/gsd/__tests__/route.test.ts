@@ -225,4 +225,37 @@ describe("GSD command routes", () => {
       bypassReason: "operator accepted external deploy evidence",
     });
   });
+
+  it("guards shipcheck auth and reports invalid goal receipts safely", async () => {
+    const { shipcheck, registerAgent } = await loadRoutes();
+    const agent = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const unauthorized = await shipcheck.POST(
+      request("http://localhost/api/gsd/shipcheck", undefined, {
+        method: "POST",
+        body: JSON.stringify({ goalId: "missing-goal", lane: "code" }),
+      }) as any
+    );
+    expect(unauthorized.status).toBe(401);
+
+    const invalid = await shipcheck.POST(
+      request("http://localhost/api/gsd/shipcheck", agent.apiKey, {
+        method: "POST",
+        body: JSON.stringify({ goal_id: "missing-goal", lane: "not-a-lane" }),
+      }) as any
+    );
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({
+      ok: false,
+      status: "blocked",
+      missingProof: expect.any(Array),
+    });
+  });
 });

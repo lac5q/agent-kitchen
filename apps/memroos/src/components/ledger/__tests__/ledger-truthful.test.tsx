@@ -265,5 +265,33 @@ describe("Ledger truthful metric rendering", () => {
       expect(valueEl).toBeTruthy();
       expect(valueEl?.textContent).toContain("$0.00");
     });
+
+    it("recomputes spend and live savings when operator rates change", () => {
+      render(
+        <CostCalculator
+          totalInput={2_000_000}
+          totalOutput={1_000_000}
+          tokensSaved={500_000}
+          savingsEnvelope={{
+            value: 500_000,
+            status: "live",
+            source: "/api/tokens",
+            observedAt: "2026-05-21T00:00:00.000Z",
+            freshnessMs: 1000,
+            scope: { window: "cumulative", workspace: "all" },
+            reason: "Measured retained-memory savings",
+          }}
+        />
+      );
+
+      expect(document.querySelector("[data-cost-spend-card]")?.textContent).toContain("$21.00");
+      expect(document.querySelector("[data-cost-savings-value]")?.textContent).toContain("$1.50");
+
+      fireEvent.change(document.querySelector("[data-cost-input-rate]")!, { target: { value: "4" } });
+      fireEvent.change(document.querySelector("[data-cost-output-rate]")!, { target: { value: "" } });
+
+      expect(document.querySelector("[data-cost-spend-card]")?.textContent).toContain("$8.00");
+      expect(document.querySelector("[data-cost-savings-value]")?.textContent).toContain("$2.00");
+    });
   });
 });

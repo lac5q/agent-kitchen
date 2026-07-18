@@ -39,7 +39,7 @@ describe("POST /api/memory/add", () => {
 
   it("rejects missing, invalid, and body-only agent identity", async () => {
     const { POST, registerAgent } = await loadRoute();
-    registerAgent({
+    const { apiKey } = registerAgent({
       id: "memory-agent",
       name: "Memory Agent",
       role: "Writes memory",
@@ -61,6 +61,18 @@ describe("POST /api/memory/add", () => {
         )
       ).status
     ).toBe(401);
+
+    expect(
+      (
+        await POST(
+          new Request("http://localhost/api/memory/add", {
+            method: "POST",
+            headers: { authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(["not", "an", "object"]),
+          })
+        )
+      ).status
+    ).toBe(400);
   });
 
   it("forwards valid memory writes to mem0 and audits the write", async () => {
@@ -157,6 +169,15 @@ describe("POST /api/memory/add", () => {
     delete process.env.MEMROOS_MEMORY_WRITE_TIMEOUT_MS;
   });
 
+  it("falls back to default memory timeout for invalid env values", async () => {
+    process.env.MEMROOS_MEMORY_WRITE_TIMEOUT_MS = "-1";
+    const { memoryWriteTimeoutMs } = await loadRoute();
+
+    expect(memoryWriteTimeoutMs()).toBe(30_000);
+
+    delete process.env.MEMROOS_MEMORY_WRITE_TIMEOUT_MS;
+  });
+
   it("returns a safe 502 when mem0 is unreachable", async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("connection refused"));
     const { POST, getDb, registerAgent } = await loadRoute();
@@ -181,6 +202,31 @@ describe("POST /api/memory/add", () => {
     expect(await res.json()).toEqual({ ok: false, error: "Memory backend unavailable" });
     const rows = getDb().prepare("SELECT agent_id FROM agent_memory_writes").all();
     expect(rows).toEqual([]);
+  });
+
+  it("returns a safe 502 when mem0 responds with a non-ok status", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ error: "down" }, { status: 503 }));
+    const { POST, getDb, registerAgent } = await loadRoute();
+    const { apiKey } = registerAgent({
+      id: "memory-agent",
+      name: "Memory Agent",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/memory/add", {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ text: "remember this", type: "episodic" }),
+      })
+    );
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ ok: false, error: "Memory backend unavailable" });
+    expect(getDb().prepare("SELECT agent_id FROM agent_memory_writes").all()).toEqual([]);
   });
 
   it("denies memory writes to tiers outside the agent capability policy", async () => {

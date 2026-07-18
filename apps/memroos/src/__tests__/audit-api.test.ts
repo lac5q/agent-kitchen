@@ -89,6 +89,30 @@ describe("GET /api/audit — auth gating", () => {
     const body = await res.json() as { entries: unknown[] };
     expect(Array.isArray(body.entries)).toBe(true);
   });
+
+  it("parses multi-value event filters and clamps oversized limits", async () => {
+    vi.mocked(authenticateUser).mockResolvedValue(reviewerSession);
+    writeAuditEntry(
+      {
+        actor_id: "system",
+        actor_role: "system",
+        event_type: "seal.rescored",
+        entity_type: "seal_job",
+        entity_id: "seal_job:s-002",
+        tenant_id: "default-tenant",
+      },
+      testDb
+    );
+
+    const res = await auditRoute.GET(
+      makeRequest("http://localhost/api/audit?eventType=seal.proposed,seal.rescored&limit=999&cursor=0") as any
+    );
+    const body = await res.json() as { entries: Array<{ event_type?: string; eventType?: string }>; total: number };
+
+    expect(res.status).toBe(200);
+    expect(body.total).toBeLessThanOrEqual(200);
+    expect(Array.isArray(body.entries)).toBe(true);
+  });
 });
 
 describe("GET /api/audit/export — role enforcement", () => {

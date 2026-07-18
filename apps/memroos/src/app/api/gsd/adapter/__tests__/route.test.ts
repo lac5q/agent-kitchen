@@ -131,4 +131,56 @@ describe("POST /api/gsd/adapter", () => {
     expect(payload.result).toBeDefined();
     expect(payload.policyReceipt).toBeUndefined();
   });
+
+  it("exposes the adapter contract only to authenticated agents", async () => {
+    const { route, registerAgent } = await loadRoute();
+    const agent = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const unauthorized = await route.GET(request("http://localhost/api/gsd/adapter") as any);
+    expect(unauthorized.status).toBe(401);
+
+    const res = await route.GET(request("http://localhost/api/gsd/adapter", agent.apiKey) as any);
+    const payload = await res.json();
+    expect(res.status).toBe(200);
+    expect(payload.contract.adapters).toContain("cursor");
+    expect(payload.contract.actions).toContain("model_route");
+    expect(payload.contract.ownsState).toBe(false);
+    expect(payload.contract.forbiddenOwnership).toContain("memory");
+  });
+
+  it("rejects malformed adapter requests before safety and policy gates", async () => {
+    const { route, registerAgent } = await loadRoute();
+    const agent = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const unauthorized = await route.POST(
+      request("http://localhost/api/gsd/adapter", undefined, {
+        method: "POST",
+        body: JSON.stringify({ adapterId: "hermes", action: "create_task" }),
+      }) as any
+    );
+    expect(unauthorized.status).toBe(401);
+
+    const invalid = await route.POST(
+      request("http://localhost/api/gsd/adapter", agent.apiKey, {
+        method: "POST",
+        body: JSON.stringify({ adapter_id: "unknown", action: "not-real" }),
+      }) as any
+    );
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ ok: false, error: "adapterId and action are required" });
+  });
 });

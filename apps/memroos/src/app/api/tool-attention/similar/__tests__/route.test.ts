@@ -48,4 +48,29 @@ describe("GET /api/tool-attention/similar", () => {
     const body = await res.json();
     expect(body.recommendations).toEqual([]);
   });
+
+  it("parses trimmed tags and finite limits from query params", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/tool-attention/similar?agent_id=agent-1&tags= review, ,security ,&limit=3"
+    );
+    await GET(req);
+
+    expect(getSimilarTaskRecommendations).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        agent_id: "agent-1",
+        tags: ["review", "security"],
+      }),
+      3
+    );
+  });
+
+  it("falls back to default limit when limit is not finite", async () => {
+    const req = new NextRequest("http://localhost/api/tool-attention/similar?limit=NaN");
+    await GET(req);
+
+    expect(getSimilarTaskRecommendations).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      10
+    );
+  });
 });

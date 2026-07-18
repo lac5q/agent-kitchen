@@ -43,4 +43,34 @@ describe("blog content loader", () => {
     expect(getPostBySlug("absent")).toBeNull();
     expect(getAllPosts().map((post) => post.slug)).toEqual(["new", "old"]);
   });
+
+  it("parses optional metadata fields without dropping markdown content", () => {
+    vi.spyOn(fs, "existsSync").mockImplementation((target) => String(target).endsWith("content/blog") || String(target).endsWith("deep-dive.md"));
+    vi.spyOn(fs, "readFileSync").mockReturnValue(
+      [
+        "---",
+        "title: Deep Dive",
+        "description: Details",
+        "publishedAt: 2026-07-01",
+        "updatedAt: 2026-07-02",
+        "author: MemRoOS",
+        "tags: [memory]",
+        "keywords: [agents]",
+        "---",
+        "Body content",
+      ].join("\n")
+    );
+
+    const post = getPostBySlug("deep-dive");
+
+    expect(post).toMatchObject({
+      slug: "deep-dive",
+      frontmatter: {
+        title: "Deep Dive",
+        author: "MemRoOS",
+      },
+      content: "Body content",
+    });
+    expect(post?.frontmatter.updatedAt).toEqual(new Date("2026-07-02T00:00:00.000Z"));
+  });
 });

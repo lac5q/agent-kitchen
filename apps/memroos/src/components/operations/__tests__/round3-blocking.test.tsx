@@ -473,6 +473,55 @@ describe("Round 3 [F2] Behavior Signals destinations render drilldown banner", (
 
 // ── Finding (3): /library consumes the Memory Not Digested scope note ────
 describe("Round 3 [F3] Library consumes Memory Not Digested scope note", () => {
+  it("/library renders a loading spinner while knowledge collections load", () => {
+    clearSearchParams();
+    api.useKnowledge.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+    api.useGitNexus.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    const { container } = render(<LibraryPage />);
+
+    expect(container.querySelector(".animate-spin")).toBeTruthy();
+  });
+
+  it("/library renders top collections, totals fallback, and GitNexus repos", () => {
+    clearSearchParams();
+    api.useKnowledge.mockReturnValue({
+      data: {
+        collections: [
+          { name: "alpha", docCount: 10 },
+          { name: "beta", docCount: 4 },
+          { name: "gamma", docCount: 1 },
+        ],
+        totalDocs: 15,
+      },
+      isLoading: false,
+      isError: false,
+    });
+    api.useGitNexus.mockReturnValue({
+      data: { repos: [{ name: "memroos" }] },
+      isLoading: false,
+      isError: false,
+    });
+
+    const { getByText, getAllByTestId } = render(<LibraryPage />);
+
+    expect(getByText("Knowledge")).toBeInTheDocument();
+    expect(getAllByTestId("collection-card").map((node) => node.textContent)).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+    ]);
+    expect(document.querySelector('[data-drilldown-from="library"]')).toBeNull();
+  });
+
   it("/library shows the Drilldown from Operations NOC banner when forwarded", () => {
     setSearchParams({
       from_window: "24h",

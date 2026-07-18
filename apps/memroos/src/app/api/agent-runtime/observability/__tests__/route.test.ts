@@ -7,13 +7,16 @@ import { buildObservabilityModel, renderObservabilityHtml, writeObservabilityDas
 
 let tempRoot: string | null = null;
 const originalHome = process.env.HOME;
+const originalCwd = process.cwd();
 
 const { GET } = await import("../route");
 
 afterEach(() => {
   if (tempRoot) rmSync(tempRoot, { recursive: true, force: true });
   tempRoot = null;
-  process.env.HOME = originalHome;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  process.chdir(originalCwd);
 });
 
 describe("agent runtime observability API", () => {
@@ -66,6 +69,26 @@ describe("agent runtime observability API", () => {
     const res = await GET(new Request("http://localhost/api/agent-runtime/observability") as any);
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("default-root-tool");
+  });
+
+  it("falls back to process cwd when HOME is unset", async () => {
+    tempRoot = mkdtempSync(path.join(tmpdir(), "hermes-cwd-default-"));
+    delete process.env.HOME;
+    process.chdir(tempRoot);
+    mkdirSync(path.join(tempRoot, ".hermes", "logs"), { recursive: true });
+    writeFileSync(
+      path.join(tempRoot, ".hermes", "logs", "tool-outcomes.jsonl"),
+      JSON.stringify({
+        timestamp: "2026-01-01T00:00:00.000Z",
+        tool: "cwd-root-tool",
+        success: true,
+        duration_ms: 20,
+      }) + "\n"
+    );
+
+    const res = await GET(new Request("http://localhost/api/agent-runtime/observability") as any);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("cwd-root-tool");
   });
 
   it("builds a safe empty model for missing or malformed logs", () => {

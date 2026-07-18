@@ -44,6 +44,22 @@ beforeEach(() => {
 });
 
 describe("POST /api/meeting/join", () => {
+  it("requires an authenticated operator session", async () => {
+    const { POST } = await import("../route");
+
+    sessionRole = null;
+    const unauthenticated = await POST(
+      makeRequest({ roomUrl: "https://daily.example/room", token: "token", consentConfirmed: true }) as never
+    );
+    expect(unauthenticated.status).toBe(403);
+
+    sessionRole = "reviewer";
+    const reviewer = await POST(
+      makeRequest({ roomUrl: "https://daily.example/room", token: "token", consentConfirmed: true }) as never
+    );
+    expect(reviewer.status).toBe(403);
+  });
+
   it("rejects join requests without explicit recording consent", async () => {
     const { POST } = await import("../route");
     const res = await POST(
@@ -57,6 +73,27 @@ describe("POST /api/meeting/join", () => {
     expect(res.status).toBe(403);
     const auditCount = testDb.prepare("SELECT COUNT(*) AS count FROM audit_entries").get() as { count: number };
     expect(auditCount.count).toBe(0);
+  });
+
+  it("requires room URL and token after consent", async () => {
+    const { POST } = await import("../route");
+    const missingRoom = await POST(
+      makeRequest({
+        roomUrl: "   ",
+        token: "daily-secret-token",
+        consentConfirmed: true,
+      }) as never
+    );
+    const missingToken = await POST(
+      makeRequest({
+        roomUrl: "https://daily.example/secret-room",
+        token: "",
+        consentConfirmed: true,
+      }) as never
+    );
+
+    expect(missingRoom.status).toBe(400);
+    expect(missingToken.status).toBe(400);
   });
 
   it("returns an opaque meeting_id when consent is confirmed", async () => {
@@ -75,6 +112,23 @@ describe("POST /api/meeting/join", () => {
     expect(body.status).toBe("joining");
     expect(body.meeting_id).not.toContain("://");
     expect(body.meeting_id).not.toContain("secret");
+  });
+
+  it("uses a safe default meeting label when the request label is blank", async () => {
+    const { POST } = await import("../route");
+
+    const res = await POST(
+      makeRequest({
+        meetingLabel: "   ",
+        roomUrl: "https://daily.example/secret-room",
+        token: "daily-secret-token",
+        consentConfirmed: true,
+      }) as never
+    );
+    expect(res.status).toBe(200);
+
+    const row = testDb.prepare("SELECT metadata_json FROM audit_entries").get() as { metadata_json: string };
+    expect(JSON.parse(row.metadata_json).meeting_label).toBe("Untitled meeting");
   });
 
   it("audits meeting_id only, never room URL or token", async () => {

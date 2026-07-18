@@ -169,6 +169,61 @@ describe("orchestration API routes", () => {
     expect(fetchMock.mock.calls[2][0]).toBe("http://localhost:3210/runs/run-1/evidence");
   });
 
+  it("maps resume and rollback invalid receipts plus service failures", async () => {
+    vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
+    vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("resume offline"))
+      .mockRejectedValueOnce(new Error("rollback offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const resumeRoute = await import("../runs/[id]/resume/route");
+    const rollbackRoute = await import("../runs/[id]/rollback/route");
+
+    const denied = await resumeRoute.POST(
+      jsonRequest("https://memroos.example/api/orchestration/runs/run-1/resume", { plan: {} }),
+      { params: Promise.resolve({ id: "run-1" }) }
+    );
+    const invalidResume = await resumeRoute.POST(
+      jsonRequest("https://memroos.example/api/orchestration/runs/run-1/resume", [], { authorization: "Bearer operator-secret" }),
+      { params: Promise.resolve({ id: "run-1" }) }
+    );
+    const invalidRollback = await rollbackRoute.POST(
+      new Request("https://memroos.example/api/orchestration/runs/run-1/rollback", {
+        method: "POST",
+        headers: { authorization: "Bearer operator-secret" },
+        body: "{not-json",
+      }),
+      { params: Promise.resolve({ id: "run-1" }) }
+    );
+    const resumeUnavailable = await resumeRoute.POST(
+      jsonRequest(
+        "https://memroos.example/api/orchestration/runs/run-2/resume",
+        { receipt: "resume-handle" },
+        { authorization: "Bearer operator-secret" }
+      ),
+      { params: Promise.resolve({ id: "run-2" }) }
+    );
+    const rollbackUnavailable = await rollbackRoute.POST(
+      jsonRequest(
+        "https://memroos.example/api/orchestration/runs/run-2/rollback",
+        { handle: "rollback-handle" },
+        { authorization: "Bearer operator-secret" }
+      ),
+      { params: Promise.resolve({ id: "run-2" }) }
+    );
+
+    expect(denied.status).toBe(403);
+    expect(invalidResume.status).toBe(400);
+    expect(await invalidResume.json()).toMatchObject({ status: "missing_receipt" });
+    expect(invalidRollback.status).toBe(400);
+    expect(await invalidRollback.json()).toMatchObject({ status: "rollback_handle_invalid" });
+    expect(resumeUnavailable.status).toBe(502);
+    expect(await resumeUnavailable.json()).toMatchObject({ status: "unavailable", error: "resume offline" });
+    expect(rollbackUnavailable.status).toBe(502);
+    expect(await rollbackUnavailable.json()).toMatchObject({ status: "unavailable", error: "rollback offline" });
+  });
+
   it("maps orchestration evidence auth, missing bundle, and service failures", async () => {
     vi.stubEnv("MEMROOS_OPERATOR_API_KEY", "operator-secret");
     vi.stubEnv("ORCHESTRATION_SERVICE_URL", "http://localhost:3210");
