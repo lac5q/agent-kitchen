@@ -4,7 +4,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import {
@@ -407,5 +407,46 @@ describe("VAL-MEM-027: DSAR export/delete is identity-verified and complete", ()
         now: new Date("not-a-date"),
       }),
     ).toThrow("Invalid UTC timestamp");
+  });
+
+  it("marks export failed when manifest durability write fails", async () => {
+    const database = freshDb();
+    seedMessage(database, "subject-vault-fail", "DSAR_VAULT_FAILURE_PAYLOAD");
+    const vaultDurability = await import("../vault-durability");
+    const spy = vi.spyOn(vaultDurability, "writeVaultArtifactWithDurability").mockImplementation(() => {
+      throw new Error("vault offline");
+    });
+    const verificationHash = computeDsarVerificationHash({
+      subject: { subjectId: "subject-vault-fail" },
+      verificationMethod: "email_token",
+      actorId: "operator",
+      tenantId: "default-tenant",
+    });
+
+    try {
+      const result = submitDsarRequest(database, {
+        tenantId: "default-tenant",
+        requestType: "export",
+        subject: { subjectId: "subject-vault-fail" },
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+        verificationMethod: "email_token",
+        verificationHash,
+        actorId: "operator",
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        status: "failed",
+        manifestArtifactId: null,
+      });
+      expect(result.reason).toContain("manifest_write_failed:vault offline");
+      expect(result.manifestHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(database.prepare("SELECT status, denial_reason FROM memory_dsar_requests WHERE id = ?").get(result.requestId)).toMatchObject({
+        status: "failed",
+        denial_reason: "manifest_write_failed:vault offline",
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

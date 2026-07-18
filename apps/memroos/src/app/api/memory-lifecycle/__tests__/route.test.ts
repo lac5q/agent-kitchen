@@ -8,9 +8,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb } from "@/lib/db";
 import { POST as expiryPost } from "../expiry/route";
 import { POST as decayPost } from "../decay/route";
+import { POST as consolidationPost } from "../consolidation/route";
 import { GET as holdsGet, POST as holdsPost } from "../legal-holds/route";
 import { GET as retentionGet, POST as retentionPost } from "../retention/route";
 import { POST as subjectErasurePost } from "../subject-erasure/route";
+import { GET as tombstonesGet, POST as tombstonesPost } from "../tombstones/route";
 
 const TMP_ROOT = path.join(os.tmpdir(), `memory-lifecycle-route-${crypto.randomUUID()}`);
 
@@ -71,7 +73,7 @@ describe("memory lifecycle API routes", () => {
       jsonRequest({
         action: "create",
         id: "hold-route",
-        scope: { tenantId: "default-tenant", recordId: "api-msg-1" },
+        scope: { tenantId: "default-tenant", recordId: "api-msg-1", purpose: "recall" },
         reasonCode: "litigation",
         actorId: "operator",
       })
@@ -223,7 +225,7 @@ describe("memory lifecycle API routes", () => {
         ontologyType: "memory.note",
         securityLabel: { visibility: "internal" },
         purpose: "recall",
-        scope: { tenantId: "default-tenant", project: "alpha" },
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
         durationDays: 365,
         actorId: "operator",
       })
@@ -320,5 +322,131 @@ describe("memory lifecycle API routes", () => {
     const executeJson = (await executeResponse.json()) as { status: string; erased: number };
     expect(executeJson).toMatchObject({ status: "completed", erased: 1 });
     expect(db.prepare("SELECT content FROM messages WHERE id = ?").get(messageId)).toMatchObject({ content: "[erased]" });
+  });
+
+  it("lists subject-erasure plans and rejects unsupported actions", async () => {
+    const unsupported = await subjectErasurePost(
+      jsonRequest({
+        action: "archive_plan",
+        actorId: "operator",
+      })
+    );
+    expect(unsupported.status).toBe(400);
+    expect(await unsupported.json()).toMatchObject({
+      ok: false,
+      error: "unsupported action: archive_plan",
+    });
+
+    const { GET: subjectErasureGet } = await import("../subject-erasure/route");
+    const listed = await subjectErasureGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/subject-erasure?tenantId=default-tenant&limit=2")
+    );
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ ok: true, plans: [] });
+  });
+
+  it("validates consolidation payloads and accepts provider override summaries", async () => {
+    const missingSources = await consolidationPost(
+      jsonRequest({
+        runKey: "route-consolidation-missing-sources",
+        actorId: "operator",
+        scope: { tenantId: "default-tenant" },
+      })
+    );
+    expect(missingSources.status).toBe(400);
+    expect(await missingSources.json()).toMatchObject({
+      ok: false,
+      error: "sources must be an array",
+    });
+
+    const response = await consolidationPost(
+      jsonRequest({
+        runKey: "route-consolidation-provider-override",
+        actorId: "operator",
+        scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+        providerOverride: { summary: "Operator supplied summary" },
+        sources: [
+          {
+            canonicalId: "canonical-1",
+            recordType: "message",
+            recordId: "record-1",
+            content: "One durable memory",
+            contentHash: "sha256:record-1",
+            ontologyType: "memory.note",
+            tier: "episodic",
+            classification: { visibility: "internal" },
+          },
+        ],
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.ok).toBe(true);
+    expect(json.result.summaryId).toBeTruthy();
+    const { getDb } = await import("@/lib/db");
+    expect(
+      getDb()
+        .prepare("SELECT summary_content FROM memory_consolidation_summaries WHERE id = ?")
+        .get(json.result.summaryId)
+    ).toMatchObject({ summary_content: "Operator supplied summary" });
+  });
+
+  it("writes, verifies, and lists tombstones via lifecycle route", async () => {
+    const missingSubject = await tombstonesGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/tombstones")
+    );
+    expect(missingSubject.status).toBe(400);
+    expect(await missingSubject.json()).toMatchObject({ ok: false, error: "subjectHash is required" });
+
+    const unsupported = await tombstonesPost(
+      jsonRequest({
+        action: "purge",
+      })
+    );
+    expect(unsupported.status).toBe(400);
+
+    const write = await tombstonesPost(
+      jsonRequest({
+        action: "write",
+        tenantId: "default-tenant",
+        subjectHash: "subject-route-tombstone",
+        canonicalId: "canon-route",
+        recordType: "message",
+        recordId: "msg-route",
+        recordIdHash: "hash-route",
+        derivativeInventory: [
+          { storeId: "vector", action: "purge", reason: "vector_projection" },
+        ],
+        policyId: "policy-route",
+        policyVersion: "v1",
+        erasureId: "erasure-route",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        outcome: "erased",
+        actorId: "operator",
+        createdAt: "2026-07-18T10:00:00.000Z",
+      })
+    );
+    expect(write.status).toBe(200);
+    expect(await write.json()).toMatchObject({ ok: true, tombstone: { subjectHash: "subject-route-tombstone" } });
+
+    const verify = await tombstonesPost(
+      jsonRequest({
+        action: "verify",
+        tenantId: "default-tenant",
+        subjectHash: "subject-route-tombstone",
+      })
+    );
+    expect(verify.status).toBe(200);
+    expect(await verify.json()).toMatchObject({ ok: true, report: { valid: true, tombstonesChecked: 1 } });
+
+    const listed = await tombstonesGet(
+      new Request("http://localhost:3110/api/memory-lifecycle/tombstones?subjectHash=subject-route-tombstone")
+    );
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      ok: true,
+      tombstones: [expect.objectContaining({ subjectHash: "subject-route-tombstone" })],
+    });
   });
 });

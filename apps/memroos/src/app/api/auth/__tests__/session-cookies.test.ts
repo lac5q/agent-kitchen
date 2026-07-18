@@ -187,6 +187,81 @@ describe('auth session cookies', () => {
     expect(cookies).toContain('Max-Age=43200');
   });
 
+  it('refresh rejects missing, unknown, revoked, and expired tokens while clearing cookies', async () => {
+    const { POST } = await import('../refresh/route');
+
+    const missing = await POST(new Request('http://localhost/api/auth/refresh', { method: 'POST' }));
+    expect(missing.status).toBe(401);
+    expect(await missing.json()).toEqual({ error: 'refresh token required' });
+
+    const invalidCases = [
+      undefined,
+      { id: 'refresh-revoked', user_id: 'user-1', expires_at: new Date(Date.now() + 60_000).toISOString(), revoked_at: new Date().toISOString() },
+      { id: 'refresh-expired', user_id: 'user-1', expires_at: new Date(Date.now() - 60_000).toISOString(), revoked_at: null },
+    ];
+
+    for (const tokenRow of invalidCases) {
+      mocks.db.prepare.mockImplementation((sql: string) => {
+        if (sql.includes('FROM user_refresh_tokens WHERE token_hash = ?')) {
+          return { get: () => tokenRow };
+        }
+        return { run: vi.fn() };
+      });
+
+      const response = await POST(
+        new Request('http://localhost/api/auth/refresh', {
+          method: 'POST',
+          headers: { cookie: 'memroos_refresh=bad-token' },
+        })
+      );
+
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: 'invalid or expired refresh token' });
+      const cookies = setCookieHeader(response);
+      expect(cookies).toContain('memroos_refresh=');
+      expect(cookies).toContain('access_token=');
+      expect(cookies).toContain('Max-Age=0');
+      mocks.db.prepare.mockReset();
+    }
+  });
+
+  it('refresh defaults missing roles to reviewer and emits Secure cookies in production', async () => {
+    const rawRefreshToken = 'prod-refresh-token';
+    const tokenHash = createHash('sha256').update(rawRefreshToken).digest('hex');
+    process.env.NODE_ENV = 'production';
+
+    mocks.db.prepare.mockImplementation((sql: string) => {
+      if (sql.includes('FROM user_refresh_tokens WHERE token_hash = ?')) {
+        return {
+          get: (hash: string) =>
+            hash === tokenHash
+              ? {
+                  id: 'refresh-prod',
+                  user_id: 'user-no-role',
+                  expires_at: new Date(Date.now() + 60_000).toISOString(),
+                  revoked_at: null,
+                }
+              : undefined,
+        };
+      }
+      if (sql.includes('FROM user_roles WHERE user_id = ?')) {
+        return { get: () => undefined };
+      }
+      return { run: vi.fn() };
+    });
+
+    const { POST } = await import('../refresh/route');
+    const response = await POST(
+      new Request('https://memroos.example.com/api/auth/refresh', {
+        method: 'POST',
+        headers: { cookie: `memroos_refresh=${encodeURIComponent(rawRefreshToken)}` },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(setCookieHeader(response)).toContain('Secure');
+  });
+
   it('logout clears both refresh and access cookies', async () => {
     mocks.db.prepare.mockReturnValue({ run: vi.fn() });
 

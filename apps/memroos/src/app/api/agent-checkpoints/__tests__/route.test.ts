@@ -98,6 +98,39 @@ describe("/api/agent-checkpoints", () => {
     expect(getData.checkpoint.objective).toBe("Verify API routes");
   });
 
+  it("returns validation and not-found responses for checkpoint lookups", async () => {
+    const missingParam = await checkpointsRoute.GET(
+      new Request("http://localhost/api/agent-checkpoints")
+    );
+    expect(missingParam.status).toBe(400);
+    expect(await missingParam.json()).toMatchObject({
+      status: "error",
+      message: "runId parameter is required",
+    });
+
+    const missingCheckpoint = await checkpointsRoute.GET(
+      new Request("http://localhost/api/agent-checkpoints?runId=missing-run")
+    );
+    expect(missingCheckpoint.status).toBe(404);
+    expect(await missingCheckpoint.json()).toMatchObject({
+      status: "not_found",
+      message: "No checkpoints found for run ID missing-run",
+    });
+  });
+
+  it("surfaces bad checkpoint POST payloads as client errors", async () => {
+    const res = await checkpointsRoute.POST(
+      new Request("http://localhost/api/agent-checkpoints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ status: "error" });
+  });
+
   it("fetches checkpoints metrics", async () => {
     const req = new Request("http://localhost/api/agent-checkpoints/metrics");
     const res = await metricsRoute.GET(req);

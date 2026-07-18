@@ -65,6 +65,64 @@ describe("SkillForge Intake Pipeline", () => {
     expect(result.redacted).toBe(0);
   });
 
+  it("keeps entries unchanged when redaction is disabled", () => {
+    db.prepare(
+      `INSERT INTO skill_registry (name, source_harness, dispatch_status, version, imported_by, imported_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run("no-redaction-skill", "codex", "enabled", "1.0.0", "test", new Date().toISOString());
+
+    const result = runIntakePipeline(db, {
+      ...DEFAULT_SKILLFORGE_CONFIG,
+      minTraceAgeHours: 0,
+      redactionEnabled: false,
+    });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.redacted).toBe(0);
+  });
+
+  it("collects failed eval candidates and skips rows without a skill id", () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS eval_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id TEXT,
+        query TEXT,
+        expected TEXT,
+        actual TEXT,
+        passed INTEGER,
+        created_at TEXT
+      );
+    `);
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO eval_candidates (skill_id, query, expected, actual, passed, created_at)
+       VALUES (?, ?, ?, ?, 0, ?)`
+    ).run("eval-skill", "How should routing work?", "route safely", "route unsafely", now);
+    db.prepare(
+      `INSERT INTO eval_candidates (skill_id, query, expected, actual, passed, created_at)
+       VALUES (NULL, ?, ?, ?, 0, ?)`
+    ).run("Missing skill", "expected", "actual", now);
+    db.prepare(
+      `INSERT INTO eval_candidates (skill_id, query, expected, actual, passed, created_at)
+       VALUES (?, ?, ?, ?, 1, ?)`
+    ).run("passed-skill", "Passed", "expected", "expected", now);
+
+    const result = runIntakePipeline(db, { ...DEFAULT_SKILLFORGE_CONFIG, minTraceAgeHours: 0 });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      skillId: "eval-skill",
+      skillName: "eval-skill",
+      traceType: "failure",
+      payload: {
+        query: "How should routing work?",
+        expected: "route safely",
+        actual: "route unsafely",
+        passed: false,
+      },
+    });
+  });
+
   it("deduplicates identical entries", () => {
     const now = new Date().toISOString();
     db.prepare(

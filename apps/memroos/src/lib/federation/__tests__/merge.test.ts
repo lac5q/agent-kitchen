@@ -106,6 +106,50 @@ describe("VAL-ORCH-010 -- mergeFederatedPack", () => {
     expect(r.boundStatus).toBe("partial_bounded");
   });
 
+  it("records duplicate outcome ids for authorized duplicate canonical hashes", () => {
+    const a = makeOutcome({ outcomeId: "A", sourceHandle: "alpha" });
+    const b = makeOutcome({ outcomeId: "B", sourceHandle: "beta" });
+    const items = new Map<string, Array<{ id: string; content: string; score: number; canonicalHash: string }>>();
+    items.set("A", [{ id: "first", content: "alpha", score: 0.7, canonicalHash: "sha256:dup" }]);
+    items.set("B", [{ id: "second", content: "beta", score: 0.9, canonicalHash: "sha256:dup" }]);
+
+    const r = mergeFederatedPack(db, {
+      tenantId: "default-tenant",
+      federationRunId: "run-dup",
+      outcomes: [a, b],
+      scopeHash: "sha256:scope",
+      budget: { maxItems: 10, maxBytes: 10000, hopCount: 2 },
+      itemsByOutcome: items,
+    });
+
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      canonicalId: "first",
+      duplicateCount: 1,
+      contributingOutcomeIds: ["A", "B"],
+    });
+    expect(r.dedupeMetadata).toMatchObject({ duplicates_total: 1, dedupe_keys: 1 });
+  });
+
+  it("marks over-budget before admitting an oversized item", () => {
+    const a = makeOutcome({ outcomeId: "A", sourceHandle: "alpha" });
+    const items = new Map<string, Array<{ id: string; content: string; score: number; canonicalHash: string }>>();
+    items.set("A", [{ id: "too-large", content: "content-too-large", score: 1, canonicalHash: "sha256:large" }]);
+
+    const r = mergeFederatedPack(db, {
+      tenantId: "default-tenant",
+      federationRunId: "run-bytes",
+      outcomes: [a],
+      scopeHash: "sha256:scope",
+      budget: { maxItems: 10, maxBytes: 3, hopCount: 1 },
+      itemsByOutcome: items,
+    });
+
+    expect(r.items).toEqual([]);
+    expect(r.boundStatus).toBe("over_budget");
+    expect(r.budgetMetadata).toMatchObject({ used_bytes: 0, used_items: 0 });
+  });
+
   it("persists pack hash + contributing source ids to federation_merges + audit", () => {
     const a = makeOutcome({ outcomeId: "A", sourceId: "src-1", sourceHandle: "alpha" });
     db.prepare(

@@ -102,6 +102,59 @@ describe("SkillForge Edit Generator", () => {
     expect(proposal).not.toBeNull(); // Hash won't match stub
   });
 
+  it("skips an edit whose actual hash was recently rejected", () => {
+    const analysis = makeAnalysis("skill-1", [
+      { pattern: "deploy query", frequency: 3, suggestedFix: "Add deploy trigger" },
+    ]);
+    const first = generateEditProposal(analysis, config, []);
+    expect(first?.editHash).toBeTruthy();
+
+    const proposal = generateEditProposal(analysis, config, [
+      {
+        editHash: first!.editHash!,
+        reason: "operator rejected",
+        rejectedAt: new Date(),
+      },
+    ]);
+
+    expect(proposal).toBeNull();
+  });
+
+  it("includes generated test cases in bounded edit proposals", () => {
+    const analysis: SkillForgeAnalysisResult = {
+      skillId: "skill-tests",
+      patterns: [],
+      testCases: [
+        {
+          id: "tc-1",
+          input: "When the operator asks for deployment proof, collect release evidence.",
+          expectedOutput: "Return the deployment receipt and verification command.",
+          patternId: "pattern-1",
+          source: "deterministic",
+        },
+      ],
+      confidence: 0.75,
+    };
+
+    const proposal = generateEditProposal(analysis, { ...config, textualLearningRate: 1 }, []);
+
+    expect(proposal?.proposedDiff).toContain("Generated Test Cases");
+    expect(proposal?.proposedDiff).toContain("Expected:");
+    expect(proposal?.typedEditOps?.some((op) => op.value?.includes("Generated Test Cases"))).toBe(true);
+  });
+
+  it("returns null when the generated diff exceeds the conservative learning rate", () => {
+    const analysis = makeAnalysis("skill-large", [
+      { pattern: "pattern a", frequency: 1, suggestedFix: "fix a" },
+      { pattern: "pattern b", frequency: 1, suggestedFix: "fix b" },
+      { pattern: "pattern c", frequency: 1, suggestedFix: "fix c" },
+    ]);
+
+    const proposal = generateEditProposal(analysis, { ...config, textualLearningRate: 0 }, []);
+
+    expect(proposal).toBeNull();
+  });
+
   it("generates multiple proposals respecting batch size", () => {
     const analyses = [
       makeAnalysis("skill-1", [{ pattern: "a", frequency: 1 }]),

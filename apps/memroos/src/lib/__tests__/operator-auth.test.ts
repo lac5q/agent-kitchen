@@ -19,6 +19,23 @@ describe("authorizeRegistryWrite", () => {
     expect(authorizeRegistryWrite(new Request("http://127.0.0.1/api/orchestration/hil"))).toBe(true);
   });
 
+  it("falls back to a controlled Host header when URL hostname is unspecified", () => {
+    expect(
+      authorizeRegistryWrite(
+        new Request("http://0.0.0.0/api/agents/register", {
+          headers: { host: "[::1]:3000" },
+        })
+      )
+    ).toBe(true);
+    expect(
+      authorizeRegistryWrite(
+        new Request("http://0.0.0.0/api/agents/register", {
+          headers: { host: "localhost:3000" },
+        })
+      )
+    ).toBe(true);
+  });
+
   it("does not treat a public forwarded host as local loopback", () => {
     // CR-08: x-forwarded-host is ignored; a spoofed "localhost" header cannot
     // elevate a public-origin request to loopback trust.

@@ -245,6 +245,76 @@ describe("VAL-MEM-026: vault durability and replay are tenant-safe", () => {
     expect(row.write_state).toBe("orphaned");
   });
 
+  it("rejects invalid artifact timestamps before writing durability rows", () => {
+    const database = freshDb();
+
+    expect(() =>
+      writeVaultArtifactWithDurability(database, {
+        tenantId: "default-tenant",
+        sourceType: "memory.test",
+        sourceId: "bad-time",
+        body: "invalid timestamp",
+        label: { visibility: "private", policy: "sealed" },
+        actorId: "operator",
+        now: new Date("not-a-date"),
+      })
+    ).toThrow(/Invalid UTC timestamp/);
+
+    expect(database.prepare("SELECT COUNT(*) AS count FROM memory_vault_durability").get()).toMatchObject({ count: 0 });
+  });
+
+  it("replay tolerates malformed durability classification JSON", () => {
+    const database = freshDb();
+    const written = writeVaultArtifactWithDurability(database, {
+      tenantId: "default-tenant",
+      sourceType: "memory.test",
+      sourceId: "bad-classification",
+      body: "classify me",
+      label: { visibility: "private", policy: "sealed" },
+      actorId: "operator",
+    });
+    database
+      .prepare("UPDATE memory_vault_durability SET classification_json = ? WHERE artifact_id = ?")
+      .run("{", written.id);
+
+    const replayed = replayVaultArtifactWithDurability(database, "default-tenant", written.id, "operator");
+
+    expect(replayed.ok).toBe(true);
+    expect(replayed.replayState).toBe("complete");
+  });
+
+  it("markOrphanedArtifacts handles filesystem stat failures as missing files", () => {
+    const database = freshDb();
+    const written = writeVaultArtifactWithDurability(database, {
+      tenantId: "default-tenant",
+      sourceType: "memory.test",
+      sourceId: "fs-error",
+      body: "orphan if stat fails",
+      label: { visibility: "private", policy: "sealed" },
+      actorId: "operator",
+    });
+    database
+      .prepare("UPDATE memory_vault_durability SET write_state = 'pending' WHERE artifact_id = ?")
+      .run(written.id);
+    const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation(() => {
+      throw new Error("stat failed");
+    });
+    try {
+      expect(markOrphanedArtifacts(database, "default-tenant")).toBe(1);
+    } finally {
+      existsSpy.mockRestore();
+    }
+    expect(database.prepare("SELECT write_state FROM memory_vault_durability WHERE artifact_id = ?").get(written.id)).toMatchObject({
+      write_state: "orphaned",
+    });
+  });
+
+  it("markOrphanedArtifacts returns zero when the durability table is absent", () => {
+    const bare = new Database(":memory:");
+    expect(markOrphanedArtifacts(bare, "default-tenant")).toBe(0);
+    bare.close();
+  });
+
   it("writeVaultArtifactWithDurability records failed durability when vault write throws", async () => {
     const database = freshDb();
     const writer = await import("@/lib/vault/writer");

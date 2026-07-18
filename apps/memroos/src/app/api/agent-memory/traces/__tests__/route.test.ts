@@ -74,4 +74,37 @@ describe("/api/agent-memory/traces", () => {
     expect(getData.timeline).toContain("[Context Assembly] Assembled vector database.");
     expect(getData.timeline).toContain('[Retrieval Query] "How does SEAL apply shadow copies?"');
   });
+
+  it("returns validation and not-found responses for trace reads", async () => {
+    const missingParam = await tracesRoute.GET(
+      new Request("http://localhost/api/agent-memory/traces")
+    );
+    expect(missingParam.status).toBe(400);
+    expect(await missingParam.json()).toMatchObject({
+      status: "error",
+      message: "runId parameter is required",
+    });
+
+    const missingTrace = await tracesRoute.GET(
+      new Request("http://localhost/api/agent-memory/traces?runId=missing-run")
+    );
+    expect(missingTrace.status).toBe(404);
+    expect(await missingTrace.json()).toMatchObject({
+      status: "not_found",
+      message: "No memory traces found for run ID missing-run",
+    });
+  });
+
+  it("surfaces malformed trace POST payloads as client errors", async () => {
+    const res = await tracesRoute.POST(
+      new Request("http://localhost/api/agent-memory/traces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{",
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ status: "error" });
+  });
 });

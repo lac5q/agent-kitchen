@@ -271,6 +271,63 @@ describe("agent context bus routes", () => {
     expect(audit).toContainEqual({ action: "content_blocked", severity: "high" });
   });
 
+  it("validates message list query and send payload shape", async () => {
+    const { listRoute, registerAgent } = await loadRoutes();
+    const alpha = registerAgent({
+      id: "agent-alpha",
+      name: "Agent Alpha",
+      role: "Sender",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const invalidStatus = await listRoute.GET(
+      new Request("http://localhost/api/agent-context/messages?agent=agent-alpha&status=stale", {
+        headers: { authorization: `Bearer ${alpha.apiKey}` },
+      }) as any
+    );
+    expect(invalidStatus.status).toBe(400);
+    expect(await invalidStatus.json()).toMatchObject({ ok: false, error: "Invalid status: stale" });
+
+    const invalidBox = await listRoute.GET(
+      new Request("http://localhost/api/agent-context/messages?agent=agent-alpha&box=archive", {
+        headers: { authorization: `Bearer ${alpha.apiKey}` },
+      }) as any
+    );
+    expect(invalidBox.status).toBe(400);
+    expect(await invalidBox.json()).toMatchObject({ ok: false, error: "Invalid box: archive" });
+
+    const invalidPayload = await listRoute.POST(
+      new Request("http://localhost/api/agent-context/messages", {
+        method: "POST",
+        headers: { authorization: `Bearer ${alpha.apiKey}`, "Content-Type": "application/json" },
+        body: "null",
+      }) as any
+    );
+    expect(invalidPayload.status).toBe(400);
+
+    const missingRequired = await listRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages", alpha.apiKey!, {
+        fromAgent: "agent-alpha",
+        body: "missing recipient",
+      }) as any
+    );
+    expect(missingRequired.status).toBe(400);
+    expect(await missingRequired.json()).toMatchObject({ ok: false, error: "toAgent and body are required" });
+
+    const invalidMessageType = await listRoute.POST(
+      postRequest("http://localhost/api/agent-context/messages", alpha.apiKey!, {
+        fromAgent: "agent-alpha",
+        toAgent: "agent-beta",
+        body: "hello",
+        messageType: "carrier-pigeon",
+      }) as any
+    );
+    expect(invalidMessageType.status).toBe(400);
+    expect(await invalidMessageType.json()).toMatchObject({ ok: false, error: "Invalid messageType: carrier-pigeon" });
+  });
+
   it("denies self-declared user, OAuth, credential, and data-access claims", async () => {
     const { listRoute, getDb, registerAgent } = await loadRoutes();
     const alpha = registerAgent({

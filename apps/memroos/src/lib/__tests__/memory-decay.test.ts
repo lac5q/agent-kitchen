@@ -1,6 +1,6 @@
 // @vitest-environment node
 import Database from 'better-sqlite3';
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll, afterEach } from 'vitest';
 
 const testDb = new Database(':memory:');
 
@@ -14,6 +14,11 @@ initSchema(testDb);
 
 afterAll(() => {
   testDb.close();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 // Seed a message with a specific tier and salience_score backdated for decay eligibility
@@ -175,5 +180,33 @@ describe('runDecay', () => {
     const first = hasLogFunction();
     const second = hasLogFunction();
     expect(first).toBe(second);
+  });
+
+  it('rejects invalid decay timestamps before mutating rows', async () => {
+    seedSalience('mid', 1.0);
+    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    _resetForTest();
+
+    expect(() =>
+      runDecay({
+        runKey: 'invalid-now',
+        now: new Date('not-a-date'),
+      })
+    ).toThrow(/Invalid UTC timestamp/);
+
+    expect(testDb.prepare('SELECT COUNT(*) AS count FROM memory_decay_runs').get()).toMatchObject({ count: 0 });
+  });
+
+  it('starts the scheduler only once', async () => {
+    vi.useFakeTimers();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { startDecayScheduler } = await import('@/lib/memory-decay');
+
+    startDecayScheduler();
+    startDecayScheduler();
+
+    expect(consoleSpy).toHaveBeenCalledWith('[decay] scheduler started (interval: 60m)');
+    expect(consoleSpy.mock.calls.filter(([message]) => message === '[decay] scheduler started (interval: 60m)')).toHaveLength(1);
+    vi.clearAllTimers();
   });
 });

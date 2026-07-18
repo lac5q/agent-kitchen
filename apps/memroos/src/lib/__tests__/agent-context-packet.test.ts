@@ -24,6 +24,41 @@ function seedDb(): Database.Database {
 }
 
 describe("agent context packet", () => {
+  it("validates required input identifiers", () => {
+    const db = seedDb();
+
+    expect(() =>
+      buildAgentContextPacket(db, {
+        goalId: " ",
+        actorAgentId: "agent-alpha",
+      })
+    ).toThrow("goalId is required");
+    expect(() =>
+      buildAgentContextPacket(db, {
+        goalId: GOAL_ID,
+        actorAgentId: "",
+      })
+    ).toThrow("actorAgentId is required");
+    db.close();
+  });
+
+  it("falls back cleanly when packet tables are absent", () => {
+    const db = new Database(":memory:");
+    const result = buildAgentContextPacket(db, {
+      goalId: "bare-goal",
+      actorAgentId: "agent-alpha",
+      now: () => FIXED_NOW,
+    });
+
+    expect(result.packet.goal.status).toBe("planned");
+    expect(result.packet.receipts).toContainEqual(expect.objectContaining({
+      source: "agent_memory_traces",
+      status: "skipped",
+    }));
+    expect(result.ledger.handoffs).toEqual([]);
+    db.close();
+  });
+
   it("assembles redacted packet and run ledger from existing substrates", () => {
     const db = seedDb();
     db.prepare(
@@ -183,6 +218,67 @@ describe("agent context packet", () => {
       })
     );
     expect(result.packet.recentRunState.latestProofReceipts).toContain("efficiency_events:1");
+    db.close();
+  });
+
+  it("includes handoff packs and trace rows without policy filters as receipts", () => {
+    const db = seedDb();
+    db.prepare(
+      `INSERT INTO agent_checkpoints(
+         tenant_id, run_id, owner_agent_id, objective, verification_state_json, artifact_refs_json, next_safe_action
+       ) VALUES ('default-tenant', ?, 'agent-alpha', 'Checkpoint-only active goal', '{}', ?, 'continue from checkpoint')`
+    ).run(GOAL_ID, JSON.stringify([{ path: "proof.md", hash: "sha256:proof" }]));
+    db.prepare(
+      `INSERT INTO agent_handoff_packs(
+         id, tenant_id, from_agent_id, to_agent_id, task_id, session_id, title, status,
+         context_pack_json, source_capture_ids_json, token_budget, redaction_state, created_at
+       ) VALUES (
+         'handoff-1', 'default-tenant', 'agent-alpha', 'agent-beta', ?, 'session-handoff',
+         'Resume title', 'ready', ?, '[]', 2048, 'redacted', '2026-07-06T11:30:00Z'
+       )`
+    ).run(GOAL_ID, JSON.stringify({
+      resume_marker: "resume-from-handoff",
+      last_known_blocker: "waiting on proof",
+      next_action: "run tests",
+    }));
+    recordMemoryTrace(db, {
+      runId: GOAL_ID,
+      taskId: GOAL_ID,
+      agentId: "agent-alpha",
+      causalPath: {
+        contextAssembly: "no policy filter trace",
+        retrievalQuery: "empty filters",
+        retrievedCandidates: [],
+        policyFilters: [],
+        promptInclusion: false,
+      },
+    });
+
+    const result = buildAgentContextPacket(db, {
+      goalId: GOAL_ID,
+      actorAgentId: "agent-alpha",
+      now: () => FIXED_NOW,
+    });
+
+    expect(result.packet.goal.status).toBe("active");
+    expect(result.ledger.artifacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "proof.md", kind: "artifact", hash: "sha256:proof" }),
+      expect.objectContaining({ id: "handoff-1", kind: "handoff_pack", source: "agent_handoff_packs" }),
+    ]));
+    expect(result.ledger.handoffs).toEqual([
+      expect.objectContaining({
+        id: "handoff-1",
+        resumeMarker: "resume-from-handoff",
+        lastKnownBlocker: "waiting on proof",
+        nextAction: "run tests",
+      }),
+    ]);
+    expect(result.packet.recentRunState.handoff).toBe("resume-from-handoff");
+    expect(result.packet.receipts).toContainEqual(expect.objectContaining({
+      source: "agent_memory_traces",
+      status: "skipped",
+      reason: "trace had no policy filter receipts",
+    }));
     db.close();
   });
 

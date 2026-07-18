@@ -32,6 +32,7 @@ afterEach(async () => {
   } catch {
     /* ignore */
   }
+  vi.doUnmock("@/lib/skills/skill-sync");
   vi.resetModules();
   fs.rmSync(TMP_ROOT, { recursive: true, force: true });
 });
@@ -113,6 +114,35 @@ describe("POST /api/skills/sync/check", () => {
     );
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/roots is required/i);
+  });
+
+  it("400 for invalid JSON and non-object request bodies", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    await loadDb();
+    const route = await loadRoute();
+
+    const invalidJson = await route.POST(
+      new Request("https://example.com/api/skills/sync/check", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer right-key",
+        },
+        body: "{not-json",
+      })
+    );
+    expect(invalidJson.status).toBe(400);
+    expect(await invalidJson.json()).toEqual({ ok: false, error: "Invalid JSON body" });
+
+    const arrayBody = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/check",
+        [],
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(arrayBody.status).toBe(400);
+    expect(await arrayBody.json()).toEqual({ ok: false, error: "Body must be an object" });
   });
 
   it("400 when a harness root path is empty", async () => {
@@ -242,5 +272,54 @@ same content
     expect(json.ok).toBe(true);
     expect(json.unchanged).toBeGreaterThanOrEqual(1);
     expect(json.created).toBe(0);
+  });
+
+  it("maps sync engine typed and unexpected failures to route errors", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "right-key";
+    await loadDb();
+
+    vi.doMock("@/lib/skills/skill-sync", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("@/lib/skills/skill-sync")>();
+      return {
+        ...actual,
+        checkSync: () => {
+          throw new actual.SkillSyncError("configured root is unsafe");
+        },
+      };
+    });
+    let route = await loadRoute();
+    let res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/check",
+        { roots: makeHarnessRoots() },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: "configured root is unsafe" });
+
+    vi.resetModules();
+    vi.doMock("@/lib/skills/skill-sync", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("@/lib/skills/skill-sync")>();
+      return {
+        ...actual,
+        checkSync: () => {
+          throw new Error("filesystem unavailable");
+        },
+      };
+    });
+    route = await loadRoute();
+    res = await route.POST(
+      makePost(
+        "https://example.com/api/skills/sync/check",
+        { roots: makeHarnessRoots() },
+        { authorization: "Bearer right-key" }
+      )
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      ok: false,
+      error: "Sync check failed: filesystem unavailable",
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -102,5 +102,66 @@ describe("Hermes middleware runtime", () => {
     });
 
     expect(result.middlewareOrder).not.toContain("pre/02-redact-secrets");
+  });
+
+  it("handles disabled middleware failures, timeout classification, skipped health, and default roots", async () => {
+    const root = tempHermesRoot();
+    createDefaultMiddlewareFiles(root, { enabled: false, skip: [] });
+
+    const disabledFailure = await runToolWithMiddleware({
+      hermesRoot: root,
+      toolName: "shell",
+      input: { command: "sleep" },
+      execute: async () => {
+        throw new Error("timeout waiting for tool");
+      },
+    });
+    expect(disabledFailure).toMatchObject({
+      ok: false,
+      errorType: "timeout",
+      middlewareOrder: [],
+    });
+
+    writeFileSync(
+      path.join(root, "config.json"),
+      JSON.stringify({ middleware: { enabled: true, skip: ["02-skill-health"] } }, null, 2)
+    );
+    const failed = await runToolWithMiddleware({
+      hermesRoot: root,
+      toolName: "browser-use",
+      input: { url: "https://example.com" },
+      requiredFields: ["url"],
+      execute: async () => {
+        throw "string failure";
+      },
+    });
+    expect(failed).toMatchObject({
+      ok: false,
+      error: "Tool call failed",
+      errorType: "api_error",
+    });
+    expect(failed.middlewareOrder).not.toContain("post/02-skill-health");
+
+    const oldHome = process.env.HOME;
+    const home = mkdtempSync(path.join(tmpdir(), "hermes-home-"));
+    process.env.HOME = home;
+    await runToolWithMiddleware({
+      toolName: "default-root",
+      input: { value: "ok" },
+      execute: () => "ok",
+    });
+    expect(existsSync(path.join(home, ".hermes", "logs", "tool-outcomes.jsonl"))).toBe(true);
+    process.env.HOME = oldHome;
+    rmSync(home, { recursive: true, force: true });
+
+    writeFileSync(path.join(root, "middleware", "secret-patterns.json"), "{not-json");
+    const redacted = await runToolWithMiddleware({
+      hermesRoot: root,
+      toolName: "redact-defaults",
+      input: { authorization: "Bearer abc.def" },
+      execute: () => "ok",
+    });
+    expect(redacted.ok).toBe(true);
+    expect(readFileSync(path.join(root, "logs", "tool-outcomes.jsonl"), "utf8")).toContain("[REDACTED]");
   });
 });

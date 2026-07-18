@@ -346,4 +346,48 @@ describe("VAL-SKILL-034 dependency view — safe fallbacks and summaries", () =>
       unresolved_count: 0,
     });
   });
+
+  it("includes valid dispatch receipts while skipping malformed payload matches", async () => {
+    const { getSkillDependencyView } = await import("../skill-dependencies");
+    const id = insertRegistry({ id: 42, name: "dispatch-skill", version: "1.2.3", content_hash: "4".repeat(64) });
+    db.exec("ALTER TABLE hive_delegations ADD COLUMN started_at TEXT");
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id, checkpoint, result, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "task-dispatch-bad",
+      "agent-dispatch",
+      "operator",
+      "bad dispatch payload",
+      "completed",
+      "ctx-dispatch",
+      `{"skill_id":${id}`,
+      `{"skill_id":${id}`,
+      "2026-07-18T10:00:00.000Z"
+    );
+    db.prepare(
+      `INSERT INTO hive_delegations(task_id, from_agent, to_agent, task_summary, status, context_id, checkpoint, result, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "task-dispatch-good",
+      "agent-dispatch",
+      "operator",
+      "good dispatch payload",
+      "completed",
+      "ctx-dispatch",
+      "{}",
+      JSON.stringify({ skill_id: id }),
+      "2026-07-18T10:05:00.000Z"
+    );
+
+    const view = getSkillDependencyView(db, id);
+    const dispatchRows = view.trusted.filter((row) => row.provenance === "dispatch");
+
+    expect(dispatchRows).toHaveLength(1);
+    expect(dispatchRows[0]).toMatchObject({
+      scope: { agent_id: "agent-dispatch", skill_id: id },
+      identity: { version: "1.2.3", content_hash: "4".repeat(64) },
+      status: "observed",
+    });
+  });
 });

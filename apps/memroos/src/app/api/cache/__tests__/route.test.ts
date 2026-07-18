@@ -57,4 +57,34 @@ describe("cache operations API", () => {
     expect(purge.status).toBe(500);
     expect(body.error).toBe("cache exploded");
   });
+
+  it("reports cold and unavailable cache metric states", async () => {
+    vi.spyOn(responseCache, "stats").mockReturnValueOnce({
+      entries: 0,
+      hits: 0,
+      misses: 2,
+      keys: [],
+    });
+    const cold = await (await statsRoute.GET()).json();
+    expect(cold.metrics.hitRate).toMatchObject({
+      status: "zero",
+      value: 0,
+    });
+
+    vi.spyOn(responseCache, "stats").mockReturnValueOnce({
+      entries: undefined,
+      hits: undefined,
+      misses: undefined,
+      keys: [],
+    } as never);
+    const unavailable = await (await statsRoute.GET()).json();
+    expect(unavailable.metrics.entries).toMatchObject({
+      status: "unavailable",
+      value: null,
+    });
+    expect(unavailable.metrics.hitRate).toMatchObject({
+      status: "unavailable",
+      value: null,
+    });
+  });
 });

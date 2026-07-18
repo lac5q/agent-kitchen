@@ -67,4 +67,70 @@ describe("agent context bus", () => {
     expect(findReplyForAgentContextMessage(db, message.id)?.id).toBe(result.reply.id);
     db.close();
   });
+
+  it("covers validation, filters, malformed row JSON, and reply errors", () => {
+    const db = seedDb();
+
+    expect(() =>
+      postAgentContextMessage(db, {
+        fromAgent: "agent-alpha",
+        toAgent: "agent-beta",
+        messageType: "invalid" as never,
+        body: "bad type",
+      })
+    ).toThrow(/Invalid agent context message type/);
+
+    const first = postAgentContextMessage(db, {
+      fromAgent: "agent-alpha",
+      toAgent: "agent-beta",
+      body: "High priority",
+      priority: Number.POSITIVE_INFINITY,
+      threadId: "thread-filter",
+      correlationId: "corr-filter",
+    });
+    const second = postAgentContextMessage(db, {
+      fromAgent: "agent-beta",
+      toAgent: "agent-alpha",
+      body: "Outbox item",
+      priority: 0,
+      threadId: "thread-filter",
+      correlationId: "corr-other",
+    });
+    db.prepare("UPDATE agent_context_messages SET context_refs = ?, artifacts = ? WHERE id = ?").run(
+      "not-json",
+      "[]",
+      first.id
+    );
+
+    const allForAlpha = listAgentContextMessages(db, { agentId: "agent-alpha", box: "all", limit: 999 });
+    expect(allForAlpha.map((message) => message.id)).toEqual([second.id, first.id]);
+    expect(allForAlpha.find((message) => message.id === first.id)).toMatchObject({
+      priority: 5,
+      contextRefs: [],
+      artifacts: {},
+    });
+
+    expect(listAgentContextMessages(db, { agentId: "agent-beta", box: "outbox" }).map((message) => message.id)).toEqual([
+      second.id,
+    ]);
+    expect(listAgentContextMessages(db, { threadId: "thread-filter" })).toHaveLength(2);
+    expect(listAgentContextMessages(db, { correlationId: "corr-filter" }).map((message) => message.id)).toEqual([
+      first.id,
+    ]);
+
+    expect(() =>
+      replyToAgentContextMessage(db, "missing-message", {
+        fromAgent: "agent-beta",
+        body: "no original",
+      })
+    ).toThrow(/Unknown agent context message/);
+    expect(() =>
+      replyToAgentContextMessage(db, first.id, {
+        fromAgent: "agent-alpha",
+        body: "wrong sender",
+      })
+    ).toThrow(/Only the addressed agent/);
+
+    db.close();
+  });
 });

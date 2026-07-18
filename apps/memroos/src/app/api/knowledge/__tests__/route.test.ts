@@ -20,6 +20,7 @@ describe("GET /api/knowledge", () => {
   });
 
   afterEach(() => {
+    vi.doUnmock("@/lib/knowledge-collections");
     vi.unstubAllEnvs();
   });
 
@@ -73,6 +74,7 @@ describe("GET /api/knowledge truthful metric contract (VAL-LIB-001)", () => {
   });
 
   afterEach(() => {
+    vi.doUnmock("@/lib/knowledge-collections");
     vi.unstubAllEnvs();
   });
 
@@ -137,6 +139,35 @@ describe("GET /api/knowledge truthful metric contract (VAL-LIB-001)", () => {
     expect(body.metrics.totalCollections).toMatchObject({
       status: expect.stringMatching(/^(live|empty)$/),
       source: expect.any(String),
+    });
+  });
+
+  it("marks a collection metric as error when scanning throws", async () => {
+    writeFileSync(configPath, JSON.stringify({
+      collections: [{ name: "broken", category: "agents" }],
+    }));
+    vi.doMock("@/lib/knowledge-collections", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("@/lib/knowledge-collections")>();
+      return {
+        ...actual,
+        scanConfiguredCollection: async () => {
+          throw new Error("permission denied");
+        },
+      };
+    });
+
+    const { GET } = await loadRoute();
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.collections[0]).toMatchObject({
+      name: "broken",
+      docCount: 0,
+      metric: expect.objectContaining({
+        status: "error",
+        reason: "permission denied",
+      }),
     });
   });
 
