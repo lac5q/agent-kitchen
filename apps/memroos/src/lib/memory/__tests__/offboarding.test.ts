@@ -37,6 +37,42 @@ function makeDerivativeInventory(): SubjectDerivativeInventory[] {
 }
 
 describe("VAL-MEM-028: offboarding triggers but does not fake erasure", () => {
+  it("rejects missing subject or actor and invalid tombstone timestamps", () => {
+    const database = freshDb();
+    expect(() =>
+      triggerOffboardingPendingErasure(database, {
+        tenantId: "default-tenant",
+        subjectHash: "",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        actorId: "admin",
+      })
+    ).toThrow(/subjectHash is required/);
+    expect(() =>
+      triggerOffboardingPendingErasure(database, {
+        tenantId: "default-tenant",
+        subjectHash: "subject-invalid",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        actorId: "",
+      })
+    ).toThrow(/actorId is required/);
+    expect(() =>
+      writeTombstoneForErasure(database, {
+        tenantId: "default-tenant",
+        subjectHash: "subject-invalid-tombstone",
+        canonicalId: "canon-invalid",
+        recordType: "message",
+        recordId: "msg-invalid",
+        recordIdHash: crypto.createHash("sha256").update("msg-invalid").digest("hex"),
+        derivativeInventory: makeDerivativeInventory(),
+        erasureId: "erasure-invalid",
+        scope: { tenantId: "default-tenant", purpose: "recall" },
+        outcome: "failed",
+        actorId: "operator",
+        now: new Date("not-a-date"),
+      })
+    ).toThrow(/Invalid UTC timestamp/);
+  });
+
   it("creates a pending MEMLIFE review without claiming erasure complete", () => {
     const database = freshDb();
     const receipt = triggerOffboardingPendingErasure(database, {

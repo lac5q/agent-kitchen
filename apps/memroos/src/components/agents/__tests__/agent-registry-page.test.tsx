@@ -288,6 +288,38 @@ describe("AgentRegistryPage", () => {
     });
   });
 
+  it("surfaces generic invite failures and missing command responses", async () => {
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    const [, options] = mutateInvite.mock.calls[0];
+
+    options.onError("network down");
+    await waitFor(() => {
+      expect(screen.getByText("Invite creation failed.")).toBeInTheDocument();
+    });
+
+    await options.onSuccess({});
+    await waitFor(() => {
+      expect(screen.getByText("Invite response did not include a command. Try again.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows manual invite copy guidance when clipboard fallback fails", async () => {
+    const execCommand = vi.fn(() => false);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    const [, options] = mutateInvite.mock.calls[0];
+    await options.onSuccess({ command: "curl -fsSL https://memroos.example.test/invite | bash" });
+
+    await waitFor(() => {
+      expect(screen.getByText("Invite created. Copy it from the box below.")).toBeInTheDocument();
+    });
+    expect(execCommand).toHaveBeenCalledWith("copy");
+  });
+
   it("renders liveness and readiness banners when envelopes are present", () => {
     mockUseRegisteredAgents.mockReturnValue({
       data: {
@@ -320,5 +352,38 @@ describe("AgentRegistryPage", () => {
     expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent(/Liveness/i);
     expect(screen.getByText(/Readiness:/)).toBeInTheDocument();
     expect(screen.getByText(/Local runtime scan:/)).toBeInTheDocument();
+  });
+
+  it("renders degraded metric envelopes with unavailable measurements", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents,
+        timestamp: "",
+        summary: {
+          total: { value: null, status: "unavailable", source: "registry", reason: "db down" },
+          active: { value: null, status: "degraded", source: "registry", reason: "stale" },
+        },
+        liveness: { value: null, status: "degraded", source: "heartbeat", reason: "stale heartbeat" },
+        protocols: {
+          rest: { value: null, status: "unavailable" },
+          a2a: { value: 1, status: "live" },
+          ui: { value: 0, status: "zero" },
+          local: { value: null, status: "degraded" },
+        },
+        localRuntime: {
+          metric: { value: null, status: "unavailable", source: "scan", reason: "no shell" },
+        },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+
+    render(<AgentRegistryPage />);
+
+    expect(screen.getAllByText(/no measurement/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent("stale heartbeat");
+    expect(screen.getByText(/unavailable — source=scan/)).toBeInTheDocument();
+    expect(screen.getByText(/rest — \(unavailable\)/)).toBeInTheDocument();
   });
 });

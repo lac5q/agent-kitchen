@@ -197,6 +197,56 @@ describe('runDecay', () => {
     expect(testDb.prepare('SELECT COUNT(*) AS count FROM memory_decay_runs').get()).toMatchObject({ count: 0 });
   });
 
+  it('filters decay by requested scope arrays and returns lease-held for completed run keys', async () => {
+    const alphaId = seedSalience('mid', 1.0);
+    const betaId = seedSalience('mid', 1.0);
+    const { createRetentionPolicy, registerRetentionRecord } = await import('@/lib/memory/retention-policy');
+    createRetentionPolicy(testDb, {
+      id: 'decay-scope-policy',
+      name: 'decay scope policy',
+      ontologyType: 'memory.note',
+      securityLabel: { visibility: 'internal' },
+      purpose: 'recall',
+      scope: { tenantId: 'default-tenant', project: 'p1' },
+      durationDays: 365,
+      actorId: 'operator',
+    });
+    for (const [id, project] of [[alphaId, 'alpha'], [betaId, 'beta']] as Array<[number, string]>) {
+      registerRetentionRecord(testDb, {
+        recordType: 'message',
+        recordId: String(id),
+        ontologyType: 'memory.note',
+        securityLabel: { visibility: 'internal' },
+        purpose: 'recall',
+        scope: { tenantId: 'default-tenant', purpose: 'recall', project },
+        actorId: 'operator',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        now: new Date('2024-01-01T00:00:00.000Z'),
+      });
+    }
+
+    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    _resetForTest();
+    const first = runDecay({
+      runKey: 'decay-scoped-array',
+      scope: { tenantId: 'default-tenant', purpose: 'recall', recordId: [String(alphaId)] },
+      now: new Date('2026-01-03T00:00:00.000Z'),
+    });
+    const second = runDecay({
+      runKey: 'decay-scoped-array',
+      scope: { tenantId: 'default-tenant', purpose: 'recall', recordId: [String(alphaId)] },
+      now: new Date('2026-01-03T00:01:00.000Z'),
+    });
+
+    expect(first.decayed).toBe(1);
+    expect(first.considered).toBe(1);
+    expect(second).toMatchObject({ status: 'lease_held', receipts: [] });
+    const alpha = testDb.prepare('SELECT salience_score FROM memory_salience WHERE message_id = ?').get(alphaId) as { salience_score: number };
+    const beta = testDb.prepare('SELECT salience_score FROM memory_salience WHERE message_id = ?').get(betaId) as { salience_score: number };
+    expect(alpha.salience_score).toBeLessThan(1.0);
+    expect(beta.salience_score).toBe(1.0);
+  });
+
   it('starts the scheduler only once', async () => {
     vi.useFakeTimers();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});

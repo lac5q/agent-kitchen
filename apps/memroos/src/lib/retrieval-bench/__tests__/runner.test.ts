@@ -35,6 +35,25 @@ const LIVE_SCOPE = {
 };
 
 describe("runBenchmark smoke (VAL-RETR-001)", () => {
+  it("returns typed errors for datasets that require caller-local sources", () => {
+    expect(loadDataset({ dataset: "locomo", fixturesDir: FIXTURES_DIR })).toEqual({
+      ok: false,
+      reason: "locomo_source_not_provided_caller_local_required",
+    });
+    expect(loadDataset({ dataset: "longmemeval", fixturesDir: FIXTURES_DIR })).toEqual({
+      ok: false,
+      reason: "longmemeval_source_not_provided_caller_local_required",
+    });
+    expect(loadDataset({ dataset: "longmemeval_v2", fixturesDir: FIXTURES_DIR })).toEqual({
+      ok: false,
+      reason: "longmemeval_v2_unavailable_explicit_error",
+    });
+    expect(loadDataset({ dataset: "unknown" as never, fixturesDir: FIXTURES_DIR })).toEqual({
+      ok: false,
+      reason: "dataset_unsupported:unknown",
+    });
+  });
+
   it("loads exactly 25 synthetic tasks with the lexical adapter", async () => {
     const r = await runBenchmark({
       dataset: "memroos_public_synthetic",

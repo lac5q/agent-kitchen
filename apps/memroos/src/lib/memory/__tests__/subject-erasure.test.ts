@@ -64,6 +64,32 @@ afterEach(() => {
 });
 
 describe("subject erasure planning and execution", () => {
+  it("denies missing subject identities and subject selectors with no matches", () => {
+    const database = freshDb();
+    seedMessage(database, "SECRET_OTHER_SUBJECT", "subject-other");
+
+    const missingIdentity = createSubjectErasurePlan(database, {
+      subject: {},
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      actorId: "operator",
+    });
+    expect(missingIdentity).toMatchObject({
+      ok: false,
+      status: "denied",
+      reason: "missing_subject_identity",
+      candidates: [],
+    });
+
+    const denied = createSubjectErasurePlan(database, {
+      subject: { subjectId: "subject-missing" },
+      scope: { tenantId: "default-tenant", purpose: "recall", project: ["alpha"] },
+      actorId: "operator",
+      now: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    expect(denied).toMatchObject({ ok: false, status: "denied", reason: "subject_not_found" });
+    expect(denied.candidates).toEqual([]);
+  });
+
   it("VAL-MEM-019: resolves subject records and derivative coverage without raw payload", () => {
     const database = freshDb();
     const messageId = seedMessage(database, "SECRET_PAYLOAD_FOR_ALICE", "subject-alpha");

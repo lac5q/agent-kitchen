@@ -141,6 +141,52 @@ describe("audit query service", () => {
     expect(rows[0]).toMatchObject({ id: "seal-row", entity_id: "proposal:1" });
   });
 
+  it("streams rows with the same optional filters as paginated queries", () => {
+    insertAudit({
+      id: "match",
+      event: AUDIT_EVENT_TYPES.AGENT_FLAGGED,
+      entityType: ENTITY_TYPES.AGENT,
+      entityId: "agent:agent-filter",
+      actor: "actor-filter",
+      metadata: { user_id: "user-100" },
+      createdAt: "2026-01-02T00:00:00.000Z",
+    });
+    insertAudit({
+      id: "wrong-user",
+      event: AUDIT_EVENT_TYPES.AGENT_FLAGGED,
+      entityType: ENTITY_TYPES.AGENT,
+      entityId: "agent:agent-filter",
+      actor: "actor-filter",
+      metadata: { user_id: "user-101" },
+      createdAt: "2026-01-02T00:00:01.000Z",
+    });
+    insertAudit({
+      id: "wrong-event",
+      event: AUDIT_EVENT_TYPES.AGENT_MATCHED,
+      entityType: ENTITY_TYPES.AGENT,
+      entityId: "agent:agent-filter",
+      actor: "actor-filter",
+      metadata: { user_id: "user-100" },
+      createdAt: "2026-01-02T00:00:02.000Z",
+    });
+
+    expect(queryAuditEntries({ userId: "user_100%", limit: 1 }, db).entries).toEqual([]);
+
+    const rows = Array.from(streamAuditEntries({
+      tenantId: "tenant-a",
+      agentId: "agent-filter",
+      entityType: ENTITY_TYPES.AGENT,
+      entityId: "agent:agent-filter",
+      eventType: [AUDIT_EVENT_TYPES.AGENT_FLAGGED],
+      actorId: "actor-filter",
+      userId: "user-100",
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-01-03T00:00:00.000Z",
+    }, db));
+
+    expect(rows.map((row) => row.id)).toEqual(["match"]);
+  });
+
   it("queries HIL escalations with status filters and overdue state", () => {
     db.prepare(
       `INSERT INTO hil_escalations

@@ -359,6 +359,83 @@ describe("VoicePanel", () => {
     expect(screen.getByRole("option", { name: "Codex CLI - Agent" })).toBeInTheDocument();
   });
 
+  it("labels fallback CLI ids, knowledge projects, and workspace projects", () => {
+    mockUseAgents.mockReturnValue({
+      data: {
+        agents: [
+          {
+            id: "qwen-engineer",
+            name: "Qwen Engineer",
+            role: "Qwen role",
+            platform: "qwen",
+            protocol: "local",
+            metadata: {},
+          },
+          {
+            id: "gemini-senior-engineer",
+            name: "Gemini Senior Engineer",
+            role: "Gemini role",
+            platform: "gemini",
+            protocol: "local",
+            metadata: {},
+          },
+          {
+            id: "workspace-agent",
+            name: "Workspace Agent",
+            role: "Workspace helper",
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "pmo-agents", workspace: "Delta" },
+          },
+          {
+            id: "knowledge-agent",
+            name: "Knowledge Agent",
+            role: "Knowledge helper",
+            platform: "codex",
+            protocol: "local",
+            metadata: { source: "pmo-agents", path: "/workspace/knowledge/cards" },
+          },
+        ],
+      },
+    } as ReturnType<typeof useAgents>);
+
+    render(<VoicePanel />);
+
+    expect(screen.getByRole("option", { name: "Qwen CLI - Engineer" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Gemini CLI - Senior Engineer" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "PC (Delta) - Workspace Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "PC (Knowledge) - Knowledge Agent" })).toBeInTheDocument();
+  });
+
+  it("ignores malformed stream chunks and surfaces raw JSON chat errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                'data: not-json\n\ndata: {"error":"{\\"message\\":\\"plain failure\\"}"}\n\n',
+              ),
+            );
+            controller.close();
+          },
+        }),
+      }),
+    );
+
+    render(<VoicePanel />);
+    fireEvent.change(screen.getByPlaceholderText(/Message .* \(Enter to send\)/), {
+      target: { value: "malformed" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/plain failure/)).toBeInTheDocument();
+    });
+  });
+
   it("surfaces generic chat errors from non-streaming failures", async () => {
     vi.stubGlobal(
       "fetch",
