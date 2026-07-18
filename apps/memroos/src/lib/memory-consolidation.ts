@@ -91,13 +91,41 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
     const data = await response.json() as { message?: { content?: string } };
     const rawText = data.message?.content ?? '';
 
-    // Strip markdown code fences
+    // Strip markdown code fences, then extract the first JSON array.
+    // Small local models often emit prose around the JSON, so we cannot rely
+    // on JSON.parse(cleanedText) alone. Walk the string and locate the first
+    // balanced [ ... ] block, then parse that. Falls back to the cleaned text
+    // when no bracket pair is present.
     const cleanedText = rawText.replace(/```(?:json)?\n?/gi, '').trim();
+    const extractFirstJsonArray = (input: string): string | null => {
+      const start = input.indexOf('[');
+      if (start === -1) return null;
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      for (let i = start; i < input.length; i++) {
+        const ch = input[i];
+        if (inString) {
+          if (escape) { escape = false; continue; }
+          if (ch === '\\') { escape = true; continue; }
+          if (ch === '"') inString = false;
+          continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === '[') depth++;
+        else if (ch === ']') {
+          depth--;
+          if (depth === 0) return input.slice(start, i + 1);
+        }
+      }
+      return null;
+    };
 
     // Parse insights with strict validation
     let insights: Array<{ insight_type: string; content: string }> = [];
+    const jsonCandidate = extractFirstJsonArray(cleanedText) ?? cleanedText;
     try {
-      const parsed = JSON.parse(cleanedText);
+      const parsed = JSON.parse(jsonCandidate);
       if (Array.isArray(parsed)) {
         insights = parsed.filter(
           (item) =>
@@ -107,9 +135,14 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
             typeof item.content === 'string' &&
             item.content.length > 0
         );
+      } else {
+        console.warn('[consolidation] LLM response parsed but is not a JSON array — writing run with 0 insights');
       }
-    } catch {
-      console.error('[consolidation] Failed to parse LLM response as JSON -- writing run with 0 insights');
+    } catch (parseErr) {
+      const preview = cleanedText.slice(0, 200).replace(/\s+/g, ' ');
+      console.error(
+        `[consolidation] Failed to parse LLM response as JSON -- writing run with 0 insights (preview: "${preview}")`
+      );
     }
 
     // Write insights to DB
