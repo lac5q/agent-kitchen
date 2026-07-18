@@ -59,3 +59,9 @@ cd apps/memroos && npx vitest run --coverage \
 npm test -- --run
 npm run test:slow -- --run
 ```
+
+## Gate results (2026-07-18)
+
+- Focused coverage suite: **66/66** passed
+- Fast suite: **3198** passed / 19 skipped
+- Slow suite: **19** passed
