@@ -47,7 +47,7 @@ describe("memory lifecycle API routes", () => {
         ontologyType: "memory.note",
         securityLabel: { visibility: "internal" },
         purpose: "recall",
-        scope: { tenantId: "default-tenant", project: "alpha" },
+        scope: { tenantId: "default-tenant", project: "alpha", purpose: "recall" },
         durationDays: 0,
         actorId: "operator",
       })
@@ -62,7 +62,7 @@ describe("memory lifecycle API routes", () => {
         ontologyType: "memory.note",
         securityLabel: { visibility: "internal" },
         purpose: "recall",
-        scope: { tenantId: "default-tenant", project: "alpha" },
+        scope: { tenantId: "default-tenant", project: "alpha", purpose: "recall" },
         actorId: "operator",
         createdAt: "2026-01-01T00:00:00.000Z",
       })
