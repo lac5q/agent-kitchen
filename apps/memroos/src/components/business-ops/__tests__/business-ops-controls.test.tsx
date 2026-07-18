@@ -47,6 +47,10 @@ describe("Business Ops controls", () => {
     expect(screen.getByLabelText(/date range/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^agent$/i)).toBeInTheDocument();
     expect(screen.getByText(/scope: since=/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^agent$/i), { target: { value: "agent-1" } });
+    fireEvent.change(screen.getByLabelText(/date range/i), { target: { value: "7" } });
+    expect(screen.getAllByText(/agentId=agent-1/i).length).toBeGreaterThan(0);
   });
 
   it("explains timeline load failures with the failing source", () => {
@@ -83,6 +87,26 @@ describe("Business Ops controls", () => {
     expect(screen.getByText(/salesforce/i)).toBeInTheDocument();
     // Not-wired adapters should never be rendered as live/healthy.
     expect(screen.getAllByText(/not wired/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders adapter status loading and error envelopes", () => {
+    apiMock.useBusinessOutcomeEvents.mockReturnValueOnce({
+      data: null,
+      isLoading: true,
+      error: null,
+    });
+    const loading = render(<AdapterStatusPanel dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
+    expect(screen.getAllByText(/loading/i).length).toBeGreaterThan(0);
+    loading.unmount();
+
+    apiMock.useBusinessOutcomeEvents.mockReturnValueOnce({
+      data: null,
+      isLoading: false,
+      error: new Error("adapter offline"),
+    });
+    render(<AdapterStatusPanel agentId="agent-1" dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
+    expect(screen.getAllByText(/adapter offline/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/agentId=agent-1/i).length).toBeGreaterThan(0);
   });
 
   it("KpiTimelinePanel renders L3 as N/A (unavailable) when scorers are marked unavailable", () => {

@@ -14,11 +14,25 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 vi.mock("../sidebar", () => ({
-  Sidebar: () => <nav aria-label="Authenticated navigation">Sidebar</nav>,
+  Sidebar: ({ onClose }: { onClose: () => void }) => (
+    <nav aria-label="Authenticated navigation">
+      Sidebar
+      <button type="button" onClick={onClose}>
+        Close sidebar
+      </button>
+    </nav>
+  ),
 }));
 
 vi.mock("../top-bar", () => ({
-  TopBar: () => <header>TopBar</header>,
+  TopBar: ({ onMenuClick }: { onMenuClick: () => void }) => (
+    <header>
+      TopBar
+      <button type="button" onClick={onMenuClick}>
+        Open menu
+      </button>
+    </header>
+  ),
 }));
 
 vi.mock("../section-tabs", () => ({
@@ -65,5 +79,20 @@ describe("Shell", () => {
     expect(screen.getByLabelText("Authenticated navigation")).toBeInTheDocument();
     expect(screen.getByText("TopBar")).toBeInTheDocument();
     expect(mockUseHealth).toHaveBeenCalled();
+  });
+
+  it("lets the top bar open and the sidebar close without leaving shell routes", () => {
+    mockPathname = "/ledger";
+
+    render(
+      <Shell publicLandingHost={false}>
+        <div>Ledger page</div>
+      </Shell>
+    );
+
+    expect(screen.getByText("SectionTabs")).toBeInTheDocument();
+    screen.getByRole("button", { name: /open menu/i }).click();
+    screen.getByRole("button", { name: /close sidebar/i }).click();
+    expect(screen.getByText("Ledger page")).toBeInTheDocument();
   });
 });

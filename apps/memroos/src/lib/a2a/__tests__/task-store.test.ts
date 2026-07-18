@@ -91,6 +91,45 @@ describe("A2A task store", () => {
     expect(record?.events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 
+  it("serializes malformed stored JSON as empty message, artifacts, metadata, and event payloads", async () => {
+    const { appendA2aTaskEvent, createA2aTask, getA2aTask, getDb, serializeA2aTask } = await loadStore();
+    createA2aTask({ taskId: "task-malformed", contextId: "ctx-bad", callerAgentId: "caller", message: MESSAGE });
+    appendA2aTaskEvent("task-malformed", "task.created", { ok: true });
+    getDb()
+      .prepare(
+        `UPDATE a2a_tasks
+         SET message_json = 'not-json', artifacts_json = '{"not":"array"}', metadata_json = '[]'
+         WHERE task_id = 'task-malformed'`
+      )
+      .run();
+    getDb()
+      .prepare(`UPDATE a2a_task_events SET payload_json = 'not-json' WHERE task_id = 'task-malformed'`)
+      .run();
+
+    const record = getA2aTask("task-malformed");
+    expect(record?.task.status.message).toEqual({});
+    expect(record?.task.artifacts).toEqual([]);
+    expect(record?.task.metadata).toEqual({});
+    expect(record?.events[0].payload).toEqual({});
+
+    expect(
+      serializeA2aTask({
+        task_id: "task-serialized",
+        context_id: "ctx",
+        caller_agent_id: "caller",
+        target_agent_id: null,
+        state: "submitted",
+        message_json: "[]",
+        artifacts_json: "not-json",
+        metadata_json: "not-json",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        terminal_at: null,
+        cancel_requested_at: null,
+      } as never).metadata
+    ).toEqual({});
+  });
+
   it("filters listed tasks to caller or target agent", async () => {
     const { createA2aTask, listA2aTasksForAgent } = await loadStore();
     createA2aTask({ taskId: "caller-task", contextId: "ctx-a", callerAgentId: "agent-a", targetAgentId: "agent-b", message: MESSAGE });

@@ -70,6 +70,17 @@ describe("ProposalCard", () => {
     expect(screen.getByText("target: skill")).toBeInTheDocument();
   });
 
+  it("opens details from the card and falls back to queued tracking for approved proposals", () => {
+    const onClick = vi.fn();
+    render(<ProposalCard proposal={{ ...pendingProposal, status: "approved" }} onClick={onClick} />);
+
+    fireEvent.click(screen.getAllByText("ceo")[0]);
+
+    expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: pendingProposal.id }));
+    expect(screen.getByText("Queued for worker")).toBeInTheDocument();
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+  });
+
   it("does not show approve for archived proposals", () => {
     render(<ProposalCard proposal={{ ...pendingProposal, status: "archived" }} onClick={vi.fn()} />);
 

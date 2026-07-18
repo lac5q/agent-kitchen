@@ -86,4 +86,30 @@ describe("ToolAttentionPanel", () => {
 
     expect(mockUseToolAttention).toHaveBeenLastCalledWith("memory");
   });
+
+  it("renders loading and empty catalog fallbacks", () => {
+    mockUseToolAttention.mockReturnValueOnce({
+      data: undefined,
+      isLoading: true,
+    } as unknown as ReturnType<typeof useToolAttention>);
+    const loading = render(<ToolAttentionPanel />);
+    expect(screen.getByText(/loading capabilities/i)).toBeInTheDocument();
+    loading.unmount();
+
+    mockUseToolAttention.mockReturnValueOnce({
+      data: {
+        summary: { totalCapabilities: 0, topLevelTools: 0, workspaces: 0, sources: 0, recentOutcomes: 0 },
+        capabilities: [],
+        recentOutcomes: [],
+        recommendations: [],
+        sources: [],
+        health: { status: "ok", catalog: "ok", outcomes: "ok", messages: [] },
+        timestamp: "2026-04-30T00:00:00.000Z",
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useToolAttention>);
+    render(<ToolAttentionPanel />);
+    expect(screen.getByText(/no matching capabilities/i)).toBeInTheDocument();
+    expect(screen.getByText(/no recommendations available/i)).toBeInTheDocument();
+  });
 });
