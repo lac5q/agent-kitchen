@@ -241,7 +241,16 @@ async function checkGraphMemory(): Promise<ServiceCheckResult> {
 export async function GET() {
   const services = await Promise.all([
     checkService("RTK", async () => {
-      await execFileStdout("rtk", ["--version"], { timeout: 2000 });
+      // RTK is a local-Mac CLI compression tool, not an oracle-1 service.
+      // Match QMD pattern: optional on cloud operators; never report as down here.
+      try {
+        await execFileStdout("rtk", ["--version"], { timeout: 2000 });
+      } catch {
+        return {
+          status: "degraded",
+          detail: "optional — rtk binary not installed (local dev tool, not an oracle-1 service)",
+        };
+      }
     }),
     checkService("mem0", async () => {
       return checkMem0();

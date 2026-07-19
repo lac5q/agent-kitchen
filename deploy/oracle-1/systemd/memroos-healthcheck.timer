@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MemRoOS oracle-1 healthcheck every 30 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Unit=memroos-healthcheck.service
+
+[Install]
+WantedBy=timers.target
