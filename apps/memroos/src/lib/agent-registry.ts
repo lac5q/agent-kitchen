@@ -14,6 +14,7 @@ import type {
 } from "@/types";
 import { getDb } from "@/lib/db";
 import { recordEfficiencyEvent, type MemoryWritePayload } from "@/lib/efficiency-telemetry";
+import { getAdapters } from "@/lib/memory/registry";
 
 interface RegisteredAgentRow {
   id: string;
@@ -502,6 +503,21 @@ export function recordMemoryWrite(
       isRediscovery: priorWrite !== null,
     },
   });
+
+  // MEMX-3: route the write to the matching tier adapter so vector/graph tiers
+  // actually persist, not just the audit row. Fire-and-forget; mem0 queue
+  // buffers failures. Opt-in via env so existing tests stay green.
+  if (process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER === "1" && payload.type) {
+    const tier = payload.type as Parameters<typeof getAdapters>[0];
+    const adapter = getAdapters(tier)[0];
+    if (adapter && typeof payload.content === "string" && payload.content.length > 0) {
+      void adapter
+        .write({ agent_id: agentId, content: payload.content, metadata })
+        .catch((err: unknown) => {
+          console.warn("[recordMemoryWrite] adapter push failed", tier, err);
+        });
+    }
+  }
 }
 
 export function recordToolOutcome(agentId: string, payload: ToolOutcomeInput): void {
