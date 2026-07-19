@@ -651,10 +651,16 @@
 | OBSERVE-07 | Wave 1 adapters: Claude Code JSONL, Codex JSONL, Hermes sessions, OpenClaw sessions, **Pi `~/.pi/agent/sessions/**/*.jsonl`** attributed to onboarded Pi agents | 169 | complete |
 | OBSERVE-08 | Hermes memory observe plugin shares the same depth policy | 169 | complete |
 | OBSERVE-09 | Capture reuses Phase 96 `captureCodingAgentSession` (no parallel schema); dry-run receipts; Pi Wave-1 smoke without manual `knowledge_write` | 169 | complete |
-| OBSERVE-10 | Cursor adapter: MCP + best-available hook/export; honest partial status if capture incomplete | 170 | pending |
-| OBSERVE-11 | Factory/Droid MCP + capture path; map to `platform=droid` when registered; **do not demote Pi out of Wave 1** | 170 | pending |
-| OBSERVE-12 | Antigravity: MCP if available else documented limitation — no false full-capture claim | 171 | pending |
-| OBSERVE-13 | Maturity matrix lists Claude/Codex/Hermes/OpenClaw/**Pi**/Cursor/Factory/Antigravity with capture method; installer TARGETS include Pi | 171 | pending |
-| OBSERVE-14 | Operator visibility per onboarded agent (incl. Pi): last capture, depth, volume, errors; Wave 1 smoke ≥1 relevant candidate without manual `knowledge_write` | 171 | pending |
+| OBSERVE-10 | Cursor adapter: MCP + best-available hook/export; honest partial status if capture incomplete | 170 | complete (2026-07-18; `mcp-partial` maturity, sessionRoots=[`.cursor/projects`]) |
+| OBSERVE-11 | Factory/Droid MCP + capture path; map to `platform=droid` when registered; **do not demote Pi out of Wave 1** | 170 | complete (2026-07-18; `hooks+jsonl` maturity, sessionRoots=[`.factory`]) |
+| OBSERVE-12 | Antigravity: MCP if available else documented limitation — no false full-capture claim | 171 | complete (2026-07-18; `limited` maturity, no JSONL surface found, explicit no-path note in catalog) |
+| OBSERVE-13 | Maturity matrix lists Claude/Codex/Hermes/OpenClaw/**Pi**/Cursor/Factory/Antigravity with capture method; installer TARGETS include Pi | 171 | complete (2026-07-18; `scripts/check-observe-maturity-drift.mjs` + CI wired; matrix synced to catalog) |
+| OBSERVE-14 | Operator visibility per onboarded agent (incl. Pi): last capture, depth, volume, errors; Wave 1 smoke ≥1 relevant candidate without manual `knowledge_write` | 171 | complete (2026-07-18; `errorCount`+`agentsByHarness` in `listObserveHarnessHealth`; Wave-1 Pi smoke in `observe-wave1-smoke.test.ts`) |
 
 **Locked:** Support **already-onboarded** MemRoOS agents (Pi is first-class `AgentPlatform`). MCP is the company brain interface, not a wiretap. Autonomous learning requires the observe sidecar/adapters. Default store **relevant** content only; depth is intentionally upgradable later. Do not promise 100% closed-IDE fidelity without vendor hooks.
+
+## v8.11 Followup — Source-to-Index Evidence (Phase 172)
+
+| ID | Requirement | Phase | Status |
+|----|-------------|-------|--------|
+| MEETREL-FOLLOWUP-05 | Every meeting lookup returns a bounded 6-case status (`provider_absent` \| `provider_auth_blocked` \| `captured_unrouted` \| `routed_unindexed` \| `indexed_unrecalled` \| `recalled`); pre-flight refuses to report `ok:true` when OAuth scopes are insufficient; evidence bundle at `docs/uat/2026-07-18-meetrel-source-to-index-evidence.md` | 172 | complete (2026-07-18; `services/knowledge-mcp/knowledge_system/source_status.py` + `apps/memroos/src/lib/meeting-source-status.ts`; pre-flight in `scripts/meet-sync/preflight.sh`; `memory_recall` parity fix for spark-recordings) |

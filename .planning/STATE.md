@@ -4,13 +4,13 @@ milestone: v8.10
 milestone_name: Governed Ontology Foundation
 status: active
 stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
-last_updated: "2026-07-18T09:08:00Z"
+last_updated: "2026-07-18T22:30:00Z"
 progress:
   total_phases: 115
-  completed_phases: 79
+  completed_phases: 84
   total_plans: 158
-  completed_plans: 138
-  percent: 70
+  completed_plans: 143
+  percent: 73
 ---
 
 # State: Memroos
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md
 
 Phase: Quality gate over open GSD (v8.13→v8.16 excl. Voyage) — 2026-07-18
 Plan: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Status: **complete-with-blockers** · wiki digest episodic fallback + live UAT 32/32 · Voyage/Phase 166 excluded
-Completed recently: Standing Quality Gate; v8.13–v8.16 cloud-executable work; live UAT pass; wiki-digest mem0 fallback fix
+Status: **closed-in-reach** · v8.16 OBSERVE 10..14 + MEETREL-FOLLOWUP-05 + M1.3 coverage slice 1+2 closed; Voyage/Phase 166 still excluded
+Completed recently: OBSERVE-10..14 (Phases 170, 171); MEETREL-FOLLOWUP-05 (Phase 172); cron-health coverage 0%→95% (M1.3 slice 2)
 
-**This goal (cloud-executable):** DONE with documented infra blockers.
-- **v8.13–v8.16** code/docs landed (Phase 166 Voyage skipped; v8.15 live cutover blocked on oracle SSH)
-- Coverage improved with measured gaps; feature inventory + live UAT clean pass
-- Fast 3168 + slow 19 green; prod-log triage: no actionable cloud-reachable errors
+**This goal (cloud-executable):** DONE in-reach items closed.
+- **v8.13–v8.16** code/docs landed; v8.16 Phases 170+171 shipped OBSERVE-10..14 with drift-check automation, Wave-1 Pi smoke, and operator visibility (errorCount + agentsByHarness)
+- **MEETREL-FOLLOWUP-05** closed: 6-status enum (`provider_absent` | `provider_auth_blocked` | `captured_unrouted` | `routed_unindexed` | `indexed_unrecalled` | `recalled`), per-collection status in `memory_recall`, OAuth pre-flight that refuses to report `ok:true` on insufficient scopes, evidence bundle at `docs/uat/2026-07-18-meetrel-source-to-index-evidence.md`
+- **M1.3 coverage** slice 1 (utility parsers + topology + registry helpers) and slice 2 (cron-health.ts 0%→95%) shipped
+- Fast 3322 + slow 19 + 88 knowledge-mcp green; pre-existing flakes (audit-perf hook timeout, pulse-strip UI copy) unrelated
 
-**Still open (outside this goal / approval-gated):**
+**Still open (approval-gated, not in scope this session):**
 - **v8.15 live** — public cutover verified 2026-07-18; opc SSH shell needs pubkey install for on-host re-smoke/deploy
 - **MSIQ-06** — GraphRAG spike (Luis approval)
 - **ENTOPS-04/05** — IdP/MDM
 - **ENTOPS-07** — Claude/Codex wiring; Hermes rewrite still deferred
 - **v8.9 / Phase 166** — Voyage/LLM scoring (explicitly excluded this pass)
-- **MEETREL-FOLLOWUP-05** — Source-to-index evidence (Cordant investigation)
 
 ## Session Continuity
 
-Last session: 2026-07-18T08:16:00Z
-Stopped at: Goal complete-with-blockers; PR #28 updated with wiki-digest fallback + live UAT evidence.
+Last session: 2026-07-18T22:30:00Z
+Stopped at: Goal closed-in-reach; 5 new branches merged on main (Phases 170, 171, 172 + coverage slices 1+2).
 Resume file: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Next action: Luis installs Cursor Cloud SSH pubkey on opc@oracle-1; then deploy PR branch and re-smoke systemd/Ollama.
+Next action: Luis installs Cursor Cloud SSH pubkey on opc@oracle-1 (v8.15 on-host re-smoke) and signs off on MSIQ-06 / ENTOPS-04/05/07.
 
 ## Roadmap Summary (v5.0 + v6.0)
 
