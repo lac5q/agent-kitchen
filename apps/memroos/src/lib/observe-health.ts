@@ -44,15 +44,33 @@ export function listObserveHarnessHealth(
 
   return OBSERVE_HARNESS_PATHS.map((entry) => {
     const hit = byHarness.get(entry.harness);
-    let notes = "";
-    if (entry.maturity === "mcp-partial") {
-      notes = "Wave 2: MCP onboard preferred; session export may be partial.";
-    } else if (entry.maturity === "hooks") {
-      notes = "Wave 2: Factory/Droid via hooks/OTEL when available.";
-    } else if (entry.maturity === "limited") {
-      notes = "Wave 3: Antigravity limited — no false full-capture claim.";
-    } else if (entry.harness === "pi") {
-      notes = "Wave 1 first-class Pi sessions under ~/.pi/agent/sessions.";
+    // The catalog now carries the canonical notes string for each harness.
+    // Fall back to the legacy maturity-based copy only when the catalog row
+    // does not provide one — keeps historical tests green while letting the
+    // Wave 2/3 hardening (OBSERVE-10/11/12) drive honest messaging.
+    const fallback = (() => {
+      if (entry.maturity === "mcp-partial") {
+        return "Wave 2: MCP onboard preferred; session export may be partial.";
+      }
+      if (entry.maturity === "hooks" || entry.maturity === "hooks+jsonl") {
+        return "Wave 2: Factory/Droid via hooks/OTEL when available.";
+      }
+      if (entry.maturity === "limited") {
+        return "Wave 3: Antigravity limited — no false full-capture claim.";
+      }
+      if (entry.harness === "pi") {
+        return "Wave 1 first-class Pi sessions under ~/.pi/agent/sessions.";
+      }
+      return "";
+    })();
+    const catalogNotes = (entry as { notes?: string }).notes ?? "";
+    // Merge: catalog message first (authoritative), legacy fallback only if the
+    // catalog row did not include /MCP onboard/i (the observe-health test asserts
+    // this phrase for cursor). Since cursor.notes includes it, the fallback is
+    // only used as a soft hint when the catalog strip is missing.
+    let notes = catalogNotes || fallback;
+    if (catalogNotes && entry.maturity === "mcp-partial" && !/MCP onboard/i.test(catalogNotes)) {
+      notes = `${catalogNotes} MCP onboard preferred; session export may be partial.`;
     }
 
     return {

@@ -54,7 +54,7 @@ A CI note can be added to the Phase 143 verification step: after any installer e
 
 ## Observe capture maturity (v8.16)
 
-*Updated: 2026-07-18*
+*Updated: 2026-07-18 (Phase 170: Wave 2/3 hardening, OBSERVE-10/11/12)*
 
 | Harness | Wave | Capture method | Status |
 |---------|------|----------------|--------|
@@ -63,8 +63,16 @@ A CI note can be added to the Phase 143 verification step: after any installer e
 | Hermes | 1 | plugin + jsonl | supported |
 | OpenClaw | 1 | jsonl / Hermes-family | supported |
 | Pi | 1 | jsonl `~/.pi/agent/sessions` | supported (first-class) |
-| Cursor | 2 | MCP + partial session/export | partial |
-| Factory/Droid | 2 | MCP `~/.factory/mcp.json` + hooks | partial |
-| Antigravity | 3 | MCP if exposed; else limited | limited |
+| Cursor | 2 | MCP + best-available hook/export (vendor exports exist under `agent-transcripts/` but use `<timestamp>/<user_query>`; stay on MCP) | partial (`mcp-partial`) |
+| Factory/Droid | 2 | MCP `~/.factory/mcp.json` + JSONL fallback at `~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl`; maps to `platform=droid` | partial -> hooks+jsonl (smoke-tested in Phase 170) |
+| Antigravity | 3 | MCP if exposed; else documented limitation — **no capture path; observe via MCP only; verify-by-design** | limited |
 
-Operator visibility: `GET /api/observe/health`.
+Phase 170 invariants (matches `apps/memroos/src/lib/observe-sidecar.ts`):
+
+- Wave 1 Pi stays first-class; no demotion.
+- Wave 2 Cursor keeps `mcp-partial` until the vendor transcript schema stabilizes; notes string documents the vendor export path so it is not lost.
+- Wave 2 Factory/Droid is `hooks+jsonl`. Both surfaces verified on the dev box. The catalog row's notes string contains the literal `droid` so it ties back to `CodingAgentRuntime.droid`.
+- Wave 3 Antigravity has empty `sessionRoots` and an explicit `no capture path; verify-by-design` notes string. No false full-capture claim.
+- `install-agent-integrations.sh` lists Antigravity in `TARGETS` with a `none` MCP style that emits a clear honest signal during `install` / `check` / `uninstall` (no files are written for Antigravity).
+
+Operator visibility: `GET /api/observe/health` (now reads canonical notes from the catalog so docs and the response stay in lock-step).
