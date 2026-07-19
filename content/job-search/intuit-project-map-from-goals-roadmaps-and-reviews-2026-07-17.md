@@ -3,22 +3,22 @@ title: Intuit project map from goals, roadmaps, reviews, and EOS evidence
 date: 2026-07-17
 model: GPT-5 Codex
 sources:
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/My Goals 2023-05-11 (1).xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/Team Goals 2023-05-11.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/FY22 UPS Roadmap _ Homebase.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Roadmap Draft.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Reimagine Expenses/SE Industry Expense Counts v2.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Reimagine Expenses/Expenses/Data Engine Industry Match Update 01102022.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap.xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/NextGen TTL TY23 EOS Learnings.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/FY24 SOM Product Review Evergreen.pptx
-derived_from: /Users/lcalderon/github/jobhunt/data/intuit-source-index.json
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/My Goals 2023-05-11 (1).xlsx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/Team Goals 2023-05-11.xlsx
+  - /Users/<you>/Documents/Work/Intuit/FY22 UPS Roadmap _ Homebase.xlsx
+  - /Users/<you>/Documents/Work/Intuit/Roadmap Draft.xlsx
+  - /Users/<you>/Documents/Work/Intuit/Reimagine Expenses/SE Industry Expense Counts v2.xlsx
+  - /Users/<you>/Documents/Work/Intuit/Reimagine Expenses/Expenses/Data Engine Industry Match Update 01102022.xlsx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap.xlsx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/NextGen TTL TY23 EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/FY24 SOM Product Review Evergreen.pptx
+derived_from: /Users/<you>/github/jobhunt/data/intuit-source-index.json
 regen_prompt: Rebuild the Intuit project map by connecting Luis-owned goals, team goals, roadmaps, product reviews, and EOS evidence. Separate intended work, reported progress, observed outcomes, and team-member ownership. Do not attribute Ritu, Grace, or Syed deliverables to Luis personally.
 ---
 
 # Intuit Project Map
 
-Canonical working report: `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md`
+Canonical working report: `/Users/<you>/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md`
 
 ## Summary
 

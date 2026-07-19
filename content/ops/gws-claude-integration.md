@@ -21,7 +21,7 @@ The response is structured JSON. Parse the JSON; don't paste walls of text back 
 - **NO `--account` flag** — it was removed in v0.7.0. To act as a different Google account, swap the credentials file via env var before the call:
 
   ```bash
-  GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=~/.config/gws/credentials.luis@epiloguecapital.com.enc \
+  GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=~/.config/gws/credentials.<you>@epiloguecapital.com.enc \
     gws gmail users messages list ...
   ```
 
@@ -37,7 +37,7 @@ Stored under `~/.config/gws/credentials.<base64-of-email>.enc`:
 | Account | Filename hint | Default? |
 |---|---|---|
 | `luis.calderon@gmail.com` | `credentials.bHVpcy5jYWxkZXJvbkBnbWFpbC5jb20=.enc` | no |
-| `luis@epiloguecapital.com` | `credentials.bHVpc0BlcGlsb2d1ZWNhcGl0YWwuY29t.enc` | no |
+| `<you>@epiloguecapital.com` | `credentials.bHVpc0BlcGlsb2d1ZWNhcGl0YWwuY29t.enc` | no |
 | `luis@cordant.ai` (= `luis.calderon@cordant.ai`) | `credentials.bHVpc0Bjb3JkYW50LmFp.enc` | **yes (default)** |
 
 To switch accounts, prefix the Bash call with `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=~/.config/gws/credentials.<file>.enc `.

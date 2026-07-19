@@ -290,7 +290,7 @@ sudo useradd --system --shell /usr/sbin/nologin --home-dir /nonexistent hermes-p
 sudo curl -fsSL https://raw.githubusercontent.com/lac5q/knowledge/main/infrastructure/hermes-network-policy.json \
   -o /etc/hermes/network-policy.json
 sudo install -o hermes-proxy -g hermes-proxy -m 0600 \
-  /home/lac5q/hermes-secrets/mcp-tokens.json /etc/hermes/mcp-tokens.json
+  /home/<user>/hermes-secrets/mcp-tokens.json /etc/hermes/mcp-tokens.json
 
 # 11. systemd service for the proxy (mirror §1a step 9, with TCP bind for Mac forwarder)
 sudo tee /etc/systemd/system/hermes-mcp-proxy.service <<'INI'
@@ -333,17 +333,17 @@ sudo ss -tlnp | grep 7777               # expect: python listening on 127.0.0.1:
 
 **Paperclip systemd unit — already wired (verified 2026-07-08):**
 ```ini
-# /home/lac5q/.config/systemd/user/paperclip.service
+# /home/<user>/.config/systemd/user/paperclip.service
 [Unit]
 Description=Paperclip control plane (user)
 After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/lac5q/github/paperclip
-Environment=PATH=/home/lac5q/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/home/lac5q/github/paperclip/.env
-ExecStart=/usr/bin/env bash -c 'cd /home/lac5q/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
+WorkingDirectory=/home/<user>/github/paperclip
+Environment=PATH=/home/<user>/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/home/<user>/github/paperclip/.env
+ExecStart=/usr/bin/env bash -c 'cd /home/<user>/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
 Restart=on-failure
 RestartSec=10
 KillMode=process
@@ -798,7 +798,7 @@ docker load -i /tmp/agent-base-amd64.tar
 | `~/Library/LaunchAgents/com.hermes.orchestrator.plist` | Mac | lac5q | Hermes launchd unit |
 | `~/.hermes/skills/session-runner/SKILL.md` | Mac | lac5q | orchestrator skill |
 | `~/paperclip/instances/<session>/{run.log,artifacts/}` | Mac | lac5q | session archive |
-| `/home/lac5q/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
+| `/home/<user>/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
 | `/var/lib/systemd/linger/lac5q` | maeve-u1 | root | linger marker |
 | `~/github/knowledge/infrastructure/hermes-mcp-proxy.py` | Mac | lac5q | mcp-proxy canonical source |
 

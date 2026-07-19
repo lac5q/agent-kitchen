@@ -136,7 +136,7 @@ Run only after the oracle-1 host access, production secrets, and data migration 
 3. Deploy the repository on oracle-1:
 
    ```bash
-   cd /home/opc/github/memroos
+   cd /home/<user>/github/memroos
    git pull --ff-only
    npm --prefix apps/memroos ci
    npm --prefix apps/memroos run build
@@ -148,7 +148,7 @@ Run only after the oracle-1 host access, production secrets, and data migration 
 
    ```bash
    sudo systemctl stop memroos-web memroos-mem0
-   cp -a /home/opc/github/memroos/data/conversations.db "/home/opc/github/memroos/data/conversations.db.backup.$(date +%Y%m%d%H%M%S)"
+   cp -a /home/<user>/github/memroos/data/conversations.db "/home/<user>/github/memroos/data/conversations.db.backup.$(date +%Y%m%d%H%M%S)"
    # Copy the approved source conversations.db to the configured SQLITE_DB_PATH here.
    sudo systemctl start memroos-mem0 memroos-web
    ```
@@ -156,7 +156,7 @@ Run only after the oracle-1 host access, production secrets, and data migration 
 5. Enable graph catchup on the operator host using the existing memory resilience install path:
 
    ```bash
-   cd /home/opc/github/memroos
+   cd /home/<user>/github/memroos
    node scripts/install-memory-resilience.mjs install
    node scripts/run-graph-catchup.mjs --dry-run
    ```

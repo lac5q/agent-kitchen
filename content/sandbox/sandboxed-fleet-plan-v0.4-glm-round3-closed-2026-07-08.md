@@ -255,17 +255,17 @@ ls -la /dev/kvm   # expect: crw-rw---- 1 root kvm 10, 232
 
 **Paperclip systemd unit — already wired (verified 2026-07-08):**
 ```ini
-# /home/lac5q/.config/systemd/user/paperclip.service
+# /home/<user>/.config/systemd/user/paperclip.service
 [Unit]
 Description=Paperclip control plane (user)
 After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/lac5q/github/paperclip
-Environment=PATH=/home/lac5q/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/home/lac5q/github/paperclip/.env
-ExecStart=/usr/bin/env bash -c 'cd /home/lac5q/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
+WorkingDirectory=/home/<user>/github/paperclip
+Environment=PATH=/home/<user>/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/home/<user>/github/paperclip/.env
+ExecStart=/usr/bin/env bash -c 'cd /home/<user>/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
 Restart=on-failure
 RestartSec=10
 KillMode=process
@@ -711,7 +711,7 @@ docker buildx build --platform linux/amd64 -t agent-base:amd64 \
 | `~/Library/LaunchAgents/com.hermes.orchestrator.plist` | Mac | lac5q | Hermes launchd unit |
 | `~/.hermes/skills/session-runner/SKILL.md` | Mac | lac5q | orchestrator skill |
 | `~/paperclip/instances/<session>/{run.log,artifacts/}` | Mac | lac5q | session archive |
-| `/home/lac5q/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
+| `/home/<user>/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
 | `/var/lib/systemd/linger/lac5q` | maeve-u1 | root | linger marker |
 | `~/github/knowledge/infrastructure/hermes-mcp-proxy.py` | Mac | lac5q | mcp-proxy canonical source |
 

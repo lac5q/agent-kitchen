@@ -199,17 +199,17 @@ ls -la /dev/kvm   # expect: crw-rw---- 1 root kvm 10, 232
 
 **Paperclip systemd unit — already wired (verified 2026-07-08):**
 ```ini
-# /home/lac5q/.config/systemd/user/paperclip.service
+# /home/<user>/.config/systemd/user/paperclip.service
 [Unit]
 Description=Paperclip control plane (user)
 After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/lac5q/github/paperclip
-Environment=PATH=/home/lac5q/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/home/lac5q/github/paperclip/.env
-ExecStart=/usr/bin/env bash -c 'cd /home/lac5q/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
+WorkingDirectory=/home/<user>/github/paperclip
+Environment=PATH=/home/<user>/.local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/home/<user>/github/paperclip/.env
+ExecStart=/usr/bin/env bash -c 'cd /home/<user>/github/paperclip && exec pnpm --filter @paperclipai/server exec tsx ../scripts/dev-runner.ts dev --bind tailnet'
 Restart=on-failure
 RestartSec=10
 KillMode=process
@@ -223,7 +223,7 @@ WantedBy=default.target
 
 Linger is enabled (`/var/lib/systemd/linger/lac5q` exists), so the service auto-starts on next WSL2 boot — **fixes the B6 silent-kill problem**.
 
-**Cloudflare tunnel — already wired.** The `pc2.epiloguecapital.com` tunnel runs as `cloudflared --config /home/lac5q/.cloudflared/pc2-config.yml tunnel run`. Same linger pattern recommended (not yet wired — see Out-of-scope).
+**Cloudflare tunnel — already wired.** The `pc2.epiloguecapital.com` tunnel runs as `cloudflared --config /home/<user>/.cloudflared/pc2-config.yml tunnel run`. Same linger pattern recommended (not yet wired — see Out-of-scope).
 
 **WSL2-specific note on `runsc`:** the kernel is `6.18.33.2-microsoft-standard-WSL2` (rolling, June 18 2026 build). gVisor's docs list WSL2 as **supported-but-experimental** for the `runsc-systrap` runtime. Round-1 validation found `/dev/kvm` is present, so the kernel-mode fast path is available. If `runsc` ever fails to start a container in WSL2, fall back to standard `runc` (still a strong sandbox under seccomp+apparmor); see Section 5 verification step 4.
 
@@ -625,7 +625,7 @@ docker buildx build --platform linux/amd64 -t agent-base:amd64 -f /tmp/agent-bas
 | `~/Library/LaunchAgents/com.hermes.orchestrator.plist` | Mac | lac5q | Hermes launchd unit |
 | `~/.hermes/skills/session-runner/SKILL.md` | Mac | lac5q | orchestrator skill |
 | `~/paperclip/instances/<session>/{run.log,artifacts/}` | Mac | lac5q | session archive |
-| `/home/lac5q/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
+| `/home/<user>/.config/systemd/user/paperclip.service` | maeve-u1 | lac5q | paperclip systemd unit |
 | `/var/lib/systemd/linger/lac5q` | maeve-u1 | root | linger marker (enables auto-start) |
 
 ---

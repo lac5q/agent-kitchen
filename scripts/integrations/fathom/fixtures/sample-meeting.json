@@ -7,10 +7,10 @@
   "share_url": "https://fathom.video/share/fixture",
   "recorded_by": {
     "name": "Luis Calderon",
-    "email": "luis@epiloguecapital.com"
+    "email": "<you>@epiloguecapital.com"
   },
   "calendar_invitees": [
-    {"name": "Luis", "email": "luis@epiloguecapital.com", "is_external": false}
+    {"name": "Luis", "email": "<you>@epiloguecapital.com", "is_external": false}
   ],
   "default_summary": {
     "markdown_formatted": "Fixture summary for unit tests."

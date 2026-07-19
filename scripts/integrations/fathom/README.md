@@ -24,7 +24,7 @@ the public repo stays free of API keys.
 
 MemRoOS ingests **both**:
 
-- `luis@epiloguecapital.com`
+- `<you>@epiloguecapital.com`
 - `luis.calderon@gmail.com`
 
 Fathom API keys are **per user**. Each key only sees meetings that account
@@ -65,7 +65,7 @@ npm run check:runtime-services
 
 | Account | Suggested 1Password title | Default `op://` ref |
 |---------|---------------------------|---------------------|
-| `luis@epiloguecapital.com` | `Fathom API Epilogue` | `op://Private/Fathom API Epilogue/credential` |
+| `<you>@epiloguecapital.com` | `Fathom API Epilogue` | `op://Private/Fathom API Epilogue/credential` |
 | `luis.calderon@gmail.com` | `Fathom API Gmail` | `op://Private/Fathom API Gmail/credential` |
 
 Store the Fathom API key in the item’s **credential** / **password** / **API key** field.

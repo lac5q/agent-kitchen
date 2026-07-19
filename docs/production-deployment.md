@@ -39,15 +39,15 @@ GitHub PR checks include **Vercel – memroos**. That deploys the **marketing si
 | `cloudflared.service` | Tunnel `memroos-oracle` only |
 
 **Env files (host):** `/etc/memroos/web.env`, `/etc/memroos/mem0.env`  
-**App checkout:** `/home/opc/github/memroos`  
-**SQLite:** `SQLITE_DB_PATH` → `/home/opc/github/memroos/data/conversations.db`  
+**App checkout:** `/home/<user>/github/memroos`  
+**SQLite:** `SQLITE_DB_PATH` → `/home/<user>/github/memroos/data/conversations.db`  
 **Disk watch:** `memroos-disk-watch.timer` every 30m — warns at ≤6G free, critical at ≤4G (`/var/log/memroos/disk-watch.log`, `/run/memroos-disk-watch.state`)
 
 ### Deploy / restart on oracle-1
 
 ```bash
 ssh oracle-1
-cd /home/opc/github/memroos
+cd /home/<user>/github/memroos
 git pull --ff-only   # or rsync schema-compatible code
 npm --prefix apps/memroos ci
 # arm64 natives if needed after npm ci
