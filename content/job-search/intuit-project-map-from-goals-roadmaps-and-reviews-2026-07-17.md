@@ -46,6 +46,7 @@ No source located so far proves that the exact named program began in calendar 2
 - `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md` now starts with the 2021 research, MVP, and roadmap sequence before ML personalization and QuickFile.
 - `/Users/lcalderon/github/jobhunt/docs/interview/intuit-project-history-narration.txt` contains the same chronology and evidence boundaries.
 - `/Users/lcalderon/github/jobhunt/docs/interview/intuit-project-history-natural-slow.m4a` was regenerated from the revised narration.
+- `/Users/lcalderon/github/jobhunt/docs/interview/intuit-career-roadmap-2021-2024.svg` is the canonical large visual roadmap. Its PNG and PDF exports use the same filename stem. It labels Reimagined Expenses MVP as August–October 2021 and shows July–August discovery as the lead-in.
 - The raw index now includes `FY22 SE GMIR Evergreen.pptx` as a product review with 33,348 characters in 22 chunks. The full index contains 38 candidates, 33 unique documents, 36,358 chunks, 56,275,909 characters, and zero skipped files.
 
 ## Key conclusions
