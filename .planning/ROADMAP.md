@@ -64,7 +64,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
-- 📋 **v8.18 NOC Metrics Rethink** — candidate (added 2026-07-20; audit `.planning/notes/2026-07-20-noc-rethink-audit.md`; NOCUX-01..05 paste-ready; 13-panel surface shows "No events"/"empty by design" on fresh operator; root causes: efficiency_events producers never wired, hive-centric panels presume hive activity, empty states describe absence not meaning; pipeline: kimi-k3-thinking UX design → gpt-5.6-terra-high orchestrator → M3 worker → codex validator; open Qs: sole-operator vs client-demo audience, kill vs hide empty panels, default 24h only or all windows; v8.17 reserved for logging observability candidate pending in local uncommitted ROADMAP)
+- 📋 **v8.18 NOC Metrics Rethink** — Phases 173-174 (planned 2026-07-20; NOCUX-01..05; K3 UX design + terra-high review complete; operator-first 7-row layout; v8.17 remains reserved for logging observability candidate pending in local uncommitted ROADMAP)
 
 ## Phases
 
@@ -2756,3 +2756,53 @@ Operator host
 - Promising 100% Cursor/Antigravity transcript fidelity without vendor hooks.
 - Indexing full chat dumps at default depth.
 - Replacing v8.14 wiki digest (observe feeds memory; wiki synthesizes later).
+
+## v8.18 NOC Metrics Rethink (Phases 173-174)
+
+*Planned: 2026-07-20 · Design: `.planning/design/noc-rethink-v1.md` · Audit: `.planning/notes/2026-07-20-noc-rethink-audit.md`*
+
+**Goal:** Replace the current 13-panel placeholder-heavy NOC with an operator-first surface that reports truthful day-1 MemRoOS signals and makes the first needed action obvious.
+
+**Audience:** Sole MemRoOS operator. The default view must be useful before hive activity or EFFTEL instrumentation exists.
+
+**Locked UX decisions:**
+- Main layout answers, in order: alive → needs attention → learning → agent activity → cost → governance.
+- Useful but unwired panels are hidden behind a remembered **Show advanced** toggle, off by default.
+- All 24h / 7d / 30d and workspace scopes preserve the same semantic contract.
+- Empty has four distinct states: window-empty, no-history, stale/error, known-unwired. Errors never display as no-data.
+
+### Phase 173 — NOC Truth Contracts + Attention
+
+**Goal:** Make the existing NOC API truthful for a single operator: attention items, message-backed activity, source freshness, and known-unwired status.
+**Depends on:** Phase 172 (complete; shared NOC contract baseline)
+**Requirements:** NOCUX-01, NOCUX-04, NOCUX-05
+**Success criteria:**
+1. Default NOC data uses day-1 sources (`messages`, memory, cron health, skills, audit, model usage), not hive activity as a prerequisite.
+2. Attention is severity-ordered and shows cron failures, pending HIL work, security findings, and stale sources with a next action.
+3. Agent Activity remains useful when `hive_delegations` is empty; delegation detail is additive only.
+4. EfficiencySignals is explicit known-unwired/Advanced until EFFTEL producers are verified.
+
+### Phase 174 — Operator Layout + Semantic States
+
+**Goal:** Ship the approved K3 v1.1 operator layout using Phase 173 data: simple default, Advanced for useful-but-unwired panels, and honest states at every scope.
+**Depends on:** Phase 173
+**Requirements:** NOCUX-01, NOCUX-02, NOCUX-03, NOCUX-04, NOCUX-05
+**Success criteria:**
+1. Default order is Pulse → Attention → Memory/Tier Health → Agent Activity/Models/Heatmap → Cost → Governance/Skills.
+2. No default panel displays only "No events" or "empty by design"; it renders live, window-empty, no-history, stale/error, or known-unwired semantics.
+3. Show advanced is off by default, remembers the operator preference, and contains EfficiencySignals/BehaviorSignals until their data is useful.
+4. Window and workspace filters apply to every default signal; one-workspace installs do not show a dead picker.
+5. Operator tests cover default order, advanced visibility, empty states, and filter propagation.
+
+### Progress Table (v8.18 NOC Metrics Rethink)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 173. NOC Truth Contracts + Attention | 1/1 | Planned | — |
+| 174. Operator Layout + Semantic States | 1/1 | Planned | — |
+
+### Out of scope (v8.18)
+
+- Wiring EFFTEL producers or changing the observe capture pipeline.
+- New data stores, session capture, analytics baselines, or design-system replacement.
+- Dashboard drill-down redesign or a new workspace model.

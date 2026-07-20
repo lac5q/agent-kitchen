@@ -664,3 +664,17 @@
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
 | MEETREL-FOLLOWUP-05 | Every meeting lookup returns a bounded 6-case status (`provider_absent` \| `provider_auth_blocked` \| `captured_unrouted` \| `routed_unindexed` \| `indexed_unrecalled` \| `recalled`); pre-flight refuses to report `ok:true` when OAuth scopes are insufficient; evidence bundle at `docs/uat/2026-07-18-meetrel-source-to-index-evidence.md` | 172 | complete (2026-07-18; `services/knowledge-mcp/knowledge_system/source_status.py` + `apps/memroos/src/lib/meeting-source-status.ts`; pre-flight in `scripts/meet-sync/preflight.sh`; `memory_recall` parity fix for spark-recordings) |
+
+## v8.18 NOC Metrics Rethink — Planned 2026-07-20
+
+**Design:** `.planning/design/noc-rethink-v1.md`
+**Audit:** `.planning/notes/2026-07-20-noc-rethink-audit.md`
+**Audience:** Sole operator. No requirement may depend on hive activity or unwired EFFTEL producers for its default view.
+
+| ID | Requirement | Phase | Status |
+|----|-------------|-------|--------|
+| NOCUX-01 | Default NOC panels use signals populated by a fresh single-operator install: messages, memory, cron health, skills, audit, and model usage. Hive-only signals are additive, never required. | 173, 174 | planned |
+| NOCUX-02 | Every default NOC panel renders semantic state: live, window-empty, no-history, stale/error, or known-unwired. No bare "No events" or "empty by design" copy remains in the default layout. | 174 | planned |
+| NOCUX-03 | Default panel order answers operator questions in order: alive, needs attention, learning, agent activity, cost, governance. | 174 | planned |
+| NOCUX-04 | EfficiencySignals and other useful-but-unwired panels are hidden behind Show advanced until their producers are verified. Known-unwired is explicit, not a generic empty/error state. | 173, 174 | planned |
+| NOCUX-05 | Window (24h/7d/30d) and workspace filters apply consistently; Agent Activity remains message-backed when no hive delegations exist; empty-state probes respect the selected workspace. | 173, 174 | planned |
