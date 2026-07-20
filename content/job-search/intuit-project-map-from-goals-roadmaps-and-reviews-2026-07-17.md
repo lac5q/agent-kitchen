@@ -1,6 +1,7 @@
 ---
 title: Intuit project map from goals, roadmaps, reviews, and EOS evidence
 date: 2026-07-17
+updated: 2026-07-20
 model: GPT-5 Codex
 sources:
   - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/My Goals 2023-05-11 (1).xlsx
@@ -24,7 +25,7 @@ Canonical working report: `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT
 
 ## Summary
 
-The evidence supports a corrected chronology of seven connected Intuit programs. The first chapter was a ground-up reimagining of self-employed expenses, followed by ML industry and expense personalization, QuickFile and 1099-K simplification, Specialized Experts and EPP, partner imports such as Amazon and Stride, WOM acquisition experiments, and divergent onboarding/pricing. Luis owned portfolio strategy and formal goals while PMs including Grace Rieger and Ritu Joshi owned portions of execution. Roadmaps prove intended sequencing, goal exports prove reported progress, and EOS/product reviews provide the strongest outcome evidence.
+The evidence supports a corrected chronology of seven connected Intuit programs. The documented history begins in 2021 with a broad Self-Employed transformation roadmap whose central product workstream was `Reimagine Expense MVP`. It continued through ML industry and expense personalization, QuickFile and 1099-K simplification, Specialized Experts and EPP, partner imports such as Amazon and Stride, WOM acquisition experiments, and divergent onboarding/pricing. Luis owned portfolio strategy and formal goals while PMs including Grace Rieger and Ritu Joshi owned portions of execution. Roadmaps prove intended sequencing, goal exports prove reported progress, and EOS/product reviews provide the strongest outcome evidence.
 
 ## Earlier 2021 origin of the Reimagine work
 
@@ -40,9 +41,16 @@ This was a substantial discovery and product-transformation program, not merely 
 
 No source located so far proves that the exact named program began in calendar 2020. The FY22 roadmap references TY20 precursors such as 1099-NEC OCR and uses TY20 cohorts for sizing, but the direct Reimagine evidence begins with 2021 research and roadmap work.
 
+## Canonical artifact state after integration
+
+- `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md` now starts with the 2021 research, MVP, and roadmap sequence before ML personalization and QuickFile.
+- `/Users/lcalderon/github/jobhunt/docs/interview/intuit-project-history-narration.txt` contains the same chronology and evidence boundaries.
+- `/Users/lcalderon/github/jobhunt/docs/interview/intuit-project-history-natural-slow.m4a` was regenerated from the revised narration.
+- The raw index now includes `FY22 SE GMIR Evergreen.pptx` as a product review with 33,348 characters in 22 chunks. The full index contains 38 candidates, 33 unique documents, 36,358 chunks, 56,275,909 characters, and zero skipped files.
+
 ## Key conclusions
 
-- Reimagined Self-Employed Expenses is the correct opening and a flagship product-transformation story. The FY22 roadmap labels it a P0 big swing and names Luis as owner of a full expense-entry revamp. Its data foundation contains roughly 192,000 behavior rows, 234 industries, and 669,000 weighted customer records. The data-engine vocabulary explicitly added emerging gig and creator work such as DoorDash, Uber Eats, Instacart, Twitch, online publishing, content creation, and Airbnb.
+- The 2021 Self-Employed transformation and Reimagine Expense MVP are the correct opening and a flagship product-transformation story. The program used six weeks of research with 88 customers across six industries, Kano work, rapid and refined prototypes, and A/B tests. Early evidence reported new-user S2C lift from the expense-onboarding video and up to an approximately 9% increase in expense dollars deducted, while completion still lagged. The FY22 roadmap labels the expense work a P0 big swing and names Luis as owner of a full expense-entry revamp. Its data foundation contains roughly 192,000 behavior rows, 234 industries, and 669,000 weighted customer records.
 - The Reimagined Expenses evidence shows layered wins rather than one combined lift: personalized-expense users were at roughly a 101 conversion index versus generic treatment; the later ML milestone extended recommendations to another 10% of previously unserved users; and the later Skip Expenses simplification had a 16% skip rate, with eligible skippers converting about four points better than customers forced through an irrelevant expense flow. These results must remain attributed to their distinct tests and stages.
 - QuickFile and 1099-K work followed the earlier expense redesign and built on its customer model, data foundation, and simplification principles. Luis's goal and multiple milestones were marked complete, but the exact two-point S2C target still needs an experiment readout.
 - EPP/Specialized Experts is the strongest zero-to-one platform story. Strategy, cadence, platform launch, and tracking milestones completed; the parent goal reached 80% and partner/regulatory constraints limited scale.
