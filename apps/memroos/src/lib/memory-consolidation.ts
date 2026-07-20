@@ -55,9 +55,9 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
     .run().lastInsertRowid as number;
 
   try {
-    // Select unconsolidated batch
+    // Select unconsolidated batch (MEMX-BATCH: 10 fits qwen2.5:3b's reliable JSON regime; 50 returned prose)
     const batch = db
-      .prepare('SELECT id, content FROM messages WHERE consolidated = 0 LIMIT 50')
+      .prepare('SELECT id, content FROM messages WHERE consolidated = 0 LIMIT 10')
       .all() as { id: number; content: string }[];
 
     if (batch.length === 0) {
@@ -80,7 +80,7 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
         model: consolidationModel,
         messages: [{ role: 'user', content: CONSOLIDATION_PROMPT + batchText }],
         stream: false,
-        options: { num_predict: 1024 },
+        options: { num_predict: 256 },
       }),
     });
 
