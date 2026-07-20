@@ -64,9 +64,11 @@ describe("GET /api/operations/noc truthful metric contract", () => {
       expect(envelope.scope).toEqual(scopeByMetric[key]);
     }
   });
-  it("surfaces degraded status with full source provenance when only some streams are present", async () => {
+  it("keeps EfficiencySignals known_unwired and out of the default metrics/panels payload", async () => {
     const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
     const db = getDb();
+    // Even if efficiency_events rows exist, default NOC must not surface them
+    // until EFFTEL producers are verified (known_unwired contract).
     recordEfficiencyEvent(db, {
       eventType: "retrieval_trace",
       taskId: "task-zero",
@@ -82,12 +84,9 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     });
     const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
     const body = await response.json();
-    const env = body.metrics.efficiency;
-    expect(env.status).toBe("degraded");
-    expect(env.value).toBeNull();
-    expect(env.source).toBe("durable://efficiency_events");
-    expect(env.scope).toEqual({ window: "24h", workspace: "local" });
-    expect(env.reason).toBeTruthy();
+    expect(body.metrics.efficiency).toBeUndefined();
+    expect(body.panels.efficiency).toBeUndefined();
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
   });
 
   it("returns error rather than zero when the underlying query throws", async () => {
@@ -101,70 +100,15 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(body.ok).toBe(false);
   });
 
-  it("emits a truthful empty envelope for an empty successful source", async () => {
-    const { GET } = await loadRoute();
-    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
-    const body = await response.json();
-    expect(body.metrics.efficiency.status).toBe("empty");
-    expect(body.metrics.efficiency.value).toBeNull();
-    expect(body.metrics.efficiency.reason).toBeTruthy();
-  });
-
   it("preserves scope and source provenance through the response", async () => {
     const { GET } = await loadRoute();
     const response = await GET(new Request("http://localhost/api/operations/noc?window=7d&workspace=remote"));
     const body = await response.json();
-    expect(body.metrics.efficiency.scope).toEqual({ window: "7d", workspace: "remote" });
-    expect(body.metrics.efficiency.source).toBeTruthy();
     expect(body.filters).toMatchObject({ window: "7d", workspace: "remote" });
-  });
-
-  it("reports efficiency as degraded (not zero) when some streams are missing", async () => {
-    const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
-    recordEfficiencyEvent(getDb(), {
-      eventType: "retrieval_trace",
-      taskId: "task-partial",
-      agentId: "codex",
-      createdAt: new Date().toISOString(),
-      payload: {
-        query: "partial",
-        sources: ["a"],
-        tokensUsed: 1,
-        usedInFirstResponse: true,
-        timingGate: "before_plan",
-      },
-    });
-    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
-    const body = await response.json();
-    expect(body.metrics.efficiency.status).toBe("degraded");
-    expect(body.metrics.efficiency.value).toBeNull();
-    expect(body.metrics.efficiency.reason).toBeTruthy();
-  });
-
-  it("direct memory_write producer coverage flows from API into efficiency envelope", async () => {
-    const { GET, recordEfficiencyEvent, getDb } = await loadRoute();
-    const now = new Date().toISOString();
-    recordEfficiencyEvent(getDb(), {
-      eventType: "memory_write",
-      taskId: "task-direct-write",
-      agentId: "codex",
-      createdAt: now,
-      payload: {
-        source: "agent_memory",
-        firstSeenAt: now,
-        dedupHash: "abc-123",
-        isRediscovery: false,
-      },
-    });
-    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
-    const body = await response.json();
-    const env = body.metrics.efficiency;
-    expect(env.status).toBe("degraded");
-    expect(env.value).toBeNull();
-    expect(env.source).toBe("durable://efficiency_events");
-    expect(env.reason).toContain("Missing");
-    // 4/5 streams missing because we only emitted memory_write
-    expect(env.reason).toMatch(/Missing 4\/5 efficiency streams/);
+    expect(body.metrics.memoryRows.scope).toEqual({ window: "7d", workspace: "remote" });
+    expect(body.metrics.memoryRows.source).toBe("sqlite://messages");
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
+    expect(body.metrics.efficiency).toBeUndefined();
   });
 
   it("memoryRows envelope distinguishes a successful measured zero from error and empty", async () => {
@@ -485,6 +429,7 @@ describe("Phase 173 NOC truth contracts", () => {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
     delete process.env.SQLITE_DB_PATH;
     vi.resetModules();
+    vi.doUnmock("@/lib/context-sources");
   });
 
   it("keeps Agent Activity message-backed when no hive delegation exists", async () => {
@@ -507,6 +452,7 @@ describe("Phase 173 NOC truth contracts", () => {
     expect(body.agentActivity.agents).toEqual([
       expect.objectContaining({ agentId: "codex", messageCount: 1, sessionCount: 1, lastMessageAt: timestamp }),
     ]);
+    expect(body.agentActivity.agents[0].messageCount).toBeGreaterThan(0);
     expect(body.sourceStates).toMatchObject({ agentActivity: "live", efficiencySignals: "known_unwired" });
   });
 
@@ -533,6 +479,64 @@ describe("Phase 173 NOC truth contracts", () => {
 
     expect(matching.map((item: { severity: string }) => item.severity)).toEqual(["critical", "critical", "warning"]);
     expect(matching.every((item: { timestamp: string | null; target: string | null }) => item.timestamp && item.target)).toBe(true);
+  });
+
+  it("returns an all-clear Attention collection when no actionable sources exist", async () => {
+    const { GET } = await loadRoute();
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+
+    expect(Array.isArray(body.attention)).toBe(true);
+    expect(body.attention.filter((item: { id: string }) => item.id.startsWith("cron:") || item.id.startsWith("hil:") || item.id.startsWith("security:"))).toEqual([]);
+  });
+
+  it("surfaces stale-source Attention as info with a repair target", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/context-sources", () => ({
+      loadContextSourceContracts: () => ({ sources: [] }),
+      evaluateContextSources: () => ({
+        sources: [
+          {
+            id: "spark",
+            status: "stale",
+            lastError: "source older than 60 minutes",
+            repairHint: "Refresh spark",
+            lastRun: "2026-07-01T00:00:00.000Z",
+          },
+        ],
+        timestamp: "2026-07-20T12:00:00.000Z",
+      }),
+    }));
+    process.env.SQLITE_DB_PATH = TEST_DB_PATH;
+    const route = await import("../route");
+    const dbModule = await import("@/lib/db");
+    const response = await route.GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+    const stale = body.attention.filter((item: { id: string }) => item.id.startsWith("source:"));
+
+    expect(stale).toEqual([
+      expect.objectContaining({
+        id: "source:spark",
+        severity: "info",
+        title: "Source freshness needs attention: spark",
+        detail: "source older than 60 minutes",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        target: "/api/context/health",
+      }),
+    ]);
+    dbModule.closeDb();
+  });
+
+  it("marks EfficiencySignals known_unwired without a default efficiency payload", async () => {
+    const { GET } = await loadRoute();
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
+    expect(body.metrics).not.toHaveProperty("efficiency");
+    expect(body.panels).not.toHaveProperty("efficiency");
+    expect(body.sourceStates.efficiencySignals).not.toBe("empty");
+    expect(body.sourceStates.efficiencySignals).not.toBe("stale_or_error");
   });
 
   it("distinguishes no_history, window_empty, and stale_or_error source states", async () => {

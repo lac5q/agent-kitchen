@@ -4,11 +4,25 @@ import { describe, expect, it, vi } from "vitest";
 import { AttentionPanel } from "../attention-panel";
 import { BehaviorSignals } from "../behavior-signals";
 import { EfficiencySignals } from "../efficiency-signals";
+import { AgentActivityPanel } from "../index";
 import { MemoryNotDigested } from "../memory-not-digested";
 import { ModelUtility } from "../model-utility";
 import { SkillsLifecycle } from "../skills-lifecycle";
 
-const noc = vi.hoisted(() => ({ attention: [] as Array<Record<string, unknown>> }));
+const noc = vi.hoisted(() => ({
+  attention: [] as Array<Record<string, unknown>>,
+  agentActivity: {
+    sourceState: "no_history" as string,
+    source: "sqlite://messages",
+    observedAt: null as string | null,
+    agents: [] as Array<Record<string, unknown>>,
+    delegations: [] as Array<Record<string, unknown>>,
+  },
+  sourceStates: {
+    agentActivity: "no_history" as string,
+    efficiencySignals: "known_unwired" as const,
+  },
+}));
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -106,43 +120,12 @@ vi.mock("@/lib/api-client", () => ({
   useOperationsNoc: () => ({
     data: {
       attention: noc.attention,
-      panels: {
-        efficiency: {
-          status: "empty",
-          source: "efficiency_events",
-          lastUpdated: null,
-          warnings: ["No efficiency telemetry events in the selected window"],
-        },
-      },
-      metrics: {
-        efficiency: {
-          totalEvents: 0,
-          retrievalEvents: 0,
-          retrievalUsedInFirstResponse: 0,
-          retrievalBeforeWorkRate: null,
-          sourceReadEvents: 0,
-          repeatedSourceReads: 0,
-          tokenLedgerEvents: 0,
-          rawContextTokens: 0,
-          cachedTokens: 0,
-          totalTokens: 0,
-          rawContextTokenShare: null,
-          operatorQuestions: 0,
-          operatorReasks: 0,
-          operatorReaskRate: null,
-          memoryWrites: 0,
-          rediscoveredWrites: 0,
-          rediscoveredFactRate: null,
-          streams: {
-            retrieval_trace: 0,
-            source_read: 0,
-            token_ledger: 0,
-            operator_question: 0,
-            memory_write: 0,
-          },
-          lastUpdated: null,
-        },
-      },
+      agentActivity: noc.agentActivity,
+      sourceStates: noc.sourceStates,
+      // Default NOC omits efficiency; EfficiencySignals tests still render the
+      // advanced component against an empty local fallback.
+      panels: {},
+      metrics: {},
     },
     isLoading: false,
     isError: false,
@@ -243,6 +226,7 @@ describe("Phase 173 Attention", () => {
     expect(screen.getByText("Cron needs attention")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Open" })[0]).toHaveAttribute("href", "/api/cron-health");
     expect(document.querySelectorAll("[data-attention-severity='critical']")).toHaveLength(1);
+    expect(screen.getByLabelText("Attention")).toBeInTheDocument();
   });
 
   it("renders the explicit all-clear state", () => {
@@ -251,5 +235,52 @@ describe("Phase 173 Attention", () => {
 
     expect(screen.getByText(/all clear — no cron failures/i)).toBeInTheDocument();
     expect(document.querySelector("[data-status='all-clear']")).toBeInTheDocument();
+    expect(screen.getByText(/0 items/i)).toBeInTheDocument();
+  });
+
+  it("renders stale-source Attention as an info row with the health target", () => {
+    noc.attention = [
+      {
+        id: "source:spark",
+        severity: "info",
+        title: "Source freshness needs attention: spark",
+        detail: "source older than 60 minutes",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        target: "/api/context/health",
+      },
+    ];
+    render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
+
+    expect(screen.getByText(/source freshness needs attention: spark/i)).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-attention-severity='info']")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/api/context/health");
+  });
+});
+
+describe("Phase 173 Agent Activity", () => {
+  it("surfaces message-backed activity without requiring hive rows", () => {
+    noc.agentActivity = {
+      sourceState: "live",
+      source: "sqlite://messages",
+      observedAt: "2026-07-20T12:00:00.000Z",
+      agents: [
+        {
+          agentId: "codex",
+          messageCount: 3,
+          sessionCount: 2,
+          lastMessageAt: "2026-07-20T12:00:00.000Z",
+        },
+      ],
+      delegations: [],
+    };
+    noc.sourceStates = { agentActivity: "live", efficiencySignals: "known_unwired" };
+
+    render(<AgentActivityPanel filters={{ window: "24h", workspace: "all" }} />);
+
+    expect(screen.getByTestId("agent-activity-panel")).toBeInTheDocument();
+    expect(screen.getByText("codex")).toBeInTheDocument();
+    expect(screen.getByText(/3 msg · 2 ses/i)).toBeInTheDocument();
+    expect(screen.queryByText(/delegations/i)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-agent-activity="live"]')).toBeInTheDocument();
   });
 });

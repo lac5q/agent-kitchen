@@ -217,15 +217,18 @@ export interface OperationsNocResponse {
     enabledSkills: MetricEnvelope<number>;
     cronWarnings: MetricEnvelope<number>;
     localFootprint: MetricEnvelope<number>;
-    efficiency: MetricEnvelope<OperationsNocEfficiencyMetrics>;
+    /** Omitted from the default NOC response while EFFTEL producers are unwired. */
+    efficiency?: MetricEnvelope<OperationsNocEfficiencyMetrics>;
   };
   panels: Record<string, OperationsNocPanel> & {
-    efficiency: OperationsNocPanel;
+    /** Omitted from the default NOC response while EFFTEL producers are unwired. */
+    efficiency?: OperationsNocPanel;
   };
   attention: OperationsNocAttentionItem[];
   agentActivity: OperationsNocAgentActivity;
   sourceStates: {
     agentActivity: NocSourceState;
+    /** Explicit known-unwired contract — not empty/error — until EFFTEL lands. */
     efficiencySignals: "known_unwired";
   };
   localFootprint?: unknown;

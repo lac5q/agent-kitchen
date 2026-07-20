@@ -763,8 +763,8 @@ async function buildNocResponse(request: Request) {
   const scope = normalizeScope({ window, workspace }, "24h", "all");
   const db = getDb();
   const ws = workspaceClause(workspace);
-  const efficiencyEvents = readEfficiencyEvents(db, since, workspace);
-  const efficiencyMetrics = computeEfficiencyMetrics(efficiencyEvents);
+  // EfficiencySignals stays known_unwired until EFFTEL producers are verified.
+  // Do not include efficiency metrics/panels in the default NOC response.
   const agentActivity = readAgentActivity(db, since, workspace);
   const attention = buildAttention(db);
 
@@ -906,7 +906,6 @@ async function buildNocResponse(request: Request) {
       ? "Local footprint pressure is critical; cloud offload candidates listed"
       : "Local footprint inventory collected from repo and home store profiles",
   });
-  const efficiencyEnvelope = buildEfficiencyEnvelope(efficiencyMetrics, scope);
 
   return Response.json({
     ok: true,
@@ -922,12 +921,12 @@ async function buildNocResponse(request: Request) {
       cronWarnings: cronWarningsEnvelope,
       localFootprint: localFootprintEnvelope,
       memoryIteration,
-      efficiency: efficiencyEnvelope,
     },
     attention,
     agentActivity,
     sourceStates: {
       agentActivity: agentActivity.sourceState,
+      // Preserved contract: EfficiencySignals is known-unwired, not empty/error.
       efficiencySignals: "known_unwired" as const,
     },
     operatorLoadStatus: operatorLoadStatus ?? {
@@ -961,7 +960,6 @@ async function buildNocResponse(request: Request) {
         memoryIteration.observe.lastDiscordMessageAt ?? localFootprint.generatedAt,
         memoryIteration.warnings
       ),
-      efficiency: efficiencyPanelFor(efficiencyMetrics),
       operatorLoad: panel(
         operatorLoadStatus?.status === "pass"
           ? "live"
