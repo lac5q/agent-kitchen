@@ -6,7 +6,8 @@ Hits two endpoints on oracle-1:
   - http://127.0.0.1:3000/api/health   (Next.js operator; services + disk)
   - http://127.0.0.1:3201/health      (mem0; vector store + queue)
 
-When ANY service reports "down" OR disk hits "warning"/"critical",
+When any non-optional service reports "down" or "degraded", or disk hits
+"warning"/"critical",
 opens (or reuses) a GitHub issue on lac5q/memroos with a fixed, deduplicated
 title per failure signature. Cooldown: don't re-open a signature for 6h.
 
@@ -31,12 +32,46 @@ STATE_DIR = Path(os.environ.get("MEMROOS_HEALTHCHECK_STATE", "/run/memroos-healt
 LOG_FILE = os.environ.get("MEMROOS_HEALTHCHECK_LOG", "/var/log/memroos/healthcheck.log")
 COOLDOWN_S = int(os.environ.get("MEMROOS_HEALTHCHECK_COOLDOWN_S", str(6 * 3600)))
 REQUEST_TIMEOUT = 8
+GH_REQUEST_TIMEOUT = 12
+RUN_TIMEOUT_S = 85
+OPEN_ISSUES_PER_PAGE = 100
+OPEN_ISSUES_MAX_PAGES = 10
 LABELS = ["healthcheck", "oracle-1", "automated"]
+OPTIONAL_LOCAL_TOOL_SERVICES = frozenset({"RTK", "QMD", "Knowledge Index"})
+RUN_DEADLINE: Optional[float] = None
+
+
+def start_run_deadline(timeout_s: float = RUN_TIMEOUT_S) -> None:
+    """Set the monotonic deadline shared by all HTTP calls in this run."""
+    global RUN_DEADLINE
+    RUN_DEADLINE = time.monotonic() + timeout_s
+
+
+def remaining_request_timeout(default_timeout: float, *, now: Optional[float] = None) -> float:
+    """Return the request timeout clipped to the watchdog's remaining runtime."""
+    if RUN_DEADLINE is None:
+        return default_timeout
+    remaining = RUN_DEADLINE - (time.monotonic() if now is None else now)
+    if remaining <= 0:
+        raise TimeoutError("healthcheck run deadline exceeded")
+    return min(default_timeout, remaining)
+
+
+def is_intentional_optional_degradation(name: str, detail: str) -> bool:
+    """Allow only explicit optional-local-tool absence to suppress a degradation."""
+    if name not in OPTIONAL_LOCAL_TOOL_SERVICES or not isinstance(detail, str):
+        return False
+    normalized = detail.lower()
+    is_optional = bool(re.search(r"\boptional\b", normalized))
+    is_absent_or_skipped = bool(
+        re.search(r"\b(not installed|missing|absent|unavailable|skipped)\b", normalized)
+    )
+    return is_optional and is_absent_or_skipped
 
 
 def http_json(url: str) -> Optional[dict]:
     try:
-        with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as r:
+        with urllib.request.urlopen(url, timeout=remaining_request_timeout(REQUEST_TIMEOUT)) as r:
             return json.load(r)
     except Exception as e:
         return {"__error__": str(e), "__url__": url}
@@ -50,7 +85,7 @@ def gh_token() -> Optional[str]:
     return tok or None
 
 
-def gh_api(method: str, path: str, body: Optional[dict] = None) -> Tuple[int, dict]:
+def gh_api(method: str, path: str, body: Optional[dict] = None) -> Tuple[int, object]:
     token = gh_token()
     if not token:
         return 0, {"error": "no_token"}
@@ -66,7 +101,9 @@ def gh_api(method: str, path: str, body: Optional[dict] = None) -> Tuple[int, di
     )
     data = json.dumps(body).encode() if body else None
     try:
-        with urllib.request.urlopen(req, data=data, timeout=REQUEST_TIMEOUT + 4) as r:
+        with urllib.request.urlopen(
+            req, data=data, timeout=remaining_request_timeout(GH_REQUEST_TIMEOUT)
+        ) as r:
             payload = json.load(r)
             return r.status, payload
     except urllib.error.HTTPError as e:
@@ -79,14 +116,24 @@ def gh_api(method: str, path: str, body: Optional[dict] = None) -> Tuple[int, di
         return 0, {"error": str(e)}
 
 
-def find_open_issue(signature: str) -> Optional[dict]:
-    status, data = gh_api("GET", f"/repos/{GH_REPO}/issues?state=open&per_page=50&labels=healthcheck")
-    if status != 200 or not isinstance(data, list):
-        return None
-    for it in data:
-        if it.get("title", "").startswith(f"[healthcheck] {signature}"):
-            return it
-    return None
+def find_open_issue(signature: str) -> Tuple[str, Optional[dict]]:
+    """Find an issue, returning found, missing, or unknown if lookup was incomplete."""
+    for page in range(1, OPEN_ISSUES_MAX_PAGES + 1):
+        status, data = gh_api(
+            "GET",
+            f"/repos/{GH_REPO}/issues?state=open&per_page={OPEN_ISSUES_PER_PAGE}"
+            f"&labels=healthcheck&page={page}",
+        )
+        if status != 200 or not isinstance(data, list):
+            return "unknown", None
+        for item in data:
+            if isinstance(item, dict) and item.get("title", "").startswith(
+                f"[healthcheck] {signature}"
+            ):
+                return "found", item
+        if len(data) < OPEN_ISSUES_PER_PAGE:
+            return "missing", None
+    return "unknown", None
 
 
 def open_issue(signature: str, title_suffix: str, body_md: str) -> Optional[dict]:
@@ -97,7 +144,7 @@ def open_issue(signature: str, title_suffix: str, body_md: str) -> Optional[dict
         "labels": LABELS,
     }
     status, data = gh_api("POST", f"/repos/{GH_REPO}/issues", payload)
-    if status == 201:
+    if status == 201 and isinstance(data, dict):
         return data
     log(f"  → GitHub issue create FAILED status={status} body={json.dumps(data)[:200]}")
     return None
@@ -137,6 +184,18 @@ def mark_fired(sig: str, issue_url: str) -> None:
     p.write_text(f"{time.time()}\n{issue_url}\n")
 
 
+def disk_path_for_state(disk: dict, state: str) -> dict:
+    """Return the path entry responsible for a disk state, including home advisory."""
+    paths = [entry for entry in disk.get("paths") or [] if isinstance(entry, dict)]
+    home_advisory = disk.get("home_advisory")
+    if isinstance(home_advisory, dict):
+        paths.append(home_advisory)
+    for path in paths:
+        if path.get(state):
+            return path
+    return paths[0] if paths else {}
+
+
 def collect_failures() -> list:
     failures = []
 
@@ -162,13 +221,18 @@ def collect_failures() -> list:
             name = svc.get("service", "?")
             status = svc.get("status", "down")
             detail = svc.get("detail", "")
-            if status == "down":
+            should_alert = status == "down" or (
+                status == "degraded"
+                and not is_intentional_optional_degradation(name, detail)
+            )
+            if should_alert:
                 failures.append({
-                    "signature": f"service-down:web:{name}",
-                    "summary": f"{name} is down on operator web",
+                    "signature": f"service-{status}:web:{name}",
+                    "summary": f"{name} is {status} on operator web",
                     "body_md": (
-                        f"## {name} reports `down` on operator `/api/health`\n\n"
+                        f"## {name} reports `{status}` on operator `/api/health`\n\n"
                         f"- Service: `{name}`\n"
+                        f"- Status: `{status}`\n"
                         f"- Detail: `{detail}`\n"
                         f"- Checked at: `{web.get('timestamp', '?')}`\n\n"
                         f"Auto-opened by memroos-oracle-1-healthcheck.\n"
@@ -179,22 +243,23 @@ def collect_failures() -> list:
     if isinstance(mem, dict) and "disk" in mem:
         disk = mem["disk"]
         if disk.get("critical"):
+            critical_path = disk_path_for_state(disk, "critical")
             failures.append({
                 "signature": "disk-critical:mem0",
                 "summary": "disk critical on oracle-1",
                 "body_md": (
                     f"## Disk CRITICAL on oracle-1\n\n"
                     f"- `disk.critical = True`\n"
-                    f"- `mem0.health.disk.paths[0]`: "
-                    f"`{json.dumps((disk.get('paths') or [{}])[0])}`\n\n"
+                    f"- Path: `{critical_path.get('path', '?')}`\n"
+                    f"- Path status: `{json.dumps(critical_path)}`\n\n"
                     f"Auto-opened by memroos-oracle-1-healthcheck.\n"
                 ),
                 "severity": "high",
             })
         elif disk.get("warning"):
-            p0 = (disk.get("paths") or [{}])[0]
-            free_gb = p0.get("free_gb", "?")
-            used_pct = p0.get("percent_used", "?")
+            warning_path = disk_path_for_state(disk, "warning")
+            free_gb = warning_path.get("free_gb", "?")
+            used_pct = warning_path.get("percent_used", "?")
             failures.append({
                 "signature": "disk-warning:mem0",
                 "summary": f"disk warning: {free_gb} GB free, {used_pct}% used",
@@ -202,7 +267,7 @@ def collect_failures() -> list:
                     f"## Disk WARNING on oracle-1\n\n"
                     f"- Free GB: `{free_gb}`\n"
                     f"- Used %: `{used_pct}`\n"
-                    f"- Path: `{p0.get('path', '?')}`\n\n"
+                    f"- Path: `{warning_path.get('path', '?')}`\n\n"
                     f"Auto-opened by memroos-oracle-1-healthcheck. Re-fires every 6h while warning persists.\n"
                 ),
                 "severity": "medium",
@@ -211,13 +276,39 @@ def collect_failures() -> list:
     return failures
 
 
+def check_github_auth() -> bool:
+    """Verify read access to the configured repository's issue listing only."""
+    if not gh_token():
+        log(f"  → ERROR: no GH_TOKEN available at {GH_TOKEN_FILE}")
+        return False
+    status, data = gh_api(
+        "GET", f"/repos/{GH_REPO}/issues?state=open&per_page=1&labels=healthcheck"
+    )
+    if status == 200 and isinstance(data, list):
+        log(f"  → GitHub issue-list access verified for {GH_REPO}")
+        return True
+    log(f"  → ERROR: GitHub issue-list access failed status={status} body={json.dumps(data)[:200]}")
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument(
+        "--check-github-auth",
+        action="store_true",
+        help="verify GitHub issue-list access without creating or modifying issues",
+    )
     args = parser.parse_args()
 
+    start_run_deadline()
     log("=== healthcheck run start ===")
+    if args.check_github_auth:
+        result = 0 if check_github_auth() else 2
+        log(f"=== healthcheck run done (github-auth={'ok' if result == 0 else 'failed'}) ===")
+        return result
+
     failures = collect_failures()
     if not failures:
         log("  → all green; no failures detected")
@@ -245,7 +336,10 @@ def main() -> int:
             deduped += 1
             log(f"  → SKIP (cooldown): {sig}")
             continue
-        existing = find_open_issue(sig)
+        lookup_status, existing = find_open_issue(sig)
+        if lookup_status == "unknown":
+            log(f"  → SKIP (open issue lookup unknown; will not risk duplicate): {sig}")
+            continue
         if existing:
             mark_fired(sig, existing.get("html_url", ""))
             deduped += 1
