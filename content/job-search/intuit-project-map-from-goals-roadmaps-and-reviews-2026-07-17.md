@@ -7,6 +7,8 @@ sources:
   - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/Team Goals 2023-05-11.xlsx
   - /Users/lcalderon/Documents/Work/Intuit/FY22 UPS Roadmap _ Homebase.xlsx
   - /Users/lcalderon/Documents/Work/Intuit/Roadmap Draft.xlsx
+  - /Users/lcalderon/Documents/Work/Intuit/Product Management/FY22 SE GMIR Evergreen.pptx
+  - /Users/lcalderon/Documents/Work/Intuit/Current Flow Long.mov
   - /Users/lcalderon/Documents/Work/Intuit/Reimagine Expenses/SE Industry Expense Counts v2.xlsx
   - /Users/lcalderon/Documents/Work/Intuit/Reimagine Expenses/Expenses/Data Engine Industry Match Update 01102022.xlsx
   - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap.xlsx
@@ -23,6 +25,20 @@ Canonical working report: `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT
 ## Summary
 
 The evidence supports a corrected chronology of seven connected Intuit programs. The first chapter was a ground-up reimagining of self-employed expenses, followed by ML industry and expense personalization, QuickFile and 1099-K simplification, Specialized Experts and EPP, partner imports such as Amazon and Stride, WOM acquisition experiments, and divergent onboarding/pricing. Luis owned portfolio strategy and formal goals while PMs including Grace Rieger and Ritu Joshi owned portions of execution. Roadmaps prove intended sequencing, goal exports prove reported progress, and EOS/product reviews provide the strongest outcome evidence.
+
+## Earlier 2021 origin of the Reimagine work
+
+The strongest contemporaneous source is `FY22 SE GMIR Evergreen.pptx`. It does not use the exact title “Reimagined Self-Employed,” but it places `Reimagine Expense MVP` at the center of a broader `UPS Self Employed Roadmap`. Slide 5 sequences the learning plan across TY21 Q3, TY21 Q4, and TY22 Q1. Slide 16 dates the GMIR review to October 21, 2021. Related raw files form the same late-2021 cluster: the current-flow recording is dated October 20, the roadmap draft October 25, and the industry-expense workbooks November 18 and December 16.
+
+This was a substantial discovery and product-transformation program, not merely the later FY23 QuickFile milestone:
+
+- Six weeks of research with 88 participants across six priority self-employed industries, followed by Kano work, rapid prototypes, refined prototypes, and A/B tests from July through October 2021.
+- A redesigned expense-discovery model built around an industry-personalized list, commonly overlooked deductions, clearer payoff, smart follow-up questions, and fewer unnecessary decisions.
+- Early MVP evidence reported an expense-onboarding video driving new-user S2C lift and up to an approximately 9% increase in expense dollars deducted, while also candidly noting that expense completion was lagging and final test data was still developing.
+- Planned V2 and V3 extensions included defaulted recommendations, downloadable industry checklists, preparation support, collaboration and sharing, financial-institution imports, and year-round collection and organization.
+- The wider Self-Employed roadmap also included specialized experts, risk-free pricing, year-round guidance, improved 1099 imports, Schedule C import, and QuickFile. This wider scope likely explains the remembered phrase “Reimagined Self-Employed,” even though the exact artifact label found is “Reimagine Expense MVP.”
+
+No source located so far proves that the exact named program began in calendar 2020. The FY22 roadmap references TY20 precursors such as 1099-NEC OCR and uses TY20 cohorts for sizing, but the direct Reimagine evidence begins with 2021 research and roadmap work.
 
 ## Key conclusions
 
