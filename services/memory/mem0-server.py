@@ -8,6 +8,7 @@ import os
 import sys
 import yaml
 import json
+import time
 import logging
 import logging.handlers
 import traceback
@@ -880,6 +881,41 @@ def livez():
     return {"status": "ok", "service": "mem0-server"}
 
 
+
+_DISK_WARN_STATE_FILE = Path("/run/memroos-disk-warn.state")
+_DISK_WARN_INTERVAL_S = 6 * 3600  # once per 6 hours
+
+def _should_log_disk_warning(status: dict) -> bool:
+    """Throttle disk warnings: emit at most once per _DISK_WARN_INTERVAL_S.
+
+    Disk status is essentially static between cleanup events; logging on every
+    /health call spam-fills mem0-server.log and journald. We persist a
+    (signature, ts) tuple in /run and only emit when (a) the signature changed
+    or (b) the interval elapsed. Returns True iff this call should log.
+    """
+    import json as _json
+    sig = _json.dumps(
+        {k: v for k, v in status.items() if k != "home_advisory"},
+        sort_keys=True,
+    )
+    now = time.time()
+    try:
+        if _DISK_WARN_STATE_FILE.exists():
+            state = _json.loads(_DISK_WARN_STATE_FILE.read_text())
+        else:
+            state = {"sig": None, "ts": 0.0}
+    except Exception:
+        state = {"sig": None, "ts": 0.0}
+    if state.get("sig") == sig and (now - state.get("ts", 0.0)) < _DISK_WARN_INTERVAL_S:
+        return False
+    try:
+        _DISK_WARN_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _DISK_WARN_STATE_FILE.write_text(_json.dumps({"sig": sig, "ts": now}))
+    except OSError:
+        pass  # best-effort
+    return True
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """Health check — verifies mem0 runtime, vector store, disk, SQLite, and queued writes."""
@@ -914,11 +950,13 @@ def health():
     except Exception as exc:
         queue_status = {"status": "error", "error": str(exc), "queued": None}
 
-    # Log warnings for concerning states (path-scoped critical only — not home advisory alone)
+    # Log warnings for concerning states (path-scoped critical only — not home advisory alone).
+    # Disk status is essentially static between cleanup events; log at most once per 6h.
     if disk_status.get("critical"):
         log_failure("disk_critical", disk_status)
     elif disk_status.get("warning"):
-        logger.warning(f"Disk space warning: {disk_status}")
+        if _should_log_disk_warning(disk_status):
+            logger.warning(f"Disk space warning: {disk_status}")
 
     if sqlite_status.get("status") != "healthy":
         log_failure("sqlite_unhealthy", sqlite_status)

@@ -1,0 +1,16 @@
+[Unit]
+Description=MemRoOS oracle-1 healthcheck + GitHub-issue-on-failure
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=opc
+Group=opc
+ExecStart=/usr/bin/python3.11 /usr/local/bin/memroos-healthcheck.py --once
+TimeoutStartSec=90s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
