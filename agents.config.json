@@ -91,6 +91,33 @@
       ]
     },
     {
+      "id": "cline-desktop-luis-mbp",
+      "name": "Cline Desktop",
+      "role": "Coding Agent (Desktop)",
+      "platform": "cline",
+      "protocol": "rest",
+      "location": "local",
+      "capabilities": [
+        {
+          "id": "memory:write:vector",
+          "name": "Write Vector Memory",
+          "description": "Persist compact semantic memories through MemRoOS",
+          "tags": ["memory"]
+        },
+        {
+          "id": "memory:write:episodic",
+          "name": "Write Episodic Memory",
+          "description": "Persist compact task events and handoffs through MemRoOS",
+          "tags": ["memory"]
+        }
+      ],
+      "metadata": {
+        "agentFamily": "cline",
+        "runtimeKind": "desktop",
+        "environment": "Luis MacBook Pro"
+      }
+    },
+    {
       "id": "claude-code-luis-mbp",
       "name": "Claude Code",
       "role": "Coding Agent (Desktop)",

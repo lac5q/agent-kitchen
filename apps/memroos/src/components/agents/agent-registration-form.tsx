@@ -14,6 +14,7 @@ const ONBOARDING_PLATFORMS: AgentPlatform[] = [
   "openclaw",
   "hermes",
   "claude",
+  "cline",
   "gemini",
   "qwen",
   "zcode",

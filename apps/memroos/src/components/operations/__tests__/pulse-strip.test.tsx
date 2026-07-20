@@ -174,7 +174,12 @@ describe("PulseStrip truthful metric rendering", () => {
     const savingsCard = screen.getByText(/savings baseline/i).closest("[data-card-label]");
     expect(savingsCard).not.toBeNull();
     if (savingsCard) {
-      expect(within(savingsCard).getByText(/explicitly blocked until a retained-memory baseline exists/i)).toBeInTheDocument();
+      expect(savingsCard).toHaveTextContent(
+        /savings are explicitly blocked until a retained-memory baseline exists/i,
+      );
+      expect(savingsCard).toHaveTextContent(
+        /token_ledger cache hits are not savings/i,
+      );
     }
     // Savings never renders as a numeric zero
     const zeroZeroSavings = document.body.textContent?.match(/Savings baseline.*\b0\b/);

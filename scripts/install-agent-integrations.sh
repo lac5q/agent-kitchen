@@ -135,7 +135,18 @@ declare -a TARGETS=(
   "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|factory-json"
   "grok|$HOME_DIR/.grok/AGENTS.md|$HOME_DIR/.grok/skills|json"
   "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|yaml"
+  # Cline: VS Code extension (saoudrizwan.claude-dev) reads project-level .clinerules;
+  # we also seed ~/.cline/AGENTS.md as a MemRoOS-owned home so the canonical template
+  # is reachable from any Cline workspace without colliding with user-authored rules.
+  "cline|$HOME_DIR/.cline/AGENTS.md|$HOME_DIR/.cline/skills|cline-json"
   "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|yaml"
+  # Antigravity: OBSERVE-12. No capture path is verified for this harness
+  # (no CLI, no JSONL, no MCP surface we have observed). The TARGETS row
+  # below routes its AGENTS.md + skill to a MemRoOS-owned stub directory
+  # under ~/.config so it cannot collide with a future Antigravity install
+  # and the install run prints a clear honest signal instead of pretending
+  # to wire something we have not proven.
+  "antigravity|$HOME_DIR/.config/memroos/observe/antigravity/AGENTS.md|$HOME_DIR/.config/memroos/observe/antigravity/skills|none"
 )
 
 # OpenClaw workspaces (discovered)
@@ -455,15 +466,29 @@ case "$MODE" in
     echo ""
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
-      install_agents_md "$agents_file"
-      install_skill "$skills_dir"
       case "$mcp_style" in
-        yaml) upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
-        toml) upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
-        json) upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
-        cursor-json) upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
-        zcode-json) upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
-        factory-json) upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
+        none)
+          # OBSERVE-12: Antigravity has no installer surface we have verified.
+          # Print the honest signal; do not write AGENTS.md/skill for a CLI
+          # that does not exist on the host.
+          warn "$name: no installer surface; observe via MCP only (verify-by-design)"
+          continue
+          ;;
+        yaml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
+        toml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
+        json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
+        cline-json)
+          install_agents_md "$agents_file"
+          install_skill "$skills_dir"
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            upsert_json_mcp_block "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json" 2>/dev/null || true
+          else
+            upsert_json_mcp_block "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json" 2>/dev/null || true
+          fi
+          ;;
+        cursor-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
+        zcode-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
+        factory-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
       esac
       log "$name → $agents_file"
     done
@@ -478,12 +503,38 @@ case "$MODE" in
     missing=0
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
+      if [[ "$mcp_style" == "none" ]]; then
+        warn "$name: no installer surface; verify-by-design (no AGENTS.md/skill expected)"
+        continue
+      fi
       if [[ ! -f "$agents_file" ]] || ! diff -q "$TEMPLATE" "$agents_file" >/dev/null 2>&1; then
         warn "$name: AGENTS.md missing or drifted ($agents_file)"
         missing=$((missing+1))
       elif [[ ! -f "$skills_dir/memroos-save/SKILL.md" ]] || ! diff -q "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md" >/dev/null 2>&1; then
         warn "$name: memroos-save skill missing or drifted ($skills_dir/memroos-save/SKILL.md)"
         missing=$((missing+1))
+      elif [[ "$mcp_style" == "cline-json" ]]; then
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+          cline_mcp_config="$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+        else
+          cline_mcp_config="$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+        fi
+        if python3 - "$cline_mcp_config" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    raise SystemExit(1)
+raise SystemExit(0 if isinstance(data.get("mcpServers", {}).get("memroos"), dict) else 1)
+PY
+        then
+          log "$name: ok"
+        else
+          warn "$name: MemroOS MCP config missing or drifted ($cline_mcp_config)"
+          missing=$((missing+1))
+        fi
       else
         log "$name: ok"
       fi
@@ -501,12 +552,25 @@ case "$MODE" in
     echo ""
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
+      case "$mcp_style" in
+        none)
+          warn "$name: no installer surface; nothing to remove"
+          continue
+          ;;
+      esac
       uninstall_agents_md "$agents_file"
       uninstall_skill "$skills_dir"
       case "$mcp_style" in
         yaml) uninstall_yaml_mcp_block "${agents_file%.md}.mcp.yaml" ;;
         toml) uninstall_toml_mcp_block "${agents_file%.md}.mcp.toml" ;;
         json) uninstall_json_mcp_block "${agents_file%.md}.mcp.json" ;;
+        cline-json)
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            uninstall_json_mcp_block "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+          else
+            uninstall_json_mcp_block "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+          fi
+          ;;
         cursor-json) uninstall_json_mcp_block "$HOME_DIR/.cursor/mcp.json" ;;
         zcode-json) uninstall_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" ;;
         factory-json) uninstall_json_mcp_block "$HOME_DIR/.factory/mcp.json" ;;

@@ -85,6 +85,7 @@ const COMMON_AGENT_IDS = [
 
 const DEFAULT_MODEL_BY_PLATFORM: Partial<Record<RegisteredAgent["platform"], string>> = {
   claude: "claude-sonnet-4-6",
+  cline: "claude-haiku-4-5",
   codex: "claude-haiku-4-5",
   chatgpt: "claude-haiku-4-5",
   hermes: "claude-haiku-4-5",

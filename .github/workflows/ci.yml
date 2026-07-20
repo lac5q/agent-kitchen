@@ -45,6 +45,12 @@ jobs:
       - name: Check future spikes
         run: npm run check:future-spikes
 
+      - name: Check observe maturity drift (v8.16 OBSERVE-13)
+        # Keeps docs/runtime-adapter-maturity.md in lock-step with the
+        # observe-sidecar catalog (OBSERVE_HARNESS_PATHS) and the installer
+        # TARGETS rows. Phase 171 / Phase 169–171 introduces the check.
+        run: npm run check:observe-maturity-drift
+
       - name: Run Memroos tests (fast suite)
         run: npm test -- --run
 

@@ -6,6 +6,7 @@ import { findConfigFile } from "@/lib/paths";
 const VALID_PLATFORMS = new Set<AgentPlatform>([
   "cursor",
   "claude",
+  "cline",
   "codex",
   "qwen",
   "pi",

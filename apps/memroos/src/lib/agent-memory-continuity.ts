@@ -2,6 +2,11 @@ import crypto from "crypto";
 import type Database from "better-sqlite3";
 
 import { scanContent, type ScanMatch } from "@/lib/content-scanner";
+import {
+  looksLikeTranscriptDump,
+  projectCaptureDepth,
+  type CaptureDepth,
+} from "@/lib/observe-capture-depth";
 import { writeVaultArtifact } from "@/lib/vault/writer";
 
 type JsonObject = Record<string, unknown>;
@@ -15,6 +20,9 @@ export type CodingAgentRuntime =
   | "opencode"
   | "gemini-cli"
   | "qwen-cli"
+  | "pi"
+  | "cursor"
+  | "droid"
   | "other";
 
 export interface CodingAgentCaptureInput {
@@ -35,6 +43,10 @@ export interface CodingAgentCaptureInput {
   errors?: JsonValue[];
   verification?: JsonValue[];
   events?: JsonValue[];
+  /** Optional full transcript; only sealed at captureDepth=full. */
+  transcript?: string | null;
+  /** summary | relevant | full — default relevant (MEMROOS_CAPTURE_DEPTH). */
+  captureDepth?: CaptureDepth | string;
   metadata?: JsonObject;
 }
 
@@ -49,6 +61,7 @@ export interface CapturedCodingAgentSession {
   captureHealth: "ok" | "redacted" | "warning" | "failed";
   rawArtifactId: string | null;
   candidateCount: number;
+  captureDepth: CaptureDepth;
   redactions: ScanMatch[];
 }
 
@@ -200,15 +213,45 @@ export function captureCodingAgentSession(
   const redactions: ScanMatch[] = [];
   const tenantId = input.tenantId ?? "default-tenant";
   const capturedAt = input.capturedAt ?? nowIso();
-  const summary = String(sanitizeValue(input.summary ?? "", redactions));
-  const decisionIntent = sanitizeObject(input.decisionIntent, redactions);
-  const sources = sanitizeArray(input.sources, redactions);
-  const files = sanitizeArray(input.files, redactions);
-  const commands = sanitizeArray(input.commands, redactions);
-  const errors = sanitizeArray(input.errors, redactions);
-  const verification = sanitizeArray(input.verification, redactions);
+  const depthProjection = projectCaptureDepth(
+    {
+      summary: input.summary,
+      decisionIntent: input.decisionIntent,
+      sources: input.sources,
+      files: input.files,
+      commands: input.commands,
+      errors: input.errors,
+      verification: input.verification,
+      events: input.events,
+      transcript: input.transcript,
+      metadata: input.metadata,
+    },
+    input.captureDepth
+  );
+  const captureDepth = depthProjection.depth;
+
+  const summary = String(sanitizeValue(depthProjection.indexable.summary ?? "", redactions));
+  const decisionIntent = sanitizeObject(depthProjection.indexable.decisionIntent, redactions);
+  const sources = sanitizeArray(depthProjection.indexable.sources as JsonValue[], redactions);
+  const files = sanitizeArray(depthProjection.indexable.files as JsonValue[], redactions);
+  const commands = sanitizeArray(depthProjection.indexable.commands as JsonValue[], redactions);
+  const errors = sanitizeArray(depthProjection.indexable.errors as JsonValue[], redactions);
+  const verification = sanitizeArray(depthProjection.indexable.verification as JsonValue[], redactions);
   const modelRoute = sanitizeObject(input.modelRoute, redactions);
-  const metadata = sanitizeObject(input.metadata, redactions);
+  const metadata = sanitizeObject(
+    {
+      ...(input.metadata ?? {}),
+      captureDepth,
+    },
+    redactions
+  );
+  const sealedEvents = depthProjection.sealTranscript
+    ? sanitizeArray(depthProjection.sealedEvents as JsonValue[], redactions)
+    : [];
+  const sealedTranscript = depthProjection.sealTranscript
+    ? String(sanitizeValue(depthProjection.sealedTranscript ?? "", redactions))
+    : "";
+
   const normalized = {
     tenantId,
     sourceAgentId: input.sourceAgentId,
@@ -218,6 +261,7 @@ export function captureCodingAgentSession(
     sessionId: input.sessionId,
     taskId: input.taskId ?? null,
     capturedAt,
+    captureDepth,
     modelRoute,
     summary,
     decisionIntent,
@@ -235,6 +279,7 @@ export function captureCodingAgentSession(
     repoPath: input.repoPath ?? null,
     sessionId: input.sessionId,
     taskId: input.taskId ?? null,
+    captureDepth,
     modelRoute,
     summary,
     decisionIntent,
@@ -244,7 +289,8 @@ export function captureCodingAgentSession(
     errors,
     verification,
     metadata,
-    events: input.events ?? [],
+    events: depthProjection.sealTranscript ? sealedEvents : [],
+    transcript: depthProjection.sealTranscript ? sealedTranscript : null,
   }));
   const duplicateRow = db
     .prepare("SELECT id, raw_artifact_id, capture_health FROM agent_session_captures WHERE tenant_id = ? AND capture_hash = ?")
@@ -261,6 +307,7 @@ export function captureCodingAgentSession(
       captureHealth: duplicateRow.capture_health as CapturedCodingAgentSession["captureHealth"],
       rawArtifactId: duplicateRow.raw_artifact_id,
       candidateCount: 0,
+      captureDepth,
       redactions,
     };
   }
@@ -268,8 +315,21 @@ export function captureCodingAgentSession(
   const rawBody = `${JSON.stringify({
     schema: "memroos.coding_agent_capture.v1",
     capturedAt,
-    original: input,
+    captureDepth,
+    original: {
+      ...input,
+      // Never persist full transcript in the stored "original" unless depth=full.
+      events: depthProjection.sealTranscript ? input.events ?? [] : undefined,
+      transcript: depthProjection.sealTranscript ? input.transcript ?? null : undefined,
+    },
     normalized,
+    sealed: depthProjection.sealTranscript
+      ? {
+          events: sealedEvents,
+          transcript: sealedTranscript || null,
+          retention: depthProjection.vaultLabel.retention,
+        }
+      : null,
   })}\n`;
   const rawArtifact = writeVaultArtifact(db, {
     tenantId,
@@ -282,12 +342,15 @@ export function captureCodingAgentSession(
       runtime: input.runtime,
       taskId: input.taskId ?? null,
       captureHash,
+      captureDepth,
       adapter: "agent-memory-continuity",
     },
     label: {
-      visibility: "private",
-      sensitivity: redactions.some((match) => match.severity === "HIGH") ? "credential" : null,
-      policy: "sealed",
+      visibility: depthProjection.vaultLabel.visibility,
+      sensitivity: redactions.some((match) => match.severity === "HIGH")
+        ? "credential"
+        : depthProjection.vaultLabel.sensitivity,
+      policy: depthProjection.vaultLabel.policy,
     },
   });
 
@@ -324,14 +387,16 @@ export function captureCodingAgentSession(
     commandsJson: JSON.stringify(commands),
     errorsJson: JSON.stringify(errors),
     verificationJson: JSON.stringify(verification),
-    metadataJson: JSON.stringify({ ...metadata, redactionMatches: redactions }),
+    metadataJson: JSON.stringify({ ...metadata, redactionMatches: redactions, captureDepth }),
     rawArtifactId: rawArtifact.id,
     captureHash,
     capturedAt,
     updatedAt: capturedAt,
   });
 
-  const candidates = durableCandidates({ summary, decisionIntent, files, errors, verification, sources });
+  const candidates = durableCandidates({ summary, decisionIntent, files, errors, verification, sources }).filter(
+    (candidate) => !looksLikeTranscriptDump(candidate.content)
+  );
   const insertCandidate = db.prepare(
     `INSERT OR IGNORE INTO agent_memory_candidates
       (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, metadata_json)
@@ -347,7 +412,7 @@ export function captureCodingAgentSession(
       candidate.memoryType,
       candidate.content,
       contentHash,
-      JSON.stringify(candidate.metadata)
+      JSON.stringify({ ...candidate.metadata, captureDepth })
     );
   }
 
@@ -362,6 +427,7 @@ export function captureCodingAgentSession(
     captureHealth: health,
     rawArtifactId: rawArtifact.id,
     candidateCount: candidates.length,
+    captureDepth,
     redactions,
   };
 }

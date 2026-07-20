@@ -277,4 +277,28 @@ describe("agent registry routes", () => {
       expect.objectContaining({ id: "chatgpt", platform: "chatgpt" }),
     ]);
   });
+
+  it("accepts Cline as a first-class registered agent platform", async () => {
+    const { agentsRoute, registerRoute } = await loadRoutes();
+
+    const registerResponse = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "cline",
+          name: "Cline",
+          role: "Interactive coding agent",
+          platform: "cline",
+          protocol: "rest",
+          issueApiKey: false,
+        }),
+      })
+    );
+
+    expect(registerResponse.status).toBe(200);
+    const listResponse = await agentsRoute.GET();
+    expect((await listResponse.json()).agents).toEqual([
+      expect.objectContaining({ id: "cline", platform: "cline" }),
+    ]);
+  });
 });

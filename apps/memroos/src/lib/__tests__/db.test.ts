@@ -162,6 +162,7 @@ describe('SQLite DB layer', () => {
         expect.arrayContaining([
           expect.objectContaining({ id: 'alba', name: 'Alba', platform: 'hermes' }),
           expect.objectContaining({ id: 'claude-code-luis-mbp', name: 'Claude Code', platform: 'claude' }),
+          expect.objectContaining({ id: 'cline-desktop-luis-mbp', name: 'Cline Desktop', platform: 'cline' }),
           expect.objectContaining({ id: 'codex-cloud-memroos', name: 'Codex Cloud', platform: 'codex' }),
           expect.objectContaining({ id: 'codex-desktop-luis-mbp', name: 'Codex Desktop', platform: 'codex' }),
           expect.objectContaining({ id: 'cursor-cloud-memroos', name: 'Cursor Cloud', platform: 'cursor' }),

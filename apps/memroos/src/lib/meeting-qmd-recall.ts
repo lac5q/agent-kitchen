@@ -1,12 +1,25 @@
 /**
  * Meeting QMD lane helpers for unified memory recall (v8.11 / URECALL-04).
  * Discovers enabled meeting collections and shells out to `qmd search -c`.
+ *
+ * Phase 172 (MEETREL-FOLLOWUP-05): Each collection now surfaces a bounded
+ * `SourceStatus` so operators can distinguish "not captured" from "captured
+ * but not routed" from "indexed but not recalled" from "recalled".
  */
 import { execFile as defaultExecFile } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
+
+import {
+  SOURCE_STATUS,
+  SOURCE_STATUS_VALUES,
+  coerceSourceStatus,
+  isTerminalSourceStatus,
+  type MeetingSourceStatus,
+  type SourceStatus,
+} from "./meeting-source-status";
 
 const defaultExecFileAsync = promisify(defaultExecFile);
 
@@ -109,6 +122,10 @@ function normalizeHits(data: unknown, collection: string, limit: number): Meetin
       path ||
       "";
     const score = typeof row.score === "number" ? row.score : undefined;
+    const indexedAtRaw =
+      (typeof row.indexed_at === "string" && row.indexed_at) ||
+      (typeof row.indexedAt === "string" && row.indexedAt) ||
+      (typeof row.updated_at === "string" && row.updated_at);
     return {
       id: `qmd:${collection}:${path || index}`,
       collection,
@@ -116,9 +133,42 @@ function normalizeHits(data: unknown, collection: string, limit: number): Meetin
       content: String(content).slice(0, 4000),
       path: path ? String(path) : undefined,
       score,
-      metadata: item,
+      metadata: indexedAtRaw
+        ? { ...(item as Record<string, unknown>), indexedAt: indexedAtRaw }
+        : item,
     };
   });
+}
+
+/**
+ * Compute the aggregate (weakest) status across all collections.
+ *
+ * Semantics: if ANY collection is `provider_absent` while another is `recalled`,
+ * the aggregate must surface the absent provider — `recalled` cannot mask a
+ * stopped pre-flight. Mirrors `compute_aggregate_status` in the Python
+ * `memory_recall` module.
+ */
+export function aggregateSourceStatus(
+  collections: Record<string, MeetingSourceStatus>
+): SourceStatus {
+  const seen = Object.values(collections).map((v) => v.status);
+  if (seen.length === 0) return SOURCE_STATUS.providerAbsent;
+  let weakest = Number.POSITIVE_INFINITY;
+  for (const status of seen) {
+    const idx = SOURCE_STATUS_VALUES.indexOf(coerceSourceStatus(status));
+    if (idx >= 0 && idx < weakest) weakest = idx;
+  }
+  if (!Number.isFinite(weakest)) return SOURCE_STATUS.providerAbsent;
+  return SOURCE_STATUS_VALUES[weakest];
+}
+
+export interface SearchMeetingCollectionsResult {
+  ok: boolean;
+  hits: MeetingQmdHit[];
+  error?: string;
+  collections: string[];
+  collectionStatus: Record<string, MeetingSourceStatus>;
+  aggregateStatus: SourceStatus;
 }
 
 export async function searchMeetingCollections(
@@ -126,15 +176,24 @@ export async function searchMeetingCollections(
   limit = 10,
   collections?: string[],
   execFileAsync: ExecFileAsync = defaultExecFileAsync
-): Promise<{ ok: boolean; hits: MeetingQmdHit[]; error?: string; collections: string[] }> {
+): Promise<SearchMeetingCollectionsResult> {
   const q = query.trim();
-  if (!q) return { ok: false, hits: [], error: "query is required", collections: [] };
+  if (!q)
+    return {
+      ok: false,
+      hits: [],
+      error: "query is required",
+      collections: [],
+      collectionStatus: {},
+      aggregateStatus: SOURCE_STATUS.providerAbsent,
+    };
 
   const cols = collections ?? (await loadEnabledMeetingCollections());
   const per = Math.max(2, Math.min(limit, 8));
   const qmdBin = process.env.QMD_BIN || "qmd";
   const hits: MeetingQmdHit[] = [];
   const seen = new Set<string>();
+  const collectionStatus: Record<string, MeetingSourceStatus> = {};
   let lastError: string | undefined;
 
   for (const collection of cols) {
@@ -149,21 +208,57 @@ export async function searchMeetingCollections(
         }
       );
       const parsed = JSON.parse(stdout || "[]");
-      for (const hit of normalizeHits(parsed, collection, per)) {
+      const normalized = normalizeHits(parsed, collection, per);
+      const retained: MeetingQmdHit[] = [];
+      let lastIndexAt: string | null = null;
+      for (const hit of normalized) {
         if (seen.has(hit.id)) continue;
         seen.add(hit.id);
         hits.push(hit);
+        retained.push(hit);
+        const metadata = hit.metadata as Record<string, unknown> | undefined;
+        if (metadata) {
+          const hint =
+            (typeof metadata.indexedAt === "string" && metadata.indexedAt) ||
+            (typeof metadata.indexed_at === "string" && metadata.indexed_at) ||
+            (typeof metadata.updated_at === "string" && metadata.updated_at);
+          if (typeof hint === "string" && !lastIndexAt) lastIndexAt = hint;
+        }
       }
+      collectionStatus[collection] = {
+        collection,
+        status:
+          retained.length > 0
+            ? SOURCE_STATUS.recalled
+            : SOURCE_STATUS.indexedUnrecalled,
+        count: retained.length,
+        lastIndexAt,
+      };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      // Collection may be missing — continue federating
+      collectionStatus[collection] = {
+        collection,
+        status: SOURCE_STATUS.indexedUnrecalled,
+        count: 0,
+        lastIndexAt: null,
+        reason: lastError,
+      };
     }
   }
 
+  const aggregateStatus = aggregateSourceStatus(collectionStatus);
   return {
     ok: hits.length > 0 || !lastError,
     hits: hits.slice(0, Math.max(1, Math.min(limit, 25))),
     error: hits.length === 0 ? lastError : undefined,
     collections: cols,
+    collectionStatus,
+    aggregateStatus,
   };
+}
+
+export function isSearchAggregateRecalled(
+  result: Pick<SearchMeetingCollectionsResult, "aggregateStatus">
+): boolean {
+  return isTerminalSourceStatus(result.aggregateStatus);
 }

@@ -43,7 +43,7 @@ const NAV_ITEMS = [
     label: "Memory",
     description: "Memory · Knowledge · Notebooks",
     icon: Brain,
-    match: ["/notebooks", "/library"],
+    match: ["/notebooks", "/library", "/wiki"],
   },
   {
     href: "/cookbooks",

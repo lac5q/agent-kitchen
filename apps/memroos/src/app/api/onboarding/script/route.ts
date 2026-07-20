@@ -49,7 +49,7 @@ AGENT_ROLE="\${AGENT_ROLE:-\${MEMROOS_AGENT_ROLE:-MemroOS agent}}"
 PLATFORM="\${PLATFORM:-\${MEMROOS_PLATFORM:-}}"
 
 if [[ -z "$PLATFORM" ]]; then
-  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|grok|droid|codex|claude|opencode|zcode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|gemini|qwen|opencode|zcode|openclaw|hermes|droid|none|file:/path]" >&2
+  echo "Usage: onboard [--id <id>] [--name <name>] [--role <role>] --platform <cursor|chatgpt|grok|droid|codex|claude|cline|opencode|zcode|openclaw|hermes|gemini|qwen|pi> [--mcp-target auto|stdout|cursor|codex|claude|cline|gemini|qwen|opencode|zcode|openclaw|hermes|droid|none|file:/path]" >&2
   exit 2
 fi
 
@@ -227,6 +227,20 @@ def install_claude():
     ok = run_if_available("claude", ["mcp", "add", "--transport", "http", "memroos", "--scope", "user", mcp_url])
     return ok
 
+def install_cline():
+    # Cline stores MCP servers in VS Code's globalStorage per-platform.
+    if sys.platform == "darwin":
+        settings_dir = home / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
+    elif os.name == "nt":
+        app_data = os.environ.get("APPDATA")
+        if not app_data:
+            raise SystemExit("APPDATA is required to configure Cline on Windows")
+        settings_dir = pathlib.Path(app_data) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
+    else:
+        settings_dir = home / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
+    merge_json(settings_dir / "cline_mcp_settings.json", {"mcpServers": generic_servers})
+    return True
+
 def install_gemini():
     if run_if_available("gemini", ["mcp", "add", "--scope", "user", "--transport", "http", "memroos", mcp_url]):
         return True
@@ -312,6 +326,7 @@ def install_explicit(selected):
         "codex": install_codex,
         "droid": install_droid,
         "claude": install_claude,
+        "cline": install_cline,
         "gemini": install_gemini,
         "qwen": install_qwen,
         "opencode": install_opencode,
@@ -333,6 +348,7 @@ def install_auto():
         "codex": "codex",
         "droid": "droid",
         "claude": "claude",
+        "cline": "cline",
         "gemini": "gemini",
         "qwen": "qwen",
         "pi": "stdout",

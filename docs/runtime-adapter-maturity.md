@@ -51,3 +51,82 @@ A CI note can be added to the Phase 143 verification step: after any installer e
 3. **Claude Code / Codex / Cursor → T1**: add runtime-specific adapter modules (similar to `openclaw-adapter.ts`) or A2A-first onboarding, and add targeted GSD adapter tests for each identity.
 4. **Qwen / Gemini / ZCode → T1/T2**: promote to T2 by adding a `GsdAdapterId` entry and at least one GSD adapter test; promote to T1 by adding a dedicated transport adapter or verified A2A path plus safety-gate coverage.
 5. **Cross-cutting**: ensure every T1 adapter has a pre-execution policy gate that delegates to the existing POLGOV engine (per the Phase 145 reconciliation note in `content/architecture/memroos-as-agent-fleet-plane-2026-07-08.md`), rather than adding a second policy engine per adapter.
+
+## Observe capture matrix (v8.16)
+
+
+*Updated: 2026-07-18 (Phase 171: OBSERVE-13/14 matrix + per-onboarded-agent visibility).*
+
+*Mirrors `apps/memroos/src/lib/observe-sidecar.ts` `OBSERVE_HARNESS_PATHS` exactly.
+The drift-check script `scripts/check-observe-maturity-drift.mjs` keeps this table,
+the catalog, and the installer `TARGETS` rows in sync (exit code `1` on drift).*
+
+| Harness | Wave | Platform key | Capture method | Status |
+|---------|------|--------------|----------------|--------|
+| Claude | 1 | `claude` | jsonl `~/.claude/projects` | supported (`jsonl`) |
+| Codex | 1 | `codex` | jsonl `~/.codex/sessions` | supported (`jsonl`) |
+| Hermes | 1 | `hermes` | plugin + jsonl at `~/.hermes/sessions` | supported (`plugin`) |
+| OpenClaw | 1 | `openclaw` | jsonl under `~/.openclaw/sessions` (also inherits Hermes-family `~/.hermes/sessions`) | supported (`jsonl`) |
+| Pi | 1 | `pi` | jsonl `~/.pi/agent/sessions` | supported (`jsonl`, first-class) |
+| Cursor | 2 | `cursor` | MCP `mcp.json` only; vendor transcripts at `~/.cursor/projects/<id>/agent-transcripts/<session>/<session>.jsonl` exist but use a non-standard `<timestamp>/<user_query>` schema — stay on MCP | partial (`mcp-partial`) |
+| Factory/Droid | 2 | `factory` / `droid` | MCP `~/.factory/mcp.json` + JSONL fallback at `~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl` (maps `platform=droid`) | partial (`hooks+jsonl`, smoke-tested in Phase 170) |
+| Antigravity | 3 | `antigravity` | no CLI/JSONL/MCP surface verified; catalog keeps the row so the health endpoint can honestly report `no path` instead of faking coverage | limited |
+
+### Installer `TARGETS` sync targets (Phases 169–171)
+
+`scripts/install-agent-integrations.sh` lists every observe harness (except `factory`,
+which is covered by the `droid` install target) in `TARGETS`:
+
+- Wave 1: `claude`, `codex`, `hermes`, `openclaw`, `pi` — first-class `jsonl` / `plugin`
+  paths.
+- Wave 2: `cursor` (`cursor-json` MCP block), `droid` (`factory-json` MCP block;
+  corresponds to the `factory` observe row and `platform=droid` registry key).
+- Wave 3: `antigravity` (`none` MCP style — emits a clear honest signal during
+  `install` / `check` / `uninstall`; no AGENTS.md or skill file is written).
+
+### Phase 170–171 invariants (matches `observe-sidecar.ts`)
+
+- Wave 1 Pi stays first-class; no demotion. `OBSERVE_HARNESS_PATHS` keeps `pi`
+  alongside `claude` / `codex` / `hermes` / `openclaw`.
+- Wave 2 Cursor keeps `mcp-partial` until the vendor transcript schema stabilizes;
+  the catalog `notes` documents the vendor export path so it is not lost.
+- Wave 2 Factory/Droid is `hooks+jsonl`. Both surfaces verified on the dev box.
+  The catalog row's `notes` string contains the literal `droid` so it ties back to
+  `CodingAgentRuntime.droid`.
+- Wave 3 Antigravity has empty `sessionRoots` and an explicit
+  `no capture path; verify-by-design` notes string. No false full-capture claim.
+- `install-agent-integrations.sh` lists Antigravity in `TARGETS` with a `none`
+  MCP style that emits a clear honest signal during `install` / `check` /
+  `uninstall` (no files are written for Antigravity).
+
+### Operator visibility — Phase 171 (OBSERVE-14)
+
+`GET /api/observe/health` now reads canonical `notes` from the catalog so docs
+and the response stay in lock-step. Per-harness rows expose:
+
+- `harness`, `wave`, `maturity` — straight from the catalog.
+- `lastCaptureAt` — `MAX(captured_at)` for `runtime` rows in
+  `agent_session_captures`.
+- `captureCount` — `COUNT(*)` for `runtime` rows in `agent_session_captures`.
+- `depthSetting` — `MEMROOS_CAPTURE_DEPTH` (`summary` / `relevant` / `full`),
+  defaulting to `relevant`.
+- `errorCount` — `COUNT(*)` of `agent_session_captures` rows for this runtime
+  whose `status='failed'` (the existing `status` CHECK enum already covers
+  `failed`). Wave 1–2 harnesses that have never failed report `0`; Antigravity
+  reports `0` by construction (no capture rows possible).
+- `errorRate` — kept `null` for now; computed when we have enough failed rows
+  to make the percentage meaningful. Catalog row is the source of truth for
+  honest messaging instead of error-rate arithmetic.
+- `agentsByHarness` — `COUNT(*)` of `registered_agents` rows whose `platform`
+  matches the harness's runtime name (case-insensitive). Droid maps to
+  `platform=droid`; everything else maps to `platform=<harness>`. This is the
+  operator visibility "who is onboarded" count that the Wave-1 smoke proves
+  end-to-end.
+
+### Drift-check automation (OBSERVE-13)
+
+Run `scripts/check-observe-maturity-drift.mjs` (or `npm run check:observe-maturity-drift`
+from `apps/memroos`) to verify the catalog, matrix, and installer `TARGETS`
+agree on harness names. The check is also wired into CI alongside
+`check:future-spikes`. Exit code `1` on drift — fix the catalog row, the matrix
+row, or the installer `TARGETS` row before merging.

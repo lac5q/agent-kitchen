@@ -22,7 +22,8 @@
     "curate:skills": "node ../../scripts/curate-agent-skills.mjs",
     "install:skill-curation": "node ../../scripts/install-skill-curation-launchd.mjs",
     "lint": "eslint",
-    "check:belief-eval": "vitest run src/lib/__tests__/belief-promotion-eval-ci.test.ts"
+    "check:belief-eval": "vitest run src/lib/__tests__/belief-promotion-eval-ci.test.ts",
+    "check:observe-maturity-drift": "node ../../scripts/check-observe-maturity-drift.mjs && node --test ../../scripts/check-observe-maturity-drift.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
