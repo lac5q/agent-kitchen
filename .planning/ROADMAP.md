@@ -64,6 +64,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
+- 📋 **v8.18 NOC Metrics Rethink** — candidate (added 2026-07-20; audit `.planning/notes/2026-07-20-noc-rethink-audit.md`; NOCUX-01..05 paste-ready; 13-panel surface shows "No events"/"empty by design" on fresh operator; root causes: efficiency_events producers never wired, hive-centric panels presume hive activity, empty states describe absence not meaning; pipeline: kimi-k3-thinking UX design → gpt-5.6-terra-high orchestrator → M3 worker → codex validator; open Qs: sole-operator vs client-demo audience, kill vs hide empty panels, default 24h only or all windows; v8.17 reserved for logging observability candidate pending in local uncommitted ROADMAP)
 
 ## Phases
 
