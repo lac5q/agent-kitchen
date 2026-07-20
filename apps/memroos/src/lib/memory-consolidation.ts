@@ -154,11 +154,18 @@ export async function runConsolidation(): Promise<ConsolidationRunResult> {
       insertInsight.run(runId, insight.insight_type, insight.content, sourceIds);
     }
 
-    // Mark batch as consolidated
-    const placeholders = batch.map(() => '?').join(',');
-    db.prepare(
-      `UPDATE messages SET consolidated = 1 WHERE id IN (${placeholders})`
-    ).run(...batch.map((m) => m.id));
+    // Mark batch as consolidated — but only when the LLM response actually
+    // produced extractable insights. Without this gate, parse failures silently
+    // mark messages consolidated=1 with insights_written=0, advancing the
+    // consolidation cursor over rows that never made it into memory_meta_insights.
+    if (insights.length > 0) {
+      const placeholders = batch.map(() => '?').join(',');
+      db.prepare(
+        `UPDATE messages SET consolidated = 1 WHERE id IN (${placeholders})`
+      ).run(...batch.map((m) => m.id));
+    } else {
+      console.warn(`[consolidation] Skipping consolidated=1 mark (insights.length=0) for batch of ${batch.length} messages`);
+    }
 
     // Update run record
     db.prepare(
