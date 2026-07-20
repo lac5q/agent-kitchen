@@ -33,8 +33,8 @@ function NocPanelSkeleton({ height = 220 }: { height?: number }) {
   );
 }
 
-const EfficiencySignals = dynamic(
-  () => import("./efficiency-signals").then((mod) => mod.EfficiencySignals),
+const AttentionPanel = dynamic(
+  () => import("./attention-panel").then((mod) => mod.AttentionPanel),
   { ssr: false, loading: () => <div style={{ padding: "0 28px 14px" }}><NocPanelSkeleton height={190} /></div> }
 );
 const MemoryConsumption = dynamic(
@@ -106,8 +106,8 @@ export function OperationsNoc() {
       {/* Row 1 — System pulse strip (6 KPIs) */}
       <PulseStrip filters={filters} />
 
-      {/* Row 1.5 — Efficiency signals */}
-      <EfficiencySignals filters={filters} />
+      {/* Row 1.5 — operator actions */}
+      <AttentionPanel filters={filters} />
 
       {/* Row 2 — Memory consumption + Memory not digested */}
       <div

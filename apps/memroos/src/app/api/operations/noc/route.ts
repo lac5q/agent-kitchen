@@ -20,6 +20,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import { listDeprecatedSkills } from "@/lib/skills/skill-lifecycle";
+import { evaluateContextSources, loadContextSourceContracts } from "@/lib/context-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,36 @@ function findRepoRoot(startDir: string): string {
 }
 
 type PanelStatus = "live" | "empty" | "degraded" | "missing";
+type NocSourceState = "live" | "window_empty" | "no_history" | "stale_or_error" | "known_unwired";
+type AttentionSeverity = "critical" | "warning" | "info";
+
+type AttentionItem = {
+  id: string;
+  severity: AttentionSeverity;
+  title: string;
+  detail: string | null;
+  timestamp: string | null;
+  target: string | null;
+};
+
+type AgentActivity = {
+  sourceState: NocSourceState;
+  source: string;
+  observedAt: string | null;
+  agents: Array<{
+    agentId: string;
+    messageCount: number;
+    sessionCount: number;
+    lastMessageAt: string;
+  }>;
+  delegations: Array<{
+    taskId: string;
+    fromAgent: string;
+    toAgent: string;
+    status: string;
+    updatedAt: string;
+  }>;
+};
 
 type EfficiencyEventType =
   | "retrieval_trace"
@@ -234,6 +265,150 @@ function hiveActionsWorkspaceClause(workspace: NocWorkspace) {
     return `AND a.agent_id NOT IN (${quotedIds})`;
   }
   return "";
+}
+
+function delegationWorkspaceClause(workspace: NocWorkspace) {
+  const quotedIds = LOCAL_NOC_AGENT_IDS.map((agentId) => `'${agentId}'`).join(",");
+  if (workspace === "local") {
+    return `AND (d.from_agent IN (${quotedIds}) OR d.to_agent IN (${quotedIds}))`;
+  }
+  if (workspace === "remote") {
+    return `AND (d.from_agent NOT IN (${quotedIds}) OR d.to_agent NOT IN (${quotedIds}))`;
+  }
+  return "";
+}
+
+function readAgentActivity(db: ReturnType<typeof getDb>, since: string, workspace: NocWorkspace): AgentActivity {
+  const ws = workspaceClause(workspace);
+  try {
+    const agents = db.prepare(
+      `SELECT m.agent_id AS agentId,
+              COUNT(*) AS messageCount,
+              COUNT(DISTINCT m.session_id) AS sessionCount,
+              MAX(m.timestamp) AS lastMessageAt
+       FROM messages m
+       WHERE m.timestamp >= ? ${ws}
+       GROUP BY m.agent_id
+       ORDER BY lastMessageAt DESC, m.agent_id ASC`
+    ).all(since) as Array<{
+      agentId: string;
+      messageCount: number;
+      sessionCount: number;
+      lastMessageAt: string;
+    }>;
+    const observedAt = agents[0]?.lastMessageAt ?? null;
+    const history = agents.length === 0
+      ? Number((db.prepare(`SELECT COUNT(*) AS value FROM messages m WHERE 1=1 ${ws}`).get() as { value: number }).value)
+      : 0;
+    const dws = delegationWorkspaceClause(workspace);
+    let delegations: AgentActivity["delegations"] = [];
+    try {
+      delegations = db.prepare(
+        `SELECT d.task_id AS taskId, d.from_agent AS fromAgent, d.to_agent AS toAgent,
+                d.status AS status, d.updated_at AS updatedAt
+         FROM hive_delegations d
+         WHERE d.updated_at >= ? ${dws}
+         ORDER BY d.updated_at DESC, d.task_id ASC
+         LIMIT 25`
+      ).all(since) as AgentActivity["delegations"];
+    } catch {
+      // Delegation detail is additive; message activity remains available.
+    }
+    return {
+      sourceState: agents.length > 0 ? "live" : history > 0 ? "window_empty" : "no_history",
+      source: "sqlite://messages",
+      observedAt,
+      agents,
+      delegations,
+    };
+  } catch {
+    return {
+      sourceState: "stale_or_error",
+      source: "sqlite://messages",
+      observedAt: null,
+      agents: [],
+      delegations: [],
+    };
+  }
+}
+
+function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
+  const items: AttentionItem[] = [];
+  try {
+    const cronRows = db.prepare(
+      `SELECT id, name, warning, last_failure_at AS lastFailureAt, updated_at AS updatedAt
+       FROM cron_health_jobs
+       WHERE status = 'active' AND (warning IS NOT NULL OR last_failure_at IS NOT NULL)`
+    ).all() as Array<{ id: string; name: string; warning: string | null; lastFailureAt: string | null; updatedAt: string }>;
+    items.push(...cronRows.map((row) => ({
+      id: `cron:${row.id}`,
+      severity: "critical" as const,
+      title: `Cron needs attention: ${row.name}`,
+      detail: row.warning,
+      timestamp: row.lastFailureAt ?? row.updatedAt,
+      target: "/api/cron-health",
+    })));
+  } catch {
+    // An optional attention source must not fabricate an operator task.
+  }
+  try {
+    const hilRows = db.prepare(
+      `SELECT id, escalation_type AS escalationType, status, sla_deadline AS slaDeadline, created_at AS createdAt
+       FROM hil_escalations
+       WHERE status IN ('open', 'sla_breached')
+       ORDER BY sla_deadline ASC`
+    ).all() as Array<{ id: string; escalationType: string; status: string; slaDeadline: string; createdAt: string }>;
+    items.push(...hilRows.map((row) => ({
+      id: `hil:${row.id}`,
+      severity: row.status === "sla_breached" ? "critical" as const : "warning" as const,
+      title: row.status === "sla_breached" ? `HIL SLA breached: ${row.escalationType}` : `Pending HIL review: ${row.escalationType}`,
+      detail: null,
+      timestamp: row.slaDeadline || row.createdAt,
+      target: "/escalations",
+    })));
+  } catch {
+    // An optional attention source must not fabricate an operator task.
+  }
+  try {
+    const securityRows = db.prepare(
+      `SELECT id, action, target, severity, timestamp
+       FROM audit_log
+       WHERE severity IN ('high', 'medium')
+         AND (lower(action || ' ' || target) LIKE '%security%'
+              OR lower(action || ' ' || target) LIKE '%policy%'
+              OR lower(action || ' ' || target) LIKE '%blocked%'
+              OR lower(action || ' ' || target) LIKE '%denied%')
+       ORDER BY timestamp DESC
+       LIMIT 25`
+    ).all() as Array<{ id: number; action: string; target: string; severity: "high" | "medium"; timestamp: string }>;
+    items.push(...securityRows.map((row) => ({
+      id: `security:${row.id}`,
+      severity: row.severity === "high" ? "critical" as const : "warning" as const,
+      title: `Security finding: ${row.action}`,
+      detail: row.target,
+      timestamp: row.timestamp,
+      target: "/api/security/report",
+    })));
+  } catch {
+    // An optional attention source must not fabricate an operator task.
+  }
+  try {
+    const sources = evaluateContextSources(loadContextSourceContracts()).sources;
+    items.push(...sources
+      .filter((source) => source.status === "stale" || source.status === "degraded")
+      .map((source) => ({
+        id: `source:${source.id}`,
+        severity: "info" as const,
+        title: `Source freshness needs attention: ${source.id}`,
+        detail: source.lastError ?? source.repairHint,
+        timestamp: source.lastRun,
+        target: "/api/context/health",
+      })));
+  } catch {
+    // An optional attention source must not fabricate an operator task.
+  }
+  const rank: Record<AttentionSeverity, number> = { critical: 0, warning: 1, info: 2 };
+  return items.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.timestamp ?? "").localeCompare(a.timestamp ?? "") || a.id.localeCompare(b.id));
 }
 
 function panel(status: PanelStatus, source: string, lastUpdated: string | null, warnings: string[] = []) {
@@ -590,6 +765,8 @@ async function buildNocResponse(request: Request) {
   const ws = workspaceClause(workspace);
   const efficiencyEvents = readEfficiencyEvents(db, since, workspace);
   const efficiencyMetrics = computeEfficiencyMetrics(efficiencyEvents);
+  const agentActivity = readAgentActivity(db, since, workspace);
+  const attention = buildAttention(db);
 
   const memoryRows = safeScalar(
     db,
@@ -746,6 +923,12 @@ async function buildNocResponse(request: Request) {
       localFootprint: localFootprintEnvelope,
       memoryIteration,
       efficiency: efficiencyEnvelope,
+    },
+    attention,
+    agentActivity,
+    sourceStates: {
+      agentActivity: agentActivity.sourceState,
+      efficiencySignals: "known_unwired" as const,
     },
     operatorLoadStatus: operatorLoadStatus ?? {
       status: "missing",

@@ -471,3 +471,92 @@ describe("Round 4 blocking fixes — operations/NOC", () => {
     expect(mem.source).toBe("sqlite://messages");
   });
 });
+
+
+describe("Phase 173 NOC truth contracts", () => {
+  beforeEach(() => {
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DIR, { recursive: true });
+  });
+
+  afterEach(async () => {
+    const { closeDb } = await loadRoute();
+    closeDb();
+    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    delete process.env.SQLITE_DB_PATH;
+    vi.resetModules();
+  });
+
+  it("keeps Agent Activity message-backed when no hive delegation exists", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const timestamp = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy, request_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("message-session", "operator", "codex", "assistant", "activity", timestamp, "internal", "indexable", "activity-1");
+
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
+    const body = await response.json();
+
+    expect(body.agentActivity).toMatchObject({
+      sourceState: "live",
+      source: "sqlite://messages",
+      delegations: [],
+    });
+    expect(body.agentActivity.agents).toEqual([
+      expect.objectContaining({ agentId: "codex", messageCount: 1, sessionCount: 1, lastMessageAt: timestamp }),
+    ]);
+    expect(body.sourceStates).toMatchObject({ agentActivity: "live", efficiencySignals: "known_unwired" });
+  });
+
+  it("orders Attention by severity using existing cron, HIL, and security sources", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const timestamp = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO cron_health_jobs(id, name, source_family, schedule, status, expected_interval_minutes, warning, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("cron-1", "Backfill", "memory", "hourly", "active", 60, "failed", timestamp);
+    db.prepare(
+      `INSERT INTO hil_escalations(id, tenant_id, entity_type, entity_id, escalation_type, sla_seconds, sla_deadline, status, opened_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("hil-1", "default-tenant", "task", "task-1", "agent_escalate", 60, timestamp, "open", "operator", timestamp);
+    db.prepare(
+      `INSERT INTO audit_log(actor, action, target, severity, timestamp)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run("operator", "security.denied", "policy", "high", timestamp);
+
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+    const matching = body.attention.filter((item: { id: string }) => ["cron:cron-1", "hil:hil-1", "security:1"].includes(item.id));
+
+    expect(matching.map((item: { severity: string }) => item.severity)).toEqual(["critical", "critical", "warning"]);
+    expect(matching.every((item: { timestamp: string | null; target: string | null }) => item.timestamp && item.target)).toBe(true);
+  });
+
+  it("distinguishes no_history, window_empty, and stale_or_error source states", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    let response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
+    let body = await response.json();
+    expect(body.agentActivity.sourceState).toBe("no_history");
+
+    db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy, request_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("old-session", "operator", "codex", "assistant", "old", "2000-01-01T00:00:00.000Z", "internal", "indexable", "old-1");
+    response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
+    body = await response.json();
+    expect(body.agentActivity.sourceState).toBe("window_empty");
+
+    const originalPrepare = db.prepare.bind(db);
+    (db as unknown as { prepare: typeof db.prepare }).prepare = ((sql: string) => {
+      if (sql.includes("GROUP BY m.agent_id")) throw new Error("messages unavailable");
+      return originalPrepare(sql);
+    }) as typeof db.prepare;
+    response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
+    body = await response.json();
+    expect(body.agentActivity.sourceState).toBe("stale_or_error");
+  });
+});

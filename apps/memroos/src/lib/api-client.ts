@@ -116,6 +116,36 @@ export interface OperationsNocPanel {
   warnings: string[];
 }
 
+export type NocSourceState = "live" | "window_empty" | "no_history" | "stale_or_error" | "known_unwired";
+
+export interface OperationsNocAttentionItem {
+  id: string;
+  severity: "critical" | "warning" | "info";
+  title: string;
+  detail: string | null;
+  timestamp: string | null;
+  target: string | null;
+}
+
+export interface OperationsNocAgentActivity {
+  sourceState: NocSourceState;
+  source: string;
+  observedAt: string | null;
+  agents: Array<{
+    agentId: string;
+    messageCount: number;
+    sessionCount: number;
+    lastMessageAt: string;
+  }>;
+  delegations: Array<{
+    taskId: string;
+    fromAgent: string;
+    toAgent: string;
+    status: string;
+    updatedAt: string;
+  }>;
+}
+
 export interface OperationsNocEfficiencyMetrics {
   totalEvents: number;
   retrievalEvents: number;
@@ -191,6 +221,12 @@ export interface OperationsNocResponse {
   };
   panels: Record<string, OperationsNocPanel> & {
     efficiency: OperationsNocPanel;
+  };
+  attention: OperationsNocAttentionItem[];
+  agentActivity: OperationsNocAgentActivity;
+  sourceStates: {
+    agentActivity: NocSourceState;
+    efficiencySignals: "known_unwired";
   };
   localFootprint?: unknown;
 }

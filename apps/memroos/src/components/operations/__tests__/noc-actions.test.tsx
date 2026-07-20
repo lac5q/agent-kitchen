@@ -1,11 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { AttentionPanel } from "../attention-panel";
 import { BehaviorSignals } from "../behavior-signals";
 import { EfficiencySignals } from "../efficiency-signals";
 import { MemoryNotDigested } from "../memory-not-digested";
 import { ModelUtility } from "../model-utility";
 import { SkillsLifecycle } from "../skills-lifecycle";
+
+const noc = vi.hoisted(() => ({ attention: [] as Array<Record<string, unknown>> }));
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -102,6 +105,7 @@ vi.mock("@/lib/api-client", () => ({
   }),
   useOperationsNoc: () => ({
     data: {
+      attention: noc.attention,
       panels: {
         efficiency: {
           status: "empty",
@@ -224,5 +228,28 @@ describe("Round 4 blocking fixes — Seal drilldown navigation", () => {
       expect(link.getAttribute("data-navigation-element")).toBe("anchor");
       expect(link.tagName.toLowerCase()).toBe("a");
     }
+  });
+});
+
+
+describe("Phase 173 Attention", () => {
+  it("renders severity rows with existing route targets", () => {
+    noc.attention = [
+      { id: "critical", severity: "critical", title: "Cron needs attention", detail: "failed", timestamp: "2026-07-20T12:00:00.000Z", target: "/api/cron-health" },
+      { id: "warning", severity: "warning", title: "Pending HIL review", detail: null, timestamp: "2026-07-20T11:00:00.000Z", target: "/escalations" },
+    ];
+    render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
+
+    expect(screen.getByText("Cron needs attention")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open" })[0]).toHaveAttribute("href", "/api/cron-health");
+    expect(document.querySelectorAll("[data-attention-severity='critical']")).toHaveLength(1);
+  });
+
+  it("renders the explicit all-clear state", () => {
+    noc.attention = [];
+    render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
+
+    expect(screen.getByText(/all clear — no cron failures/i)).toBeInTheDocument();
+    expect(document.querySelector("[data-status='all-clear']")).toBeInTheDocument();
   });
 });
