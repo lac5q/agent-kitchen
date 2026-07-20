@@ -143,6 +143,40 @@ describe("seedRegisteredAgents — gating", () => {
 });
 
 describe("seedRegisteredAgents — config parsing", () => {
+  it("accepts every supported platform, including Cline", () => {
+    const platforms = [
+      "cursor",
+      "claude",
+      "cline",
+      "codex",
+      "qwen",
+      "pi",
+      "gemini",
+      "opencode",
+      "zcode",
+      "hermes",
+      "openclaw",
+      "chatgpt",
+      "cortex",
+      "grok",
+      "droid",
+    ];
+    writeConfig({
+      remoteAgents: platforms.map((platform) => ({
+        id: `${platform}-agent`,
+        name: `${platform} Agent`,
+        role: "worker",
+        platform,
+      })),
+    });
+
+    const db = freshDb();
+    seedRegisteredAgents(db);
+    const rows = db.prepare("SELECT id FROM registered_agents ORDER BY id").all() as Array<{ id: string }>;
+
+    expect(rows.map((row) => row.id)).toEqual(platforms.map((platform) => `${platform}-agent`).sort());
+  });
+
   it("does nothing when agents.config.json is missing", () => {
     const db = freshDb();
     seedRegisteredAgents(db);

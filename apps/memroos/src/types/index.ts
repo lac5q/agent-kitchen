@@ -2,6 +2,7 @@ export type AgentStatus = "active" | "idle" | "dormant" | "error";
 export type AgentPlatform =
   | "cursor"
   | "claude"
+  | "cline"
   | "codex"
   | "qwen"
   | "pi"

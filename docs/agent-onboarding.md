@@ -52,6 +52,7 @@ When the canonical rule changes:
 | Droid (Factory) | `~/.factory/AGENTS.md` + `~/.factory/mcp.json` | `mcpServers.memroos` in `mcp.json` |
 | Grok | `~/.grok/AGENTS.md` + `~/.grok/skills` | JSON MCP companion + onboard invite |
 | OpenCode | `~/.config/opencode/instructions.md` | YAML in adjacent `mcp.yaml` |
+| Cline (VS Code) | `~/.cline/AGENTS.md` (project-level `.clinerules` also supported) | JSON `mcpServers.memroos` in Linux `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` or macOS `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`. The onboarding script also supports Windows `%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; the shell installer provisions Linux and macOS. |
 | Hermes | `~/.hermes/AGENTS.md` + `~/.hermes/profiles/<name>/config.yaml` | `mcp_servers:` block in `config.yaml` |
 | OpenClaw | `~/.openclaw/workspace*/AGENTS.md` | YAML in adjacent `mcp.yaml` |
 

@@ -32,6 +32,7 @@ export const STATUS_COLORS: Record<string, string> = {
 
 export const PLATFORM_LABELS: Record<string, string> = {
   claude: "Claude",
+  cline: "Cline",
   cursor: "Cursor",
   codex: "Codex",
   qwen: "Qwen",

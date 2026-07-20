@@ -53,6 +53,7 @@ const DEFAULT_GEMINI_CHAT_MODEL =
   process.env.MEMROOS_GEMINI_CHAT_MODEL || "gemini-pro";
 const ANTHROPIC_CHAT_PLATFORMS = new Set<AgentPlatform>([
   "claude",
+  "cline",
   "codex",
   "hermes",
   "openclaw",

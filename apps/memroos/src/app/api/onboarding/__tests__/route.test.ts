@@ -1,5 +1,6 @@
 // @vitest-environment node
 import crypto from "crypto";
+import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -222,6 +223,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     expect(script).toContain("MEMROOS_AGENT_ID");
     expect(script).toContain("MEMROOS_AGENT_NAME");
     expect(script).toContain("\"claude\": \"claude\"");
+    expect(script).toContain("\"cline\": \"cline\"");
     expect(script).toContain("\"gemini\": \"gemini\"");
     expect(script).toContain("\"qwen\": \"qwen\"");
     expect(script).toContain("\"zcode\": \"zcode\"");
@@ -234,6 +236,10 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     expect(script).toContain("\"hermes\": \"hermes\"");
     expect(script).toContain("\"cursor\": \"cursor\"");
     expect(script).toContain("home / \".config\" / \"opencode\" / \"opencode.json\"");
+    expect(script).toContain('if sys.platform == "darwin":');
+    expect(script).toContain('elif os.name == "nt":');
+    expect(script).toContain('home / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"');
+    expect(script).toContain('home / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"');
     expect(script).toContain("home / \".zcode\" / \"cli\" / \"config.json\"");
     expect(script).toContain("pathlib.Path.cwd() / \".cursor\" / \"mcp.json\"");
     expect(script).toContain("\"type\": \"remote\"");
@@ -251,7 +257,77 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     expect(rejected.status).toBe(403);
   });
 
-  it.each(["cursor", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
+  it("writes Cline MCP configuration at the Linux and macOS VS Code paths without replacing other servers", async () => {
+    const { inviteRoute, scriptRoute } = await loadRoutes();
+    const inviteResponse = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ agentId: "cline-agent", platform: "cline" }),
+      })
+    );
+    const invite = await inviteResponse.json();
+    const scriptResponse = await scriptRoute.GET(
+      new Request(`https://memroos.example.test/api/onboarding/script?token=${encodeURIComponent(invite.token)}`)
+    );
+    const script = await scriptResponse.text();
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cline-onboarding-"));
+
+    try {
+      const scriptPath = path.join(tempRoot, "onboard");
+      const binDir = path.join(tempRoot, "bin");
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.writeFileSync(scriptPath, script, { mode: 0o700 });
+      fs.writeFileSync(
+        path.join(binDir, "curl"),
+        `#!/usr/bin/env bash
+printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"cline-agent"},"apiKey":"ak_cline_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
+`,
+        { mode: 0o700 }
+      );
+
+      for (const [platform, settingsPath] of [
+        ["linux", [".config", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"]],
+        ["darwin", ["Library", "Application Support", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"]],
+      ] as const) {
+        const home = path.join(tempRoot, platform);
+        const configPath = path.join(home, ...settingsPath);
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(configPath, JSON.stringify({ preserved: true, mcpServers: { existing: { url: "https://existing.example.test/mcp" } } }));
+
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          HOME: home,
+          PATH: `${binDir}:${process.env.PATH}`,
+        };
+        if (platform === "darwin") {
+          const siteDir = path.join(tempRoot, "sitecustomize");
+          fs.mkdirSync(siteDir, { recursive: true });
+          fs.writeFileSync(path.join(siteDir, "sitecustomize.py"), 'import sys\nsys.platform = "darwin"\n');
+          env.PYTHONPATH = siteDir;
+        }
+
+        execFileSync("bash", [scriptPath, "--id", "cline-agent", "--name", "Cline Agent", "--platform", "cline"], {
+          env,
+          stdio: "pipe",
+        });
+        expect(JSON.parse(fs.readFileSync(configPath, "utf8"))).toEqual({
+          preserved: true,
+          mcpServers: {
+            existing: { url: "https://existing.example.test/mcp" },
+            memroos: { url: "https://memroos.example.test/mcp" },
+          },
+        });
+      }
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["cursor", "cline", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
       const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();
