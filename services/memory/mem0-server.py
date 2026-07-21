@@ -1113,13 +1113,17 @@ async def _qdrant_health_checker():
             vector_cfg = cfg.get("vector_store", {}).get("config", {})
             vector_provider = cfg.get("vector_store", {}).get("provider", "unknown")
 
-            if vector_provider == "qdrant":
-                vector_status = await asyncio.to_thread(
-                    lambda: cached_qdrant_vector_status(vector_cfg, force=True)
-                )
-                qdrant_ok = vector_status == "connected"
-            else:
-                qdrant_ok = True
+            # Embedded vector stores (e.g. Chroma in the local/demo stack) have no
+            # external backend to recover from, so the periodic "Qdrant recovery"
+            # reset below is pointless and only churns the client every ~3 min.
+            # Skip it entirely — there is nothing to probe or reset for non-Qdrant.
+            if vector_provider != "qdrant":
+                continue
+
+            vector_status = await asyncio.to_thread(
+                lambda: cached_qdrant_vector_status(vector_cfg, force=True)
+            )
+            qdrant_ok = vector_status == "connected"
 
             disk_status = await asyncio.to_thread(check_mem0_disk_space)
             disk_ok = not disk_status.get("critical", False)

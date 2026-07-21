@@ -1,0 +1,49 @@
+name: install-regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "install.sh"
+      - "docker-compose*.yml"
+      - ".env.example"
+      - "apps/memroos/tsconfig.json"
+      - "scripts/install-regression/**"
+      - ".planning/phases/177-*/**"
+  push:
+    branches: [main]
+    paths:
+      - "install.sh"
+      - "docker-compose*.yml"
+      - ".env.example"
+      - "apps/memroos/tsconfig.json"
+
+jobs:
+  fast:
+    name: structural checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run install-regression --fast
+        run: bash scripts/install-regression/install-regression.sh --fast
+
+  full-disposable-host:
+    name: full disposable-host reinstall
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: fast
+    if: github.event_name == 'pull_request' && contains(github.head_ref, 'install-repro')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run install-regression --full
+        env:
+          TRANSCRIPT_DIR: ${{ github.workspace }}/install-regression-transcript
+        run: |
+          bash scripts/install-regression/install-regression.sh --full
+      - name: Upload transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-regression-transcript
+          path: install-regression-transcript/
