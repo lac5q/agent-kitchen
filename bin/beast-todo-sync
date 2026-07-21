@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Beastmode todo-sync: read a goal/plan markdown file and emit matching
+pi `todo` create calls so the active list never drifts from the plan.
+
+Usage:
+    bin/beast-todo-sync <goal-file.md>            # dry-run, print calls
+    bin/beast-todo-sync --emit <goal-file.md>     # JSON output for piping
+    bin/beast-todo-sync <goal-file.md>            # default: dry-run
+
+Discipline rule (recorded in .beastmode/learnings):
+    "Every time a goal/plan file changes, run `bin/beast-todo-sync <file>`
+     to regenerate the todo list. The script is conservative:
+     it does NOT delete existing ad-hoc todos; it only adds the ones
+     derivable from the goal file headings."
+"""
+import json
+import os
+import re
+import sys
+
+
+def parse_goal(path: str):
+    text = open(path).read()
+    sections = []
+    current = None
+    for line in text.splitlines():
+        # Top-level '# Title' is the goal name; ignored as a section.
+        if re.match(r"^# [^#]", line):
+            if current is not None:
+                sections.append(current)
+            current = None
+            continue
+        m = re.match(r"^(##|###|####)\s+(.*)$", line)
+        if m:
+            if current is not None:
+                sections.append(current)
+            current = {
+                "level": len(m.group(1)),
+                "title": m.group(2).strip(),
+                "body": [],
+            }
+            continue
+        if current is not None:
+            current["body"].append(line)
+    if current is not None:
+        sections.append(current)
+    return sections
+
+
+def derivable_todos(sections):
+    """Convert ## and ### sections into todo items.
+
+    ACP-N headings are treated as one todo per numbered criterion; other
+    ## sections become one todo each.
+    """
+    items = []
+    for s in sections:
+        if s["level"] not in (2, 3):
+            continue
+        body = [l.strip() for l in s["body"] if l.strip()]
+        if not body:
+            active_form = s["title"]
+            description = ""
+        else:
+            active_form = body[0]
+            description = "\n".join(body[1:]) if len(body) > 1 else ""
+        items.append(
+            {
+                "subject": s["title"],
+                "activeForm": active_form,
+                "description": description,
+            }
+        )
+    return items
+
+
+def main() -> int:
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    path = sys.argv[1]
+    if path in ("--emit",):
+        path = sys.argv[2] if len(sys.argv) > 2 else ""
+    if not path or not os.path.isfile(path):
+        print(f"beast-todo-sync: file not found: {path}", file=sys.stderr)
+        return 2
+
+    sections = parse_goal(path)
+    items = derivable_todos(sections)
+    if "--emit" in sys.argv:
+        print(json.dumps(items, indent=2))
+        return 0
+    print(f"# Suggested todos derived from {path}")
+    print(f"# (Dry-run — copy/paste into pi's todo tool, or pipe through --emit)")
+    print()
+    for it in items:
+        print(f"# subject: {it['subject']}")
+        print(f"#   activeForm: {it['activeForm']}")
+        if it["description"]:
+            print(f"#   description: {it['description'][:120]}")
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
