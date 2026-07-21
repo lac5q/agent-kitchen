@@ -65,8 +65,14 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 - 📋 **v8.18 NOC Metrics Rethink** — Phases 173-174 (planned 2026-07-20; NOCUX-01..05; K3 UX design + terra-high review complete; operator-first 7-row layout; v8.17 remains reserved for logging observability candidate pending in local uncommitted ROADMAP)
+- 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 
 ## Phases
+
+## Current v8.19 Runtime Bottleneck Evidence Summary — PLANNED
+
+- [ ] **Phase 175: Runtime Bottleneck Evidence** — PERF-EVID-01..04; run two reproducible operator and retrieval workloads with sanitized fixtures; validate report schemas, sample floors, workload hashes, latency attribution, and the keep/optimize/bounded-shadow-extraction gate. No Rust adoption or rewrite is in scope.
+
 
 ### Current v7.3 Agent Context Bus Operational Bootstrap Summary — COMPLETE
 
@@ -2806,3 +2812,22 @@ Operator host
 - Wiring EFFTEL producers or changing the observe capture pipeline.
 - New data stores, session capture, analytics baselines, or design-system replacement.
 - Dashboard drill-down redesign or a new workspace model.
+
+## v8.19 Runtime Bottleneck Evidence
+
+### Phase 175 — Runtime Bottleneck Evidence
+
+**Goal:** Produce reproducible operator-load, retrieval, and latency-attribution evidence before any bounded runtime extraction decision.
+**Depends on:** Phase 174
+**Requirements:** PERF-EVID-01, PERF-EVID-02, PERF-EVID-03, PERF-EVID-04
+**Success criteria:**
+1. Two accepted operator runs and two accepted retrieval runs use canonical files, shared fixture identity, and lane-specific workload and configuration hashes.
+2. JSON schemas and a fail-closed checker validate sample floors, percentiles, concurrency, token/dependency availability, raw artifacts, and attribution reconciliation.
+3. The checker selects keep, current-stack optimization, or bounded shadow extraction by the quantitative decision order in `175-01-PLAN.md`.
+4. No Rust implementation, production cutover, datastore change, or wholesale rewrite is authorized.
+
+### Progress Table (v8.19 Runtime Bottleneck Evidence)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 175. Runtime Bottleneck Evidence | 1/1 | Planned | — |

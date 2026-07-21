@@ -26,6 +26,13 @@
 
 ---
 
+## v8.19 Runtime Bottleneck Evidence
+
+- [ ] **PERF-EVID-01**: A reproducible operator-load run uses sanitized production-scale fixtures and current runtime configuration, then records p50/p95/p99 latency, throughput, error rate, concurrency, source revision, and host metadata in a machine-readable report.
+- [ ] **PERF-EVID-02**: Trace or profile evidence separates application CPU/heap, SQLite/queue contention, and remote Qdrant/Neo4j/Ollama/LLM time for representative operator paths; unknown time is labeled instead of inferred.
+- [ ] **PERF-EVID-03**: A representative retrieval run records recall-quality metrics together with p50/p95 latency, token spend, and dependency timing using the same declared dataset and workload definition.
+- [ ] **PERF-EVID-04**: A decision record selects keep, current-stack optimization, or a bounded shadow extraction. A Rust candidate is allowed only when repeated representative runs miss the accepted SLO and profiling attributes the limiting work to a bounded local compute/indexing path; no wholesale rewrite is authorized by this phase.
+
 ## v6.4 SkillForge Production SkillOpt Hardening
 
 - [x] **SKILLOPT-HARDEN-01**: `runHeldOutEval` and `runEvalGate` use a deterministic sandbox-backed behavioral scorer with a true current-skill baseline W for instruction and skill proposals.
@@ -381,6 +388,10 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
+| PERF-EVID-01 | 175 | Planned |
+| PERF-EVID-02 | 175 | Planned |
+| PERF-EVID-03 | 175 | Planned |
+| PERF-EVID-04 | 175 | Planned |
 | SKILLOPT-HARDEN-01 | 106 | Complete |
 | SKILLOPT-HARDEN-02 | 106 | Complete |
 | SKILLOPT-HARDEN-03 | 106 | Complete |
