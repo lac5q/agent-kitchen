@@ -22,8 +22,9 @@ function formatClock() {
 }
 
 function useClock() {
-  const [now, setNow] = useState(formatClock);
+  const [now, setNow] = useState("—");
   useEffect(() => {
+    setNow(formatClock());
     const id = window.setInterval(() => setNow(formatClock()), 30_000);
     return () => window.clearInterval(id);
   }, []);
@@ -144,7 +145,7 @@ export function TopBar({ services, onMenuClick }: TopBarProps) {
           </span>
         </span>
         <span className="hidden h-4 w-px sm:block" style={{ background: NOC.rule }} />
-        <span className="hidden font-mono sm:inline">{clock}</span>
+        <span className="hidden font-mono sm:inline" data-topbar-clock="true">{clock}</span>
         <span className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold" style={{ background: NOC.peach, color: NOC.terraDeep }}>
           LC
         </span>
