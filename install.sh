@@ -340,6 +340,21 @@ run_docker_install() {
     fi
     chmod 600 .env
     ok "Created .env from .env.example"
+
+    # Generate fresh per-install credentials so a reachable fresh install
+    # does NOT ship the well-known 'memroos-local-*' defaults. install.sh
+    # is the single source of truth; compose falls back to its env vars.
+    if ! grep -q '^MEMROOS_JWT_SECRET=' .env 2>/dev/null || grep -q '^MEMROOS_JWT_SECRET=$' .env 2>/dev/null; then
+      if command -v openssl >/dev/null 2>&1; then
+        gen_jwt="$(openssl rand -hex 32)"
+        gen_pw="$(openssl rand -hex 18)"
+        gen_neo="$(openssl rand -hex 12)"
+        sed -i "s|^MEMROOS_JWT_SECRET=.*|MEMROOS_JWT_SECRET=${gen_jwt}|" .env
+        sed -i "s|^MEMROOS_ADMIN_PASSWORD=.*|MEMROOS_ADMIN_PASSWORD=${gen_pw}|" .env
+        sed -i "s|^MEMROOS_NEO4J_AUTH=.*|MEMROOS_NEO4J_AUTH=neo4j/${gen_neo}|" .env
+        ok "Generated per-install credentials (JWT_SECRET, ADMIN_PASSWORD, NEO4J_AUTH)"
+      fi
+    fi
   fi
 
   if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
