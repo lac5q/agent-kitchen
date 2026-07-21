@@ -33,10 +33,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: fast
-    if: github.event_name == 'pull_request' && contains(github.head_ref, 'install-repro')
+    # Run on PRs touching install / compose / regression harness, plus
+    # any PR whose branch names start with install- or connmem- (Phase
+    # 176 / Phase 177 work). Also runs on push to main for hard merges.
+    if: |
+      (github.event_name == 'pull_request' && (
+        contains(github.head_ref, 'install-') ||
+        contains(github.head_ref, 'connmem')
+      )) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v4
-      - name: Run install-regression --full
+        with:
+          # Pull the explicit revision under test, not 'origin/main'.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      - name: Run install-regression --full (isolated TRANSCRIPT_DIR)
         env:
           TRANSCRIPT_DIR: ${{ github.workspace }}/install-regression-transcript
         run: |
