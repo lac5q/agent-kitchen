@@ -54,12 +54,17 @@ services:
       NEO4J_HTTP_URL: http://neo4j:7474
       NEO4J_DATABASE: neo4j
       NEO4J_USERNAME: neo4j
-      # NEO4J_PASSWORD must be set by install.sh (random 24-hex, same value
-      # as MEMROOS_NEO4J_AUTH below). The app talks to Neo4j via
-      # NEO4J_USERNAME/NEO4J_PASSWORD; the Neo4j container's own AUTH
-      # comes from MEMROOS_NEO4J_AUTH (composed in install.sh as
+      # NEO4J_PASSWORD is set by install.sh to a random 24-hex value
+      # (same value as MEMROOS_NEO4J_AUTH below). The app talks to Neo4j
+      # via NEO4J_USERNAME/NEO4J_PASSWORD; the Neo4j container's own
+      # AUTH comes from MEMROOS_NEO4J_AUTH (composed in install.sh as
       # 'neo4j/<same-password>') so app + DB stay in sync.
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set by install.sh}
+      # The literal fallback matches the same string the Neo4j container
+      # uses for MEMROOS_NEO4J_AUTH so 'docker compose ... down' (which
+      # runs BEFORE install writes .env on a clean CI checkout) still
+      # renders; install-regression --fast + --full assert the rotation
+      # via install.sh regenerated the value on first install.
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-memroos-local}
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
@@ -166,6 +171,12 @@ services:
       # one; install.sh writes MEMROOS_NEO4J_AUTH on first install so the
       # reachable stack rotates this on every fresh boot.
       NEO4J_AUTH: ${MEMROOS_NEO4J_AUTH:-neo4j/memroos-local}
+      # Also pass MEMROOS_NEO4J_AUTH so the healthcheck shell escape
+      # \${MEMROOS_NEO4J_AUTH#neo4j/} resolves at run-time. Without
+      # this, the healthcheck authenticates with an empty password and
+      # Neo4j stays unhealthy, which blocks the dependent memroos
+      # service from ever starting.
+      MEMROOS_NEO4J_AUTH: ${MEMROOS_NEO4J_AUTH:-neo4j/memroos-local}
     volumes:
       - neo4j-data:/data
       - neo4j-logs:/logs
