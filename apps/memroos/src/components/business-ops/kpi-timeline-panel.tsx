@@ -197,7 +197,6 @@ export function KpiTimelinePanel({ agentId, dateRange }: KpiTimelinePanelProps) 
     return runs.map(runToPoint).reverse();
   }, [data, agentId, dateRange]);
 
-  const historyEnv = historyEnvelope(data, error, isLoading, data?.runs as (EvalRunResult & { examples?: unknown[] })[] | undefined);
   const filteredRuns = useMemo<(EvalRunResult & { examples?: unknown[] })[] | undefined>(() => {
     if (!data?.runs) return undefined;
     let runs = data.runs as (EvalRunResult & { examples?: unknown[] })[];
@@ -213,6 +212,7 @@ export function KpiTimelinePanel({ agentId, dateRange }: KpiTimelinePanelProps) 
     return runs;
   }, [data, agentId, dateRange]);
 
+  const historyEnv = historyEnvelope(data, error, isLoading, filteredRuns);
   const l3Env = l3Envelope(filteredRuns);
   const wEnv = wEnvelope(filteredRuns);
 

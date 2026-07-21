@@ -79,6 +79,35 @@ describe("Business Ops controls", () => {
     expect(screen.getAllByText(/not wired/i).length).toBeGreaterThan(0);
   });
 
+  it("reports the same filtered run count as the timeline", () => {
+    apiMock.useEvalHistory.mockReturnValue({
+      data: {
+        runs: [
+          {
+            id: "recent", traceId: "trace-recent", agentId: "ops-agent", role: "default", compositeW: 0.84, trusted: true,
+            completedAt: "2026-07-17T16:26:39.788Z",
+            layers: { l1: { score: 0.9, scorers: [] }, l2: { score: 0.85, scorers: [] } },
+            scorerResults: [], judge: {}, driftGuard: { status: "passed" },
+          },
+          {
+            id: "old", traceId: "trace-old", agentId: "uat-test-agent", role: "default", compositeW: 0.72, trusted: true,
+            completedAt: "2026-05-17T08:09:40.697Z",
+            layers: { l1: { score: 0.7, scorers: [] }, l2: { score: 0.75, scorers: [] } },
+            scorerResults: [], judge: {}, driftGuard: { status: "passed" },
+          },
+        ],
+        timestamp: "2026-07-20T00:00:00.000Z",
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<KpiTimelinePanel dateRange={{ since: "2026-06-20T00:00:00.000Z" }} />);
+
+    expect(document.querySelector("[data-kpi-timeline-runs-status]")).toHaveTextContent("runs: live (1)");
+    expect(document.querySelector("[data-kpi-timeline-reason]")).toHaveTextContent("1 eval runs");
+  });
+
   it("KpiTimelinePanel renders L3 as N/A (unavailable) when scorers are marked unavailable", () => {
     apiMock.useAgents.mockReturnValue({ data: { agents: [] } });
     apiMock.useEvalConfig.mockReturnValue({ data: null });
