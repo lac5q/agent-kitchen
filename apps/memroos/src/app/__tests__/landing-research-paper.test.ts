@@ -119,8 +119,13 @@ describe("public landing research proof", () => {
     expect(landingSource).toContain("/landing/assets/shots/operator-floor.png");
     expect(landingSource).toContain("/landing/styles/memroos-refresh.css");
     expect(landingSource).toContain("/landing/scripts/ask-memroos.js");
-    expect(landingSource).toContain("https://github.com/lac5q/memroos");
+    expect(landingSource).toContain("https://github.com/lac5q/memroos#install");
+    expect(landingSource).toContain("Self-host with Docker");
+    expect(landingSource).toContain("Live recall gate");
+    expect(landingSource).toContain("8/8");
+    expect(landingSource).toContain("469 ms p95");
     expect(landingSource).toContain("https://calendar.google.com/calendar/appointments/schedules/");
+    expect(landingSource).toContain("Company-owned memory for AI agents");
     expect(landingSource).not.toContain("__bundler/manifest");
   });
 

@@ -9,16 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="https://memroos.com">memroos.com</a> ·
-  <a href="#launch-quickstart">Launch Quickstart</a> ·
-  <a href="#who-this-is-for">Who This Is For</a> ·
-  <a href="#quickstart">Quickstart</a> ·
-  <a href="#video-demo">Video Demo</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#what-memroos-is">What It Is</a> ·
   <a href="#competitive-benchmark">Benchmark</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#architecture">Architecture</a> ·
+  <a href="#full-setup">Full Setup</a> ·
   <a href="#security-model">Security</a> ·
-  <a href="#docs">Docs</a>
+  <a href="#docs">Docs</a> ·
+  <a href="https://memroos.com">memroos.com</a>
 </p>
 
 <p align="center">
@@ -33,7 +32,7 @@
 
 ---
 
-## Launch Quickstart
+## Install
 
 **Docker install (recommended):**
 
@@ -85,7 +84,7 @@ MemroOS is the company-owned memory and governance layer that makes agent harnes
 - **Prove:** connect agent output to the memories consumed, sources used, tools run, checks passed, and residual risks.
 - **Improve:** review, edit, approve, and promote repeated successful workflows into durable governed skills and playbooks.
 
-The repository began as `memroos.dev`; some internal package names, paths, and environment variables still use `memroos` for compatibility. The public product and positioning are now MemroOS.
+Package names, paths, and environment variables use the lowercase `memroos` identifier for compatibility with existing installs. The public product name is MemroOS.
 
 Related public agent-operations project: [Beastmode](https://github.com/lac5q/beastmode) is a MofA / Mixture of Agents orchestration framework for Hermes Agent, OpenClaw, Codex, Claude Code, Qwen, and MemroOS-style context continuity.
 
@@ -113,6 +112,10 @@ Live recall gate after beta hardening:
 - p95 recall latency: `469 ms`.
 - Tier failures: none.
 
+Build validation from the v7.0 client-ready security and architecture audit: `1079` app tests passed, alongside a passing production build, typecheck, and Python service/SDK/voice validation.
+
+The same three numbers — `84.06`, `8/8` at `469 ms` p95, and `1079` — are the proof points on [memroos.com](https://memroos.com). Methodology for the architecture behind them is in the [governed knowledge architecture paper](https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf).
+
 ## Video Demo
 
 <p align="center">
@@ -130,7 +133,7 @@ Live recall gate after beta hardening:
 </p>
 
 <p align="center">
-  <em>The public landing page now leads with the evolved MemroOS story: company-owned memory and governance for agent harnesses, backed by governed dispatch and proof that shows what context moved the work forward.</em>
+  <em>The public landing page: company-owned memory and governance for agent harnesses, backed by governed dispatch and proof that shows what context moved the work forward.</em>
 </p>
 
 <table>
@@ -366,7 +369,7 @@ sequenceDiagram
   MemroOS->>Memory: Retain what changed
 ```
 
-## Quickstart
+## Full Setup
 
 ### Prerequisites
 
@@ -667,6 +670,7 @@ memroos/
 - [REST API reference](docs/rest-api.md)
 - [Memory architecture](docs/memory-architecture.md)
 - [Agentic memory benchmark](docs/marketplace/agentic-memory-benchmark-2026-05-24.md)
+- [Governed knowledge architecture paper](https://memroos.com/research/memroos-governed-knowledge-architecture-paper.pdf)
 - [Claude Code integration](docs/integrations/claude-code.md)
 - [Google ADK integration](docs/integrations/google-adk.md)
 - [LangGraph integration](docs/integrations/langgraph.md)
