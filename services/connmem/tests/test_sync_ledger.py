@@ -11,6 +11,7 @@ import unittest
 
 from services.connmem.canonical_envelope import CanonicalRecord, to_canonical_record
 from services.connmem.sync_ledger import LEDGER_STATUSES, SyncLedger
+import sqlite3  # used by LedgerMigrationTests
 
 
 def _sample_record(source: str = "circleback", source_id: str = "m-001") -> CanonicalRecord:
@@ -243,6 +244,75 @@ class ProviderEnumTests(unittest.TestCase):
                 "dead_letter",
             },
         )
+
+
+class LedgerMigrationTests(unittest.TestCase):
+    """Pre-fix ledgers lack cursor_checkpoint/retry_count/last_error.
+    _init_schema() must add them via idempotent ALTER TABLE so reopening
+    an existing ledger doesn't fail with OperationalError. These tests
+    simulate the upgrade: write to an old-shape ledger file directly,
+    instantiate SyncLedger (which runs _init_schema), then verify the
+    rows are still readable AND the new columns exist."""
+
+    def _create_pre_fix_ledger(self, db_path: str) -> None:
+        """Manually create a v0 ledger with the original 12 columns."""
+        with sqlite3.connect(db_path) as conn:
+            conn.executescript("""
+                CREATE TABLE ledger (
+                    ledger_schema TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    workspace_id TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    object_type TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    deleted_at TEXT,
+                    status TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    tombstone INTEGER NOT NULL DEFAULT 0,
+                    dead_letter INTEGER NOT NULL DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (source, workspace_id, source_id)
+                );
+                INSERT INTO ledger VALUES (
+                    'v0', 'circleback', 'acme', 'm-old',
+                    'meeting', 'h' || hex(0), '2026-07-21T10:00:00Z',
+                    '2026-07-21T10:00:00Z', NULL,
+                    'captured_unrouted', '2026-07-21T10:00:00Z',
+                    0, 0, '{"legacy":true}'
+                );
+            """)
+
+    def test_init_schema_adds_missing_columns_to_pre_fix_ledger(self):
+        import sqlite3, tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
+            db = f.name
+        try:
+            self._create_pre_fix_ledger(db)
+            # Confirm pre-fix: cursor_checkpoint column is missing.
+            with sqlite3.connect(db) as c:
+                cols = [r[1] for r in c.execute("PRAGMA table_info(ledger)").fetchall()]
+            self.assertNotIn("cursor_checkpoint", cols)
+            # Now open via SyncLedger — _init_schema must add the columns.
+            ledger = SyncLedger(db)
+            with sqlite3.connect(db) as c:
+                cols = [r[1] for r in c.execute("PRAGMA table_info(ledger)").fetchall()]
+            self.assertIn("cursor_checkpoint", cols)
+            self.assertIn("retry_count", cols)
+            self.assertIn("last_error", cols)
+
+            # Pre-existing row is still readable AND now updatable via
+            # the new fields (cursor + retry + same-hash tombstone).
+            row = ledger.get("circleback", "acme", "m-old")
+            self.assertIsNotNone(row)
+            self.assertEqual(row["status"], "captured_unrouted")
+            n = ledger.record_retry("circleback", "acme", "m-old", "transient")
+            self.assertEqual(n, 1)
+            m = ledger.set_cursor("circleback", "v0-token-legacy")
+            self.assertGreaterEqual(m, 1)
+        finally:
+            os.unlink(db)
 
 
 if __name__ == "__main__":

@@ -118,19 +118,21 @@ full_run() {
   info "Install directory: $INSTALL_DIR (separate from REPO_ROOT)"
 
   # Seed INSTALL_DIR with a copy of REPO_ROOT. install.sh's clone_repo()
-  # only re-uses MEMROOS_DIR if .git exists; on a fresh CI runner the
-  # branch's MEMROOS_BRANCH env var would otherwise pull from network.
-  # We bypass network entirely by mirroring the checked-out tree so
-  # "test the checked-out revision" is what --full actually tests.
+  # only re-uses MEMROOS_DIR if .git exists; we KEEP .git in the copy
+  # so install.sh recognises this as an existing checkout and skips its
+  # network clone entirely. Otherwise it would `git clone --branch main`
+  # against a non-empty dir, which fails. Discard build caches and
+  # runtime artifacts — the seed is meant for a clean first-install.
   info "Step 0a: seed INSTALL_DIR from REPO_ROOT (avoids network clone)"
   # rsync is preferred but we fall back to cp -a.
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
+    rsync -a --exclude='node_modules' --exclude='__pycache__' \
       --exclude='coverage' --exclude='.next' --exclude='.venv' --exclude='.claude' \
+      --exclude='.evidence-push' --exclude='.bundles' \
       "$REPO_ROOT"/ "$INSTALL_DIR"/
   else
     cp -a "$REPO_ROOT"/. "$INSTALL_DIR"/
-    rm -rf "$INSTALL_DIR/.git" "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude"
+    rm -rf "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude"
   fi
   # Mark the seed so its provenance is part of the transcript.
   echo "install-regression --full seed" > "$INSTALL_DIR/.install-regression-seed"
@@ -252,8 +254,17 @@ PY
   if ! grep -qE "^NEO4J_PASSWORD=[a-f0-9]{16,}" "$install_env"; then
     fail "NEO4J_PASSWORD not rotated; app's Neo4j login would use the literal default"
   fi
+  # Hard assertion: NEO4J_PASSWORD and the password portion of
+  # MEMROOS_NEO4J_AUTH MUST match — the validator flagged that
+  # independent random-looking values could pass the regex while
+  # actually mismatching at runtime.
   if ! grep -qE "^MEMROOS_NEO4J_AUTH=neo4j/[a-f0-9]{16,}" "$install_env"; then
     fail "MEMROOS_NEO4J_AUTH not set as 'neo4j/<random>'; Neo4j container's AUTH will mismatch the app's NEO4J_PASSWORD"
+  fi
+  app_pw="$(grep -E '^NEO4J_PASSWORD=' "$install_env" | head -1 | cut -d= -f2-)"
+  neo_auth_pw="$(grep -E '^MEMROOS_NEO4J_AUTH=' "$install_env" | head -1 | cut -d= -f2- | sed 's|^neo4j/||')"
+  if [[ "$app_pw" != "$neo_auth_pw" ]]; then
+    fail "NEO4J_PASSWORD ($app_pw) does not match MEMROOS_NEO4J_AUTH password ($neo_auth_pw); app+DB split-brain"
   fi
 
   info "OK: full disposable-host regression passed. Transcript at $TRANSCRIPT_DIR"

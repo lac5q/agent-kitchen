@@ -33,8 +33,9 @@ It did NOT ship:
   `services/connmem/circleback_adapter.py`)
 - **CONNMEM-04** — Linear adapter implementation (multi-workspace
   GraphQL, capability discovery, signed webhook handling)
-- **CONNMEM-05..07** — Linear/Notion reconciliation, comprehensive
-  ledger integration with operator surfaces, recall tests
+- **CONNMEM-05..07** — Linear reconciliation + operator surfaces +
+  recall tests + comprehensive ledger integration (Circleback flows
+  feed the same surfaces; Notion is OUT of Phase 176 — see Phase 178)
 - **CONNMEM-08** — Authorization, privacy, retention, deletion
   (NOT the release gate — that's CONNMEM-10)
 - **CONNMEM-09** — Operator controls and observability
