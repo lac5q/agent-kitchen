@@ -37,8 +37,16 @@ wiring switch, and full Linear adapter implementation.
 - **CONNMEM-04** (Linear adapter, multi-workspace) — Session 2
 - **CONNMEM-05..07** (Linear webhooks, reconciliation, comprehensive ledger)
   — Session 2+
-- **CONNMEM-08** (release gate live reconciliation) — CONNMEM-LIVE-DEFER
+- **CONNMEM-03** (Circleback adapter extension to envelope + dedupe) —
+  Session 2
+- **CONNMEM-04** (Linear adapter implementation, multi-workspace) —
+  Session 2 against live SDL
+- **CONNMEM-05..09** (reconciliation, operator surfaces, recall tests) —
+  Session 2+
+- **CONNMEM-10** (release gate live reconciliation) — CONNMEM-LIVE-DEFER
 - **NOTION-01** (Phase 178 research) — sibling phase stub gates this
+  (Notion is OUT of Phase 176 scope; Notion keys are NOT a Phase 176
+  blocker per the sibling-phase pattern of `.planning/phases/178-.../SIBLING-STUB.md`)
 
 ## Verifier pass
 

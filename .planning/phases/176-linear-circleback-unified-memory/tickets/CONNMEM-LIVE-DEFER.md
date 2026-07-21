@@ -6,10 +6,16 @@
 **Created:** 2026-07-21 (beastmode consolidated session)
 **Owner:** Luis / whoever holds the live-backfill credentials
 **Status:** OPEN
+**Target:** CONNMEM-10 release gate (NOT CONNMEM-08 — the gate is the
+final sub-ID per the canonical plan; CONNMEM-08 is authorization /
+privacy / retention / deletion. The earlier draft of this ticket
+incorrectly named CONNMEM-08; corrected by this commit per validator
+feedback.)
 
 ## What this ticket defers
 
-Phase 176 release gate (CONNMEM-08) requires live provider-total
+Phase 176 release gate (**CONNMEM-10**, per the plan file
+`176-01-PLAN.md` line 129) requires live provider-total
 reconciliation: the operator must be able to say "entire company
 indexed" only when the ledger reconciles provider totals against
 fetched/unique/filtered/failed/tombstoned/indexed counts for every
@@ -28,17 +34,22 @@ It did NOT ship:
 - **CONNMEM-04** — Linear adapter implementation (multi-workspace
   GraphQL, capability discovery, signed webhook handling)
 - **CONNMEM-05..07** — Linear/Notion reconciliation, comprehensive
-  ledger integration with operator surfaces
-- **CONNMEM-08** — release-gate live reconciliation against provider
-  totals (the path `services/connmem/release_gate.py` does not exist
-  yet; runs once CONNMEM-04 ships)
+  ledger integration with operator surfaces, recall tests
+- **CONNMEM-08** — Authorization, privacy, retention, deletion
+  (NOT the release gate — that's CONNMEM-10)
+- **CONNMEM-09** — Operator controls and observability
+- **CONNMEM-10** — Tests, backfill proof, release gate (the gate this
+  ticket defers)
 
-The blockers are:
+The blockers for completing the above are:
 
 - **Circleback CLI not installed** on cordant-hermes-01 (`circleback:
   command not found`).
 - **No API keys** on cordant-hermes-01's `.env`: no `CIRCLEBACK_*`,
-  no `LINEAR_*`, no `NOTION_*`.
+  no `LINEAR_*`.
+  - (Notion's keys are NOT a Phase 176 blocker — Notion is the
+    Phase 178 sibling phase and is correctly fenced out of this
+    ticket.)
 - **Circleback tenant-visibility unproven** — the SDK CLI may only see
   meetings shared with the authenticated user, not the whole
   workspace. Until capability-discovery runs, the release gate is
@@ -46,18 +57,19 @@ The blockers are:
 - **Linear introspection requires a personal API key or OAuth token.**
   Vendored SDL is doc-derived; live introspection is queued for
   Session 2.
-- **Notion sibling phase** is scaffolded only (see
-  `.planning/phases/178-notion-provider-coverage/SIBLING-STUB.md`).
-- **Phase 176 first session deliverables already shipped** on
-  `install-repro-connmem-bridge`:
-  - canonical envelope + sync ledger schemas (tests: 26/26 GREEN)
-  - Linear doc-derived SDL stub at `references/linear/SDL-STUBS.graphql`
-  - doc-derived Linear fixture at
-    `scripts/connmem/fixtures/linear/__init__.py`
-  - File paths of the NOT-YET-BUILT adapter/release-gate modules:
-    - `services/connmem/circleback_adapter.py` (CONNMEM-03)
-    - `services/connmem/linear_adapter.py` (CONNMEM-04)
-    - `services/connmem/release_gate.py` (CONNMEM-08)
+
+Phase 176 first session deliverables already shipped on
+`install-repro-connmem-bridge`:
+- canonical envelope + sync ledger schemas (tests: 33/33 GREEN,
+  including 7 new tests for cursor/retry/tombstone booleans)
+- Linear doc-derived SDL stub at `references/linear/SDL-STUBS.graphql`
+- doc-derived Linear fixture at
+  `scripts/connmem/fixtures/linear/__init__.py`
+
+File paths of the NOT-YET-BUILT modules (Session 2 build targets):
+- `services/connmem/circleback_adapter.py` — CONNMEM-03
+- `services/connmem/linear_adapter.py` — CONNMEM-04
+- `services/connmem/release_gate.py` — CONNMEM-10
 
 The doc-derived fixture has known limitations flagged by the verifier
 that must be reconciled when CONNMEM-04 lands:
@@ -79,16 +91,16 @@ items signed off by the operator as accepted residual.
    - `CIRCLEBACK_API_TOKEN` or install the Circleback CLI auth on
      cordant-hermes-01.
    - `LINEAR_API_KEY` (personal) OR `LINEAR_OAUTH_*` (company-managed).
-   - `NOTION_API_KEY` for Notion ingestion (separate sibling phase).
 2. Run `services/connmem/circleback_adapter.py ingest --since 2024-01-01`
    (Session 3).
 3. Run `services/connmem/linear_adapter.py ingest --orgid <linear_org>`
    (Session 3, after the Linear adapter is built against live SDL).
 4. For each provider, capture a capability manifest and reconcile the
    ledger.
-5. Re-run `services/connmem/release_gate.py --strict` and verify "entire
-   company indexed" transitions from `unknown-provider-capability` to
-   `green`.
+5. Re-run `services/connmem/release_gate.py --strict` and verify the
+   CONNMEM-10 release gate transitions from `unknown-provider-capability`
+   to `green`. (The operator UI must say "entire company indexed" only
+   when this is green per the CONNMEM-10 acceptance criteria.)
 
 ### Path (b) — accepted-residual
 
@@ -101,7 +113,7 @@ items signed off by the operator as accepted residual.
 
 ## Sub-IDs dependent on this ticket
 
-- **CONNMEM-08 release gate** — blocked until both paths close.
+- **CONNMEM-10 release gate** — blocked until both paths close.
 - **Phase 176 final closure** (currently `planned — highest priority`)
   — moves to `partial closure` or `complete` based on chosen path.
 
@@ -112,3 +124,9 @@ are deployable and testable without secrets. The adapter code paths are
 correctly stubbed where live keys would go. The release-gate live
 reconciliation is genuinely the last step of Phase 176 and remains
 gated by an env constraint (no keys), not by a code defect.
+
+## Cross-references
+
+- `.planning/phases/176-linear-circleback-unified-memory/176-01-PLAN.md` — canonical ID map (CONNMEM-01..10)
+- `.planning/phases/176-linear-circleback-unified-memory/176-02-FIRST-SESSION.md` — first-session companion plan
+- `.planning/phases/178-notion-provider-coverage/SIBLING-STUB.md` — sibling phase, NOTION-01 research is the gate for any Notion work
