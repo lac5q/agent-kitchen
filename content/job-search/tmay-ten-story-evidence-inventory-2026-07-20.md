@@ -28,7 +28,7 @@ The target domains are applied AI, agentic AI, LLM products, growth, PLG, AI pla
 
 | Sort | Company | Hook | Scope | Impact | Evidence status |
 |---:|---|---|---:|---:|---|
-| 1 | Intuit | Luis inherited a strategically important Self-Employed segment with stagnant growth and a disbanded team. He rebuilt the team, customer promise, and multi-year portfolio strategy. Reimagined Expenses was the first major workstream; the broader transformation expanded into ML personalization, removing irrelevant work, QuickFile and partner imports, Schedule C simplification, expert help, partner distribution, and later onboarding and monetization. | 5 | 5 | Flagship umbrella; GMIR roadmap and goal archive support the portfolio structure |
+| 1 | Intuit | Luis inherited a strategically important Self-Employed segment with stagnant growth and a disbanded team. He rebuilt the team, customer promise, and multi-year portfolio strategy. Reimagined Expenses was the first major workstream; the broader transformation expanded into ML personalization, removing irrelevant work, QuickFile and partner imports, Schedule C simplification, expert help, and partner distribution. Its foundations were later reused by separate programs such as SOM. | 5 | 5 | Flagship umbrella; GMIR roadmap and goal archive support the portfolio structure |
 | 2 | Intuit SOM | Luis challenged the assumption that customers had to select a product before TurboTax understood their needs. He led Divergent Start/Checkout and end-of-flow pricing, reporting 5% higher conversion, 22% more starts, and 6% less overcharging. | 5 | 5 | Strong scope; clarify metric units |
 | 3 | SketchPop / Epilogue | Luis acquired a dated, highly manual e-commerce business and took full product and P&L accountability. He rebuilt three front-end experiences touching about 90% of revenue, modernized the stack and measurement, and operationalized marketing, service, and fulfillment. | 5 | 5 | Strong firsthand transformation; clarify 90% denominator |
 | 4 | Tile | Luis created a hardware-as-a-service renewal model that charged customers approximately $15-$25 per year and provided a 50% replacement-hardware discount. Tile grew from roughly $10M to $100M during his tenure, and Luis reports that the program generated about 30% of revenue. | 5 | 5 | Strong firsthand outcome; company growth is context, not sole attribution |
@@ -71,10 +71,10 @@ Tile is the fourth story and eBay is fifth. For subscription, marketplace, payme
 
 ## Story architecture
 
-- **Reimagined Self-Employed umbrella:** Reimagined Expenses; ML industry and expense personalization; Skip Expenses; QuickFile, 1099-K, and Schedule C; Amazon and Uber imports; Specialized Experts and EPP; word-of-mouth learning; later onboarding and monetization.
+- **Reimagined Self-Employed umbrella:** Reimagined Expenses; ML industry and expense personalization; Skip Expenses; QuickFile, 1099-K, and Schedule C; Amazon and Uber imports; Specialized Experts and EPP; word-of-mouth learning.
 - **SketchPop umbrella:** customer-experience rebuilds; technology modernization; analytics and marketing instrumentation; AI-supported service; artist fulfillment and the operating model.
 - **eBay umbrella:** checkout conversion; unpaid-item prevention and recovery; one-click closure; seller fee credits; marketplace defects and seller economics.
-- **SOM umbrella:** Divergent Start; delayed product assignment; rightsizing; end-of-flow pricing; expert entitlement; cross-device completion and monetization.
+- **SOM umbrella:** A separate top-level story that reused some Self-Employed foundations: Divergent Start; delayed product assignment; rightsizing; end-of-flow pricing; expert entitlement; cross-device completion and monetization.
 
 ## Working-doc status
 
