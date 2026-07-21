@@ -81,6 +81,11 @@ class SyncLedger:
                     deleted_at TEXT,
                     status TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
+                    -- per-provider sync cursor (e.g., Linear updatedAt, Circleback page cursor)
+                    cursor_checkpoint TEXT,
+                    -- retry accounting for the ingest path
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
                     tombstone INTEGER NOT NULL DEFAULT 0,
                     dead_letter INTEGER NOT NULL DEFAULT 0,
                     payload_json TEXT NOT NULL,
@@ -89,6 +94,8 @@ class SyncLedger:
                 CREATE INDEX IF NOT EXISTS ledger_status_idx ON ledger(status);
                 CREATE INDEX IF NOT EXISTS ledger_provider_idx ON ledger(source);
                 CREATE INDEX IF NOT EXISTS ledger_hash_idx ON ledger(content_hash);
+                CREATE INDEX IF NOT EXISTS ledger_cursor_idx ON ledger(source, cursor_checkpoint);
+                CREATE INDEX IF NOT EXISTS ledger_dead_letter_idx ON ledger(dead_letter);
             """)
 
     def upsert(self, record: CanonicalRecord, *, status: str = "captured_unrouted") -> bool:
@@ -97,10 +104,17 @@ class SyncLedger:
         Returns:
             True if a NEW row was inserted
             False if the row existed and was updated (idempotent re-ingest)
+
+        Per the connection-ledger contract: status='tombstoned' sets the
+        tombstone flag to 1; status='dead_letter' sets the dead_letter
+        flag to 1. Other statuses clear those flags on update. This keeps
+        the six-state enum and the boolean columns consistent.
         """
         if status not in LEDGER_STATUSES:
             raise ValueError(f"invalid status {status!r}; allowed: {LEDGER_STATUSES}")
         ts = self._utc_now()
+        tombstone_flag = 1 if status == "tombstoned" else 0
+        dead_letter_flag = 1 if status == "dead_letter" else 0
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 "SELECT content_hash FROM ledger WHERE (source, workspace_id, source_id) = (?, ?, ?)",
@@ -113,15 +127,17 @@ class SyncLedger:
                     INSERT INTO ledger (
                         ledger_schema, source, workspace_id, source_id, object_type,
                         content_hash, captured_at, updated_at, deleted_at,
-                        status, last_seen_at, tombstone, dead_letter, payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+                        status, last_seen_at,
+                        tombstone, dead_letter, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         LEDGER_SCHEMA_VERSION,
                         record.source, record.workspace_id, record.source_id,
                         record.object_type, record.content_hash,
                         record.captured_at, record.updated_at, record.deleted_at,
-                        status, ts, json.dumps(record.to_dict()),
+                        status, ts,
+                        tombstone_flag, dead_letter_flag, json.dumps(record.to_dict()),
                     ),
                 )
                 conn.commit()
@@ -132,12 +148,14 @@ class SyncLedger:
                     """
                     UPDATE ledger
                        SET content_hash = ?, updated_at = ?, deleted_at = ?,
-                           status = ?, last_seen_at = ?, payload_json = ?
+                           status = ?, last_seen_at = ?,
+                           tombstone = ?, dead_letter = ?, payload_json = ?
                      WHERE (source, workspace_id, source_id) = (?, ?, ?)
                     """,
                     (
                         record.content_hash, record.updated_at, record.deleted_at,
-                        status, ts, json.dumps(record.to_dict()),
+                        status, ts,
+                        tombstone_flag, dead_letter_flag, json.dumps(record.to_dict()),
                         record.source, record.workspace_id, record.source_id,
                     ),
                 )
@@ -148,6 +166,50 @@ class SyncLedger:
                 )
             conn.commit()
             return False
+
+    def set_cursor(self, source: str, cursor_checkpoint: str) -> int:
+        """Stamp the per-provider sync cursor.
+
+        Cursor semantics are provider-defined (Linear: updatedAt ISO 8601;
+        Circleback: opaque paginated cursor string). The ledger does not
+        interpret; it just persists. Returns the number of rows updated
+        (typically 1 after the first ingest, 0 before).
+        """
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE ledger SET cursor_checkpoint = ? WHERE source = ?",
+                (cursor_checkpoint, source),
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def read_cursor(self, source: str) -> Optional[str]:
+        """Return the last cursor for a provider, or None if never set."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT cursor_checkpoint FROM ledger WHERE source = ? "
+                "AND cursor_checkpoint IS NOT NULL ORDER BY last_seen_at DESC LIMIT 1",
+                (source,),
+            )
+            row = cur.fetchone()
+            return row[0] if row is not None else None
+
+    def record_retry(self, source: str, workspace_id: str, source_id: str, last_error: str) -> int:
+        """Increment retry_count and record last_error. Returns the new retry_count."""
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE ledger
+                   SET retry_count = retry_count + 1,
+                       last_error = ?
+                 WHERE (source, workspace_id, source_id) = (?, ?, ?)
+                RETURNING retry_count
+                """,
+                (last_error, source, workspace_id, source_id),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return row[0] if row is not None else 0
 
     def get(self, source: str, workspace_id: str, source_id: str) -> Optional[dict]:
         with self._connect() as conn:
