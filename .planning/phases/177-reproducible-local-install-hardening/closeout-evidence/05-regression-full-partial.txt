@@ -144,3 +144,25 @@ destructive-path execution is deferred to CI and remains the responsibility
 of the branch-targeted full-disposable-host job. This session did not
 delete volumes, which is the right call given the gate (no --v on a live
 stack that holds the only working configuration).
+
+==INSTREP-05-DEFER (Round 5 -> 6 closure)==
+Fable Round 5 caught that the destructive CI path was delegated but
+unevidenced. A formal acceptance-deferral ticket has been filed at:
+  .planning/phases/177-reproducible-local-install-hardening/tickets/INSTALL-REPRO-05-CI-DRIVE.md
+
+Roadmap entry commit 7013ec32 has been amended in commit ca10d2eb
+to mark v8.21 as PARTIAL CLOSURE and link the ticket. The plan
+file 177-01-PLAN.md closeout gate row 2 (full --fast/--full) reflects
+the PARTIAL sub-05 status with rationale.
+
+Closure path for sub-05:
+  (a) attach a passing CI full-disposable-host run artifact OR
+  (b) sign off on the INSTREP-05-DEFER deferral as final.
+
+==RTK/QMD 'degraded' status confirmation==
+Source citations in apps/memroos/src/app/api/health/route.ts confirm
+RTK and QMD are 'optional on cloud operators; never report as down'.
+Their 'degraded' status is by-design — neither tool is installed on
+cordant-hermes-01 (RTK is a local-Mac CLI; QMD is an optional QMD binary).
+This predates dc53a951 (the /api/health code did not change in the fix)
+and is irrelevant to sub-03's truthful health evidence.
