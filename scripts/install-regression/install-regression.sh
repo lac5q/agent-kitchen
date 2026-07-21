@@ -120,25 +120,52 @@ full_run() {
   # Seed INSTALL_DIR with a copy of REPO_ROOT. install.sh's clone_repo()
   # only re-uses MEMROOS_DIR if .git exists; we KEEP .git in the copy
   # so install.sh recognises this as an existing checkout and skips its
-  # network clone entirely. Otherwise it would `git clone --branch main`
-  # against a non-empty dir, which fails. Discard build caches and
-  # runtime artifacts — the seed is meant for a clean first-install.
+  # network clone entirely. Discard build caches and runtime artifacts
+  # — the seed is meant for a clean first-install.
   # Validator also flagged: rsync must use --delete so a stale TRANSCRIPT_DIR
-  # doesn't retain files from a prior run; cp -a equivalent is `rm -rf`
-  # before seeding.
+  # doesn't retain files from a prior run. cp -a equivalent is `rm -rf`
+  # before seeding + stripping the same set.
   info "Step 0a: seed INSTALL_DIR from REPO_ROOT (avoids network clone)"
   rm -rf "$INSTALL_DIR"
   mkdir -p "$INSTALL_DIR"
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --delete --exclude='node_modules' --exclude='__pycache__' \
       --exclude='coverage' --exclude='.next' --exclude='.venv' --exclude='.claude' \
-      --exclude='.evidence-push' --exclude='.bundles' --exclude='.git/objects/pack' \
+      --exclude='.evidence-push' --exclude='.bundles' \
       "$REPO_ROOT"/ "$INSTALL_DIR"/
+    # Validator round-4 flagged: --exclude=.git/objects/pack breaks the
+    # seed's `git fsck` (refs point into missing packs). Use git's own
+    # machinery instead: `git clone --shared --no-checkout` keeps .git
+    # intact and fsck-clean, then rsync the working tree over it.
+    if [[ -d "$REPO_ROOT/.git" ]]; then
+      info "Step 0b: replace seed .git with a shared local clone (fsck-clean)"
+      rm -rf "$INSTALL_DIR/.git"
+      (cd "$INSTALL_DIR" && git clone --shared --no-checkout --quiet "$REPO_ROOT" .git-tmp && mv .git-tmp .git && git checkout --quiet HEAD)
+    fi
   else
+    # cp -a fallback: strip the same heavy caches rsync would have
+    # excluded, so the install exercise starts from a clean checkout.
     cp -a "$REPO_ROOT"/. "$INSTALL_DIR"/
-    rm -rf "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude" \
-           "$INSTALL_DIR/.evidence-push" "$INSTALL_DIR/.bundles"
+    # Hard-strip the same set rsync --exclude covers, plus caches that
+    # install.sh would never touch but could mislead build/runtime.
+    find "$INSTALL_DIR" \
+      \( -name node_modules -o -name __pycache__ -o -name .venv \
+         -o -type d -name coverage -o -type d -name .next \
+         -o -type d -name .claude -o -type d -name .evidence-push \
+         -o -type d -name .bundles \) -prune -exec rm -rf {} +
+    # Strip pyc files anywhere they exist, including outside __pycache__
+    find "$INSTALL_DIR" -name '*.pyc' -delete
+    find "$INSTALL_DIR" -name '*.pyo' -delete
+    if [[ -d "$REPO_ROOT/.git" ]]; then
+      info "Step 0b: cp -a fallback — also copying .git fresh"
+      rm -rf "$INSTALL_DIR/.git"
+      cp -a "$REPO_ROOT/.git" "$INSTALL_DIR/.git"
+    fi
   fi
+  # Mark the seed's provenance for the transcript audit.
+  echo "install-regression --full seed" > "$INSTALL_DIR/.install-regression-seed"
+  echo "REPO_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)" >> "$INSTALL_DIR/.install-regression-seed"
+  echo "TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$INSTALL_DIR/.install-regression-seed"
   # Mark the seed so its provenance is part of the transcript.
   echo "install-regression --full seed" > "$INSTALL_DIR/.install-regression-seed"
   echo "REPO_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)" >> "$INSTALL_DIR/.install-regression-seed"
