@@ -7,7 +7,7 @@
 # 1. Detects OS and prerequisites
 # 2. Installs missing dependencies (with user approval)
 # 3. Clones MemroOS
-# 4. Offers demo mode or full setup
+# 4. Offers local (default, full self-hosted stack), demo, or full setup
 # 5. Shows status on completion
 
 set -euo pipefail
@@ -24,7 +24,10 @@ MEMROOS_REPO="https://github.com/lac5q/memroos.git"
 MEMROOS_DIR="${MEMROOS_INSTALL_DIR:-$HOME/memroos}"
 MEMROOS_BRANCH="${MEMROOS_BRANCH:-main}"
 INSTALL_MODE="${MEMROOS_INSTALL_MODE:-}"
-DOCKER_COMPOSE_FILE="${MEMROOS_COMPOSE_FILE:-docker-compose.demo.yml}"
+# Default local install = the fully self-hosted stack (bundled Ollama + embedded
+# Chroma + local Neo4j graph memory). docker-compose.demo.yml is the lighter,
+# no-graph variant; docker-compose.yml is the production/managed-services stack.
+DOCKER_COMPOSE_FILE="${MEMROOS_COMPOSE_FILE:-docker-compose.local.yml}"
 
 log() { echo -e "${BLUE}➜ $1${NC}"; }
 ok() { echo -e "${GREEN}✓ $1${NC}"; }
@@ -58,14 +61,15 @@ MemroOS Installer
 
 Usage:
   install.sh                 Interactive install
-  install.sh --docker        Docker-only install (requires Git, Docker, Compose)
-  install.sh --demo          Native demo setup
-  install.sh --full          Native full setup wizard
+  install.sh --local         Full local self-hosted stack, incl. graph memory (default, Docker)
+  install.sh --docker        Docker install using MEMROOS_COMPOSE_FILE (defaults to local)
+  install.sh --demo          Lightweight local stack, no graph memory (native)
+  install.sh --full          Native full setup wizard (managed Qdrant/Neo4j)
 
 Environment:
   MEMROOS_INSTALL_DIR        Install directory (default: $HOME/memroos)
   MEMROOS_BRANCH             Git branch to clone (default: main)
-  MEMROOS_COMPOSE_FILE       Compose file for --docker (default: docker-compose.demo.yml)
+  MEMROOS_COMPOSE_FILE       Compose file for --docker (default: docker-compose.local.yml)
   MEMROOS_UPDATE=1           Pull latest if already cloned
 EOF
 }
@@ -73,6 +77,11 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --local)
+        # Fully local, self-hosted Docker stack (default): includes graph memory.
+        INSTALL_MODE="docker"
+        DOCKER_COMPOSE_FILE="docker-compose.local.yml"
+        ;;
       --docker|--container)
         INSTALL_MODE="docker"
         ;;
@@ -344,26 +353,38 @@ select_mode() {
   echo "║  How do you want to run MemroOS?                     ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "  1. 🎯 Demo Mode (recommended for first-time users)"
-  echo "     Local memory only. No cloud accounts needed."
+  echo "  1. 🏠 Local (recommended) — full self-hosted stack (Docker)"
+  echo "     Everything on this host: vector + graph memory, bundled Ollama."
+  echo "     No cloud accounts needed."
   echo ""
-  echo "  2. 🔧 Full Setup (production)"
+  echo "  2. 🎯 Demo — lightweight local, no graph memory (native)"
+  echo "     Fastest to boot; skips Neo4j graph memory."
+  echo ""
+  echo "  3. 🔧 Full Setup (production)"
   echo "     Requires Qdrant Cloud account and API keys."
   echo ""
 
   if [[ -n "${MEMROOS_MODE:-}" ]]; then
     choice="$MEMROOS_MODE"
   else
-    read -rp "Choose [1-2]: " choice
+    read -rp "Choose [1-3] (default 1): " choice
   fi
+  choice="${choice:-1}"
 
   case "$choice" in
     1)
       echo ""
+      ok "Local self-hosted stack selected — no configuration needed"
+      DOCKER_COMPOSE_FILE="docker-compose.local.yml"
+      INSTALL_MODE="docker"
+      run_docker_install
+      ;;
+    2)
+      echo ""
       ok "Demo mode selected — no configuration needed"
       "$MEMROOS_DIR/setup.sh" --demo
       ;;
-    2)
+    3)
       echo ""
       log "Starting interactive setup..."
       "$MEMROOS_DIR/setup.sh" --wizard

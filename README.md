@@ -38,10 +38,10 @@
 **Docker install (recommended):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --local
 ```
 
-This requires only Git, Docker, and Docker Compose. It clones MemroOS, builds the app container, starts the local demo stack, and keeps app data in Docker volumes.
+This requires only Git, Docker, and Docker Compose. It clones MemroOS, builds the app container, and starts the **full local self-hosted stack** — vector memory (mem0 + Chroma), graph memory (local Neo4j), orchestration, and a bundled Ollama — keeping app data in Docker volumes with no cloud accounts. For the lighter variant without graph memory, pass `--docker` with `MEMROOS_COMPOSE_FILE=docker-compose.demo.yml`.
 
 **Native development install:**
 
@@ -59,8 +59,9 @@ npm install
 ```bash
 git clone https://github.com/lac5q/memroos.git
 cd memroos
-docker compose -f docker-compose.demo.yml up -d --build
-docker compose -f docker-compose.demo.yml ps
+docker compose -f docker-compose.local.yml up -d --build   # full local stack (graph memory)
+docker compose -f docker-compose.local.yml ps
+# lighter, no graph memory: swap in docker-compose.demo.yml
 ```
 
 The demo profile is self-contained: it starts MemRoOS, mem0, orchestration, and
@@ -376,10 +377,10 @@ sequenceDiagram
 - Optional: Qdrant Cloud URL and API key for vector memory
 - Optional: Tailscale for multi-machine private networking
 
-For a Docker-first install:
+For a Docker-first install (full local self-hosted stack, incl. graph memory):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --docker
+curl -fsSL https://raw.githubusercontent.com/lac5q/memroos/main/install.sh | bash -s -- --local
 ```
 
 For native development:
