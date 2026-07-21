@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.10
-milestone_name: Governed Ontology Foundation
+milestone: v8.21
+milestone_name: Reproducible Local Install Hardening (partial closure)
 status: active
-stopped_at: 2026-07-16 Hermes dual-mode observe memory provider (ENTOPS-07 opt-in) — MEMORY.md stays primary. v8.12 MCP Memory Gate Resilience COMPLETE (2026-07-15).
-last_updated: "2026-07-18T22:30:00Z"
+stopped_at:  (continued in v8.21 partial closure 2026-07-21 — see ROADMAP and Phase 177 plan)
+last_updated: "2026-07-21T20:59:00Z"
 progress:
   total_phases: 115
   completed_phases: 84
@@ -424,3 +424,12 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 | future_spike | ADK/A2A cross-language contract-compliance demo — compare Google's Python ADK plus Go deterministic-validator A2A fixture against MemRoOS registry/dispatch/evidence/NOC surfaces; no core ADK/Gemini dependency, app copy, runtime replacement, or compliance-vertical claim without Luis approval | Completed in Phase 119; adoption deferred |
 | future_spike | Qdrant 1.18.x Cloud upgrade readiness — verify latest patch, mem0 compatibility, collection schemas, snapshot/rollback, canary write/search, recall/latency non-regression, audit tracing, metrics, and strict-mode guardrails; no local Qdrant, backend swap, TurboQuant/named-vector adoption, or production upgrade without Luis approval | Completed in Phase 119; adoption deferred |
 | future_spike | Hyper-Extract structured-memory extraction spike — compare typed graph/hypergraph/temporal/spatial extraction on non-sensitive or sanitized documents against Markdown/QMD/mem0 ingestion; no dependency, private-doc upload, production ingestion, default extraction, or storage-layer change without Luis approval | Completed in Phase 119; adoption deferred |
+
+## 2026-07-21 v8.21 Partial Closure — Phase 177 Reproducible Local Install Hardening
+
+- INSTALL-REPRO-01..04 + 06 GREEN (commit inventory at .planning/phases/177-.../closeout-evidence/)
+- INSTALL-REPRO-05 PARTIAL — destructive CI run deferred per ticket INSTREP-05-DEFER
+- /api/health truthful on cordant-hermes-01 for mem0, Knowledge Index, Graph Memory, Agents, APO (was Agents='down' before dc53a951)
+- install-regression.sh --fast: 9/9 structural checks pass
+- 17 commits since main origin/main via merge 5d10b959 + closeout evidence + roadmap correction ca10d2eb
+- Fable (claude-fable-5) verifier-first rounds 1..6 closed at PASS (close)
