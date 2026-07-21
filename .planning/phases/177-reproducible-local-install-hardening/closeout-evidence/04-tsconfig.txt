@@ -1,0 +1,49 @@
+==03: tsconfig.json full content==
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules", "**/vitest*.config.ts"]
+}
+
+==04: typecheck sanity (apps/memroos)===
+
+==Production build success marker==
+==tsconfig exclude (narrow)===
+  "exclude": ["node_modules", "**/vitest*.config.ts"]
+
+==INJECTION TEST (proof next.config.ts is typechecked)==
+next.config.ts(55,14): error TS2322: Type 'string' is not assignable to type 'number'.
+
+==INJECTION TEST (proof playwright.config.ts is typechecked)==
+playwright.config.ts(20,14): error TS2322: Type 'string' is not assignable to type 'number'.
+
+==INJECTION TEST (proof vitest.slow.config.ts is EXCLUDED — no error captured)==

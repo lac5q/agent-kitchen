@@ -1,0 +1,16 @@
+==05: install-regression.sh --fast==
+[34m•[0m Run mode: fast (structural)
+[32m✓[0m install.sh --local flag and docker-compose.local.yml default
+[32m✓[0m docker-compose.local.yml present at repo root
+[32m✓[0m README + install-profiles.md advertise local stack
+[32m✓[0m .env.example runtime paths use ${HOME} placeholders, not literal sample macOS paths
+[32m✓[0m tsconfig.json excludes only **/vitest*.config.ts (narrowest fix)
+[32m✓[0m compose passes AGENT_CONFIGS_PATH + APO_PROPOSALS_PATH to the app container
+[32m✓[0m install.sh expands ${HOME} when generating .env
+[32m✓[0m install.sh sets .env to mode 600
+[32m✓[0m all five core services present in compose
+[34m•[0m OK: all structural checks passed.
+
+==05: install-regression.yml YAML lint==
+jobs: ['fast', 'full-disposable-host']
+triggers: ['pull_request', 'push']

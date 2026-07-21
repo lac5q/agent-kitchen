@@ -1,0 +1,5 @@
+==06: raw npm audit --omit=dev JSON==
+-rw-rw-r-- 1 lac5q lac5q 19045 Jul 21 13:34 /tmp/npm-audit-current.json
+
+==06: severity counts==
+totals: {'info': 0, 'low': 2, 'moderate': 6, 'high': 4, 'critical': 0, 'total': 12}

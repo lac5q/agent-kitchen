@@ -1,0 +1,13 @@
+==01: grep -n /Users/yourname in .env.example (should be 0 hits)==
+(no hits)
+
+==Diffstat vs 7de1b5ba==
+ .env.example                                       |  39 +++--
+ .github/workflows/install-regression.yml           |  49 ++++++
+ .../177-01-PLAN.md                                 | 106 ++++++++++++
+ .../npm-audit-lockfile.sha1                        |   1 +
+ .../npm-audit-triage.md                            |  49 ++++++
+ docker-compose.local.yml                           | 186 +++++++++++++++++++++
+ install.sh                                         |  70 ++++++--
+ scripts/install-regression/install-regression.sh   | 169 +++++++++++++++++++
+ 8 files changed, 645 insertions(+), 24 deletions(-)

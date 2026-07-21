@@ -1,0 +1,19 @@
+==03: AGENT_CONFIGS_PATH/APO_PROPOSALS_PATH compose wiring==
+51:      KNOWLEDGE_BASE_PATH: /knowledge
+52:      # Agents: AGENT_CONFIGS_PATH inside the container.
+54:      #   Independent layout: set MEMROOS_AGENT_CONFIGS_CONTAINER_PATH=/agent-configs
+55:      #     in .env AND set AGENT_CONFIGS_HOST_PATH to a host directory; the
+57:      # The legacy .env key AGENT_CONFIGS_PATH (host-side) is still tolerated
+59:      AGENT_CONFIGS_PATH: ${MEMROOS_AGENT_CONFIGS_CONTAINER_PATH:-/knowledge/agent-configs}
+60:      APO_PROPOSALS_PATH: /root/.openclaw/skills/proposals
+68:      - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+69:      # Independent Agents mount (only active when AGENT_CONFIGS_PATH is set
+73:      - ${AGENT_CONFIGS_HOST_PATH:-/dev/null}:/agent-configs:ro
+74:      - ${APO_PROPOSALS_PATH:-./data/apo-proposals}:/root/.openclaw/skills/proposals:ro
+
+==03: in-container printenv at cordant-hermes-01==
+/knowledge/agent-configs
+/root/.openclaw/skills/proposals
+/knowledge
+==03: /api/health summary at cordant-hermes-01==
+{'RTK': 'degraded', 'mem0': 'up', 'QMD': 'degraded', 'Knowledge Index': 'up', 'Graph Memory': 'up', 'Agents': 'up', 'APO': 'up'}
