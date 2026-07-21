@@ -66,10 +66,32 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 - 📋 **v8.18 NOC Metrics Rethink** — Phases 173-174 (planned 2026-07-20; NOCUX-01..05; K3 UX design + terra-high review complete; operator-first 7-row layout; v8.17 remains reserved for logging observability candidate pending in local uncommitted ROADMAP)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
+- 📋 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; continuously ingest all authorized Linear workspace information plus all accessible Circleback meetings/memories into permission-aware, provenance-backed unified recall)
+- 📋 **v8.21 Reproducible Local Install Hardening** — Phase 177 (added 2026-07-21 from `cordant-hermes-01` clean-reinstall evidence; INSTALL-REPRO-01..06; permanently upstream the local profile, remove host-specific path drift, tighten production build scope, add clean-install regression coverage, and triage production dependency advisories; scheduled after Phase 176)
 
 ## Phases
 
-## Current v8.19 Runtime Bottleneck Evidence Summary — PLANNED
+## Current v8.20 Connected Work Memory Summary — PLANNED — HIGHEST PRIORITY
+
+- [ ] **Phase 176: Linear + Circleback Unified Memory Ingestion** — CONNMEM-01..10; implement least-privilege provider authorization, an explicit company-boundary inventory, a canonical source envelope and sync ledger, complete historical and incremental Circleback ingestion, a multi-workspace Linear adapter, signed webhooks plus reconciliation, permission-aware QMD/mem0/graph projections, unified cross-source recall, deletion/retention propagation, operator observability, and provider-total-to-index proof.
+- [ ] **Phase 176 company-completeness gate:** “entire company” means every object exposed to company-managed authorized identities across every approved Linear organization/workspace and Circleback team/account/user source. Linear must include explicitly authorized private teams and archived resources—not only `allPublicTeams`. Circleback tenant-wide/admin visibility and any distinct memories/insights endpoint are currently unproven and must be verified through installed-interface discovery/provider support or covered by approved per-user authorizations; unknown or inaccessible families fail closed.
+- [ ] **Phase 176 release gate:** reconcile provider inventory totals by source/object family to fetched, unique, filtered, failed, tombstoned, and indexed totals; prove idempotent backfill, update/delete propagation, authorization boundaries, source citations/deep links, stale-claim supersession, and representative Circleback↔Linear cross-source recall using sanitized evidence. The operator may not display “entire company indexed” until this ledger is green.
+
+Full plan: `.planning/phases/176-linear-circleback-unified-memory/176-01-PLAN.md`. Provider research: `.planning/phases/176-linear-circleback-unified-memory/PROVIDER-COVERAGE-RESEARCH.md`.
+
+## Current v8.21 Reproducible Local Install Hardening Summary — PLANNED
+
+- [ ] **Phase 177: Reproducible Local Install Hardening** — INSTALL-REPRO-01..06; review the recovered local-profile implementation and replace the temporary host-only repairs with a portable, tested upstream solution.
+  - [ ] **INSTALL-REPRO-01 — Restore canonical local installer profile:** make a fresh `origin/main` clone support the documented `install.sh --local` path and ship the required `docker-compose.local.yml`; reconcile recovered commits `b925ee0` / `40923919` rather than depending on the retained host checkout.
+  - [ ] **INSTALL-REPRO-02 — Make runtime paths portable:** eliminate sample macOS paths such as `/Users/yourname/...` from active configuration, validate bind-mount sources before Compose creates them, and provide Linux/macOS-safe defaults or explicit installer prompts.
+  - [ ] **INSTALL-REPRO-03 — Wire Agents and APO intentionally:** pass and mount `AGENT_CONFIGS_PATH` and `APO_PROPOSALS_PATH` consistently in the local app container, create required directories with least privilege, and test `/api/health` reports Agents/APO truthfully after a clean install.
+  - [ ] **INSTALL-REPRO-04 — Fix production typecheck without masking configs:** replace the temporary broad `**/*.config.ts` exclusion with the narrowest durable fix for `vitest.slow.config.ts` under production-only Docker dependencies; retain typechecking for Next/Tailwind and other production configuration files.
+  - [ ] **INSTALL-REPRO-05 — Add destructive-safe reinstall regression coverage:** automate a disposable-host clean install, data/config backup, reinstall without `down -v`, volume/config continuity checks, all-core-service HTTP smoke checks, and a second idempotent installer run. Ensure secret-bearing files are created/restored with mode `600` or stricter and logs never print values.
+  - [ ] **INSTALL-REPRO-06 — Review production dependency advisories:** reproduce and triage the recorded `npm audit --omit=dev` baseline (4 high, 6 moderate, 2 low, 0 critical on 2026-07-21), upgrade safely with focused regressions, and document accepted residual risk; never use a blind breaking `npm audit fix --force`.
+- [ ] **Phase 177 evidence and closeout gate:** use `/home/lac5q/maeve-u1-runs/cordant-hermes-01/REINSTALL-REPORT.md` and the remote audit record `/home/ubuntu/memroos-reinstall-audit/20260721T191616Z` as source evidence while available; require a fresh disposable-host reinstall from current `main`, core health proof, installer idempotency, focused tests, fast/slow suites, typecheck, build, and reviewer approval before marking complete.
+
+
+### Current v8.19 Runtime Bottleneck Evidence Summary — PLANNED
 
 - [ ] **Phase 175: Runtime Bottleneck Evidence** — PERF-EVID-01..04; run two reproducible operator and retrieval workloads with sanitized fixtures; validate report schemas, sample floors, workload hashes, latency attribution, and the keep/optimize/bounded-shadow-extraction gate. No Rust adoption or rewrite is in scope.
 
