@@ -94,6 +94,7 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { pattern: /^\/api\/memory\/evals\// },
   { method: "GET", pattern: /^\/api\/recall$/ },
   { method: "POST", pattern: /^\/api\/recall\/ingest$/ },
+  { method: "GET", pattern: /^\/api\/cron-health$/ },
   { method: "POST", pattern: /^\/api\/skills\/report$/ },
   // SkillForge endpoints implement their own local/operator-key auth. The proxy
   // must not require a human JWT before cron/operator workers can reach them.

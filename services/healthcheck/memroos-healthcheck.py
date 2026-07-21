@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 WEB_HEALTH = os.environ.get("MEMROOS_WEB_HEALTH", "http://127.0.0.1:3000/api/health")
+WEB_MEMORY_HEALTH = os.environ.get("MEMROOS_WEB_MEMORY_HEALTH", "http://127.0.0.1:3000/api/memory/health")
+MEMROOS_RECALL_STALE_HOURS = float(os.environ.get("MEMROOS_RECALL_STALE_HOURS", "6"))
 MEM0_HEALTH = os.environ.get("MEMROOS_MEM0_HEALTH", "http://127.0.0.1:3201/health")
 GH_REPO = os.environ.get("MEMROOS_GH_REPO", "lac5q/memroos")
 GH_TOKEN_FILE = os.environ.get("MEMROOS_GH_TOKEN_FILE", "/etc/memroos/gh-token")
@@ -236,6 +238,75 @@ def collect_failures() -> list:
                         f"- Detail: `{detail}`\n"
                         f"- Checked at: `{web.get('timestamp', '?')}`\n\n"
                         f"Auto-opened by memroos-oracle-1-healthcheck.\n"
+                    ),
+                    "severity": "high",
+                })
+
+    # MEMX-6: probe /api/memory/health for tier + recallIngest status.
+    # A stale recall signal (no Mac-side ship run landing) is critical because
+    # it means the memory pipeline has stalled.
+    memory = http_json(WEB_MEMORY_HEALTH)
+    if isinstance(memory, dict) and "__error__" in memory:
+        failures.append({
+            "signature": "endpoint-down:memory-health",
+            "summary": "memory health endpoint unreachable",
+            "body_md": (
+                "## \`/api/memory/health\` unreachable on oracle-1\n\n"
+                f"- URL: \`{memory.get('__url__', '?')}\`\n"
+                f"- Error: \`{memory.get('__error__', '?')}\`\n\n"
+                "Detected by memroos-oracle-1-healthcheck. Auto-reopens every 6h.\n"
+            ),
+            "severity": "high",
+        })
+    elif isinstance(memory, dict):
+        recall = memory.get("recallIngest")
+        if isinstance(recall, dict):
+            stale_after = recall.get("staleAfterHours")
+            age = recall.get("ageHours")
+            status = recall.get("status")
+            last_ingest = recall.get("lastIngest")
+            is_stale = (
+                status != "up"
+                or (isinstance(age, (int, float)) and age > MEMROOS_RECALL_STALE_HOURS)
+            )
+            if is_stale:
+                failures.append({
+                    "signature": f"recallIngest-stale:{status}:{age}",
+                    "summary": (
+                        f"recallIngest stale on oracle-1 "
+                        f"(status={status}, age={age}h > {MEMROOS_RECALL_STALE_HOURS}h threshold)"
+                    ),
+                    "body_md": (
+                        "## Recall ingest stale on oracle-1\n\n"
+                        f"- \`recallIngest.status\`: \`{status}\`\n"
+                        f"- \`recallIngest.ageHours\`: \`{age}\`\n"
+                        f"- \`recallIngest.staleAfterHours\`: \`{stale_after}\`\n"
+                        f"- \`recallIngest.lastIngest\`: \`{last_ingest}\`\n"
+                        f"- Threshold (env \`MEMROOS_RECALL_STALE_HOURS\`): \`{MEMROOS_RECALL_STALE_HOURS}h\`\n\n"
+                        "This means the Mac->oracle ship pipeline has not landed rows in over 6h.\n"
+                        "Check:\n"
+                        "1. LaunchAgent \`com.memroos.recall-ship\` on the Mac\n"
+                        "2. SSH tunnel \`localhost:3838\` -> oracle-1:3000\n"
+                        "3. \`/home/opc/inbox/{claude,hermes,qwen,codex}\` on oracle-1\n"
+                        "4. \`cat /Users/lcalderon/github/memroos/services/memory/logs/recall-ship.log\`\n\n"
+                        "Auto-opened by memroos-oracle-1-healthcheck.\n"
+                    ),
+                    "severity": "high",
+                })
+        for tier in memory.get("tiers") or []:
+            tier_status = tier.get("status")
+            tier_name = tier.get("tier", "?")
+            if tier_status != "up":
+                failures.append({
+                    "signature": f"tier-{tier_status}:{tier_name}",
+                    "summary": f"{tier_name} tier is {tier_status} on oracle-1",
+                    "body_md": (
+                        f"## Memory tier \`{tier_name}\` is \`{tier_status}\` on oracle-1\n\n"
+                        f"- Tier: \`{tier_name}\`\n"
+                        f"- Backend: \`{tier.get('backend', '?')}\`\n"
+                        f"- Status: \`{tier_status}\`\n"
+                        f"- Detail: \`{tier.get('detail', '')}\`\n\n"
+                        "Auto-opened by memroos-oracle-1-healthcheck.\n"
                     ),
                     "severity": "high",
                 })

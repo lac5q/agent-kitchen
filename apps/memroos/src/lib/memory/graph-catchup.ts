@@ -589,11 +589,15 @@ export async function runGraphCatchup(
         }
         summary.considered += 1;
         summary.sources.episodic.considered += 1;
+        // MEMX-5: advance the cursor on every considered row, not just
+        // successful projections. Combined with the existing early-break on
+        // error, this ensures failed rows get one retry cycle rather than
+        // being reprocessed forever.
+        episodicLastId = row.id;
         try {
           await project(item);
           summary.projected += 1;
           summary.sources.episodic.projected += 1;
-          episodicLastId = row.id;
           if (writeDelayMs > 0 && !dryRun) await sleep(writeDelayMs);
         } catch (err) {
           summary.errors += 1;
