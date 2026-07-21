@@ -271,7 +271,7 @@ def collect_failures() -> list:
             )
             if is_stale:
                 failures.append({
-                    "signature": f"recallIngest-stale:{status}:{age}",
+                    "signature": f"recallIngest-stale:{status}",
                     "summary": (
                         f"recallIngest stale on oracle-1 "
                         f"(status={status}, age={age}h > {MEMROOS_RECALL_STALE_HOURS}h threshold)"

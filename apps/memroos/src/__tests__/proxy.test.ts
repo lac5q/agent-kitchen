@@ -78,6 +78,18 @@ describe("proxy", () => {
     expect(await response.json()).toEqual({ error: "authentication required" });
   });
 
+  it("keeps cron-health behind session authentication", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/cron-health", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "authentication required" });
+  });
+
   it("lets runtime health respond without a session token", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/health", {

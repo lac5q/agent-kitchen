@@ -430,7 +430,7 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(seen[0]).toContain("vector:");
   });
 
-  it("marks partial status when an episodic projection throws", async () => {
+  it("marks partial status and advances past a failed episodic projection", async () => {
     process.env.NEO4J_PASSWORD = "test-secret";
     testDb
       .prepare(
@@ -460,7 +460,7 @@ describe("graph-catchup incremental checkpointing", () => {
     expect(summary.errors).toBe(1);
     expect(summary.errorSamples?.[0]).toContain("neo4j_write_failed");
     expect(["partial", "failed", "completed"]).toContain(summary.status);
-    expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(1);
+    expect(readGraphCatchupCheckpoint(testDb).episodicLastId).toBe(2);
   });
 
   it("continues oneshot vector projection after a single item failure", async () => {
