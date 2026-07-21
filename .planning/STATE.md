@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.21
-milestone_name: Reproducible Local Install Hardening (partial closure)
+milestone: v8.20+v8.21
+milestone_name: Connected Work Memory (Phase 176 first session) + Reproducible Local Install Hardening (Phase 177 partial closure)
 status: active
-stopped_at:  (continued in v8.21 partial closure 2026-07-21 — see ROADMAP and Phase 177 plan)
-last_updated: "2026-07-21T20:59:00Z"
+stopped_at: Phase 176 first-session landed on install-repro-connmem-bridge (CONNMEM-02 + Linear SDL + GSD siblings); validator audit + Phase 177 push pending
+last_updated: "2026-07-21T22:00:00Z"
 progress:
-  total_phases: 115
+  total_phases: 117
   completed_phases: 84
-  total_plans: 158
+  total_plans: 159
   completed_plans: 143
   percent: 73
 ---
@@ -24,16 +24,44 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Quality gate over open GSD (v8.13→v8.16 excl. Voyage) — 2026-07-18
-Plan: `.planning/goals/2026-07-18-gsd-roadmap-quality-gate.md`
-Status: **closed-in-reach** · v8.16 OBSERVE 10..14 + MEETREL-FOLLOWUP-05 + M1.3 coverage slice 1+2 closed; Voyage/Phase 166 still excluded
-Completed recently: OBSERVE-10..14 (Phases 170, 171); MEETREL-FOLLOWUP-05 (Phase 172); cron-health coverage 0%→95% (M1.3 slice 2)
+Phase: Phase 176 first-session (v8.20 Connected Work Memory) + Phase 177 partial closure (v8.21 Reproducible Local Install Hardening) — 2026-07-21
+Plans:
+  - `.planning/phases/176-linear-circleback-unified-memory/176-02-FIRST-SESSION.md` (NEW this session)
+  - `.planning/phases/176-linear-circleback-unified-memory/176-01-PLAN.md` (original CONNMEM-01..10)
+  - `.planning/phases/177-reproducible-local-install-hardening/177-01-PLAN.md`
+Status: **partial closure both phases**. Phase 176 first session landed on
+`install-repro-connmem-bridge` (CONNMEM-02 schema + Linear SDL stub + GSD siblings);
+release-gate live reconciliation is deferred per the
+`CONNMEM-LIVE-DEFER` ticket. Phase 177 was closed-partial in the prior session
+(INSTALL-REPRO-01..04 + 06 GREEN; INSTALL-REPRO-05 PARTIAL — destructive CI
+run delegated to the branch-targeted full-disposable-host CI job).
 
-**This goal (cloud-executable):** DONE in-reach items closed.
-- **v8.13–v8.16** code/docs landed; v8.16 Phases 170+171 shipped OBSERVE-10..14 with drift-check automation, Wave-1 Pi smoke, and operator visibility (errorCount + agentsByHarness)
-- **MEETREL-FOLLOWUP-05** closed: 6-status enum (`provider_absent` | `provider_auth_blocked` | `captured_unrouted` | `routed_unindexed` | `indexed_unrecalled` | `recalled`), per-collection status in `memory_recall`, OAuth pre-flight that refuses to report `ok:true` on insufficient scopes, evidence bundle at `docs/uat/2026-07-18-meetrel-source-to-index-evidence.md`
-- **M1.3 coverage** slice 1 (utility parsers + topology + registry helpers) and slice 2 (cron-health.ts 0%→95%) shipped
-- Fast 3322 + slow 19 + 88 knowledge-mcp green; pre-existing flakes (audit-perf hook timeout, pulse-strip UI copy) unrelated
+**This run (beastmode consolidated, 2026-07-21):**
+- **CONNMEM-02 (canonical envelope + sync ledger)** shipped on
+  `install-repro-connmem-bridge`:
+  - `services/connmem/canonical_envelope.py` (frozen 16-field dataclass)
+  - `services/connmem/sync_ledger.py` (SQLite-backed per-provider ledger)
+  - 26/26 contract tests green (canonical envelope + sync ledger)
+- **CONNMEM-04-prep** shipped: Linear GraphQL SDL vendored at
+  `references/linear/SDL-STUBS.graphql` with provenance-tag vocabulary
+  (`doc-derived`); doc-derived fixture at
+  `scripts/connmem/fixtures/linear/__init__.py`
+- **Phase 178 sibling stub** opened: NOTION-01 provider-coverage research;
+  zero Notion adapter code this run per Fable's prior cut
+- **CONNMEM-LIVE-DEFER** ticket filed for live release-gate reconciliation
+- **Phase 177 push to origin/main** pending (18 commits ahead; pre-push
+  gates: install-regression 9/9, vitest fast 3373/3373, typecheck baseline
+  expected, lint expected)
+- **Substitutions in lessons**: validator lane went
+  claude-fable-5 (Anthropic API credit balance 0) →
+  claude-opus-4-8 high (Pro lane) → codex gpt-5.6-terra high (OAuth, current).
+  Recorded at `.beastmode/learnings/2026-07-21-fable-credits-depleted.md`.
+  `bin/beast-validator` wraps `codex exec --model gpt-5.6-terra
+  --reasoning-effort high`; effort floor MEDIUM, default HIGH, low refused.
+- **Beastmode discipline rule** captured: every goal/plan file change must
+  be followed by `bin/beast-todo-sync <file>` before the next tool call
+  (script reads `## / ### / ####` headings and emits matching todo items).
+
 
 **Still open (approval-gated, not in scope this session):**
 - **v8.15 live** — public cutover verified 2026-07-18; opc SSH shell needs pubkey install for on-host re-smoke/deploy
