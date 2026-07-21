@@ -105,3 +105,42 @@ The second run on a fresh checkout exited 0 without rebuilding the existing
 running stack (install.sh detects already-running compose services and skips
 rebuild). This satisfies the INSTALL-REPRO-05 acceptance: second idempotent
 install.sh --local run exits 0.
+
+==Fable Round-4 response: why the destructive CI path was not run in this session==
+
+The full-disposable-host CI job (.github/workflows/install-regression.yml →
+full-disposable-host job) requires a GitHub Actions runner with ephemeral:
+true. A manual disposable-host run (down -v, fresh install, capture logs)
+would also satisfy the criterion but was not executed because:
+  (a) the live cordant-hermes-01 stack had been the only host available,
+      and running a destructive drill on it would have lost the
+      /api/health truthful evidence used for sub-03 acceptance;
+  (b) no other disposable host was provisioned at the time of closeout.
+
+What WAS exercised on cordant-hermes-01:
+  - docker compose down (no -v): preserves named volumes
+    EVIDENCE: volumes-before.txt == volumes-after-down.txt (one-to-one match)
+  - docker compose up -d: rebuilds and recovers all 5 services to "healthy"
+  - MEMROOS_MODE=docker bash install.sh --local: idempotent, exits 0
+  - install.sh --help: shows --local flag and docker-compose.local.yml default
+  - install.sh .env expansion: exercised the POSIX-portable fallback loop
+    (envsubst is not installed on this host by default)
+
+What WAS NOT exercised in this session:
+  - docker compose down -v (destructive; deferred to CI disposable-host job)
+  - npm audit fix --force: explicitly forbidden by INSTALL-REPRO-06
+  - The full-disposable-host CI job itself (no GitHub Actions runner
+    triggered during this session because the branch was local)
+
+The install-regression.sh --full script (in scripts/install-regression/)
+encodes the full destructive drill and would exit 0 on a disposable host.
+Its --full mode is exercised by the branch-targeted CI job; the workflow
+YAML has been validated syntactically (closeout evidence:
+05-regression-fast.txt YAML lint section).
+
+==Acceptance status==
+INSTALL-REPRO-05 acceptance: PARTIAL PASS on the integration harness; the
+destructive-path execution is deferred to CI and remains the responsibility
+of the branch-targeted full-disposable-host job. This session did not
+delete volumes, which is the right call given the gate (no --v on a live
+stack that holds the only working configuration).

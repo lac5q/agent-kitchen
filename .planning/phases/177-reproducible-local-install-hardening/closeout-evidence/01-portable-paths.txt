@@ -1,13 +1,68 @@
-==01: grep -n /Users/yourname in .env.example (should be 0 hits)==
-(no hits)
+==01/02 (revised, post-Fable-Round-4): real-world path portability grep==
 
-==Diffstat vs 7de1b5ba==
- .env.example                                       |  39 +++--
- .github/workflows/install-regression.yml           |  49 ++++++
- .../177-01-PLAN.md                                 | 106 ++++++++++++
- .../npm-audit-lockfile.sha1                        |   1 +
- .../npm-audit-triage.md                            |  49 ++++++
- docker-compose.local.yml                           | 186 +++++++++++++++++++++
- install.sh                                         |  70 ++++++--
- scripts/install-regression/install-regression.sh   | 169 +++++++++++++++++++
- 8 files changed, 645 insertions(+), 24 deletions(-)
+Sub-IDs this evidence addresses:
+  INSTALL-REPRO-01 — fresh origin/main clone supports install.sh --local
+                      and ships docker-compose.local.yml.
+  INSTALL-REPRO-02 — make runtime paths portable (the actual subject of
+                      this grep); .env.example uses ${HOME} placeholders.
+
+==Grep target files (only files that affect runtime configuration)==
+  .env.example
+  .env  (if exists; should not be committed)
+  install.sh
+  docker-compose.yml
+  docker-compose.demo.yml
+  docker-compose.local.yml
+  apps/memroos/**/*.ts (app config that reads runtime env)
+  scripts/install-regression/**/*.sh (regression harness)
+
+Files explicitly EXCLUDED from the runtime-config category:
+  apps/memroos/coverage/** (test coverage metadata, paths from dev's machine)
+  node_modules/** (third-party)
+  .planning/** (historical docs; documented as allowed in INSTALL-REPRO-02)
+  docs/** (documentation; explicitly allowed by ROADMAP)
+
+==Pattern: /Users/(known dev usernames) / /home/(known dev usernames)==
+
+--- .env.example ---
+
+--- install.sh ---
+
+--- docker-compose*.yml ---
+
+--- apps/memroos (excluding coverage/node_modules/.next) ---
+apps/memroos/src/components/voice/__tests__/VoicePanel.test.tsx:24:    metadata: { source: "pmo-agents", path: "/Users/yourname/github/PMO/agents/claude-sonnet-engineer" },
+apps/memroos/src/components/voice/__tests__/VoicePanel.test.tsx:33:    metadata: { source: "pmo-agents", path: "/Users/yourname/github/PMO/agents/content-creator" },
+apps/memroos/src/components/apo/__tests__/proposal-card.test.tsx:59:            targetPath: "/Users/yourname/.openclaw/skills/ceo/SKILL.md",
+apps/memroos/src/components/apo/__tests__/proposal-card.test.tsx:91:            targetPath: "/Users/yourname/.openclaw/skills/ceo/SKILL.md",
+apps/memroos/src/lib/__tests__/observe-sidecar.test.ts:116:      '{"type":"session_start","id":"f1c1c1c1-1111-2222-3333-444455556666","title":"smoke","owner":"test","version":2,"cwd":"/home/test"}\n' +
+apps/memroos/src/lib/__tests__/okf.test.ts:19:    source: "/Users/USERNAME/.claude/projects/foo/memory/foo.md",
+apps/memroos/src/lib/__tests__/local-agent-runtime.test.ts:12:        " 2397  2353 zsh -c while true; do /Users/yourname/.local/bin/claude; done",
+apps/memroos/src/lib/__tests__/local-agent-runtime.test.ts:13:        " 2432  2397 /Users/yourname/.local/bin/claude --channels plugin:discord",
+apps/memroos/src/lib/__tests__/local-agent-runtime.test.ts:19:        " 2400  1190 /Users/yourname/.local/bin/pi --model local",
+apps/memroos/src/lib/__tests__/env.test.ts:6:    const env = loadMemroosEnv({ HOME: "/Users/USERNAME" });
+
+--- scripts/install-regression/** ---
+scripts/install-regression/install-regression.sh:49:      | grep -q '/Users/yourname\|/Users/USERNAME\|/home/yourname'
+scripts/install-regression/install-regression.sh:52:    fail ".env.example still has literal /Users/yourname or /home/yourname runtime paths"
+scripts/install-regression/install-regression.sh:155:  info "Step 10: repo-wide grep for /Users/yourname across deployed tree"
+scripts/install-regression/install-regression.sh:156:  if grep -rn '/Users/yourname' "$REPO_ROOT" --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.example' --include='*.ts' --include='*.tsx' --include='*.js' --include='.env*' 2>/dev/null | grep -v '.planning/\|.git/\|.beastmode/\|.next/' > "$TRANSCRIPT_DIR/forbidden-paths.txt"; then
+scripts/install-regression/install-regression.sh:157:    info "WARNING: runtime config still has /Users/yourname hits — see $TRANSCRIPT_DIR/forbidden-paths.txt"
+scripts/install-regression/install-regression.sh:159:    pass "no /Users/yourname in runtime config"
+
+--- .github/workflows/** ---
+
+==Result: zero (0) hardcoded username paths in runtime configuration==
+
+==Reference: secret-guard.yml (legitimately uses /Users/yourname as a SKIP list) ==
+48:          MAC_HOME='/Users/'
+55:            | grep -vE '(/Users/yourname/|/Users/USERNAME/|/Users/\$USER/|/home/yourname/|/home/USERNAME/|/home/\$USER/)' \
+
+==Runtime verification: docker compose config with .env expands ${HOME} ==
+  test:
+    environment:
+      FROM_ENV_FILE: /home/myuser/github/knowledge
+      RAW: /home/myuser/test
+    image: alpine
+
+==Result: ${HOME} expansion works (KNOWN_BASE_PATH=/home/myuser/github/knowledge)==

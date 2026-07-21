@@ -3,3 +3,32 @@
 
 ==06: severity counts==
 totals: {'info': 0, 'low': 2, 'moderate': 6, 'high': 4, 'critical': 0, 'total': 12}
+
+==Triage content==
+The triage table (8 ticket IDs, 12 findings, no blind audit fix) lives at
+.planning/phases/177-reproducible-local-install-hardening/npm-audit-triage.md
+(COPY included as 06-npm-audit-triage.md in this evidence pack).
+
+==Acceptance threshold (from the triage document)==
+INSTALL-REPRO-06 closes when:
+  - 0 untriaged HIGH or CRITICAL findings
+  - All MEDIUM/LOW findings either fixed or explicitly marked
+    accepted (residual) with a follow-up date or version target
+  - No blind `npm audit fix --force` applied
+
+==Confirmation: run was --omit=dev==
+The archived audit (npm-audit-current.json) was captured at the lockfile
+SHA in the triage doc (npm-audit-lockfile.sha1). Repro command:
+  $ npm audit --omit=dev --json > npm-audit-current.json
+The `--omit=dev` flag is explicit and excludes all devDependencies from
+the audit (the "production dependency" boundary).
+
+==4 HIGH-severity findings, each with a concrete upgrade path==
+  1. brace-expansion: GHSA-jxxr-4gwj-5jf2 → upgrade via npm
+     (INSTREP-06-001, deferred to next bump cycle)
+  2. fast-uri: GHSA-4c8g-83qw-93j6 → upgrade @modelcontextprotocol/sdk
+     (INSTREP-06-002)
+  3. hono: GHSA-qp7p-654g-cw7p → upgrade @hono/node-server
+     (INSTREP-06-003)
+  4. js-yaml: GHSA-h67p-54hq-rp68 → upgrade eslint
+     (INSTREP-06-004)
