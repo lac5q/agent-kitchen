@@ -140,7 +140,16 @@ full_run() {
     if [[ -d "$REPO_ROOT/.git" ]]; then
       info "Step 0b: replace seed .git with a shared local clone (fsck-clean)"
       rm -rf "$INSTALL_DIR/.git"
-      (cd "$INSTALL_DIR" && git clone --shared --no-checkout --quiet "$REPO_ROOT" .git-tmp && mv .git-tmp .git && git checkout --quiet HEAD)
+      # The validator flagged: cloning into INSTALL_DIR/.git-tmp nests
+      # the real .git at INSTALL_DIR/.git-tmp/.git (a bare-like layout),
+      # so 'git checkout' in INSTALL_DIR doesn't find a worktree. Clone
+      # into a temp dir outside INSTALL_DIR, then move .git into place.
+      local _git_tmp
+      _git_tmp="$(mktemp -d -t install-regression-git-XXXXXX)"
+      (cd "$_git_tmp" && git clone --shared --no-checkout --quiet "$REPO_ROOT" src)
+      mv "$_git_tmp/src/.git" "$INSTALL_DIR/.git"
+      rm -rf "$_git_tmp"
+      (cd "$INSTALL_DIR" && git checkout --quiet HEAD)
     fi
   else
     # cp -a fallback: strip the same heavy caches rsync would have
