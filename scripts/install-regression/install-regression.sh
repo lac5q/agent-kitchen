@@ -123,16 +123,21 @@ full_run() {
   # network clone entirely. Otherwise it would `git clone --branch main`
   # against a non-empty dir, which fails. Discard build caches and
   # runtime artifacts — the seed is meant for a clean first-install.
+  # Validator also flagged: rsync must use --delete so a stale TRANSCRIPT_DIR
+  # doesn't retain files from a prior run; cp -a equivalent is `rm -rf`
+  # before seeding.
   info "Step 0a: seed INSTALL_DIR from REPO_ROOT (avoids network clone)"
-  # rsync is preferred but we fall back to cp -a.
+  rm -rf "$INSTALL_DIR"
+  mkdir -p "$INSTALL_DIR"
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a --exclude='node_modules' --exclude='__pycache__' \
+    rsync -a --delete --exclude='node_modules' --exclude='__pycache__' \
       --exclude='coverage' --exclude='.next' --exclude='.venv' --exclude='.claude' \
-      --exclude='.evidence-push' --exclude='.bundles' \
+      --exclude='.evidence-push' --exclude='.bundles' --exclude='.git/objects/pack' \
       "$REPO_ROOT"/ "$INSTALL_DIR"/
   else
     cp -a "$REPO_ROOT"/. "$INSTALL_DIR"/
-    rm -rf "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude"
+    rm -rf "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude" \
+           "$INSTALL_DIR/.evidence-push" "$INSTALL_DIR/.bundles"
   fi
   # Mark the seed so its provenance is part of the transcript.
   echo "install-regression --full seed" > "$INSTALL_DIR/.install-regression-seed"
@@ -239,33 +244,33 @@ PY
   [[ "$mode" == "600" ]] || fail ".env (${install_env}) mode is ${mode}, expected 600"
   pass ".env is mode 600"
 
-  # Step 10: credential-rotation evidence. HARD assertion: install.sh
-  # MUST have written a 32-hex JWT_SECRET to .env (not the literal
-  # fallback). The validator flagged a NOTE-then-pass path; make this
-  # gating so a fresh reachable install cannot ship the documented
-  # default.
+  # Step 10: credential-rotation gating. HARD assertions; we don't echo
+  # the credential values themselves (validator flagged that the failure
+  # message leaked the generated passwords into CI/transcript logs).
   if grep -qE "^MEMROOS_JWT_SECRET=[a-f0-9]{32,}" "$install_env"; then
     pass "MEMROOS_JWT_SECRET rotated to openssl rand value (not literal)"
   else
     fail "MEMROOS_JWT_SECRET not rotated to openssl rand value; literal default would be exposed. Re-run install.sh without skipping the credential block."
   fi
-  # Neo4j: NEO4J_PASSWORD must also be a 24-hex value (same source as
-  # MEMROOS_NEO4J_AUTH) and propagate into the running compose stack.
   if ! grep -qE "^NEO4J_PASSWORD=[a-f0-9]{16,}" "$install_env"; then
     fail "NEO4J_PASSWORD not rotated; app's Neo4j login would use the literal default"
   fi
-  # Hard assertion: NEO4J_PASSWORD and the password portion of
-  # MEMROOS_NEO4J_AUTH MUST match — the validator flagged that
-  # independent random-looking values could pass the regex while
-  # actually mismatching at runtime.
   if ! grep -qE "^MEMROOS_NEO4J_AUTH=neo4j/[a-f0-9]{16,}" "$install_env"; then
     fail "MEMROOS_NEO4J_AUTH not set as 'neo4j/<random>'; Neo4j container's AUTH will mismatch the app's NEO4J_PASSWORD"
   fi
+  # Split-brain guard: NEO4J_PASSWORD and the password portion of
+  # MEMROOS_NEO4J_AUTH must match exactly. If they differ, we fail
+  # WITHOUT echoing the values — just the boolean difference.
+  local app_pw neo_auth_pw
   app_pw="$(grep -E '^NEO4J_PASSWORD=' "$install_env" | head -1 | cut -d= -f2-)"
   neo_auth_pw="$(grep -E '^MEMROOS_NEO4J_AUTH=' "$install_env" | head -1 | cut -d= -f2- | sed 's|^neo4j/||')"
-  if [[ "$app_pw" != "$neo_auth_pw" ]]; then
-    fail "NEO4J_PASSWORD ($app_pw) does not match MEMROOS_NEO4J_AUTH password ($neo_auth_pw); app+DB split-brain"
+  if [[ -z "$app_pw" || -z "$neo_auth_pw" ]]; then
+    fail "could not parse NEO4J_PASSWORD or MEMROOS_NEO4J_AUTH from $install_env"
   fi
+  if [[ "$app_pw" != "$neo_auth_pw" ]]; then
+    fail "NEO4J_PASSWORD and MEMROOS_NEO4J_AUTH disagree on the password (values redacted); app+DB split-brain. Re-run install.sh to regenerate."
+  fi
+  pass "NEO4J_PASSWORD == MEMROOS_NEO4J_AUTH password (split-brain guard; values redacted)"
 
   info "OK: full disposable-host regression passed. Transcript at $TRANSCRIPT_DIR"
 }

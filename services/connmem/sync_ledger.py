@@ -68,6 +68,11 @@ class SyncLedger:
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
+            # Phase 1: CREATE TABLE with all columns. Safe on a fresh
+            # install (creates the table); on a pre-fix ledger the
+            # CREATE TABLE IF NOT EXISTS is a no-op and the table is
+            # missing cursor_checkpoint/retry_count/last_error, which
+            # the Phase 2 ALTERs below add.
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS ledger (
                     ledger_schema TEXT NOT NULL,
@@ -81,9 +86,7 @@ class SyncLedger:
                     deleted_at TEXT,
                     status TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
-                    -- per-provider sync cursor (e.g., Linear updatedAt, Circleback page cursor)
                     cursor_checkpoint TEXT,
-                    -- retry accounting for the ingest path
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     last_error TEXT,
                     tombstone INTEGER NOT NULL DEFAULT 0,
@@ -91,17 +94,12 @@ class SyncLedger:
                     payload_json TEXT NOT NULL,
                     PRIMARY KEY (source, workspace_id, source_id)
                 );
-                CREATE INDEX IF NOT EXISTS ledger_status_idx ON ledger(status);
-                CREATE INDEX IF NOT EXISTS ledger_provider_idx ON ledger(source);
-                CREATE INDEX IF NOT EXISTS ledger_hash_idx ON ledger(content_hash);
-                CREATE INDEX IF NOT EXISTS ledger_cursor_idx ON ledger(source, cursor_checkpoint);
-                CREATE INDEX IF NOT EXISTS ledger_dead_letter_idx ON ledger(dead_letter);
             """)
-            # Idempotent migration for pre-fix ledgers that lacked the
-            # cursor/retry/last_error columns. SQLite ADD COLUMN fails with
-            # 'duplicate column' which we catch and ignore, so re-running
-            # this on a fresh ledger is a no-op and on a pre-fix ledger
-            # adds the columns in place.
+            # Phase 2: idempotent migration. MUST run before Phase 3
+            # (indexes) because the cursor_check / dead_letter indexes
+            # reference columns that pre-fix ledgers don't have yet.
+            # SQLite's ADD COLUMN on an already-present column raises
+            # 'duplicate column' which we catch and ignore.
             for stmt in (
                 "ALTER TABLE ledger ADD COLUMN cursor_checkpoint TEXT",
                 "ALTER TABLE ledger ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
@@ -111,6 +109,15 @@ class SyncLedger:
                     conn.execute(stmt)
                 except Exception:  # noqa: BLE001 — duplicate-column is fine
                     pass
+            # Phase 3: indexes. By now pre-fix ledgers have been
+            # upgraded so cursor_checkpoint and dead_letter exist.
+            conn.executescript("""
+                CREATE INDEX IF NOT EXISTS ledger_status_idx ON ledger(status);
+                CREATE INDEX IF NOT EXISTS ledger_provider_idx ON ledger(source);
+                CREATE INDEX IF NOT EXISTS ledger_hash_idx ON ledger(content_hash);
+                CREATE INDEX IF NOT EXISTS ledger_cursor_idx ON ledger(source, cursor_checkpoint);
+                CREATE INDEX IF NOT EXISTS ledger_dead_letter_idx ON ledger(dead_letter);
+            """)
 
     def upsert(self, record: CanonicalRecord, *, status: str = "captured_unrouted") -> bool:
         """Insert if new, update content_hash/last_seen_at if changed.
