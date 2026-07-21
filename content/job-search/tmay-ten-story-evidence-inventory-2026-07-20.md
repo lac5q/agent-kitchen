@@ -1,5 +1,5 @@
 ---
-title: TMAY ten-story evidence inventory
+title: Google L6/L7-equivalent TMAY story inventory
 date: 2026-07-20
 status: revised pending five fact confirmations
 model: GPT-5 Codex
@@ -13,12 +13,14 @@ sources:
   - /Users/lcalderon/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md
   - Luis Calderon firsthand corrections supplied 2026-07-20
 derived_from: TMAY working copy 1fMj104dB3y2rhHkbXRk8KJ24Wx7O8WnLSwp15CWPQbA
-regen_prompt: Rebuild the ranked Principal Director interview-story inventory from Luis Calderon's source documents and firsthand corrections. Lead with business mandate, diagnosis, strategy, organizational leadership, execution, result, and executive lesson. Keep forecasts separate from observed results and preserve all evidence guardrails.
+regen_prompt: Rebuild the ranked Google L6/L7-equivalent interview-story inventory from Luis Calderon's source documents and firsthand corrections. Lead with business mandate, ambiguity, diagnosis, strategy, cross-functional influence, durable operating mechanisms, execution, result, and level signal. Keep the stories suitable for either an individual contributor or people manager. Preserve all evidence guardrails.
 ---
 
 # TMAY ten-story evidence inventory
 
-This inventory supports the Stories Brainstorm step in Luis Calderon's TMAY worksheet. It uses Intuit goals, roadmaps, and product reviews; a pre-Intuit 2021 resume; the confirmed SketchPop operating narrative; and Luis's firsthand corrections from 2026-07-20. The stories are framed at Principal Director level: business mandate, system diagnosis, strategy, organizational leadership, operating model, execution, and measurable business result.
+This inventory supports the Stories Brainstorm step in Luis Calderon's TMAY worksheet. It uses Intuit goals, roadmaps, and product reviews; a pre-Intuit 2021 resume; the confirmed SketchPop operating narrative; and Luis's firsthand corrections from 2026-07-20. The stories are tuned for Google L6/L7-equivalent product leadership at public companies or Series E+ startups. They work for either an individual contributor or people-manager path and emphasize ownership of ambiguous product areas, portfolio strategy, cross-functional influence, durable operating mechanisms, and measurable customer and business results.
+
+The target domains are applied AI, agentic AI, LLM products, growth, PLG, AI platforms, marketplaces, commerce, subscriptions, and experimentation across B2C and B2B products. Target industries are AI, enterprise SaaS, fintech, developer tools, and consumer technology. Preferred location is San Diego, hybrid, or remote, with openness to relocate for the right role.
 
 ## Ten story hooks
 
@@ -70,7 +72,7 @@ The TMAY worksheet was revised in place, preserving its native table and templat
 
 - https://docs.google.com/document/d/1fMj104dB3y2rhHkbXRk8KJ24Wx7O8WnLSwp15CWPQbA/edit
 
-A native Google Doc contains the full Principal Director walkthrough for all ten stories. Each story covers the mandate, diagnosis, strategy, organizational leadership, operating model, execution, result, and executive lesson:
+A native Google Doc contains the full Google L6/L7-equivalent walkthrough for all ten stories. Each story covers the mandate, ambiguity, diagnosis, strategy, cross-functional influence, operating mechanisms, execution, result, and level signal:
 
 - https://docs.google.com/document/d/1Uu5ddPHPs_EMlPO2-Sfzmb0Wgq1fbtMyQ11OtXbJIMc/edit
 
