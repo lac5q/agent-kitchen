@@ -160,9 +160,25 @@ class SyncLedger:
                     ),
                 )
             else:
+                # Same-hash re-ingestion can still represent a state
+                # transition: a row previously 'captured_unrouted' may be
+                # 'tombstoned' on the next sync because the provider
+                # issued a deletion, even though body content didn't
+                # change. The boolean flags MUST update; otherwise
+                # deletion propagation silently fails. Caller passes
+                # status=... on every call, not only on new bodies.
                 conn.execute(
-                    "UPDATE ledger SET last_seen_at = ? WHERE (source, workspace_id, source_id) = (?, ?, ?)",
-                    (ts, record.source, record.workspace_id, record.source_id),
+                    """
+                    UPDATE ledger
+                       SET status = ?, last_seen_at = ?,
+                           tombstone = ?, dead_letter = ?
+                     WHERE (source, workspace_id, source_id) = (?, ?, ?)
+                    """,
+                    (
+                        status, ts,
+                        tombstone_flag, dead_letter_flag,
+                        record.source, record.workspace_id, record.source_id,
+                    ),
                 )
             conn.commit()
             return False

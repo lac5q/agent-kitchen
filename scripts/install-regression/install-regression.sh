@@ -117,6 +117,26 @@ full_run() {
   mkdir -p "$TRANSCRIPT_DIR" "$INSTALL_DIR"
   info "Install directory: $INSTALL_DIR (separate from REPO_ROOT)"
 
+  # Seed INSTALL_DIR with a copy of REPO_ROOT. install.sh's clone_repo()
+  # only re-uses MEMROOS_DIR if .git exists; on a fresh CI runner the
+  # branch's MEMROOS_BRANCH env var would otherwise pull from network.
+  # We bypass network entirely by mirroring the checked-out tree so
+  # "test the checked-out revision" is what --full actually tests.
+  info "Step 0a: seed INSTALL_DIR from REPO_ROOT (avoids network clone)"
+  # rsync is preferred but we fall back to cp -a.
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
+      --exclude='coverage' --exclude='.next' --exclude='.venv' --exclude='.claude' \
+      "$REPO_ROOT"/ "$INSTALL_DIR"/
+  else
+    cp -a "$REPO_ROOT"/. "$INSTALL_DIR"/
+    rm -rf "$INSTALL_DIR/.git" "$INSTALL_DIR/node_modules" "$INSTALL_DIR/.claude"
+  fi
+  # Mark the seed so its provenance is part of the transcript.
+  echo "install-regression --full seed" > "$INSTALL_DIR/.install-regression-seed"
+  echo "REPO_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)" >> "$INSTALL_DIR/.install-regression-seed"
+  echo "TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$INSTALL_DIR/.install-regression-seed"
+
   # Step 0: tear down any prior local stack from earlier runs against
   # the same repo (independent of the install dir we control).
   docker compose -f "$REPO_ROOT/docker-compose.local.yml" down 2>&1 \
@@ -217,11 +237,24 @@ PY
   [[ "$mode" == "600" ]] || fail ".env (${install_env}) mode is ${mode}, expected 600"
   pass ".env is mode 600"
 
-  # Step 10: credential-rotation evidence. The install.sh credentials
-  # block wrote a generated JWT_SECRET (not the literal fallback).
-  grep -qE "^MEMROOS_JWT_SECRET=[a-f0-9]{32,}" "$install_env" \
-    && pass "MEMROOS_JWT_SECRET rotated to openssl rand value" \
-    || info "NOTE: MEMROOS_JWT_SECRET not rotated to openssl rand value (fallback or non-installer install)"
+  # Step 10: credential-rotation evidence. HARD assertion: install.sh
+  # MUST have written a 32-hex JWT_SECRET to .env (not the literal
+  # fallback). The validator flagged a NOTE-then-pass path; make this
+  # gating so a fresh reachable install cannot ship the documented
+  # default.
+  if grep -qE "^MEMROOS_JWT_SECRET=[a-f0-9]{32,}" "$install_env"; then
+    pass "MEMROOS_JWT_SECRET rotated to openssl rand value (not literal)"
+  else
+    fail "MEMROOS_JWT_SECRET not rotated to openssl rand value; literal default would be exposed. Re-run install.sh without skipping the credential block."
+  fi
+  # Neo4j: NEO4J_PASSWORD must also be a 24-hex value (same source as
+  # MEMROOS_NEO4J_AUTH) and propagate into the running compose stack.
+  if ! grep -qE "^NEO4J_PASSWORD=[a-f0-9]{16,}" "$install_env"; then
+    fail "NEO4J_PASSWORD not rotated; app's Neo4j login would use the literal default"
+  fi
+  if ! grep -qE "^MEMROOS_NEO4J_AUTH=neo4j/[a-f0-9]{16,}" "$install_env"; then
+    fail "MEMROOS_NEO4J_AUTH not set as 'neo4j/<random>'; Neo4j container's AUTH will mismatch the app's NEO4J_PASSWORD"
+  fi
 
   info "OK: full disposable-host regression passed. Transcript at $TRANSCRIPT_DIR"
 }

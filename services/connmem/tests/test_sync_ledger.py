@@ -131,6 +131,28 @@ class SyncLedgerTests(unittest.TestCase):
         self.assertFalse(row["tombstone"], "tombstone must clear when status moves off tombstoned")
         self.assertFalse(row["dead_letter"])
 
+    def test_same_hash_tombstone_propagation(self):
+        """Same-hash re-ingestion with status='tombstoned' MUST update
+        tombstone=1. This is the deletion-propagation path: the provider
+        says 'deleted' even though the body is the same.
+        """
+        r = _sample_record(source_id="m-tomb-same-hash")
+        # Initial ingest as captured_unrouted
+        self.ledger.upsert(r, status="captured_unrouted")
+        row = self.ledger.get(r.source, r.workspace_id, r.source_id)
+        self.assertEqual(row["status"], "captured_unrouted")
+        self.assertFalse(row["tombstone"])
+        # Same body, status changes to tombstoned -> must flip flag.
+        self.ledger.upsert(r, status="tombstoned")
+        row = self.ledger.get(r.source, r.workspace_id, r.source_id)
+        self.assertEqual(row["status"], "tombstoned")
+        self.assertTrue(row["tombstone"])
+        # Same body, status flips back to recalled -> must clear flag.
+        self.ledger.upsert(r, status="recalled")
+        row = self.ledger.get(r.source, r.workspace_id, r.source_id)
+        self.assertEqual(row["status"], "recalled")
+        self.assertFalse(row["tombstone"])
+
     def test_set_cursor_stamps_provider_wide(self):
         r = _sample_record(source_id="m-cursor")
         self.ledger.upsert(r)
