@@ -8,6 +8,8 @@ import {
   aggregateTaskScores,
   hashConfig,
   isAnswerSupported,
+  isLatencyAttributionReconciled,
+  measured,
   normalizeForAnswerCheck,
   resolveLane,
   scoreTask,
@@ -268,6 +270,7 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
     const agg = aggregateTaskScores(scores);
     // 95th percentile of 0..19 sorted ascending (length 20): p95Index = ceil(20*0.95)-1 = 18, latencies[18] = 18
     expect(agg.p95LatencyMs).toBe(18);
+    expect(agg.p50LatencyMs).toBe(9);
   });
 
   it("token spend is null when any task omits it (VAL-RETR-012 honest)", () => {
@@ -279,6 +282,11 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
     });
     const agg = aggregateTaskScores(scores);
     expect(agg.tokensRetrieval).toBeNull();
+    expect(agg.tokenAccounting.retrieval).toEqual({
+      status: "unavailable",
+      value: null,
+      reason: "tokensRetrieval was not reported by every completed task",
+    });
   });
 
   it("token spend is summed when all tasks report it", () => {
@@ -290,6 +298,31 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
     });
     const agg = aggregateTaskScores(scores);
     expect(agg.tokensRetrieval).toBe(33);
+  });
+
+  it("exports measured dependency timing only when every task reports it", () => {
+    const scores = Array.from({ length: 2 }, (_, i) => {
+      const result = makeResult({ injected: ["mem-1"], latencyMs: 1 });
+      result.receipt.metrics.dependencyTimingMs = {
+        qdrantMs: measured(0), neo4jMs: measured(0), ollamaMs: measured(0), llmMs: measured(0),
+        sqliteQueueMs: measured(2 + i), applicationCpuMs: measured(3), applicationHeapMs: measured(0), unknownMs: measured(1),
+      };
+      return scoreTask({ task: makeTask({ id: `dependency-${i}` }), result, k: 1, lane: "external_retrieval" });
+    });
+    const aggregate = aggregateTaskScores(scores);
+    expect(aggregate.dependencyTiming.sqliteQueueMs).toEqual({ status: "measured", value: 5, reason: null });
+    expect(aggregate.dependencyTiming.qdrantMs).toEqual({ status: "measured", value: 0, reason: null });
+  });
+
+  it("reconciles attribution with the larger of five milliseconds or ten percent", () => {
+    expect(isLatencyAttributionReconciled({
+      endToEndMs: 100,
+      componentTimes: { applicationCpuMs: measured(60), sqliteQueueMs: measured(30), unknownMs: measured(5) },
+    })).toBe(true);
+    expect(isLatencyAttributionReconciled({
+      endToEndMs: 100,
+      componentTimes: { applicationCpuMs: measured(60), sqliteQueueMs: measured(20), unknownMs: measured(5) },
+    })).toBe(false);
   });
 
   it("incomplete tasks do not pollute ranked-ID aggregates", () => {

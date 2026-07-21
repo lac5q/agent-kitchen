@@ -167,6 +167,22 @@ export type AdapterStatus =
   | "malformed_response"
   | "scorer_failure";
 
+export type AvailabilityEvidence =
+  | { status: "measured"; value: number; reason: null }
+  | { status: "unavailable"; value: null; reason: string };
+
+export type DependencyTimingEvidence = Record<
+  | "qdrantMs"
+  | "neo4jMs"
+  | "ollamaMs"
+  | "llmMs"
+  | "sqliteQueueMs"
+  | "applicationCpuMs"
+  | "applicationHeapMs"
+  | "unknownMs",
+  AvailabilityEvidence
+>;
+
 export interface AdapterReceipt {
   adapterName: AdapterId;
   adapterVersion: string;
@@ -193,6 +209,8 @@ export interface AdapterReceipt {
     tokensJudge: number | null;
     contextPackBytes: number | null;
     contextPackHash: string | null;
+    /** Explicit availability avoids treating unobserved component time as zero. */
+    dependencyTimingMs?: DependencyTimingEvidence;
   };
 }
 
@@ -228,6 +246,7 @@ export interface AggregateMetrics {
   mrr: number;
   falsePositiveRate: number;
   answerSupportedRate: number;
+  p50LatencyMs: number;
   p95LatencyMs: number;
   abstentionAccuracy: number | null;
   abstentionDenominator: number | null;
@@ -239,6 +258,13 @@ export interface AggregateMetrics {
   tokensRerank: number | null;
   tokensPack: number | null;
   tokensJudge: number | null;
+  tokenAccounting: {
+    retrieval: AvailabilityEvidence;
+    rerank: AvailabilityEvidence;
+    pack: AvailabilityEvidence;
+    judge: AvailabilityEvidence;
+  };
+  dependencyTiming: DependencyTimingEvidence;
   components: {
     retrieval: number | null;
     rerank: number | null;

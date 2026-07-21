@@ -23,6 +23,8 @@ import type {
   AdapterReceipt,
   AdapterResult,
   AggregateMetrics,
+  AvailabilityEvidence,
+  DependencyTimingEvidence,
   BenchmarkLane,
   NormalizedTask,
   TaskScore,
@@ -182,6 +184,48 @@ export function scoreTask(input: ScoreTaskInput): TaskScore {
 // ============================================================================
 
 const PERCENTILE = 0.95;
+const DEPENDENCY_TIMING_KEYS = [
+  "qdrantMs", "neo4jMs", "ollamaMs", "llmMs", "sqliteQueueMs", "applicationCpuMs", "applicationHeapMs", "unknownMs",
+] as const;
+
+/** Explicitly encode observed values vs unavailable instrumentation. Zero is valid only when measured. */
+export function measured(value: number): AvailabilityEvidence {
+  if (!Number.isFinite(value)) throw new Error("measured evidence requires a finite number");
+  return { status: "measured", value, reason: null };
+}
+
+export function unavailable(reason: string): AvailabilityEvidence {
+  if (reason.trim().length === 0) throw new Error("unavailable evidence requires a reason");
+  return { status: "unavailable", value: null, reason };
+}
+
+function aggregateAvailability(values: Array<AvailabilityEvidence | undefined>, fallbackReason: string): AvailabilityEvidence {
+  if (values.length === 0) return unavailable(fallbackReason);
+  const missing = values.filter((value) => !value || value.status === "unavailable");
+  if (missing.length > 0) {
+    const reasons = missing
+      .map((value) => value?.status === "unavailable" ? value.reason : "not reported")
+      .filter((reason, index, all) => all.indexOf(reason) === index);
+    return unavailable(reasons.join("; "));
+  }
+  return measured(values.reduce((total, value) => total + (value as Extract<AvailabilityEvidence, { status: "measured" }>).value, 0));
+}
+
+function unavailableDependencyTiming(reason: string): DependencyTimingEvidence {
+  return Object.fromEntries(DEPENDENCY_TIMING_KEYS.map((key) => [key, unavailable(reason)])) as DependencyTimingEvidence;
+}
+
+/** Returns whether component + unknown time reconciles with end-to-end time. */
+export function isLatencyAttributionReconciled(args: {
+  endToEndMs: number;
+  componentTimes: Partial<Record<keyof DependencyTimingEvidence, AvailabilityEvidence>>;
+}): boolean {
+  if (!Number.isFinite(args.endToEndMs) || args.endToEndMs < 0) return false;
+  const values = Object.values(args.componentTimes);
+  if (values.some((value) => !value || value.status !== "measured")) return false;
+  const total = values.reduce((sum, value) => sum + (value as Extract<AvailabilityEvidence, { status: "measured" }>).value, 0);
+  return Math.abs(total - args.endToEndMs) <= Math.max(5, args.endToEndMs * 0.1);
+}
 
 export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
   // Only completed tasks contribute to ranked-ID metrics.
@@ -200,6 +244,7 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
       mrr: 0,
       falsePositiveRate: 0,
       answerSupportedRate: 0,
+      p50LatencyMs: 0,
       p95LatencyMs: 0,
       abstentionAccuracy: null,
       abstentionDenominator: null,
@@ -211,6 +256,13 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
       tokensRerank: null,
       tokensPack: null,
       tokensJudge: null,
+      tokenAccounting: {
+        retrieval: unavailable("no completed retrieval tasks"),
+        rerank: unavailable("no completed retrieval tasks"),
+        pack: unavailable("no completed retrieval tasks"),
+        judge: unavailable("no completed retrieval tasks"),
+      },
+      dependencyTiming: unavailableDependencyTiming("no completed retrieval tasks"),
       components: { retrieval: null, rerank: null, pack: null, judge: null },
       laneMetrics: {},
     };
@@ -227,9 +279,11 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
     completed.filter((t) => t.answerSupportedByRetrievedSource).length / cn,
   );
 
-  // p95 retrieval latency (VAL-RETR-012): honest — uses task retrieval latencies only
+  // Retrieval percentiles use task retrieval latencies only (VAL-RETR-012).
   const latencies = completed.map((t) => t.latencyMs).sort((a, b) => a - b);
+  const p50Index = Math.ceil(latencies.length * 0.5) - 1;
   const p95Index = Math.ceil(latencies.length * PERCENTILE) - 1;
+  const p50LatencyMs = latencies[Math.max(0, p50Index)] ?? 0;
   const p95LatencyMs = latencies[Math.max(0, p95Index)] ?? 0;
 
   // Abstention accuracy (VAL-RETR-011): only labeled tasks count.
@@ -256,6 +310,19 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
   const tokensRerank = sumTokens(completed.map((s) => safeMetric(s, "tokensRerank")));
   const tokensPack = sumTokens(completed.map((s) => safeMetric(s, "tokensPack")));
   const tokensJudge = sumTokens(completed.map((s) => safeMetric(s, "tokensJudge")));
+  const tokenAccounting = {
+    retrieval: tokensRetrieval === null ? unavailable("tokensRetrieval was not reported by every completed task") : measured(tokensRetrieval),
+    rerank: tokensRerank === null ? unavailable("tokensRerank was not reported by every completed task") : measured(tokensRerank),
+    pack: tokensPack === null ? unavailable("tokensPack was not reported by every completed task") : measured(tokensPack),
+    judge: tokensJudge === null ? unavailable("tokensJudge was not reported by every completed task") : measured(tokensJudge),
+  };
+  const dependencyTiming = Object.fromEntries(DEPENDENCY_TIMING_KEYS.map((key) => [
+    key,
+    aggregateAvailability(
+      completed.map((score) => score.receipt.metrics.dependencyTimingMs?.[key]),
+      `${key} was not observed by every completed task`,
+    ),
+  ])) as DependencyTimingEvidence;
 
   // Context pack bytes: canonical pack size (first non-null wins, all must agree)
   const contextPackBytes = firstNonNull(completed.map((s) => safeMetric(s, "contextPackBytes") as number | null));
@@ -271,6 +338,7 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
     mrr,
     falsePositiveRate,
     answerSupportedRate,
+    p50LatencyMs,
     p95LatencyMs,
     abstentionAccuracy,
     abstentionDenominator,
@@ -282,6 +350,8 @@ export function aggregateTaskScores(scores: TaskScore[]): AggregateMetrics {
     tokensRerank,
     tokensPack,
     tokensJudge,
+    tokenAccounting,
+    dependencyTiming,
     components: {
       retrieval: tokensRetrieval,
       rerank: tokensRerank,

@@ -46,6 +46,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { register } from "node:module";
 import { createRequire } from "node:module";
+import { hashRetrievalConfiguration, hashRetrievalWorkload } from "./runtime-bottleneck-contract.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -300,6 +301,71 @@ function loadFixturesSync(dataset, limit) {
 // Text report renderer
 // ===========================================================================
 
+function validateRuntimeBottleneckReport(report, suite) {
+  for (const field of ["suiteManifestHash", "fixtureHash", "retrievalWorkloadHash", "retrievalConfigurationHash", "operatorRequestMethod", "dependencyHealth"]) {
+    if (typeof suite[field] !== "string" && field !== "dependencyHealth") throw new Error(`runtime suite manifest missing ${field}`);
+  }
+  const dependenciesHealthy = suite.dependencyHealth && typeof suite.dependencyHealth === "object" && !Array.isArray(suite.dependencyHealth) && Object.keys(suite.dependencyHealth).length > 0 && Object.values(suite.dependencyHealth).every((entry) => entry === "healthy" || (entry && typeof entry === "object" && entry.status === "healthy"));
+  const aggregate = report.aggregate;
+  const actual = {
+    fixtureHash: report.fixtureHash,
+    retrievalConfigurationHash: hashRetrievalConfiguration({
+      dataset: report.dataset,
+      adapter: report.adapter,
+      k: report.k,
+      rerankEnabled: report.rerankEnabled,
+      judgeEnabled: report.judgeEnabled,
+      providerFlags: report.providerFlags,
+      seed: report.seed,
+    }),
+    retrievalWorkloadHash: hashRetrievalWorkload({ dataset: report.dataset, taskCount: report.taskCount, fixtureHash: report.fixtureHash }),
+  };
+  if (actual.retrievalConfigurationHash !== report.configHash) throw new Error("retrieval report configHash does not match executed arguments");
+  if (report.taskCount < 25 || aggregate.completedTaskCount !== report.taskCount || aggregate.failedTaskCount !== 0) {
+    throw new Error("runtime bottleneck retrieval evidence requires at least 25 completed tasks and zero failed tasks");
+  }
+  if (!dependenciesHealthy || suite.fixtureHash !== actual.fixtureHash || suite.retrievalWorkloadHash !== actual.retrievalWorkloadHash || suite.retrievalConfigurationHash !== actual.retrievalConfigurationHash || suite.operatorRequestMethod !== "GET" || suite.degradedMode !== false) {
+    throw new Error("runtime suite manifest does not match the healthy retrieval run's executed arguments");
+  }
+  return actual;
+}
+
+function writeRuntimeBottleneckResult(report) {
+  const runId = process.env.RUNTIME_BOTTLENECK_RUN_ID;
+  if (!runId) return null;
+  if (!/^run-\d\d$/.test(runId)) throw new Error("RUNTIME_BOTTLENECK_RUN_ID must use immutable run-NN form");
+  const outputDir = path.join(repoRoot, "evals", "comparative-retrieval", "results", "runtime-bottleneck");
+  const manifestPath = process.env.RUNTIME_BOTTLENECK_SUITE_MANIFEST || path.join(repoRoot, "reports", "operator-load", "runtime-bottleneck", "suite-manifest.json");
+  const suite = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const actual = validateRuntimeBottleneckReport(report, suite);
+  const aggregate = report.aggregate;
+  const output = path.join(outputDir, `${runId}.json`);
+  if (fs.existsSync(output)) throw new Error(`refusing to overwrite immutable evidence run: ${output}`);
+  const evidence = {
+    schemaVersion: "1",
+    suiteManifestHash: suite.suiteManifestHash,
+    fixtureHash: actual.fixtureHash,
+    retrievalWorkloadHash: actual.retrievalWorkloadHash,
+    retrievalConfigurationHash: actual.retrievalConfigurationHash,
+    seed: report.seed,
+    taskCount: report.taskCount,
+    precisionAtK: aggregate.precisionAtK,
+    recallAtK: aggregate.recallAtK,
+    mrr: aggregate.mrr,
+    falsePositiveRate: aggregate.falsePositiveRate,
+    answerSupportedRate: aggregate.answerSupportedRate,
+    p50LatencyMs: aggregate.p50LatencyMs,
+    p95LatencyMs: aggregate.p95LatencyMs,
+    completedTaskCount: aggregate.completedTaskCount,
+    failedTaskCount: aggregate.failedTaskCount,
+    tokenAccounting: aggregate.tokenAccounting,
+    dependencyTiming: aggregate.dependencyTiming,
+  };
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`, { flag: "wx" });
+  return output;
+}
+
 function renderTextReport(args, result) {
   const lines = [];
   lines.push("# MemroOS Comparative Retrieval Benchmark");
@@ -324,6 +390,7 @@ function renderTextReport(args, result) {
     lines.push(`MRR:                      ${a.mrr}`);
     lines.push(`false_positive_rate:      ${a.falsePositiveRate}`);
     lines.push(`answer_support_rate:      ${a.answerSupportedRate}`);
+    lines.push(`p50_latency_ms:           ${a.p50LatencyMs}`);
     lines.push(`p95_latency_ms:           ${a.p95LatencyMs}`);
     if (a.abstentionAccuracy !== null && a.abstentionAccuracy !== undefined) {
       lines.push(`abstention_accuracy:      ${a.abstentionAccuracy} (labeled=${a.abstentionLabeledCount})`);
@@ -490,6 +557,7 @@ async function run(argv = process.argv.slice(2)) {
         mrr: report.aggregate.mrr,
         falsePositiveRate: report.aggregate.falsePositiveRate,
         answerSupportedRate: report.aggregate.answerSupportedRate,
+        p50LatencyMs: report.aggregate.p50LatencyMs,
         p95LatencyMs: report.aggregate.p95LatencyMs,
         abstentionAccuracy: report.aggregate.abstentionAccuracy,
         abstentionLabeledCount: report.aggregate.abstentionLabeledCount,
@@ -516,10 +584,15 @@ async function run(argv = process.argv.slice(2)) {
     const publicationReady =
       outcome.publicationGate?.ok === true &&
       outcome.auditPersistence?.allRequiredPersisted === true;
+    if (process.env.RUNTIME_BOTTLENECK_RUN_ID && (!publicationReady || args.noWrite)) {
+      throw new Error("runtime bottleneck evidence requires a persisted, publication-ready retrieval run");
+    }
     if (!args.noWrite && publicationReady) {
       fs.mkdirSync(resultsDir, { recursive: true });
       const outFile = path.join(resultsDir, dataset + "-" + adapter + "-latest.json");
       fs.writeFileSync(outFile, JSON.stringify(result, null, 2));
+      const runtimeEvidencePath = writeRuntimeBottleneckResult(report);
+      if (!args.json && runtimeEvidencePath) console.log("Wrote " + path.relative(repoRoot, runtimeEvidencePath));
       if (!args.json) {
         console.log("Wrote " + path.relative(repoRoot, outFile));
       }
@@ -616,4 +689,6 @@ export {
   legacyNoMemoryAdapter as noMemoryAdapter,
   run,
   scoreTask,
+  validateRuntimeBottleneckReport,
+  writeRuntimeBottleneckResult,
 };

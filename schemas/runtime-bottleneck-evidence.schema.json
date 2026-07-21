@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memroos.com/schemas/runtime-bottleneck-evidence.schema.json",
+  "title": "MemroOS Runtime Bottleneck Evidence v1",
+  "description": "Versioned, non-secret evidence for the Phase 175 runtime bottleneck decision. All latency values use milliseconds; throughput uses requests per second.",
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^(sha256:)?[a-f0-9]{64}$" },
+    "availability": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "reason"],
+          "properties": {
+            "status": { "const": "measured" },
+            "value": { "type": "number" },
+            "reason": { "type": "null" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "reason"],
+          "properties": {
+            "status": { "const": "unavailable" },
+            "value": { "type": "null" },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "dependencyTimes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qdrantMs", "neo4jMs", "ollamaMs", "llmMs", "sqliteQueueMs", "applicationCpuMs", "applicationHeapMs", "unknownMs"],
+      "properties": {
+        "qdrantMs": { "$ref": "#/$defs/availability" },
+        "neo4jMs": { "$ref": "#/$defs/availability" },
+        "ollamaMs": { "$ref": "#/$defs/availability" },
+        "llmMs": { "$ref": "#/$defs/availability" },
+        "sqliteQueueMs": { "$ref": "#/$defs/availability" },
+        "applicationCpuMs": { "$ref": "#/$defs/availability" },
+        "applicationHeapMs": { "$ref": "#/$defs/availability" },
+        "unknownMs": { "$ref": "#/$defs/availability" }
+      }
+    },
+    "suiteManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "suiteManifestHash", "fixtureHash", "operatorWorkloadHash", "retrievalWorkloadHash", "operatorConfigurationHash", "retrievalConfigurationHash", "gitRevision", "host", "runtimeVersions", "targetUrl", "operatorRequestMethod", "dependencyHealth", "degradedMode"],
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "suiteManifestHash": { "$ref": "#/$defs/hash" },
+        "fixtureHash": { "$ref": "#/$defs/hash" },
+        "operatorWorkloadHash": { "$ref": "#/$defs/hash" },
+        "retrievalWorkloadHash": { "$ref": "#/$defs/hash" },
+        "operatorConfigurationHash": { "$ref": "#/$defs/hash" },
+        "retrievalConfigurationHash": { "$ref": "#/$defs/hash" },
+        "gitRevision": { "type": "string", "minLength": 7 },
+        "host": { "type": "object", "additionalProperties": false, "required": ["cpu", "memoryBytes"], "properties": { "cpu": { "type": "string", "minLength": 1 }, "memoryBytes": { "type": "number", "minimum": 0 } } },
+        "runtimeVersions": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } },
+        "targetUrl": { "type": "string", "format": "uri" },
+        "operatorRequestMethod": { "const": "GET", "description": "Phase 175 operator evidence is read-only." },
+        "dependencyHealth": { "type": "object", "minProperties": 1 },
+        "degradedMode": { "const": false }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endToEndP95Ms", "components"],
+      "properties": {
+        "endToEndP95Ms": { "type": "number", "minimum": 0, "description": "milliseconds" },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["qdrantMs", "neo4jMs", "ollamaMs", "llmMs", "sqliteQueueMs", "applicationCpuMs", "applicationHeapMs", "indexingMs", "unknownMs"],
+          "properties": {
+            "qdrantMs": { "$ref": "#/$defs/availability" }, "neo4jMs": { "$ref": "#/$defs/availability" }, "ollamaMs": { "$ref": "#/$defs/availability" }, "llmMs": { "$ref": "#/$defs/availability" }, "sqliteQueueMs": { "$ref": "#/$defs/availability" }, "applicationCpuMs": { "$ref": "#/$defs/availability" }, "applicationHeapMs": { "$ref": "#/$defs/availability" }, "indexingMs": { "$ref": "#/$defs/availability" }, "unknownMs": { "$ref": "#/$defs/availability", "description": "Must be measured; it absorbs all unreconciled end-to-end time." }
+          }
+        }
+      }
+    },
+    "operatorRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "status", "suiteManifestHash", "fixtureHash", "operatorWorkloadHash", "operatorConfigurationHash", "gitRevision", "targetUrl", "dependencyHealth", "degradedMode", "durationMs", "totalRequests", "errors", "errorRate", "p50Ms", "p95Ms", "p99Ms", "throughputRps", "configuredAgents", "maxInFlight", "requestMethod"],
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "status": { "enum": ["pass", "fail"], "description": "A completed SLO miss is valid decision evidence; unreachable or incomplete runs are not." },
+        "suiteManifestHash": { "$ref": "#/$defs/hash" },
+        "fixtureHash": { "$ref": "#/$defs/hash" },
+        "operatorWorkloadHash": { "$ref": "#/$defs/hash" },
+        "operatorConfigurationHash": { "$ref": "#/$defs/hash" },
+        "gitRevision": { "type": "string", "minLength": 7 },
+        "targetUrl": { "type": "string", "format": "uri" },
+        "dependencyHealth": { "type": "object", "minProperties": 1 },
+        "degradedMode": { "const": false },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "totalRequests": { "type": "number", "minimum": 0 },
+        "errors": { "type": "number", "minimum": 0 },
+        "errorRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "p50Ms": { "type": "number", "minimum": 0 },
+        "p95Ms": { "type": "number", "minimum": 0 },
+        "p99Ms": { "type": "number", "minimum": 0 },
+        "throughputRps": { "type": "number", "minimum": 0 },
+        "configuredAgents": { "type": "number", "minimum": 1 },
+        "maxInFlight": { "type": "number", "minimum": 0 },
+        "requestMethod": { "const": "GET" }
+      }
+    },
+    "requestTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "suiteManifestHash", "runId", "requestMethod", "targetUrl", "requests"],
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "suiteManifestHash": { "$ref": "#/$defs/hash" },
+        "runId": { "type": "string", "pattern": "^run-[0-9]{2}$" },
+        "requestMethod": { "const": "GET" },
+        "targetUrl": { "type": "string", "format": "uri" },
+        "requests": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["kind", "method", "startedAt", "finishedAt", "latencyMs", "status", "error", "inFlightAtStart"], "properties": { "kind": { "enum": ["probe", "load"] }, "method": { "const": "GET" }, "startedAt": { "type": "string", "format": "date-time" }, "finishedAt": { "type": "string", "format": "date-time" }, "latencyMs": { "type": ["number", "null"], "minimum": 0 }, "status": { "type": "number", "minimum": 0 }, "error": { "type": ["string", "null"] }, "inFlightAtStart": { "type": "integer", "minimum": 0, "description": "Exact concurrency sampled immediately after dispatch; load requests require at least one." } } } }
+      }
+    },
+    "retrievalRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "suiteManifestHash", "fixtureHash", "retrievalWorkloadHash", "retrievalConfigurationHash", "seed", "taskCount", "precisionAtK", "recallAtK", "mrr", "falsePositiveRate", "answerSupportedRate", "p50LatencyMs", "p95LatencyMs", "completedTaskCount", "failedTaskCount", "tokenAccounting", "dependencyTiming"],
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "suiteManifestHash": { "$ref": "#/$defs/hash" },
+        "fixtureHash": { "$ref": "#/$defs/hash" },
+        "retrievalWorkloadHash": { "$ref": "#/$defs/hash" },
+        "retrievalConfigurationHash": { "$ref": "#/$defs/hash" },
+        "seed": { "type": "number" },
+        "taskCount": { "type": "number", "minimum": 1 },
+        "precisionAtK": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recallAtK": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mrr": { "type": "number", "minimum": 0, "maximum": 1 },
+        "falsePositiveRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "answerSupportedRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "p50LatencyMs": { "type": "number", "minimum": 0 },
+        "p95LatencyMs": { "type": "number", "minimum": 0 },
+        "completedTaskCount": { "type": "number", "minimum": 0 },
+        "failedTaskCount": { "type": "number", "minimum": 0 },
+        "tokenAccounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retrieval", "rerank", "pack", "judge"],
+          "properties": {
+            "retrieval": { "$ref": "#/$defs/availability" },
+            "rerank": { "$ref": "#/$defs/availability" },
+            "pack": { "$ref": "#/$defs/availability" },
+            "judge": { "$ref": "#/$defs/availability" }
+          }
+        },
+        "dependencyTiming": { "$ref": "#/$defs/dependencyTimes" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/suiteManifest" },
+    { "$ref": "#/$defs/operatorRun" },
+    { "$ref": "#/$defs/requestTrace" },
+    { "$ref": "#/$defs/retrievalRun" },
+    { "$ref": "#/$defs/attribution" }
+  ]
+}

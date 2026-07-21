@@ -19,6 +19,7 @@ import type {
   CorpusEntry,
   IgnoredItem,
   NormalizedTask,
+  DependencyTimingEvidence,
   RetrievedItem,
 } from "../schema";
 import {
@@ -53,6 +54,18 @@ const LIVE_LABEL_POLICIES = new Set([
 const LIVE_BELIEF_STAGES = new Set([
   "silver_candidate_claim", "gold_claim", "revoked", "superseded",
 ]);
+const DEPENDENCY_TIMING_KEYS = [
+  "qdrantMs", "neo4jMs", "ollamaMs", "llmMs", "sqliteQueueMs", "applicationCpuMs", "applicationHeapMs", "unknownMs",
+] as const;
+
+/** The live lexical wrapper never guesses component timings or token spend. */
+function unavailableDependencyTiming(): DependencyTimingEvidence {
+  return Object.fromEntries(DEPENDENCY_TIMING_KEYS.map((key) => [key, {
+    status: "unavailable" as const,
+    value: null,
+    reason: "live adapter does not instrument component timing",
+  }])) as DependencyTimingEvidence;
+}
 
 function scopeInputIssue(value: unknown, candidate: boolean): string | null {
   const missing = candidate ? "candidate_scope_missing" : "incomplete_scope";
@@ -200,6 +213,7 @@ class LiveAdapter implements BenchmarkAdapter {
             tokensJudge: null,
             contextPackBytes: null,
             contextPackHash: null,
+            dependencyTimingMs: unavailableDependencyTiming(),
           },
         },
       };
@@ -288,6 +302,7 @@ class LiveAdapter implements BenchmarkAdapter {
           tokensJudge: null,
           contextPackBytes: null,
           contextPackHash: null,
+          dependencyTimingMs: unavailableDependencyTiming(),
         },
       },
     };

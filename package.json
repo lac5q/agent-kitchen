@@ -39,6 +39,8 @@
     "eval:memory-degradation": "bash scripts/run-memory-degradation-checks.sh",
     "eval:marketplace-memory": "node scripts/run-marketplace-memory-evals.mjs",
     "eval:comparative-retrieval": "node scripts/run-comparative-retrieval-evals.mjs",
+    "generate:runtime-bottleneck-manifest": "node scripts/generate-runtime-bottleneck-manifest.mjs",
+    "check:runtime-bottleneck-evidence": "node scripts/check-runtime-bottleneck-evidence.mjs",
     "check:governance": "node scripts/check-governance-coverage.mjs",
     "check:knowledge-indexing": "node scripts/check-knowledge-indexing.mjs",
     "check:local-footprint": "node scripts/check-local-footprint.mjs",
