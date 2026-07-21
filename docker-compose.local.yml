@@ -49,6 +49,8 @@ services:
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
+      AGENT_CONFIGS_PATH: /knowledge/agent-configs
+      APO_PROPOSALS_PATH: /root/.openclaw/skills/proposals
       MEMROOS_DATA_RESIDENCY: ${MEMROOS_DATA_RESIDENCY:-0}
       LOCAL_JUDGE_PROVIDER: ${LOCAL_JUDGE_PROVIDER:-ollama}
       LOCAL_JUDGE_ENDPOINT: ${LOCAL_JUDGE_ENDPOINT:-http://ollama:11434/v1}
@@ -57,6 +59,7 @@ services:
     volumes:
       - memroos-data:/data
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+      - ${APO_PROPOSALS_PATH:-./data/apo-proposals}:/root/.openclaw/skills/proposals:ro
     depends_on:
       mem0:
         condition: service_healthy
