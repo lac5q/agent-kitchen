@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Beastmode adversarial-checker / watcher lane: codex gpt-5.6-terra at HIGH effort.
+#
+# SUBSTITUTION HISTORY (preserve order in shell comments when restoring):
+#   1. claude-fable-5 via Anthropic API (bin/beast-fable)        — credits exhausted
+#   2. claude-opus-4-8 high via Pro lane (bin/beast-opus)         — user override
+#   3. codex gpt-5.6-terra high via codex OAuth lane (THIS)        — final user override
+#
+# When Anthropic credits return, restore this wrapper to the Anthropic
+# messaging endpoint: `ln -sf bin/beast-fable bin/beast-validator` (after
+# editing it back to the messages-API shape). For now it assumes the
+# codex OAuth lane is the active validator lane.
+#
+# stdin → stdout contract (same as bin/beast-fable/bin/beast-opus), so
+# existing `.beastmode/worker-runs/*-*/prompt.txt` callers work unchanged.
+#
+# Reasoning effort is set via ~/.codex/config.toml (model_reasoning_effort
+# = "high"); codex exec does not accept a CLI flag for it. The wrapper
+# refuses to dispatch if the config shows anything below HIGH.
+set -euo pipefail
+if ! command -v codex >/dev/null 2>&1; then
+  echo "beast-validator: 'codex' CLI not found in PATH" >&2
+  exit 127
+fi
+
+# Sanity-check the configured reasoning effort (or pass an override via
+# env var for testing).
+EFFECT="${BEAST_VALIDATOR_EFFORT:-high}"
+case "$EFFECT" in
+  low|medium|high|xhigh|max) ;;
+  *)
+    echo "beast-validator: refuse effort=${EFFECT!r}; allowed: low|medium|high|xhigh|max" >&2
+    exit 4 ;;
+esac
+
+PROMPT_FILE="$(mktemp)"
+trap 'rm -f "$PROMPT_FILE"' EXIT
+cat >"$PROMPT_FILE"
+
+# Note: approval policy is "never" equivalent for one-shot validator turns;
+# skip-git-repo-check lets us run from /tmp; the env override pins the
+# reasoning effort in case the user/test has a different default.
+exec env CODEX_RUNTIME_CONFIG_OVERRIDE="model_reasoning_effort=\"${EFFECT}\"" \
+  codex exec \
+    --model gpt-5.6-terra \
+    --skip-git-repo-check \
+    --dangerously-bypass-approvals-and-sandbox \
+    - <"$PROMPT_FILE"
