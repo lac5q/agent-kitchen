@@ -13,11 +13,30 @@ Phase 176 release gate (CONNMEM-08) requires live provider-total
 reconciliation: the operator must be able to say "entire company
 indexed" only when the ledger reconciles provider totals against
 fetched/unique/filtered/failed/tombstoned/indexed counts for every
-approved provider. The session that landed CONNMEM-02 + 03 + 04
-(schemas, Circleback extension, Linear SDL vendoring) did NOT run
-live backfill because:
+approved provider.
 
-- **Circleback CLI not installed** on cordant-hermes-01 (`circleback: command not found`).
+The Phase 176 first session that landed on `install-repro-connmem-bridge`
+shipped **CONNMEM-02** (canonical envelope + sync ledger schemas) and
+**CONNMEM-04-prep** (Linear GraphQL SDL stub with doc-derived provenance).
+It did NOT ship:
+
+- **CONNMEM-03** — Circleback adapter extension to project through the
+  envelope; current `circleback_ingest.py` writes idempotent markdown
+  directly into `meet-recordings-circleback` but does NOT route through
+  the canonical envelope yet (no path at
+  `services/connmem/circleback_adapter.py`)
+- **CONNMEM-04** — Linear adapter implementation (multi-workspace
+  GraphQL, capability discovery, signed webhook handling)
+- **CONNMEM-05..07** — Linear/Notion reconciliation, comprehensive
+  ledger integration with operator surfaces
+- **CONNMEM-08** — release-gate live reconciliation against provider
+  totals (the path `services/connmem/release_gate.py` does not exist
+  yet; runs once CONNMEM-04 ships)
+
+The blockers are:
+
+- **Circleback CLI not installed** on cordant-hermes-01 (`circleback:
+  command not found`).
 - **No API keys** on cordant-hermes-01's `.env`: no `CIRCLEBACK_*`,
   no `LINEAR_*`, no `NOTION_*`.
 - **Circleback tenant-visibility unproven** — the SDK CLI may only see
@@ -35,6 +54,19 @@ live backfill because:
   - Linear doc-derived SDL stub at `references/linear/SDL-STUBS.graphql`
   - doc-derived Linear fixture at
     `scripts/connmem/fixtures/linear/__init__.py`
+  - File paths of the NOT-YET-BUILT adapter/release-gate modules:
+    - `services/connmem/circleback_adapter.py` (CONNMEM-03)
+    - `services/connmem/linear_adapter.py` (CONNMEM-04)
+    - `services/connmem/release_gate.py` (CONNMEM-08)
+
+The doc-derived fixture has known limitations flagged by the verifier
+that must be reconciled when CONNMEM-04 lands:
+- doc-derived SDL fields/nullability can drift from live introspection
+- `workspace_id` mapped to Linear team key; live may need organization/workspace
+  scope instead
+- fixture's expected canonical payload uses `null` content_hash and
+  captured_at values, which are NOT valid CanonicalRecord until the
+  adapter's projection step fills them in
 
 ## What's required to close this ticket
 
