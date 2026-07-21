@@ -257,6 +257,18 @@ describe("proxy", () => {
     expect(await response.text()).toBe("");
   });
 
+  it("lets telemetry shipment handle its own operator-key authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/operations/telemetry", {
+        method: "POST",
+        headers: { host: "localhost:3002", "x-memroos-operator-key": "operator-key" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets recall ingest handle its own operator-key authorization", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/recall/ingest", {
