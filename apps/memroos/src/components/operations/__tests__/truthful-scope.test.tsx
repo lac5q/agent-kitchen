@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   useDelegations: vi.fn(),
   useSkills: vi.fn(),
   useModelUsage: vi.fn(),
+  useModelRoutingDashboard: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -21,6 +22,7 @@ vi.mock("@/lib/api-client", () => ({
   useDelegations: api.useDelegations,
   useSkills: api.useSkills,
   useModelUsage: api.useModelUsage,
+  useModelRoutingDashboard: api.useModelRoutingDashboard,
 }));
 
 function emptyHiveAndDelegationsMocks() {
@@ -35,6 +37,7 @@ function emptyHiveAndDelegationsMocks() {
     data: { totalSkills: 0, coverageGaps: [], skillBudget: { duplicateSkills: [] } },
     isError: false,
   });
+  api.useModelRoutingDashboard.mockReturnValue({ data: { events: [] }, isLoading: false, isError: false });
 }
 
 describe("Operations NOC truthful scope and source disclosure", () => {
@@ -110,12 +113,12 @@ describe("Operations NOC truthful scope and source disclosure", () => {
 
       expect(screen.getAllByText(/window=24h/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/last 24 hours/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Cost and quality recommendations/i)[0]).toBeInTheDocument();
+      expect(screen.getByText(/No model utility history yet/i)).toBeInTheDocument();
     });
 
     it("discloses source failure rather than fabricating model totals", () => {
       emptyHiveAndDelegationsMocks();
-      api.useModelUsage.mockReturnValue({
+      api.useModelRoutingDashboard.mockReturnValue({
         data: undefined,
         isLoading: false,
         isError: true,
@@ -123,7 +126,7 @@ describe("Operations NOC truthful scope and source disclosure", () => {
       });
 
       render(<ModelUtility filters={{ window: "7d", workspace: "local" }} />);
-      expect(screen.getByText(/Failed to load/i)).toBeInTheDocument();
+      expect(screen.getByText(/Model utility is stale or unavailable/i)).toBeInTheDocument();
     });
   });
 });

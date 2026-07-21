@@ -105,6 +105,11 @@ type AttentionItem = {
   target: string | null;
 };
 
+type AttentionResult = {
+  items: AttentionItem[];
+  sourceState: "live" | "stale_or_error";
+};
+
 type AgentActivity = {
   sourceState: NocSourceState;
   source: string;
@@ -332,8 +337,9 @@ function readAgentActivity(db: ReturnType<typeof getDb>, since: string, workspac
   }
 }
 
-function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
+function buildAttention(db: ReturnType<typeof getDb>): AttentionResult {
   const items: AttentionItem[] = [];
+  let sourceState: AttentionResult["sourceState"] = "live";
   try {
     const cronRows = db.prepare(
       `SELECT id, name, warning, last_failure_at AS lastFailureAt, updated_at AS updatedAt
@@ -346,10 +352,10 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
       title: `Cron needs attention: ${row.name}`,
       detail: row.warning,
       timestamp: row.lastFailureAt ?? row.updatedAt,
-      target: "/api/cron-health",
+      target: null,
     })));
   } catch {
-    // An optional attention source must not fabricate an operator task.
+    sourceState = "stale_or_error";
   }
   try {
     const hilRows = db.prepare(
@@ -367,7 +373,7 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
       target: "/escalations",
     })));
   } catch {
-    // An optional attention source must not fabricate an operator task.
+    sourceState = "stale_or_error";
   }
   try {
     const securityRows = db.prepare(
@@ -387,10 +393,10 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
       title: `Security finding: ${row.action}`,
       detail: row.target,
       timestamp: row.timestamp,
-      target: "/api/security/report",
+      target: "/audit",
     })));
   } catch {
-    // An optional attention source must not fabricate an operator task.
+    sourceState = "stale_or_error";
   }
   try {
     const sources = evaluateContextSources(loadContextSourceContracts()).sources;
@@ -402,13 +408,16 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionItem[] {
         title: `Source freshness needs attention: ${source.id}`,
         detail: source.lastError ?? source.repairHint,
         timestamp: source.lastRun,
-        target: "/api/context/health",
+        target: "/library",
       })));
   } catch {
-    // An optional attention source must not fabricate an operator task.
+    sourceState = "stale_or_error";
   }
   const rank: Record<AttentionSeverity, number> = { critical: 0, warning: 1, info: 2 };
-  return items.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.timestamp ?? "").localeCompare(a.timestamp ?? "") || a.id.localeCompare(b.id));
+  return {
+    items: items.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.timestamp ?? "").localeCompare(a.timestamp ?? "") || a.id.localeCompare(b.id)),
+    sourceState,
+  };
 }
 
 function panel(status: PanelStatus, source: string, lastUpdated: string | null, warnings: string[] = []) {
@@ -922,9 +931,10 @@ async function buildNocResponse(request: Request) {
       localFootprint: localFootprintEnvelope,
       memoryIteration,
     },
-    attention,
+    attention: attention.items,
     agentActivity,
     sourceStates: {
+      attention: attention.sourceState,
       agentActivity: agentActivity.sourceState,
       // Preserved contract: EfficiencySignals is known-unwired, not empty/error.
       efficiencySignals: "known_unwired" as const,

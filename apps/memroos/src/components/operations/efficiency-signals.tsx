@@ -57,7 +57,7 @@ const EMPTY_METRICS: OperationsNocEfficiencyMetrics = {
 };
 
 function formatPercent(value: number | null) {
-  if (value === null) return "No events";
+  if (value === null) return "Not measured";
   return `${Math.round(value * 100)}%`;
 }
 
@@ -193,17 +193,22 @@ export function EfficiencySignals({ filters }: { filters?: NocFilters }) {
   const envelope = noc.data?.metrics.efficiency;
   const metrics = normalizeMetrics(envelope?.value ?? EMPTY_METRICS);
   const panel = noc.data?.panels.efficiency;
-  const status = noc.isLoading
-    ? "loading"
-    : noc.isError
-      ? "degraded"
-      : (envelope?.status ?? panel?.status ?? "empty");
+  const knownUnwired = noc.data?.sourceStates?.efficiencySignals === "known_unwired";
+  const status = knownUnwired
+    ? "known_unwired"
+    : noc.isLoading
+      ? "loading"
+      : noc.isError
+        ? "degraded"
+        : (envelope?.status ?? panel?.status ?? "empty");
   const statusColors = badgeColors(status);
-  const warnings = noc.isError
-    ? ["Unable to load efficiency telemetry"]
-    : envelope && envelope.status !== "live" && envelope.status !== "zero"
-      ? [envelope.reason ?? "Efficiency telemetry unavailable"]
-      : panel?.warnings ?? ["No efficiency telemetry events in the selected window"];
+  const warnings = knownUnwired
+    ? ["Source not yet wired — activates when EFFTEL producers ship."]
+    : noc.isError
+      ? ["Unable to load efficiency telemetry"]
+      : envelope && envelope.status !== "live" && envelope.status !== "zero"
+        ? [envelope.reason ?? "Efficiency telemetry unavailable"]
+        : panel?.warnings ?? ["Efficiency telemetry has not produced records in the selected window."];
   const cards = buildCards(metrics);
 
   return (

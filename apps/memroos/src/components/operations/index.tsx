@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOperationsNoc } from "@/lib/api-client";
 import { nocWindowLabel, type NocFilters, type NocWindow, type NocWorkspace } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
@@ -50,10 +50,6 @@ const MemoryConsumption = dynamic(
   () => import("./memory-consumption").then((mod) => mod.MemoryConsumption),
   { ssr: false, loading: () => <NocPanelSkeleton height={320} /> }
 );
-const MemoryNotDigested = dynamic(
-  () => import("./memory-not-digested").then((mod) => mod.MemoryNotDigested),
-  { ssr: false, loading: () => <NocPanelSkeleton height={320} /> }
-);
 const ModelUtility = dynamic(
   () => import("./model-utility").then((mod) => mod.ModelUtility),
   { ssr: false, loading: () => <NocPanelSkeleton /> }
@@ -62,34 +58,45 @@ const ActivityHeatmap = dynamic(
   () => import("./activity-heatmap").then((mod) => mod.ActivityHeatmap),
   { ssr: false, loading: () => <NocPanelSkeleton /> }
 );
+const Cost = dynamic(
+  () => import("./savings-waste").then((mod) => mod.Cost),
+  { ssr: false, loading: () => <NocPanelSkeleton /> }
+);
 const SkillsLifecycle = dynamic(
   () => import("./skills-lifecycle").then((mod) => mod.SkillsLifecycle),
   { ssr: false, loading: () => <div style={{ padding: "0 28px 14px" }}><NocPanelSkeleton height={260} /></div> }
-);
-const BehaviorSignals = dynamic(
-  () => import("./behavior-signals").then((mod) => mod.BehaviorSignals),
-  { ssr: false, loading: () => <NocPanelSkeleton height={260} /> }
 );
 const GovernanceStrip = dynamic(
   () => import("./governance-strip").then((mod) => mod.GovernanceStrip),
   { ssr: false, loading: () => <NocPanelSkeleton /> }
 );
-const Savings = dynamic(
-  () => import("./savings-waste").then((mod) => mod.Savings),
-  { ssr: false, loading: () => <NocPanelSkeleton /> }
+const EfficiencySignals = dynamic(
+  () => import("./efficiency-signals").then((mod) => mod.EfficiencySignals),
+  { ssr: false, loading: () => <NocPanelSkeleton height={260} /> }
 );
-const Waste = dynamic(
-  () => import("./savings-waste").then((mod) => mod.Waste),
-  { ssr: false, loading: () => <NocPanelSkeleton /> }
+const BehaviorSignals = dynamic(
+  () => import("./behavior-signals").then((mod) => mod.BehaviorSignals),
+  { ssr: false, loading: () => <NocPanelSkeleton height={260} /> }
 );
 
-function agentActivityStatus(
-  sourceState: string | undefined
-): "live" | "empty" | "degraded" | "stale" {
+/**
+ * Phase 174 four-state semantic for the Agent Activity panel. The panel
+ * is a direct read of the Phase 173 message-backed sourceState, so we
+ * pass it through unchanged; only `noc.isError` / `noc.isLoading` are
+ * promoted into `stale_or_error` so an endpoint failure cannot be
+ * mistaken for `no_history`.
+ */
+function agentActivityPanelSemantic(
+  sourceState: string | undefined,
+  isLoading: boolean,
+  isError: boolean
+): "live" | "window_empty" | "no_history" | "stale_or_error" | "loading" {
+  if (isError) return "stale_or_error";
+  if (isLoading) return "loading";
   if (sourceState === "live") return "live";
-  if (sourceState === "stale_or_error") return "degraded";
-  if (sourceState === "window_empty" || sourceState === "no_history") return "empty";
-  return "stale";
+  if (sourceState === "window_empty") return "window_empty";
+  if (sourceState === "stale_or_error") return "stale_or_error";
+  return "no_history";
 }
 
 /** Message-backed Agent Activity — hive delegations are additive only. */
@@ -99,32 +106,49 @@ export function AgentActivityPanel({ filters }: { filters: NocFilters }) {
   const agents = activity?.agents ?? [];
   const delegations = activity?.delegations ?? [];
   const sourceState = activity?.sourceState ?? noc.data?.sourceStates?.agentActivity;
-  const status = noc.isLoading ? "degraded" : agentActivityStatus(sourceState);
+  const reportedSemantic = agentActivityPanelSemantic(sourceState, noc.isLoading, noc.isError);
+  const semantic =
+    reportedSemantic === "live" && agents.length === 0
+      ? "no_history"
+      : reportedSemantic;
+  const status =
+    semantic === "live"
+      ? "live"
+      : semantic === "window_empty" || semantic === "no_history"
+        ? "empty"
+        : semantic === "loading"
+          ? "blocked"
+        : "error";
   const emptyCopy =
-    sourceState === "window_empty"
-      ? `No agent messages in ${nocWindowLabel(filters.window)}. Widen the window?`
-      : sourceState === "stale_or_error"
-        ? "Agent activity source is stale or unavailable."
-        : "No agent messages yet. Activity appears from the first operator/agent exchange.";
+    semantic === "window_empty"
+      ? `Nothing in ${nocWindowLabel(filters.window)}; message history exists outside this window. Widen the window?`
+      : semantic === "stale_or_error"
+        ? "Agent activity is stale or unavailable; the message source may be down."
+        : "No agent message history yet. The first operator or agent exchange populates this panel.";
 
   return (
     <div data-testid="agent-activity-panel">
       <NocCard>
         <NocPanelHeader
           title={`Agent activity · ${nocWindowLabel(filters.window)}`}
-          hint="Per-agent message traffic from sqlite://messages. Hive delegation detail is additive when rows exist."
+          hint={
+            delegations.length > 0
+              ? "Per-agent message traffic from sqlite://messages, with delegation detail for the selected window."
+              : "Per-agent message traffic from sqlite://messages."
+          }
           right={
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <Mono color={NOC.soft} size={11}>
                 {noc.isLoading ? "loading" : `${agents.length} agent${agents.length === 1 ? "" : "s"}`}
               </Mono>
-              <SourceStatusBadge status={status} />
+              <SourceStatusBadge status={status} label={semantic} />
             </div>
           }
         />
-        {agents.length === 0 ? (
+        {semantic !== "live" || agents.length === 0 ? (
           <div
-            data-status-block={sourceState ?? "no_history"}
+            data-status-block={semantic}
+            data-filters={`window=${filters.window}&workspace=${filters.workspace}`}
             style={{
               fontSize: 12,
               color: NOC.soft,
@@ -159,9 +183,33 @@ export function AgentActivityPanel({ filters }: { filters: NocFilters }) {
           </div>
         )}
         {delegations.length > 0 ? (
-          <div style={{ marginTop: 12, borderTop: `1px solid ${NOC.rule}`, paddingTop: 10 }}>
+          <div
+            data-status-block="live"
+            data-filters={`window=${filters.window}&workspace=${filters.workspace}`}
+            style={{ marginTop: 12, borderTop: `1px solid ${NOC.rule}`, paddingTop: 10 }}
+          >
             <Eyebrow>Delegations</Eyebrow>
-            <div style={{ marginTop: 6, fontSize: 11, color: NOC.soft, fontFamily: NOC_FONT_MONO }}>
+            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              {delegations.map((delegation) => (
+                <div
+                  key={`${delegation.taskId}:${delegation.fromAgent}:${delegation.toAgent}`}
+                  data-delegation-task={delegation.taskId}
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    color: NOC.soft,
+                    fontFamily: NOC_FONT_MONO,
+                    fontSize: 11,
+                  }}
+                >
+                  <span>{delegation.fromAgent} → {delegation.toAgent}</span>
+                  <span>{delegation.status} · {formatObservedAt(delegation.updatedAt)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 10.5, color: NOC.soft, fontFamily: NOC_FONT_MONO }}>
               {delegations.length} hive delegation{delegations.length === 1 ? "" : "s"} in window
             </div>
           </div>
@@ -185,13 +233,35 @@ export function AgentActivityPanel({ filters }: { filters: NocFilters }) {
   );
 }
 
+const ADVANCED_PREFERENCE_KEY = "memroos:noc:show-advanced";
+
 export function OperationsNoc() {
   const [windowLabel, setWindowLabel] = useState<NocWindow>("24h");
   const [workspace, setWorkspace] = useState<NocWorkspace>("all");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const filters = useMemo<NocFilters>(
     () => ({ window: windowLabel, workspace }),
     [windowLabel, workspace]
   );
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true") {
+        setShowAdvanced(true);
+      }
+    } catch {
+      // Storage can be disabled; the safe default remains off.
+    }
+  }, []);
+
+  function handleShowAdvancedChange(value: boolean) {
+    setShowAdvanced(value);
+    try {
+      window.localStorage.setItem(ADVANCED_PREFERENCE_KEY, String(value));
+    } catch {
+      // The control still works for this session when persistence is unavailable.
+    }
+  }
 
   return (
     <div
@@ -202,36 +272,32 @@ export function OperationsNoc() {
         minHeight: "100%",
       }}
     >
-      {/* Header */}
-      <NocHeader
-        windowLabel={windowLabel}
-        workspace={workspace}
-        onWindowChange={setWindowLabel}
-        onWorkspaceChange={setWorkspace}
-      />
-
-      {/* Row 1 — System pulse strip (6 KPIs) */}
-      <PulseStrip filters={filters} />
-
-      {/* Row 1.5 — operator actions */}
-      <AttentionPanel filters={filters} />
-
-      {/* Row 2 — Memory consumption + Memory not digested */}
-      <div
-        style={{
-          padding: "6px 28px 14px",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 1fr)",
-          gap: 14,
-        }}
-      >
-        <MemoryConsumption filters={filters} />
-        <MemoryNotDigested filters={filters} />
+      <div data-noc-section="header">
+        <NocHeader
+          windowLabel={windowLabel}
+          workspace={workspace}
+          showAdvanced={showAdvanced}
+          onWindowChange={setWindowLabel}
+          onWorkspaceChange={setWorkspace}
+          onShowAdvancedChange={handleShowAdvancedChange}
+        />
       </div>
 
+      <div data-noc-section="pulse">
+        <PulseStrip filters={filters} />
+      </div>
 
-      {/* Row 3 — Agent activity (message-backed) + Model utility + Activity heatmap */}
+      <div data-noc-section="attention">
+        <AttentionPanel filters={filters} />
+      </div>
+
+      <div data-noc-section="memory" style={{ padding: "6px 28px 14px" }}>
+        <MemoryConsumption filters={filters} />
+      </div>
+
       <div
+        data-noc-section="agent-model-activity"
+        data-mobile-grid="agent-model-activity"
         style={{
           padding: "0 28px 14px",
           display: "grid",
@@ -244,30 +310,42 @@ export function OperationsNoc() {
         <ActivityHeatmap filters={filters} />
       </div>
 
-      {/* Row 4 — Skills lifecycle */}
-      <SkillsLifecycle filters={filters} />
-
-      {/* Row 5 — Behavior signals */}
-      <div
-        style={{
-          padding: "0 28px 14px",
-        }}
-      >
-        <BehaviorSignals filters={filters} />
+      <div data-noc-section="cost" style={{ padding: "0 28px 14px" }}>
+        <Cost filters={filters} />
       </div>
 
-      {/* Row 6 — Governance + Savings + Waste */}
       <div
+        data-noc-section="governance-skills"
+        data-mobile-grid="governance-skills"
         style={{
           padding: "0 28px 28px",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
           gap: 14,
         }}
       >
         <GovernanceStrip filters={filters} />
-        <Savings filters={filters} />
-        <Waste filters={filters} />
-      </div>    </div>
+        <SkillsLifecycle filters={filters} />
+      </div>
+
+      {showAdvanced ? (
+        <section
+          aria-label="Advanced operations panels"
+          data-noc-section="advanced"
+          style={{ borderTop: `1px solid ${NOC.rule}`, paddingTop: 14 }}
+        >
+          <div style={{ padding: "0 28px 10px" }}>
+            <Eyebrow>Advanced</Eyebrow>
+            <div style={{ color: NOC.soft, fontSize: 11.5, marginTop: 3 }}>
+              Optional or known-unwired signals, hidden from the default operator scan.
+            </div>
+          </div>
+          <EfficiencySignals filters={filters} />
+          <div style={{ padding: "0 28px 28px" }}>
+            <BehaviorSignals filters={filters} />
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }

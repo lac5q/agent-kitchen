@@ -1,87 +1,183 @@
-
 "use client";
 
-import { Heatmap, Donut } from "@/components/shared/charts";
-import { useHiveFeed } from "@/lib/api-client";
-import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
-import { NOC } from "@/lib/noc-theme";
-import { NocCard, NocPanelHeader, Eyebrow } from "./noc-primitives";
-function buildHeatmap(actions: Array<{ timestamp: string }>): { data: number[][]; max: number; today: number } {
-  const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  const now = new Date();
-  for (const action of actions) {
-    const date = new Date(action.timestamp);
+import { Heatmap } from "@/components/shared/charts";
+import { useOperationsNoc, useTimeSeries } from "@/lib/api-client";
+import type { MetricStatus } from "@/lib/metric-status";
+import {
+  nocWindowLabel,
+  nocWindowToTimeSeriesWindow,
+  type NocFilters,
+} from "@/lib/noc-filters";
+import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
+import {
+  NocCard,
+  NocPanelHeader,
+  SourceStatusBadge,
+} from "./noc-primitives";
+
+interface TimedActivity {
+  timestamp: string;
+  value: number;
+}
+
+function buildHeatmap(activity: TimedActivity[]): {
+  data: number[][];
+  max: number;
+  total: number;
+} {
+  const grid = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => 0),
+  );
+
+  for (const item of activity) {
+    const date = new Date(item.timestamp);
     if (!Number.isFinite(date.getTime())) continue;
-    const ageDays = Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())) / 86400000);
-    if (ageDays < 0 || ageDays > 6) continue;
-    grid[6 - ageDays][date.getHours()] += 1;
+    grid[date.getUTCDay()][date.getUTCHours()] += Math.max(0, item.value);
   }
+
   const max = Math.max(0, ...grid.flat());
   return {
-    data: grid.map((row) => row.map((value) => (max ? Math.max(0.08, value / max) : 0))),
+    data: grid.map((row) =>
+      row.map((value) => (max ? Math.max(0.08, value / max) : 0)),
+    ),
     max,
-    today: grid[6].reduce((sum, value) => sum + value, 0),
+    total: grid.flat().reduce((sum, value) => sum + value, 0),
   };
 }
 
+function memoryTiming(
+  points: Array<{ bucket: string; value: number }>,
+  window: NocFilters["window"],
+): TimedActivity[] {
+  const now = new Date();
+  return points.flatMap((point) => {
+    if (point.value <= 0) return [];
+
+    if (window === "24h" && /^\d{2}:00$/.test(point.bucket)) {
+      const hour = Number(point.bucket.slice(0, 2));
+      const date = new Date(now);
+      date.setUTCMinutes(0, 0, 0);
+      date.setUTCHours(hour);
+      if (date.getTime() > now.getTime()) {
+        date.setUTCDate(date.getUTCDate() - 1);
+      }
+      return [{ timestamp: date.toISOString(), value: point.value }];
+    }
+
+    const date = new Date(`${point.bucket}T12:00:00.000Z`);
+    return Number.isFinite(date.getTime())
+      ? [{ timestamp: date.toISOString(), value: point.value }]
+      : [];
+  });
+}
 
 export function ActivityHeatmap({ filters }: { filters?: NocFilters }) {
   const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
-  const hive = useHiveFeed(500);
-  const hiveOk = !hive.isError && !hive.isLoading && hive.data !== undefined;
-  const heat = buildHeatmap(hiveOk ? hive.data!.actions : []);
-  const weekdayP95 = Math.max(1, Math.ceil(heat.max * 24 * 0.95));
-  const todayLoad = Math.min(100, Math.round((heat.today / weekdayP95) * 100));
+  const noc = useOperationsNoc(effectiveFilters);
+  const writes = useTimeSeries(
+    "memory_writes",
+    nocWindowToTimeSeriesWindow(effectiveFilters.window),
+  );
+  const activity = noc.data?.agentActivity;
+  const agents = activity?.agents ?? [];
+  // Memory-consolidation runs have no workspace key. Do not mix their global
+  // timing into a selected local/remote workspace heatmap.
+  const writePoints = effectiveFilters.workspace === "all" ? writes.data?.points ?? [] : [];
+  const messageActivity = agents.map((agent) => ({
+    timestamp: agent.lastMessageAt,
+    value: agent.messageCount,
+  }));
+  const memoryActivity = memoryTiming(writePoints, effectiveFilters.window);
+  const observations = [...messageActivity, ...memoryActivity];
+  const heat = buildHeatmap(observations);
+  const messageCount = agents.reduce(
+    (total, agent) => total + agent.messageCount,
+    0,
+  );
+  const writeCount = writePoints.reduce(
+    (total, point) => total + point.value,
+    0,
+  );
+  const sourceState =
+    activity?.sourceState ?? noc.data?.sourceStates?.agentActivity;
+  const sourceFailed = noc.isError || sourceState === "stale_or_error" || (effectiveFilters.workspace === "all" && writes.isError);
+  const isLoading = noc.isLoading || (effectiveFilters.workspace === "all" && writes.isLoading);
+  const status: MetricStatus = sourceFailed
+    ? "error"
+    : isLoading
+      ? "blocked"
+      : heat.total > 0
+        ? "live"
+        : "empty";
+
+  const emptyCopy = sourceFailed
+    ? "Activity timing is stale or unavailable; messages or memory-write timing may be down."
+    : sourceState === "window_empty"
+      ? `Nothing in ${nocWindowLabel(effectiveFilters.window)} for workspace=${effectiveFilters.workspace}; message history exists outside this window. Widen the window?`
+      : `No activity history yet for workspace=${effectiveFilters.workspace}. Agent messages and successful memory consolidation populate this view.`;
 
   return (
     <NocCard>
       <NocPanelHeader
-        title="When agents work"
-        // Activity heatmap is a 7-day rollup across all workspaces; it does
-        // not honor the selected NOC filters.
-        hint={`Live hive actions by hour from /api/hive. Scope is a fixed 7-day rollup across all workspaces — window=${effectiveFilters.window} and workspace=${effectiveFilters.workspace} filters do not partition this metric. ${nocWindowLabel(effectiveFilters.window)} for context only.`}
-      />      <Heatmap w={290} h={104} data={heat.data} />
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 10,
-          color: NOC.soft,
-          marginTop: 4,
-        }}
-      >
-        <span>00</span>
-        <span>06</span>
-        <span>12</span>
-        <span>18</span>
-        <span>24</span>
-      </div>
-      <div
-        style={{
-          marginTop: 14,
-          borderTop: `1px solid ${NOC.rule}`,
-          paddingTop: 10,
-        }}
-      >
-        <Eyebrow>Today&apos;s load</Eyebrow>
+        title={`Activity timing · ${nocWindowLabel(effectiveFilters.window)}`}
+        hint={effectiveFilters.workspace === "all" ? `Message and memory-write activity honors window=${effectiveFilters.window}, workspace=all. Cells show weekday/hour concentration, not fabricated session capture.` : `Message activity honors window=${effectiveFilters.window}, workspace=${effectiveFilters.workspace}. Memory-write timing is withheld because consolidation runs are not workspace-partitioned.`}
+        right={<SourceStatusBadge status={status} />}
+      />
+      {status === "live" ? (
+        <>
+          <div
+            data-heatmap-scroll="horizontal"
+            style={{ overflowX: "auto", maxWidth: "100%" }}
+          >
+            <div style={{ minWidth: 290 }}>
+              <Heatmap w={290} h={104} data={heat.data} />
+              <div
+                style={{
+                  color: NOC.soft,
+                  display: "flex",
+                  fontSize: 10,
+                  justifyContent: "space-between",
+                  marginTop: 4,
+                }}
+              >
+                <span>00</span>
+                <span>06</span>
+                <span>12</span>
+                <span>18</span>
+                <span>24</span>
+              </div>
+            </div>
+          </div>
+          <div
+            style={{
+              borderTop: `1px solid ${NOC.rule}`,
+              color: NOC.muted,
+              fontFamily: NOC_FONT_MONO,
+              fontSize: 11,
+              lineHeight: 1.5,
+              marginTop: 12,
+              paddingTop: 10,
+            }}
+          >
+            {messageCount} message{messageCount === 1 ? "" : "s"}{effectiveFilters.workspace === "all" ? ` · ${writeCount} memory write${writeCount === 1 ? "" : "s"}` : ""} in the selected window
+          </div>
+        </>
+      ) : (
         <div
+          data-status-block={isLoading ? "loading" : sourceFailed ? "stale_or_error" : sourceState ?? "no_history"}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginTop: 6,
+            background: sourceFailed ? NOC.warnBg : NOC.fog,
+            border: `1px solid ${sourceFailed ? NOC.warn : NOC.rule}`,
+            color: sourceFailed ? NOC.warn : NOC.soft,
+            fontFamily: NOC_FONT_MONO,
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            padding: "12px 10px",
           }}
         >
-          <Donut value={todayLoad} label="of loaded-window p95" />
-          <div style={{ fontSize: 11.5, color: NOC.muted, lineHeight: 1.5 }}>
-            {hive.isError
-              ? "Failed to load /api/hive."
-              : heat.max
-                ? `${heat.today} actions today across the loaded hive window.`
-                : "No hive actions recorded in the loaded 7-day window."}
-          </div>
+          {isLoading ? "Loading activity timing…" : emptyCopy}
         </div>
-      </div>
+      )}
     </NocCard>
   );
 }

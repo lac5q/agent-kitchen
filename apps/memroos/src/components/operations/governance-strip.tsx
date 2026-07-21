@@ -12,6 +12,7 @@ export function GovernanceStrip({ filters }: { filters?: NocFilters }) {
   const security = useSecurityReport(20);
   const hil = useOrchestrationHil();
   const audit = useAuditLog(20);
+  const workspaceUnsupported = effectiveFilters.workspace !== "all";
   // Each row independently evaluates its source state. Failed sources do
   // NOT coerce to 0 — they render "—" with an explicit reason.
   const securityOk = !security.isError && !security.isLoading && security.data !== undefined;
@@ -22,6 +23,14 @@ export function GovernanceStrip({ filters }: { filters?: NocFilters }) {
   const securityEvents = securityOk ? security.data!.summary.securityEvents : null;
   const auditLines = auditOk ? audit.data!.entries.length : null;
   const sourceFailed = security.isError || hil.isError || audit.isError;
+  const sourceLoading = security.isLoading || hil.isLoading || audit.isLoading;
+  const panelStatus: MetricStatus = sourceFailed
+    ? "error"
+    : sourceLoading
+      ? "blocked"
+      : (securityEvents ?? 0) + (hilApprovals ?? 0) + (auditLines ?? 0) > 0
+        ? "live"
+        : "zero";
   const stats = [
     {
       label: "Blocked attempts",
@@ -88,17 +97,27 @@ export function GovernanceStrip({ filters }: { filters?: NocFilters }) {
 
   // The /api/security, /api/audit, and /api/orchestration/hil endpoints do
   // NOT honor the selected NOC date or workspace. Disclose that explicitly.
-  const scopeNote = `Source feeds are recent snapshots — window=${effectiveFilters.window}, workspace=${effectiveFilters.workspace} filters do not partition these metrics. ${nocWindowLabel(effectiveFilters.window)} for context only.`;
+  const scopeNote = `Global governance snapshot across all workspaces. Window=${effectiveFilters.window} is context only because audit feeds are not time-windowed.`;
+  if (workspaceUnsupported) {
+    return <NocCard>
+      <NocPanelHeader title="Governance & trust" hint={`Governance sources have no workspace key; global audit data is withheld for workspace=${effectiveFilters.workspace}.`} right={<SourceStatusBadge status="error" label="stale_or_error" />} />
+      <div data-status-block="stale_or_error" style={{ background: NOC.warnBg, border: `1px solid ${NOC.warn}`, color: NOC.warn, fontFamily: "monospace", fontSize: 11.5, lineHeight: 1.5, padding: "12px 10px" }}>
+        Workspace-scoped governance is unavailable. Select all workspaces to view the global audit summary.
+      </div>
+    </NocCard>;
+  }
+
   return (
     <NocCard>
       <NocPanelHeader
         title="Governance & trust"
         hint={scopeNote}
+        right={<SourceStatusBadge status={panelStatus} />}
       />
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
           gap: 10,
         }}
       >
@@ -159,10 +178,16 @@ export function GovernanceStrip({ filters }: { filters?: NocFilters }) {
             fontSize: 12,
           }}
         >
-          {security.isError || hil.isError || audit.isError ? (
-            <div style={{ color: NOC.terra }}>A governance source failed to load.</div>
+          {sourceFailed ? (
+            <div data-status-block="stale_or_error" style={{ color: NOC.terra }}>
+              Governance data is stale or unavailable; at least one source may be down.
+            </div>
+          ) : sourceLoading ? (
+            <div style={{ color: NOC.soft }}>Loading governance history…</div>
           ) : events.length === 0 ? (
-            <div style={{ color: NOC.soft }}>No recent audit events returned by /api/audit-log.</div>
+            <div data-status-block="no_history" style={{ color: NOC.soft }}>
+              No governance history in the loaded audit snapshot. Operator and policy actions populate this trail.
+            </div>
           ) : events.map((e, i) => (
             <div
               key={i}

@@ -151,6 +151,29 @@ describe("EfficiencySignals", () => {
     expect(screen.queryByText(/^0 rediscovery/i)).not.toBeInTheDocument();
   });
 
+  it("renders the deterministic known-unwired state in Advanced", () => {
+    api.useOperationsNoc.mockReturnValue({
+      data: {
+        panels: {},
+        metrics: {},
+        sourceStates: {
+          agentActivity: "no_history",
+          efficiencySignals: "known_unwired",
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const { container } = render(<EfficiencySignals filters={{ window: "7d", workspace: "local" }} />);
+
+    expect(screen.getByText(/^known_unwired$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Source not yet wired — activates when EFFTEL producers ship/i).length).toBeGreaterThan(0);
+    expect(container.textContent ?? "").not.toMatch(new RegExp(["No", "events"].join(" "), "i"));
+    expect(container.textContent ?? "").not.toMatch(new RegExp(["empty", "by", "design"].join(" "), "i"));
+    expect(api.useOperationsNoc).toHaveBeenCalledWith({ window: "7d", workspace: "local" });
+  });
+
   it("does not fabricate numeric values when the envelope value is null", () => {
     // Source has zero events of every stream; envelope is empty. The card
     // values must not display "0 reread" / "0 rediscovery" / "0 re-ask"

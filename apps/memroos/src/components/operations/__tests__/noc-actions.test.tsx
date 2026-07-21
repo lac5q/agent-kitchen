@@ -19,9 +19,12 @@ const noc = vi.hoisted(() => ({
     delegations: [] as Array<Record<string, unknown>>,
   },
   sourceStates: {
+    attention: "live" as "live" | "stale_or_error",
     agentActivity: "no_history" as string,
     efficiencySignals: "known_unwired" as const,
   },
+  isLoading: false,
+  isError: false,
 }));
 
 vi.mock("next/link", () => ({
@@ -127,8 +130,8 @@ vi.mock("@/lib/api-client", () => ({
       panels: {},
       metrics: {},
     },
-    isLoading: false,
-    isError: false,
+    isLoading: noc.isLoading,
+    isError: noc.isError,
   }),
 }));
 
@@ -216,20 +219,28 @@ describe("Round 4 blocking fixes — Seal drilldown navigation", () => {
 
 
 describe("Phase 173 Attention", () => {
-  it("renders severity rows with existing route targets", () => {
+  it("links only to available operator pages", () => {
+    noc.isLoading = false;
+    noc.isError = false;
+    noc.sourceStates.attention = "live";
     noc.attention = [
-      { id: "critical", severity: "critical", title: "Cron needs attention", detail: "failed", timestamp: "2026-07-20T12:00:00.000Z", target: "/api/cron-health" },
-      { id: "warning", severity: "warning", title: "Pending HIL review", detail: null, timestamp: "2026-07-20T11:00:00.000Z", target: "/escalations" },
+      { id: "cron", severity: "critical", title: "Cron needs attention", detail: "failed", timestamp: "2026-07-20T12:00:00.000Z", target: null },
+      { id: "hil", severity: "warning", title: "Pending HIL review", detail: null, timestamp: "2026-07-20T11:00:00.000Z", target: "/escalations" },
+      { id: "security", severity: "critical", title: "Security finding", detail: null, timestamp: "2026-07-20T11:00:00.000Z", target: "/audit" },
+      { id: "source", severity: "info", title: "Source freshness needs attention", detail: null, timestamp: "2026-07-20T11:00:00.000Z", target: "/library" },
     ];
     render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
 
     expect(screen.getByText("Cron needs attention")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Open" })[0]).toHaveAttribute("href", "/api/cron-health");
-    expect(document.querySelectorAll("[data-attention-severity='critical']")).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Open" }).map((link) => link.getAttribute("href"))).toEqual(["/escalations", "/audit", "/library"]);
+    expect(document.querySelectorAll("[data-attention-severity='critical']")).toHaveLength(2);
     expect(screen.getByLabelText("Attention")).toBeInTheDocument();
   });
 
-  it("renders the explicit all-clear state", () => {
+  it("renders the explicit all-clear state only after live data", () => {
+    noc.isLoading = false;
+    noc.isError = false;
+    noc.sourceStates.attention = "live";
     noc.attention = [];
     render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
 
@@ -238,22 +249,24 @@ describe("Phase 173 Attention", () => {
     expect(screen.getByText(/0 items/i)).toBeInTheDocument();
   });
 
-  it("renders stale-source Attention as an info row with the health target", () => {
-    noc.attention = [
-      {
-        id: "source:spark",
-        severity: "info",
-        title: "Source freshness needs attention: spark",
-        detail: "source older than 60 minutes",
-        timestamp: "2026-07-01T00:00:00.000Z",
-        target: "/api/context/health",
-      },
-    ];
+  it("does not render all-clear while loading or when a source failed", () => {
+    noc.attention = [];
+    noc.isLoading = true;
+    noc.isError = false;
+    noc.sourceStates.attention = "live";
+    const { unmount } = render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
+
+    expect(document.querySelector("[data-status='loading']")).toBeInTheDocument();
+    expect(document.querySelector("[data-status='all-clear']")).not.toBeInTheDocument();
+    unmount();
+
+    noc.isLoading = false;
+    noc.isError = false;
+    noc.sourceStates.attention = "stale_or_error";
     render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
 
-    expect(screen.getByText(/source freshness needs attention: spark/i)).toBeInTheDocument();
-    expect(document.querySelectorAll("[data-attention-severity='info']")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/api/context/health");
+    expect(document.querySelector("[data-status='source-error']")).toBeInTheDocument();
+    expect(document.querySelector("[data-status='all-clear']")).not.toBeInTheDocument();
   });
 });
 

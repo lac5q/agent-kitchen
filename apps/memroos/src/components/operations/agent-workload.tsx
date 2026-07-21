@@ -102,7 +102,7 @@ export function AgentWorkload({ filters }: { filters?: NocFilters }) {
           }}
           data-status-block="empty-hive"
         >
-          {panelReason ?? "Healthy /api/hive returned zero actions. The workload panel is empty by design."}
+          {panelReason ?? "Healthy /api/hive returned zero actions. Hive activity appears after the first recorded action."}
         </div>
       ) : (
         <HBars rows={rows} />

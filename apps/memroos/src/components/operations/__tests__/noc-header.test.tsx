@@ -68,6 +68,25 @@ describe("NocHeader", () => {
     expect(onWorkspaceChange).toHaveBeenCalledWith("local");
   });
 
+  it("forwards the accessible advanced checkbox state", () => {
+    const onShowAdvancedChange = vi.fn();
+    render(
+      <NocHeader
+        windowLabel="24h"
+        workspace="all"
+        showAdvanced={false}
+        onWindowChange={onWindowChange}
+        onWorkspaceChange={onWorkspaceChange}
+        onShowAdvancedChange={onShowAdvancedChange}
+      />,
+    );
+
+    const toggle = screen.getByRole("checkbox", { name: "Show advanced" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(onShowAdvancedChange).toHaveBeenCalledWith(true);
+  });
+
   it("exports a JSON report with the current filters", () => {
     const click = vi.fn();
     const originalCreateElement = document.createElement.bind(document);

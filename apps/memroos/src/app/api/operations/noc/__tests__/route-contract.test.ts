@@ -478,7 +478,7 @@ describe("Phase 173 NOC truth contracts", () => {
     const matching = body.attention.filter((item: { id: string }) => ["cron:cron-1", "hil:hil-1", "security:1"].includes(item.id));
 
     expect(matching.map((item: { severity: string }) => item.severity)).toEqual(["critical", "critical", "warning"]);
-    expect(matching.every((item: { timestamp: string | null; target: string | null }) => item.timestamp && item.target)).toBe(true);
+    expect(matching.map((item: { target: string | null }) => item.target)).toEqual([null, "/audit", "/escalations"]);
   });
 
   it("returns an all-clear Attention collection when no actionable sources exist", async () => {
@@ -488,6 +488,22 @@ describe("Phase 173 NOC truth contracts", () => {
 
     expect(Array.isArray(body.attention)).toBe(true);
     expect(body.attention.filter((item: { id: string }) => item.id.startsWith("cron:") || item.id.startsWith("hil:") || item.id.startsWith("security:"))).toEqual([]);
+    expect(body.sourceStates.attention).toBe("live");
+  });
+
+  it("marks Attention unavailable when an underlying source query fails", async () => {
+    const { GET, getDb } = await loadRoute();
+    const db = getDb();
+    const originalPrepare = db.prepare.bind(db);
+    (db as unknown as { prepare: typeof db.prepare }).prepare = ((sql: string) => {
+      if (sql.includes("FROM cron_health_jobs")) throw new Error("cron source unavailable");
+      return originalPrepare(sql);
+    }) as typeof db.prepare;
+
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+
+    expect(body.sourceStates.attention).toBe("stale_or_error");
   });
 
   it("surfaces stale-source Attention as info with a repair target", async () => {
@@ -521,7 +537,7 @@ describe("Phase 173 NOC truth contracts", () => {
         title: "Source freshness needs attention: spark",
         detail: "source older than 60 minutes",
         timestamp: "2026-07-01T00:00:00.000Z",
-        target: "/api/context/health",
+        target: "/library",
       }),
     ]);
     dbModule.closeDb();

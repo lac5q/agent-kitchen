@@ -4,15 +4,61 @@
 import { useMemo } from "react";
 
 import { useSealProposals, useSkills } from "@/lib/api-client";
-import { nocWindowLabel, type NocFilters } from "@/lib/noc-filters";
+import type { MetricStatus } from "@/lib/metric-status";
+import {
+  LOCAL_NOC_AGENT_IDS,
+  nocWindowToSinceIso,
+  type NocFilters,
+} from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
-import { Mono, PillBtn } from "./noc-primitives";
+import { Mono, PillBtn, SourceStatusBadge } from "./noc-primitives";
+
+/** Phase 174 four-state semantic for the panel-level empty/error surface. */
+type PanelSemantic = "live" | "window_empty" | "no_history" | "stale_or_error" | "loading";
+
+const LOCAL_AGENT_IDS = new Set<string>(LOCAL_NOC_AGENT_IDS);
+
+function workspaceMatches(owner: string, workspace: NocFilters["workspace"]): boolean {
+  if (workspace === "all") return true;
+  const isLocal = LOCAL_AGENT_IDS.has(owner.trim().toLowerCase());
+  return workspace === "local" ? isLocal : !isLocal;
+}
+
+function latestSkillTimestamp(skill: {
+  lastActivityAt: string | null;
+  updatedAt: string | null;
+  approvedAt: string | null;
+}): number | null {
+  for (const value of [skill.lastActivityAt, skill.updatedAt, skill.approvedAt]) {
+    if (!value) continue;
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
 
 export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
-  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };  const skills = useSkills();
+  const effectiveFilters = filters ?? { window: "24h", workspace: "all" };
+  const skills = useSkills();
   const seal = useSealProposals("pending");
+  const sinceMs = Date.parse(nocWindowToSinceIso(effectiveFilters.window));
+  const allDetails = skills.data?.skillDetails ?? [];
+  const workspaceDetails = allDetails.filter((skill) =>
+    workspaceMatches(skill.owner, effectiveFilters.workspace),
+  );
+  const details = workspaceDetails.filter((skill) => {
+    const timestamp = latestSkillTimestamp(skill);
+    return timestamp !== null && timestamp >= sinceMs;
+  });
+  const filteredSealProposals = (seal.data?.proposals ?? []).filter((proposal) => {
+    const createdAt = Date.parse(proposal.createdAt);
+    return (
+      Number.isFinite(createdAt) &&
+      createdAt >= sinceMs &&
+      workspaceMatches(proposal.agentId, effectiveFilters.workspace)
+    );
+  });
   const columns = useMemo(() => {
-    const details = skills.data?.skillDetails ?? [];
     return [
       {
         stage: "Emerging",
@@ -39,12 +85,35 @@ export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
         items: details.filter((skill) => skill.stage === "enterprise" || skill.reviewStatus === "enterprise-ready").slice(0, 3),
       },
     ];
-  }, [skills.data?.skillDetails]);
-  const total = skills.data?.totalSkills ?? 0;
-  const promoted = skills.data?.skillDetails.filter((skill) => skill.approvedAt).length ?? 0;
-  const dormant = skills.data?.coverageGaps.length ?? 0;
-  const drifting = skills.data?.skillDetails.filter((skill) => skill.health !== "ready").length ?? 0;
-  const pendingSeal = seal.data?.proposals.length ?? 0;
+  }, [details]);
+  const total = details.length;
+  const promoted = details.filter((skill) => skill.approvedAt).length;
+  const selectedNames = new Set(details.map((skill) => skill.name));
+  const dormant = skills.data?.coverageGaps.filter((name) => selectedNames.has(name)).length ?? 0;
+  const drifting = details.filter((skill) => skill.health !== "ready").length;
+  const pendingSeal = filteredSealProposals.length;
+  const sourceFailed = skills.isError || seal.isError;
+  const sourceLoading = skills.isLoading || seal.isLoading;
+  const panelStatus: MetricStatus = sourceFailed
+    ? "error"
+    : sourceLoading
+      ? "blocked"
+      : total > 0
+        ? "live"
+        : "zero";
+  // The panel filters the cumulative registry snapshot client-side using
+  // each skill's owner and latest activity timestamp. The wider probe uses
+  // the same workspace before deciding window_empty versus no_history.
+  const panelSemantic: PanelSemantic = sourceFailed
+    ? "stale_or_error"
+    : sourceLoading
+      ? "loading"
+      : details.length > 0
+        ? "live"
+        : workspaceDetails.length > 0 ||
+            (effectiveFilters.workspace === "all" && skills.data?.lastUpdated != null)
+          ? "window_empty"
+          : "no_history";
 
   return (
     <div style={{ padding: "0 28px 14px" }}>
@@ -68,12 +137,16 @@ export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
                 ? "loading /api/skills"
                 : `${total} total · ${promoted} approved · ${dormant} coverage gaps · ${drifting} drifting`}
           </span>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+            <SourceStatusBadge status={panelStatus} />
+            <SourceStatusBadge status={panelSemantic === "live" ? "live" : panelSemantic === "window_empty" ? "empty" : panelSemantic === "stale_or_error" ? "error" : "empty"} label={panelSemantic} />
             <PillBtn href="/seal">SEAL proposals · {pendingSeal}</PillBtn>
             <PillBtn href="/skills" variant="solid">Promote candidate</PillBtn>
           </div>
         </div>
         <div
+          data-status-block={panelSemantic}
+          data-filters={`window=${effectiveFilters.window}&workspace=${effectiveFilters.workspace}`}
           style={{
             padding: "8px 16px 0",
             fontSize: 10.5,
@@ -81,10 +154,24 @@ export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
             fontFamily: NOC_FONT_MONO,
           }}
         >
-          Scope: cumulative skill registry snapshot — window={effectiveFilters.window}, workspace={effectiveFilters.workspace} filters do not partition this metric ({nocWindowLabel(effectiveFilters.window)} for context only).
+          Scope: skill rows and pending SEAL proposals filtered by window={effectiveFilters.window}, workspace={effectiveFilters.workspace}. {workspaceDetails.length} skill record{workspaceDetails.length === 1 ? "" : "s"} exist in the widest same-workspace probe; registry last touched {skills.data?.lastUpdated ?? "—"}.
         </div>
-        {/* 4 columns */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
+        {sourceFailed ? (
+          <div
+            data-status-block="stale_or_error"
+            style={{ color: NOC.warn, fontSize: 11.5, lineHeight: 1.5, padding: "14px 16px" }}
+          >
+            Skills lifecycle data is stale or unavailable; the registry or SEAL source may be down.
+          </div>
+        ) : sourceLoading ? (
+          <div style={{ color: NOC.soft, fontSize: 11.5, padding: "14px 16px" }}>
+            Loading skills lifecycle…
+          </div>
+        ) : (
+        <div
+          data-mobile-grid="skills-lifecycle"
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}
+        >
           {columns.map((col, i) => (
             <div
               key={col.stage}
@@ -120,8 +207,12 @@ export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
               {/* Items */}
               <div style={{ minHeight: 200 }}>
                 {col.items.length === 0 && (
-                  <div style={{ padding: "10px 14px", fontSize: 12, color: NOC.soft }}>
-                    No live records in this stage.
+                  <div data-status-block="no_history" style={{ padding: "10px 14px", fontSize: 12, color: NOC.soft }}>
+                    {panelSemantic === "stale_or_error"
+                      ? `${col.stage} stage data is stale or unavailable; the registry or SEAL source may be down.`
+                      : panelSemantic === "window_empty"
+                        ? `No ${col.stage.toLowerCase()} skill records in the loaded registry snapshot, but the registry has prior activity outside the selected window. Widen the window or check /skills for older entries.`
+                        : `No ${col.stage.toLowerCase()} skill records yet. Registry installs and promotions populate this stage.`}
                   </div>
                 )}
                 {col.items.map((it, j) => (
@@ -173,6 +264,7 @@ export function SkillsLifecycle({ filters }: { filters?: NocFilters }) {
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );

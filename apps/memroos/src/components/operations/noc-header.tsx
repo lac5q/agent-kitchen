@@ -48,11 +48,20 @@ const QUICK_LINKS: Drilldown[] = [
 interface NocHeaderProps {
   windowLabel: NocWindow;
   workspace: NocWorkspace;
+  showAdvanced?: boolean;
   onWindowChange: (value: NocWindow) => void;
   onWorkspaceChange: (value: NocWorkspace) => void;
+  onShowAdvancedChange?: (value: boolean) => void;
 }
 
-export function NocHeader({ windowLabel, workspace, onWindowChange, onWorkspaceChange }: NocHeaderProps) {
+export function NocHeader({
+  windowLabel,
+  workspace,
+  showAdvanced = false,
+  onWindowChange,
+  onWorkspaceChange,
+  onShowAdvancedChange = () => undefined,
+}: NocHeaderProps) {
   function exportReport() {
     const payload = {
       surface: "operations-noc",
@@ -210,6 +219,16 @@ export function NocHeader({ windowLabel, workspace, onWindowChange, onWorkspaceC
             <option value="local">Local</option>
             <option value="remote">Remote</option>
           </select>
+        </label>
+        <label style={{ ...controlStyle, gap: 6 }}>
+          <input
+            aria-label="Show advanced"
+            type="checkbox"
+            checked={showAdvanced}
+            onChange={(event) => onShowAdvancedChange(event.target.checked)}
+            style={{ accentColor: NOC.ink, margin: 0 }}
+          />
+          <span>Show advanced</span>
         </label>
         <button
           onClick={exportReport}

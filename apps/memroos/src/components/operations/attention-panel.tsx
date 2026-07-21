@@ -14,6 +14,14 @@ const COLORS = {
 export function AttentionPanel({ filters }: { filters: NocFilters }) {
   const noc = useOperationsNoc(filters);
   const items = noc.data?.attention ?? [];
+  const sourceState = noc.data?.sourceStates?.attention;
+  const state = noc.isLoading
+    ? "loading"
+    : noc.isError || sourceState !== "live"
+      ? "source-error"
+      : items.length === 0
+        ? "all-clear"
+        : "items";
 
   return (
     <section style={{ padding: "0 28px 14px" }} aria-label="Attention">
@@ -21,10 +29,18 @@ export function AttentionPanel({ filters }: { filters: NocFilters }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <Eyebrow>Attention</Eyebrow>
           <span style={{ fontFamily: NOC_FONT_MONO, fontSize: 11, color: NOC.soft }}>
-            {noc.isLoading ? "loading" : `${items.length} item${items.length === 1 ? "" : "s"}`}
+            {state === "loading" ? "loading" : state === "source-error" ? "unavailable" : `${items.length} item${items.length === 1 ? "" : "s"}`}
           </span>
         </div>
-        {items.length === 0 && !noc.isLoading ? (
+        {state === "loading" ? (
+          <div data-status="loading" style={{ color: NOC.soft, fontSize: 13 }}>
+            Loading attention sources…
+          </div>
+        ) : state === "source-error" ? (
+          <div data-status="source-error" style={{ color: NOC.warn, fontSize: 13 }}>
+            Attention sources are unavailable; refresh before treating this as all clear.
+          </div>
+        ) : state === "all-clear" ? (
           <div data-status="all-clear" style={{ color: NOC.success, fontSize: 13 }}>
             All clear — no cron failures, pending approvals, security findings, or stale sources.
           </div>

@@ -1,15 +1,17 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryConsumption } from "../memory-consumption";
 
 const api = vi.hoisted(() => ({
   useMemoryStats: vi.fn(),
+  useMemoryTierHealth: vi.fn(),
   useTimeSeries: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
   useMemoryStats: api.useMemoryStats,
+  useMemoryTierHealth: api.useMemoryTierHealth,
   useTimeSeries: api.useTimeSeries,
 }));
 
@@ -34,6 +36,14 @@ function emptyTs() {
 }
 
 describe("MemoryConsumption truthful rendering", () => {
+  beforeEach(() => {
+    api.useMemoryTierHealth.mockReturnValue({
+      data: { tiers: [], timestamp: "2026-07-13T12:00:00Z" },
+      isLoading: false,
+      isError: false,
+    });
+  });
+
   it("renders scope-disclosure text and live status for healthy sources", () => {
     api.useMemoryStats.mockReturnValue({
       data: {
@@ -52,10 +62,24 @@ describe("MemoryConsumption truthful rendering", () => {
       isError: false,
     });
     api.useTimeSeries.mockReturnValue(tsMockReturn([1, 2, 3, 4]));
+    api.useMemoryTierHealth.mockReturnValue({
+      data: {
+        tiers: [
+          { tier: "vector", backend: "qdrant", status: "up", count: 3 },
+          { tier: "graph", backend: "neo4j", status: "degraded", count: 1 },
+        ],
+        timestamp: "2026-07-13T12:00:00Z",
+      },
+      isLoading: false,
+      isError: false,
+    });
 
     render(<MemoryConsumption filters={{ window: "24h", workspace: "all" }} />);
 
     expect(screen.getAllByText(/last 24 hours/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("memory-tier-health")).toBeInTheDocument();
+    expect(screen.getByText(/qdrant/)).toBeInTheDocument();
+    expect(screen.getByText(/neo4j/)).toBeInTheDocument();
     // Discloses fixed/cumulative scope on each submetric
     const tierRows = screen.getByText("Tier rows").closest("[data-submetric]");
     expect(tierRows).not.toBeNull();
@@ -87,7 +111,7 @@ describe("MemoryConsumption truthful rendering", () => {
 
     render(<MemoryConsumption filters={{ window: "24h", workspace: "all" }} />);
 
-    expect(screen.getByText(/No memory write or recall buckets recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing in last 24 hours.*Widen the window/i)).toBeInTheDocument();
     expect(screen.getAllByText(/last 24 hours/i).length).toBeGreaterThan(0);
   });
 

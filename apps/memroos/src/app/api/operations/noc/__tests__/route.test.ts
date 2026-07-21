@@ -31,7 +31,7 @@ describe("GET /api/operations/noc efficiency metrics", () => {
     vi.resetModules();
   });
 
-  it("aggregates live efficiency metrics from all instrumented event streams", async () => {
+  it("keeps efficiency known-unwired even when efficiency rows exist", async () => {
     const { GET, getDb, recordEfficiencyEvent } = await loadRoute();
     const db = getDb();
     const createdAt = new Date().toISOString();
@@ -157,52 +157,12 @@ describe("GET /api/operations/noc efficiency metrics", () => {
     const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=local"));
     const body = await response.json();
 
-    expect(body.panels.efficiency.status).toBe("live");
-    expect(body.panels.efficiency.warnings).toEqual([]);
-    expect(body.metrics.efficiency.value.streams).toMatchObject({
-      retrieval_trace: 2,
-      source_read: 2,
-      token_ledger: 1,
-      operator_question: 2,
-      memory_write: 2,
-    });
-    expect(body.metrics.efficiency.value.retrievalBeforeWorkRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.value.repeatedSourceReads).toBe(1);
-    expect(body.metrics.efficiency.value.rawContextTokenShare).toBeCloseTo(0.3);
-    expect(body.metrics.efficiency.value.operatorReaskRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.value.rediscoveredFactRate).toBeCloseTo(0.5);
-    expect(body.metrics.efficiency.value.recollection).toMatchObject({
-      totalDecisions: 2,
-      searchRequired: 1,
-      searchSkipped: 1,
-      injectedMemories: 2,
-      ignoredCandidates: 1,
-      policyDeniedCandidates: 1,
-      belowThresholdCandidates: 0,
-      beliefStageCounts: {
-        bronze_raw_source: 0,
-        silver_candidate_claim: 1,
-        gold_operational_truth: 1,
-      },
-      relianceCounts: {
-        direct_truth: 1,
-        caveated_claim: 1,
-        source_evidence_only: 0,
-      },
-      skipReasons: {
-        "Task is local or mechanical with no stable recall dependency.": 1,
-      },
-    });
-    expect(body.metrics.efficiency.value.recollection.latestDecisions[0]).toMatchObject({
-      taskId: "task-live",
-      agentId: "codex",
-      decision: "search_skipped",
-      timing: "before_plan",
-      skipReason: "Task is local or mechanical with no stable recall dependency.",
-    });
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
+    expect(body.panels.efficiency).toBeUndefined();
+    expect(body.metrics.efficiency).toBeUndefined();
   });
 
-  it("reports degraded efficiency when one or more streams are absent", async () => {
+  it("does not expose partial efficiency rows before EFFTEL producers are verified", async () => {
     const { GET, getDb, recordEfficiencyEvent } = await loadRoute();
     recordEfficiencyEvent(getDb(), {
       eventType: "retrieval_trace",
@@ -221,31 +181,20 @@ describe("GET /api/operations/noc efficiency metrics", () => {
     const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=remote"));
     const body = await response.json();
 
-    expect(body.panels.efficiency.status).toBe("degraded");
-    expect(body.panels.efficiency.warnings).toEqual(
-      expect.arrayContaining([
-        "Missing source-read telemetry",
-        "Missing raw-context token ledger",
-        "Missing operator-question telemetry",
-        "Missing memory-write telemetry",
-      ])
-    );
-    expect(body.metrics.efficiency.status).toBe("degraded");
-    expect(body.metrics.efficiency.value).toBeNull();
-    expect(body.metrics.efficiency.reason).toBeTruthy();
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
+    expect(body.panels.efficiency).toBeUndefined();
+    expect(body.metrics.efficiency).toBeUndefined();
   });
 
-  it("reports empty efficiency when no events exist in the selected window", async () => {
+  it("reports deterministic known-unwired efficiency when no rows exist", async () => {
     const { GET } = await loadRoute();
 
     const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
     const body = await response.json();
 
-    expect(body.panels.efficiency.status).toBe("empty");
-    expect(body.panels.efficiency.warnings).toContain("No efficiency telemetry events in the selected window");
-    expect(body.metrics.efficiency.status).toBe("empty");
-    expect(body.metrics.efficiency.value).toBeNull();
-    expect(body.metrics.efficiency.reason).toBeTruthy();
+    expect(body.sourceStates.efficiencySignals).toBe("known_unwired");
+    expect(body.panels.efficiency).toBeUndefined();
+    expect(body.metrics.efficiency).toBeUndefined();
   });
 
   it("surfaces the memory iteration repair loop inside the NOC response", async () => {

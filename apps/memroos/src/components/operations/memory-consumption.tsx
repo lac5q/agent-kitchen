@@ -1,7 +1,7 @@
 "use client";
 
 import { AreaStack } from "@/components/shared/charts";
-import { useMemoryStats, useTimeSeries } from "@/lib/api-client";
+import { useMemoryStats, useMemoryTierHealth, useTimeSeries } from "@/lib/api-client";
 import { nocWindowLabel, nocWindowToTimeSeriesWindow, type NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
 import {
@@ -71,6 +71,13 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
   // pending consolidation). The chart must therefore disclose that it is
   // windowed-across-all-workspaces, never the requested workspace.
   const memory = useMemoryStats({ window: timeWindow, workspace: filters.workspace });
+  // The widest-window probe keeps no-history/window-empty workspace-scoped.
+  const memoryHistory = useMemoryStats({ workspace: filters.workspace });
+  const health = useMemoryTierHealth() ?? {
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  };
   const writes = useTimeSeries("memory_writes", timeWindow);
   const recalls = useTimeSeries("recall_queries", timeWindow);
   const labels = labelsForWindow(filters.window);
@@ -95,10 +102,40 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
   const lowTier = memory.data?.tierStats.find((tier) => tier.tier === "low")?.count ?? 0;
   const lastRunStatus = memory.data?.lastRun?.status;
   const lastRunError = memory.data?.lastRun?.error_message?.replace(/\s+/g, " ").slice(0, 140) ?? null;
-  const sourceError = memory.isError || writes.isError || recalls.isError;
-  const sourcesLoaded = !memory.isLoading && !writes.isLoading && !recalls.isLoading;
   const hasWindowedData = writeSeries.hasAnyPoint || recallSeries.hasAnyPoint;
-  const noPoints = !hasWindowedData;
+  const workspaceSeriesSupported = filters.workspace === "all";
+  const hasScopedWindowMemory =
+    totalTierCount > 0 ||
+    (memory.data?.sources.length ?? 0) > 0 ||
+    (memory.data?.pendingUnconsolidated ?? 0) > 0;
+  const widestTierCount =
+    memoryHistory.data?.tierStats.reduce((sum, tier) => sum + tier.count, 0) ?? 0;
+  const hasScopedMemoryHistory =
+    widestTierCount > 0 ||
+    (memoryHistory.data?.sources.length ?? 0) > 0 ||
+    (memoryHistory.data?.pendingUnconsolidated ?? 0) > 0 ||
+    memoryHistory.data?.lastRun != null;
+  const sourceError =
+    memory.isError ||
+    memoryHistory.isError ||
+    (workspaceSeriesSupported && (writes.isError || recalls.isError));
+  const sourcesLoaded =
+    !memory.isLoading &&
+    !memoryHistory.isLoading &&
+    (!workspaceSeriesSupported || (!writes.isLoading && !recalls.isLoading));
+
+  type ActivitySemantic = "live" | "window_empty" | "no_history" | "stale_or_error" | "loading";
+  const activitySemantic: ActivitySemantic = sourceError
+    ? "stale_or_error"
+    : !sourcesLoaded
+      ? "loading"
+      : workspaceSeriesSupported && hasWindowedData
+        ? "live"
+        : hasScopedWindowMemory
+          ? "live"
+          : hasScopedMemoryHistory
+            ? "window_empty"
+            : "no_history";
 
   type SubStatus =
     | "live"
@@ -110,11 +147,10 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
     | "degraded"
     | "error";
   function classifyWindowedSeries(): SubStatus {
-    if (memory.isError || writes.isError || recalls.isError) return "error";
-    if (memory.isLoading || writes.isLoading || recalls.isLoading) return "blocked";
-    if (sourcesLoaded && !hasWindowedData) return "empty";
-    if (sourcesLoaded && hasWindowedData) return "live";
-    return "unavailable";
+    if (activitySemantic === "stale_or_error") return "error";
+    if (!sourcesLoaded) return "blocked";
+    if (activitySemantic === "live") return "live";
+    return "empty";
   }
   function classifyTierInventory(): SubStatus {
     if (memory.isError) return "error";
@@ -140,12 +176,18 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
         // Memory activity chart is windowed across ALL workspaces (the source
         // does not partition by workspace). Tier inventory and consolidation
         // state DO honor the selected workspace.
-        hint={`Window=${filters.window}. Chart series are windowed across all workspaces (workspace selection does not partition /api/time-series). Tier inventory and consolidation state are cumulative across the SQLite store.`}
+        hint={`window=${filters.window}, workspace=${filters.workspace}. Inventory and consolidation counts come from the filtered /api/memory-stats response. Activity timing is shown only for workspace=all because /api/time-series cannot partition by workspace. Tier backend health is a current global operational snapshot.`}
         right={
           <div style={{ display: "flex", gap: 10, fontSize: 11, color: NOC.muted, alignItems: "center" }}>
             <Legend color={NOC.terra} label="Writes" />
             <Legend color={NOC.ink} label="Recall" />
             <SourceStatusBadge status={windowedStatus} label={`series ${windowedStatus}`} />
+            <span
+              data-filters={`window=${filters.window}&workspace=${filters.workspace}`}
+              style={{ fontSize: 10, color: NOC.soft, fontFamily: NOC_FONT_MONO }}
+            >
+              window={filters.window}/workspace={filters.workspace}
+            </span>
           </div>
         }
       />
@@ -162,81 +204,78 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
             lineHeight: 1.4,
           }}
         >
-          /api/memory-stats or /api/time-series failed: {memory.error?.message ?? writes.error?.message ?? recalls.error?.message ?? "see network log"}
+          /api/memory-stats{workspaceSeriesSupported ? " or /api/time-series" : ""} failed: {memory.error?.message ?? memoryHistory.error?.message ?? (workspaceSeriesSupported ? writes.error?.message ?? recalls.error?.message : null) ?? "see network log"}
         </div>
       )}
-      {writeSeries.hasAnyPoint || recallSeries.hasAnyPoint ? (
-        <AreaStack
-          w={720}
-          h={210}
-          labels={labels}
-          series={[
-            { color: NOC.terra, values: writeValuesForChart },
-            { color: NOC.ink, values: recallValuesForChart },
-          ]}
-          data-empty={false}
-        />
+      {workspaceSeriesSupported && hasWindowedData ? (
+        <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <AreaStack
+            w={720}
+            h={210}
+            labels={labels}
+            series={[
+              { color: NOC.terra, values: writeValuesForChart },
+              { color: NOC.ink, values: recallValuesForChart },
+            ]}
+            data-empty={false}
+          />
+        </div>
       ) : (
         <div
           style={{
-            height: 210,
-            border: `1px dashed ${NOC.rule}`,
+            minHeight: 150,
+            border: `1px dashed ${sourceError ? NOC.warn : NOC.rule}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: NOC.muted,
+            color: sourceError ? NOC.warn : NOC.muted,
             fontFamily: NOC_FONT_MONO,
             fontSize: 11.5,
-            padding: 8,
+            padding: 12,
             textAlign: "center",
           }}
-          data-status-block="chart-empty"
+          data-status-block={activitySemantic}
           data-empty={true}
         >
-          Chart withheld: zero buckets recorded for {nocWindowLabel(filters.window)}.
-          Source returns no measured activity; numeric zeros are NOT rendered.
+          {sourceError
+            ? "Memory activity is stale or unavailable; the filtered stats source may be down."
+            : !sourcesLoaded
+              ? "Loading memory activity…"
+              : hasScopedWindowMemory
+                ? workspaceSeriesSupported
+                  ? `Memory is live for window=${filters.window}, workspace=${filters.workspace}; filtered inventory exists, but no activity timing buckets were returned.`
+                  : `Memory is live for window=${filters.window}, workspace=${filters.workspace}. Timing is withheld because /api/time-series cannot partition by workspace; filtered inventory counts remain available below.`
+                : activitySemantic === "window_empty"
+                  ? `Nothing in ${nocWindowLabel(filters.window)} for workspace=${filters.workspace}; memory history exists outside this window. Widen the window?`
+                  : `No memory activity history yet for workspace=${filters.workspace}. Messages and successful consolidation populate this panel. Try: run an agent exchange.`}
         </div>
       )}
-      {noPoints && !sourceError && (
-        <div
-          style={{
-            fontSize: 11.5,
-            color: NOC.muted,
-            marginTop: 6,
-            padding: "6px 8px",
-            background: NOC.fog,
-            border: `1px solid ${NOC.rule}`,
-          }}
-          data-status-block="empty-series"
-        >
-          No memory write or recall buckets recorded for {nocWindowLabel(filters.window)} (chart series span all workspaces, not workspace={filters.workspace}). The chart is intentionally withheld — these zeros are NOT a measured source value.
-        </div>
-      )}      <div
+      <div
         style={{
           marginTop: 10,
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
           gap: 10,
         }}
       >
         {[
           {
             label: "Tier rows",
-            sublabel: "cumulative (all windows)",
+            sublabel: `selected window/workspace count (not cumulative) · ${filters.window}/${filters.workspace}`,
             value: compact(totalTierCount),
             status: tierStatus,
             color: tierStatus === "error" ? NOC.terra : NOC.ink,
           },
           {
             label: "High/pinned",
-            sublabel: "cumulative tier snapshot",
+            sublabel: `filtered tier snapshot · ${filters.window}/${filters.workspace}`,
             value: compact(highTier),
             status: tierStatus,
             color: tierStatus === "error" ? NOC.terra : NOC.success,
           },
           {
             label: "Low tier",
-            sublabel: "cumulative tier snapshot",
+            sublabel: `filtered tier snapshot · ${filters.window}/${filters.workspace}`,
             value: compact(lowTier),
             status: tierStatus,
             color: tierStatus === "error" ? NOC.terra : NOC.warn,
@@ -291,6 +330,91 @@ export function MemoryConsumption({ filters }: MemoryConsumptionProps) {
             </div>
           </div>
         ))}
+      </div>
+      <div
+        data-testid="memory-tier-health"
+        data-scope="global-backend-health"
+        style={{
+          borderTop: `1px solid ${NOC.rule}`,
+          marginTop: 14,
+          paddingTop: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Eyebrow>Tier health</Eyebrow>
+          <SourceStatusBadge
+            status={
+              health.isError
+                ? "error"
+                : health.isLoading
+                  ? "blocked"
+                  : (health.data?.tiers.length ?? 0) > 0
+                    ? health.data?.tiers.some((tier) => tier.status === "down")
+                      ? "error"
+                      : health.data?.tiers.some((tier) => tier.status === "degraded")
+                        ? "degraded"
+                        : "live"
+                    : "empty"
+            }
+          />
+        </div>
+        {health.isError ? (
+          <div
+            data-status-block="stale_or_error"
+            style={{ color: NOC.warn, fontSize: 11.5, marginTop: 8 }}
+          >
+            Memory tier health is stale or unavailable; the health source may be down.
+          </div>
+        ) : health.isLoading ? (
+          <div style={{ color: NOC.soft, fontSize: 11.5, marginTop: 8 }}>
+            Loading memory tier health…
+          </div>
+        ) : (health.data?.tiers.length ?? 0) === 0 ? (
+          <div
+            data-status-block="no_history"
+            style={{ color: NOC.soft, fontSize: 11.5, marginTop: 8 }}
+          >
+            No memory tier health history yet. Configure a memory backend to populate this current snapshot.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
+              gap: 8,
+              marginTop: 8,
+            }}
+          >
+            {health.data?.tiers.map((tier) => {
+              const status: SubStatus =
+                tier.status === "up"
+                  ? "live"
+                  : tier.status === "degraded"
+                    ? "degraded"
+                    : tier.status === "down"
+                      ? "error"
+                      : "unavailable";
+              return (
+                <div
+                  key={tier.tier}
+                  data-memory-tier={tier.tier}
+                  style={{ background: NOC.fog, border: `1px solid ${NOC.rule}`, padding: 9 }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                    <span style={{ color: NOC.ink, fontSize: 12, textTransform: "capitalize" }}>{tier.tier}</span>
+                    <SourceStatusBadge status={status} label={tier.status.replace("_", " ")} />
+                  </div>
+                  <div style={{ color: NOC.soft, fontFamily: NOC_FONT_MONO, fontSize: 10.5, marginTop: 5 }}>
+                    {tier.backend}{tier.count != null && filters.workspace === "all" ? ` · ${tier.count} rows` : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ color: NOC.soft, fontFamily: NOC_FONT_MONO, fontSize: 10, marginTop: 8 }}>
+          source: /api/memory/health · global backend liveness; window and workspace filters do not alter this operational check.
+        </div>
       </div>
     </NocCard>
   );

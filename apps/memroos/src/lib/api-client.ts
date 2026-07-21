@@ -227,6 +227,7 @@ export interface OperationsNocResponse {
   attention: OperationsNocAttentionItem[];
   agentActivity: OperationsNocAgentActivity;
   sourceStates: {
+    attention: "live" | "stale_or_error";
     agentActivity: NocSourceState;
     /** Explicit known-unwired contract — not empty/error — until EFFTEL lands. */
     efficiencySignals: "known_unwired";

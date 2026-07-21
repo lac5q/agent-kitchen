@@ -90,7 +90,7 @@ describe("Round 2 blocking fixes — UI", () => {
     // The AreaStack component must not receive a series with all zeros
     // when the source has no points. The component must render an
     // explicit empty-state block instead.
-    expect(screen.getByText(/no memory write or recall buckets recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing in last 24 hours.*widen the window/i)).toBeInTheDocument();
     // Ensure no zero-filled series is rendered (the chart should
     // either receive an empty series or render an explicit gap
     // message; in either case the SVG should NOT have data points
@@ -200,11 +200,11 @@ describe("Round 2 blocking fixes — UI", () => {
       <PulseStrip filters={{ window: "24h", workspace: "local" }} />
     );
 
-    // The Model tokens envelope for a workspace=local request must
+    // The Active models card for a workspace=local request must
     // advertise scope.workspace=all (since /api/model-usage does
     // NOT partition by workspace) OR clearly disclose this
     // limitation. Either way it must NOT pretend to be local.
-    const cards = screen.getAllByText(/model tokens/i);
+    const cards = screen.getAllByText(/active models/i);
     expect(cards.length).toBeGreaterThan(0);
     // The card's source/observed metadata or subline must disclose
     // that the model-usage query is windowed-only, not partitioned
