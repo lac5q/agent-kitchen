@@ -49,7 +49,12 @@ services:
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
-      AGENT_CONFIGS_PATH: /knowledge/agent-configs
+      # Agents: AGENT_CONFIGS_PATH inside the container
+      #   - default: <knowledge>/agent-configs (subdir convention)
+      #   - to override: set AGENT_CONFIGS_PATH in .env to a host path
+      #     outside the knowledge repo, and the matching bind mount below
+      #     exposes it at /agent-configs (read-only) inside the container.
+      AGENT_CONFIGS_PATH: ${AGENT_CONFIGS_PATH:-/knowledge/agent-configs}
       APO_PROPOSALS_PATH: /root/.openclaw/skills/proposals
       MEMROOS_DATA_RESIDENCY: ${MEMROOS_DATA_RESIDENCY:-0}
       LOCAL_JUDGE_PROVIDER: ${LOCAL_JUDGE_PROVIDER:-ollama}
@@ -59,6 +64,11 @@ services:
     volumes:
       - memroos-data:/data
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+      # Independent Agents mount (only active when AGENT_CONFIGS_PATH is set
+      # in .env to a path outside the knowledge repo). The mount path is
+      # declared as a literal at /agent-configs so it does not collide with
+      # the /knowledge mount above.
+      - ${AGENT_CONFIGS_HOST_PATH:-/dev/null}:/agent-configs:ro
       - ${APO_PROPOSALS_PATH:-./data/apo-proposals}:/root/.openclaw/skills/proposals:ro
     depends_on:
       mem0:

@@ -313,7 +313,32 @@ run_docker_install() {
 
   cd "$MEMROOS_DIR"
   if [[ ! -f ".env" && -f ".env.example" ]]; then
-    cp .env.example .env
+    log "Generating .env from .env.example (with shell expansion of \${HOME} and friends)..."
+    if command -v envsubst >/dev/null 2>&1; then
+      envsubst < .env.example > .env
+    else
+      # Fallback when gettext's envsubst isn't installed: shell-source the
+      # example and evaluate each non-comment assignment so ${HOME} expands.
+      # POSIX-portable; same semantics for the variables INSTALL-REPRO-02 covers.
+      while IFS= read -r line; do
+        case "$line" in
+          ''|\#*) printf '%s\n' "$line" >> .env ;;
+          *=*)
+            # shellcheck disable=SC2086
+            key="${line%%=*}"; val="${line#*=}"
+            # Evaluate variable references but reject command substitution
+            # (${...} commands, $(...)) for safety; we only allow the form
+            # ${HOME} and ${VAR:-default} style expansions.
+            eval "expanded=\"$val\"" 2>/dev/null || expanded="$val"
+            printf '%s=%s\n' "$key" "$expanded" >> .env
+            ;;
+          *) printf '%s\n' "$line" >> .env ;;
+        esac
+      done < .env.example
+      chmod 600 .env
+      ok "Created .env from .env.example with shell expansion (no envsubst)."
+    fi
+    chmod 600 .env
     ok "Created .env from .env.example"
   fi
 
