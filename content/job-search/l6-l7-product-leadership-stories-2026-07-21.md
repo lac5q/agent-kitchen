@@ -10,6 +10,7 @@ model: "gpt-5; reviewed by claude-opus-4-8"
 sources:
   - "https://docs.google.com/document/d/112O31jPbf2ooYj0rBnxLW0zsKPYnyhAmQZEybEaCfqE/edit"
   - "https://docs.google.com/document/d/1stCZQUo7RezQeviPOJyCPNKQbs3e93VGfr8VNqQ94O4/edit"
+  - "/Users/lcalderon/.codex/attachments/4cae15da-0cb0-4bd3-bbc5-2b192ba41617/pasted-text.txt"
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"
   - "content/job-search/intuit-project-map-from-goals-roadmaps-and-reviews-2026-07-17.md"
 derived_from:
@@ -46,6 +47,17 @@ The final edit made these changes:
 - It added an explicit Intuit evidence boundary. The story does not claim one segment-growth number for the full portfolio.
 - It reduced the Tile ownership claim from “I changed” to “I helped change.”
 - It separated the SketchPop company transformation from the support-cost result. This avoids a false causal link.
+
+### External coaching feedback revision — 2026-07-22
+
+The first-story feedback supplied a useful rubric for all three stories: quantify the hook and stakes, make cross-functional influence and tradeoffs explicit, and synthesize results into two or three confident outcomes. The live Google Docs were revised in place using that rubric.
+
+- Intuit now opens with the supported launch measures and states the scale and business risk earlier. Its action makes the different functional constraints and evidence-based investment decisions explicit. Its result groups the three separate launch outcomes without presenting them as one portfolio-wide growth measure.
+- Tile now introduces the company-growth context earlier, makes the customer-value versus unit-economics tradeoff explicit, and separates the program's attributable revenue contribution from company growth.
+- SketchPop now states the $3 million scale, 20 percent margins, and 600,000-customer context earlier. It makes the speed-versus-revenue-continuity tradeoff explicit and separates customer-journey coverage from the support-cost workstream.
+- The revision did not import suggested claims about revenue share, multiple declining seasons, satisfaction decline, specific executive pushback, or projected lifetime value because the cited source set does not support them.
+
+The Story Builder validation remains within the template limits. Hooks contain 25 to 28 words. Handshakes contain 21 to 22 words. Situations contain 82 to 94 words. Actions contain 310 to 350 words. Results contain 59 to 75 words. Each Task is one sentence. The STAR substance is identical in both live documents.
 
 ### Second high-effort validation
 
