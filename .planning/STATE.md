@@ -433,3 +433,21 @@ Items acknowledged and deferred at milestone close on 2026-05-17:
 - install-regression.sh --fast: 9/9 structural checks pass
 - 17 commits since main origin/main via merge 5d10b959 + closeout evidence + roadmap correction ca10d2eb
 - Fable (claude-fable-5) verifier-first rounds 1..6 closed at PASS (close)
+
+## 2026-07-21 v8.21 Deploy — cordant-hermes-01 @ 5f3fe1c2 (post Phase 177 + 176 first session)
+
+- cordant-hermes-01 deploy complete: 5/5 core services up (mem0, Knowledge
+  Index, Graph Memory, Agents, APO). /api/health truthful.
+- .env credentials rotated per install: JWT 64-char, admin 36-char,
+  Neo4j 24-char. MEMROOS_NEO4J_AUTH = neo4j/<24-char>.
+- Branches cleaned: install-repro-connmem-bridge + fix/telemetry-route-auth
+  deleted; /tmp/memroos-phase175-exec left for inspection.
+- /api/health on the 5 core services returns "up"; RTK + QMD "degraded"
+  by-design (optional tooling not installed on this host).
+- oracle-1 deploy BLOCKED: opc SSH works, no memroos repo, aarch64 host.
+  Tracked at .evidence-push/cordant-hermes-01-deploy-2026-07-21/oracle-1-blocker.md
+  (Luis pubkey install + multi-arch build needed; tracked under STATE.md's
+  prior v8.15 on-host re-smoke item).
+- Receipts: .evidence-push/cordant-hermes-01-deploy-2026-07-21/SUMMARY.txt
+- Validator (codex gpt-5.6-terra MEDIUM): "cordant_hermes_01: GREEN;
+  oracle_1: RED; ready_to_close: false (defer oracle-1)".
