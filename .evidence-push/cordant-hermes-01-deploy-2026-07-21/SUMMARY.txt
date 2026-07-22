@@ -1,0 +1,44 @@
+=== receipts from cordant-hermes-01 @ 5f3fe1c2 ===
+Date: 2026-07-22T00:23:44Z
+
+==git==
+5f3fe1c2c5ccebf2284a38a3ebb415102d23cde0
+5f3fe1c2 merge: pull in unrelated origin/main doc edits (TMAY story hierarchy + SOM story separation)
+
+==compose==
+NAME                            IMAGE                         COMMAND                  SERVICE         CREATED         STATUS                   PORTS
+memroos-local-mem0-1            memroos-local-mem0            "uvicorn mem0-server…"   mem0            7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:3201->3201/tcp
+memroos-local-memroos-1         memroos-local-memroos         "docker-entrypoint.s…"   memroos         7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:3000->3000/tcp
+memroos-local-neo4j-1           neo4j:5-community             "tini -g -- /startup…"   neo4j            7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:7474->7474/tcp, 7473/tcp, 0.0.0.0:7687->7687/tcp
+memroos-local-ollama-1          ollama/ollama:latest          "/bin/ollama serve"      ollama          7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:11434->11434/tcp
+memroos-local-orchestration-1   memroos-local-orchestration   "uvicorn services.or…"   orchestration   7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:3210->3210/tcp
+
+==api/health (json)==
+{"services":[{"service":"RTK","status":"degraded","latencyMs":13,"lastCheck":"2026-07-22T00:23:44.851Z","detail":"optional — rtk binary not installed (local dev tool, not an oracle-1 service)"},{"service":"mem0","status":"up","latencyMs":17,"lastCheck":"2026-07-22T00:23:44.859Z"},{"service":"QMD","status":"degraded","latencyMs":10,"lastCheck":"2026-07-22T00:23:44.852Z","detail":"optional — qmd binary not installed (local library search only)"},{"service":"Knowledge Index","status":"up","latencyMs":6,"lastCheck":"2026-07-22T00:23:44.852Z","detail":"skipped — qmd not installed (optional local knowledge index)"},{"service":"Graph Memory","status":"up","latencyMs":21,"lastCheck":"2026-07-22T00:23:44.870Z","detail":"neo4j"},{"service":"Agents","status":"up","latencyMs":1,"lastCheck":"2026-07-22T00:23:44.851Z"},{"service":"APO","status":"up","latencyMs":1,"lastCheck":"2026-07-22T00:23:44.851Z"}],"timestamp":"2026-07-22T00:23:44.870Z"}
+
+==5-of-5 core up==
+mem0: code=200
+neo4j: code=200
+orchestration: code=200
+ollama: code=200
+memroos: code=200
+
+==credential rotation (lengths only)==
+MEMROOS_JWT_SECRET length:    64
+MEMROOS_ADMIN_PASSWORD length: 36
+NEO4J_PASSWORD length:        24
+MEMROOS_NEO4J_AUTH:           neo4j/8e19cb8c44768b017e099581  (length 24 + 'neo4j/' prefix)
+
+==branch / worktree state==
+  install-repro-177
+* main
+  reinstall-local-profile
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+/home/ubuntu/memroos 5f3fe1c2 [main]
+
+==branch cleanup this session==
+- install-repro-connmem-bridge (merged into main via 5f3fe1c2; deleted)
+- fix/telemetry-route-auth (in /tmp/memroos-telemetry-auth-fix worktree;
+  force-removed; branch deleted)
+- /tmp/memroos-phase175-exec (detached HEAD @ aa4f06a7; left for inspection)
