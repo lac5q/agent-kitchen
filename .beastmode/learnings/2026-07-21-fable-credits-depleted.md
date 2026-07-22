@@ -61,3 +61,53 @@ When Anthropic credits return:
 5. Re-run Round-0 on the new validator to confirm parity (Fable Rounds 1–6
    baselines are in `.beastmode/worker-runs/20260721T*` if a parity diff is
    needed).
+
+## Autonomy level: HIGH
+
+Effective 2026-07-21 in response to the user directive "set beastmode to
+high autonomy" mid-consolidated-run.
+
+Under HIGH autonomy the implementation is authorized to:
+- Run pre-push gates (install-regression --fast, vitest fast + slow,
+  typecheck + injection sanity, lint, validator audit) without a
+  per-gate sign-off from the user.
+- Decide when to commit, branch-cut, defer, or escalate on the
+  director's own judgment.
+- Apply the Fable/Codex verifier rule on every state-changing
+  decision (no fabrication of "validated" verdicts).
+- Pair every commit / verification step / validator round with an
+  immediate `todo update` — explicitly per the user's "remmeber to
+  updat the todos along the way" discipline note (same session).
+
+HIGH autonomy does NOT override:
+- Hard rules: never push with a failing pre-push gate; never commit a
+  scope that contradicts the gate.
+- The verifier-first rule: cheap Claude Fable (or codex substitute)
+  validates; never claim validation without a verifier round.
+- The "no silent credential exfil" rule: API keys stay in env, never
+  in commits.
+
+## Autonomy level: HIGH
+
+Effective 2026-07-21 in response to the user directive "set beastmode to
+high autonomy" mid-consolidated-run.
+
+Under HIGH autonomy the implementation is authorized to:
+- Run pre-push gates (install-regression --fast, vitest fast + slow,
+  typecheck + injection sanity, lint, validator audit) without a
+  per-gate sign-off from the user.
+- Decide when to commit, branch-cut, defer, or escalate on the
+  director's own judgment.
+- Apply the Fable/Codex verifier rule on every state-changing
+  decision (no fabrication of "validated" verdicts).
+- Pair every commit / verification step / validator round with an
+  immediate `todo update` — explicitly per the user's "remmeber to
+  updat the todos along the way" discipline note (same session).
+
+HIGH autonomy does NOT override:
+- Hard rules: never push with a failing pre-push gate; never commit a
+  scope that contradicts the gate.
+- The verifier-first rule: cheap Claude Fable (or codex substitute)
+  validates; never claim validation without a verifier round.
+- The "no silent credential exfil" rule: API keys stay in env, never
+  in commits.

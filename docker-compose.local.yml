@@ -23,20 +23,29 @@ services:
       context: .
       dockerfile: docker/Dockerfile.memroos
     ports:
-      - "${MEMROOS_PORT:-3000}:3000"
+      # Bind to loopback by default — a reachable fresh install on a
+      # multi-tenant host would otherwise expose the staging stack on
+      # all interfaces. Override the host-IP portion (e.g.
+      # MEMROOS_BIND=0.0.0.0) to expose for a local VM test.
+      - "${MEMROOS_BIND:-127.0.0.1}:${MEMROOS_PORT:-3000}:3000"
     environment:
       MEMROOS_A2A_PROFILE: ${MEMROOS_A2A_PROFILE:-local-dev}
       MEMROOS_PUBLIC_BASE_URL: ${MEMROOS_PUBLIC_BASE_URL:-http://localhost:3000}
       MEMROOS_A2A_ENDPOINT_BASE_URL: ${MEMROOS_A2A_ENDPOINT_BASE_URL:-http://localhost:3000}
       MEMROOS_OPERATOR_API_KEY: ${MEMROOS_OPERATOR_API_KEY:-demo-key}
-      # This server's OWN dashboard login. Pinned local-only values (like the
-      # Neo4j wiring) so the .env placeholders don't apply and an admin is seeded
-      # on first boot. LOCAL ONLY — change these before exposing this instance.
-      # This is a separate, self-contained instance; it does NOT touch any
-      # hosted/production MemroOS dashboard.
-      MEMROOS_JWT_SECRET: memroos-local-dev-jwt-secret-change-me-0123456789
-      MEMROOS_ADMIN_EMAIL: admin@memroos.local
-      MEMROOS_ADMIN_PASSWORD: memroos-local-admin
+      # This server's OWN dashboard login. Defaults are seeded on first
+      # boot only if the env vars are unset; install.sh generates a
+      # random MEMROOS_JWT_SECRET and a random MEMROOS_ADMIN_PASSWORD
+      # on first install (see install.sh::run_docker_install) so the
+      # reachable install does NOT ship the well-known 'memroos-local'
+      # values that the prior version of this compose had. The literal
+      # fallbacks below remain ONLY for the offline / no-installer path
+      # (e.g., running docker compose up by hand) and the user MUST
+      # override these or bind the published ports to a non-routable
+      # interface (default MEMROOS_BIND=127.0.0.1 above) before exposing.
+      MEMROOS_JWT_SECRET: ${MEMROOS_JWT_SECRET:-memroos-local-dev-jwt-secret-change-me-32chars}
+      MEMROOS_ADMIN_EMAIL: ${MEMROOS_ADMIN_EMAIL:-admin@memroos.local}
+      MEMROOS_ADMIN_PASSWORD: ${MEMROOS_ADMIN_PASSWORD:-change-me-on-first-install}
       MEM0_URL: http://mem0:3201
       ORCHESTRATION_SERVICE_URL: http://orchestration:3210
       # Graph memory: point the app at the bundled local Neo4j.
@@ -45,7 +54,17 @@ services:
       NEO4J_HTTP_URL: http://neo4j:7474
       NEO4J_DATABASE: neo4j
       NEO4J_USERNAME: neo4j
-      NEO4J_PASSWORD: memroos-local
+      # NEO4J_PASSWORD is set by install.sh to a random 24-hex value
+      # (same value as MEMROOS_NEO4J_AUTH below). The app talks to Neo4j
+      # via NEO4J_USERNAME/NEO4J_PASSWORD; the Neo4j container's own
+      # AUTH comes from MEMROOS_NEO4J_AUTH (composed in install.sh as
+      # 'neo4j/<same-password>') so app + DB stay in sync.
+      # The literal fallback matches the same string the Neo4j container
+      # uses for MEMROOS_NEO4J_AUTH so 'docker compose ... down' (which
+      # runs BEFORE install writes .env on a clean CI checkout) still
+      # renders; install-regression --fast + --full assert the rotation
+      # via install.sh regenerated the value on first install.
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-memroos-local}
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
@@ -90,7 +109,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.memory
     ports:
-      - "${MEM0_PORT:-3201}:3201"
+      - "${MEMROOS_BIND:-127.0.0.1}:${MEM0_PORT:-3201}:3201"
     environment:
       # Local mode: no Qdrant required (embedded Chroma vector store).
       # Pinned empty so the repo .env's cloud Qdrant placeholders can't leak in.
@@ -117,7 +136,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${MEMROOS_BIND:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
@@ -140,20 +159,31 @@ services:
   neo4j:
     image: neo4j:5-community
     ports:
-      - "${NEO4J_HTTP_PORT:-7474}:7474"
-      - "${NEO4J_BOLT_PORT:-7687}:7687"
+      - "${MEMROOS_BIND:-127.0.0.1}:${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${MEMROOS_BIND:-127.0.0.1}:${NEO4J_BOLT_PORT:-7687}:7687"
     environment:
       # NEO4J_AUTH is the ONE credential var the neo4j image handles specially.
       # Do NOT set NEO4J_PASSWORD here: the image maps every other NEO4J_* env to
       # a server setting under strict validation, and there is no 'PASSWORD'
       # setting, so the server refuses to start. Pinned literal to match the app
       # wiring above and stay independent of the repo .env cloud placeholders.
-      NEO4J_AUTH: neo4j/memroos-local
+      # Falls back to a known-default only when the host env doesn't supply
+      # one; install.sh writes MEMROOS_NEO4J_AUTH on first install so the
+      # reachable stack rotates this on every fresh boot.
+      NEO4J_AUTH: ${MEMROOS_NEO4J_AUTH:-neo4j/memroos-local}
+      # Also pass MEMROOS_NEO4J_AUTH so the healthcheck shell escape
+      # \${MEMROOS_NEO4J_AUTH#neo4j/} resolves at run-time. Without
+      # this, the healthcheck authenticates with an empty password and
+      # Neo4j stays unhealthy, which blocks the dependent memroos
+      # service from ever starting.
+      MEMROOS_NEO4J_AUTH: ${MEMROOS_NEO4J_AUTH:-neo4j/memroos-local}
     volumes:
       - neo4j-data:/data
       - neo4j-logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -a bolt://127.0.0.1:7687 -u neo4j -p memroos-local 'RETURN 1' >/dev/null"]
+      # Use the same per-install password MEMROOS_NEO4J_AUTH carries (it
+      # is 'neo4j/<pass>'; strip the 'neo4j/' prefix).
+      test: ["CMD-SHELL", "cypher-shell -a bolt://127.0.0.1:7687 -u neo4j -p \"$${MEMROOS_NEO4J_AUTH#neo4j/}\" 'RETURN 1' >/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -164,7 +194,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.orchestration
     ports:
-      - "${ORCHESTRATION_PORT:-3210}:3210"
+      - "${MEMROOS_BIND:-127.0.0.1}:${ORCHESTRATION_PORT:-3210}:3210"
     environment:
       ORCHESTRATION_DB_PATH: /data/orchestration.db
       ORCHESTRATION_RETRY_LIMIT: ${ORCHESTRATION_RETRY_LIMIT:-2}

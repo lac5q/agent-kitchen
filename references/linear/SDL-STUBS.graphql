@@ -1,0 +1,407 @@
+# Type stubs derived from public Linear GraphQL docs.
+# Provenance tag: doc-derived. Replace with introsepction output when
+# a Linear API key is available (see SCHEMA-PROVENANCE.md).
+
+type Query {
+  # Organization
+  organization(id: String!): Organization
+  organizations(first: Int, after: String): OrganizationConnection!
+
+  # Viewer
+  viewer: User!
+
+  # Teams
+  team(id: String!): Team
+
+  # Issues
+  issue(id: String!): Issue
+  issues(
+    first: Int, after: String,
+    filter: IssueFilter,
+    includeArchived: Boolean
+  ): IssueConnection!
+
+  # Comments
+  issueComments(
+    issueId: String!,
+    first: Int, after: String
+  ): CommentConnection!
+
+  # Projects
+  project(id: String!): Project
+  projects(
+    first: Int, after: String,
+    filter: ProjectFilter,
+    includeArchived: Boolean
+  ): ProjectConnection!
+
+  # Initiatives (capability-gated)
+  initiatives(
+    first: Int, after: String,
+    includeArchived: Boolean
+  ): InitiativeConnection!
+
+  # Documents
+  document(id: String!): Document
+  documents(
+    first: Int, after: String,
+    filter: DocumentFilter
+  ): DocumentConnection!
+
+  # Cycles
+  cycles(
+    first: Int, after: String,
+    filter: CycleFilter,
+    includeArchived: Boolean
+  ): CycleConnection!
+
+  # Users (assignees/creators)
+  users(first: Int, after: String, filter: UserFilter): UserConnection!
+
+  # Customers (feature-gated)
+  customers(first: Int, after: String, filter: CustomerFilter): CustomerConnection!
+}
+
+scalar DateTime
+scalar JSON
+
+interface Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
+
+type Organization implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  urlKey: String!
+  logoUrl: String
+  teams: TeamConnection!
+}
+
+type Team implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  key: String!
+  description: String
+  members: UserConnection!
+  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
+}
+
+type User implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  email: String!
+  displayName: String!
+  active: Boolean!
+  admin: Boolean!
+}
+
+type Issue implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  identifier: String!
+  title: String!
+  description: String
+  priority: Int
+  estimate: Int
+  state: WorkflowState!
+  team: Team!
+  assignee: User
+  creator: User!
+  labels: LabelConnection!
+  project: Project
+  cycle: Cycle
+  parent: Issue
+  children(filter: IssueFilter, first: Int, after: String): IssueConnection!
+  comments(first: Int, after: String): CommentConnection!
+  url: String!
+}
+
+type Comment implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  body: String!
+  issue: Issue!
+  user: User!
+}
+
+type Project implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  description: String
+  state: String!
+  targetDate: DateTime
+  lead: User
+  teams: TeamConnection!
+  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
+  updates(first: Int, after: String): ProjectUpdateConnection!
+}
+
+type Initiative implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  description: String
+  status: String!
+  owner: User
+  projects: ProjectConnection!
+}
+
+type Document implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  title: String!
+  content: JSON
+  project: Project
+  creator: User!
+  url: String!
+}
+
+type Cycle implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  number: Int!
+  name: String
+  startsAt: DateTime!
+  endsAt: DateTime!
+  team: Team!
+  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
+}
+
+type WorkflowState implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  type: String!
+  color: String!
+  position: Float!
+  team: Team!
+}
+
+type Label implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  color: String!
+}
+
+type Customer implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  name: String!
+  logoUrl: String
+  domains: [String!]!
+  externalId: String
+}
+
+type Attachment implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  title: String!
+  url: String!
+  filename: String!
+  contentType: String
+  size: Float
+  issue: Issue
+}
+
+# Connection + Edge types (Relay-style)
+
+type OrganizationConnection {
+  nodes: [Organization!]!
+  edges: [OrganizationEdge!]!
+  pageInfo: PageInfo!
+}
+
+type OrganizationEdge {
+  node: Organization!
+  cursor: String!
+}
+
+type TeamConnection {
+  nodes: [Team!]!
+  edges: [TeamEdge!]!
+  pageInfo: PageInfo!
+}
+
+type TeamEdge {
+  node: Team!
+  cursor: String!
+}
+
+type UserConnection {
+  nodes: [User!]!
+  edges: [UserEdge!]!
+  pageInfo: PageInfo!
+}
+
+type UserEdge {
+  node: User!
+  cursor: String!
+}
+
+type IssueConnection {
+  nodes: [Issue!]!
+  edges: [IssueEdge!]!
+  pageInfo: PageInfo!
+}
+
+type IssueEdge {
+  node: Issue!
+  cursor: String!
+}
+
+type CommentConnection {
+  nodes: [Comment!]!
+  edges: [CommentEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CommentEdge {
+  node: Comment!
+  cursor: String!
+}
+
+type ProjectConnection {
+  nodes: [Project!]!
+  edges: [ProjectEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProjectEdge {
+  node: Project!
+  cursor: String!
+}
+
+type ProjectUpdateConnection {
+  nodes: [ProjectUpdate!]!
+  edges: [ProjectUpdateEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProjectUpdateEdge {
+  node: ProjectUpdate!
+  cursor: String!
+}
+
+type ProjectUpdate implements Node {
+  id: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  body: String
+  health: String
+  project: Project!
+  user: User!
+}
+
+type InitiativeConnection {
+  nodes: [Initiative!]!
+  edges: [InitiativeEdge!]!
+  pageInfo: PageInfo!
+}
+
+type InitiativeEdge {
+  node: Initiative!
+  cursor: String!
+}
+
+type DocumentConnection {
+  nodes: [Document!]!
+  edges: [DocumentEdge!]!
+  pageInfo: PageInfo!
+}
+
+type DocumentEdge {
+  node: Document!
+  cursor: String!
+}
+
+type CycleConnection {
+  nodes: [Cycle!]!
+  edges: [CycleEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CycleEdge {
+  node: Cycle!
+  cursor: String!
+}
+
+type LabelConnection {
+  nodes: [Label!]!
+  edges: [LabelEdge!]!
+  pageInfo: PageInfo!
+}
+
+type LabelEdge {
+  node: Label!
+  cursor: String!
+}
+
+type CustomerConnection {
+  nodes: [Customer!]!
+  edges: [CustomerEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CustomerEdge {
+  node: Customer!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+input IssueFilter {
+  state: WorkflowStateFilter
+  assignee: UserFilter
+  creator: UserFilter
+  project: ProjectFilter
+  team: TeamFilter
+  priority: Int
+  search: String
+}
+
+input UserFilter { id: ID; email: String; active: Boolean }
+input ProjectFilter { id: ID; name: String; state: String; lead: UserFilter }
+input DocumentFilter { id: ID; title: String; creator: UserFilter }
+input CycleFilter { id: ID; number: Int; team: TeamFilter }
+input TeamFilter { id: ID; key: String }
+input WorkflowStateFilter { id: ID; name: String; type: String }

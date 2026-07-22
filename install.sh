@@ -340,6 +340,36 @@ run_docker_install() {
     fi
     chmod 600 .env
     ok "Created .env from .env.example"
+
+    # Generate fresh per-install credentials so a reachable fresh install
+    # does NOT ship the well-known 'memroos-local-*' defaults. install.sh
+    # is the single source of truth; compose falls back to its env vars.
+    if command -v openssl >/dev/null 2>&1; then
+      gen_jwt="$(openssl rand -hex 32)"
+      gen_pw="$(openssl rand -hex 18)"
+      gen_neo="$(openssl rand -hex 12)"
+      # Always replace ALL three credential rows (insert if missing).
+      # Sets the value if the key already exists (e.g. set from
+      # .env.example) or appends the line if the key is absent.
+      set_or_append() {
+        local key="$1"; local value="$2"
+        if grep -q "^${key}=" .env 2>/dev/null; then
+          sed -i "s|^${key}=.*|${key}=${value}|" .env
+        else
+          printf '%s=%s\n' "$key" "$value" >> .env
+        fi
+      }
+      set_or_append 'MEMROOS_JWT_SECRET' "${gen_jwt}"
+      set_or_append 'MEMROOS_ADMIN_PASSWORD' "${gen_pw}"
+      set_or_append 'NEO4J_PASSWORD' "${gen_neo}"
+      # Neo4j image reads NEO4J_AUTH (user/pass combined). We compose
+      # it from the same NEO4J_PASSWORD so app + DB stay in sync.
+      set_or_append 'MEMROOS_NEO4J_AUTH' "neo4j/${gen_neo}"
+      chmod 600 .env
+      ok "Generated per-install credentials (JWT_SECRET, ADMIN_PASSWORD, NEO4J_PASSWORD, NEO4J_AUTH)"
+    else
+      warn "openssl not found; reachable install will keep literal defaults"
+    fi
   fi
 
   if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
