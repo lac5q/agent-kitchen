@@ -47,6 +47,19 @@ The final edit made these changes:
 - It reduced the Tile ownership claim from “I changed” to “I helped change.”
 - It separated the SketchPop company transformation from the support-cost result. This avoids a false causal link.
 
+### Second high-effort validation
+
+Claude Opus 4.8 completed a second high-effort pass after both clean output documents were finalized. It compared the live documents paragraph by paragraph against the Story Builder template, completed STAR workbook, TMAY inventories, Intuit evidence chronology, and corrected SketchPop source.
+
+Its final verdict was: ship both documents as-is. It recommended zero required revisions.
+
+- The STAR document contains only Situation, Task, Action, and Result for each story.
+- The Story Builder document contains Hook, Handshake, Situation, Task, Action, and Result for each story.
+- The STAR sections match between the two documents.
+- All three Story Builder stories meet the template word limits.
+- Intuit passes at L7-equivalent scope. Tile passes at L6/L7 business-model scope. SketchPop passes through ownership breadth and remains the third story.
+- The review rejected unsupported additions for Tile's program name, Tile's 30 percent denominator, one Intuit portfolio-growth number, and stronger SketchPop revenue-lift claims.
+
 ## Open evidence checks
 
 - Confirm the formal Tile program name before use.
