@@ -19,6 +19,7 @@ export async function GET(_req: NextRequest) {
   // catalog is the same for every installation. Per-user state (connections,
   // activity) lives behind the auth-gated sibling routes. This also lets
   // the redeploy script smoke-test the route without authenticating.
+  console.log("[PROVIDERS_ROUTE_FIRED]", { ts: new Date().toISOString() });
   const response: ListProvidersResponse = {
     categories: getCategories().map((cat) => ({
       id: cat.id,
@@ -34,4 +35,3 @@ export async function GET(_req: NextRequest) {
   };
   return Response.json(response);
 }
-// SENTINEL_BUILD_TEST — this line should appear in the rebuilt image
