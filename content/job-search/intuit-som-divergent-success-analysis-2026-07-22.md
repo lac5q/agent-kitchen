@@ -78,7 +78,7 @@ Do not combine the percentage lifts with the index results. Do not claim complet
 
 ## Recommended interview language
 
-“I led SOM as an end-to-end portfolio through two to three PMs across chat onboarding, simplification, data import, and pricing. The organization was not aligned to the shift, so I rehired critical roles, moved engineering capacity, and reset cross-functional goals around the whole journey. We accepted added work in one segment when it improved the overall customer experience and economics. Each workstream delivered wins, but Divergent was the controversial capstone. We removed the start-SKU constraint and let actual tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
+“In SOM, I unlocked growth by bringing chat onboarding, simplification, data import, and pricing under one organization. I led two or three PMs, rehired key roles, shifted engineering, and set goals around the full customer journey—not isolated funnel wins. That let us add friction in one area when it improved the overall experience. Each workstream delivered, but Divergent was the controversial capstone. We removed the start-SKU constraint and let actual tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
 
 ## MiniMax-M3 validation
 
