@@ -68,6 +68,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 📋 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; continuously ingest all authorized Linear workspace information plus all accessible Circleback meetings/memories into permission-aware, provenance-backed unified recall)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
+- 📋 **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (planned 2026-07-21; MEMCLIP-01..05; implements Option D from the 2026-07-21 Opus 4.8 architectural opinion; MemroOS integrates at exactly two Paperclip *core* seams — the planned memory-provider plugin for push (pre-run hydrate via `instructionsFilePath`) and the existing tool-connection MCP gateway for pull (one `toolConnections` row); zero Paperclip adapters gain MemroOS-aware code)
 
 ## Phases
 
@@ -2852,3 +2853,33 @@ Operator host
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 175. Runtime Bottleneck Evidence | 1/1 | Planned | — |
+
+## v8.22 Paperclip/MemroOS Two-Seam Memory Integration
+
+### Phase 178 — Paperclip/MemroOS Two-Seam Memory Integration (Option D)
+
+**Goal:** Land Option D per the 2026-07-21 Opus 4.8 architectural opinion. MemroOS integrates at exactly two Paperclip *core* seams — the planned memory-provider plugin for push and the existing tool-connection MCP gateway for pull — and zero Paperclip adapters gain MemroOS-aware code.
+**Depends on:** Phase 146 (FLEET contract baseline; ownership split + boundary rules), `paperclip/doc/plans/2026-03-17-memory-service-surface-api.md` (memory-provider plugin shape), current Paperclip tool-gateway work
+**Requirements:** MEMCLIP-01, MEMCLIP-02, MEMCLIP-03, MEMCLIP-04, MEMCLIP-05
+
+**Success criteria:**
+1. `memroos/docs/integrations/paperclip.md` gets a new "Memory Path (FLEET-2x)" §4 clause that resolves the policy collision between the Phase 146 ownership rules and the 2026-03-17 plan. Resolution: Paperclip authorizes *binding access* (which agent may call which provider); MemroOS authorizes *record content* (permission-aware pack assembly). MemroOS's content authorization wins on what's in the bundle.
+2. MemroOS implements the `MemoryAdapter` interface from the 2026-03-17 plan with two paths:
+   - **Push:** `pre_run_hydrate` writes the MemroOS context pack into the per-run instructions file at Paperclip's `instructionsFilePath` resolution point (`server/src/services/heartbeat.ts:3630`). One core change covers all 9 CLI / cloud / gateway adapters.
+   - **Pull:** MemroOS registers as one Paperclip `toolConnections` row (`remote_http` transport). Adapters that wire `AdapterExecutionContext.runtimeMcp` (currently claude-local, codex-local) get MemroOS natively. Adapters that do not yet wire `runtimeMcp` fall back to push-only.
+3. Paperclip's tool gateway exposes token→run-scope introspection — the `subjectId` field already exists (`server/src/services/heartbeat.ts:~2129`); making it readable by MemroOS's MCP callee is the change. MemroOS uses this to resolve every gateway token to `{companyId, agentId, runId}` for audit provenance.
+4. Idempotency on `(run_id, content_hash)` is enforced server-side in MemroOS. An integration test asserts that one run which both hydrates via hook AND writes via MCP yields exactly one MemroOS record + two linked `memory_operations` rows. Test sits next to `packages/adapter-utils/src/mcp-isolation.integration.test.ts` in the Paperclip repo.
+5. Zero Paperclip adapters gain MemroOS-aware code, verified by `grep -r 'MemroOS' paperclip/packages/adapters/*/src/**` returning zero hits.
+
+**Source opinion:** See `docs/integrations/paperclip-option-d-2026-07-21.md` (or the linked Opus 4.8 run transcript). Decision drivers: (a) the Phase 146 contract rule "Paperclip does not own cross-runtime fleet, memory, or governance"; (b) the 2026-03-17 plan's already-designed memory-provider plugin shape; (c) MemroOS's product positioning as a standalone MCP server, not a Paperclip feature.
+
+**Out of scope (v8.22):**
+- `runtimeMcp` audit for non-wired Paperclip adapters (cursor-local, gemini-local, grok-local, opencode-local, pi-local, hermes, hermes-gateway, openclaw-gateway, cursor-cloud) — separate Paperclip hygiene item, not a MemroOS deliverable.
+- Plan amendments to add `providerNativeToolSurface` capability flag and provenance stamp on `MemoryContextBundle` — those land in Paperclip's repo separately if accepted; not a v8.22 gate.
+- Harness-native context-pack delivery beyond `instructionsFilePath` + MCP server registration — no per-adapter code under this phase.
+
+### Progress Table (v8.22 Paperclip/MemroOS Two-Seam Memory Integration)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 178. Paperclip/MemroOS Two-Seam Memory Integration | 0/? | Planned | — |

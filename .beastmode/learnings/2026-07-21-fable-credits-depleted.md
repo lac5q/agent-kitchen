@@ -111,3 +111,57 @@ HIGH autonomy does NOT override:
   validates; never claim validation without a verifier round.
 - The "no silent credential exfil" rule: API keys stay in env, never
   in commits.
+
+## Followup 2: oracle-1 deploy deferral (2026-07-22)
+
+User confirmed mid-run: do NOT install / re-run / re-rotate anything
+on oracle-1. They wanted the host at "latest code" (which it is — main @
+origin/main HEAD = bb6d4583, no divergence) but to leave the existing
+data state untouched. So the oracle-1 deploy remains:
+- HEAD: bb6d4583 (matches origin/main, 0 commits behind)
+- No docker stack running (ps empty)
+- .env (if any) is the preinstall backup; not rotated
+- Multi-arch image build still tracked as a future work item
+
+This is a valid deployment state for the oracle-1 host. The `oracle-1
+BLOCKED` note is now narrower: it's blocked on first-install
+provisioning (network pull, credential rotation, image-build), not on
+the source code on disk.
+
+The DEPLOY2 todos (oracle-1 work) created in the last turn are now
+mis-scoped: the user wanted code-only, not install. Closing them all
+as not-applicable; the deliverable is "oracle-1 source is at HEAD"
+which is already done.
+
+## Followup 3: oracle-1 thin-client (2026-07-22)
+
+oracle-1 is a thin client: aarch64, 30G disk total (4.8G free at session
+start), 10Gi RAM. Pulling the 2.7GB ollama image with its CUDA layers
+fills disk and breaks extraction. Net change to oracle-1 in this
+session was minimal:
+
+  - git clone https://github.com/lac5q/memroos.git ~/memroos
+  - git pull --ff-only origin main → bb6d4583
+  - No .env, no containers, no system services modified
+
+To get oracle-1's stack running without the 2.7GB ollama image, this
+session's commits:
+  - docker-compose.local.yml: ollama + ollama-pull now gated behind
+    `profiles: [local]`. Default `docker compose up -d` is the cloud
+    shape (4 services, no ollama); the 2.7GB image is opt-in via
+    `COMPOSE_PROFILES=local`.
+  - .env.example: documents `MEMROOS_OLLAMA_MODE` (local / cloud / skip)
+    and the COMPOSE_PROFILES relationship.
+  - install-regression --fast: 2 new structural checks assert the
+    profile-gating behavior (default excludes ollama; `local` profile
+    includes it; `required: false` on the mem0/.../ollama-pull deps
+    so the cloud shape doesn't error on the missing service).
+
+Next session that needs oracle-1 running with full stack:
+  - ssh opc@oracle-1
+  - cd ~/memroos
+  - COMPOSE_PROFILES=local docker compose -f docker-compose.yml \
+      -f docker-compose.local.yml up -d
+    (only if disk free > 4.5G; else use cloud + set OLLAMA_BASE_URL)
+  - OLLAMA_BASE_URL=https://<remote-ollama> if cloud
+
