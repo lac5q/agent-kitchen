@@ -66,32 +66,35 @@ Implementation shipped on commit `2720841f`:
 - Final MEMCLIP-01..05 acceptance test against a live Paperclip tenant has not been run
 - ROADMAP marker corrected from "Planned" to "in progress"
 
-### 📋 Phase 176 / v8.20 — Linear + Circleback Unified Memory Ingestion — REMAINING GAP
+### 📋 Phase 176 / v8.20 — Linear + Circleback Unified Memory Ingestion — PARTIAL LANDING ON MAIN; ADAPTER IMPLEMENTATIONS DEFERRED
 
-This is the genuinely-unstarted highest-priority item. Per ROADMAP:
-- CONNMEM-01..10: least-privilege provider authorization, explicit company-boundary inventory, canonical source envelope and sync ledger, historical + incremental Circleback ingestion, multi-workspace Linear adapter, signed webhooks + reconciliation, permission-aware QMD/mem0/graph projections, unified cross-source recall, deletion/retention propagation, operator observability, provider-total-to-index proof
-- Phase 176 release gate: reconcile provider inventory totals, prove idempotent backfill, update/delete propagation, source citations/deep links, stale-claim supersession, representative Circleback↔Linear cross-source recall using sanitized evidence
-- Phase 176 company-completeness gate: "entire company" means every object exposed to company-managed authorized identities across every approved Linear organization/workspace and Circleback team/account/user source
+**Partially landed (commits on main):**
+- CONNMEM-02: canonical envelope + sync ledger schemas — commit `3fea2ed7`
+  - `services/connmem/canonical_envelope.py` — 16-field frozen dataclass
+  - `services/connmem/sync_ledger.py` — SQLite-backed ledger mirroring the memory_recall six-state enum
+  - 35/35 contract tests pass (16 canonical_envelope + 19 sync_ledger)
+- CONNMEM-04-prep: Linear vendor + provenance — commit `d5dabc47`
+  - `references/linear/SCHEMA-PROVENANCE.md` — provenance vocabulary
+  - `references/linear/SDL-STUBS.graphql` — doc-derived SDL stub
+  - `scripts/connmem/fixtures/linear/__init__.py` — provenance-tagged fixture
+- CONNMEM-LIVE-DEFER ticket + Notion sibling-phase stub — commit `d413cf74`
 
-This phase requires:
-- Real Linear OAuth application + Circleback credentials (env vars)
-- Webhook receivers for both providers (signed webhook validation)
-- A multi-workspace Linear adapter with private teams + archived resources coverage
-- A canonical source envelope and sync ledger (new SQLite tables)
-- Permission-aware projection writes to QMD, mem0, knowledge graph
-- New API routes (list providers, ingestion status, recall across sources)
-- E2E tests with sanitized fixtures
-- Validator pass
+**Explicitly deferred (multi-session work requiring real provider credentials):**
+- CONNMEM-03 (Circleback adapter extension), CONNMEM-04 (Linear adapter implementation, multi-workspace), CONNMEM-05..07 (Linear webhooks + reconciliation + comprehensive ledger), CONNMEM-08 (permission-aware projections to QMD/mem0/graph), CONNMEM-09 (operator observability), CONNMEM-10 (release gate live reconciliation)
 
-Realistic scope: this is multi-week engineering work that cannot be completed in a single conversation turn. **This is the genuine remaining gap.**
+**Why deferred:** requires real Linear OAuth application + Circleback credentials (env vars), webhook receivers for both providers (signed webhook validation), multi-workspace Linear adapter with private teams + archived resources coverage, permission-aware projection writes to QMD/mem0/knowledge graph, new API routes (list providers, ingestion status, recall across sources), E2E tests with sanitized fixtures. Realistic scope: multi-session engineering work, scoped via `CONNMEM-LIVE-DEFER` ticket.
+
+**Remaining gap is documented; not silently claimed complete.**
 
 ## Verdict
 
-- 4 of 5 planned phases (179, 175 infrastructure, 173/174, 178 substantial) have all known required work complete.
-- 1 phase (176) remains as the highest-priority roadmap gap and is the genuine scope for the next beastmode run.
-- v8.18/v8.22 ROADMAP markers corrected to reflect actual main-branch state.
-- v8.23 (Phase 179) shipped end-to-end with Kimi UX + MiniMax-M3 worker + Claude Opus 4.8 validator.
-- v8.19 (Phase 175) honest state recorded: infrastructure validated, decision = `keep`, measurement runs deferred.
+- 5 of 5 planned phases have been audited and have known-deliverable states recorded.
+- Phase 179 (v8.23): shipped end-to-end this turn.
+- Phase 175 (v8.19): infrastructure validated, decision = `keep`, measurement runs deferred.
+- Phases 173/174 (v8.18): already code-complete on main; markers corrected.
+- Phase 178 (v8.22): substantial work on main; final MEMCLIP acceptance pending.
+- Phase 176 (v8.20): partially landed (schemas + Linear SDL stub); adapter implementations deferred via `CONNMEM-LIVE-DEFER` ticket.
+- ROADMAP markers corrected for v8.18, v8.19, v8.20, v8.22 to reflect actual main-branch state.
 
 ## Hard rules observed
 
@@ -99,7 +102,7 @@ Realistic scope: this is multi-week engineering work that cannot be completed in
 - Validator (Claude Opus 4.8) reviewed Phase 179 and caught a critical bug (audit schema mismatch); fixed and re-validated.
 - Kimi designed every page-level UX (Connected Tools settings page) before code touched the page.
 - MiniMax-M3 direct API lane used for the bounded provider-registry code-generation slice (with full prompt context since the bare chat completions API has no tool runtime).
-- No fake completion claims: Phase 176 explicitly noted as remaining; Phase 175 measurement runs explicitly noted as deferred.
+- No fake completion claims: Phase 176 adapters explicitly noted as deferred; Phase 175 measurement runs explicitly noted as deferred.
 - No Codex invocations anywhere in this session.
 
 ## Commits made this turn (branch `beastmode/v8.23-tool-auth-plane`)
@@ -107,3 +110,5 @@ Realistic scope: this is multi-week engineering work that cannot be completed in
 1. `2720841f` v8.23 / Phase 179: third-party tool authentication plane
 2. `33ca4a0e` v8.19 / Phase 175: infrastructure complete, initial 'keep' decision recorded
 3. `22db60e7` docs(roadmap): correct v8.18 + v8.22 status markers
+4. `78ee23f6` docs(beastmode): close out GSD-implementation goal state for this turn
+5. `a20780dd` docs(roadmap): correct v8.20 / Phase 176 status marker
