@@ -34,3 +34,4 @@ export async function GET(_req: NextRequest) {
   };
   return Response.json(response);
 }
+// SENTINEL_BUILD_TEST — this line should appear in the rebuilt image
