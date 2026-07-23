@@ -55,9 +55,10 @@ The first-story feedback supplied a useful rubric for all three stories: quantif
 - Intuit now opens with the supported launch measures and states the scale and business risk earlier. Its action makes the different functional constraints and evidence-based investment decisions explicit. Its result groups the three separate launch outcomes without presenting them as one portfolio-wide growth measure.
 - Tile now introduces the company-growth context earlier, makes the customer-value versus unit-economics tradeoff explicit, and separates the program's attributable revenue contribution from company growth.
 - SketchPop now states the $3 million scale, 20 percent margins, and 600,000-customer context earlier. It makes the speed-versus-revenue-continuity tradeoff explicit and separates customer-journey coverage from the support-cost workstream.
+- The Intuit hook and result now assign each conversion measure to its launch: Skip Expenses produced the approximately four-percentage-point gain, while QuickFile produced the 5 percent conversion gain and reached 25 percent adoption.
 - The revision did not import suggested claims about revenue share, multiple declining seasons, satisfaction decline, specific executive pushback, or projected lifetime value because the cited source set does not support them.
 
-The Story Builder validation remains within the template limits. Hooks contain 25 to 28 words. Handshakes contain 21 to 22 words. Situations contain 82 to 94 words. Actions contain 310 to 350 words. Results contain 59 to 75 words. Each Task is one sentence. The STAR substance is identical in both live documents.
+The Story Builder validation remains within the template limits. Hooks contain 25 to 30 words. Handshakes contain 21 to 22 words. Situations contain 82 to 94 words. Actions contain 310 to 350 words. Results contain 59 to 79 words. Each Task is one sentence. The STAR substance is identical in both live documents.
 
 ### Second high-effort validation
 
