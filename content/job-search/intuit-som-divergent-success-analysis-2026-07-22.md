@@ -16,16 +16,18 @@ sources:
   - /Users/lcalderon/Documents/Work/Intuit/Product Management/SOM/TY22 Supercharge Front Doors EOS Learnings.pptx
   - Luis Calderon firsthand clarification supplied 2026-07-22
 derived_from: Raw Intuit learning decks, roadmap workbooks, and firsthand context
-regen_prompt: Reconstruct why SOM Divergent succeeded after earlier attempts failed. Keep Reductive GTKM and Divergent New Start as two linked changes. Separate archive evidence from firsthand historical explanation. Preserve metric qualifiers and the open RPA gap.
+regen_prompt: Reconstruct SOM as an end-to-end portfolio led through two to three PMs across chat onboarding, simplification, data import, and pricing. Treat Reductive GTKM and Divergent New Start as linked moves within the portfolio, with Divergent as the controversial capstone. Separate archive evidence from firsthand organization context. Preserve metric qualifiers and the open RPA gap.
 ---
 
 # Intuit SOM Divergent — Why This Attempt Succeeded
 
 ## Executive answer
 
-This attempt succeeded because Luis did not begin with the most controversial structural change. He first simplified the existing onboarding flow and found conversion and revenue improvements. That work identified which complexity signals created value and built economic room for the larger change. He then removed the inherited requirement that customers select a final SKU before TurboTax understood their return. The team fixed the platform edge cases that had weakened earlier attempts and let actual tax complexity determine the final product and price.
+SOM was a broader strategy, not a two-change initiative. Luis led two to three PMs across chat onboarding, simplification, data import, and pricing. He restructured engineering and analytics around the full customer journey because the prior organization optimized individual steps against local goals, creating friction across the whole experience. The strategic principle was to accept added steps or friction in one segment when it improved the overall customer experience and economics. Each workstream delivered wins. Divergent was the controversial capstone: earlier simplification created economic proof, then the team removed early SKU commitment and let actual tax complexity determine the final product and price.
 
-## The two linked changes
+## The portfolio and capstone sequence
+
+Chat onboarding, simplification, data import, and pricing were distinct workstreams in the SOM portfolio. Reductive GTKM and Divergent New Start were linked moves within that broader strategy.
 
 ### 1. Reductive GTKM
 
@@ -75,7 +77,7 @@ Do not combine the percentage lifts with the index results. Do not claim complet
 
 ## Recommended interview language
 
-“I led two linked changes. First, I simplified the existing onboarding flow and found conversion wins that created economic room for change. Then I challenged the inherited requirement that customers commit to a final product before TurboTax understood their return. We removed that start-SKU constraint, fixed the cross-device and downgrade edge cases, and let actual tax complexity determine the final product and price. That sequencing made the structural change work: starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
+“I led SOM as an end-to-end portfolio through two to three PMs across chat onboarding, simplification, data import, and pricing. I restructured engineering and analytics around the whole journey rather than local funnel goals, accepting added work in one segment when it improved the overall customer experience and economics. Each workstream delivered wins, but Divergent was the controversial capstone. We removed the start-SKU constraint and let actual tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
 
 ## MiniMax-M3 validation
 
@@ -85,7 +87,7 @@ MiniMax-M3 independently reviewed the two TMAYs and this evidence analysis. It p
 2. Exactly two stories per version.
 3. No story overlap between versions.
 4. Both scripts are within 275–350 spoken words.
-5. SOM clearly presents Reductive GTKM and Divergent New Start as linked changes.
+5. SOM clearly presents Reductive GTKM and Divergent New Start as linked moves within a broader portfolio.
 6. Archive evidence and Luis's firsthand context are distinct.
 7. The documents do not claim full RPA parity.
 8. The language is legally safe.
@@ -94,3 +96,5 @@ MiniMax-M3 independently reviewed the two TMAYs and this evidence analysis. It p
 Validation session: `20260722_213228_ebdd01`. MiniMax-M3 reported no essential fixes.
 
 Follow-up validation after the SOM resistance and MemRoOS adoption corrections confirmed that the two scripts remain structurally distinct and inside the target length. MiniMax-M3 flagged the external MemRoOS adoption statement as a claim that must remain attributable to Luis's firsthand account. Keep the two consulting companies unnamed, do not imply adoption beyond those two companies, and be prepared to substantiate the statement privately if an interviewer asks.
+
+After the broader SOM portfolio correction, MiniMax-M3 passed the revised consumer TMAY with no essential fixes. It confirmed the end-to-end portfolio framing, leadership through two to three PMs, named workstreams, engineering and analytics realignment, local-versus-overall tradeoff strategy, Divergent capstone, L7 scope, and legal-safe language.
