@@ -30,6 +30,7 @@ cd "$MEMROOS_DIR"
 red()   { printf '\033[31m✗\033[0m %s\n' "$1"; }
 green() { printf '\033[32m✓\033[0m %s\n' "$1"; }
 blue()  { printf '\033[34m•\033[0m %s\n' "$1"; }
+yellow(){ printf '\033[33m!\033[0m %s\n' "$1"; }
 
 blue "Repo:     $MEMROOS_DIR"
 blue "Ref:      $REF"
@@ -88,7 +89,7 @@ if [ -f bin/memroos ]; then
     yellow "could not install bin/memroos on PATH; run as $PWD/bin/memroos"
   fi
   if command -v memroos >/dev/null 2>&1; then
-    memroos --help 2>&1 | head -1 | sed 's/^/    /'
+    memroos --help 2>&1 | head -1 | sed 's/^/    /' || true
   fi
 else
   yellow "  (bin/memroos not present in this checkout; skipping)"

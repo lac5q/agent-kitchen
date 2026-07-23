@@ -85,21 +85,30 @@ NEW_VER="${NEW_TAG#v}"
 if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "none" ]; then
   PREV_MAJOR="${PREV_VERSION%%.*}"; REST="${PREV_VERSION#*.}"
   PREV_MINOR="${REST%%.*}";  PREV_PATCH="${REST#*.}"
-  NEW_MAJOR="${NEW_VER%%.*}"; REST2="${NEW_VER#*.}"
-  NEW_MINOR="${REST2%%.*}";  NEW_PATCH="${REST2#*.}"
-  if [ "$NEW_MAJOR" -gt "$PREV_MAJOR" ] 2>/dev/null; then
-    BUMP="major"
-  elif [ "$NEW_MINOR" -gt "$PREV_MINOR" ] 2>/dev/null; then
-    BUMP="minor"
-  elif [ "$NEW_PATCH" -gt "$PREV_PATCH" ] 2>/dev/null; then
-    BUMP="patch"
+  # R7: only classify semver when BOTH sides are real semver. If the
+  # current build is untagged, or the target is untagged (the common
+  # branch-deploy case where NEW_TAG = "v<rev-count>"), treat as
+  # patch — an in-place commit move.
+  if [[ "$NEW_VER" == *.*.* ]]; then
+    NEW_MAJOR="${NEW_VER%%.*}"; REST2="${NEW_VER#*.}"
+    NEW_MINOR="${REST2%%.*}";  NEW_PATCH="${REST2#*.}"
+    if [ "$NEW_MAJOR" -gt "$PREV_MAJOR" ] 2>/dev/null; then
+      BUMP="major"
+    elif [ "$NEW_MINOR" -gt "$PREV_MINOR" ] 2>/dev/null; then
+      BUMP="minor"
+    elif [ "$NEW_PATCH" -gt "$PREV_PATCH" ] 2>/dev/null; then
+      BUMP="patch"
+    else
+      BUMP="equal"
+    fi
+    echo "  $PREV_VERSION -> $NEW_VER : $BUMP"
+    if [ "$BUMP" = "major" ] && [ "$ALLOW_MAJOR" -ne 1 ]; then
+      red "major version bump requires --allow-major"
+      exit 1
+    fi
   else
-    BUMP="equal"
-  fi
-  echo "  $PREV_VERSION -> $NEW_VER : $BUMP"
-  if [ "$BUMP" = "major" ] && [ "$ALLOW_MAJOR" -ne 1 ]; then
-    red "major version bump requires --allow-major"
-    exit 1
+    BUMP="patch"
+    echo "  $PREV_VERSION -> <untagged $TARGET_HEAD> : patch (untagged target; in-place)"
   fi
 else
   BUMP="unknown"

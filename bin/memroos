@@ -287,9 +287,13 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     if not target or len(target) < 7:
         print("aborted (need a commit hash)")
         return 1
+    # Issue R1: checkout the target commit (detached HEAD), then rebuild
+    # the CURRENT containers against THAT commit. Do NOT call
+    # redeploy-from-ref.sh — that would git pull main and drag us back.
     _run(["git", "checkout", target])
-    _run(["bash", str(REPO / "scripts" / "redeploy-from-ref.sh"), "main"])
-    print("rollback complete")
+    _docker("pull")
+    _docker("up", "-d")
+    print(f"rolled back to {target}; run `memroos status` to verify")
     return 0
 
 
@@ -302,7 +306,6 @@ SECRETS_KEYS = [
     "MEMROOS_JWT_SECRET",
     "MEMROOS_OPERATOR_API_KEY",
     "MEMROOS_ONBOARDING_SECRET",
-    "MEMROOS_VAULT_KEY_PATH",
 ]
 
 
@@ -317,7 +320,15 @@ def cmd_secrets_rotate(args: argparse.Namespace) -> int:
         print(f"error: {env_path} not found", file=sys.stderr)
         return 1
     if not args.yes:
-        confirm = input("rotate MEMROOS_JWT_SECRET + MEMROOS_OPERATOR_API_KEY + MEMROOS_ONBOARDING_SECRET? (type 'rotate' to continue): ")
+        print(
+            "This will:\n"
+            "  - regenerate MEMROOS_JWT_SECRET, MEMROOS_OPERATOR_API_KEY, "
+            "MEMROOS_ONBOARDING_SECRET\n"
+            "  - invalidate all outstanding user sessions (JWT)\n"
+            "  - invalidate all pending onboarding invite tokens\n"
+            "  - restart the memroos container"
+        )
+        confirm = input("type 'rotate' to continue: ")
         if confirm.strip() != "rotate":
             print("aborted")
             return 1
@@ -329,7 +340,9 @@ def cmd_secrets_rotate(args: argparse.Namespace) -> int:
     if rotated == original:
         print("no matching keys found in .env; nothing rotated", file=sys.stderr)
         return 1
-    backup = env_path.with_suffix(".env.bak")
+    # Issue R6: .env has no suffix, so with_suffix(".env.bak") yields
+    # ".env.env.bak". Use a sibling filename instead.
+    backup = env_path.parent / ".env.bak"
     backup.write_text(original, encoding="utf-8")
     env_path.write_text(rotated, encoding="utf-8")
     print(f"rotated; backup at {backup}")
@@ -558,10 +571,23 @@ def cmd_fix(args: argparse.Namespace) -> int:
                 print(f"    fix: {f.fix}")
     if not args.auto:
         return 1
+    # R3: only the bounded SAFE_AUTOFIX set is allowed unattended.
+    # Everything else (prune, sudo, docker compose up, memroos launch) is
+    # surfaced for the operator to run themselves. This is the explicit
+    # "destructive never unattended" rule from the v8.24 spec.
+    SAFE_AUTOFIX = {
+        "env_world_readable",
+        "vault_key_world_readable",
+    }
     applied: list[str] = []
+    skipped: list[str] = []
     failed: list[str] = []
     for f in findings:
         if not f.fix:
+            continue
+        if f.code not in SAFE_AUTOFIX:
+            print(f"  (manual only) {f.code}: {f.fix}")
+            skipped.append(f.code)
             continue
         print(f"applying: {f.fix}")
         try:
@@ -569,7 +595,7 @@ def cmd_fix(args: argparse.Namespace) -> int:
             applied.append(f.code)
         except Exception as exc:
             failed.append(f"{f.code}: {exc}")
-    print(f"applied: {len(applied)} | failed: {len(failed)}")
+    print(f"applied: {len(applied)} | skipped (manual): {len(skipped)} | failed: {len(failed)}")
     return 0 if not failed else 1
 
 
@@ -656,10 +682,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", "-y", action="store_true", help="skip confirmation")
 
     p = sub.add_parser("fix", help="auto-diagnose + repair")
-    p.add_argument("--auto", action="store_true", help="apply fixes automatically")
+    p.add_argument("--auto", action="store_true", help="apply safe fixes automatically")
     p.add_argument("--json", action="store_true", help="JSON output")
 
-    sub.add_parser("doctor", help="alias for `fix` (diagnostic walk)")
+    d = sub.add_parser("doctor", help="diagnostic walk (alias for fix)")
+    d.add_argument("--auto", action="store_true", help="apply safe fixes only")
+    d.add_argument("--json", action="store_true", help="JSON output")
 
     p = sub.add_parser("bench", help="quick performance baseline")
     p.add_argument("--samples", type=int, default=10, help="number of samples (default 10)")
