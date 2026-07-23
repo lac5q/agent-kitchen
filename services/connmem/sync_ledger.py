@@ -248,6 +248,39 @@ class SyncLedger:
             conn.commit()
             return row[0] if row is not None else 0
 
+    def upsert_by_row(self, *, row: dict, status: str) -> bool:
+        """Re-upsert a row read via `get()` with a new status.
+
+        Used by the purge planner when transitioning a row to a
+        different ledger state (e.g. `tombstoned` for the irreversible
+        "removed" semantic). The row's existing payload_json is preserved
+        so the audit chain retains what was removed.
+        """
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE ledger SET status = ? WHERE (source, workspace_id, source_id) = (?, ?, ?)",
+                (status, row["source"], row["workspace_id"], row["source_id"]),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def delete(self, source: str, workspace_id: str, source_id: str) -> int:
+        """Permanently remove a row. Returns the number of rows removed.
+
+        Use sparingly — `upsert(..., status="tombstoned")` is the
+        reversible "removed from recall" state. `delete` is the
+        irreversible "scrubbed from the ledger" state, used only by
+        the purge planner once a row is already tombstoned AND the
+        operator has approved the purge.
+        """
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM ledger WHERE (source, workspace_id, source_id) = (?, ?, ?)",
+                (source, workspace_id, source_id),
+            )
+            conn.commit()
+            return cur.rowcount
+
     def iter_workspace(self, source: str, workspace_id: str) -> list[dict]:
         """Return every row in the given workspace, keyed by `source_id`.
 
