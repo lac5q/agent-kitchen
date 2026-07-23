@@ -37,6 +37,23 @@ class MemFs(FsBoundary):
     def append_text(self, *, path: Path, content: str) -> None:
         self._files[path] = self._files.get(path, "") + content
 
+    # Path-rglob support: track every path that was ever written so
+    # `Path.rglob` (used by the recall module) can find them without
+    # touching the real filesystem.
+    def list_paths(self, root: Path, pattern: str) -> list[Path]:
+        suffix = pattern.lstrip("*")
+        out: list[Path] = []
+        for path in self._files:
+            if not str(path).endswith(suffix):
+                continue
+            try:
+                rel = path.relative_to(root)
+            except ValueError:
+                continue
+            if len(rel.parts) >= 3:
+                out.append(path)
+        return out
+
 
 def make_record(
     *,
