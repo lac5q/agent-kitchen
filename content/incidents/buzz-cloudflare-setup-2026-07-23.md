@@ -1,7 +1,7 @@
 # Buzz (Block/Square Nostr relay) — Cloudflare setup on Maeve-u1
 **Date:** 2026-07-23
 **Author:** Alba (Hermes agent, taking over from Sophia Hermes)
-**Result:** ✅ `https://buzz.epiloguecapital.com` live, returns **HTTP 200** NIP-11 relay info JSON (after restart — see "Follow-up" below)
+**Result:** ✅ `https://buzz.epiloguecapital.com` live, returns **HTTP 200** NIP-11 relay info JSON for Nostr clients AND **HTTP 200** `text/html` SPA shell for browsers. No second hostname needed.
 
 ## What Sophia tried
 Installed `buzz-relay` on Maeve-u1 in Docker (`buzz-relay:latest` container, port 3000, plus `buzz-postgres` + `buzz-redis`).
@@ -54,6 +54,55 @@ curl -s -H "Authorization: Bearer <token>" \
 ## Key pitfall — save this one
 **Editing `~/.cloudflared/*.yml` while `cloudflared tunnel run` is alive does NOT propagate to Cloudflare's edge.** You must restart the cloudflared process (it pushes config to the edge on startup). The local file is read for ingress routing live, but Cloudflare's edge uses its own `cfd_tunnel/{id}/configurations` table to decide which hostnames this tunnel serves; unknown hostnames get a Cloudflare-origin 404 even when DNS resolves correctly and the connector is healthy.
 
+## Web UI on the same hostname (2026-07-23, same day)
+
+Initial setup only exposed the **relay API**. Browsers hitting `https://buzz.epiloguecapital.com/` got the NIP-11 JSON (because the relay hard-wires `/` to the Nostr/NIP-11 handler — `/` never reaches the SPA fallback, see `crates/buzz-relay/src/router.rs:63,256`).
+
+**Fix:** set **`BUZZ_SERVE_GIT_WEB_GUI=true`** in the relay container. The `BUZZ_WEB_DIR` env var already points at `/srv/buzz/web` (a prebuilt `dist/` shipped in the image). With this flag, the relay serves `index.html` at `/` to browsers (`Accept: text/html`) and the SPA fallback serves all other paths. Nostr clients still get NIP-11 because they send `Accept: application/nostr+json`. Same port (3000), same hostname. No reverse proxy needed.
+
+```bash
+# Recreate the relay container with the flag (no image rebuild — env-only):
+docker rm -f buzz-relay
+docker run -d --name buzz-relay --network buzz-net \
+  -e DATABASE_URL=postgres://buzz_dev:buzz_dev@172.18.0.2:5432/buzz \
+  -e REDIS_URL=redis://172.18.0.3:6379 \
+  -e BUZZ_BIND_ADDR=0.0.0.0:3000 \
+  -e RELAY_URL=wss://buzz.epiloguecapital.com \
+  -e BUZZ_WEB_DIR=/srv/buzz/web \
+  -e BUZZ_ADMIN_WEB_DIR=/srv/buzz/admin-web \
+  -e BUZZ_SERVE_GIT_WEB_GUI=true \   # <-- the one new flag
+  -e RUST_LOG=buzz_relay=info \
+  -e AWS_ACCESS_KEY_ID=buzz_dev -e AWS_SECRET_ACCESS_KEY=buzz_dev_secret \
+  -e AWS_REGION=us-east-1 -e BUZZ_S3_BUCKET=buzz-media \
+  -e BUZZ_S3_ENDPOINT=http://172.18.0.4:9000 -e BUZZ_S3_FORCE_PATH_STYLE=true \
+  --restart unless-stopped -p 3000:3000 buzz-relay:latest
+```
+
+**If `BUZZ_WEB_DIR` weren't already populated in the image**, you'd need to build locally and either rebuild the image or mount the dist:
+```bash
+ssh maeve-u1
+cd /home/lac5q/github/buzz
+. ./bin/activate-hermit
+(cd web && pnpm install --prefer-offline && pnpm build)
+# then mount web/dist into the container via -v /home/lac5q/github/buzz/web/dist:/srv/buzz/web
+# OR rebuild the image with the dist baked in (Dockerfile COPY).
+```
+
+**Verify (raw socket, in case curl tunnels don't behave):**
+```bash
+python3 -c '
+import socket
+s = socket.socket(); s.settimeout(5)
+s.connect(("127.0.0.1", 3000))
+s.sendall(b"GET / HTTP/1.1\r\nHost: x\r\nAccept: text/html\r\nConnection: close\r\n\r\n")
+print(s.recv(4096)[:600].decode())
+'
+```
+Expected: `HTTP/1.1 200 OK\r\ncontent-type: text/html; charset=utf-8` + `<!doctype html><html lang="en"><head>...<title>Buzz</title>...`.
+
+## Key pitfall #2 — `BUZZ_SERVE_GIT_WEB_GUI`
+The flag's name suggests it's about serving a Git web GUI, but the code path at `router.rs:256` actually enables **the SPA fallback at `/` for any `Accept: text/html` browser request**. Misnomer; the right knob for "give me the web UI on the same hostname as the relay".
+
 ## Recipe for future agents adding a Maeve-u1 service to *.epiloguecapital.com
 
 ```bash
@@ -97,4 +146,5 @@ The Mac's main `ollama-mac` tunnel (`e75e37b5-…`) is also an option when the M
 - Don't `cloudflared tunnel create` again — credential file collision will fail. Use existing tunnels.
 - **Verification gotcha:** an HTTP 404 from Cloudflare with **empty body** is an edge 404 (host not in tunnel config). An HTTP 404 from Cloudflare with a **body** is your origin answering. Always check `curl -i` body, not just status.
 - `pkill -f "cloudflared.pc2-config.yml"` will also kill any SSH session whose command line contains that literal string (because SSH wraps the remote command in `bash -c "..."`). Use `ps -ef | awk '/[c]loudflared tunnel.*pc2-config.yml/ {print $2}' | xargs -r kill` to only target the binary.
-- Buzz relay's root `/` returns 404 with body `relay: no community is configured for this host` — but `GET /` returns NIP-11 info JSON (`HTTP 200`) once the relay answers. WS upgrade is on `/`.
+- **Relay `/` is NIP-11 hard-wired** unless `BUZZ_SERVE_GIT_WEB_GUI=true` is set. Without it, browsers see the relay's Nostr JSON instead of the SPA. Setting it makes the relay serve `web_dir/index.html` to `Accept: text/html` requests; Nostr clients still get NIP-11 because they send `Accept: application/nostr+json`. WS upgrade still works because the WS check runs before the HTML branch (router.rs:256+).
+- **curl HTTP 000 from this SSH session** kept showing false negatives during debugging. Raw `python3 socket` worked fine. If you see 000 with empty body from a long-lived SSH session, suspect the SSH session's TCP buffering, not the server.
