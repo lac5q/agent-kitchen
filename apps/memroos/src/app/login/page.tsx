@@ -141,6 +141,23 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <a
+              href="/forgot-password"
+              className="underline"
+              style={{ color: NOC.muted }}
+            >
+              Forgot password?
+            </a>
+            <a
+              href="/register"
+              className="underline"
+              style={{ color: NOC.muted }}
+            >
+              Create an account
+            </a>
+          </div>
         </section>
       </div>
     </main>
