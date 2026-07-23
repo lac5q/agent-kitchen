@@ -48,6 +48,16 @@ SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
 OPERATOR_STUB="$MEMROOS_ROOT/scripts/memroos-operator-stub.sh"
 
+# ENTOPS-13 (2026-07-22): extra skills to fan out alongside memroos-save.
+# Format: "name|source-dir" (space-separated pairs). Source-dir must contain
+# SKILL.md at the top level. Installed to <skills-dir>/<name>/SKILL.md on
+# every target that has a skills dir (skip the `none` Antigravity row).
+# Use case: upstream skill integration (e.g. petergyang/no-ai-slop) that the
+# operator wants shipped to every agent CLI without forking the canonical repo.
+# Examples:
+#   EXTRA_SKILLS="no-ai-slop|$HOME_DIR/github/no-ai-slop" bash scripts/install-agent-integrations.sh
+EXTRA_SKILLS="${EXTRA_SKILLS:-}"
+
 if [[ ! -f "$TEMPLATE" ]]; then
   echo "❌ Canonical AGENTS template not found: $TEMPLATE" >&2
   exit 1
@@ -366,6 +376,21 @@ install_skill() {
   local skills_dir="$1"
   mkdir -p "$skills_dir/memroos-save"
   cp "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md"
+  # ENTOPS-13: also install any EXTRA_SKILLS (name|source-dir pairs).
+  if [[ -n "$EXTRA_SKILLS" ]]; then
+    local pair name src
+    for pair in $EXTRA_SKILLS; do
+      name="${pair%%|*}"
+      src="${pair#*|}"
+      if [[ -f "$src/SKILL.md" ]]; then
+        mkdir -p "$skills_dir/$name"
+        cp "$src/SKILL.md" "$skills_dir/$name/SKILL.md"
+        echo "  + $name skill installed to $skills_dir/$name/"
+      else
+        warn "$name: SKILL.md not found at $src/SKILL.md, skipping"
+      fi
+    done
+  fi
 }
 
 uninstall_agents_md() {
@@ -376,6 +401,14 @@ uninstall_agents_md() {
 uninstall_skill() {
   local skills_dir="$1"
   rm -rf "$skills_dir/memroos-save"
+  # ENTOPS-13: also remove any EXTRA_SKILLS that were installed.
+  if [[ -n "$EXTRA_SKILLS" ]]; then
+    local pair name
+    for pair in $EXTRA_SKILLS; do
+      name="${pair%%|*}"
+      rm -rf "$skills_dir/$name"
+    done
+  fi
 }
 
 uninstall_yaml_mcp_block() {
