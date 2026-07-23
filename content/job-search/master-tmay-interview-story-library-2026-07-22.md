@@ -13,7 +13,7 @@ sources:
 derived_from:
   - "content/job-search/l6-l7-product-leadership-stories-2026-07-21.md"
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"
-regen_prompt: "Maintain one master TMAY practice library. Keep seven strategic stories primary, three focused drill-downs nested, Reimagined Self-Employed as the default anchor, and SOM as a separate strategic program."
+regen_prompt: "Maintain one master TMAY practice library. Keep seven strategic stories primary, three focused drill-downs nested, Reimagined Self-Employed as the default anchor, and SOM as a separate strategic program. For ServiceNow AI Agent Products, maintain an evidence-safe two-story TMAY pairing the Intuit transformation with MemroOS governed-agent platform work."
 ---
 
 # Master TMAY and Interview Story Library
@@ -42,6 +42,17 @@ This is the single working document for interview practice. It contains a 30-sec
 9. QuickFile, 1099-K, and partner data, nested under Reimagined Self-Employed
 10. SketchPop AI-supported operations, nested under the SketchPop transformation
 
+## ServiceNow AI Agent Products TMAY
+
+The master library also contains a role-specific TMAY for **ServiceNow — Director, Product Management - AI Agent Products**:
+
+- a 244-word template-submission version; and
+- a 2.5-to-3-minute spoken version.
+
+Both versions use two distinct proof points: Reimagined Self-Employed as the enterprise transformation story, and MemroOS as the hands-on governed-agent platform story. The personal bridge is Luis's coaching kids' sports and hands-on agentic projects. The close maps directly to agent memory, orchestration, action, auditability, and human governance.
+
+Evidence guardrails: do not elevate Reimagined Expenses above its place as the first workstream within Reimagined Self-Employed; do not introduce unsupported Finance, funding, model-threshold, cost-to-serve, or margin claims. The about-40% agent-workflow support-cost result is resume-supported, but confirm its measurement window before making it a primary verbal metric. The QuickFile 5% filing-conversion / 25% adoption result is archive-backed but is not repeated in the AI resume; verify it against a primary Intuit record before using it in a resume-led conversation.
+
 ## Validation
 
 Claude Opus 4.8 reviewed the final local source with `claude -p --model opus`. It passed these checks:
@@ -52,6 +63,8 @@ Claude Opus 4.8 reviewed the final local source with `claude -p --model opus`. I
 - drill-downs are visibly nested; and
 - each evidence boundary corresponds to the claims in its story card.
 
+Claude Opus 4.8 also reviewed the ServiceNow-specific TMAY after revision and returned **PASS**. It confirmed explicit First/Second story framing, canonical MemroOS naming, the resume-supported current agent-workflow outcome, and direct alignment to the ServiceNow job description's platform primitives and enterprise-governance requirements.
+
 ## Use rule
 
-Use one full script per introduction. Do not combine multiple scripts into a TMAY. Reimagined Self-Employed is the default anchor. Select a different card only when the role strongly favors its domain, such as marketplaces for eBay or subscriptions for Tile.
+Use one full script per introduction. Do not combine multiple scripts into a general TMAY. Reimagined Self-Employed is the default anchor. Select a different card only when the role strongly favors its domain, such as marketplaces for eBay or subscriptions for Tile. The ServiceNow role-specific package is the deliberate exception: it uses two compact stories because the role demands both enterprise product leadership and recent hands-on agent-platform depth.
