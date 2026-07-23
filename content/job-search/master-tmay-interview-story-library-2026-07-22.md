@@ -50,19 +50,19 @@ Use for Google, Meta, Microsoft, fintech, commerce, pricing, and consumer-growth
 
 Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
 
-I’m a Director-level product leader with 15+ years leading 0-to-1 and turnaround work across regulated consumer and enterprise products. I specialize in resetting business strategy, leading PM teams, and aligning complex organizations around customer trust and measurable growth.
+I’m a Director-level product leader with 15+ years leading 0-to-1 and turnaround work. I reset business strategy, lead PM teams, and align complex organizations around customer trust and measurable growth.
 
-I’d like to highlight two Intuit experiences that show how I lead transformation.
+Two Intuit experiences show how I lead transformation.
 
 First, I was brought in to rethink TurboTax Self-Employed when the business was shrinking and product capacity had eroded to a senior director and junior contractors. I secured leadership approval for an end-to-end strategy, hired and assembled a four-PM team, and owned acquisition, onboarding, and Schedule C through personal filing. Reimagined Expenses proved the direction. I then aligned Tax and QuickBooks around a jointly priced QuickFile and ML Deduction Finder experience embedded in filing—protecting a roughly $400M QuickBooks revenue stream while bringing more customers to TurboTax. The turnaround helped grow Self-Employed to roughly $900M, close to $1B.
 
-Second, in SOM, I led two linked changes to a four-to-five-year-old shopping model inherited from boxed software. First, I simplified onboarding and found conversion wins that created room to reduce revenue from aspirational placement. Then I challenged the core requirement that customers commit to a final product before TurboTax understood their return. Earlier tests either increased paid mix and aspirational placement or improved Free conversion but lost too much revenue. We moved preparation questions after Start, stopped losing recipes early, removed the technical start-SKU constraint, fixed cross-device and downgrade edge cases, and let tax complexity determine the final product and price. That sequencing made the structural change work: starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.
+Second, in SOM, I challenged a decades-old product-selection model inherited from retail boxed software—a sacred cow embedded in revenue goals, reporting, upgrade mechanics, and organizational ownership. “Aspirational placement” meant putting customers in a higher-priced product than their actual tax complexity required. I led two linked changes. First, I simplified onboarding and found conversion wins that created economic room to reduce aspirational revenue. Then I removed the start-SKU constraint so customers no longer committed to a final product before TurboTax understood their return. The shift faced major resistance because changing price timing cascaded across teams and metrics. I aligned product, engineering, analytics, pricing, marketing, compliance, and portfolio leaders, fixed cross-device and downgrade edge cases, and let tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.
 
 Outside work, I coach kids’ sports and build agentic projects. Coaching sharpens how I lead through clear roles and feedback; prototyping keeps me close to how complex systems behave in practice.
 
 For consumer growth and monetization roles, I bring a repeatable pattern: challenge an entrenched model, align leaders around better economics, and build customer trust without giving up growth.
 
-## Version 2 — AI-Native Builder-Operator (about 300 words)
+## Version 2 — AI-Native Builder-Operator (about 330 words)
 
 Use for ServiceNow, Google, Microsoft, Cursor, and enterprise AI-platform roles.
 
@@ -74,7 +74,7 @@ I’d like to highlight two experiences that show how I work.
 
 First, as Head of Product at SketchPop, I took P&L and product ownership of a profitable custom-art business with $3M in revenue, 20% margins, more than 600,000 customers, and a distributed 30-person network. Demand was real, but the customer experience, operations, marketing measurement, and backend had all become constraints. I treated the full value chain as the product, aligned the operating network around the transformation, rebuilt three front-end experiences covering 90% of revenue, modernized tracking and the backend, and operationalized marketing and fulfillment. A chatbot serving about 30,000 users per month helped cut support costs 40% while customer satisfaction held.
 
-Second, I led the creation of MemRoOS as a governed agent platform and designed it with engineering before shipping it to production. I defined memory, skill orchestration, evaluation, audit logs, tool governance, and human approval as reusable platform primitives. Today, a 17-agent production stack supports acquisition, customer experience, and analytics across the portfolio. We use explicit feedback loops around satisfaction, error patterns, and human handoffs to make autonomy observable and accountable.
+Second, I led the creation of MemRoOS, initially developed inside my company as a governed agent platform. I defined memory, skill orchestration, evaluation, audit logs, tool governance, and human approval as reusable platform primitives. A 17-agent production stack now supports acquisition, customer experience, and analytics across our portfolio. Its value has extended beyond our own operation: two well-funded Silicon Valley companies I advise have adopted it for their agent work. That progression—from an internal operating need to external adoption—has sharpened how I productize platform primitives, establish trust, and guide organizations through real agent deployment.
 
 Outside work, I coach kids’ sports and keep building agentic projects. Coaching sharpens how I lead through clear roles and feedback; prototyping keeps me honest about where autonomy fails in real use.
 
@@ -90,7 +90,7 @@ The source archive supports a two-stage explanation.
 4. **Product assignment followed customer understanding.** Customers could move through their actual tax complexity before the system right-sized the final product and price.
 5. **The decision used a balanced scorecard.** DNS V1 reached 105 A2C ITC; V2 reached 122 A2S ITC; all recipes held aspirational rates below 6% at 25 ITC; and PRS increased, especially among right-sized users.
 
-The archive also says the RPA gap remained open. Present the result as proof of a more durable conversion-and-trust model, not complete revenue parity. The boxed-software origin is Luis's firsthand historical explanation. The archive independently confirms the start-SKU platform constraint.
+The archive also says the RPA gap remained open. Present the result as proof of a more durable conversion-and-trust model, not complete revenue parity. The decades-old retail-box origin, sacred-cow status, organizational resistance, and cascading effects on goals, reporting, upgrades, and organizational ownership are Luis's firsthand context. The archive independently confirms the start-SKU platform constraint.
 
 ## Evidence guardrails
 
@@ -104,8 +104,7 @@ The archive also says the RPA gap remained open. Present the result as proof of 
 - Archive results for SOM also include 122 start and 105 completion indices and test recipes below a 6% aspirational rate at 25 ITC. Keep those measures separate from Luis’s percentage lifts.
 - Do not say that Intuit intentionally overcharged customers or that the prior SOM flow violated regulations. Describe customer fit, price surprise, transparency, and regulatory-risk reduction.
 - Version 1 uses Reimagined Self-Employed and SOM. Version 2 uses SketchPop and MemRoOS. Do not reuse a story across the two scripts.
-- Frame MemRoOS as a production commerce deployment with governed platform primitives, not as proof of external enterprise adoption.
-- Confirm the support-cost measurement window before using the approximately 40% MemRoOS result as a primary metric.
+- MemRoOS began as a production commerce deployment and has since been adopted by two well-funded Silicon Valley companies Luis advises. Treat the external adoption as firsthand and do not imply named public references or broader adoption.
 
 ## Use rule
 

@@ -40,7 +40,7 @@ This stage did two jobs:
 
 The second change removed the requirement that customers begin onboarding in a final SKU. Customers could move through their actual tax complexity before TurboTax right-sized the final product and price.
 
-This was controversial because the prior model treated product selection as an early commitment. Luis explains that this behavior was inherited from boxed desktop software, where buying the box determined the product. The archive does not explicitly document that origin. It does confirm that the start-SKU requirement was a platform constraint.
+This was controversial because the prior model treated product selection as an early commitment. Luis explains that the model was decades old and inherited from retail boxed software, where buying the box determined the product. It had become a sacred cow embedded in revenue goals, reporting, upgrade mechanics, and organizational ownership. Changing price timing therefore created cascading effects and significant resistance across the company. The archive does not explicitly document that history or the organizational response. It does confirm that the start-SKU requirement was a platform constraint.
 
 ## Why earlier attempts struggled
 
@@ -92,3 +92,5 @@ MiniMax-M3 independently reviewed the two TMAYs and this evidence analysis. It p
 9. The stories show credible L7 scope without invented scale.
 
 Validation session: `20260722_213228_ebdd01`. MiniMax-M3 reported no essential fixes.
+
+Follow-up validation after the SOM resistance and MemRoOS adoption corrections confirmed that the two scripts remain structurally distinct and inside the target length. MiniMax-M3 flagged the external MemRoOS adoption statement as a claim that must remain attributable to Luis's firsthand account. Keep the two consulting companies unnamed, do not imply adoption beyond those two companies, and be prepared to substantiate the statement privately if an interviewer asks.
