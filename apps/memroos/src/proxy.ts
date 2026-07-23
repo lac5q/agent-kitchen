@@ -152,6 +152,13 @@ async function enforceAuth(req: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // 1b. /api/tools/providers is a public catalog of available providers; the
+  // list is the same for every installation. Per-user state (connections,
+  // activity, usage) lives behind auth on the sibling routes.
+  if (pathname === "/api/tools/providers") {
+    return NextResponse.next();
+  }
+
   // 2. Pass through login/invite/register UI pages
   if (pathname === "/login" || pathname.startsWith("/invite/") || pathname === "/register") {
     return NextResponse.next();
