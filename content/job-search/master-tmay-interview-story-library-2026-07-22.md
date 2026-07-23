@@ -50,15 +50,15 @@ Use for Google, Meta, Microsoft, fintech, commerce, pricing, and consumer-growth
 
 Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
 
-I’m a Director-level product leader with 15+ years leading 0-to-1 and turnaround work. I reset business strategy, lead PM teams, and align complex organizations around customer trust and measurable growth.
+I’m a Director-level product leader with 15+ years leading new ventures and turnarounds. I find hidden growth opportunities in the customer experience and within the organization, then reset strategy and lead teams across complex businesses to capture them.
 
 Two Intuit experiences show how I lead transformation.
 
 First, I was brought in to rethink TurboTax Self-Employed when the business was shrinking and product capacity had eroded to a senior director and junior contractors. I secured leadership approval for an end-to-end strategy, hired and assembled a four-PM team, and owned acquisition, onboarding, and Schedule C through personal filing. Reimagined Expenses proved the direction. I then aligned Tax and QuickBooks around a jointly priced QuickFile and ML Deduction Finder experience embedded in filing—protecting a roughly $400M QuickBooks revenue stream while bringing more customers to TurboTax. The turnaround helped grow Self-Employed to roughly $900M, close to $1B.
 
-Second, I led SOM through two to three PMs across chat onboarding, simplification, data import, and pricing. The organization optimized local funnel goals and was not aligned to this shift. I rehired critical roles, moved engineering capacity, and completely reset engineering, analytics, and cross-functional goals around the full journey. We accepted more work in one segment when it improved the overall experience and economics. Each workstream won; Divergent was the capstone. It challenged a decades-old retail-box product-selection model—a sacred cow embedded in revenue goals, reporting, upgrades, pricing, and organizational ownership. “Aspirational placement” meant placing customers in a higher-priced product than their actual complexity required. Despite resistance, we removed the start-SKU constraint and let tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.
+Second, in SOM, I unlocked growth by bringing chat onboarding, simplification, data import, and pricing under one organization. I led two or three PMs, rehired key roles, shifted engineering, and set goals around the full customer journey—not isolated funnel wins. That let us add friction in one area when it improved the overall experience. Each workstream delivered; Divergent was the capstone. It challenged a decades-old retail-box product-selection model—a sacred cow embedded in revenue goals, reporting, upgrades, pricing, and organizational ownership. “Aspirational placement” meant placing customers in a higher-priced product than their actual complexity required. Despite resistance, we removed the start-SKU constraint and let tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.
 
-Outside work, I coach kids’ sports and build agentic projects. Coaching sharpens how I lead through clear roles and feedback; prototyping keeps me close to how complex systems behave in practice.
+Outside work, I coach kids’ sports and build agentic projects. I love helping people find their role, build confidence, and excel at what they do well. The best wins come through trust and clear coaching—not anger or insults.
 
 For consumer growth and monetization roles, I bring a repeatable pattern: challenge an entrenched model, align leaders around better economics, and build customer trust without giving up growth.
 
@@ -68,15 +68,15 @@ Use for ServiceNow, Google, Microsoft, Cursor, and enterprise AI-platform roles.
 
 Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
 
-I’m a Director-level builder-operator with 15+ years leading 0-to-1 products, turnarounds, and AI-enabled business transformation. I specialize in connecting product strategy, operating design, and hands-on technical judgment so emerging capabilities become measurable customer and business outcomes.
+I’m a Director-level builder-operator with 15+ years leading new ventures, turnarounds, and AI-enabled transformation. I find hidden growth opportunities in customer experiences and organizations, then reset strategy and build the product and operating systems to capture them.
 
 I’d like to highlight two experiences that show how I work.
 
 First, as Head of Product at SketchPop, I took P&L and product ownership of a profitable custom-art business with $3M in revenue, 20% margins, more than 600,000 customers, and a distributed 30-person network. Demand was real, but the customer experience, operations, marketing measurement, and backend had all become constraints. I treated the full value chain as the product, aligned the operating network around the transformation, rebuilt three front-end experiences covering 90% of revenue, modernized tracking and the backend, and operationalized marketing and fulfillment. A chatbot serving about 30,000 users per month helped cut support costs 40% while customer satisfaction held.
 
-Second, I led the creation of MemRoOS, initially developed inside my company as a governed agent platform. I defined memory, skill orchestration, evaluation, audit logs, tool governance, and human approval as reusable platform primitives. A 17-agent production stack now supports acquisition, customer experience, and analytics across our portfolio. Its value has extended beyond our own operation: two well-funded Silicon Valley companies I advise have adopted it for their agent work. That progression—from an internal operating need to external adoption—has sharpened how I productize platform primitives, establish trust, and guide organizations through real agent deployment.
+Second, I led the creation of MemRoOS, an agent-memory governance platform we first built inside my company. I defined memory, skill orchestration, evaluation, audit logs, tool governance, and human approval as reusable platform primitives. A 17-agent production stack now supports acquisition, customer experience, and analytics across our portfolio. Its value has extended beyond our own operation: two well-funded Silicon Valley companies I advise have adopted it for their agent work. That progression—from an internal operating need to external adoption—has sharpened how I productize platform primitives, establish trust, and guide organizations through real agent deployment.
 
-Outside work, I coach kids’ sports and keep building agentic projects. Coaching sharpens how I lead through clear roles and feedback; prototyping keeps me honest about where autonomy fails in real use.
+Outside work, I coach kids’ sports and build agentic projects. I love helping people find their role, build confidence, and excel at what they do well. The best wins come through trust and clear coaching—not anger or insults.
 
 For an AI-native company, I bring business ownership, organization leadership, and hands-on platform depth. I can set the product thesis, align teams around it, and turn fast-moving agent capabilities into trusted products with measurable adoption and economics.
 
@@ -105,7 +105,7 @@ The archive also says the RPA gap remained open. Present the result as proof of 
 - Do not say that Intuit intentionally overcharged customers or that the prior SOM flow violated regulations. Describe customer fit, price surprise, transparency, and regulatory-risk reduction.
 - SOM was a broader portfolio. Luis led two to three PMs, rehired critical roles, moved engineering capacity, and completely realigned engineering, analytics, and cross-functional goals around the whole customer journey rather than local step goals. Chat onboarding, simplification, data import, and pricing each delivered wins; Divergent was the controversial capstone. These scope and organization details are firsthand.
 - Version 1 uses Reimagined Self-Employed and SOM. Version 2 uses SketchPop and MemRoOS. Do not reuse a story across the two scripts.
-- MemRoOS began as a production commerce deployment and has since been adopted by two well-funded Silicon Valley companies Luis advises. Treat the external adoption as firsthand and do not imply named public references or broader adoption.
+- MemRoOS began as an internal agent-memory governance platform for a production commerce operation and has since been adopted by two well-funded Silicon Valley companies Luis advises. Treat the external adoption as firsthand and do not imply named public references or broader adoption.
 
 ## Use rule
 
