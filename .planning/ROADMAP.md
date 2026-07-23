@@ -91,9 +91,12 @@ Full plan: `.planning/phases/176-linear-circleback-unified-memory/176-01-PLAN.md
   - [x] **INSTALL-REPRO-06 — Review production dependency advisories:** 12 findings (4 high, 6 moderate, 2 low, 0 critical) triaged across 8 ticket IDs (INSTREP-06-001..008). Raw npm audit JSON archived in closeout-evidence/npm-audit-current.json. No `npm audit fix --force` was run.
 
 
-### Current v8.19 Runtime Bottleneck Evidence Summary — PLANNED
+### Current v8.19 Runtime Bottleneck Evidence Summary — INFRASTRUCTURE COMPLETE; MEASUREMENT RUNS DEFERRED
 
-- [ ] **Phase 175: Runtime Bottleneck Evidence** — PERF-EVID-01..04; run two reproducible operator and retrieval workloads with sanitized fixtures; validate report schemas, sample floors, workload hashes, latency attribution, and the keep/optimize/bounded-shadow-extraction gate. No Rust adoption or rewrite is in scope.
+- [x] **Phase 175 infrastructure**: retrieval-bench module (204 vitest tests pass), schemas (`runtime-bottleneck-evidence.schema.json`, `runtime-bottleneck-decision.schema.json`), checker (`scripts/check-runtime-bottleneck-evidence.mjs`), manifest generator, contract (`scripts/runtime-bottleneck-contract.mjs`), and 22 node-test cases pass.
+- [x] **Phase 175 initial decision**: `.planning/decisions/runtime-bottleneck.json` records `keep` because no Phase 175 measurement evidence has been collected yet. Per the decision gate (no SLO misses detectable without evidence), `keep` is the only valid choice.
+- [ ] **Phase 175 measurement runs**: deferred. Requires a live memroos server with all dependencies (Qdrant Cloud, Neo4j Aura, Ollama, LLM) plus 300s+ operator runs and 2 retrieval runs. Cannot be executed in the current environment.
+- [ ] **Phase 175 re-decision**: re-run `node scripts/check-runtime-bottleneck-evidence.mjs` after the measurement runs exist; upgrade `keep` to `optimize-current-stack` or `bounded-shadow-extraction` per the decision gate.
 
 
 ### Current v7.3 Agent Context Bus Operational Bootstrap Summary — COMPLETE
@@ -2883,3 +2886,46 @@ Operator host
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 178. Paperclip/MemroOS Two-Seam Memory Integration | 0/? | Planned | — |
+
+## v8.23 Third-Party Tool Authentication Plane
+
+### Phase 179 — Third-Party Tool Authentication Plane
+
+**Goal:** Ship a per-installation, embeddable UX where an operator can connect memroos to third-party tools via OAuth or API key, with token refresh, credential storage in memroos's existing AES-256-GCM vault, and a stable surface for future integrations to consume instead of re-implementing auth each time.
+**Depends on:** v8.20 Phase 176 (CONNMEM proven for Linear/Circleback), v8.22 Phase 178 (MEMCLIP proven for Paperclip tool-connection model), FLEET-22 secrets path
+**Requirements:** TOOLAUTH-01, TOOLAUTH-02, TOOLAUTH-03, TOOLAUTH-04, TOOLAUTH-05, TOOLAUTH-06, TOOLAUTH-07, TOOLAUTH-08
+
+**TOOLAUTH requirement definitions:**
+- TOOLAUTH-01 — Per-installation provider registry (JSON/YAML) with auth URL, token URL, scopes, refresh policy.
+- TOOLAUTH-02 — "Connected Tools" settings page at `apps/memroos/src/app/settings/tools` with Connect UI for each registered provider.
+- TOOLAUTH-03 — OAuth flow handler that stores refresh tokens in the AES-256-GCM vault (`MEMROOS_VAULT_KEY_PATH`).
+- TOOLAUTH-04 — API-key flow handler that stores keys in the same vault.
+- TOOLAUTH-05 — `tool_auth.getCredentials(provider, scope)` API for MCP tools to resolve tokens uniformly. No adapter calls an external OAuth library directly.
+- TOOLAUTH-06 — Token refresh + failure observability (audit row + NOC dashboard tile).
+- TOOLAUTH-07 — Revocation flow with webhook dispatch.
+- TOOLAUTH-08 — Backfill connector: existing Phase 176 (Linear/Circleback) and Phase 178 (Paperclip) consumers migrated to the new plane.
+
+**Success criteria:**
+1. "Connected Tools" page exists with a Connect UI for at least 3 providers (initial set: Linear, Circleback, GitHub — the Phase 176 + Phase 178 immediate consumers). Adding a 4th-10th provider requires only a registry entry, no new code.
+2. Phase 176 (CONNMEM-04..07) and Phase 178 (MEMCLIP-02..04) consumers migrated to the new plane and cite this phase in their requirement IDs.
+3. MCP tools (`apps/memroos/src/lib/l3/adapters/{slack,hubspot,quickbooks,...}`) resolve tokens via the single `tool_auth.getCredentials()` API. Zero direct external OAuth library imports in adapters.
+4. Token refresh is automatic and observable. Failed refresh emits a structured audit row and a NOC dashboard tile.
+5. Operator can revoke a connection from settings; revocation triggers a webhook to memroos and clears the vault entry. Re-authorization is one click.
+6. Cost at 10 users per installation is $0/month (free tier covers); cost at 50 users per installation is documented and paid by the customer, not by memroos.
+7. OAuth + API-key hybrid supported (not OAuth-only). API-key path validated against at least one non-OAuth provider (e.g., a legacy CRM).
+8. Provider swap path documented (e.g., Nango → Klavis) at the configuration layer, not the application layer.
+
+**Source opinion:** `.planning/spikes/2026-07-23-tool-auth-ux-research.md` + `.planning/spikes/2026-07-23-tool-auth-ux-validation.md` + `.planning/design/2026-07-23-connected-tools-ux-design.md` (Kimi K2.7 Code UX design spec). Primary implementation pick: Nango (hosted free tier covers ≤10 users exactly); swap candidate: Klavis (MCP-first OSS, self-hostable). Klavis prototype to confirm catalog (100+) is sufficient for memroos's integration roadmap.
+
+**Out of scope (v8.23):**
+- Building a SaaS offering on top of the tool-auth plane (memroos stays per-installation).
+- Replacing the existing user-login auth (`/api/auth/*`).
+- Federated multi-memroos tool sharing.
+- OSI-strict OSS self-host at scale (Klavis self-host remains a future swap candidate, not v8.23 deliverable).
+- Memroos becoming an OAuth server itself for agents (separate concern; tracks via Better Auth `@better-auth/oauth-provider` or Ory Hydra if pursued).
+
+### Progress Table (v8.23 Third-Party Tool Authentication Plane)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
