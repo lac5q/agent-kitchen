@@ -248,6 +248,32 @@ class SyncLedger:
             conn.commit()
             return row[0] if row is not None else 0
 
+    def iter_workspace(self, source: str, workspace_id: str) -> list[dict]:
+        """Return every row in the given workspace, keyed by `source_id`.
+
+        Used by the reconciler to scan a workspace in a single round-trip
+        so tombstoning missing rows is O(workspace) rather than O(workspace²).
+        """
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "SELECT source_id, payload_json, status FROM ledger "
+                "WHERE source = ? AND workspace_id = ?",
+                (source, workspace_id),
+            )
+            rows = list(cur.fetchall())
+        out: list[dict] = []
+        for source_id, payload_json, status in rows:
+            try:
+                payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+            except (json.JSONDecodeError, TypeError):
+                payload = {}
+            out.append({
+                "source_id": source_id,
+                "payload": payload,
+                "status": status,
+            })
+        return out
+
     def get(self, source: str, workspace_id: str, source_id: str) -> Optional[dict]:
         with self._connect() as conn:
             cur = conn.execute(
