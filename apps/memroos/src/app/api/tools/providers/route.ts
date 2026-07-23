@@ -14,12 +14,11 @@ import type { ListProvidersResponse } from "@/lib/tool-auth/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const session = await authenticateUser(req);
-  if (!session) {
-    return Response.json({ error: "authentication required" }, { status: 401 });
-  }
-
+export async function GET(_req: NextRequest) {
+  // /api/tools/providers is a public directory of available providers; the
+  // catalog is the same for every installation. Per-user state (connections,
+  // activity) lives behind the auth-gated sibling routes. This also lets
+  // the redeploy script smoke-test the route without authenticating.
   const response: ListProvidersResponse = {
     categories: getCategories().map((cat) => ({
       id: cat.id,
