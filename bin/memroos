@@ -83,10 +83,11 @@ def _run(
         raise
 
 
-def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def _docker(*args: str, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
     return _run(
         ["docker", "compose", "-f", COMPOSE_FILE, *args],
         capture=capture,
+        check=check,
     )
 
 
