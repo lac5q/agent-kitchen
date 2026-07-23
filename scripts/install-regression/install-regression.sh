@@ -99,6 +99,30 @@ structural_checks() {
   done
   pass "all five core services present in compose"
 
+  # 9b. ollama + ollama-pull are gated behind the `local` profile so a
+  # thin-client host (oracle-1 has 30G disk) can skip the 2.7GB CUDA
+  # image and point at a remote ollama via OLLAMA_BASE_URL. The default
+  # `docker compose up -d` does NOT pull ollama; the cloud profile is
+  # the new default (was 'local' before this commit).
+  if grep -qE "^[[:space:]]+profiles:[[:space:]]+\[?\"?local\"?" docker-compose.local.yml; then
+    pass "ollama + ollama-pull are gated behind the \`local\` profile (cloud is default)"
+  else
+    fail "ollama / ollama-pull must be gated by profiles: [local] so cloud profile (the new default) skips the 2.7GB CUDA image"
+  fi
+  # Without COMPOSE_PROFILES=local, the rendered config must NOT include
+  # the ollama service.
+  if docker compose -f docker-compose.local.yml config --services 2>/dev/null | grep -qx "ollama"; then
+    fail "default compose config includes ollama; should be gated behind COMPOSE_PROFILES=local"
+  else
+    pass "default compose config excludes ollama (cloud default verified)"
+  fi
+  # With COMPOSE_PROFILES=local, the rendered config must include ollama.
+  if COMPOSE_PROFILES=local docker compose -f docker-compose.local.yml config --services 2>/dev/null | grep -qx "ollama"; then
+    pass "COMPOSE_PROFILES=local includes ollama as expected"
+  else
+    fail "COMPOSE_PROFILES=local did NOT include ollama; profile gate is broken"
+  fi
+
   info "OK: all structural checks passed."
 }
 

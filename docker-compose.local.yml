@@ -126,7 +126,11 @@ services:
       - ./services/memory/mem0-config.demo.yaml:/app/services/memory/mem0-config.yaml:ro
     depends_on:
       ollama-pull:
+        # With COMPOSE_PROFILES=cloud the local ollama services are
+        # filtered out, so this dep must be optional. Without cloud
+        # profile, mem0 still waits for ollama-pull.
         condition: service_completed_successfully
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:3201/health', timeout=3)\nPY"]
       interval: 30s
@@ -134,6 +138,17 @@ services:
       retries: 5
 
   ollama:
+    # Local Ollama is OPTIONAL on a thin-client deployment. By default
+    # it is included (set in the project's `up` flow). To skip the
+    # 2.7GB CUDA image and point the app at a remote Ollama via
+    # LOCAL_JUDGE_ENDPOINT, run on a host with:
+    #     COMPOSE_PROFILES=cloud docker compose -f docker-compose.yml \
+    #       -f docker-compose.local.yml up -d
+    # The `cloud` profile (set via COMPOSE_PROFILES) skips ollama
+    # services entirely. mem0/memroos/orchestration continue to depend
+    # on the local ollama-pull BUT with `required: false` so the dep
+    # becomes a no-op when the service isn't present.
+    profiles: ["local"]   # included only when COMPOSE_PROFILES=local
     image: ollama/ollama:latest
     ports:
       - "${MEMROOS_BIND:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
@@ -146,6 +161,8 @@ services:
       retries: 12
 
   ollama-pull:
+    # Same profile gating as ollama.
+    profiles: ["local"]
     image: ollama/ollama:latest
     entrypoint: ["/bin/sh", "-lc"]
     command:
