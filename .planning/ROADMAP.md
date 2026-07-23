@@ -64,11 +64,11 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
-- 📋 **v8.18 NOC Metrics Rethink** — Phases 173-174 (planned 2026-07-20; NOCUX-01..05; K3 UX design + terra-high review complete; operator-first 7-row layout; v8.17 remains reserved for logging observability candidate pending in local uncommitted ROADMAP)
+- ✅ **v8.18 NOC Metrics Rethink** — Phases 173-174 (code-complete on main: commits `07a419d0` "feat: add truthful NOC attention contract" and `720f7805` "feat: complete NOC operator layout"; 116/116 tests pass across NOC API + components; NOCUX-01..05 met)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 📋 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; continuously ingest all authorized Linear workspace information plus all accessible Circleback meetings/memories into permission-aware, provenance-backed unified recall)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
-- 📋 **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (planned 2026-07-21; MEMCLIP-01..05; implements Option D from the 2026-07-21 Opus 4.8 architectural opinion; MemroOS integrates at exactly two Paperclip *core* seams — the planned memory-provider plugin for push (pre-run hydrate via `instructionsFilePath`) and the existing tool-connection MCP gateway for pull (one `toolConnections` row); zero Paperclip adapters gain MemroOS-aware code)
+- 🔄 **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (substantial work on main: `apps/memroos/src/app/api/paperclip/*`, `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` + `paperclip-option-d-2026-07-21.md`; final MEMCLIP-01..05 acceptance test pending against a live Paperclip tenant)
 
 ## Phases
 
@@ -2829,8 +2829,8 @@ Operator host
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 173. NOC Truth Contracts + Attention | 1/1 | Planned | — |
-| 174. Operator Layout + Semantic States | 1/1 | Planned | — |
+| 173. NOC Truth Contracts + Attention | 1/1 | Code-complete on main | 2026-07-23 (commit `07a419d0`) |
+| 174. Operator Layout + Semantic States | 1/1 | Code-complete on main | 2026-07-23 (commit `720f7805`) |
 
 ### Out of scope (v8.18)
 
