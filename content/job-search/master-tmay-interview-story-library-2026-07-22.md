@@ -50,7 +50,7 @@ Use for Google, Meta, Microsoft, fintech, commerce, pricing, and consumer-growth
 
 Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
 
-I’m a Director-level product leader with 15+ years leading 0-to-1 and turnaround work. I reset business strategy, lead PM teams, and align complex organizations around customer trust and measurable growth.
+I’m a Director-level product leader with 15+ years leading new ventures and turnarounds. I find hidden growth opportunities in the customer experience and within the organization, then reset strategy and lead teams across complex businesses to capture them.
 
 Two Intuit experiences show how I lead transformation.
 
@@ -68,7 +68,7 @@ Use for ServiceNow, Google, Microsoft, Cursor, and enterprise AI-platform roles.
 
 Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
 
-I’m a Director-level builder-operator with 15+ years leading 0-to-1 products, turnarounds, and AI-enabled business transformation. I specialize in connecting product strategy, operating design, and hands-on technical judgment so emerging capabilities become measurable customer and business outcomes.
+I’m a Director-level builder-operator with 15+ years leading new ventures, turnarounds, and AI-enabled transformation. I find hidden growth opportunities in customer experiences and organizations, then reset strategy and build the product and operating systems to capture them.
 
 I’d like to highlight two experiences that show how I work.
 
