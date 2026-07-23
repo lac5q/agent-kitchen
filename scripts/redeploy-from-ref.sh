@@ -76,6 +76,23 @@ blue "[4/6] docker compose pull + up -d"
 docker compose -f "$COMPOSE_FILE" pull
 docker compose -f "$COMPOSE_FILE" up -d
 green "docker compose up -d complete"
+
+# Step 4b — install the operator CLI on PATH so `memroos` works.
+blue "[4b/6] install bin/memroos on PATH"
+if [ -f bin/memroos ]; then
+  if install -m 0755 bin/memroos /usr/local/bin/memroos 2>/dev/null; then
+    green "memroos installed at /usr/local/bin/memroos"
+  elif install -m 0755 bin/memroos "$HOME/.local/bin/memroos" 2>/dev/null; then
+    green "memroos installed at $HOME/.local/bin/memroos (no sudo for /usr/local/bin)"
+  else
+    yellow "could not install bin/memroos on PATH; run as $PWD/bin/memroos"
+  fi
+  if command -v memroos >/dev/null 2>&1; then
+    memroos --help 2>&1 | head -1 | sed 's/^/    /'
+  fi
+else
+  yellow "  (bin/memroos not present in this checkout; skipping)"
+fi
 echo
 
 # Step 5 — wait for app to come up (bounded)
