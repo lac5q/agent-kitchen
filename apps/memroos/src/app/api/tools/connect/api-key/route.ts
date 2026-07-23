@@ -22,7 +22,11 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   providerKey: z.string().min(1).max(64),
-  credentials: z.record(z.string().min(1).max(4096)),
+  // zod 3.25 requires both a KEY schema and a VALUE schema for
+  // z.record(); earlier 3.x allowed a single value schema. The key
+  // schema is just z.string() (any non-empty key) and the value
+  // schema bounds each credential value to <=4 KiB.
+  credentials: z.record(z.string(), z.string().min(1).max(4096)),
 });
 
 export async function POST(req: NextRequest) {
