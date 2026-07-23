@@ -47,9 +47,17 @@ This is the single working document for interview practice. It contains a 30-sec
 The human coaching direction is to review no more than two overarching TMAYs. The canonical review document is [Luis Calderon — Two L7 TMAY Anchors for Review](https://docs.google.com/document/d/1k2K2dORMUQvmMyhsKs8Pqi7OpqDloZ7Ws4iWkmDpXCI/edit). It contains only:
 
 1. **Enterprise Agent Platform Director** (298 words): Intuit turnaround and governed agent-platform work. Use for ServiceNow, Google, and enterprise AI-platform roles.
-2. **AI-Native Builder-Operator** (324 words): Epilogue/MemroOS commerce operating stack first, then Intuit enterprise scale. Use for Cursor and AI-native product companies.
+2. **AI-Native Builder-Operator**: SketchPop end-to-end business transformation and MemroOS governed-agent platform work. Use for Cursor and AI-native product companies.
 
-The two versions are intentionally different in entry point and role fit, but use only verified facts. Do not create additional overarching TMAY variants until a coach selects one positioning. MiniMax-M3 performed the routine evidence/scope pass; the final author rejected its unsupported “hired four PMs” wording and retained the verified “rebuilt and managed a four-PM organization.”
+The two versions use different leadership stories, not merely different wording: the first leads with Intuit; the second leads with SketchPop. Do not create additional overarching TMAY variants until a coach selects one positioning. MiniMax-M3 performed the routine evidence/scope pass; the final author rejected its unsupported “hired four PMs” wording and retained the verified “rebuilt and managed a four-PM organization.”
+
+## Resolved interview metrics — 2026-07-22
+
+- **Intuit SOM:** The 5% checkout-conversion and 22% start results are percentage lifts. The 6% result is a reduction in overcharging. These are not percentage points or the separate index values in the archive.
+- **Tile:** The approximately 30% program contribution refers to sales. The formal program name is still unknown.
+- **eBay:** The 8% UPI-and-credit result was platform buying revenue/GMV. The exact internal metric label is still unknown.
+- **SketchPop:** The rebuilt front-end experiences covered approximately 90% of revenue. A/B tests produced 100%+ lifts, but the tested metric is still unknown. The chatbot served approximately 30,000 users per month.
+- **Personal bridge:** Sports coaching and hands-on agent building are confirmed and can be used when they fit the interview conversation.
 
 ## ServiceNow AI Agent Products TMAY
 
