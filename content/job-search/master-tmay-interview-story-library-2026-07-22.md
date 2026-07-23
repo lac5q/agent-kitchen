@@ -44,12 +44,12 @@ This is the single working document for interview practice. It contains a 30-sec
 
 ## ServiceNow AI Agent Products TMAY
 
-The master library also contains a role-specific TMAY for **ServiceNow — Director, Product Management - AI Agent Products**:
+The master library begins with a role-specific TMAY for **ServiceNow — Director, Product Management - AI Agent Products**:
 
 - a 244-word template-submission version; and
-- a 2.5-to-3-minute spoken version.
+- a 298-word L7 coaching re-submission and spoken version.
 
-Both versions use two distinct proof points: Reimagined Self-Employed as the enterprise transformation story, and MemroOS as the hands-on governed-agent platform story. The personal bridge is Luis's coaching kids' sports and hands-on agentic projects. The close maps directly to agent memory, orchestration, action, auditability, and human governance.
+The L7 version makes Director scope concrete without invented placeholders: Luis owned strategy for the $900M TurboTax Self-Employed business and top-funnel onboarding, serving 4M+ solopreneurs; rebuilt and managed four PMs; reset the multi-year cross-functional strategy; drove 10-15% CAGR; and shipped four AI products through legal, compliance, and audit review. The second proof point is MemroOS as the hands-on governed-agent platform story, backed by the 17-agent commerce operating stack and 40% support-cost outcome. The personal bridge is Luis's coaching kids' sports and hands-on agentic projects. The close maps directly to agent memory, orchestration, action, auditability, and human governance.
 
 Evidence guardrails: do not elevate Reimagined Expenses above its place as the first workstream within Reimagined Self-Employed; do not introduce unsupported Finance, funding, model-threshold, cost-to-serve, or margin claims. The about-40% agent-workflow support-cost result is resume-supported, but confirm its measurement window before making it a primary verbal metric. The QuickFile 5% filing-conversion / 25% adoption result is archive-backed but is not repeated in the AI resume; verify it against a primary Intuit record before using it in a resume-led conversation.
 
@@ -63,7 +63,7 @@ Claude Opus 4.8 reviewed the final local source with `claude -p --model opus`. I
 - drill-downs are visibly nested; and
 - each evidence boundary corresponds to the claims in its story card.
 
-Claude Opus 4.8 also reviewed the ServiceNow-specific TMAY after revision and returned **PASS**. It confirmed explicit First/Second story framing, canonical MemroOS naming, the resume-supported current agent-workflow outcome, and direct alignment to the ServiceNow job description's platform primitives and enterprise-governance requirements.
+Claude Opus 4.8 reviewed the earlier ServiceNow-specific TMAY after revision and returned **PASS**. It confirmed explicit First/Second story framing, canonical MemroOS naming, the resume-supported current agent-workflow outcome, and direct alignment to the ServiceNow job description's platform primitives and enterprise-governance requirements. A later Beastmode MiniMax-M3 worker supplied a routine compression draft for the L7 re-submission; the Director rejected its unsupported “hired four PMs” wording and kept the resume-supported “rebuilt and managed a four-PM organization.” A subsequent Opus xhigh watcher invocation became unresponsive, so no new watcher verdict is recorded for the 298-word revision.
 
 ## Use rule
 
