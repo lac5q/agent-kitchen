@@ -111,3 +111,24 @@ HIGH autonomy does NOT override:
   validates; never claim validation without a verifier round.
 - The "no silent credential exfil" rule: API keys stay in env, never
   in commits.
+
+## Followup 2: oracle-1 deploy deferral (2026-07-22)
+
+User confirmed mid-run: do NOT install / re-run / re-rotate anything
+on oracle-1. They wanted the host at "latest code" (which it is — main @
+origin/main HEAD = bb6d4583, no divergence) but to leave the existing
+data state untouched. So the oracle-1 deploy remains:
+- HEAD: bb6d4583 (matches origin/main, 0 commits behind)
+- No docker stack running (ps empty)
+- .env (if any) is the preinstall backup; not rotated
+- Multi-arch image build still tracked as a future work item
+
+This is a valid deployment state for the oracle-1 host. The `oracle-1
+BLOCKED` note is now narrower: it's blocked on first-install
+provisioning (network pull, credential rotation, image-build), not on
+the source code on disk.
+
+The DEPLOY2 todos (oracle-1 work) created in the last turn are now
+mis-scoped: the user wanted code-only, not install. Closing them all
+as not-applicable; the deliverable is "oracle-1 source is at HEAD"
+which is already done.
