@@ -2929,3 +2929,122 @@ Operator host
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+
+## v8.24 Operator Lifecycle Toolkit (bin/memroos)
+
+**Goal:** Give the sole operator a single, self-contained CLI on PATH that
+covers every common host-level lifecycle action: launch / stop / restart
+/ status / logs / update / redeploy / fix / doctor / shell / snapshot
+/ restore / rollback / secrets-rotate / bench. No more shelling out
+to docker compose by hand; no more ad-hoc SSH scripts; no more
+guessing what's safe to do on a live install.
+
+The CLI is installed automatically by `install.sh` via
+`install -m 0755 bin/memroos /usr/local/bin/memroos` (with a
+`~/.local/bin/memroos` fallback for non-sudo hosts).
+
+### Phase 180 — Operator CLI Surface (bin/memroos) — SHIPPED 2026-07-23
+
+**Goal:** Ship a single self-contained Python CLI on PATH.
+**Depends on:** install.sh (so the CLI is auto-installed), scripts/redeploy-from-ref.sh + scripts/update.sh (the two large workflows the CLI dispatches to).
+**Requirements:** OPSCLI-01, OPSCLI-02, OPSCLI-03, OPSCLI-04, OPSCLI-05
+
+**Success criteria:**
+1. `memroos launch / stop / restart / status / logs` work out of the box
+   on a fresh install; no `docker compose` by hand.
+2. `memroos status --json` returns the same shape the existing
+   `/api/health` dashboard consumes, so monitoring tooling can be
+   re-pointed at the CLI without a parser change.
+3. `memroos update` calls `scripts/update.sh` with the right
+   `--channel` flag; `memroos redeploy` calls
+   `scripts/redeploy-from-ref.sh`. The CLI is a thin dispatcher, not
+   a duplicate implementation.
+4. `memroos fix` runs the diagnostic battery (docker daemon,
+   compose file presence, .env + vault key permissions, disk space,
+   service health) and prints findings; `--auto` applies the safe
+   fixes (file modes, docker system prune). The auto-apply list is
+   bounded — destructive fixes (e.g. `docker system prune -af`)
+   are surfaced but never run unattended.
+5. `memroos doctor` is an alias for `memroos fix` so the conventional
+   name works for operators used to `docker doctor`-style commands.
+
+**Out of scope (v8.24 Phase 180):**
+- True auto-repair (currently only safe file-mode + prune fixes run
+  unattended; everything else is surfaced for operator decision).
+- SSH-less cross-host orchestration (Phase 181+).
+- Operator UI inside the memroos app (CONNMEM-09 already covers the
+  app-side operator surface; the CLI is the host-side complement).
+
+### Phase 181 — Operator Recovery Suite (snapshot / restore / rollback / secrets-rotate)
+
+**Goal:** Cover the "things went wrong, what do I do" paths: point-in-time
+backup, restore from a snapshot, roll back to the last good commit,
+rotate operator secrets without losing the install.
+**Depends on:** Phase 180 (CLI), Phase 177 (install-repro --full).
+**Requirements:** OPSCLI-06, OPSCLI-07, OPSCLI-08, OPSCLI-09
+
+**Success criteria:**
+1. `memroos snapshot` writes a tar.gz with `.env`, compose override,
+   `data/`, and `services/connmem/ledger.db` to
+   `$MEMROOS_SNAPSHOT_DIR` (default `/var/backups/memroos/`).
+2. `memroos restore <archive>` extracts with a typed `yes`
+   confirmation; refuses to clobber without it.
+3. `memroos rollback <commit>` checks out the prior commit and
+   re-runs `scripts/redeploy-from-ref.sh` so the host is on the
+   declared ref.
+4. `memroos secrets-rotate` rewrites `MEMROOS_JWT_SECRET`,
+   `MEMROOS_OPERATOR_API_KEY`, `MEMROOS_ONBOARDING_SECRET` in `.env`
+   (backed up to `.env.bak`), then restarts the memroos container.
+5. Each action logs the decision to `/var/log/memroos/upgrade-decisions.log`
+   (the same log `scripts/update.sh` writes to).
+
+**Out of scope (v8.24 Phase 181):**
+- Encrypted / off-host backups (current snapshots are plaintext
+  tarballs on the same host).
+- Key-rotation ceremonies that span >1 host (orchestrate later).
+- Automatic scheduled snapshots (manual only for v8.24).
+
+### Phase 182 — Quick Performance Baseline (bench)
+
+**Goal:** A repeatable, low-overhead baseline the operator can run
+before/after any change to see if the change moved latency.
+**Depends on:** Phase 180, an installed stack.
+**Requirements:** OPSCLI-10
+
+**Success criteria:**
+1. `memroos bench` samples `/api/health` N times (default 10), reports
+   p50 + p95 in ms.
+2. The benchmark does not require extra dependencies (only stdlib).
+3. The benchmark is safe to run against a live install — single
+   `/api/health` GETs, no side effects.
+
+**Out of scope (v8.24 Phase 182):**
+- Multi-route benchmarks (a single `/api/health` is enough to detect
+  regressions; richer benchmarks are the v8.19 PERF-EVID work).
+- Sustained load testing (use Phase 175's operator-load-test.mjs).
+
+### Progress Table (v8.24 Operator Lifecycle Toolkit)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 180. Operator CLI Surface (bin/memroos) | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 181. Operator Recovery Suite | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 182. Quick Performance Baseline (bench) | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+
+### What we considered and DEFERRED
+
+- **`memroos profile` (continuous resource profile per service).**
+  Useful but redundant with existing NOC dashboard + Phase 175 PERF-EVID
+  work. Queued for a follow-on.
+- **`memroos trace` (distributed trace view).** Memroos already has
+  Phase 8 audit chain + Phase 156 path-scoped disk diagnostics; a
+  trace view would compete with those. Queued.
+- **`memroos upgrade` (major version migration with manifest).** We
+  have `update.sh` for in-place upgrades. Major-version migration
+  across historical phases (e.g. v7 → v8 schema bridges) is a separate
+  problem with a separate owner. Queued for a future operator-survey
+  spike.
+- **`memroos repair` (auto-repair).** v8.24 only auto-applies safe
+  fixes (file modes, prune). True auto-repair across the full battery
+  would require an LLM-assisted operator, which is out of scope for
+  the operator-Lifecycle toolkit.

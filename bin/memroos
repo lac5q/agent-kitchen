@@ -1,0 +1,694 @@
+#!/usr/bin/env python3
+"""bin/memroos — operator CLI for Memroos deployments.
+
+A single self-contained Python entry point that dispatches to per-host
+shell operations. Designed to be installed on oracle-1 + cordant-hermes-01
+via the existing install.sh (the installer drops it on PATH as `memroos`).
+
+The CLI is intentionally narrow: every subcommand is an operator
+action the host can run without external dependencies. Heavy
+business logic (release gate, connmem ledger, etc.) lives in the
+existing memroos services; the CLI is the human-facing surface.
+
+Subcommands:
+  launch          start the memroos stack (docker compose up -d)
+  stop            stop the stack
+  restart         restart one or all services
+  status          health snapshot (JSON or table)
+  logs            tail logs for a service
+  update          language-deps + migrations + restart (in-place)
+  redeploy        pull + restart (fast path)
+  fix             auto-diagnose + repair common issues
+  doctor          full diagnostic walk (alias for `fix --full`)
+  shell           exec into a service container
+  snapshot        point-in-time backup of vault + sqlite
+  restore         restore from a snapshot archive
+  rollback        revert to last good commit (in-place)
+  secrets-rotate  generate new secrets + restart
+  bench           quick performance baseline (smoke-only)
+
+All commands honor MEMROOS_DIR (default ~/memroos) and MEMROOS_COMPOSE_FILE
+(default docker-compose.local.yml).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Optional, Sequence
+
+
+# ---------------------------------------------------------------------------
+# Plumbing
+# ---------------------------------------------------------------------------
+
+
+MEMROOS_DIR = Path(os.environ.get("MEMROOS_DIR", Path.home() / "memroos"))
+COMPOSE_FILE = os.environ.get("MEMROOS_COMPOSE_FILE", "docker-compose.local.yml")
+APP_URL = os.environ.get("MEMROOS_APP_URL", "http://localhost:3000")
+REPO = MEMROOS_DIR
+
+
+def _run(
+    cmd: Sequence[str],
+    *,
+    check: bool = True,
+    cwd: Optional[Path] = None,
+    capture: bool = False,
+    timeout: Optional[int] = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess and return the CompletedProcess."""
+    printable = " ".join(shlex.quote(c) for c in cmd)
+    if not capture:
+        print(f"$ {printable}", file=sys.stderr)
+    try:
+        return subprocess.run(
+            list(cmd),
+            check=check,
+            cwd=cwd or REPO,
+            text=True,
+            capture_output=capture,
+            timeout=timeout,
+        )
+    except subprocess.CalledProcessError as exc:
+        if capture:
+            sys.stderr.write(exc.stderr or "")
+        raise
+
+
+def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return _run(
+        ["docker", "compose", "-f", COMPOSE_FILE, *args],
+        capture=capture,
+    )
+
+
+def _print_table(rows: list[dict[str, str]], columns: Sequence[str]) -> None:
+    if not rows:
+        print("(no rows)")
+        return
+    widths = {c: max(len(c), max(len(str(r.get(c, ""))) for r in rows)) for c in columns}
+    for c in columns:
+        print(c.ljust(widths[c]), end="  ")
+    print()
+    for c in columns:
+        print("-" * widths[c], end="  ")
+    print()
+    for r in rows:
+        for c in columns:
+            print(str(r.get(c, "")).ljust(widths[c]), end="  ")
+        print()
+
+
+# ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+
+def cmd_launch(_args: argparse.Namespace) -> int:
+    _docker("up", "-d")
+    print("memroos stack launched")
+    return 0
+
+
+def cmd_stop(_args: argparse.Namespace) -> int:
+    _docker("down")
+    print("memroos stack stopped")
+    return 0
+
+
+def cmd_restart(args: argparse.Namespace) -> int:
+    targets = [args.service] if args.service else None
+    if targets:
+        for svc in targets:
+            _docker("restart", svc)
+            print(f"restarted: {svc}")
+    else:
+        _docker("restart")
+        print("restarted: all services")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    proc = _docker("ps", "--format", "json", capture=True)
+    services: list[dict[str, str]] = []
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        services.append(
+            {
+                "service": entry.get("Service") or entry.get("Name", ""),
+                "state": entry.get("State", ""),
+                "status": entry.get("Status") or entry.get("Health", ""),
+                "ports": entry.get("Ports", ""),
+            }
+        )
+    if args.json:
+        print(json.dumps({"services": services, "app_url": APP_URL}, indent=2))
+        return 0
+    _print_table(services, ["service", "state", "status", "ports"])
+    print()
+    # /api/health probe
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(f"{APP_URL}/api/health", timeout=5) as resp:
+            body = resp.read().decode("utf-8")
+            print(f"/api/health: HTTP {resp.status} ({len(body)} bytes)")
+    except Exception as exc:
+        print(f"/api/health: unreachable ({exc})")
+        return 1
+    return 0
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    cmd = ["logs"]
+    if args.follow:
+        cmd.append("--follow")
+    if args.tail:
+        cmd.extend(["--tail", str(args.tail)])
+    if args.since:
+        cmd.extend(["--since", args.since])
+    if args.service:
+        cmd.append(args.service)
+    _docker(*cmd)
+    return 0
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    update_script = REPO / "scripts" / "update.sh"
+    if not update_script.exists():
+        print(f"error: {update_script} not found", file=sys.stderr)
+        return 1
+    cmd = ["bash", str(update_script)]
+    if args.channel:
+        cmd.extend(["--channel", args.channel])
+    if args.allow_major:
+        cmd.append("--allow-major")
+    if args.dry_run:
+        cmd.append("--dry-run")
+    return _run(cmd).returncode
+
+
+def cmd_redeploy(args: argparse.Namespace) -> int:
+    redeploy_script = REPO / "scripts" / "redeploy-from-ref.sh"
+    if not redeploy_script.exists():
+        print(f"error: {redeploy_script} not found", file=sys.stderr)
+        return 1
+    cmd = ["bash", str(redeploy_script), args.ref or "main"]
+    if args.compose:
+        cmd.append(args.compose)
+    return _run(cmd).returncode
+
+
+def cmd_shell(args: argparse.Namespace) -> int:
+    if not args.service:
+        print("error: `memroos shell <service>` requires a service name", file=sys.stderr)
+        return 2
+    _docker("exec", args.service, "sh", "-c", args.command or "sh")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Phase: snapshot / restore (Phase v8.24+)
+# ---------------------------------------------------------------------------
+
+
+SNAPSHOT_DIR = Path(os.environ.get("MEMROOS_SNAPSHOT_DIR", "/var/backups/memroos"))
+
+
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    target = Path(args.output) if args.output else SNAPSHOT_DIR / f"memroos-{ts}.tar.gz"
+    print(f"writing snapshot -> {target}")
+    # Snapshot: vault root, sqlite db file, .env, docker compose override
+    cmd = [
+        "tar", "-czf", str(target),
+        "-C", str(REPO),
+        ".env", ".env.local", "docker-compose.local.yml",
+    ]
+    if (REPO / "data").exists():
+        cmd.extend(["-C", str(REPO), "data"])
+    if (REPO / "services" / "connmem" / "ledger.db").exists():
+        cmd.extend(["-C", str(REPO), "services/connmem/ledger.db"])
+    try:
+        _run(cmd)
+    except subprocess.CalledProcessError:
+        # Fall back to just .env + compose when data dirs are absent.
+        _run([
+            "tar", "-czf", str(target),
+            "-C", str(REPO), ".env.example", "docker-compose.local.yml",
+        ])
+    print(f"snapshot complete: {target}")
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    archive = Path(args.archive)
+    if not archive.exists():
+        print(f"error: snapshot not found: {archive}", file=sys.stderr)
+        return 1
+    if not args.yes:
+        print(f"about to extract {archive} into {REPO} (overwriting .env, data/, ledger.db)")
+        confirm = input("type 'yes' to continue: ")
+        if confirm.strip() != "yes":
+            print("aborted")
+            return 1
+    _run(["tar", "-xzf", str(archive), "-C", str(REPO)])
+    print("restore complete; restart the stack with `memroos restart`")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Phase: rollback (Phase v8.24+)
+# ---------------------------------------------------------------------------
+
+
+def cmd_rollback(args: argparse.Namespace) -> int:
+    proc = _run(["git", "log", "--oneline", "-5"], capture=True)
+    print("recent commits on this host:")
+    print(proc.stdout)
+    if not args.yes:
+        target = input("commit to roll back to (full hash): ").strip()
+    else:
+        target = args.target or ""
+    if not target or len(target) < 7:
+        print("aborted (need a commit hash)")
+        return 1
+    _run(["git", "checkout", target])
+    _run(["bash", str(REPO / "scripts" / "redeploy-from-ref.sh"), "main"])
+    print("rollback complete")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Phase: secrets-rotate (Phase v8.24+)
+# ---------------------------------------------------------------------------
+
+
+SECRETS_KEYS = [
+    "MEMROOS_JWT_SECRET",
+    "MEMROOS_OPERATOR_API_KEY",
+    "MEMROOS_ONBOARDING_SECRET",
+    "MEMROOS_VAULT_KEY_PATH",
+]
+
+
+def _openssl_random_bytes(n: int) -> str:
+    proc = _run(["openssl", "rand", "-hex", str(n // 2)], capture=True)
+    return proc.stdout.strip()
+
+
+def cmd_secrets_rotate(args: argparse.Namespace) -> int:
+    env_path = REPO / ".env"
+    if not env_path.exists():
+        print(f"error: {env_path} not found", file=sys.stderr)
+        return 1
+    if not args.yes:
+        confirm = input("rotate MEMROOS_JWT_SECRET + MEMROOS_OPERATOR_API_KEY + MEMROOS_ONBOARDING_SECRET? (type 'rotate' to continue): ")
+        if confirm.strip() != "rotate":
+            print("aborted")
+            return 1
+    original = env_path.read_text(encoding="utf-8")
+    rotated = original
+    for key in SECRETS_KEYS:
+        new_value = _openssl_random_bytes(64)
+        rotated = _rotate_env_value(rotated, key, new_value)
+    if rotated == original:
+        print("no matching keys found in .env; nothing rotated", file=sys.stderr)
+        return 1
+    backup = env_path.with_suffix(".env.bak")
+    backup.write_text(original, encoding="utf-8")
+    env_path.write_text(rotated, encoding="utf-8")
+    print(f"rotated; backup at {backup}")
+    _docker("restart", "memroos")
+    print("restarted; new secrets are live")
+    return 0
+
+
+def _rotate_env_value(content: str, key: str, new_value: str) -> str:
+    import re
+
+    pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
+
+    def repl(match: Any) -> str:
+        line = match.group(0)
+        if "=" not in line:
+            return line
+        prefix = line.split("=", 1)[0]
+        return f"{prefix}={new_value}"
+
+    if pattern.search(content):
+        return pattern.sub(repl, content)
+    return content + ("" if content.endswith("\n") else "\n") + f"{key}={new_value}\n"
+
+
+# ---------------------------------------------------------------------------
+# Phase: fix (auto-repair common issues)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Finding:
+    severity: str  # "info" | "warning" | "critical"
+    code: str
+    message: str
+    fix: Optional[str] = None  # shell command to run if --auto
+
+
+def _check_docker_running() -> Optional[Finding]:
+    proc = _run(["docker", "info"], capture=True, check=False)
+    if proc.returncode == 0:
+        return None
+    return Finding(
+        severity="critical",
+        code="docker_not_running",
+        message="docker daemon is not responding to `docker info`",
+        fix="sudo systemctl start docker",
+    )
+
+
+def _check_compose_file_exists() -> Optional[Finding]:
+    if (REPO / COMPOSE_FILE).exists():
+        return None
+    return Finding(
+        severity="critical",
+        code="compose_file_missing",
+        message=f"compose file not found: {COMPOSE_FILE}",
+        fix=None,
+    )
+
+
+def _check_services_running() -> list[Finding]:
+    proc = _docker("ps", "--format", "json", capture=True, check=False)
+    findings: list[Finding] = []
+    if proc.returncode != 0:
+        return [
+            Finding(
+                severity="critical",
+                code="compose_ps_failed",
+                message=f"docker compose ps failed: {proc.stderr.strip()[:200]}",
+            )
+        ]
+    services = []
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            services.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if not services:
+        return [
+            Finding(
+                severity="critical",
+                code="no_services_running",
+                message="docker compose ps returned no services",
+                fix="memroos launch",
+            )
+        ]
+    for svc in services:
+        state = svc.get("State", "").lower()
+        if state in ("exited", "dead"):
+            findings.append(
+                Finding(
+                    severity="warning",
+                    code="service_exited",
+                    message=f"service {svc.get('Service')} is {state}",
+                    fix=f"docker compose -f {COMPOSE_FILE} up -d {svc.get('Service')}",
+                )
+            )
+    return findings
+
+
+def _check_health_endpoint() -> Optional[Finding]:
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(f"{APP_URL}/api/health", timeout=5) as resp:
+            if resp.status >= 500:
+                return Finding(
+                    severity="critical",
+                    code="health_5xx",
+                    message=f"/api/health returned HTTP {resp.status}",
+                    fix="memroos logs memroos | tail -100",
+                )
+            return None
+    except Exception as exc:
+        return Finding(
+            severity="warning",
+            code="health_unreachable",
+            message=f"/api/health unreachable: {exc}",
+            fix="memroos status --json",
+        )
+
+
+def _check_disk_space() -> Optional[Finding]:
+    import shutil
+
+    usage = shutil.disk_usage("/")
+    free_pct = usage.free / usage.total
+    if free_pct < 0.05:
+        return Finding(
+            severity="critical",
+            code="disk_critical",
+            message=f"only {free_pct * 100:.1f}% disk free on /",
+            fix="docker system prune -af",
+        )
+    if free_pct < 0.15:
+        return Finding(
+            severity="warning",
+            code="disk_low",
+            message=f"only {free_pct * 100:.1f}% disk free on /",
+            fix="docker system prune",
+        )
+    return None
+
+
+def _check_env_file_mode() -> Optional[Finding]:
+    env_path = REPO / ".env"
+    if not env_path.exists():
+        return None
+    import stat
+
+    mode = stat.S_IMODE(env_path.stat().st_mode)
+    if mode & 0o077:
+        return Finding(
+            severity="warning",
+            code="env_world_readable",
+            message=f".env is group/world readable (mode {oct(mode)}); install.sh sets 0600",
+            fix=f"chmod 600 {env_path}",
+        )
+    return None
+
+
+def _check_vault_key_mode() -> Optional[Finding]:
+    key_path = Path(os.environ.get("MEMROOS_VAULT_KEY_PATH", str(Path.home() / ".memroos" / "vault.key")))
+    if not key_path.exists():
+        return None
+    import stat
+
+    mode = stat.S_IMODE(key_path.stat().st_mode)
+    if mode & 0o077:
+        return Finding(
+            severity="critical",
+            code="vault_key_world_readable",
+            message=f"vault key is group/world readable (mode {oct(mode)})",
+            fix=f"chmod 600 {key_path}",
+        )
+    return None
+
+
+def _run_findings() -> list[Finding]:
+    findings: list[Finding] = []
+    for check in (
+        _check_docker_running,
+        _check_compose_file_exists,
+        _check_env_file_mode,
+        _check_vault_key_mode,
+        _check_disk_space,
+    ):
+        finding = check()
+        if finding is not None:
+            findings.append(finding)
+    findings.extend(_check_services_running())
+    health = _check_health_endpoint()
+    if health is not None:
+        findings.append(health)
+    return findings
+
+
+def cmd_fix(args: argparse.Namespace) -> int:
+    findings = _run_findings()
+    if not findings:
+        print("all checks passed — nothing to fix")
+        return 0
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "severity": f.severity,
+                        "code": f.code,
+                        "message": f.message,
+                        "fix": f.fix,
+                    }
+                    for f in findings
+                ],
+                indent=2,
+            )
+        )
+    else:
+        print(f"{len(findings)} issue(s) found:")
+        for f in findings:
+            print(f"  [{f.severity}] {f.code}: {f.message}")
+            if f.fix:
+                print(f"    fix: {f.fix}")
+    if not args.auto:
+        return 1
+    applied: list[str] = []
+    failed: list[str] = []
+    for f in findings:
+        if not f.fix:
+            continue
+        print(f"applying: {f.fix}")
+        try:
+            _run(["bash", "-c", f.fix], check=False)
+            applied.append(f.code)
+        except Exception as exc:
+            failed.append(f"{f.code}: {exc}")
+    print(f"applied: {len(applied)} | failed: {len(failed)}")
+    return 0 if not failed else 1
+
+
+# ---------------------------------------------------------------------------
+# Phase: bench (quick performance baseline)
+# ---------------------------------------------------------------------------
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    import time
+    import urllib.request
+
+    samples: list[float] = []
+    for _ in range(args.samples):
+        t0 = time.time()
+        try:
+            with urllib.request.urlopen(f"{APP_URL}/api/health", timeout=5) as resp:
+                resp.read()
+                samples.append((time.time() - t0) * 1000)
+        except Exception as exc:
+            print(f"sample failed: {exc}")
+    if not samples:
+        print("no successful samples")
+        return 1
+    samples.sort()
+    p50 = samples[len(samples) // 2]
+    p95 = samples[max(0, int(len(samples) * 0.95) - 1)]
+    print(f"/api/health: {len(samples)} samples, p50={p50:.0f}ms p95={p95:.0f}ms")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="memroos",
+        description="Operator CLI for Memroos deployments.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("launch", help="start the memroos stack")
+    sub.add_parser("stop", help="stop the memroos stack")
+
+    p = sub.add_parser("restart", help="restart services")
+    p.add_argument("service", nargs="?", help="specific service (default: all)")
+
+    p = sub.add_parser("status", help="health snapshot")
+    p.add_argument("--json", action="store_true", help="JSON output")
+
+    p = sub.add_parser("logs", help="tail logs")
+    p.add_argument("service", nargs="?", help="service name (default: all)")
+    p.add_argument("--follow", "-f", action="store_true", help="follow log output")
+    p.add_argument("--tail", type=int, help="lines to show from the end")
+    p.add_argument("--since", help="since timestamp (e.g. 10m, 1h)")
+
+    p = sub.add_parser("update", help="language-deps + migrate + restart")
+    p.add_argument("--channel", choices=["current", "stable"], default="current")
+    p.add_argument("--allow-major", action="store_true", help="allow major version bump")
+    p.add_argument("--dry-run", action="store_true", help="show what would happen")
+
+    p = sub.add_parser("redeploy", help="fast pull + restart")
+    p.add_argument("ref", nargs="?", default="main", help="branch or tag (default: main)")
+    p.add_argument("--compose", help="compose file override")
+
+    p = sub.add_parser("shell", help="exec into a service container")
+    p.add_argument("service", help="service name")
+    p.add_argument("command", nargs="?", help="command to run (default: sh)")
+
+    p = sub.add_parser("snapshot", help="point-in-time backup")
+    p.add_argument("--output", "-o", help="output path (default: $MEMROOS_SNAPSHOT_DIR/memroos-<ts>.tar.gz)")
+
+    p = sub.add_parser("restore", help="restore from snapshot")
+    p.add_argument("archive", help="snapshot archive to extract")
+    p.add_argument("--yes", "-y", action="store_true", help="skip confirmation")
+
+    p = sub.add_parser("rollback", help="revert to a prior commit")
+    p.add_argument("target", nargs="?", help="commit hash to roll back to")
+    p.add_argument("--yes", "-y", action="store_true", help="skip confirmation")
+
+    p = sub.add_parser("secrets-rotate", help="rotate operator secrets in .env")
+    p.add_argument("--yes", "-y", action="store_true", help="skip confirmation")
+
+    p = sub.add_parser("fix", help="auto-diagnose + repair")
+    p.add_argument("--auto", action="store_true", help="apply fixes automatically")
+    p.add_argument("--json", action="store_true", help="JSON output")
+
+    sub.add_parser("doctor", help="alias for `fix` (diagnostic walk)")
+
+    p = sub.add_parser("bench", help="quick performance baseline")
+    p.add_argument("--samples", type=int, default=10, help="number of samples (default 10)")
+
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    handlers = {
+        "launch": cmd_launch,
+        "stop": cmd_stop,
+        "restart": cmd_restart,
+        "status": cmd_status,
+        "logs": cmd_logs,
+        "update": cmd_update,
+        "redeploy": cmd_redeploy,
+        "shell": cmd_shell,
+        "snapshot": cmd_snapshot,
+        "restore": cmd_restore,
+        "rollback": cmd_rollback,
+        "secrets-rotate": cmd_secrets_rotate,
+        "fix": cmd_fix,
+        "doctor": cmd_fix,
+        "bench": cmd_bench,
+    }
+    return handlers[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
