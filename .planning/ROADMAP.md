@@ -3031,6 +3031,56 @@ before/after any change to see if the change moved latency.
 | 181. Operator Recovery Suite | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
 | 182. Quick Performance Baseline (bench) | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
 
+## v8.25 Self-Service Password Reset (operator request, 2026-07-23)
+
+**Goal:** Give the operator and end users a complete, working password-reset
+flow on the public host (memroos.epiloguecapital.com). The backend (request +
+confirm routes, password-reset tokens table, bcrypt hashing) is already on
+main; what's missing is the UI: a "Forgot password?" link on /login, a
+request form at /forgot-password, and a confirm form at /reset-password/[token].
+
+### Phase 183 — Password Reset UI
+
+**Goal:** Ship the three missing UI pages and wire them to the existing backend.
+**Depends on:** existing `/api/auth/password-reset` + `/api/auth/password-reset/confirm` routes.
+**Requirements:** PWRESET-01, PWRESET-02, PWRESET-03
+
+**Success criteria:**
+1. `/login` shows a "Forgot password?" link next to "Create an account".
+2. `/forgot-password` shows an email-only form. On submit it calls
+   `/api/auth/password-reset`. The response's `delivery` field is
+   handled in both modes:
+   - `delivery: "queued"` (email provider configured): show a generic
+     "check your inbox" message (no user-enumeration leak).
+   - `delivery: "manual"` (no email provider, dev/test mode): render the
+     returned `resetUrl` as a clickable "Continue reset →" link so the
+     operator can complete the flow without an email loop.
+3. `/reset-password/[token]` shows new-password + confirm fields, calls
+   `/api/auth/password-reset/confirm`, validates length and match, and
+   redirects to /login on success.
+4. All three pages use the existing NOC theme tokens (NOC.ink, NOC.paper,
+   NOC.fog, NOC.warnBg, NOC.successBg) so they match the rest of the
+   auth surface visually.
+5. No new dependencies, no new environment variables, no DB migration
+   needed (the `password_reset_tokens` table already exists).
+
+**Out of scope (v8.25 Phase 183):**
+- Email template design (delivery: "queued" just sends the link; the
+  template is the operator's choice and can be a follow-on).
+- Rate-limiting the request endpoint by IP or per-email (the backend
+  already returns 200 either way; per-IP rate limiting can be added at
+  the reverse proxy in front of memroos).
+- "I forgot my email" recovery flow (out of scope for v8.25).
+- Admin "force password reset" on a user (use the operator API to
+  insert a password_reset_tokens row directly if needed; see the v8.24
+  operator docs).
+
+### Progress Table (v8.25 Self-Service Password Reset)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 183. Password Reset UI | 1/1 | Shipped on `main` | 2026-07-23 |
+
 ### What we considered and DEFERRED
 
 - **`memroos profile` (continuous resource profile per service).**
