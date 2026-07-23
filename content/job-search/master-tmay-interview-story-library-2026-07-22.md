@@ -42,6 +42,15 @@ This is the single working document for interview practice. It contains a 30-sec
 9. QuickFile, 1099-K, and partner data, nested under Reimagined Self-Employed
 10. SketchPop AI-supported operations, nested under the SketchPop transformation
 
+## Two-version coaching review set
+
+The human coaching direction is to review no more than two overarching TMAYs. The canonical review document is [Luis Calderon — Two L7 TMAY Anchors for Review](https://docs.google.com/document/d/1k2K2dORMUQvmMyhsKs8Pqi7OpqDloZ7Ws4iWkmDpXCI/edit). It contains only:
+
+1. **Enterprise Agent Platform Director** (298 words): Intuit turnaround and governed agent-platform work. Use for ServiceNow, Google, and enterprise AI-platform roles.
+2. **AI-Native Builder-Operator** (324 words): Epilogue/MemroOS commerce operating stack first, then Intuit enterprise scale. Use for Cursor and AI-native product companies.
+
+The two versions are intentionally different in entry point and role fit, but use only verified facts. Do not create additional overarching TMAY variants until a coach selects one positioning. MiniMax-M3 performed the routine evidence/scope pass; the final author rejected its unsupported “hired four PMs” wording and retained the verified “rebuilt and managed a four-PM organization.”
+
 ## ServiceNow AI Agent Products TMAY
 
 The master library begins with a role-specific TMAY for **ServiceNow — Director, Product Management - AI Agent Products**:
