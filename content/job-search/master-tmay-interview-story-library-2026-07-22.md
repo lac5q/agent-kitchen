@@ -24,7 +24,7 @@ regen_prompt: "Maintain exactly two overarching L7 TMAYs with no repeated story.
 - [Master TMAY and Interview Story Library](https://docs.google.com/document/d/1RzOjy40X9SQ1biO7IZgM3R00i6YPxKyJhBf74VmfZrA/edit)
 - [Two L7 TMAY Anchors for Review](https://docs.google.com/document/d/1k2K2dORMUQvmMyhsKs8Pqi7OpqDloZ7Ws4iWkmDpXCI/edit)
 
-The master library contains seven strategic stories and three focused drill-downs. The two-anchor document contains only the two versions intended for coaching review and spoken practice.
+The master library contains seven strategic stories, three focused drill-downs, two primary TMAY anchors, and one specialized alternate. The two-anchor document contains only the two versions intended for coaching review and spoken practice.
 
 ## Story structure
 
@@ -80,6 +80,24 @@ Outside work, I coach kids’ sports and build agentic projects. I love helping 
 
 For an AI-native company, I bring business ownership, organization leadership, and hands-on platform depth. I can set the product thesis, align teams around it, and turn fast-moving agent capabilities into trusted products with measurable adoption and economics.
 
+## Version 3 — Growth Builder & AI Spinout (about 300 words)
+
+Use as a specialized alternate for AI-native growth, commerce AI, or founder-operator roles. It combines an enterprise turnaround with an internal platform that became an external spinout.
+
+Hi, [interviewer’s name]. It’s great to meet you, and thanks for the time.
+
+I’m a Director-level product leader with 15+ years leading new ventures and turnarounds. I find hidden growth opportunities in customer experiences and organizations, then reset strategy and build the teams and systems to capture them.
+
+I’d like to highlight two experiences that show how I work.
+
+First, I was brought in to rethink TurboTax Self-Employed when the business was shrinking and product capacity had eroded. I won approval for an end-to-end strategy, built a four-PM team, and owned acquisition, onboarding, and Schedule C through filing. Reimagined Expenses proved the direction. I then aligned Tax and QuickBooks around a jointly priced QuickFile and ML Deduction Finder embedded in filing—protecting a roughly $400M QuickBooks revenue stream while bringing more customers to TurboTax. The turnaround helped grow Self-Employed to roughly $900M, close to $1B.
+
+Second, at SketchPop, I ran product and P&L for a $3M custom-art business serving more than 600,000 customers. I rebuilt three customer experiences covering 90% of revenue, modernized the backend and tracking, and put marketing and fulfillment on one operating rhythm. A chatbot serving about 30,000 users a month cut support costs 40% while satisfaction held. We built MemRoOS inside SketchPop as an agent-memory governance platform for acquisition, customer experience, and analytics. It is now a spinout used by two well-funded Silicon Valley companies I advise.
+
+Outside work, I coach kids’ sports and build agentic projects. I love helping people find their role, build confidence, and excel at what they do well. The best wins come through trust and clear coaching—not anger or insults.
+
+For growth and AI-native builder roles, I bring a repeatable pattern: find the opportunity, rebuild the system around it, and turn operating proof into a product other companies want to use.
+
 ## Why the SOM Divergent attempt succeeded
 
 SOM was a broader end-to-end portfolio led through two to three PMs across chat onboarding, simplification, data import, and pricing. The organization was not aligned to the shift, so Luis rehired critical roles, moved engineering capacity, and reset cross-functional goals around the whole journey. Reductive GTKM and Divergent were linked moves within that portfolio, not the complete strategy. The source archive supports the sequencing that made the Divergent capstone work.
@@ -106,7 +124,8 @@ The archive also says the RPA gap remained open. Present the result as proof of 
 - SOM was a broader portfolio. Luis led two to three PMs, rehired critical roles, moved engineering capacity, and completely realigned engineering, analytics, and cross-functional goals around the whole customer journey rather than local step goals. Chat onboarding, simplification, data import, and pricing each delivered wins; Divergent was the controversial capstone. These scope and organization details are firsthand.
 - Version 1 uses Reimagined Self-Employed and SOM. Version 2 uses SketchPop and MemRoOS. Do not reuse a story across the two scripts.
 - MemRoOS began as an internal agent-memory governance platform for a production commerce operation and has since been adopted by two well-funded Silicon Valley companies Luis advises. Treat the external adoption as firsthand and do not imply named public references or broader adoption.
+- Version 3 combines Reimagined Self-Employed with the SketchPop/MemRoOS spinout story. MemRoOS was built inside SketchPop before it was adopted by two well-funded Silicon Valley companies Luis advises. Treat the external adoption as firsthand; do not imply named public references or broader adoption.
 
 ## Use rule
 
-Use only these two overarching TMAYs for coaching review. Use the consumer version when the role emphasizes growth, monetization, pricing, commerce, or customer trust. Use the AI-native builder-operator version when the role emphasizes agent platforms, governance, orchestration, and enterprise adoption.
+Use only Versions 1 and 2 as the two overarching TMAYs for coaching review. Use Version 1 when the role emphasizes growth, monetization, pricing, commerce, or customer trust. Use Version 2 when the role emphasizes agent platforms, governance, orchestration, and enterprise adoption. Use Version 3 only as the specialized alternate when one narrative must bridge growth transformation and an AI spinout.
