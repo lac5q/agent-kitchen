@@ -96,7 +96,8 @@ implementation is complete and tested.
 - ✅ Phase 179 (v8.23): shipped end-to-end this turn (commit `2720841f`).
 - ✅ Phase 175 (v8.19): infrastructure validated, decision = `keep`, measurement runs deferred (commits `33ca4a0e`).
 - ✅ Phases 173/174 (v8.18): already code-complete on main; markers corrected (commit `22db60e7`).
-- 🔄 Phase 178 (v8.22): substantial work on main; final MEMCLIP acceptance pending.
+- ✅ Phase 178 (v8.22): implementation complete; §4 clause added in commit `68879a1e`; 67/67 paperclip+flow tests pass.
+- ✅ Phase 176 (v8.20): CONNMEM-02..10 implementation complete; 141/141 connmem tests pass; release gate green.
 - ✅ **Phase 176 (v8.20): implementation complete (CONNMEM-02..10)** — 141/141 connmem tests pass, release gate green. Live backfill proof remains queued behind `CONNMEM-LIVE-DEFER`.
 - ROADMAP markers corrected for v8.18, v8.19, v8.20, v8.22 to reflect actual main-branch state.
 

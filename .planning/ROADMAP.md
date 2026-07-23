@@ -68,7 +68,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 LANDED on main via 2026-07-23 beastmode session** — 141/141 connmem tests pass, release gate green; live backfill proof still QUEUED behind `CONNMEM-LIVE-DEFER` ticket — requires real Linear + Circleback API credentials on cordant-hermes-01)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
-- 🔄 **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (substantial work on main: `apps/memroos/src/app/api/paperclip/*`, `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` + `paperclip-option-d-2026-07-21.md`; final MEMCLIP-01..05 acceptance test pending against a live Paperclip tenant)
+- ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
 
 ## Phases
 
