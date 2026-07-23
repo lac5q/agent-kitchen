@@ -75,6 +75,37 @@ echo
 # Step 4 — pull images + restart services
 blue "[4/6] docker compose pull + up -d"
 docker compose -f "$COMPOSE_FILE" pull
+
+# Pre-flight: surface any host-port conflicts BEFORE attempting up -d.
+# Compose binds 127.0.0.1:3000/3001/3201/etc. on the host; if another
+# process is already on one of those ports, compose up -d fails with
+# the cryptic "address already in use" error. We check the publish
+# ports in the compose file and warn before attempting up.
+PORTS_TO_CHECK=$(docker compose -f "$COMPOSE_FILE" config 2>/dev/null \
+  | awk '/published:/ && /"127.0.0.1:/ { match($0, /127\.0\.0\.1:([0-9]+)/, m); print m[1] }' \
+  | sort -u)
+port_conflict=0
+if [ -n "$PORTS_TO_CHECK" ]; then
+  while IFS= read -r port; do
+    [ -z "$port" ] && continue
+    if (echo > /dev/tcp/127.0.0.1/"$port") 2>/dev/null; then
+      yellow "host port 127.0.0.1:$port is already bound (not by compose)."
+      yellow "  diagnostic: ss -ltnp 'sport = :$port'"
+      yellow "  fix:        kill the holder, or re-run with --force-recreate"
+      port_conflict=1
+    fi
+  done <<< "$PORTS_TO_CHECK"
+fi
+if [ "$port_conflict" = "1" ] && [ "${REDEPLOY_FORCE:-0}" -ne 1 ]; then
+  red "host port conflict(s) above; refusing to compose up -d"
+  red "  re-run with REDEPLOY_FORCE=1 to docker compose down + up -d anyway"
+  exit 1
+fi
+if [ "$port_conflict" = "1" ] && [ "${REDEPLOY_FORCE:-1}" -eq 1 ]; then
+  yellow "REDEPLOY_FORCE=1; docker compose down (this terminates current stack)"
+  docker compose -f "$COMPOSE_FILE" down
+fi
+
 docker compose -f "$COMPOSE_FILE" up -d
 green "docker compose up -d complete"
 
