@@ -24,23 +24,28 @@ approved provider.
 The Phase 176 first session that landed on `install-repro-connmem-bridge`
 shipped **CONNMEM-02** (canonical envelope + sync ledger schemas) and
 **CONNMEM-04-prep** (Linear GraphQL SDL stub with doc-derived provenance).
-It did NOT ship:
 
-- **CONNMEM-03** — Circleback adapter extension to project through the
-  envelope; current `circleback_ingest.py` writes idempotent markdown
-  directly into `meet-recordings-circleback` but does NOT route through
-  the canonical envelope yet (no path at
-  `services/connmem/circleback_adapter.py`)
-- **CONNMEM-04** — Linear adapter implementation (multi-workspace
-  GraphQL, capability discovery, signed webhook handling)
-- **CONNMEM-05..07** — Linear reconciliation + operator surfaces +
-  recall tests + comprehensive ledger integration (Circleback flows
-  feed the same surfaces; Notion is OUT of Phase 176 — see Phase 178)
-- **CONNMEM-08** — Authorization, privacy, retention, deletion
-  (NOT the release gate — that's CONNMEM-10)
-- **CONNMEM-09** — Operator controls and observability
-- **CONNMEM-10** — Tests, backfill proof, release gate (the gate this
-  ticket defers)
+The beastmode 2026-07-23 follow-on session shipped the remaining CI-runnable
+sub-IDs (CONNMEM-03, 04, 05, 06, 07, 08, 09, 10) — see
+`.beastmode/GOAL_STATE.gsd-implementation.md` for the full delivery log.
+141/141 connmem unit tests pass; the release gate is green. What this
+ticket STILL defers:
+
+- **Live backfill proof** — the actual API calls to Linear + Circleback
+  against real provider data. The implementation is fully testable in CI
+  via the swappable CLI / HTTP boundaries, but `release_gate.check_end_to_end`
+  is run against a synthetic fixture, not against Linear/Circleback APIs.
+- **Provider total reconciliation** — once live backfill runs, the
+  release gate needs a check that reconciles provider totals (e.g. Linear
+  `viewer.organization.issues.count`) against the ledger row count by
+  workspace. This is the explicit "entire company indexed" gate.
+- **Linear schema live introspection** — the vendored SDL is doc-derived;
+  a live introspection query is the only way to know which fields the
+  org's Linear plan actually exposes.
+- **Circleback tenant-visibility discovery** — the SDK CLI may only see
+  meetings shared with the authenticated user, not the whole workspace.
+  Until capability discovery runs against a real install, the
+  "tenant_complete" flag remains false.
 
 The blockers for completing the above are:
 
