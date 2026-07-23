@@ -36,6 +36,12 @@ The STAR document contains only Situation, Task, Action, and Result for each sto
 2. **Tile — Hardware as a Service.** This is the business-model story. It shows a move from one-time hardware value to a recurring customer relationship.
 3. **SketchPop — End-to-End Business Transformation.** This is the general-management story. It shows full-stack business modernization without revenue disruption.
 
+## TMAY template completion boundary — 2026-07-22
+
+These two clean story documents are source material for the TMAY. They are not the completed Step 5 TMAY itself. The live TMAY template has Step 1 through Step 4 populated, but its Step 5 `Draft Your TMAY` section still contains the course placeholders for the greeting, overview, anchor story, personal line, and role-specific close.
+
+The next deliverable is a 150-to-250-word spoken TMAY in the actual template. It should use Reimagined Self-Employed as the anchor, draw the anchor narrative from the Story Builder output, and include a personal line plus a close tailored to the selected target role.
+
 ## Review disposition
 
 Claude Opus 4.8 reviewed the story set at high effort. The review rated the work as strong and largely interview-ready.
