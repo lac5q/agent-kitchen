@@ -1,0 +1,23 @@
+Validation complete. Report written to `.beastmode/worker-runs/20260723T080718Z-phase179-providers/validator.md`.
+
+## Verdict: REVISE
+
+The architecture is sound and the orchestrator's typecheck/lint/test evidence holds, but there is **one runtime-breaking defect** that the passing tests missed:
+
+### Critical finding — `appendActivityEvent` writes to nonexistent columns
+`credential-store.ts:285-296` inserts into `audit_entries (event_type, actor_type, actor_id, target_type, target_id, ...)`, but the actual Phase-64 schema (`db-schema.ts:3455`) has **no** `actor_type`, `target_type`, or `target_id` columns, and omits the NOT-NULL `id`, `actor_role`, `entity_type`, `entity_id`. `better-sqlite3` throws at `.prepare()`. Because the function isn't wrapped in try/catch (unlike the correct pattern at `artifact-gate.ts:75`), the throw propagates and **500s all three write endpoints**:
+- **api-key connect**: vault write succeeds, then throws → misleading `vault_write_failed` 500
+- **disconnect**: vault row deleted, then throws → 500 (revoke reports failure after succeeding)
+- **oauth connect**: session created, then throws → 500
+- **Recent activity strip is permanently empty** (writes never land)
+
+### Why CI missed it
+`credential-store.test.ts` only has 2 tests, and they call `writeVaultArtifact`/`readVaultArtifact` **directly** — they never exercise the module's own `appendActivityEvent`/`listActivityEvents`/`storeApiKeyConnection`. Typecheck can't catch a raw SQL string. That's the exact blind spot.
+
+### Passing / correct
+Provider registry (15 providers, 5 categories, all invariants hold), Nango client (endpoints, 404-as-success, tier boundaries 10/100/1000, config-vs-upstream distinction, no secret leakage), vault sealing (`sensitivity:"credential"` valid), route auth/Zod/error-mapping, Nango-wins merge, shadowing fix, and all four out-of-scope exclusions.
+
+### Other functional gaps (secondary)
+Multi-secret providers (`aws`, `plaid`) unusable — route reads only `credentials.apiKey`; connected card missing scope/last-used/copy-ID/Rotate; no Test-connection step; no status-badge `aria-label` / `aria-live` (spec §10); unverified `connect.nango.dev` URL pattern.
+
+**Fix path:** correct the INSERT column list to match `audit_entries` (mirror `artifact-gate.ts:75`), add a test that calls `appendActivityEvent` → `listActivityEvents` against a real `initSchema` DB, then re-validate.

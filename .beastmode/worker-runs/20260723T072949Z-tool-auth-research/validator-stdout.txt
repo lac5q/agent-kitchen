@@ -1,0 +1,21 @@
+Validation report written to `.planning/spikes/2026-07-23-tool-auth-ux-validation.md`. I stayed within constraints: read-only on the spike, contract, and (for the format check the task required) the real ROADMAP entries + three local ground-truth files; wrote only the validation file; no installs/mutations.
+
+## Verdict: REVISE
+
+The direction is defensible; the reasoning has real holes. Headline findings:
+
+**Strongest finding — an internal contradiction that breaks the license case both ways.** The spike calls memroos "local-first, single-tenant" to wave away Nango's Elastic License v2 managed-service clause, but in the ToolJet row it rejects AGPL *because "memroos is a hosted SaaS option."* You can't have both: if memroos is a hosted SaaS bundling Nango's features, ELv2's managed-service clause is a **live** risk (not the non-issue claimed); if it's pure self-host, AGPL for ToolJet is far less scary. This must be resolved before either license verdict stands.
+
+**Recommendation soundness:**
+- Nango's self-host stack (server + workers + Postgres + Redis) is the **heaviest** option in the survey and fights memroos's own "single-binary/single-container" model — undersold.
+- memroos is MCP-first, and Nango is rated "not first-class MCP," while the MCP-native options (Composio, Arcade, and the missed **Klavis**) are the ones dismissed. Nango wins on catalog size, not on memroos's actual axis.
+- The Nango **API key** Luis set up is a *hosted* signal, but the rec is built on *self-host*; hosted Nango means third-party tokens live at `api.nango.dev`, contradicting the local-vault custody model. The hosted-vs-self-host split is treated as a footnote when it changes which risk you accept.
+- **Better Auth = MIT: confirmed.**
+
+**Coverage gaps:** Descope Outbound Apps / Stytch Connected Apps / Scalekit (building *exactly* agent-tool OAuth — more on-target than the WorkOS/Clerk/Auth0 included "for completeness") and OSS+MCP-native **Klavis** (arguably a better primary than Nango) are all missing. Composio's license-shift question the contract explicitly asked went unanswered.
+
+**Factual flags (deferring to fresh data where warranted):** "Auth.js now part of Better Auth" is a striking claim to verify; "self-host Nango = limited catalog" is likely wrong (providers.yaml is open); the "308-redirect" callback framing is technically shaky.
+
+**Roadmap block:** Format/numbering check out against real v8.18/v8.22 entries (Phase 179, v8.23, Source-opinion citing both files — all correct; dependencies FLEET-22/176/178 and the vault path verified locally). But: criterion 1's 10-provider hard gate is over-scoped for one phase; OAuth-only-vs-hybrid is silently pre-decided (contract says it's open); `TOOLAUTH-01..06` are undefined; and the block hard-codes the Nango/Better-Auth pick the spike hasn't earned yet.
+
+Fixes are additive, not a teardown — hence REVISE rather than REJECT.

@@ -1,0 +1,17 @@
+{
+  "model": "kimi-for-coding",
+  "id": "msg_cRcZrUdqgJtCJfo8CIdrP2jC",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 1375,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 5,
+    "output_tokens": 5858,
+    "service_tier": "standard",
+    "inference_geo": "not_available"
+  },
+  "content_types": [
+    "thinking",
+    "text"
+  ]
+}

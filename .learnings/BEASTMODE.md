@@ -130,3 +130,50 @@ watcher to Opus proactively rather than waiting for Fable to flag
 "this is above my ceiling." Fable is great for "does the diff claim what
 it claims?"; Opus is for "is this design sound?" These are different
 audits.
+
+---
+
+## 2026-07-23 — Tool Authentication UX Research (MiniMax-M3 orchestrator + MiniMax-M3 worker + Claude Opus 4.8 validator)
+
+### Role Routing
+
+- **Orchestrator:** MiniMax-M3 (this pi session, me) — performed the research directly using Exa MCP + `web_search` (Bing RSS).
+- **Worker:** MiniMax-M3 (direct API lane) — initial one-shot attempt failed because the model tried to call bash tools via pseudo-XML (`<tool_call>`); the bare chat completions API has no tool runtime. **Worker dropped from the loop**; orchestrator absorbed the research work.
+- **Validator:** Claude Opus 4.8 via `~/.local/bin/claude-pro` (Claude Pro lane) — never `agent({model: "anthropic/claude-opus-4-8"})` per the beastmode-pi Claude hard rule.
+
+### Acceptance Checks (operator-supplied contract)
+
+1. Research spike at `.planning/spikes/2026-07-23-tool-auth-ux-research.md` covering ≥17 candidates with license, repo URL, last activity, OAuth-refresh support, MCP compatibility, self-host story, pricing free tier. **DONE (v2, 21 candidates including Klavis + Scalekit + Stytch + Descope).**
+2. Recommendation with explicit rationale (single pick or ranked top 2) + assumptions. **DONE — Nango primary, Klavis swap candidate.**
+3. Validation report at `.planning/spikes/2026-07-23-tool-auth-ux-validation.md` from Claude Opus 4.8 covering factual accuracy, coverage gaps, recommendation soundness, roadmap entry. **DONE — REVISE verdict, additive fixes only.**
+4. GSD roadmap entry appended to `.planning/ROADMAP.md` following the existing version/phase format. **DONE — v8.23 / Phase 179 appended.**
+5. Self-improvement entry appended to `.learnings/BEASTMODE.md` capturing role routing, what worked, what drifted. **DONE — this section.**
+
+### Result
+
+- **Spike v1 → REVISE → Spike v2 (roadmap-ready).** All four validator findings resolved: ELv2/AGPL contradiction resolved by operator constraint (hosted SaaS is fine, paid scale is fine); Nango self-host heaviness acknowledged (using hosted); MCP-axis error corrected (Klavis added as swap candidate); Phase block stripped of implementation hard-codes.
+- **Phase 179 committed to ROADMAP.md** under `## v8.23 Third-Party Tool Authentication Plane` with 8 TOOLAUTH requirements, 8 success criteria, out-of-scope list, progress table.
+- **Nango confirmed as the primary** based on operator constraint (hosted free tier = 10 connections = exactly 10 users) + Luis's pre-existing API key in 1Password.
+- **Klavis surfaced as swap candidate** — MCP-first OSS, smaller catalog (100+), worth a 1-week prototype before committing at scale.
+
+### What Worked
+
+- **Exa MCP** as primary web search produced dramatically richer results than Bing RSS for technical queries (stars, license, last push date, pricing all in one hit). Bing RSS fallback needed for when Exa rate-limits (~6 calls on free tier).
+- **Validator-first, then revision** caught a real contradiction (ELv2/AGPL) and an MCP-axis miss (Klavis). Without the validator, the spike would have committed a recommendation built on shaky reasoning.
+- **Dropping the MiniMax-M3 worker mid-run** was the right call — the orchestrator already has `web_search` + Exa MCP; the worker added no value when it couldn't tool-use.
+
+### What Failed / Drifted
+
+- **MiniMax-M3 worker hallucinated tool calls.** The bare chat completions API doesn't have a tool runtime. The worker tried `<tool_call>{...}</tool_call>` pseudo-XML and emitted 133 tokens of nothing. Should have skipped the worker lane entirely given orchestrator had `web_search`.
+- **Initial spike had an ELv2/AGPL contradiction** — rejected ToolJet's AGPL on "memroos has a hosted SaaS option" grounds while waving through Nango's ELv2 by calling memroos "local-first, single-tenant." Validator caught this.
+- **Initial Phase block hard-coded the implementation pick.** Validator flagged that pre-committing in the phase block (vs the spike's recommendation) is wrong because the spike hasn't earned it yet. Revised block is implementation-agnostic at the phase level; the spike carries the pick.
+- **Huginn license/stars not verifiable** via Bing RSS — search returned irrelevant weather results. Marked "uncertain" in the table rather than fabricating.
+- **Klavis, Scalekit, Stytch, Descope missed entirely** in the first survey. Validator caught. Added in v2.
+
+### Routing Rule To Change
+
+**Yes** — two:
+
+1. **For research tasks with `web_search` in the orchestrator's tool belt, skip the MiniMax-M3 worker lane.** The orchestrator's tools are strictly better than the bare chat completions API. Reserve the worker lane for tasks that need code execution, file mutation, or worktree isolation — none of which apply to a research spike. The worker failed because the API it was given doesn't match its assumed tool runtime.
+
+2. **For recommendation tasks, the validator must read the actual real-world format of the target file** (in this case `.planning/ROADMAP.md` Phase 176/178) before approving a draft phase block. The first validator pass read only the spike and contract; the format check was loose. Future beastmode runs: include "compare against at least one real entry in the target file" in the validator prompt.
