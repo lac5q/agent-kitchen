@@ -16,14 +16,14 @@ sources:
   - /Users/lcalderon/Documents/Work/Intuit/Product Management/SOM/TY22 Supercharge Front Doors EOS Learnings.pptx
   - Luis Calderon firsthand clarification supplied 2026-07-22
 derived_from: Raw Intuit learning decks, roadmap workbooks, and firsthand context
-regen_prompt: Reconstruct SOM as an end-to-end portfolio led through two to three PMs across chat onboarding, simplification, data import, and pricing. Treat Reductive GTKM and Divergent New Start as linked moves within the portfolio, with Divergent as the controversial capstone. Separate archive evidence from firsthand organization context. Preserve metric qualifiers and the open RPA gap.
+regen_prompt: Reconstruct SOM as an end-to-end portfolio led through two to three PMs across chat onboarding, simplification, data import, and pricing. Explain that Luis had to rehire critical roles, move engineering capacity, and reset cross-functional goals because the organization was not aligned to the shift. Treat Reductive GTKM and Divergent New Start as linked moves within the portfolio, with Divergent as the controversial capstone. Separate archive evidence from firsthand organization context. Preserve metric qualifiers and the open RPA gap.
 ---
 
 # Intuit SOM Divergent — Why This Attempt Succeeded
 
 ## Executive answer
 
-SOM was a broader strategy, not a two-change initiative. Luis led two to three PMs across chat onboarding, simplification, data import, and pricing. He restructured engineering and analytics around the full customer journey because the prior organization optimized individual steps against local goals, creating friction across the whole experience. The strategic principle was to accept added steps or friction in one segment when it improved the overall customer experience and economics. Each workstream delivered wins. Divergent was the controversial capstone: earlier simplification created economic proof, then the team removed early SKU commitment and let actual tax complexity determine the final product and price.
+SOM was a broader strategy, not a two-change initiative. Luis led two to three PMs across chat onboarding, simplification, data import, and pricing. The organization and cross-functional departments were not aligned to the shift. He rehired critical roles, moved engineering capacity, and completely reset engineering, analytics, and cross-functional goals around the full customer journey. The strategic principle was to accept added steps or friction in one segment when it improved the overall customer experience and economics. Each workstream delivered wins. Divergent was the controversial capstone: earlier simplification created economic proof, then the team removed early SKU commitment and let actual tax complexity determine the final product and price.
 
 ## The portfolio and capstone sequence
 
@@ -61,8 +61,9 @@ These efforts changed merchandising or funnel presentation. They did not remove 
 2. **It changed the architecture.** Divergent removed the start-SKU requirement instead of only changing the way products were presented.
 3. **It fixed implementation failures.** The team addressed refresh, mobile handoff, users remaining in Free, and finish-and-file downgrade edge cases before scaling.
 4. **It delayed commitment until the system had evidence.** Product and price followed the customer's demonstrated tax complexity.
-5. **It used multiple guardrails.** The team tracked starts, completion, revenue per acquisition, aspirational rate, and product-rightsizing signals.
-6. **It iterated with discipline.** Losing recipes were stopped early. Promising recipes were revised and scaled after the team understood their effects.
+5. **It changed the operating model.** Luis rehired critical roles, moved engineering capacity, and reset cross-functional goals so teams optimized the end-to-end journey instead of defending local funnel metrics.
+6. **It used multiple guardrails.** The team tracked starts, completion, revenue per acquisition, aspirational rate, and product-rightsizing signals.
+7. **It iterated with discipline.** Losing recipes were stopped early. Promising recipes were revised and scaled after the team understood their effects.
 
 ## Results and evidence boundary
 
@@ -77,7 +78,7 @@ Do not combine the percentage lifts with the index results. Do not claim complet
 
 ## Recommended interview language
 
-“I led SOM as an end-to-end portfolio through two to three PMs across chat onboarding, simplification, data import, and pricing. I restructured engineering and analytics around the whole journey rather than local funnel goals, accepting added work in one segment when it improved the overall customer experience and economics. Each workstream delivered wins, but Divergent was the controversial capstone. We removed the start-SKU constraint and let actual tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
+“I led SOM as an end-to-end portfolio through two to three PMs across chat onboarding, simplification, data import, and pricing. The organization was not aligned to the shift, so I rehired critical roles, moved engineering capacity, and reset cross-functional goals around the whole journey. We accepted added work in one segment when it improved the overall customer experience and economics. Each workstream delivered wins, but Divergent was the controversial capstone. We removed the start-SKU constraint and let actual tax complexity determine the final product and price. Starts rose 22%, checkout conversion rose 5%, and aspirational placement fell 6%.”
 
 ## MiniMax-M3 validation
 
@@ -98,3 +99,5 @@ Validation session: `20260722_213228_ebdd01`. MiniMax-M3 reported no essential f
 Follow-up validation after the SOM resistance and MemRoOS adoption corrections confirmed that the two scripts remain structurally distinct and inside the target length. MiniMax-M3 flagged the external MemRoOS adoption statement as a claim that must remain attributable to Luis's firsthand account. Keep the two consulting companies unnamed, do not imply adoption beyond those two companies, and be prepared to substantiate the statement privately if an interviewer asks.
 
 After the broader SOM portfolio correction, MiniMax-M3 passed the revised consumer TMAY with no essential fixes. It confirmed the end-to-end portfolio framing, leadership through two to three PMs, named workstreams, engineering and analytics realignment, local-versus-overall tradeoff strategy, Divergent capstone, L7 scope, and legal-safe language.
+
+After the organizational-transformation correction, MiniMax-M3 again returned PASS. It confirmed that the 340-word script clearly shows leadership through two to three PMs, rehiring critical roles, moving engineering capacity, complete cross-functional goal realignment, organizational resistance, the sacred-cow change, quantified outcomes, and legally safe language.
