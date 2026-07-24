@@ -16,8 +16,8 @@ Subcommands:
   restart         restart one or all services
   status          health snapshot (JSON or table)
   logs            tail logs for a service
-  update          language-deps + migrations + restart (in-place)
-  redeploy        pull + restart (fast path)
+  update          state-preserving in-place upgrade (snapshot + npm ci + migrate + restart + verify)
+  redeploy        pull + restart (fast path; no state-preservation guarantees)
   fix             auto-diagnose + repair common issues
   doctor          full diagnostic walk (alias for `fix --full`)
   shell           exec into a service container
@@ -195,10 +195,14 @@ def cmd_update(args: argparse.Namespace) -> int:
     cmd = ["bash", str(update_script)]
     if args.channel:
         cmd.extend(["--channel", args.channel])
+    if args.ref:
+        cmd.extend(["--ref", args.ref])
     if args.allow_major:
         cmd.append("--allow-major")
     if args.dry_run:
         cmd.append("--dry-run")
+    if args.skip_snapshot:
+        cmd.append("--skip-snapshot")
     return _run(cmd).returncode
 
 
@@ -655,10 +659,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tail", type=int, help="lines to show from the end")
     p.add_argument("--since", help="since timestamp (e.g. 10m, 1h)")
 
-    p = sub.add_parser("update", help="language-deps + migrate + restart")
+    p = sub.add_parser("update", help="state-preserving in-place upgrade (snapshot + npm ci + migrate + restart + verify)")
     p.add_argument("--channel", choices=["current", "stable"], default="current")
+    p.add_argument("--ref", help="override target ref (default: current branch)")
     p.add_argument("--allow-major", action="store_true", help="allow major version bump")
     p.add_argument("--dry-run", action="store_true", help="show what would happen")
+    p.add_argument("--skip-snapshot", action="store_true", help="skip pre-update snapshot (NOT recommended)")
 
     p = sub.add_parser("redeploy", help="fast pull + restart")
     p.add_argument("ref", nargs="?", default="main", help="branch or tag (default: main)")
