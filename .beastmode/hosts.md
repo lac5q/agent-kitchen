@@ -83,3 +83,48 @@ to pick up the new env var).
   `docker-compose.local.yml` and are the same on both hosts.
 - Per-provider connection state. That's in the Nango dashboards
   (dev for oracle-1, prod for cordant-hermes-01), not in this repo.
+
+## Latest state (2026-07-23)
+
+| Host | Nango env in container | `connect/oauth` status |
+|------|------------------------|------------------------|
+| oracle-1 | ✅ dev key | 502 — Nango dev workspace not configured for github/linear/notion yet |
+| cordant-hermes-1 | ✅ prod key | 502 — Nango prod workspace not configured for github/linear/notion yet |
+
+Both hosts reachable to Nango (DNS + gVisor sandbox fixed by switching the
+memroos service to `runtime: runc` + adding `dns: [1.1.1.1, 8.8.8.8]`).
+Connection attempts return 502 with `nango_upstream_error` because the
+Nango workspaces don't have OAuth app credentials configured for those
+specific providers — that's a Nango dashboard task, not a memroos fix.
+
+## Compose patch (commit c0de6193)
+
+The `memroos` service in `docker-compose.local.yml` now has:
+```yaml
+memroos:
+  env_file: .env
+  runtime: runc
+  dns:
+    - 1.1.1.1
+    - 8.8.8.8
+  build: ...
+  ports: ...
+  environment: ...
+```
+
+Why each line:
+- `env_file: .env` — without this, the host's `.env` (with NANGO_SECRET_KEY) was NOT passed to the container, so Nango integration was dead on every host.
+- `runtime: runc` — the host's docker daemon defaults to gVisor (`runsc`) with `--network=sandbox`, which fully isolates the container's network namespace. DNS lookups via 127.0.0.11 never reach the host's upstream DNS. Switching just the memroos service to `runc` restores network. (The other services keep gVisor — they don't need outbound.)
+- `dns: [1.1.1.1, 8.8.8.8]` — belt-and-suspenders. With gVisor gone, Docker's embedded DNS at 127.0.0.11 should forward, but pinning public resolvers means DNS works even if the host's embedded resolver is misconfigured.
+
+## To finish wiring the integrations (operator task)
+
+For each Nango workspace (dev for oracle-1, prod for cordant):
+1. Log in to https://nango.dev
+2. Go to the matching integration (dev or prod)
+3. For each provider you want to support on that host (Notion, Linear, GitHub, Circleback, etc.):
+   - Add the provider in Nango's UI
+   - Configure the OAuth app credentials (Notion's integration token, Linear's API key, GitHub's OAuth app, etc.)
+4. Re-run the connect flow from `/settings/tools` on the host
+
+The memroos side is complete. The remaining work is in the Nango dashboard, not in the memroos code.
