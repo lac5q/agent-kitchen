@@ -3,7 +3,7 @@ import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
-import { queryEscalations } from "@/lib/audit/query";
+import { countEscalations, queryEscalations } from "@/lib/audit/query";
 import { checkSlaBreaches } from "@/lib/audit/sla";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,13 @@ async function buildEscalationsResponse(req: NextRequest) {
     },
     db
   );
+  const total = countEscalations(
+    {
+      status,
+      tenantId: sp.get("tenantId") ?? session.tenantId,
+    },
+    db
+  );
 
   const now = Date.now();
   const withCountdown = escalations.map((e) => ({
@@ -58,7 +65,7 @@ async function buildEscalationsResponse(req: NextRequest) {
     slaRemainingMs: new Date(e.sla_deadline).getTime() - now,
   }));
 
-  return Response.json({ escalations: withCountdown, timestamp: new Date().toISOString() });
+  return Response.json({ escalations: withCountdown, total, timestamp: new Date().toISOString() });
 }
 
 export async function GET(req: NextRequest) {

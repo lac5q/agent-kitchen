@@ -362,7 +362,8 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionResult {
       `SELECT id, escalation_type AS escalationType, status, sla_deadline AS slaDeadline, created_at AS createdAt
        FROM hil_escalations
        WHERE status IN ('open', 'sla_breached')
-       ORDER BY sla_deadline ASC`
+       ORDER BY sla_deadline ASC
+       LIMIT 25`
     ).all() as Array<{ id: string; escalationType: string; status: string; slaDeadline: string; createdAt: string }>;
     items.push(...hilRows.map((row) => ({
       id: `hil:${row.id}`,

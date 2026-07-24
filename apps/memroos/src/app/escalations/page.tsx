@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEscalations, useResolveEscalation } from "@/lib/api-client";
 import type { EscalationWithCountdown } from "@/lib/api-client";
@@ -22,13 +22,16 @@ function EscalationCard({
   escalation,
   onResolve,
   canResolve,
+  defaultExpanded = false,
 }: {
   escalation: EscalationWithCountdown;
   onResolve: (id: string, note?: string) => void;
   canResolve: boolean;
+  defaultExpanded?: boolean;
 }) {
   const [showModal, setShowModal] = useState(false);
   const [note, setNote] = useState("");
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const isOverdue = escalation.slaRemainingMs <= 0;
   const isResolved = escalation.status === "resolved";
 
@@ -68,24 +71,36 @@ function EscalationCard({
         </div>
       </div>
 
-      <div className="text-xs" style={{ color: NOC.soft }}>
-        Assigned to: {escalation.assigned_to ?? "Unassigned"} · Created: {formatTimestamp(escalation.created_at)}
-      </div>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={`escalation-details-${escalation.id}`}
+        onClick={() => setExpanded((value) => !value)}
+        className="text-left text-xs underline-offset-2 hover:underline"
+        style={{ color: NOC.terraDeep }}
+      >
+        {expanded ? "Hide details" : "Show details"}
+      </button>
 
-      {isResolved && escalation.resolution_note && (
-        <div className="text-xs px-2 py-1" style={{ background: NOC.fog, color: NOC.muted }}>
-          Note: {escalation.resolution_note}
-        </div>
-      )}
+      {expanded && (
+        <div id={`escalation-details-${escalation.id}`} className="space-y-2">
+          <div className="text-xs" style={{ color: NOC.soft }}>
+            Assigned to: {escalation.assigned_to ?? "Unassigned"} · Created: {formatTimestamp(escalation.created_at)}
+          </div>
 
-      {!isResolved && canResolve && (
-        <div>
-          <Btn
-            onClick={() => setShowModal(true)}
-            variant="terra"
-          >
-            Resolve
-          </Btn>
+          {isResolved && escalation.resolution_note && (
+            <div className="text-xs px-2 py-1" style={{ background: NOC.fog, color: NOC.muted }}>
+              Note: {escalation.resolution_note}
+            </div>
+          )}
+
+          {!isResolved && canResolve && (
+            <div>
+              <Btn onClick={() => setShowModal(true)} variant="terra">
+                Resolve
+              </Btn>
+            </div>
+          )}
         </div>
       )}
 
@@ -144,12 +159,20 @@ export default function EscalationsPage() {
   const fromWorkspace = search?.get("from_workspace") ?? null;
   const fromScopeNote = search?.get("from_scope_note") ?? null;
   const [activeTab, setActiveTab] = useState<TabStatus>("open");
-  const { data, isLoading, isError } = useEscalations({ status: activeTab });
+  const [showAll, setShowAll] = useState(false);
+  const { data, isLoading, isError } = useEscalations({ status: activeTab, limit: showAll ? 200 : 25 });
   const resolveEscalation = useResolveEscalation();
 
   // TODO: Wire to real session role — for now assume operator for UI rendering
   // Phase 65 will connect the role from the session context provider
   const canResolve = true;
+
+  const escalations = data?.escalations ?? [];
+  const total = data?.total ?? escalations.length;
+  const visibleEscalations = useMemo(
+    () => (showAll ? escalations : escalations.slice(0, 10)),
+    [escalations, showAll]
+  );
 
   function handleResolve(id: string, note?: string) {
     resolveEscalation.mutate({ id, note });
@@ -213,19 +236,36 @@ export default function EscalationsPage() {
 
       {!isLoading && (
         <div className="space-y-3">
-          {(data?.escalations ?? []).length === 0 ? (
+          {escalations.length === 0 ? (
             <Card className="p-8 text-center text-sm" style={{ color: NOC.soft }}>
               No {activeTab === "all" ? "" : activeTab} escalations found.
             </Card>
           ) : (
-            (data?.escalations ?? []).map((escalation) => (
-              <EscalationCard
-                key={escalation.id}
-                escalation={escalation}
-                onResolve={handleResolve}
-                canResolve={canResolve && escalation.status !== "resolved"}
-              />
-            ))
+            <>
+              <Card pad="sm" className="flex flex-wrap items-center justify-between gap-2" style={{ background: NOC.fog }}>
+                <div className="text-xs" style={{ color: NOC.muted }}>
+                  Showing {visibleEscalations.length} of {total} {activeTab} escalation{total === 1 ? "" : "s"}. Details are collapsed to keep the queue compact.
+                </div>
+                {total > 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((value) => !value)}
+                    className="text-xs font-semibold underline underline-offset-2"
+                    style={{ color: NOC.terraDeep }}
+                  >
+                    {showAll ? "Show fewer" : `Show up to ${Math.min(total, 200)}`}
+                  </button>
+                )}
+              </Card>
+              {visibleEscalations.map((escalation) => (
+                <EscalationCard
+                  key={escalation.id}
+                  escalation={escalation}
+                  onResolve={handleResolve}
+                  canResolve={canResolve && escalation.status !== "resolved"}
+                />
+              ))}
+            </>
           )}
         </div>
       )}

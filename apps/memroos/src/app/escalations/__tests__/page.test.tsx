@@ -78,6 +78,7 @@ describe("EscalationsPage", () => {
 
     expect(screen.getByText("Escalations")).toBeInTheDocument();
     expect(screen.getByText("codex-cli-agent")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(screen.getByText(/Assigned to: operator/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
@@ -93,7 +94,7 @@ describe("EscalationsPage", () => {
     render(<EscalationsPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "Resolved" }));
-    expect(api.useEscalations).toHaveBeenLastCalledWith({ status: "resolved" });
+    expect(api.useEscalations).toHaveBeenLastCalledWith({ status: "resolved", limit: 25 });
   });
 
   it("shows resolved notes and hides resolve actions for closed items", () => {
@@ -105,6 +106,7 @@ describe("EscalationsPage", () => {
 
     render(<EscalationsPage />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(screen.getByText(/Note: Restarted the worker/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Resolve" })).not.toBeInTheDocument();
   });

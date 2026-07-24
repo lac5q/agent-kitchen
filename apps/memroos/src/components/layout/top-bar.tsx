@@ -22,9 +22,8 @@ function formatClock() {
 }
 
 function useClock() {
-  const [now, setNow] = useState("—");
+  const [now, setNow] = useState<string>(() => formatClock());
   useEffect(() => {
-    setNow(formatClock());
     const id = window.setInterval(() => setNow(formatClock()), 30_000);
     return () => window.clearInterval(id);
   }, []);
