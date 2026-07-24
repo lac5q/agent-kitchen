@@ -119,7 +119,7 @@ Full v7.5 detail in the `## v7.5 Proactive Recollection Triggering` section belo
 
 ### Current v7.6 Future Spike Queue Summary — COMPLETE
 
-- [x] **Phase 119: Future Spike Queue Closeout** — MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, and HYPEREXTRACT-FOLLOWUP-01 completed as bounded spike reports under `.planning/spikes/`, with `npm run check:future-spikes` enforcing required report sections and guardrails. No dependency adoption, backend swap, hosted/private upload, production indexing, Qdrant upgrade, runtime replacement, or default extraction behavior is approved.
+- [x] **Phase 119: Future Spike Queue Closeout** — MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, HYPEREXTRACT-FOLLOWUP-01, GRAPHGUIDE-FOLLOWUP-01, and SIMPLIFY-FOLLOWUP-01 completed as bounded spike reports under `.planning/spikes/`, with `npm run check:future-spikes` enforcing required report sections and guardrails. No dependency adoption, backend swap, hosted/private upload, production indexing, Qdrant upgrade, runtime replacement, default extraction behavior, or 4th architecture-reviewer claim against `simplify-code` is approved.
 
 Full v7.6 detail in the `## v7.6 Future Spike Queue` section below.
 
@@ -1038,7 +1038,7 @@ Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays clou
    - Goal: move beyond small held-out eval samples into broader behavioral coverage, provider-backed judges, safety eval packs, non-fixture memory-autogen validation, and governed SEAL/agent trajectory workflows.
 
 8. **P1 — Future spike queue closeout completed.**
-   - Requirements completed in Phase 119: `MEMGEN-FOLLOWUP-02`, `COCOINDEX-FOLLOWUP-01`, `FASTCONTEXT-FOLLOWUP-01`, `ADKA2A-FOLLOWUP-01`, `QDRANT-FOLLOWUP-01`, and `HYPEREXTRACT-FOLLOWUP-01`.
+   - Requirements completed in Phase 119: `MEMGEN-FOLLOWUP-02`, `COCOINDEX-FOLLOWUP-01`, `FASTCONTEXT-FOLLOWUP-01`, `ADKA2A-FOLLOWUP-01`, `QDRANT-FOLLOWUP-01`, `HYPEREXTRACT-FOLLOWUP-01`, `GRAPHGUIDE-FOLLOWUP-01`, and `SIMPLIFY-FOLLOWUP-01`.
    - Result: bounded reports live under `.planning/spikes/` and are enforced by `npm run check:future-spikes`.
    - Gate: no dependency adoption, backend swap, hosted/private upload, production index path, Qdrant upgrade, runtime replacement, or default extraction behavior is approved. Any implementation is a new approval-gated phase.
 
@@ -1111,7 +1111,7 @@ Standing gates (unchanged): zero paid services / MIT-OSS only; Qdrant stays clou
 - Multi-hop retry compensation and rollback
 - Memory backend pluggability (beyond mem0 + Qdrant + Neo4j) — v3.0 concern
 - Turbovec compressed-vector shadow-index evaluation for local footprint/hot-path recall — future-only; requires Luis approval before implementation or dependency adoption
-- Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, and Hyper-Extract bounded spikes were conducted in Phase 119. Adoption and production changes remain deferred until Luis explicitly approves a follow-on implementation.
+- Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, Hyper-Extract, Anthropic Knowledge Graph cookbook, and the simplify-code four-altitude / architecture-reviewer claim bounded spikes were conducted in Phase 119. Adoption and production changes remain deferred until Luis explicitly approves a follow-on implementation.
 - Bronze/silver/gold memory belief-stage gates — Phase 118 requirement; raw source snapshots, candidate claims, and admitted operational truth must remain distinct in recollection receipts so agents know what they are allowed to believe
 - Voice meeting bot (Pipecat as meeting participant)
 - Recall.ai bridge for Zoom/Teams/Meet meeting bot support beyond the Daily-only v4.0 path
@@ -2253,7 +2253,7 @@ Plans:
 **Goal**: Conduct the six deferred future-only spikes as bounded repo artifacts without adopting dependencies, changing production paths, uploading private data, replacing backends, or approving runtime migrations.
 **Milestone**: v7.6
 **Depends on**: Phase 114 (competitive retrieval proof), Phase 115 (architecture review hardening), Phase 118 (proactive recollection)
-**Requirements**: MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, HYPEREXTRACT-FOLLOWUP-01
+**Requirements**: MEMGEN-FOLLOWUP-02, COCOINDEX-FOLLOWUP-01, FASTCONTEXT-FOLLOWUP-01, ADKA2A-FOLLOWUP-01, QDRANT-FOLLOWUP-01, HYPEREXTRACT-FOLLOWUP-01, GRAPHGUIDE-FOLLOWUP-01, SIMPLIFY-FOLLOWUP-01
 **Status**: Completed
 **Success Criteria** (what must be TRUE):
   1. Memento, CocoIndex, FastContext, ADK/A2A, Qdrant Cloud 1.18, and Hyper-Extract each have a dated spike report under `.planning/spikes/`.
