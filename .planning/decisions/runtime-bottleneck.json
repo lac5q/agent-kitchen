@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1",
+  "decision": "keep",
+  "evidence": {
+    "suiteManifest": "reports/operator-load/runtime-bottleneck/suite-manifest.json",
+    "operatorRuns": [
+      "reports/operator-load/runtime-bottleneck/run-01.json",
+      "reports/operator-load/runtime-bottleneck/run-02.json"
+    ],
+    "retrievalRuns": [
+      "evals/comparative-retrieval/results/runtime-bottleneck/run-01.json",
+      "evals/comparative-retrieval/results/runtime-bottleneck/run-02.json"
+    ],
+    "profiles": [
+      "reports/operator-load/runtime-bottleneck/profiles/run-01.cpu.json",
+      "reports/operator-load/runtime-bottleneck/profiles/run-02.cpu.json"
+    ],
+    "heaps": [
+      "reports/operator-load/runtime-bottleneck/profiles/run-01.heap.json",
+      "reports/operator-load/runtime-bottleneck/profiles/run-02.heap.json"
+    ],
+    "traces": [
+      "reports/operator-load/runtime-bottleneck/traces/run-01.json",
+      "reports/operator-load/runtime-bottleneck/traces/run-02.json"
+    ],
+    "attribution": [
+      "reports/operator-load/runtime-bottleneck/attribution/run-01.json",
+      "reports/operator-load/runtime-bottleneck/attribution/run-02.json"
+    ]
+  },
+  "thresholds": {
+    "p95MaxMs": 500,
+    "errorRateMax": 0.001,
+    "localShareMin": 0.6,
+    "remoteAndUnknownShareMax": 0.4
+  },
+  "_note": "Phase 175 decision recorded as 'keep' because no Phase 175 measurement evidence has been collected yet. The runtime-bottleneck infrastructure (schemas, scripts, unit tests, contract) is in place and validated; the actual operator-load and retrieval-benchmark runs against a live memroos server with all dependencies (Qdrant Cloud, Neo4j Aura, Ollama, LLM) are deferred until an authorized measurement environment is provisioned. Re-run `node scripts/check-runtime-bottleneck-evidence.mjs` against real artifacts to upgrade this decision to 'optimize-current-stack' or 'bounded-shadow-extraction' once the runs exist."
+}

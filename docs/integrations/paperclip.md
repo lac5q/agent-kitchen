@@ -122,6 +122,61 @@ These pre-existing endpoints proxy Paperclip's fleet status and dispatch task
 to Paperclip's upstream API. They normalize autonomy modes and write local
 `hive_delegations` / `hive_actions` rows for audit trail and recovery.
 
+## 4. Memory Path (FLEET-2x) — Phase 178
+
+This §4 clause resolves the policy collision that would otherwise emerge
+between Phase 146 (FLEET contract baseline; ownership split) and
+Paperclip's 2026-03-17 memory-provider plugin shape. The resolution
+is the **Option D** integration (recorded in
+`docs/integrations/paperclip-option-d-2026-07-21.md`):
+
+- **Paperclip authorizes *binding access*** — which agent may call
+  which provider (i.e. the `MemoryAdapter` plugin shape). Paperclip
+  decides *who* is allowed to read/write memory on a per-run basis.
+- **MemroOS authorizes *record content*** — the permission-aware
+  context-pack assembly uses workspace/team/owner labels from
+  MemroOS's own vault + ACL table to decide *what* the agent is
+  entitled to see. MemroOS decides *what* is in the bundle.
+
+When Paperclip's content authorization says "yes" but MemroOS's
+content authorization says "no" (e.g. the agent row is authorized to
+call the `linear` provider, but the Linear records the user is asking
+about are flagged `restricted` sensitivity), **MemroOS's content
+authorization wins on what's in the bundle**. The MemoryAdapter
+plugin returns the redacted shape; the gateway logs the discrepancy
+so the operator can investigate.
+
+**Two Paperclip core seams:**
+
+1. **Push (pre-run hydrate).** Paperclip's existing
+   `instructionsFilePath` resolver at
+   `paperclip/server/src/services/heartbeat.ts:~3630` is the one core
+   change. MemroOS's `pre_run_hydrate` writes the context pack into
+   the per-run instructions file via this seam. One core change
+   covers all 9 CLI / cloud / gateway Paperclip adapters.
+2. **Pull (MCP gateway).** MemroOS registers as **one**
+   `toolConnections` row (`remote_http` transport). Paperclip adapters
+   that wire `AdapterExecutionContext.runtimeMcp` get MemroOS
+   natively. Adapters that do not yet wire it fall back to push-only.
+
+**Subject-id introspection (MEMCLIP-03):** Paperclip's tool gateway
+exposes the `subjectId` field at `server/src/services/heartbeat.ts:~2129`.
+MemroOS's MCP callee reads this field on every gateway call to resolve
+the token to `{companyId, agentId, runId}` for audit provenance. No
+Paperclip adapter is required to change.
+
+**Idempotency (MEMCLIP-04):** MemroOS enforces server-side
+idempotency on `(run_id, content_hash)`. An integration test at
+`services/connmem/tests/test_phase178_idempotency.py` (in the
+Paperclip repo) asserts that one run which both hydrates via hook
+AND writes via MCP yields exactly one MemroOS record + two linked
+`memory_operations` rows.
+
+**Zero Paperclip adapters gain Memroos-aware code (MEMCLIP-05):**
+verified by `grep -r 'Memroos' paperclip/packages/adapters/*/src/**`
+returning zero hits. (See `paperclip/MEMCLIP-VERIFICATION.md` for
+the CI-runnable check.)
+
 ## Passive Adapter Behavior (FLEET-21)
 
 Paperclip's Hermes and OpenClaw adapters are **passive** — the runtime must

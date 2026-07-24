@@ -1,0 +1,17 @@
+{
+  "usage": {
+    "total_tokens": 3224,
+    "total_characters": 0,
+    "prompt_tokens": 805,
+    "completion_tokens": 2419,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "cached_tokens": 128
+    }
+  },
+  "model": "MiniMax-M3",
+  "stop_reason": "stop",
+  "length": 10251
+}

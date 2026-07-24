@@ -377,6 +377,17 @@ run_docker_install() {
     exit 1
   fi
 
+  # Install the operator CLI (bin/memroos) on PATH so the operator can
+  # run `memroos launch / restart / fix / status / ...` from any shell.
+  if [[ -f "$MEMROOS_DIR/bin/memroos" ]]; then
+    install -m 0755 "$MEMROOS_DIR/bin/memroos" "/usr/local/bin/memroos" 2>/dev/null \
+      || install -m 0755 "$MEMROOS_DIR/bin/memroos" "$HOME/.local/bin/memroos" 2>/dev/null \
+      || warn "could not install bin/memroos on PATH (sudo?); invoke as $MEMROOS_DIR/bin/memroos"
+    if command -v memroos >/dev/null 2>&1; then
+      ok "operator CLI installed: memroos $(memroos --help 2>&1 | head -1)"
+    fi
+  fi
+
   log "Building and starting MemroOS containers..."
   echo "  Compose file: $DOCKER_COMPOSE_FILE"
   docker compose -f "$DOCKER_COMPOSE_FILE" up -d --build

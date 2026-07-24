@@ -64,11 +64,11 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
 - 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
-- 📋 **v8.18 NOC Metrics Rethink** — Phases 173-174 (planned 2026-07-20; NOCUX-01..05; K3 UX design + terra-high review complete; operator-first 7-row layout; v8.17 remains reserved for logging observability candidate pending in local uncommitted ROADMAP)
+- ✅ **v8.18 NOC Metrics Rethink** — Phases 173-174 (code-complete on main: commits `07a419d0` "feat: add truthful NOC attention contract" and `720f7805` "feat: complete NOC operator layout"; 116/116 tests pass across NOC API + components; NOCUX-01..05 met)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
-- 📋 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; continuously ingest all authorized Linear workspace information plus all accessible Circleback meetings/memories into permission-aware, provenance-backed unified recall)
+- 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 LANDED on main via 2026-07-23 beastmode session** — 141/141 connmem tests pass, release gate green; live backfill proof still QUEUED behind `CONNMEM-LIVE-DEFER` ticket — requires real Linear + Circleback API credentials on cordant-hermes-01)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
-- 📋 **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (planned 2026-07-21; MEMCLIP-01..05; implements Option D from the 2026-07-21 Opus 4.8 architectural opinion; MemroOS integrates at exactly two Paperclip *core* seams — the planned memory-provider plugin for push (pre-run hydrate via `instructionsFilePath`) and the existing tool-connection MCP gateway for pull (one `toolConnections` row); zero Paperclip adapters gain MemroOS-aware code)
+- ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
 
 ## Phases
 
@@ -91,9 +91,12 @@ Full plan: `.planning/phases/176-linear-circleback-unified-memory/176-01-PLAN.md
   - [x] **INSTALL-REPRO-06 — Review production dependency advisories:** 12 findings (4 high, 6 moderate, 2 low, 0 critical) triaged across 8 ticket IDs (INSTREP-06-001..008). Raw npm audit JSON archived in closeout-evidence/npm-audit-current.json. No `npm audit fix --force` was run.
 
 
-### Current v8.19 Runtime Bottleneck Evidence Summary — PLANNED
+### Current v8.19 Runtime Bottleneck Evidence Summary — INFRASTRUCTURE COMPLETE; MEASUREMENT RUNS DEFERRED
 
-- [ ] **Phase 175: Runtime Bottleneck Evidence** — PERF-EVID-01..04; run two reproducible operator and retrieval workloads with sanitized fixtures; validate report schemas, sample floors, workload hashes, latency attribution, and the keep/optimize/bounded-shadow-extraction gate. No Rust adoption or rewrite is in scope.
+- [x] **Phase 175 infrastructure**: retrieval-bench module (204 vitest tests pass), schemas (`runtime-bottleneck-evidence.schema.json`, `runtime-bottleneck-decision.schema.json`), checker (`scripts/check-runtime-bottleneck-evidence.mjs`), manifest generator, contract (`scripts/runtime-bottleneck-contract.mjs`), and 22 node-test cases pass.
+- [x] **Phase 175 initial decision**: `.planning/decisions/runtime-bottleneck.json` records `keep` because no Phase 175 measurement evidence has been collected yet. Per the decision gate (no SLO misses detectable without evidence), `keep` is the only valid choice.
+- [ ] **Phase 175 measurement runs**: deferred. Requires a live memroos server with all dependencies (Qdrant Cloud, Neo4j Aura, Ollama, LLM) plus 300s+ operator runs and 2 retrieval runs. Cannot be executed in the current environment.
+- [ ] **Phase 175 re-decision**: re-run `node scripts/check-runtime-bottleneck-evidence.mjs` after the measurement runs exist; upgrade `keep` to `optimize-current-stack` or `bounded-shadow-extraction` per the decision gate.
 
 
 ### Current v7.3 Agent Context Bus Operational Bootstrap Summary — COMPLETE
@@ -2826,8 +2829,8 @@ Operator host
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 173. NOC Truth Contracts + Attention | 1/1 | Planned | — |
-| 174. Operator Layout + Semantic States | 1/1 | Planned | — |
+| 173. NOC Truth Contracts + Attention | 1/1 | Code-complete on main | 2026-07-23 (commit `07a419d0`) |
+| 174. Operator Layout + Semantic States | 1/1 | Code-complete on main | 2026-07-23 (commit `720f7805`) |
 
 ### Out of scope (v8.18)
 
@@ -2883,3 +2886,215 @@ Operator host
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 178. Paperclip/MemroOS Two-Seam Memory Integration | 0/? | Planned | — |
+
+## v8.23 Third-Party Tool Authentication Plane
+
+### Phase 179 — Third-Party Tool Authentication Plane
+
+**Goal:** Ship a per-installation, embeddable UX where an operator can connect memroos to third-party tools via OAuth or API key, with token refresh, credential storage in memroos's existing AES-256-GCM vault, and a stable surface for future integrations to consume instead of re-implementing auth each time.
+**Depends on:** v8.20 Phase 176 (CONNMEM proven for Linear/Circleback), v8.22 Phase 178 (MEMCLIP proven for Paperclip tool-connection model), FLEET-22 secrets path
+**Requirements:** TOOLAUTH-01, TOOLAUTH-02, TOOLAUTH-03, TOOLAUTH-04, TOOLAUTH-05, TOOLAUTH-06, TOOLAUTH-07, TOOLAUTH-08
+
+**TOOLAUTH requirement definitions:**
+- TOOLAUTH-01 — Per-installation provider registry (JSON/YAML) with auth URL, token URL, scopes, refresh policy.
+- TOOLAUTH-02 — "Connected Tools" settings page at `apps/memroos/src/app/settings/tools` with Connect UI for each registered provider.
+- TOOLAUTH-03 — OAuth flow handler that stores refresh tokens in the AES-256-GCM vault (`MEMROOS_VAULT_KEY_PATH`).
+- TOOLAUTH-04 — API-key flow handler that stores keys in the same vault.
+- TOOLAUTH-05 — `tool_auth.getCredentials(provider, scope)` API for MCP tools to resolve tokens uniformly. No adapter calls an external OAuth library directly.
+- TOOLAUTH-06 — Token refresh + failure observability (audit row + NOC dashboard tile).
+- TOOLAUTH-07 — Revocation flow with webhook dispatch.
+- TOOLAUTH-08 — Backfill connector: existing Phase 176 (Linear/Circleback) and Phase 178 (Paperclip) consumers migrated to the new plane.
+
+**Success criteria:**
+1. "Connected Tools" page exists with a Connect UI for at least 3 providers (initial set: Linear, Circleback, GitHub — the Phase 176 + Phase 178 immediate consumers). Adding a 4th-10th provider requires only a registry entry, no new code.
+2. Phase 176 (CONNMEM-04..07) and Phase 178 (MEMCLIP-02..04) consumers migrated to the new plane and cite this phase in their requirement IDs.
+3. MCP tools (`apps/memroos/src/lib/l3/adapters/{slack,hubspot,quickbooks,...}`) resolve tokens via the single `tool_auth.getCredentials()` API. Zero direct external OAuth library imports in adapters.
+4. Token refresh is automatic and observable. Failed refresh emits a structured audit row and a NOC dashboard tile.
+5. Operator can revoke a connection from settings; revocation triggers a webhook to memroos and clears the vault entry. Re-authorization is one click.
+6. Cost at 10 users per installation is $0/month (free tier covers); cost at 50 users per installation is documented and paid by the customer, not by memroos.
+7. OAuth + API-key hybrid supported (not OAuth-only). API-key path validated against at least one non-OAuth provider (e.g., a legacy CRM).
+8. Provider swap path documented (e.g., Nango → Klavis) at the configuration layer, not the application layer.
+
+**Source opinion:** `.planning/spikes/2026-07-23-tool-auth-ux-research.md` + `.planning/spikes/2026-07-23-tool-auth-ux-validation.md` + `.planning/design/2026-07-23-connected-tools-ux-design.md` (Kimi K2.7 Code UX design spec). Primary implementation pick: Nango (hosted free tier covers ≤10 users exactly); swap candidate: Klavis (MCP-first OSS, self-hostable). Klavis prototype to confirm catalog (100+) is sufficient for memroos's integration roadmap.
+
+**Out of scope (v8.23):**
+- Building a SaaS offering on top of the tool-auth plane (memroos stays per-installation).
+- Replacing the existing user-login auth (`/api/auth/*`).
+- Federated multi-memroos tool sharing.
+- OSI-strict OSS self-host at scale (Klavis self-host remains a future swap candidate, not v8.23 deliverable).
+- Memroos becoming an OAuth server itself for agents (separate concern; tracks via Better Auth `@better-auth/oauth-provider` or Ory Hydra if pursued).
+
+### Progress Table (v8.23 Third-Party Tool Authentication Plane)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+
+## v8.24 Operator Lifecycle Toolkit (bin/memroos)
+
+**Goal:** Give the sole operator a single, self-contained CLI on PATH that
+covers every common host-level lifecycle action: launch / stop / restart
+/ status / logs / update / redeploy / fix / doctor / shell / snapshot
+/ restore / rollback / secrets-rotate / bench. No more shelling out
+to docker compose by hand; no more ad-hoc SSH scripts; no more
+guessing what's safe to do on a live install.
+
+The CLI is installed automatically by `install.sh` via
+`install -m 0755 bin/memroos /usr/local/bin/memroos` (with a
+`~/.local/bin/memroos` fallback for non-sudo hosts).
+
+### Phase 180 — Operator CLI Surface (bin/memroos) — SHIPPED 2026-07-23
+
+**Goal:** Ship a single self-contained Python CLI on PATH.
+**Depends on:** install.sh (so the CLI is auto-installed), scripts/redeploy-from-ref.sh + scripts/update.sh (the two large workflows the CLI dispatches to).
+**Requirements:** OPSCLI-01, OPSCLI-02, OPSCLI-03, OPSCLI-04, OPSCLI-05
+
+**Success criteria:**
+1. `memroos launch / stop / restart / status / logs` work out of the box
+   on a fresh install; no `docker compose` by hand.
+2. `memroos status --json` returns the same shape the existing
+   `/api/health` dashboard consumes, so monitoring tooling can be
+   re-pointed at the CLI without a parser change.
+3. `memroos update` calls `scripts/update.sh` with the right
+   `--channel` flag; `memroos redeploy` calls
+   `scripts/redeploy-from-ref.sh`. The CLI is a thin dispatcher, not
+   a duplicate implementation.
+4. `memroos fix` runs the diagnostic battery (docker daemon,
+   compose file presence, .env + vault key permissions, disk space,
+   service health) and prints findings; `--auto` applies the safe
+   fixes (file modes, docker system prune). The auto-apply list is
+   bounded — destructive fixes (e.g. `docker system prune -af`)
+   are surfaced but never run unattended.
+5. `memroos doctor` is an alias for `memroos fix` so the conventional
+   name works for operators used to `docker doctor`-style commands.
+
+**Out of scope (v8.24 Phase 180):**
+- True auto-repair (currently only safe file-mode + prune fixes run
+  unattended; everything else is surfaced for operator decision).
+- SSH-less cross-host orchestration (Phase 181+).
+- Operator UI inside the memroos app (CONNMEM-09 already covers the
+  app-side operator surface; the CLI is the host-side complement).
+
+### Phase 181 — Operator Recovery Suite (snapshot / restore / rollback / secrets-rotate)
+
+**Goal:** Cover the "things went wrong, what do I do" paths: point-in-time
+backup, restore from a snapshot, roll back to the last good commit,
+rotate operator secrets without losing the install.
+**Depends on:** Phase 180 (CLI), Phase 177 (install-repro --full).
+**Requirements:** OPSCLI-06, OPSCLI-07, OPSCLI-08, OPSCLI-09
+
+**Success criteria:**
+1. `memroos snapshot` writes a tar.gz with `.env`, compose override,
+   `data/`, and `services/connmem/ledger.db` to
+   `$MEMROOS_SNAPSHOT_DIR` (default `/var/backups/memroos/`).
+2. `memroos restore <archive>` extracts with a typed `yes`
+   confirmation; refuses to clobber without it.
+3. `memroos rollback <commit>` checks out the prior commit and
+   re-runs `scripts/redeploy-from-ref.sh` so the host is on the
+   declared ref.
+4. `memroos secrets-rotate` rewrites `MEMROOS_JWT_SECRET`,
+   `MEMROOS_OPERATOR_API_KEY`, `MEMROOS_ONBOARDING_SECRET` in `.env`
+   (backed up to `.env.bak`), then restarts the memroos container.
+5. Each action logs the decision to `/var/log/memroos/upgrade-decisions.log`
+   (the same log `scripts/update.sh` writes to).
+
+**Out of scope (v8.24 Phase 181):**
+- Encrypted / off-host backups (current snapshots are plaintext
+  tarballs on the same host).
+- Key-rotation ceremonies that span >1 host (orchestrate later).
+- Automatic scheduled snapshots (manual only for v8.24).
+
+### Phase 182 — Quick Performance Baseline (bench)
+
+**Goal:** A repeatable, low-overhead baseline the operator can run
+before/after any change to see if the change moved latency.
+**Depends on:** Phase 180, an installed stack.
+**Requirements:** OPSCLI-10
+
+**Success criteria:**
+1. `memroos bench` samples `/api/health` N times (default 10), reports
+   p50 + p95 in ms.
+2. The benchmark does not require extra dependencies (only stdlib).
+3. The benchmark is safe to run against a live install — single
+   `/api/health` GETs, no side effects.
+
+**Out of scope (v8.24 Phase 182):**
+- Multi-route benchmarks (a single `/api/health` is enough to detect
+  regressions; richer benchmarks are the v8.19 PERF-EVID work).
+- Sustained load testing (use Phase 175's operator-load-test.mjs).
+
+### Progress Table (v8.24 Operator Lifecycle Toolkit)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 180. Operator CLI Surface (bin/memroos) | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 181. Operator Recovery Suite | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 182. Quick Performance Baseline (bench) | 1/1 | Shipped on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+
+## v8.25 Self-Service Password Reset (operator request, 2026-07-23)
+
+**Goal:** Give the operator and end users a complete, working password-reset
+flow on the public host (memroos.epiloguecapital.com). The backend (request +
+confirm routes, password-reset tokens table, bcrypt hashing) is already on
+main; what's missing is the UI: a "Forgot password?" link on /login, a
+request form at /forgot-password, and a confirm form at /reset-password/[token].
+
+### Phase 183 — Password Reset UI
+
+**Goal:** Ship the three missing UI pages and wire them to the existing backend.
+**Depends on:** existing `/api/auth/password-reset` + `/api/auth/password-reset/confirm` routes.
+**Requirements:** PWRESET-01, PWRESET-02, PWRESET-03
+
+**Success criteria:**
+1. `/login` shows a "Forgot password?" link next to "Create an account".
+2. `/forgot-password` shows an email-only form. On submit it calls
+   `/api/auth/password-reset`. The response's `delivery` field is
+   handled in both modes:
+   - `delivery: "queued"` (email provider configured): show a generic
+     "check your inbox" message (no user-enumeration leak).
+   - `delivery: "manual"` (no email provider, dev/test mode): render the
+     returned `resetUrl` as a clickable "Continue reset →" link so the
+     operator can complete the flow without an email loop.
+3. `/reset-password/[token]` shows new-password + confirm fields, calls
+   `/api/auth/password-reset/confirm`, validates length and match, and
+   redirects to /login on success.
+4. All three pages use the existing NOC theme tokens (NOC.ink, NOC.paper,
+   NOC.fog, NOC.warnBg, NOC.successBg) so they match the rest of the
+   auth surface visually.
+5. No new dependencies, no new environment variables, no DB migration
+   needed (the `password_reset_tokens` table already exists).
+
+**Out of scope (v8.25 Phase 183):**
+- Email template design (delivery: "queued" just sends the link; the
+  template is the operator's choice and can be a follow-on).
+- Rate-limiting the request endpoint by IP or per-email (the backend
+  already returns 200 either way; per-IP rate limiting can be added at
+  the reverse proxy in front of memroos).
+- "I forgot my email" recovery flow (out of scope for v8.25).
+- Admin "force password reset" on a user (use the operator API to
+  insert a password_reset_tokens row directly if needed; see the v8.24
+  operator docs).
+
+### Progress Table (v8.25 Self-Service Password Reset)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 183. Password Reset UI | 1/1 | Shipped on `main` | 2026-07-23 |
+
+### What we considered and DEFERRED
+
+- **`memroos profile` (continuous resource profile per service).**
+  Useful but redundant with existing NOC dashboard + Phase 175 PERF-EVID
+  work. Queued for a follow-on.
+- **`memroos trace` (distributed trace view).** Memroos already has
+  Phase 8 audit chain + Phase 156 path-scoped disk diagnostics; a
+  trace view would compete with those. Queued.
+- **`memroos upgrade` (major version migration with manifest).** We
+  have `update.sh` for in-place upgrades. Major-version migration
+  across historical phases (e.g. v7 → v8 schema bridges) is a separate
+  problem with a separate owner. Queued for a future operator-survey
+  spike.
+- **`memroos repair` (auto-repair).** v8.24 only auto-applies safe
+  fixes (file modes, prune). True auto-repair across the full battery
+  would require an LLM-assisted operator, which is out of scope for
+  the operator-Lifecycle toolkit.
