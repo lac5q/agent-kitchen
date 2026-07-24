@@ -3098,3 +3098,58 @@ request form at /forgot-password, and a confirm form at /reset-password/[token].
   fixes (file modes, prune). True auto-repair across the full battery
   would require an LLM-assisted operator, which is out of scope for
   the operator-Lifecycle toolkit.
+
+## v8.26 Auth UX Consistency (operator request, 2026-07-23)
+
+**Goal:** Make all authentication + onboarding screens (login, register, invite,
+forgot-password, reset-password, plus the public marketing site if it has an
+auth surface) use the same design language as the rest of the memroos app.
+Right now the auth surface is split: `apps/memroos/src/app/login/page.tsx`,
+`apps/memroos/src/app/forgot-password/page.tsx`, and
+`apps/memroos/src/app/reset-password/[token]/page.tsx` use the NOC theme
+tokens (NOC.ink, NOC.paper, NOC.fog, NOC.warnBg, NOC.successBg, NOC.terraDeep)
+from `@/lib/noc-theme` — the same tokens the main dashboard uses. But
+`apps/memroos/src/app/register/page.tsx` and
+`apps/memroos/src/app/invite/[token]/page.tsx` use the older
+`bg-zinc-950` / `rounded-2xl` / `border-zinc` design that predates the
+NOC operator console. Both are correct individually; the operator is
+seeing visual drift when moving from dashboard to /register to
+/invite to /login.
+
+### Phase 184 — Auth Surface Migration to NOC Theme
+
+**Goal:** Re-skin the two remaining auth pages to match the rest of the auth
+surface + the main dashboard.
+**Depends on:** the existing `@/lib/noc-theme` export and the patterns
+established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
+**Requirements:** AUTHUX-01, AUTHUX-02
+
+**Success criteria:**
+1. `apps/memroos/src/app/register/page.tsx` is re-skinned to use the
+   `NOC` token palette (bg: `NOC.fog` or `NOC.paper`; text: `NOC.ink` and
+   `NOC.muted`; button: `NOC.ink` with `NOC.paper` text; error: `NOC.warnBg`
+   + `NOC.terraDeep`). Form structure, copy, and validation behavior
+   unchanged.
+2. `apps/memroos/src/app/invite/[token]/page.tsx` is re-skinned to match
+   the same palette. The "accept your invitation" framing stays.
+3. Both pages pass `apps/memroos/src/lib/auth/__tests__/route-auth.test.ts`
+   (existing) and render visually consistent with `/login` at a
+   baseline check: same card width, same input padding, same button
+   geometry, same error background.
+4. No new dependencies. No new env vars. The change is pure
+   styling (Tailwind class swaps + NOC token reads).
+
+**Out of scope (v8.26):**
+- The marketing site (apps/memroos/src/app/(marketing) or similar) — that
+  uses a separate design system tied to the public marketing surface
+  (paperclip, wix, etc.) and is intentionally distinct.
+- A full design-system refactor (a v9+ effort) — v8.26 is the
+  two-page-mismatch fix only.
+- Operator-side surface (NOC, Settings) — those already use NOC.
+- New auth flows (OAuth, passkeys, magic links) — separate work.
+
+### Progress Table (v8.26 Auth UX Consistency)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 184. Auth Surface Migration to NOC Theme | 0/1 | Planned (operator request 2026-07-23) | — |
