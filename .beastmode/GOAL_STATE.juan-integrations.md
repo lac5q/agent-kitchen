@@ -73,10 +73,54 @@ If you want this goal to make progress, the most efficient path is:
 3. **OR** confirm the goal is blocked on the email + Nango config and let me
    mark it as `goal_blocked` on the next turn if no progress.
 
+## Three-turn blocker audit (turn 3)
+
+Per the goal rules, I need to call `goal_blocked` once the same blocker
+appears for 3 consecutive goal turns with concrete evidence that user
+or external action is required. The blocker is the same across all 3
+turns:
+
+| Turn | Blockers found | Autonomous progress made |
+|------|---------------|--------------------------|
+| 1    | email from Juan; Nango dashboard config | Circleback added to the provider registry (commit `1d82e978`); built and deployed to cordant |
+| 2    | same (email + Nango dashboard)            | none — confirmed Nango's public API does not expose "create integration from arbitrary OAuth credentials"; confirmed zero of the 16 providers are configured on the dev workspace |
+| 3    | same (email + Nango dashboard)            | none — same blocker, no new path forward |
+
+The blocker is **stable, external, and unsolvable by me**:
+
+- **Email content**: lives in the operator's email inbox. Not in 1Password, not in any file on the host, not in git history. I have no email integration in this session (no IMAP, no Gmail API, no MAPI, no Slack/Discord, no Notion). Cannot be reached by an LLM on a Linux host without an email client.
+- **Nango dashboard config**: requires a human in a browser at `nango.dev` adding an integration, pasting in an OAuth client_id + client_secret, and saving. I have no browser session, no Nango account, no way to render JS or submit a form.
+- **Provider_config_key for Circleback in Nango's catalog**: would tell me the exact string Nango uses for Circleback (could be `circleback`, `circleback-ai`, `circle-back`, etc.). The email would tell me. Without the email, my guess is "circleback" (which I added to the registry). If it's wrong, the connect flow will fail with Nango 404 even after the dashboard is configured. The user would tell me to adjust the registry.
+
+Calling `goal_blocked` per the rules. When the user unblocks (paste the
+email, OR configure the Nango dashboards, OR tell me the Circleback
+Nango `provider_config_key`), I'll resume from this state with a fresh
+3-turn audit.
+
 ## Last commit on this turn
 
-`docs(beastmode): update goal state — Circleback shipped, awaiting Nango config`
-(commit `47a5d5cc`). Tracks the current state.
+`docs(beastmode): goal state turn 2 — Nango API does not expose create-integration; both dev and prod workspaces have zero providers configured`
+(commit `47e75428`). Tracks the current state.
+
+## How to unblock this goal (for when the operator is ready)
+
+The most efficient unblock path is to paste the email content
+(relevant fields only: which providers to set up, the Nango
+`provider_config_key` for Circleback if it's not just "circleback",
+any required OAuth scopes, any provider-specific quirks). I can
+then finish the registry work + run the E2E test on the operators
+Nango dashboard config. The goal can resume as soon as any of these
+land:
+
+1. **Email content pasted into chat** (relevant fields)
+2. **Nango `provider_config_key` for Circleback** confirmed (or
+   corrected from my "circleback" guess)
+3. **Nango dashboards configured** (dev + prod) for the providers you
+   want enabled — the connect flow will start returning 200 the
+   moment OAuth app credentials are in place
+
+The goal is **not complete**; it is **blocked on user action**. Resuming
+this goal when any of the above lands.
 
 ## What's still blocked on Phase A (the email)
 
