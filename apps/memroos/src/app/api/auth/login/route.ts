@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { verifyPassword } from '@/lib/auth/password';
+import { isHttpsRequest } from '@/lib/auth/secure-cookie';
 import { signAccessToken } from '@/lib/auth/jwt';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limit';
 import {
@@ -81,8 +82,7 @@ export async function POST(req: NextRequest) {
     user.id
   );
 
-  const isProd = process.env.NODE_ENV === 'production';
-  const secureFlag = isProd ? '; Secure' : '';
+  const secureFlag = isHttpsRequest(req) ? '; Secure' : '';
 
   const refreshCookie = `${REFRESH_TOKEN_COOKIE_NAME}=${rawToken}; HttpOnly; SameSite=Lax${secureFlag}; Path=/; Max-Age=${REFRESH_TOKEN_COOKIE_MAX_AGE_SECONDS}`;
   // CR-01 fix: set access token as HttpOnly so JS cannot read it (XSS protection)

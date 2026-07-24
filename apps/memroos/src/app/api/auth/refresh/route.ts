@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { signAccessToken } from '@/lib/auth/jwt';
+import { isHttpsRequest } from '@/lib/auth/secure-cookie';
 import { checkAuthRateLimit } from '@/lib/auth/rate-limit';
 import {
   ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS,
@@ -74,12 +75,11 @@ export async function POST(req: Request) {
 
   const accessToken = await signAccessToken(tokenRow.user_id, role);
 
-  const isProd = process.env.NODE_ENV === 'production';
   const refreshCookie = [
     `${REFRESH_TOKEN_COOKIE_NAME}=${newRaw}`,
     'HttpOnly',
     'SameSite=Lax',
-    isProd ? 'Secure' : '',
+    isHttpsRequest(req) ? 'Secure' : '',
     'Path=/',
     `Max-Age=${REFRESH_TOKEN_COOKIE_MAX_AGE_SECONDS}`,
   ]
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}`,
     'HttpOnly',
     'SameSite=Lax',
-    isProd ? 'Secure' : '',
+    isHttpsRequest(req) ? 'Secure' : '',
     'Path=/',
     `Max-Age=${ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS}`,
   ]
