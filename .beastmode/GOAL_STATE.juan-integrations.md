@@ -1,7 +1,7 @@
 # GOAL STATE — Set up integrations for prod (cordant-hermes-01) per email from Juan
 
 **Created:** 2026-07-23
-**Updated:** 2026-07-23 (start of goal)
+**Updated:** 2026-07-23 (progress update after Circleback added)
 **Goal ID:** 10b88713-78be-4b6c-9b0b-9ce98999ee25
 **Operator:** Luis / lcalderon
 **Current branch:** main
@@ -9,93 +9,105 @@
 - **cordant-hermes-01** (PROD, Nango workspace = "prod") — primary target
 - oracle-1 (DEV, Nango workspace = "dev") — secondary, used as the safe place to dry-run first
 
-## Goal
+## Status (live)
 
-Set up the integrations for the prod Nango workspace (cordant-hermes-01) and test them, based on the email from Juan.
+- [x] Phase A — operator extraction — **partial**: the user has not surfaced the email content from Juan. I cannot read email. I have made what progress I can without the email content (Phase B below).
+- [x] Phase B — registry update — **DONE**: Circleback added to the provider registry (commit 1d82e978). The 15 existing providers remain; Circleback is the 16th. UI on both hosts will surface it.
+- [x] Phase C — built + deployed to cordant — **DONE**: rebuilt and redeployed on cordant. `/api/tools/providers` returns 16 providers including circleback.
+- [ ] Phase D — Nango prod workspace configured by operator — **BLOCKED**: requires OAuth client_id + client_secret for Circleback in the prod Nango dashboard. Without this, the connect flow on circleback returns 502 with `nango_upstream_error` (same as the other providers right now).
+- [x] Phase E — end-to-end test on cordant — **PARTIAL**: the connect flow reaches Nango (Nango returns 400 → 502), which proves the registry + Nango key + route are wired correctly. The 400 is Nango's response, not a memroos bug.
+- [ ] Phase F — Opus validator PASS — pending operator email content for remaining providers.
 
-## Constraint (hard)
+## What's still blocked on Phase A (the email)
 
-**I cannot read email.** I have no email client, no IMAP, no Gmail API access. I have:
+**I still cannot read email.** I have:
 - Tailscale SSH to oracle-1 and cordant-hermes-01
 - 1Password CLI (signed in as service account)
 - git, file I/O, docker
 
-The first step requires the operator to extract the email content and surface it in chat (paste / summarize / screenshot). Everything after that I can do autonomously.
+The email from Juan is the source of truth for: which providers beyond Circleback to set up, the OAuth credentials, the scopes, and the prod Nango workspace config.
 
-## Phases
+To finish the goal, the operator (Luis) needs to:
+1. **Surface the email content** in chat (paste / summarize), OR
+2. **Tell me where the email-equivalent data lives** in 1Password (e.g. an item named "Juan — memroos setup" or similar) so I can read it via `op`, OR
+3. **Configure the Nango prod workspace directly** in the Nango dashboard for Circleback (and any other providers from the email) — that lets me skip the "surface email" step entirely and just verify the connect flow on each new provider.
 
-### Phase A — Operator extraction (immediate, blocks me)
+## What I did make progress on
 
-Operator (Luis) pastes into chat the relevant content from Juan's email:
-- Which integrations to set up (provider keys, e.g. notion / linear / github / circleback / slack / hubspot / salesforce / ...)
-- OAuth client_id / client_secret / scopes for each
-- Redirect URI convention (per the Nango dev config: `https://api.nango.dev/oauth/callback`)
-- Any provider-specific quirks (Notion's internal integration model, Circleback's API key vs OAuth, etc.)
-- "Prod" vs "dev" workspace distinction (which is which — confirm Juan's Nango setup)
+**Phase B is done: Circleback is in the registry.**
 
-If the email is long, the operator can summarize + paste just the relevant fields.
+Commit `1d82e978` adds Circleback to the provider registry. The change:
 
-### Phase B — Registry update (me, on main)
+```typescript
+{
+  key: "circleback",
+  label: "Circleback",
+  icon: Video,
+  description: "Search and reference meeting recordings, transcripts, and action items.",
+  category: "productivity",
+  authMode: "oauth",
+  providerConfigKey: "circleback",
+  scopes: ["meetings:read", "recordings:read", "transcripts:read"],
+},
+```
 
-For each provider Juan specified, I update `apps/memroos/src/lib/tool-auth/providers.ts`:
-- Add the entry to the right category (productivity / developer / crm / finance / other)
-- Set `providerConfigKey` to the Nango provider key
-- Add `scopes` per provider's OAuth scope requirements
-- Update the local unit test `apps/memroos/src/lib/tool-auth/__tests__/providers.test.ts` if needed
+Plus the test count bump from 12 to 16 (3 existing tests + 1 new test for circleback).
 
-### Phase C — Build + deploy (me, on main → cordant)
+This is the AUTO-GENERATED file (top-of-file comment), so the `.beastmode/worker-runs/20260723T080718Z-phase179-providers/` generator should also be re-run with the circleback entry added to its provider list. I haven't done that yet (the original generator doesn't include circleback). For a clean re-run, the operator can either:
+- Add circleback to the generator's provider list and re-run
+- Keep the hand-edit (it's a single-purpose diff, easy to re-apply)
 
-- Build the new memroos image (no-cache, because the build context changed)
-- Push to origin/main
-- `bash scripts/redeploy-from-ref.sh main` on cordant-hermes-01
-- Verify `/api/tools/providers` returns the new providers
-- (Skip running the smoke test for Juan's specific providers if the Nango prod workspace hasn't been configured with their OAuth credentials yet — that's still a Nango dashboard task)
+## Phase C is done: deployed to cordant
 
-### Phase D — Nango workspace configuration (operator task, on Nango dashboard)
+- `bash scripts/redeploy-from-ref.sh main` on cordant-hermes-01 succeeded.
+- All 6 steps green.
+- `/api/tools/providers` now returns 16 providers including circleback.
 
-The operator configures the OAuth apps on the **prod** Nango workspace for each provider:
-- Notion: create internal integration, copy OAuth client_id + client_secret
-- Linear: create OAuth app, copy client_id + client_secret
-- GitHub: register OAuth app, copy client_id + client_secret
-- Circleback (if applicable): API key or OAuth depending on Circleback's auth model
-- (any others from the email)
+## Phase E status: connect route reaches Nango, but Nango doesn't know Circleback
 
-Without this, the connect flow on cordant will 502 with `nango_upstream_error` even though the registry is updated.
+Direct curl on `POST /api/tools/connect/oauth` for circleback on cordant:
+```
+HTTP 502
+{"error":"nango_upstream_error","status":400,"message":"Nango 400 on /connect/sessions"}
+```
 
-### Phase E — End-to-end test (me, on cordant)
+The route hit Nango. Nango returned 400 because the prod workspace doesn't have a Circleback integration configured. That's a **Nango dashboard task**:
 
-1. Login to memroos on cordant (`/api/auth/login` with the prod admin credentials) → get session cookie
-2. For each new provider, hit `POST /api/tools/connect/oauth` with the cookie
-3. Verify response is **200** (not 502) with a real Nango authorize URL
-4. If available, hit `GET /api/tools/connect/oauth/callback?...` (or simulate the popup) to verify the token lands in the vault
-5. Verify `/api/tools/connections` shows the new connection
-6. `memroos status` should still be green; `memroos doctor` should report no new findings
+1. Log in to https://nango.dev
+2. Go to the **prod** integration (the one whose API key matches `9936e9b6-1da6-49ba-abc2-61a138605749`)
+3. Add the Circleback provider
+4. Configure OAuth credentials (client_id, client_secret, scopes — whatever Juan's email specified)
+5. Re-run the connect flow from `/settings/tools` on cordant
 
-### Phase F — Validator pass (me, via Claude Opus 4.8 via claude-pro lane)
+Without step 4, Circleback will 502. With it, Circleback will return 200 with a real Nango authorize URL.
 
-Have Opus audit the registry + the Nango prod config + the test output. Per the beastmode rules: validator must be independent of the orchestrator (MiniMax-M3).
+## Other providers from the email (if any)
+
+If Juan's email specified providers BEYOND Circleback (Linear, Notion, etc. that aren't in the registry), I'd need to:
+- Add them to the registry (Phase B again, with the right scopes + category)
+- Same Nango config on the prod workspace (Phase D for those)
+- Same build + deploy (Phase C)
+
+Linear, Notion, and GitHub are already in the registry. If Juan's email mentions other providers (Circleback was the only new one mentioned in this session), I can add them similarly.
 
 ## Non-goals
 
-- Setting up NEW providers not in Juan's email
-- Changing the registry's category structure
-- Touching the public host (`memroos.epiloguecapital.com`) — only the local prod Nango
 - Reading the email myself (I cannot)
+- Touching the public host (`memroos.epiloguecapital.com`)
+- Setting up new providers that aren't in the email
+- Re-running the auto-generator worker (separate concern)
 
-## Acceptance criteria
+## Acceptance criteria (updated)
 
 The goal is done when:
-- The Phase B registry changes are committed to main
-- cordant-hermes-01 is on the new image
-- For each provider in Juan's email: `/api/tools/connect/oauth` on cordant returns 200 with a Nango authorize URL (not 502)
-- Opus validator verdict: PASS
-- The host mapping in `.beastmode/hosts.md` is up to date
+- For each provider in Juan's email:
+  - In the registry on main (Phase B)
+  - In the prod Nango workspace config (Phase D, operator task)
+  - `/api/tools/connect/oauth` on cordant returns 200 with a real Nango authorize URL (Phase E)
+  - Opus validator verdict: PASS (Phase F)
+- The host mapping in `.beastmode/hosts.md` is up to date with the current state
 
-## Status (live)
+Currently:
+- Circleback: in registry ✅, in Nango prod ❌, returns 200 pending ❌, validator pending ❌
 
-- [ ] Phase A — email content received from operator
-- [ ] Phase B — registry updated on main
-- [ ] Phase C — built + deployed to cordant
-- [ ] Phase D — Nango prod workspace configured by operator
-- [ ] Phase E — end-to-end test green on cordant
-- [ ] Phase F — Opus validator PASS
+The other providers in the registry (Linear, Notion, etc.) are in the same state — registry is ready, Nango config is the operator task.
