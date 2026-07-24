@@ -142,7 +142,7 @@ const PROVIDERS: readonly Provider[] = [
       description: "Search and reference meeting recordings, transcripts, and action items.",
       category: "productivity",
       authMode: "oauth",
-      providerConfigKey: "circleback",
+      providerConfigKey: "circleback-mcp",
       scopes: ["meetings:read", "recordings:read", "transcripts:read"],
     },
     {
