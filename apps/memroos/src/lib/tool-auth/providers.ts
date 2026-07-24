@@ -14,6 +14,7 @@ import {
   Calendar,
   Database,
   Box,
+  Video,
   LayoutGrid,
   Layers,
   Code2,
@@ -134,7 +135,17 @@ const PROVIDERS: readonly Provider[] = [
       "files:read",
     ],
   },
-  {
+    {
+      key: "circleback",
+      label: "Circleback",
+      icon: Video,
+      description: "Search and reference meeting recordings, transcripts, and action items.",
+      category: "productivity",
+      authMode: "oauth",
+      providerConfigKey: "circleback",
+      scopes: ["meetings:read", "recordings:read", "transcripts:read"],
+    },
+    {
     key: "notion",
     label: "Notion",
     icon: FileText,
