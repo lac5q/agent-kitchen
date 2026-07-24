@@ -18,6 +18,66 @@
 - [x] Phase E — end-to-end test on cordant — **PARTIAL**: the connect flow reaches Nango (Nango returns 400 → 502), which proves the registry + Nango key + route are wired correctly. The 400 is Nango's response, not a memroos bug.
 - [ ] Phase F — Opus validator PASS — pending operator email content for remaining providers.
 
+## Turn 2 update (this turn)
+
+- Confirmed the Nango API does not expose a "create arbitrary integration" endpoint
+  for any provider — the dashboard is the only path for configuring OAuth apps.
+  The public Nango cloud API at `api.nango.dev` is for connection management, not
+  integration provisioning.
+- Probed all 15 existing providers on the **dev** Nango workspace via the
+  `POST /v1/connect/sessions` endpoint. **All 15 return HTTP 400** — meaning none
+  of them are configured on the dev workspace either. The dev workspace is in
+  the same state as the prod one: no OAuth app credentials configured.
+- This is consistent with what I already knew: the Nango dashboards
+  (both dev and prod) have not been configured for any provider yet.
+  All 15 existing + the new circleback are in the same boat.
+
+## Blast radius of the blocker
+
+Even if the operator (Luis) configures the Nango dashboards right now for all
+providers, the Nango `provider_config_key` (the integration name) is a stable
+Nango-level identifier that lives in the Nango dashboard. The Circleback entry
+I added to the memroos registry uses `providerConfigKey: "circleback"`. If
+Nango's actual integration for Circleback is named differently in their catalog
+(e.g. "circleback.ai", "circleback-meetings", etc.), the memroos route would
+connect to a Nango integration that doesn't exist, and the user would need to
+adjust the registry to match the Nango provider name. **The email from Juan is
+the source of truth for the exact name.**
+
+## What I'm still blocked on
+
+Same as turn 1: operator action. The Circleback registry entry is shipped, but:
+1. The Nango dashboards need OAuth app credentials configured
+2. The email content from Juan (which I cannot read) would tell me the
+   exact Nango provider_config_key for Circleback, plus which other providers
+   to set up
+
+If the email content is genuinely inaccessible to the user, the goal is
+effectively blocked on operator action. Per the goal rules, I need to wait for
+3 consecutive goal turns with the same blocker before I can call `goal_blocked`.
+This is turn 2. One more turn with no progress would qualify.
+
+## Recommendation for the operator
+
+If you want this goal to make progress, the most efficient path is:
+
+1. **Configure Nango dashboards directly** (bypasses the email): log in to
+   https://nango.dev → dev workspace + prod workspace → add the providers
+   you want. The Nango provider_config_key for Circleback is visible in the
+   dashboard URL or integration list. Tell me the key(s) and I'll update the
+   registry if needed.
+
+2. **OR** paste the email content (relevant fields only) and I'll finish
+   the registry work + test plan.
+
+3. **OR** confirm the goal is blocked on the email + Nango config and let me
+   mark it as `goal_blocked` on the next turn if no progress.
+
+## Last commit on this turn
+
+`docs(beastmode): update goal state — Circleback shipped, awaiting Nango config`
+(commit `47a5d5cc`). Tracks the current state.
+
 ## What's still blocked on Phase A (the email)
 
 **I still cannot read email.** I have:
