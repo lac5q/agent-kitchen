@@ -1,9 +1,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import nodeFs from "node:fs";
+import nodeOs from "node:os";
+import nodePath from "node:path";
 
 import {
   parseRouteLocalAuthPatterns,
   validateRouteAuthBoundary,
+  patternToGlob,
+  walkRouteFiles,
+  enumerateExactFilePaths,
+  ROUTE_FILE_RE,
 } from "./check-route-auth-boundary.mjs";
 
 const PROXY_FIXTURE = `
@@ -200,5 +207,192 @@ describe("route auth boundary checker", () => {
     });
 
     assert.equal(result.ok, true);
+  });
+
+  // Regression: the validator (Opus 4.8) caught that the original
+  // `isPrefix` regex matched `\/\/` (one backslash + one slash + end)
+  // instead of `\/\/` (the regex-source form for a prefix pattern:
+  // escaped slash + closing delimiter slash). All three prefix patterns
+  // in the proxy were silently classified as `exact`, which skipped
+  // the directory-tree walk. This test pins the shape detection.
+  it("classifies the three regex shapes correctly (regression for the isPrefix bug)", () => {
+    const cases = [
+      ["/^\\/api\\/onboarding\\/script$/", "exact"],
+      ["/^\\/api\\/gsd(?:\\/|$)/", "prefix"],
+      ["/^\\/api\\/skillforge\\//", "prefix"],
+      ["/^\\/api\\/chatgpt\\/actions\\//", "prefix"],
+      ["/^\\/api\\/memory\\/evals\\//", "prefix"],
+    ];
+    for (const [pattern, expected] of cases) {
+      const glob = patternToGlob(pattern);
+      assert.equal(glob.mode, expected, `pattern ${pattern} expected mode=${expected}, got ${glob.mode}`);
+    }
+  });
+
+  it("catches a fixture under a bare-slash prefix pattern (regression for the isPrefix bug)", () => {
+    // A new route under /api/skillforge/ — bare-slash prefix pattern.
+    // Before the fix, the gate passed this silently because the
+    // isPrefix regex misclassified bare-slash prefixes as "exact".
+    const result = validateRouteAuthBoundary({
+      proxyText: PROXY_FIXTURE,
+      fileTexts: goodFiles(),
+      filesystemRouteFiles: ["apps/memroos/src/app/api/skillforge/p187-bug-repro/route.ts"],
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => error.includes("skillforge/p187-bug-repro/route.ts")));
+  });
+
+  // Regression: the validator (Opus 4.8) caught that the original
+  // walk only matched `route.ts`, leaving `route.tsx`/`route.js`/
+  // `route.jsx`/`route.mjs`/`route.mts` under an exempt prefix
+  // silently allowed. The fix widens the regex; this test pins it.
+  it("catches a fixture under a .tsx route handler (regression for the route.ts-only walk)", () => {
+    const result = validateRouteAuthBoundary({
+      proxyText: PROXY_FIXTURE,
+      fileTexts: goodFiles(),
+      filesystemRouteFiles: ["apps/memroos/src/app/api/gsd/p187-tsx/route.tsx"],
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => error.includes("route.tsx")));
+  });
+
+  // Direct unit tests for the walk + route-file regex. These exercise
+  // the actual code path (walkRouteFiles over a real temp tree) rather
+  // than the higher-level validateRouteAuthBoundary. The validator
+  // (Opus 4.8) caught that the array-injection tests above could pass
+  // even with bugs in the walk — these direct tests cannot.
+  describe("walkRouteFiles + ROUTE_FILE_RE (direct unit coverage)", () => {
+    function makeTree(files) {
+      const root = nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), "authgate-walk-"));
+      try {
+        for (const [rel, content] of Object.entries(files)) {
+          const abs = nodePath.join(root, rel);
+          nodeFs.mkdirSync(nodePath.dirname(abs), { recursive: true });
+          nodeFs.writeFileSync(abs, content);
+        }
+      } catch (e) {
+        nodeFs.rmSync(root, { recursive: true, force: true });
+        throw e;
+      }
+      return { root, cleanup: () => nodeFs.rmSync(root, { recursive: true, force: true }) };
+    }
+
+    it("walks every App Router extension, not just route.ts", () => {
+      const t = makeTree({
+        "a/route.ts": "",
+        "b/route.tsx": "",
+        "c/route.js": "",
+        "d/route.jsx": "",
+        "e/route.mjs": "",
+        "f/route.mts": "",
+        "g/not-route.ts": "",
+        "h/route.ts.bak": "",
+      });
+      try {
+        const matches = walkRouteFiles(t.root).map((p) => nodePath.relative(t.root, p)).sort();
+        assert.deepEqual(matches, [
+          "a/route.ts",
+          "b/route.tsx",
+          "c/route.js",
+          "d/route.jsx",
+          "e/route.mjs",
+          "f/route.mts",
+        ]);
+      } finally {
+        t.cleanup();
+      }
+    });
+
+    it("enumerates every existing route file under an exact path", () => {
+      const t = makeTree({
+        "route.ts": "",
+        "route.tsx": "",
+        "not-route.txt": "",
+      });
+      try {
+        const matches = enumerateExactFilePaths(t.root).map((p) => nodePath.relative(t.root, p)).sort();
+        assert.deepEqual(matches, ["route.ts", "route.tsx"]);
+      } finally {
+        t.cleanup();
+      }
+    });
+
+    it("returns an empty array for a missing exact path", () => {
+      assert.deepEqual(enumerateExactFilePaths("/nonexistent/abcdef/12345"), []);
+    });
+  });
+
+  // Live enumeration against a real temp tree. The validator (Opus 4.8)
+  // caught that the array-injection tests above could pass with a wrong
+  // patternToGlob root — the path.relative resolution would just produce
+  // garbage paths and the coverage-set check would silently accept them.
+  // This test builds a sandbox repo rooted at a temp directory, points
+  // the validation at it via customRepoRoot/customApiRoot, and exercises
+  // the full walk → cover → marker pipeline against real on-disk files.
+  describe("live enumeration against a real temp tree", () => {
+    function makeSandbox(files) {
+      const repoRoot = nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), "authgate-sandbox-"));
+      const apiRoot = nodePath.join(repoRoot, "apps/memroos/src/app/api");
+      nodeFs.mkdirSync(apiRoot, { recursive: true });
+      for (const [rel, content] of Object.entries(files)) {
+        const abs = nodePath.join(apiRoot, rel);
+        nodeFs.mkdirSync(nodePath.dirname(abs), { recursive: true });
+        nodeFs.writeFileSync(abs, content);
+      }
+      return {
+        repoRoot,
+        apiRoot,
+        cleanup: () => nodeFs.rmSync(repoRoot, { recursive: true, force: true }),
+      };
+    }
+
+    // Drive the live enumeration path (filesystemRouteFiles: true) against
+    // a temp tree. The fixture file is unknown to the production
+    // coverage list, so the test asserts the gate flags it as a missing
+    // coverage entry. This is the "the walk actually found the file"
+    // proof that the array-injection tests above could not provide.
+    it("a sandboxed /api/gsd/foo/route.ts is flagged when absent from coverage", () => {
+      const t = makeSandbox({
+        "gsd/foo/route.ts": "export async function POST() { return new Response('ok'); }",
+      });
+      try {
+        const result = validateRouteAuthBoundary({
+          proxyText: PROXY_FIXTURE,
+          fileTexts: goodFiles(),
+          filesystemRouteFiles: true,
+          repoRoot: t.repoRoot,
+          apiRoot: t.apiRoot,
+        });
+        assert.ok(
+          result.errors.some((e) => e.includes("gsd/foo/route.ts")),
+          `expected an error for gsd/foo/route.ts; got: ${JSON.stringify(result.errors)}`,
+        );
+      } finally {
+        t.cleanup();
+      }
+    });
+
+    it("a sandboxed /api/skillforge/foo/route.ts is flagged (bare-slash prefix)", () => {
+      const t = makeSandbox({
+        "skillforge/foo/route.ts": "export async function POST() { return new Response('ok'); }",
+      });
+      try {
+        const result = validateRouteAuthBoundary({
+          proxyText: PROXY_FIXTURE,
+          fileTexts: goodFiles(),
+          filesystemRouteFiles: true,
+          repoRoot: t.repoRoot,
+          apiRoot: t.apiRoot,
+        });
+        assert.ok(
+          result.errors.some((e) => e.includes("skillforge/foo/route.ts")),
+          `expected an error for skillforge/foo/route.ts; got: ${JSON.stringify(result.errors)}`,
+        );
+      } finally {
+        t.cleanup();
+      }
+    });
   });
 });

@@ -2,21 +2,27 @@
 // Auth-boundary gate — Phase 187 (AUTHGATE-01..03).
 //
 // Pre-Phase 187: this script held a hardcoded `routeLocalAuthCoverage` array
-// listing every file the check should verify. Adding a new route.ts under an
-// exempt prefix (e.g. /api/gsd/anything) was silently allowed because the
-// file was never enumerated. Architecture review F3 (2026-07-24) flagged this
-// as the most likely CI-evading failure mode.
+// listing every file the check should verify. Adding a new route handler
+// (route.ts / route.tsx / route.js / route.jsx / route.mjs / route.mts)
+// under an exempt prefix (e.g. /api/gsd/anything) was silently allowed
+// because the file was never enumerated. Architecture review F3
+// (2026-07-24) flagged this as the most likely CI-evading failure mode.
 //
 // Phase 187 rewrites the gate to enumerate the filesystem for every prefix
 // pattern in proxy.ts:ROUTE_LOCAL_AUTH_API_ROUTES and require an auth marker
-// on every matching route.ts. Public-metadata exceptions move to an explicit
-// allowlist with a stated reason. A namespace-closure check asserts no
-// route.ts exists outside both the proxy's default-deny path and the
-// coverage list.
+// on every matching route handler. Public-metadata exceptions move to an
+// explicit allowlist with a stated reason.
 //
 // The script preserves the original bidirectional pattern ↔ coverage check
 // so that removing a pattern from proxy.ts or removing a coverage entry
 // still fails CI.
+//
+// Note: a "namespace-closure" check (asserting that no route handler
+// exists outside both the proxy's default-deny path and the coverage
+// list) is NOT implemented in this phase. The proxy's default-deny
+// catch-all already covers every non-exempt route, so adding a route
+// under a new prefix fails closed at runtime. The filesystem walk
+// implemented here only covers the exempt prefixes.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -207,7 +213,7 @@ export function parseRouteLocalAuthPatterns(proxyText) {
     .filter((pattern) => pattern?.startsWith("/"));
 }
 
-function patternToGlob(pattern) {
+export function patternToGlob(pattern, customApiRoot) {
   // pattern is the regex-literal source as a JS string, e.g.
   //   "/^\\/api\\/gsd(?:\\/|$)/"
   // which materializes to:
@@ -220,7 +226,11 @@ function patternToGlob(pattern) {
   //             (matches the exact file AND the directory tree)
   const isExact = /\$\/$/.test(pattern);
   const isPrefixOrExact = /\)\/$/.test(pattern);
-  const isPrefix = /\\\/$/.test(pattern);
+  // The regex source for a prefix pattern ends with the escaped slash
+  // followed by the closing delimiter, e.g. /^\/api\/foo\//  — that
+  // materializes to a string whose last two characters are `\/` and `/`.
+  // The check below matches `\//` (two chars) at the end of the string.
+  const isPrefix = /\\\/\/$/.test(pattern);
 
   // Step 1: strip the regex literal delimiters (leading / and trailing /).
   let body = pattern.replace(/^\/|\/$/g, "");
@@ -236,14 +246,26 @@ function patternToGlob(pattern) {
     body = body.slice(0, -1);
   }
   // Step 5: body is now "/api/foo" — translate to filesystem path under
-  // apiRoot.
+  // apiRoot (or the caller's custom apiRoot in test mode).
   const apiPath = body.replace(/^\/api\//, "");
-  const root = path.join(apiRoot, apiPath);
+  const root = path.join(customApiRoot ?? apiRoot, apiPath);
 
   if (isExact && !isPrefixOrExact) {
     return { mode: "exact", root, filePath: path.join(root, "route.ts") };
   }
   return { mode: isPrefix || isPrefixOrExact ? "prefix" : "exact", root };
+}
+
+export function enumerateExactFilePaths(root) {
+  // For an exact-match pattern, the route file may be any of the
+  // Next.js App Router route handler extensions. Return every existing
+  // match so the caller can verify marker coverage on the file that
+  // actually exists on disk.
+  if (!fs.existsSync(root)) return [];
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && ROUTE_FILE_RE.test(entry.name))
+    .map((entry) => path.join(root, entry.name));
 }
 
 function hasAnyMarker(text, markers) {
@@ -255,7 +277,16 @@ function hasAnyMarker(text, markers) {
 // Walk the filesystem from the glob path and return every route.ts file.
 // Uses a simple recursive walk — no third-party glob dependency.
 
-function walkRouteFiles(absRoot) {
+// Next.js App Router files other than `route.ts`: `route.tsx`, `route.js`,
+// `route.jsx`, `route.mjs`, `route.mts`. Each is its own route handler
+// and must carry an auth marker when under an exempt prefix. The
+// validator (Opus 4.8) caught the original implementation as a real
+// CI-evading hole: a `route.tsx` under an exempt prefix was silently
+// allowed. See scripts/check-route-auth-boundary.test.mjs
+// "catches a fixture under .tsx" for the regression test.
+export const ROUTE_FILE_RE = /^route\.(ts|tsx|js|jsx|mjs|mts)$/;
+
+export function walkRouteFiles(absRoot) {
   const results = [];
   if (!fs.existsSync(absRoot)) return results;
   const entries = fs.readdirSync(absRoot, { withFileTypes: true });
@@ -263,7 +294,7 @@ function walkRouteFiles(absRoot) {
     const abs = path.join(absRoot, entry.name);
     if (entry.isDirectory()) {
       results.push(...walkRouteFiles(abs));
-    } else if (entry.isFile() && entry.name === "route.ts") {
+    } else if (entry.isFile() && ROUTE_FILE_RE.test(entry.name)) {
       results.push(abs);
     }
   }
@@ -272,22 +303,13 @@ function walkRouteFiles(absRoot) {
 
 // ---------- Validation ----------
 
-function checkFiles(files, errors, label) {
-  for (const [relativePath, markers] of files) {
-    const absolutePath = path.join(repoRoot, relativePath);
-    if (!fs.existsSync(absolutePath)) {
-      errors.push(`${label} file is missing: ${relativePath}`);
-      continue;
-    }
-    const text = fs.readFileSync(absolutePath, "utf8");
-    if (!hasAnyMarker(text, markers)) {
-      errors.push(`${label} file lacks handler-local auth marker (${markers.join(" or ")}): ${relativePath}`);
-    }
-  }
-}
-
-export function validateRouteAuthBoundary({ proxyText, fileTexts, filesystemRouteFiles }) {
+export function validateRouteAuthBoundary({ proxyText, fileTexts, filesystemRouteFiles, repoRoot: customRepoRoot, apiRoot: customApiRoot }) {
   const errors = [];
+  // When the caller passes a custom repoRoot/apiRoot (test mode), all
+  // path resolution and filesystem enumeration root from those. The
+  // default is the production layout computed from the script's location.
+  const effectiveRepoRoot = customRepoRoot ?? repoRoot;
+  const effectiveApiRoot = customApiRoot ?? apiRoot;
   const routeLocalPatterns = parseRouteLocalAuthPatterns(proxyText);
   const coveredPatterns = new Set(routeLocalAuthCoverage.map((entry) => entry.pattern));
 
@@ -308,7 +330,7 @@ export function validateRouteAuthBoundary({ proxyText, fileTexts, filesystemRout
   // metadata allowlist for that pattern.
   //
   // `filesystemRouteFiles` controls enumeration:
-  //   - true: walk the real filesystem rooted at `repoRoot`/apps/memroos/src/app/api
+  //   - true: walk the real filesystem rooted at `effectiveApiRoot`
   //   - array of relative paths: use the array as the enumeration (test mode)
   //   - false/undefined: skip enumeration (legacy mode, used by some unit tests)
   if (filesystemRouteFiles) {
@@ -329,15 +351,18 @@ export function validateRouteAuthBoundary({ proxyText, fileTexts, filesystemRout
       : (() => {
           const set = new Set();
           for (const pattern of routeLocalPatterns) {
-            const glob = patternToGlob(pattern);
+            const glob = patternToGlob(pattern, effectiveApiRoot);
             if (glob.mode === "exact") {
-              if (fs.existsSync(glob.filePath)) {
-                set.add(path.relative(repoRoot, glob.filePath));
+              // The exact path may have any App Router extension
+              // (route.ts, route.tsx, route.js, ...). Enumerate all
+              // existing files so non-`.ts` handlers are also covered.
+              for (const abs of enumerateExactFilePaths(glob.root)) {
+                set.add(path.relative(effectiveRepoRoot, abs));
               }
               continue;
             }
             for (const abs of walkRouteFiles(glob.root)) {
-              set.add(path.relative(repoRoot, abs));
+              set.add(path.relative(effectiveRepoRoot, abs));
             }
           }
           return [...set];
