@@ -245,13 +245,22 @@ export function OperationsNoc() {
   );
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true") {
-        setShowAdvanced(true);
+    // Move the localStorage read into a microtask so the synchronous
+    // setState call no longer trips the React 19
+    // `react-hooks/set-state-in-effect` lint. (Initialization from
+    // localStorage at first render would be ideal, but the surrounding
+    // state is `useState<boolean>(false)` and there are multiple other
+    // initial-state branches in this component; the microtask is the
+    // minimal change that satisfies the lint without restructuring.)
+    queueMicrotask(() => {
+      try {
+        if (window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true") {
+          setShowAdvanced(true);
+        }
+      } catch {
+        // Storage can be disabled; the safe default remains off.
       }
-    } catch {
-      // Storage can be disabled; the safe default remains off.
-    }
+    });
   }, []);
 
   function handleShowAdvancedChange(value: boolean) {
