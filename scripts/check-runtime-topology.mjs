@@ -324,12 +324,14 @@ function readRuntimeArtifacts(root = repoRoot, profileName) {
     // the `\n<unit>\n` substring needle always matches a unit header
     // (we look for `Description=` + `ExecStart=` as the real anchors).
     let systemdUnitText = "";
+    let serviceFileCount = 0;
     try {
       const entries = fs.readdirSync(systemdDir);
       for (const entry of entries.sort()) {
         if (!entry.endsWith(".service")) continue;
         const text = fs.readFileSync(path.join(systemdDir, entry), "utf8");
         systemdUnitText += `\n# === ${entry} ===\n${text}\n`;
+        serviceFileCount += 1;
       }
     } catch (err) {
       // Phase 186 / TOPOPROD-02: production profile REQUIRES the
@@ -337,6 +339,14 @@ function readRuntimeArtifacts(root = repoRoot, profileName) {
       // implementation swallowed this and silently passed.
       throw new Error(
         `production profile requires ${systemdDir} to exist with at least one *.service file (${err.message})`
+      );
+    }
+    // The directory exists but has zero *.service files. This is the
+    // validator's "Empty deploy/ tree" failure mode — fail closed
+    // because a production profile with no service files is a hole.
+    if (serviceFileCount === 0) {
+      throw new Error(
+        `production profile requires at least one *.service file under ${systemdDir} (found 0)`
       );
     }
     let cloudflareTunnelText = "";

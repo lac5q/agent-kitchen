@@ -179,24 +179,33 @@ describe("runtime topology checker", () => {
     // The production profile requires deploy/oracle-1/systemd/*.service
     // files. A missing deploy tree must fail closed (the validator
     // returned `ok:true, checked:[]` before Phase 186's REVISE fix).
+    // We pass a systemdUnitText that has only ONE unit file, with a
+    // WRONG ExecStart (doesn't bring up the named docker-compose
+    // service). The validator must report this as a hard error.
+    // Pass the manifest (not the profile) so `isV2` is true and the
+    // production branch runs.
     const manifest = loadRuntimeTopologyManifest();
+    const wrongExec = `
+# === memroos-app.service ===
+[Unit]
+Description=MemroOS memroos-app (oracle-1 production)
+
+[Service]
+ExecStart=/usr/bin/docker compose -f /home/opc/memroos/docker-compose.yml up wrong-service
+`;
     const result = validateRuntimeTopologyArtifacts(
-      resolveProfile(manifest, "production"),
+      manifest,
       {
-        systemdUnitText: "",
+        systemdUnitText: wrongExec,
         cloudflareTunnelText: "",
         production: true,
       },
       "production",
     );
-    // The validator's "ok" path is reserved for the "artifacts are
-    // present and consistent" case. With an empty systemdUnitText,
-    // the gate must report at least one error (missing unit files
-    // for the required services).
     assert.equal(result.ok, false);
     assert.ok(
       result.errors.length > 0,
-      `expected errors for missing deploy/ tree, got: ${JSON.stringify(result.errors)}`,
+      `expected errors for wrong ExecStart, got: ${JSON.stringify(result.errors)}`,
     );
   });
 
@@ -205,7 +214,6 @@ describe("runtime topology checker", () => {
     // matching `up <dockerComposeService>`. A unit that brings up
     // the wrong service must fail.
     const manifest = loadRuntimeTopologyManifest();
-    const prod = resolveProfile(manifest, "production");
     // Build a stub systemdUnitText that has a unit file for memroos-app
     // but the ExecStart brings up the wrong service.
     const wrongExec = `
@@ -217,7 +225,7 @@ Description=MemroOS memroos-app (oracle-1 production)
 ExecStart=/usr/bin/docker compose -f /home/opc/memroos/docker-compose.yml up wrong-service
 `;
     const result = validateRuntimeTopologyArtifacts(
-      prod,
+      manifest,
       {
         systemdUnitText: wrongExec,
         cloudflareTunnelText: "",
