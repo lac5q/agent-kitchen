@@ -18,7 +18,8 @@
 #      AES-256-GCM vault key, the Ed25519 skill-signing key, and the
 #      named Docker volumes persist across the run.
 #   4. On any failure, the pre-update snapshot is auto-restored and the
-#      stack is restarted. The script exits non-zero only if restore fails.
+#      stack is restarted. Exit codes: 0 = success, 3 = rolled back (update
+#      did not apply), 4 = restore failed (manual intervention required).
 #
 # Difference vs scripts/redeploy-from-ref.sh:
 #   - update.sh first does `npm install` to refresh language-level
@@ -129,12 +130,24 @@ echo
 # Capture pre-update DB state for the post-flight comparison
 PRE_USERS_COUNT=0
 PRE_FIRST_USER_HASH=""
+PRE_DB_QUERY_OK=0
 if [ "$HAD_DB" = "1" ] && command -v sqlite3 >/dev/null 2>&1; then
-  PRE_USERS_COUNT="$(sqlite3 "$PROTECTED_DB" 'SELECT COUNT(*) FROM users' 2>/dev/null || echo 0)"
-  PRE_FIRST_USER_HASH="$(sqlite3 "$PROTECTED_DB" 'SELECT password_hash FROM users ORDER BY created_at LIMIT 1' 2>/dev/null || echo "")"
-  blue "preflight: users in DB = $PRE_USERS_COUNT"
-  if [ -n "$PRE_FIRST_USER_HASH" ]; then
-    blue "preflight: first user password_hash present (len=${#PRE_FIRST_USER_HASH})"
+  # Under set -euo pipefail, an assignment whose command substitution exits
+  # non-zero aborts the script. We need to tolerate sqlite3 failure (locked
+  # DB, schema-missing, corrupt file) so the loud-fail branch below is
+  # reachable. || _raw_count="" keeps the assignment succeeding.
+  _raw_count=$(sqlite3 "$PROTECTED_DB" 'SELECT COUNT(*) FROM users' 2>/dev/null) || _raw_count=""
+  if [ -n "$_raw_count" ] && [ "$_raw_count" -eq "$_raw_count" ] 2>/dev/null; then
+    PRE_USERS_COUNT="$_raw_count"
+    PRE_FIRST_USER_HASH="$(sqlite3 "$PROTECTED_DB" 'SELECT password_hash FROM users ORDER BY created_at LIMIT 1' 2>/dev/null || echo "")"
+    PRE_DB_QUERY_OK=1
+    blue "preflight: users in DB = $PRE_USERS_COUNT"
+    if [ -n "$PRE_FIRST_USER_HASH" ]; then
+      blue "preflight: first user password_hash present (len=${#PRE_FIRST_USER_HASH})"
+    fi
+  else
+    red "preflight: DB query failed — result was not a valid integer (raw='$_raw_count')"
+    red "preflight: user-preservation check will be skipped; passwords: NOT VERIFIED"
   fi
 elif [ "$HAD_DB" = "1" ]; then
   # sqlite3 not on host — query via the running container (works on docker
@@ -254,7 +267,11 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "  would refresh:    npm ci"
   echo "  would migrate:    node scripts/run-migrations.mjs"
   echo "  would restart:    docker compose -f $COMPOSE_FILE up -d"
-  echo "  would verify:     users count >= $PRE_USERS_COUNT, password_hash present, .env intact"
+  if [ "${PRE_DB_QUERY_OK:-0}" = "1" ]; then
+    echo "  would verify:     users count >= $PRE_USERS_COUNT, password_hash present, .env intact"
+  else
+    echo "  would verify:     users count >= $PRE_USERS_COUNT (NOT VERIFIED — preflight DB query failed), .env intact"
+  fi
   echo "  would log to:     $DECISION_LOG"
   echo "  snapshot at:      ${SNAPSHOT_PATH:-(none)}"
   exit 0
@@ -402,7 +419,9 @@ if [ "$PRE_USERS_COUNT" -gt 0 ]; then
   if [ -n "$POST_FIRST_USER_HASH" ]; then
     if [ -n "$PRE_FIRST_USER_HASH" ] && [ "$POST_FIRST_USER_HASH" != "$PRE_FIRST_USER_HASH" ]; then
       yellow "  ! password_hash for first user changed (pre len=${#PRE_FIRST_USER_HASH}, post len=${#POST_FIRST_USER_HASH})"
-      yellow "    if you did not reset a password during this run, treat as a rollback trigger"
+      yellow "    treating as a rollback trigger"
+      VERIFY_OK=0
+      ROLLBACK_REASON="password_hash changed"
     else
       green "  password_hash preserved (len=${#POST_FIRST_USER_HASH})"
     fi
@@ -426,10 +445,14 @@ if [ "$VERIFY_OK" != "1" ]; then
   if [ -z "$SNAPSHOT_PATH" ] || [ ! -f "$SNAPSHOT_PATH" ]; then
     red "  no snapshot available; cannot rollback"
     red "  manual intervention required"
-    exit 2
+    exit 4
   fi
   blue "  restoring from $SNAPSHOT_PATH"
-  (cd / && tar -xzf "$SNAPSHOT_PATH")
+  if ! (cd / && tar -xzf "$SNAPSHOT_PATH"); then
+    red "  RESTORE FAILED — manual intervention required"
+    docker compose -f "$COMPOSE_FILE" up -d || true
+    exit 4
+  fi
   green "  snapshot restored"
   blue "  restarting services"
   docker compose -f "$COMPOSE_FILE" up -d
@@ -454,6 +477,10 @@ echo "  compose:    $COMPOSE_FILE"
 echo "  decision:   $DECISION_LOG"
 echo "  snapshot:   ${SNAPSHOT_PATH:-(none)}"
 echo "  users:      $PRE_USERS_COUNT unchanged"
-echo "  passwords:  preserved"
+if [ "${PRE_DB_QUERY_OK:-0}" = "1" ]; then
+  echo "  passwords:  preserved"
+else
+  echo "  passwords:  NOT VERIFIED"
+fi
 echo "  configs:    preserved"
 echo "================================================================"
