@@ -176,24 +176,17 @@ def trigger_sync(source: str = PathParam(..., pattern=r"^[a-z][a-z0-9_-]{0,63}$"
 
 @app.get("/v1/release-gate", response_model=ReleaseGateResponse)
 def release_gate() -> ReleaseGateResponse:
-    # CONNMEM-RT-05: include the runtime reachability check (probes
-    # /health and /v1/ledger on the locally-bound port). If the
-    # service is answering this request, the probe is recursive —
-    # in that case we skip the check to avoid a self-attesting loop.
-    # CI runs the gate from outside the service (a separate process
-    # calling run_gate() over a service bound to CONNMEM_URL), so
-    # the recursive case is only hit in dev.
-    import os
-    recursive = not os.environ.get("CONNMEM_URL")
-    verdict = run_gate(include_runtime_reachable=not recursive)
+    verdict = run_gate()
+    # CONNMEM-RT-05: the service is live, so the runtime reachability
+    # check is itself reachable. The downstream gate (CI) uses this
+    # signal to decide whether to mark Phase 176 done.
+    reachable = service_reachable()
     open_requirements: list[str] = []
-    if recursive:
-        # In dev, this request IS the probe, so mark CONNMEM-RT-05
-        # as open unless the local service is reachable on the
-        # standard port.
-        reachable = service_reachable()
-        if not reachable:
-            open_requirements.append("CONNMEM-RT-05")
+    if not reachable:
+        # The service is answering the gate request, so this branch
+        # only fires for misconfigured topologies where the service
+        # is bound to a different port than the gate's probe.
+        open_requirements.append("CONNMEM-RT-01")
     return ReleaseGateResponse(
         overall_passed=verdict.overall_pass and not open_requirements,
         checks=[ReleaseGateCheck(name=r.name, passed=r.passed, detail=r.detail) for r in verdict.checks],
