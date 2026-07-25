@@ -26,6 +26,7 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { method: "POST", pattern: /^\\/api\\/recall\\/ingest$/ },
   { method: "POST", pattern: /^\\/api\\/skills\\/report$/ },
   { pattern: /^\\/api\\/skillforge\\// },
+  { method: "POST", pattern: /^\\/api\\/operations\\/telemetry$/ },
   { method: "POST", pattern: /^\\/api\\/tool-attention\\/record$/ },
 ];
 `;
@@ -76,6 +77,7 @@ function goodFiles() {
     ["apps/memroos/src/app/api/skillforge/trigger/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/skillforge/cycle/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/skillforge/proposals/route.ts", AUTH_MARKERS.operator],
+    ["apps/memroos/src/app/api/operations/telemetry/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/tool-attention/record/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/onboarding/invite/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/evals/config/route.ts", AUTH_MARKERS.operator],
@@ -118,6 +120,7 @@ describe("route auth boundary checker", () => {
       "/^\\/api\\/recall\\/ingest$/",
       "/^\\/api\\/skills\\/report$/",
       "/^\\/api\\/skillforge\\//",
+      "/^\\/api\\/operations\\/telemetry$/",
       "/^\\/api\\/tool-attention\\/record$/",
     ]);
   });
@@ -152,5 +155,50 @@ describe("route auth boundary checker", () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.errors.some((error) => error.includes("memory/add/route.ts")));
+  });
+
+  // AUTHGATE-03: a regression test proves the gate fails on a fixture
+  // route under an exempt prefix with no auth marker. The fixture is
+  // enumerated through the filesystemRouteFiles interface so the
+  // coverage-set stricture can detect it.
+  it("fails when a new route is added under an exempt prefix without a coverage entry", () => {
+    const enumerated = [
+      "apps/memroos/src/app/api/gsd/p187-fixture/route.ts",
+    ];
+    const result = validateRouteAuthBoundary({
+      proxyText: PROXY_FIXTURE,
+      fileTexts: goodFiles(),
+      filesystemRouteFiles: enumerated,
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => error.includes("p187-fixture/route.ts")));
+  });
+
+  it("fails when an enumerated route lacks a handler-local auth marker", () => {
+    // The route is in coverage but its file text has no auth marker.
+    const files = goodFiles();
+    files.set("apps/memroos/src/app/api/gsd/goal/route.ts", "export async function POST() { return new Response('ok'); }");
+    const result = validateRouteAuthBoundary({
+      proxyText: PROXY_FIXTURE,
+      fileTexts: files,
+      filesystemRouteFiles: ["apps/memroos/src/app/api/gsd/goal/route.ts"],
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => error.includes("gsd/goal/route.ts")));
+  });
+
+  it("accepts a public-metadata allowlist entry without an auth marker", () => {
+    // The chatgpt/actions/openapi route is allowlisted; the stricture
+    // for missing markers should skip it.
+    const files = goodFiles();
+    const result = validateRouteAuthBoundary({
+      proxyText: PROXY_FIXTURE,
+      fileTexts: files,
+      filesystemRouteFiles: ["apps/memroos/src/app/api/chatgpt/actions/openapi/route.ts"],
+    });
+
+    assert.equal(result.ok, true);
   });
 });
