@@ -9,7 +9,7 @@ from unittest import TestCase, main
 
 from services.connmem.canonical_envelope import CanonicalRecord
 from services.connmem.governance import PurgePlanner, RetentionPolicy
-from services.connmem.operator import (
+from services.connmem.operator_surface import (
     Alert,
     ConnectorStatus,
     CountsByStatus,
