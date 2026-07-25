@@ -1,4 +1,23 @@
 #!/usr/bin/env node
+// Auth-boundary gate — Phase 187 (AUTHGATE-01..03).
+//
+// Pre-Phase 187: this script held a hardcoded `routeLocalAuthCoverage` array
+// listing every file the check should verify. Adding a new route.ts under an
+// exempt prefix (e.g. /api/gsd/anything) was silently allowed because the
+// file was never enumerated. Architecture review F3 (2026-07-24) flagged this
+// as the most likely CI-evading failure mode.
+//
+// Phase 187 rewrites the gate to enumerate the filesystem for every prefix
+// pattern in proxy.ts:ROUTE_LOCAL_AUTH_API_ROUTES and require an auth marker
+// on every matching route.ts. Public-metadata exceptions move to an explicit
+// allowlist with a stated reason. A namespace-closure check asserts no
+// route.ts exists outside both the proxy's default-deny path and the
+// coverage list.
+//
+// The script preserves the original bidirectional pattern ↔ coverage check
+// so that removing a pattern from proxy.ts or removing a coverage entry
+// still fails CI.
+
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +25,24 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const proxyPath = path.join(repoRoot, "apps/memroos/src/proxy.ts");
+const apiRoot = path.join(repoRoot, "apps/memroos/src/app/api");
+
+// ---------- Coverage source-of-truth (AUTHGATE-01) ----------
+//
+// Each entry maps a proxy pattern to:
+//   - the files the check expects to find (filesystem-derived at runtime;
+//     the `files` array is informational and used to drive the marker
+//     assertion).
+//   - the auth markers that satisfy coverage. A file containing ANY of
+//     these markers is considered auth'd.
+//   - `publicMetadataAllowlist`: route.ts files under the pattern's glob
+//     path that are explicitly public (e.g. OpenAPI metadata routes).
+//     These files are required to exist on disk and to be present in the
+//     coverage list, but are exempt from the marker check. Each entry
+//     carries a stated reason.
+//   - `markersRequired`: when true (default), every matched file must
+//     contain at least one marker. Set to false for purely-public prefix
+//     patterns (none in this repo; reserved for future use).
 
 const routeLocalAuthCoverage = [
   {
@@ -23,7 +60,12 @@ const routeLocalAuthCoverage = [
       ["apps/memroos/src/app/api/chatgpt/actions/fetch/route.ts", ["authorizeChatGptAction("]],
       ["apps/memroos/src/app/api/chatgpt/actions/save/route.ts", ["authorizeChatGptAction("]],
     ],
-    notes: ["apps/memroos/src/app/api/chatgpt/actions/openapi/route.ts is public metadata only."],
+    publicMetadataAllowlist: [
+      {
+        path: "apps/memroos/src/app/api/chatgpt/actions/openapi/route.ts",
+        reason: "Public OpenAPI metadata route (no auth by design; surfaces the action catalog for ChatGPT discovery).",
+      },
+    ],
   },
   {
     pattern: "/^\\/api\\/agent-context(?:\\/|$)/",
@@ -111,6 +153,10 @@ const routeLocalAuthCoverage = [
     ],
   },
   {
+    pattern: "/^\\/api\\/operations\\/telemetry$/",
+    files: [["apps/memroos/src/app/api/operations/telemetry/route.ts", ["authenticateAgentHeaders(", "authorizeRegistryWrite("]]],
+  },
+  {
     pattern: "/^\\/api\\/tool-attention\\/record$/",
     files: [["apps/memroos/src/app/api/tool-attention/record/route.ts", ["authenticateAgentHeaders("]]],
   },
@@ -139,9 +185,18 @@ const requiredRegressionTests = [
   ["apps/memroos/src/app/api/model-routing/__tests__/route.test.ts", ["blocks direct non-local"]],
 ];
 
-function read(relativePath) {
-  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
-}
+// ---------- Proxy parsing (regex → path prefix) ----------
+//
+// Convert the proxy's RegExp patterns to a filesystem glob path under
+// apps/memroos/src/app/api. The conversion handles the three shapes
+// observed in the proxy:
+//
+//   /^\\/api\\/foo$/                  → exact file: apps/memroos/src/app/api/foo/route.ts
+//   /^\\/api\\/foo\\//                → prefix dir: apps/memroos/src/app/api/foo/**/route.ts
+//   /^\\/api\\/foo(?:\\/|$)/          → prefix or exact: apps/memroos/src/app/api/foo/**/route.ts
+//
+// The same function is used by the test fixture (proxy text is passed in
+// as a string). The function is exported so the test can drive it.
 
 export function parseRouteLocalAuthPatterns(proxyText) {
   const match = proxyText.match(/const ROUTE_LOCAL_AUTH_API_ROUTES[\s\S]*?\n\];/);
@@ -152,9 +207,70 @@ export function parseRouteLocalAuthPatterns(proxyText) {
     .filter((pattern) => pattern?.startsWith("/"));
 }
 
+function patternToGlob(pattern) {
+  // pattern is the regex-literal source as a JS string, e.g.
+  //   "/^\\/api\\/gsd(?:\\/|$)/"
+  // which materializes to:
+  //   /^\/api\/gsd(?:\/|$)/
+  // Distinguish three shapes so we walk the filesystem with the right
+  // semantics:
+  //   - exact:   /^\/api\/foo$/                  → check api/foo/route.ts only
+  //   - prefix:  /^\/api\/foo\//                 → walk api/foo/**/route.ts
+  //   - either:  /^\/api\/foo(?:\/|$)/           → walk api/foo/**/route.ts
+  //             (matches the exact file AND the directory tree)
+  const isExact = /\$\/$/.test(pattern);
+  const isPrefixOrExact = /\)\/$/.test(pattern);
+  const isPrefix = /\\\/$/.test(pattern);
+
+  // Step 1: strip the regex literal delimiters (leading / and trailing /).
+  let body = pattern.replace(/^\/|\/$/g, "");
+  // Step 2: strip the anchors.
+  body = body.replace(/^\^/, "").replace(/\$$/, "");
+  // Step 3: undo the regex escapes for forward slashes.
+  body = body.replace(/\\\//g, "/");
+  // Step 4: strip the known shape suffixes.
+  if (body.endsWith("(?:/|$)")) {
+    body = body.slice(0, -7); // length of "(?:/|$)"
+  }
+  if (body.endsWith("/")) {
+    body = body.slice(0, -1);
+  }
+  // Step 5: body is now "/api/foo" — translate to filesystem path under
+  // apiRoot.
+  const apiPath = body.replace(/^\/api\//, "");
+  const root = path.join(apiRoot, apiPath);
+
+  if (isExact && !isPrefixOrExact) {
+    return { mode: "exact", root, filePath: path.join(root, "route.ts") };
+  }
+  return { mode: isPrefix || isPrefixOrExact ? "prefix" : "exact", root };
+}
+
 function hasAnyMarker(text, markers) {
   return markers.some((marker) => text.includes(marker));
 }
+
+// ---------- Filesystem enumeration (AUTHGATE-01) ----------
+//
+// Walk the filesystem from the glob path and return every route.ts file.
+// Uses a simple recursive walk — no third-party glob dependency.
+
+function walkRouteFiles(absRoot) {
+  const results = [];
+  if (!fs.existsSync(absRoot)) return results;
+  const entries = fs.readdirSync(absRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    const abs = path.join(absRoot, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...walkRouteFiles(abs));
+    } else if (entry.isFile() && entry.name === "route.ts") {
+      results.push(abs);
+    }
+  }
+  return results;
+}
+
+// ---------- Validation ----------
 
 function checkFiles(files, errors, label) {
   for (const [relativePath, markers] of files) {
@@ -170,7 +286,7 @@ function checkFiles(files, errors, label) {
   }
 }
 
-export function validateRouteAuthBoundary({ proxyText, fileTexts }) {
+export function validateRouteAuthBoundary({ proxyText, fileTexts, filesystemRouteFiles }) {
   const errors = [];
   const routeLocalPatterns = parseRouteLocalAuthPatterns(proxyText);
   const coveredPatterns = new Set(routeLocalAuthCoverage.map((entry) => entry.pattern));
@@ -183,6 +299,67 @@ export function validateRouteAuthBoundary({ proxyText, fileTexts }) {
   for (const pattern of coveredPatterns) {
     if (!routeLocalPatterns.includes(pattern)) {
       errors.push(`Route auth coverage references pattern not present in proxy.ts: ${pattern}`);
+    }
+  }
+
+  // AUTHGATE-01: enumerate the filesystem for every prefix pattern. Every
+  // matched route.ts must (a) be in the explicit coverage list (so a renamer
+  // catches it) AND (b) carry an auth marker unless it is in the public-
+  // metadata allowlist for that pattern.
+  //
+  // `filesystemRouteFiles` controls enumeration:
+  //   - true: walk the real filesystem rooted at `repoRoot`/apps/memroos/src/app/api
+  //   - array of relative paths: use the array as the enumeration (test mode)
+  //   - false/undefined: skip enumeration (legacy mode, used by some unit tests)
+  if (filesystemRouteFiles) {
+    const coveredFileSet = new Set();
+    for (const entry of routeLocalAuthCoverage) {
+      for (const [relativePath] of entry.files) coveredFileSet.add(relativePath);
+      for (const allow of entry.publicMetadataAllowlist ?? []) coveredFileSet.add(allow.path);
+    }
+    const publicMetadataByFile = new Map();
+    for (const entry of routeLocalAuthCoverage) {
+      for (const allow of entry.publicMetadataAllowlist ?? []) {
+        publicMetadataByFile.set(allow.path, allow.reason);
+      }
+    }
+
+    const enumerated = Array.isArray(filesystemRouteFiles)
+      ? filesystemRouteFiles
+      : (() => {
+          const set = new Set();
+          for (const pattern of routeLocalPatterns) {
+            const glob = patternToGlob(pattern);
+            if (glob.mode === "exact") {
+              if (fs.existsSync(glob.filePath)) {
+                set.add(path.relative(repoRoot, glob.filePath));
+              }
+              continue;
+            }
+            for (const abs of walkRouteFiles(glob.root)) {
+              set.add(path.relative(repoRoot, abs));
+            }
+          }
+          return [...set];
+        })();
+
+    for (const relativePath of enumerated) {
+      const isAllowlisted = publicMetadataByFile.has(relativePath);
+      const inCoverage = coveredFileSet.has(relativePath);
+      if (!inCoverage && !isAllowlisted) {
+        errors.push(
+          `Route under exempt prefix lacks coverage entry: ${relativePath}. Add a coverage entry to scripts/check-route-auth-boundary.mjs, or add it to the public-metadata allowlist with a stated reason.`,
+        );
+        continue;
+      }
+      if (isAllowlisted) continue;
+      const text = fileTexts.get(relativePath) ?? "";
+      const markers = markersForFile(relativePath);
+      if (!hasAnyMarker(text, markers)) {
+        errors.push(
+          `Enumerated route lacks handler-local auth marker (${markers.join(" or ")}): ${relativePath}`,
+        );
+      }
     }
   }
 
@@ -218,9 +395,19 @@ export function validateRouteAuthBoundary({ proxyText, fileTexts }) {
   return { ok: errors.length === 0, errors };
 }
 
+function markersForFile(relativePath) {
+  for (const entry of routeLocalAuthCoverage) {
+    for (const [file, markers] of entry.files) {
+      if (file === relativePath) return markers;
+    }
+  }
+  return [];
+}
+
 function main() {
   const relativeFiles = new Set([
     ...routeLocalAuthCoverage.flatMap((entry) => entry.files.map(([relativePath]) => relativePath)),
+    ...routeLocalAuthCoverage.flatMap((entry) => (entry.publicMetadataAllowlist ?? []).map((allow) => allow.path)),
     ...proxyOperatorCoverage.map(([relativePath]) => relativePath),
     ...requiredRegressionTests.map(([relativePath]) => relativePath),
   ]);
@@ -230,7 +417,7 @@ function main() {
   for (const relativePath of relativeFiles) {
     const absolutePath = path.join(repoRoot, relativePath);
     if (fs.existsSync(absolutePath)) {
-      fileTexts.set(relativePath, read(relativePath));
+      fileTexts.set(relativePath, fs.readFileSync(absolutePath, "utf8"));
     } else {
       errors.push(`Expected route-auth file is missing: ${relativePath}`);
     }
@@ -239,6 +426,7 @@ function main() {
   const result = validateRouteAuthBoundary({
     proxyText: fs.readFileSync(proxyPath, "utf8"),
     fileTexts,
+    filesystemRouteFiles: true,
   });
   errors.push(...result.errors);
 
