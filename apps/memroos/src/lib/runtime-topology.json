@@ -1,203 +1,443 @@
 {
-  "version": 1,
-  "profile": "local-dev",
-  "services": [
-    {
-      "id": "memroos-app",
-      "displayName": "MemRoOS Next.js app",
-      "dockerComposeService": "memroos",
-      "required": true,
-      "dependsOn": [
-        "mem0-memory",
-        "orchestration-service"
-      ],
-      "ports": [
-        {
-          "id": "docker-public-http",
-          "env": "MEMROOS_PORT",
-          "defaultPort": 3000,
-          "containerPort": 3000,
-          "requiredIn": [
-            "docker-compose"
-          ]
-        },
-        {
-          "id": "local-next-http",
-          "env": "NEXTJS_PORT",
-          "defaultPort": 3002,
-          "requiredIn": [
-            "manual-script"
-          ]
-        },
-        {
-          "id": "launchd-next-http",
-          "env": "PORT",
-          "defaultPort": 3002,
-          "requiredIn": [
-            "launchd"
-          ]
-        }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/api/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
+  "version": 2,
+  "defaultProfile": "local-dev",
+  "profiles": {
+    "local-dev": {
+      "description": "Local self-host stack (Docker compose / launchd / start.sh). All services run on one host.",
+      "supervision": [
         "docker-compose",
         "launchd",
         "manual-script"
       ],
-      "env": [
-        "MEMROOS_PUBLIC_BASE_URL",
-        "MEMROOS_OPERATOR_API_KEY",
-        "SQLITE_DB_PATH"
-      ]
-    },
-    {
-      "id": "mem0-memory",
-      "displayName": "Local mem0 memory service",
-      "dockerComposeService": "mem0",
-      "required": true,
-      "ports": [
+      "services": [
         {
-          "id": "mem0-http",
-          "env": "MEM0_PORT",
-          "defaultPort": 3201,
-          "containerPort": 3201,
-          "requiredIn": [
-            "docker-compose"
+          "id": "memroos-app",
+          "displayName": "MemRoOS Next.js app",
+          "dockerComposeService": "memroos",
+          "required": true,
+          "dependsOn": [
+            "mem0-memory",
+            "orchestration-service"
+          ],
+          "ports": [
+            {
+              "id": "docker-public-http",
+              "env": "MEMROOS_PORT",
+              "defaultPort": 3000,
+              "containerPort": 3000,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            },
+            {
+              "id": "local-next-http",
+              "env": "NEXTJS_PORT",
+              "defaultPort": 3002,
+              "requiredIn": [
+                "manual-script"
+              ]
+            },
+            {
+              "id": "launchd-next-http",
+              "env": "PORT",
+              "defaultPort": 3002,
+              "requiredIn": [
+                "launchd"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/api/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "launchd",
+            "manual-script"
+          ],
+          "env": [
+            "MEMROOS_PUBLIC_BASE_URL",
+            "MEMROOS_OPERATOR_API_KEY",
+            "SQLITE_DB_PATH"
           ]
-        }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
-        "docker-compose",
-        "external"
-      ],
-      "env": [
-        "MEM0_URL"
-      ]
-    },
-    {
-      "id": "orchestration-service",
-      "displayName": "Agent orchestration service",
-      "dockerComposeService": "orchestration",
-      "required": false,
-      "ports": [
+        },
         {
-          "id": "orchestration-http",
-          "env": "ORCHESTRATION_PORT",
-          "defaultPort": 3210,
-          "containerPort": 3210,
-          "requiredIn": [
-            "docker-compose"
+          "id": "mem0-memory",
+          "displayName": "Local mem0 memory service",
+          "dockerComposeService": "mem0",
+          "required": true,
+          "ports": [
+            {
+              "id": "mem0-http",
+              "env": "MEM0_PORT",
+              "defaultPort": 3201,
+              "containerPort": 3201,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "external"
+          ],
+          "env": [
+            "MEM0_URL"
           ]
-        }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
-        "docker-compose",
-        "external"
-      ],
-      "env": [
-        "ORCHESTRATION_SERVICE_URL"
-      ]
-    },
-    {
-      "id": "connmem",
-      "displayName": "Connected Work Memory runtime (Phase 185 / v8.27)",
-      "dockerComposeService": "connmem",
-      "required": false,
-      "dependsOn": [],
-      "ports": [
+        },
         {
-          "id": "connmem-http",
-          "env": "CONNMEM_PORT",
-          "defaultPort": 3290,
-          "containerPort": 3290,
-          "requiredIn": [
+          "id": "orchestration-service",
+          "displayName": "Agent orchestration service",
+          "dockerComposeService": "orchestration",
+          "required": false,
+          "ports": [
+            {
+              "id": "orchestration-http",
+              "env": "ORCHESTRATION_PORT",
+              "defaultPort": 3210,
+              "containerPort": 3210,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "external"
+          ],
+          "env": [
+            "ORCHESTRATION_SERVICE_URL"
+          ]
+        },
+        {
+          "id": "connmem",
+          "displayName": "Connected Work Memory runtime (Phase 185 / v8.27)",
+          "dockerComposeService": "connmem",
+          "required": false,
+          "dependsOn": [],
+          "ports": [
+            {
+              "id": "connmem-http",
+              "env": "CONNMEM_PORT",
+              "defaultPort": 3290,
+              "containerPort": 3290,
+              "requiredIn": [
+                "docker-compose",
+                "manual-script"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
             "docker-compose",
             "manual-script"
+          ],
+          "env": [
+            "CONNMEM_URL",
+            "CONNMEM_PORT",
+            "CONNMEM_LEDGER_PATH"
           ]
-        }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
-        "docker-compose",
-        "manual-script"
-      ],
-      "env": [
-        "CONNMEM_URL",
-        "CONNMEM_PORT",
-        "CONNMEM_LEDGER_PATH"
-      ]
-    },
-    {
-      "id": "voice-server",
-      "displayName": "Pipecat voice server",
-      "required": false,
-      "ports": [
+        },
         {
-          "id": "pipecat-http",
-          "env": "PIPECAT_PORT",
-          "defaultPort": 7860,
-          "requiredIn": [
+          "id": "voice-server",
+          "displayName": "Pipecat voice server",
+          "required": false,
+          "ports": [
+            {
+              "id": "pipecat-http",
+              "env": "PIPECAT_PORT",
+              "defaultPort": 7860,
+              "requiredIn": [
+                "manual-script"
+              ]
+            },
+            {
+              "id": "pipecat-health",
+              "env": "HEALTH_PORT",
+              "defaultPort": 7861,
+              "requiredIn": [
+                "manual-script"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
             "manual-script"
           ]
         },
         {
-          "id": "pipecat-health",
-          "env": "HEALTH_PORT",
-          "defaultPort": 7861,
-          "requiredIn": [
+          "id": "agentmemory-engine",
+          "displayName": "AgentMemory iii-engine backend",
+          "required": false,
+          "ports": [
+            {
+              "id": "agentmemory-http",
+              "env": "AGENTMEMORY_PORT",
+              "defaultPort": 3111,
+              "requiredIn": [
+                "manual-script"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
             "manual-script"
           ]
+        },
+        {
+          "id": "knowledge-mcp",
+          "displayName": "Knowledge MCP service (added in v8.27 / Phase 186)",
+          "dockerComposeService": "knowledge-mcp",
+          "required": false,
+          "ports": [
+            {
+              "id": "knowledge-mcp-http",
+              "env": "KNOWLEDGE_MCP_PORT",
+              "defaultPort": 3291,
+              "containerPort": 3291,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose"
+          ],
+          "env": [
+            "KNOWLEDGE_MCP_URL"
+          ]
+        },
+        {
+          "id": "healthcheck",
+          "displayName": "Operator healthcheck (systemd timer, oracle-1 or local)",
+          "required": false,
+          "ports": [],
+          "health": {
+            "type": "script",
+            "path": "/usr/local/bin/memroos-healthcheck.py",
+            "timeoutMs": 30000
+          },
+          "supervisionModes": [
+            "systemd"
+          ],
+          "env": [
+            "MEMROOS_HEALTHCHECK_ENABLED"
+          ]
         }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
-        "manual-script"
       ]
     },
-    {
-      "id": "agentmemory-engine",
-      "displayName": "AgentMemory iii-engine backend",
-      "required": false,
-      "ports": [
+    "production": {
+      "description": "Oracle-1 (ARM, aarch64) operator stack. Cloudflare Tunnel exposes the public surface; systemd unit files + compose stacks supervise the services. systemd unit files committed under deploy/oracle-1/systemd/ are the source of truth for the production supervision contract.",
+      "supervision": [
+        "systemd",
+        "cloudflare-tunnel",
+        "docker-compose"
+      ],
+      "host": "oracle-1",
+      "deployRoot": "deploy/oracle-1/",
+      "services": [
         {
-          "id": "agentmemory-http",
-          "env": "AGENTMEMORY_PORT",
-          "defaultPort": 3111,
-          "requiredIn": [
-            "manual-script"
+          "id": "memroos-app",
+          "displayName": "MemRoOS Next.js app (public)",
+          "required": true,
+          "dependsOn": [
+            "mem0-memory",
+            "orchestration-service",
+            "knowledge-mcp"
+          ],
+          "ports": [
+            {
+              "id": "production-public-https",
+              "env": "MEMROOS_PUBLIC_PORT",
+              "defaultPort": 443,
+              "requiredIn": [
+                "cloudflare-tunnel"
+              ]
+            }
+          ],
+          "health": {
+            "type": "https",
+            "path": "/api/health",
+            "timeoutMs": 5000
+          },
+          "supervisionModes": [
+            "systemd",
+            "cloudflare-tunnel"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/memroos-app.service",
+          "env": [
+            "MEMROOS_PUBLIC_BASE_URL",
+            "MEMROOS_OPERATOR_API_KEY",
+            "SQLITE_DB_PATH"
+          ],
+          "dockerComposeService": "memroos"
+        },
+        {
+          "id": "mem0-memory",
+          "displayName": "Local mem0 memory service",
+          "required": true,
+          "ports": [
+            {
+              "id": "mem0-http",
+              "env": "MEM0_PORT",
+              "defaultPort": 3201,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "systemd"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/mem0-memory.service",
+          "env": [
+            "MEM0_URL"
+          ],
+          "dockerComposeService": "mem0"
+        },
+        {
+          "id": "orchestration-service",
+          "displayName": "Agent orchestration service",
+          "required": true,
+          "ports": [
+            {
+              "id": "orchestration-http",
+              "env": "ORCHESTRATION_PORT",
+              "defaultPort": 3210,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "systemd"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/orchestration-service.service",
+          "env": [
+            "ORCHESTRATION_SERVICE_URL"
+          ],
+          "dockerComposeService": "orchestration"
+        },
+        {
+          "id": "connmem",
+          "displayName": "Connected Work Memory runtime (Phase 185 / v8.27)",
+          "required": true,
+          "ports": [
+            {
+              "id": "connmem-http",
+              "env": "CONNMEM_PORT",
+              "defaultPort": 3290,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "systemd"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/connmem.service",
+          "env": [
+            "CONNMEM_URL",
+            "CONNMEM_PORT",
+            "CONNMEM_LEDGER_PATH"
+          ],
+          "dockerComposeService": "connmem"
+        },
+        {
+          "id": "knowledge-mcp",
+          "displayName": "Knowledge MCP service",
+          "required": true,
+          "ports": [
+            {
+              "id": "knowledge-mcp-http",
+              "env": "KNOWLEDGE_MCP_PORT",
+              "defaultPort": 3291,
+              "requiredIn": [
+                "docker-compose"
+              ]
+            }
+          ],
+          "health": {
+            "type": "http",
+            "path": "/health",
+            "timeoutMs": 3000
+          },
+          "supervisionModes": [
+            "docker-compose",
+            "systemd"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/knowledge-mcp.service",
+          "env": [
+            "KNOWLEDGE_MCP_URL"
+          ],
+          "dockerComposeService": "knowledge-mcp"
+        },
+        {
+          "id": "healthcheck",
+          "displayName": "Operator healthcheck (systemd timer)",
+          "required": true,
+          "ports": [],
+          "health": {
+            "type": "script",
+            "path": "/usr/local/bin/memroos-healthcheck.py",
+            "timeoutMs": 30000
+          },
+          "supervisionModes": [
+            "systemd"
+          ],
+          "deployUnit": "deploy/oracle-1/systemd/memroos-healthcheck.service",
+          "env": [
+            "MEMROOS_HEALTHCHECK_ENABLED"
           ]
         }
-      ],
-      "health": {
-        "type": "http",
-        "path": "/health",
-        "timeoutMs": 3000
-      },
-      "supervisionModes": [
-        "manual-script"
       ]
     }
-  ]
+  },
+  "_comment": "Phase 186 (v8.28) added the production profile (oracle-1) alongside the existing local-dev. The schema is profile-keyed; scripts/readers select a profile. Knowledge-mcp and healthcheck are now declared in BOTH profiles (TOPOPROD-01). systemd unit files referenced in the production profile live under deploy/oracle-1/systemd/."
 }

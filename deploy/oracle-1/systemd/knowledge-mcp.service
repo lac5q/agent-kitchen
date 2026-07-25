@@ -1,0 +1,17 @@
+[Unit]
+Description=MemroOS knowledge-mcp (oracle-1 production)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=opc
+Group=opc
+ExecStart=/usr/local/bin/memroos-knowledge-mcp.sh
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
