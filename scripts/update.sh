@@ -66,6 +66,15 @@ MEMROOS_DIR="${MEMROOS_DIR:-$HOME/memroos}"
 COMPOSE_FILE="${MEMROOS_COMPOSE_FILE:-docker-compose.local.yml}"
 DECISION_LOG="${MEMROOS_DECISION_LOG:-/var/log/memroos/upgrade-decisions.log}"
 SNAPSHOT_DIR="${MEMROOS_SNAPSHOT_DIR:-/var/backups/memroos}"
+
+# Fall back to $HOME/.memroos for DECISION_LOG when the default
+# /var/log/memroos directory isn't writable (e.g. when running as a
+# non-root user like opc on oracle-1). This mirrors the SNAPSHOT_DIR
+# fallback below. Operators can still pin DECISION_LOG via the env var
+# to override this resolution.
+if ! (mkdir -p "$(dirname "$DECISION_LOG")" && : >> "$DECISION_LOG") 2>/dev/null; then
+  DECISION_LOG="$HOME/.memroos/upgrade-decisions.log"
+fi
 APP_URL="${MEMROOS_APP_URL:-http://localhost:3000}"
 
 # Vault key location (default matches bin/memroos)
