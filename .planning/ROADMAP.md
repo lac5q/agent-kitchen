@@ -66,9 +66,12 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 - ✅ **v8.18 NOC Metrics Rethink** — Phases 173-174 (code-complete on main: commits `07a419d0` "feat: add truthful NOC attention contract" and `720f7805` "feat: complete NOC operator layout"; 116/116 tests pass across NOC API + components; NOCUX-01..05 met)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
-- 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 LANDED on main via 2026-07-23 beastmode session** — 141/141 connmem tests pass, release gate green; live backfill proof still QUEUED behind `CONNMEM-LIVE-DEFER` ticket — requires real Linear + Circleback API credentials on cordant-hermes-01)
+- 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 library complete on main** via 2026-07-23 beastmode session — `services/connmem` (25 modules, 141 tests). **Not yet integrated:** no service entrypoint, no compose/topology entry, no kernel route, and the 141 tests do not run in CI (2026-07-24 architecture review, F1). Live backfill is blocked on runtime integration (v8.27 Phase 185), not only on the Linear + Circleback credentials tracked in `CONNMEM-LIVE-DEFER`)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
+- 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
+- 📋 **v8.28 Enforcement Surface Parity** — Phases 186-187 (added 2026-07-24 from architecture review F2/F3; TOPOPROD-01..04 production topology profile for oracle-1 + AUTHGATE-01..03 filesystem-driven route-auth gate; Phase 187 is hours of work and should land first if capacity is tight)
+- 📋 **v8.29 Structural Debt Paydown** — Phases 188-190 (added 2026-07-24 from architecture review F4/F5/F6; STORE-01..04 governed data-access chokepoint with shrinking better-sqlite3 allowlist, LIBNORM-01..03 lib/ boundary normalization, CLIENTSPLIT-01..02 api-client barrel split; incremental, no big-bang rewrites)
 
 ## Phases
 
@@ -3153,3 +3156,110 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 184. Auth Surface Migration to NOC Theme | 0/1 | Planned (operator request 2026-07-23) | — |
+
+## v8.27 Connected Work Memory Runtime Integration (Phase 185) — PLANNED (2026-07-24)
+
+**Goal:** Give `services/connmem` a runtime path so the v8.20 library becomes a running subsystem, and put its 141 tests behind CI. Source: `.planning/notes/2026-07-24-architecture-review.md` finding F1 — the library is complete but has no entrypoint, no CI, no compose/topology entry, and no kernel route; credentials are not the blocker.
+
+### Phase 185 — Connmem Runtime Integration
+
+**Depends on:** v8.20 Phase 176 (library complete on main), v8.15 (oracle-1 operator).
+**Requirements:** CONNMEM-RT-01, CONNMEM-RT-02, CONNMEM-RT-03, CONNMEM-RT-04, CONNMEM-RT-05
+
+**CONNMEM-RT requirement definitions:**
+- CONNMEM-RT-01 — Service entrypoint: `services/connmem` exposes a supervised process (FastAPI + uvicorn, matching `services/orchestration`) with `/health`, or is explicitly re-scoped as an in-process library invoked by a named kernel route. Pick one and record the decision; the current state is neither.
+- CONNMEM-RT-02 — CI coverage: `.github/workflows/ci.yml` Python job runs `pytest services/connmem/tests`. 141/141 green on PR, not on a developer's machine.
+- CONNMEM-RT-03 — Topology + compose registration: `connmem` added to `runtime-topology.json` with ports, health path, `dependsOn`, and supervision modes; `docker-compose.local.yml` service added; `npm run check:runtime-topology` passes.
+- CONNMEM-RT-04 — Kernel seam: a `/api/connmem/*` route (or documented equivalent) that authenticates via the existing agent/operator path, appears in `check-route-auth-boundary` coverage, and lets the operator trigger sync + read ledger state.
+- CONNMEM-RT-05 — Release-gate honesty: the Phase 176 release gate cannot report green while RT-01..04 are open. Update the gate script to assert runtime reachability, not just test-suite exit code.
+
+**Success criteria:**
+1. `docker compose up` starts connmem; `/api/health` reports it; `memroos status` shows it.
+2. CI fails if a connmem test breaks.
+3. A dry-run sync against fixture data completes end-to-end through the kernel route with a sync-ledger row written.
+4. The only remaining blocker to live backfill is genuinely provider credentials.
+
+### Progress Table (v8.27 Connected Work Memory Runtime Integration)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 185. Connmem Runtime Integration | 0/1 | Planned (architecture review 2026-07-24, F1) | — |
+
+## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
+
+**Goal:** Make the drift gates cover the deployment and the routes that actually exist, rather than the ones enumerated when each gate was written. Source: `.planning/notes/2026-07-24-architecture-review.md` findings F2 (topology gate is local-dev only while production is oracle-1) and F3 (route-auth gate validates a hand-maintained file list and cannot see new files under exempted prefixes).
+
+### Phase 186 — Production Topology Profile
+
+**Requirements:** TOPOPROD-01, TOPOPROD-02, TOPOPROD-03, TOPOPROD-04
+
+**TOPOPROD requirement definitions:**
+- TOPOPROD-01 — `runtime-topology.json` gains a `production` profile (oracle-1) alongside `local-dev`; `knowledge-mcp` and `healthcheck` added to both.
+- TOPOPROD-02 — `check:runtime-topology` validates the production profile against the actual supervision mechanism on oracle-1 (systemd unit files / Cloudflare Tunnel config committed to `deploy/`), the same way it validates compose and launchd today.
+- TOPOPROD-03 — `docs/production-deployment.md` and `docs/cloud-operator-oracle1-runbook.md` derive their service/port/health tables from the manifest rather than restating them, so prose cannot drift from the gate.
+- TOPOPROD-04 — `scripts/verify-onboarding-deploy.sh` extended into a post-deploy profile check that asserts every `required: true` production service is healthy.
+
+**Success criteria:** changing a production port or health path without updating the manifest fails CI. The oracle-1 runbook and the manifest cannot disagree.
+
+### Phase 187 — Filesystem-Driven Auth Gate
+
+**Requirements:** AUTHGATE-01, AUTHGATE-02, AUTHGATE-03
+
+**AUTHGATE requirement definitions:**
+- AUTHGATE-01 — `check-route-auth-boundary.mjs` enumerates the filesystem for every prefix pattern in `ROUTE_LOCAL_AUTH_API_ROUTES` and requires an auth marker on every matching `route.ts`. Public-metadata exceptions become an explicit allowlist with a stated reason, not an untested comment.
+- AUTHGATE-02 — The gate additionally asserts no `route.ts` exists outside both the proxy's default-deny path and the coverage list — closing the "new namespace, no auth" case.
+- AUTHGATE-03 — A regression test adds a fixture route under an exempt prefix with no auth marker and asserts the gate fails. Gates that have never been seen to fail are not known to work.
+
+**Success criteria:** creating `api/gsd/<anything>/route.ts` without a handler-local auth call fails CI. Phase 187 is small; it should land ahead of Phase 186 if capacity is tight.
+
+### Progress Table (v8.28 Enforcement Surface Parity)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 186. Production Topology Profile | 0/1 | Planned (architecture review 2026-07-24, F2) | — |
+| 187. Filesystem-Driven Auth Gate | 0/1 | Planned (architecture review 2026-07-24, F3) | — |
+
+## v8.29 Structural Debt Paydown (Phases 188-190) — PLANNED (2026-07-24)
+
+**Goal:** Remove the three structures that make every subsequent milestone more expensive: no data-access chokepoint under the governance spine (F4), `lib/` boundary drift (F5), and the `api-client.ts` client barrel (F6). Explicitly incremental — no big-bang rewrites; each phase lands behind a gate that prevents regression. Source: `.planning/notes/2026-07-24-architecture-review.md`.
+
+### Phase 188 — Data-Access Chokepoint
+
+**Requirements:** STORE-01, STORE-02, STORE-03, STORE-04
+
+**STORE requirement definitions:**
+- STORE-01 — `lib/store/` with per-domain modules owning their tables. Governance fields (`actor, action, asset, purpose, label, decision`) are required arguments on write paths, so an ungoverned write does not typecheck.
+- STORE-02 — `db-schema.ts` split by domain (`lib/store/<domain>/schema.ts`), migrations still ordered through the single `user_version` runner.
+- STORE-03 — ESLint rule: `better-sqlite3` may only be imported from `lib/store/**` and test files. Existing violations enter an explicit, shrinking allowlist; new ones fail CI. **Land this first even if the migration itself is slow — it stops the bleeding.**
+- STORE-04 — Two domains migrated as proof (recommend `memory` and `audit` — highest governance stakes), with the allowlist reduced accordingly.
+
+**Success criteria:** a new domain cannot write to SQLite without emitting an audit event, because the API offers no other path. Allowlist size is tracked and monotonically decreasing.
+
+### Phase 189 — lib/ Boundary Normalization
+
+**Requirements:** LIBNORM-01, LIBNORM-02, LIBNORM-03
+
+**LIBNORM requirement definitions:**
+- LIBNORM-01 — `docs/architecture.md` Placement Rules gain an explicit rule: domain logic lives in `lib/<domain>/`; `lib/` root is reserved for cross-cutting primitives (`env.ts`, `db.ts`, `paths.ts`, `constants.ts`, `api-error.ts`). Write the rule before moving files.
+- LIBNORM-02 — Consolidate the two worst offenders: all `memory-*.ts` plus `meeting-qmd-recall.ts` / `recollection-policy.ts` into `lib/memory/`; all `agent-*.ts` into `lib/agent/`. Use call-graph-aware `rename`, not find-and-replace.
+- LIBNORM-03 — `check:lib-boundary` script fails on new root-level files outside the reserved primitives list.
+
+**Success criteria:** `lib/` root drops from 79 files to the reserved set plus a declared, shrinking exception list. An agent asked to change memory behavior has exactly one directory to search.
+
+### Phase 190 — Client Barrel Split
+
+**Requirements:** CLIENTSPLIT-01, CLIENTSPLIT-02
+
+**CLIENTSPLIT requirement definitions:**
+- CLIENTSPLIT-01 — `lib/api-client.ts` (2,315 lines, 181 exports, imported by 83 files) split into `lib/api-client/<domain>.ts` mirroring the LIBNORM domain boundaries. Re-export shim kept for one milestone, then removed.
+- CLIENTSPLIT-02 — Measure and record client bundle size for the three heaviest routes before and after in the phase closeout.
+
+**Success criteria:** no single client module exceeds ~400 lines; measured bundle reduction on the NOC and operator console routes.
+
+### Progress Table (v8.29 Structural Debt Paydown)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 188. Data-Access Chokepoint | 0/1 | Planned (architecture review 2026-07-24, F4) | — |
+| 189. lib/ Boundary Normalization | 0/1 | Planned (architecture review 2026-07-24, F5) | — |
+| 190. Client Barrel Split | 0/1 | Planned (architecture review 2026-07-24, F6) | — |
