@@ -7,26 +7,35 @@
       "displayName": "MemRoOS Next.js app",
       "dockerComposeService": "memroos",
       "required": true,
-      "dependsOn": ["mem0-memory", "orchestration-service"],
+      "dependsOn": [
+        "mem0-memory",
+        "orchestration-service"
+      ],
       "ports": [
         {
           "id": "docker-public-http",
           "env": "MEMROOS_PORT",
           "defaultPort": 3000,
           "containerPort": 3000,
-          "requiredIn": ["docker-compose"]
+          "requiredIn": [
+            "docker-compose"
+          ]
         },
         {
           "id": "local-next-http",
           "env": "NEXTJS_PORT",
           "defaultPort": 3002,
-          "requiredIn": ["manual-script"]
+          "requiredIn": [
+            "manual-script"
+          ]
         },
         {
           "id": "launchd-next-http",
           "env": "PORT",
           "defaultPort": 3002,
-          "requiredIn": ["launchd"]
+          "requiredIn": [
+            "launchd"
+          ]
         }
       ],
       "health": {
@@ -34,8 +43,16 @@
         "path": "/api/health",
         "timeoutMs": 3000
       },
-      "supervisionModes": ["docker-compose", "launchd", "manual-script"],
-      "env": ["MEMROOS_PUBLIC_BASE_URL", "MEMROOS_OPERATOR_API_KEY", "SQLITE_DB_PATH"]
+      "supervisionModes": [
+        "docker-compose",
+        "launchd",
+        "manual-script"
+      ],
+      "env": [
+        "MEMROOS_PUBLIC_BASE_URL",
+        "MEMROOS_OPERATOR_API_KEY",
+        "SQLITE_DB_PATH"
+      ]
     },
     {
       "id": "mem0-memory",
@@ -48,7 +65,9 @@
           "env": "MEM0_PORT",
           "defaultPort": 3201,
           "containerPort": 3201,
-          "requiredIn": ["docker-compose"]
+          "requiredIn": [
+            "docker-compose"
+          ]
         }
       ],
       "health": {
@@ -56,8 +75,13 @@
         "path": "/health",
         "timeoutMs": 3000
       },
-      "supervisionModes": ["docker-compose", "external"],
-      "env": ["MEM0_URL"]
+      "supervisionModes": [
+        "docker-compose",
+        "external"
+      ],
+      "env": [
+        "MEM0_URL"
+      ]
     },
     {
       "id": "orchestration-service",
@@ -70,7 +94,9 @@
           "env": "ORCHESTRATION_PORT",
           "defaultPort": 3210,
           "containerPort": 3210,
-          "requiredIn": ["docker-compose"]
+          "requiredIn": [
+            "docker-compose"
+          ]
         }
       ],
       "health": {
@@ -78,8 +104,46 @@
         "path": "/health",
         "timeoutMs": 3000
       },
-      "supervisionModes": ["docker-compose", "external"],
-      "env": ["ORCHESTRATION_SERVICE_URL"]
+      "supervisionModes": [
+        "docker-compose",
+        "external"
+      ],
+      "env": [
+        "ORCHESTRATION_SERVICE_URL"
+      ]
+    },
+    {
+      "id": "connmem",
+      "displayName": "Connected Work Memory runtime (Phase 185 / v8.27)",
+      "dockerComposeService": "connmem",
+      "required": false,
+      "dependsOn": [],
+      "ports": [
+        {
+          "id": "connmem-http",
+          "env": "CONNMEM_PORT",
+          "defaultPort": 3290,
+          "containerPort": 3290,
+          "requiredIn": [
+            "docker-compose",
+            "manual-script"
+          ]
+        }
+      ],
+      "health": {
+        "type": "http",
+        "path": "/health",
+        "timeoutMs": 3000
+      },
+      "supervisionModes": [
+        "docker-compose",
+        "manual-script"
+      ],
+      "env": [
+        "CONNMEM_URL",
+        "CONNMEM_PORT",
+        "CONNMEM_LEDGER_PATH"
+      ]
     },
     {
       "id": "voice-server",
@@ -90,13 +154,17 @@
           "id": "pipecat-http",
           "env": "PIPECAT_PORT",
           "defaultPort": 7860,
-          "requiredIn": ["manual-script"]
+          "requiredIn": [
+            "manual-script"
+          ]
         },
         {
           "id": "pipecat-health",
           "env": "HEALTH_PORT",
           "defaultPort": 7861,
-          "requiredIn": ["manual-script"]
+          "requiredIn": [
+            "manual-script"
+          ]
         }
       ],
       "health": {
@@ -104,7 +172,9 @@
         "path": "/health",
         "timeoutMs": 3000
       },
-      "supervisionModes": ["manual-script"]
+      "supervisionModes": [
+        "manual-script"
+      ]
     },
     {
       "id": "agentmemory-engine",
@@ -115,7 +185,9 @@
           "id": "agentmemory-http",
           "env": "AGENTMEMORY_PORT",
           "defaultPort": 3111,
-          "requiredIn": ["manual-script"]
+          "requiredIn": [
+            "manual-script"
+          ]
         }
       ],
       "health": {
@@ -123,7 +195,9 @@
         "path": "/health",
         "timeoutMs": 3000
       },
-      "supervisionModes": ["manual-script"]
+      "supervisionModes": [
+        "manual-script"
+      ]
     }
   ]
 }

@@ -228,8 +228,29 @@ services:
       timeout: 5s
       retries: 5
 
+  connmem:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.connmem
+    ports:
+      - "${MEMROOS_BIND:-127.0.0.1}:${CONNMEM_PORT:-3290}:3290"
+    environment:
+      CONNMEM_LEDGER_PATH: /data/connmem-ledger.db
+    volumes:
+      - connmem-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'
+import urllib.request
+urllib.request.urlopen('http://127.0.0.1:3290/health', timeout=3)
+PY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+
 volumes:
   memroos-data:
+  connmem-data:
   mem0-logs:
   mem0-history:
   ollama-data:
