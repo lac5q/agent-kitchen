@@ -1,13 +1,17 @@
 [Unit]
 Description=MemroOS knowledge-mcp (oracle-1 production)
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target docker.service
+After=network-online.target docker.service
 
 [Service]
-Type=simple
+Type=notify
 User=opc
 Group=opc
-ExecStart=/usr/local/bin/memroos-knowledge-mcp.sh
+# TOPOPROD-02: the systemd unit must bring up the named
+# docker-compose service. The runtime-topology gate asserts
+# `docker compose up <service>` is in the ExecStart.
+ExecStart=/usr/bin/docker compose -f /home/opc/memroos/docker-compose.yml up knowledge-mcp
+ExecStop=/usr/bin/docker compose -f /home/opc/memroos/docker-compose.yml stop knowledge-mcp
 Restart=on-failure
 RestartSec=10s
 StandardOutput=journal

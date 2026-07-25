@@ -24,7 +24,19 @@ const args = process.argv.slice(2);
 const json = args.includes("--json");
 const outFlagIndex = args.indexOf("--out");
 const outArg = outFlagIndex >= 0 ? args[outFlagIndex + 1] : undefined;
-const profileName = args.find((arg) => !arg.startsWith("--") && arg !== outArg && args.indexOf(arg) !== outFlagIndex + 1);
+// The profile name is the first non-flag, non-out-value argument.
+// When --out is absent, outFlagIndex is -1, so outFlagIndex + 1 is 0
+// — that case is filtered out so args[0] is still eligible.
+const profileName = args.find((arg, i) => {
+  if (arg.startsWith("--")) return false;
+  if (outFlagIndex >= 0 && i === outFlagIndex + 1) return false;
+  return true;
+});
+// Resolve --out to an absolute path so the script can be invoked
+// from any cwd.
+const outAbsPath = outArg
+  ? (path.isAbsolute(outArg) ? outArg : path.join(repoRoot, outArg))
+  : undefined;
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
@@ -71,9 +83,9 @@ lines.push("Required services MUST be healthy for the operator to admit traffic.
 lines.push("");
 
 const out = lines.join("\n");
-if (outArg) {
-  fs.writeFileSync(path.join(repoRoot, outArg), out);
-  console.error(`wrote ${outArg}`);
+if (outAbsPath) {
+  fs.writeFileSync(outAbsPath, out);
+  console.error(`wrote ${outAbsPath}`);
 } else {
   console.log(out);
 }

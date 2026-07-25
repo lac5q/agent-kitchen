@@ -174,4 +174,61 @@ describe("runtime topology checker", () => {
     assert.match(launchdStartText, /runtime_topology_port memroos-app launchd-next-http/);
     assert.doesNotMatch(launchdStartText, /^PORT="\$\{PORT:-3002\}"/m);
   });
+
+  it("production profile gate fails closed when the deploy/ tree is missing", () => {
+    // The production profile requires deploy/oracle-1/systemd/*.service
+    // files. A missing deploy tree must fail closed (the validator
+    // returned `ok:true, checked:[]` before Phase 186's REVISE fix).
+    const manifest = loadRuntimeTopologyManifest();
+    const result = validateRuntimeTopologyArtifacts(
+      resolveProfile(manifest, "production"),
+      {
+        systemdUnitText: "",
+        cloudflareTunnelText: "",
+        production: true,
+      },
+      "production",
+    );
+    // The validator's "ok" path is reserved for the "artifacts are
+    // present and consistent" case. With an empty systemdUnitText,
+    // the gate must report at least one error (missing unit files
+    // for the required services).
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.errors.length > 0,
+      `expected errors for missing deploy/ tree, got: ${JSON.stringify(result.errors)}`,
+    );
+  });
+
+  it("production profile gate fails when a systemd unit file does not bring up the docker-compose service", () => {
+    // The validator checks that each *.service file has an ExecStart
+    // matching `up <dockerComposeService>`. A unit that brings up
+    // the wrong service must fail.
+    const manifest = loadRuntimeTopologyManifest();
+    const prod = resolveProfile(manifest, "production");
+    // Build a stub systemdUnitText that has a unit file for memroos-app
+    // but the ExecStart brings up the wrong service.
+    const wrongExec = `
+# === memroos-app.service ===
+[Unit]
+Description=MemroOS memroos-app (oracle-1 production)
+
+[Service]
+ExecStart=/usr/bin/docker compose -f /home/opc/memroos/docker-compose.yml up wrong-service
+`;
+    const result = validateRuntimeTopologyArtifacts(
+      prod,
+      {
+        systemdUnitText: wrongExec,
+        cloudflareTunnelText: "",
+        production: true,
+      },
+      "production",
+    );
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.errors.some((e) => e.includes("does not bring up memroos")),
+      `expected a 'does not bring up memroos' error, got: ${JSON.stringify(result.errors)}`,
+    );
+  });
 });

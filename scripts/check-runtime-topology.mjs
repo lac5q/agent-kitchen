@@ -189,17 +189,29 @@ export function validateRuntimeTopologyArtifacts(manifest, artifacts, profileNam
     if (isProduction) {
       if (artifacts.systemdUnitText && service.deployUnit) {
         const unitName = path.basename(service.deployUnit);
-        if (!artifacts.systemdUnitText.includes(`\n${unitName}\n`)) {
+        // The readRuntimeArtifacts helper wraps each *.service in a
+        // sentinel header ("# === <unit-name> ===") so the validator
+        // can match by unit file name. The header is the canonical
+        // anchor; relying on substring-searching the bare unit
+        // filename is fragile because the filename may appear in
+        // other contexts (paths, comments, descriptions).
+        const headerSentinel = `# === ${unitName} ===`;
+        if (!artifacts.systemdUnitText.includes(headerSentinel)) {
           errors.push(`Missing systemd unit file: ${service.deployUnit}`);
         } else {
           checked.push(`systemd:${service.id}:${unitName}`);
         }
         // If the service has a docker-compose service, the unit
         // file should ExecStart docker compose up the service.
+        // Match the substring `up <service>` rather than the
+        // literal `docker compose up <service>` because the real
+        // ExecStart typically uses `docker compose -f <file> up <svc>`.
         if (service.dockerComposeService) {
-          const expected = `docker compose up ${service.dockerComposeService}`;
-          if (!artifacts.systemdUnitText.includes(expected)) {
+          const execNeedle = `up ${service.dockerComposeService}`;
+          if (!artifacts.systemdUnitText.includes(execNeedle)) {
             errors.push(`Systemd unit ${unitName} does not bring up ${service.dockerComposeService}`);
+          } else {
+            checked.push(`systemd-exec:${service.id}:${execNeedle}`);
           }
         }
       } else if (artifacts.systemdUnitText && service.supervisionModes?.includes("systemd") && !service.deployUnit) {
@@ -305,18 +317,41 @@ function readRuntimeArtifacts(root = repoRoot, profileName) {
   const effectiveProfile = profileName ?? manifest?.defaultProfile ?? "local-dev";
   if (isV2 && effectiveProfile === "production") {
     const deployRoot = path.join(root, "deploy/oracle-1");
+    const systemdDir = path.join(deployRoot, "systemd");
+    // Concatenate every *.service file under deploy/oracle-1/systemd/.
+    // The validator checks for `docker compose up <service>` in the
+    // concatenated text below. Files are joined with a newline so
+    // the `\n<unit>\n` substring needle always matches a unit header
+    // (we look for `Description=` + `ExecStart=` as the real anchors).
     let systemdUnitText = "";
+    try {
+      const entries = fs.readdirSync(systemdDir);
+      for (const entry of entries.sort()) {
+        if (!entry.endsWith(".service")) continue;
+        const text = fs.readFileSync(path.join(systemdDir, entry), "utf8");
+        systemdUnitText += `\n# === ${entry} ===\n${text}\n`;
+      }
+    } catch (err) {
+      // Phase 186 / TOPOPROD-02: production profile REQUIRES the
+      // deploy/ tree to be present. Fail closed — the previous
+      // implementation swallowed this and silently passed.
+      throw new Error(
+        `production profile requires ${systemdDir} to exist with at least one *.service file (${err.message})`
+      );
+    }
     let cloudflareTunnelText = "";
     try {
-      systemdUnitText = fs.readFileSync(path.join(deployRoot, "systemd"), "utf8");
+      cloudflareTunnelText = fs.readFileSync(
+        path.join(deployRoot, "cloudflare-tunnel.yml"),
+        "utf8",
+      );
     } catch {
-      // missing deploy/ tree is allowed in local-dev CI runs
-    }
-    try {
-      cloudflareTunnelText = fs.readFileSync(path.join(deployRoot, "cloudflare-tunnel.yml"), "utf8");
-    } catch {
-      // missing cloudflare config is allowed when the operator
-      // is not yet wired
+      // cloudflare-tunnel.yml is optional for now (the architecture
+      // review lists it as a target but oracle-1 may run without
+      // a tunnel when accessed only via Tailscale). Surface as
+      // missing in the artifact object so the caller can warn
+      // without failing the gate.
+      cloudflareTunnelText = "";
     }
     return {
       systemdUnitText,
@@ -370,19 +405,33 @@ function printResult(result) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [, , command, serviceId, portId] = process.argv;
+  // Parse args: [port <service> <port> [profile]] | [check [profile]]
+  const args = process.argv.slice(2);
+  let profileName;
+  let command = "check";
 
-  if (command === "port") {
+  if (args[0] === "port") {
+    command = "port";
+    const [, , serviceId, portId, profileArg] = args;
+    profileName = profileArg;
+    const manifest = loadRuntimeTopologyManifest();
+    const services = manifest.profiles ? resolveProfile(manifest, profileName).services : manifest.services;
     try {
-      console.log(String(getRuntimeTopologyPort(loadRuntimeTopologyManifest(), serviceId, portId)));
+      const port = services.find((s) => s.id === serviceId)?.ports?.find((p) => p.id === portId);
+      if (!port || !Number.isInteger(port.defaultPort)) {
+        throw new Error(`port ${serviceId}/${portId} not found or has no integer defaultPort`);
+      }
+      console.log(String(port.defaultPort));
       process.exit(0);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
+  } else {
+    profileName = args[0]; // optional positional
   }
 
-  const result = checkRuntimeTopology(repoRoot);
+  const result = checkRuntimeTopology(repoRoot, profileName);
   printResult(result);
   process.exit(result.ok ? 0 : 1);
 }

@@ -29,10 +29,15 @@ else
 fi
 
 # --- 2. Required production services health check (Phase 186 / TOPOPROD-04) ---
-# Use the runtime-topology CLI to dump the production profile's required
-# services + their health paths, then probe each. Fail closed on any
-# required service that is not healthy.
-node "$REPO_ROOT/scripts/check-runtime-topology.mjs" "$PROFILE" >/dev/null 2>&1 || true
+# Use the runtime-topology CLI to validate the production profile's
+# topology FIRST. Phase 186 enforces that the systemd unit files
+# under deploy/oracle-1/systemd/ are committed and consistent with
+# the manifest's deployUnit entries. A missing or mismatched unit
+# file is a hard error — we do NOT continue past this gate.
+if ! node "$REPO_ROOT/scripts/check-runtime-topology.mjs" "$PROFILE" >/dev/null; then
+  echo "FAIL: runtime-topology gate failed for $PROFILE profile. Run 'npm run check:runtime-topology -- $PROFILE' to see the errors." >&2
+  exit 2
+fi
 
 # Read the manifest directly (no extra dep) to enumerate the
 # production profile's required services. Kept simple so the script
@@ -57,7 +62,12 @@ import('node:fs').then(async (fs) => {
       // The healthcheck service is a systemd timer; not an HTTP probe.
       continue;
     }
-    const port = (svc.ports ?? []).find((p) => Number.isInteger(p.defaultPort) && p.defaultPort < 1024 || Number.isInteger(p.defaultPort));
+    // Pick the first port with an integer defaultPort. The previous
+    // predicate (`p.defaultPort < 1024 || Number.isInteger(p.defaultPort)`)
+    // was tautological — the right side is always true when p is well-formed.
+    // Prefer the loopback-reachable port (low defaultPort) so the
+    // probe works from inside oracle-1.
+    const port = (svc.ports ?? []).find((p) => Number.isInteger(p.defaultPort));
     // For the public memroos-app, use BASE. For internal services, use
     // the internal loopback port.
     const base = svc.id === 'memroos-app' ? '$BASE' : internalBase;
