@@ -8,6 +8,11 @@ describe("paths", () => {
   const originalCwd = process.cwd();
   const originalRoot = process.env.MEMROOS_ROOT;
 
+  // On macOS os.tmpdir() is /var/... which is a symlink to /private/var/...
+  // Any test that chdir()s into a temp dir gets the resolved path back from
+  // process.cwd(), so compare against the real path rather than the symlink.
+  const mkTmp = (prefix: string) => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+
   afterEach(() => {
     process.chdir(originalCwd);
     if (originalRoot === undefined) {
@@ -28,7 +33,7 @@ describe("paths", () => {
 
   it("getRepoRoot walks up from apps/memroos cwd", async () => {
     delete process.env.MEMROOS_ROOT;
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "memroos-paths-"));
+    const tmp = mkTmp("memroos-paths-");
     const appsMemroos = path.join(tmp, "apps", "memroos");
     fs.mkdirSync(appsMemroos, { recursive: true });
     process.chdir(appsMemroos);
@@ -39,7 +44,7 @@ describe("paths", () => {
 
   it("getRepoRoot returns cwd when not under apps/memroos", async () => {
     delete process.env.MEMROOS_ROOT;
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "memroos-paths-other-"));
+    const tmp = mkTmp("memroos-paths-other-");
     process.chdir(tmp);
     vi.resetModules();
     const { getRepoRoot } = await import("@/lib/paths");
@@ -64,7 +69,7 @@ describe("paths", () => {
   });
 
   it("findConfigFile falls back to cwd when missing at root", async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "memroos-find-config-fb-"));
+    const tmp = mkTmp("memroos-find-config-fb-");
     const sub = path.join(tmp, "sub");
     fs.mkdirSync(sub);
     const configName = "missing-at-root.json";

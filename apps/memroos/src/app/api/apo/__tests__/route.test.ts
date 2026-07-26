@@ -29,6 +29,11 @@ async function loadRoute() {
   vi.stubEnv("APO_SKILLS_PATH", skillsPath);
   vi.stubEnv("APO_AGENT_CONFIGS_PATH", agentsPath);
   vi.stubEnv("APO_CRON_LOG_PATH", cronLogPath);
+  // The route falls back to real $HOME skill/agent roots (~/github/PMO/agents,
+  // ~/.claude/skills, ...) when the configured roots miss. Without pinning HOME
+  // to the fixture, "target is missing" tests resolve against the developer's
+  // actual machine and return 200 instead of 404.
+  vi.stubEnv("HOME", root);
   return import("../route");
 }
 
