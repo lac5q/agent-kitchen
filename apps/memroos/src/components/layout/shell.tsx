@@ -37,11 +37,19 @@ const ROUTE_TABS: Array<{ match: string[]; tabs: SectionTab[] }> = [
     ],
   },
   {
-    match: ["/audit", "/escalations", "/team", "/settings/api-keys", "/settings/compliance"],
+    match: [
+      "/audit",
+      "/escalations",
+      "/team",
+      "/settings/tools",
+      "/settings/api-keys",
+      "/settings/compliance",
+    ],
     tabs: [
       { label: "Audit", href: "/audit", hint: "Immutable decision and action history" },
       { label: "Escalations", href: "/escalations", hint: "Human-in-the-loop review queue" },
       { label: "Team", href: "/team", hint: "Members, roles, and invitations" },
+      { label: "Integrations", href: "/settings/tools", hint: "Third-party OAuth and API-key connections" },
       { label: "API Keys", href: "/settings/api-keys", hint: "Operator API key management" },
       { label: "Compliance", href: "/settings/compliance", hint: "Compliance exports and controls" },
     ],

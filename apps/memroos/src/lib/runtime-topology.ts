@@ -1,6 +1,12 @@
 import manifestData from "./runtime-topology.json";
 
-export type RuntimeSupervisionMode = "docker-compose" | "launchd" | "manual-script" | "external";
+export type RuntimeSupervisionMode =
+  | "docker-compose"
+  | "launchd"
+  | "manual-script"
+  | "systemd"
+  | "cloudflare-tunnel"
+  | "external";
 
 export interface RuntimePortDeclaration {
   id: string;
@@ -11,7 +17,7 @@ export interface RuntimePortDeclaration {
 }
 
 export interface RuntimeHealthCheck {
-  type: "http";
+  type: "http" | "https" | "script";
   path: string;
   timeoutMs: number;
 }
@@ -27,9 +33,25 @@ export interface RuntimeService {
   env?: string[];
 }
 
+export type RuntimeProfileName = "local-dev" | "production";
+
+export interface RuntimeTopologyProfile {
+  description?: string;
+  supervision?: RuntimeSupervisionMode[];
+  services: RuntimeService[];
+}
+
+/** Shape of runtime-topology.json on disk (version 2, profile map). */
+export interface StoredRuntimeTopologyManifest {
+  version: 2;
+  defaultProfile: RuntimeProfileName;
+  profiles: Record<string, RuntimeTopologyProfile>;
+}
+
+/** A manifest resolved to a single profile's flat service list. */
 export interface RuntimeTopologyManifest {
-  version: 1;
-  profile: "local-dev" | "single-host" | "docker-demo";
+  version: 2;
+  profile: RuntimeProfileName;
   services: RuntimeService[];
 }
 
@@ -44,10 +66,16 @@ export interface RuntimeTopologyArtifactValidation extends RuntimeTopologyValida
 }
 
 export function defaultRuntimeTopologyManifest(
-  profile: RuntimeTopologyManifest["profile"] = "local-dev"
+  profile?: RuntimeProfileName
 ): RuntimeTopologyManifest {
-  const manifest = JSON.parse(JSON.stringify(manifestData)) as RuntimeTopologyManifest;
-  return { ...manifest, profile };
+  const stored = JSON.parse(JSON.stringify(manifestData)) as StoredRuntimeTopologyManifest;
+  const profileName = profile ?? stored.defaultProfile;
+  const resolved = stored.profiles[profileName];
+  if (!resolved) {
+    const available = Object.keys(stored.profiles).join(", ");
+    throw new Error(`Unknown runtime topology profile: ${profileName} (available: ${available})`);
+  }
+  return { version: stored.version, profile: profileName, services: resolved.services };
 }
 
 function hasDuplicate(values: string[]): string | null {
@@ -67,13 +95,17 @@ export function validateRuntimeTopologyManifest(
   const serviceIds = manifest.services.map((service) => service.id);
   const duplicateService = hasDuplicate(serviceIds);
 
-  if (manifest.version !== 1) errors.push(`Unsupported runtime topology version: ${manifest.version}`);
+  if (manifest.version !== 2) errors.push(`Unsupported runtime topology version: ${manifest.version}`);
   if (duplicateService) errors.push(`Duplicate runtime service id: ${duplicateService}`);
 
   for (const service of manifest.services) {
     if (!service.id.trim()) errors.push("Runtime service id is required");
     if (!service.displayName.trim()) errors.push(`Runtime service ${service.id} displayName is required`);
-    if (service.ports.length === 0) errors.push(`Runtime service ${service.id} must declare at least one port`);
+    // healthcheck is the one service allowed to declare no ports (it's a
+    // systemd timer, not a listener) — mirrors check-runtime-topology.mjs.
+    if (service.ports.length === 0 && service.id !== "healthcheck") {
+      errors.push(`Runtime service ${service.id} must declare at least one port`);
+    }
     if (service.supervisionModes.length === 0) {
       errors.push(`Runtime service ${service.id} must declare supervision modes`);
     }

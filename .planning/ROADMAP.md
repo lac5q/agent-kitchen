@@ -2928,11 +2928,55 @@ Operator host
 - OSI-strict OSS self-host at scale (Klavis self-host remains a future swap candidate, not v8.23 deliverable).
 - Memroos becoming an OAuth server itself for agents (separate concern; tracks via Better Auth `@better-auth/oauth-provider` or Ory Hydra if pursued).
 
+**Field report (2026-07-26, operator escalation — "integrations UI missing"):**
+
+Root cause of the repeated "no auth UI for Notion/Circleback/Linear" reports: the TOOLAUTH-02
+Connected Tools page shipped complete at `apps/memroos/src/app/settings/tools/page.tsx`
+(provider grid, Nango OAuth popup flow, API-key sheet, revoke, usage meter, activity strip),
+with all seven `/api/tools/*` routes and the `lib/tool-auth/` plane (registry with 16 providers
+incl. Notion, Circleback `circleback-mcp`, Linear; Nango client; vault credential store) — but it
+was **never wired into navigation**. No entry in `sidebar.tsx` `NAV_ITEMS[].match`, no tab in
+`shell.tsx` `ROUTE_TABS`, and no `<Link>` anywhere pointed at `/settings/tools`. The page was
+orphaned, so on the oracle-1 dev instance it appeared as if the feature did not exist.
+
+Fixed on `claude/members-dashboard-auth-ui-82dpyh`:
+- `shell.tsx` — added `Integrations` tab (`/settings/tools`) to the Governance tab group.
+- `sidebar.tsx` — added `/settings/tools` to the Governance `match[]`; description now names integrations.
+- `settings/tools/page.tsx` — converted from its own `<main>` (double padding + font override
+  under the Shell) to the standard Pattern A wrapper (`<div className="space-y-6">`) used by
+  api-keys/compliance/team; eyebrow aligned `Settings` → `Governance`.
+
+Remaining for a working end-to-end connect flow (ops, not code):
+1. Set `NANGO_SECRET_KEY` in the operator env (oracle-1: `/etc/memroos/web.env`; dev `.env.local`).
+   Without it the page renders and the connect buttons surface "Nango not configured" inline.
+2. Register provider configs in the Nango dashboard matching `providerConfigKey` values:
+   `notion`, `linear`, `circleback-mcp`, `slack`, `github`, `google-calendar`, `google-drive`,
+   `hubspot`, `salesforce`, `xero` — separate Nango environments for dev vs prod instances.
+3. TOOLAUTH-06 (refresh observability NOC tile), TOOLAUTH-07 (revocation webhook dispatch),
+   TOOLAUTH-08 (migrate Phase 176 Linear/Circleback + Phase 178 Paperclip consumers to
+   `tool_auth.getCredentials()`) remain open.
+4. Cited source docs (`.planning/spikes/2026-07-23-tool-auth-ux-*.md`,
+   `.planning/design/2026-07-23-connected-tools-ux-design.md`) are missing from disk — recover or re-derive.
+
+CI repairs shipped on the same PR (#51) because `Memroos tests and build` could not
+pass otherwise — all four were red on main before this branch touched anything:
+- `docs/next-trust-boundary-upgrade.md` baseline sha256 refreshed: `cc1483c` changed
+  `proxy.ts` (the `/api/tools/providers` public-catalog bypass) without the checklist's
+  step-7 refresh, so the trust-boundary gate failed every run since 2026-07-23.
+- `/api/connmem/sync` moved to `sync/[source]/route.ts` (see Phase 185 field note) —
+  was failing every `next build`, including all Vercel preview deploys.
+- `runtime-topology.ts` v1→v2 parity restored (see Phase 186 field note) — 7 tests.
+- `top-bar.tsx` SSR clock: `useSyncExternalStore` with an em-dash server snapshot
+  restores the stable-placeholder contract (hydration-mismatch risk) — 1 test.
+Still red and out of scope: `Scan for internal infrastructure leaks` (Tailscale IPs
+in `content/sandbox/sandboxed-fleet-plan-*.md`, on main since 2026-07-08; needs a
+separate redact-or-relocate decision).
+
 ### Progress Table (v8.23 Third-Party Tool Authentication Plane)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 179. Third-Party Tool Authentication Plane | 1/1 | UI + API shipped; nav wiring landed 2026-07-26 (`claude/members-dashboard-auth-ui-82dpyh`); Nango env/provider config + TOOLAUTH-06..08 open | 2026-07-23 |
 
 ## v8.24 Operator Lifecycle Toolkit (bin/memroos)
 
@@ -3180,11 +3224,22 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 3. A dry-run sync against fixture data completes end-to-end through the kernel route with a sync-ledger row written.
 4. The only remaining blocker to live backfill is genuinely provider credentials.
 
+**Field note (2026-07-26, PR #51):** the CONNMEM-RT-04 kernel seam shipped early but
+mis-shaped: `apps/memroos/src/app/api/connmem/sync/route.ts` declared
+`params: Promise<{ source: string }>` at a static path, which failed `next build`'s
+route type check and broke every Vercel deploy and local build. Moved to
+`sync/[source]/route.ts` to match its documented contract
+(`POST /api/connmem/sync/{source}` → connmem `/v1/sync/{source}`). Two RT-04 gaps
+remain open: neither `/api/connmem/status` nor `/api/connmem/sync/[source]` is in
+`proxy.ts` `ROUTE_LOCAL_AUTH_API_ROUTES`, so the proxy demands a human JWT before the
+handlers' `authenticateAgentHeaders` ever runs — agents cannot reach the seam; and
+the routes are not yet in `check-route-auth-boundary` coverage as RT-04 requires.
+
 ### Progress Table (v8.27 Connected Work Memory Runtime Integration)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 185. Connmem Runtime Integration | 0/1 | Planned (architecture review 2026-07-24, F1) | — |
+| 185. Connmem Runtime Integration | 0/1 | In progress — kernel seam routes exist (sync route path fixed 2026-07-26, PR #51); proxy allowlist + boundary coverage + entrypoint/CI still open | — |
 
 ## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
 
@@ -3201,6 +3256,17 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 - TOPOPROD-04 — `scripts/verify-onboarding-deploy.sh` extended into a post-deploy profile check that asserts every `required: true` production service is healthy.
 
 **Success criteria:** changing a production port or health path without updating the manifest fails CI. The oracle-1 runbook and the manifest cannot disagree.
+
+**Field note (2026-07-26, PR #51):** TOPOPROD-01's version-2 manifest (profiles map,
+`production` profile, `healthcheck`/`knowledge-mcp` services) merged via PR #49
+(`af59905`) with `scripts/check-runtime-topology.mjs` updated — but
+`apps/memroos/src/lib/runtime-topology.ts` and its two test files were left on the
+v1 flat-services shape, so 7 vitest cases threw on main from 2026-07-24. Repaired by
+teaching the TS lib the v2 shape (profile resolution with unknown-profile throw,
+version-2 validation, port-less services allowed for the healthcheck systemd timer,
+`systemd` supervision mode and `script` health type admitted). Lesson for the phase:
+the manifest has two independent consumers (mjs gate + TS lib); TOPOPROD work must
+update both or fold the TS lib onto the script's parser.
 
 ### Phase 187 — Filesystem-Driven Auth Gate
 

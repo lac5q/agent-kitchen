@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.20+v8.21
 milestone_name: Connected Work Memory (Phase 176 first session) + Reproducible Local Install Hardening (Phase 177 partial closure)
 status: active
-stopped_at: Phase 176 first-session landed on install-repro-connmem-bridge (CONNMEM-02 + Linear SDL + GSD siblings); validator audit + Phase 177 push pending
-last_updated: "2026-07-21T22:00:00Z"
+stopped_at: Phase 179 nav wiring + main CI repair landed via PR #51 (claude/members-dashboard-auth-ui-82dpyh); Nango env/provider config still open for live OAuth connects
+last_updated: "2026-07-26T17:45:00Z"
 progress:
   total_phases: 117
   completed_phases: 84
@@ -35,6 +35,25 @@ release-gate live reconciliation is deferred per the
 `CONNMEM-LIVE-DEFER` ticket. Phase 177 was closed-partial in the prior session
 (INSTALL-REPRO-01..04 + 06 GREEN; INSTALL-REPRO-05 PARTIAL — destructive CI
 run delegated to the branch-targeted full-disposable-host CI job).
+
+**This run (claude cloud session, 2026-07-26 — PR #51 `claude/members-dashboard-auth-ui-82dpyh`):**
+- **Root cause of "integrations UI missing" operator reports:** the Phase 179
+  Connected Tools page (`apps/memroos/src/app/settings/tools/page.tsx`, Nango OAuth +
+  API-key vault flows for Notion/Circleback/Linear + 13 more) shipped complete but
+  was never wired into navigation — no sidebar match, no tab, no inbound link.
+  Fixed: `Integrations` tab added to the Governance group (`shell.tsx`,
+  `sidebar.tsx`); page converted from a self-padded `<main>` to the shared Pattern A
+  shell with the `Governance` eyebrow. Full field report under Phase 179 in ROADMAP.md.
+- **Main CI repaired on the same PR** (all red before this branch existed):
+  trust-boundary baseline refreshed after `cc1483c`'s un-attested `proxy.ts` change;
+  `/api/connmem/sync` moved to `sync/[source]/route.ts` (was failing every
+  `next build` + Vercel deploy); `runtime-topology.ts` taught the Phase 186 v2
+  manifest shape (7 tests); TopBar SSR clock restored to a stable placeholder via
+  `useSyncExternalStore` (1 test). Fast suite 3407/3407, typecheck clean.
+- **Still open:** `NANGO_SECRET_KEY` + Nango provider configs (dev/prod split) before
+  OAuth connects work end-to-end; TOOLAUTH-06..08; connmem proxy allowlist +
+  boundary coverage (Phase 185 field note); `content/sandbox` Tailscale-IP redaction
+  for the infra-leak scan (pre-existing, deferred).
 
 **This run (beastmode consolidated, 2026-07-21):**
 - **CONNMEM-02 (canonical envelope + sync ledger)** shipped on

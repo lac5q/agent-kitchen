@@ -20,7 +20,11 @@ describe("runtime topology manifest", () => {
 
     for (const service of manifest.services) {
       expect(service.displayName.length).toBeGreaterThan(0);
-      expect(service.ports.length).toBeGreaterThan(0);
+      // Port-less services (e.g. the healthcheck systemd timer) are allowed,
+      // but every required service must listen somewhere.
+      if (service.required) {
+        expect(service.ports.length).toBeGreaterThan(0);
+      }
       expect(service.health).toBeDefined();
       expect(service.supervisionModes.length).toBeGreaterThan(0);
     }

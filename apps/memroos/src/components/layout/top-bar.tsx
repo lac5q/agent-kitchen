@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { KangarooMark } from "./brand-mark";
 import { NOC } from "@/lib/noc-theme";
@@ -21,16 +21,16 @@ function formatClock() {
   });
 }
 
+function subscribeToClock(onTick: () => void) {
+  const id = window.setInterval(onTick, 30_000);
+  return () => window.clearInterval(id);
+}
+
 function useClock() {
-  // Initialize from the clock formatter so the first render is correct
-  // without a synchronous setState in the effect (React 19 lint:
-  // react-hooks/set-state-in-effect).
-  const [now, setNow] = useState(() => formatClock());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(formatClock()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
+  // The server snapshot is a stable placeholder so SSR output never embeds
+  // a wall-clock time that could mismatch the client at hydration; the
+  // client snapshot takes over on mount without a setState-in-effect.
+  return useSyncExternalStore(subscribeToClock, formatClock, () => "—");
 }
 
 export function TopBar({ services, onMenuClick }: TopBarProps) {
