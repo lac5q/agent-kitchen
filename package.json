@@ -52,6 +52,7 @@
     "observe:sidecar": "node scripts/run-observe-sidecar.mjs",
     "check:runtime-topology": "node scripts/check-runtime-topology.mjs",
     "check:contracts": "node scripts/check-contract-manifest.mjs",
+    "check:scheduler-liveness": "bash scripts/memroos-scheduler-liveness.test.sh",
     "check:health-check": "bash scripts/memroos-health-check.test.sh",
     "check:lib-boundary": "node scripts/check-lib-boundary.mjs && node --test scripts/check-lib-boundary.test.mjs",
     "check:sqlite-allowlist": "node scripts/check-sqlite-allowlist.mjs && node --test scripts/check-sqlite-allowlist.test.mjs",

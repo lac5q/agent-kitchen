@@ -48,6 +48,9 @@ jobs:
       - name: Health-check branch tests (CFGDUR-03)
         run: npm run check:health-check
 
+      - name: Scheduler liveness tests (CFGDUR-05)
+        run: npm run check:scheduler-liveness
+
       - name: Check Next trust boundary
         run: npm run check:next-trust-boundary
 

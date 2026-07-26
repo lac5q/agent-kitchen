@@ -28,6 +28,9 @@ mkdir -p "$STATE_DIR"
 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
+# stat(1) differs on GNU (-c %Y) vs BSD/macOS (-f %m).
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+
 # ── load the host profile ────────────────────────────────────────────────────
 PROFILE="${MEMROOS_HOST_PROFILE:-}"
 if [ -z "$PROFILE" ]; then
@@ -63,7 +66,7 @@ fail() {
   # One alert per distinct failure per hour, so a persistent fault does not
   # become an inbox flood that gets filtered.
   LAST_SENT="$STATE_DIR/last_alert_$(echo "$1" | md5sum | cut -d' ' -f1)"
-  if [ ! -f "$LAST_SENT" ] || [ $(( $(date +%s) - $(stat -c %Y "$LAST_SENT" 2>/dev/null || echo 0) )) -gt 3600 ]; then
+  if [ ! -f "$LAST_SENT" ] || [ $(( $(date +%s) - $(mtime "$LAST_SENT") )) -gt 3600 ]; then
     curl -s -X POST https://api.sendgrid.com/v3/mail/send \
       -H "Authorization: Bearer $SG_KEY" -H 'Content-Type: application/json' \
       -d "{\"personalizations\":[{\"to\":[{\"email\":\"$TO_EMAIL\"}]}],\"from\":{\"email\":\"$FROM\"},\"subject\":\"[memroos $HOST_ID] health check FAILED\",\"content\":[{\"type\":\"text/plain\",\"value\":\"$1\"}]}" > /dev/null
