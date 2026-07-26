@@ -507,11 +507,71 @@ DEFAULT_CHECKS: tuple[Callable[[], CheckResult], ...] = (
 )
 
 
+# CONNMEM-RT-05: runtime reachability check. The gate cannot report
+# green while the service is not actually reachable. The check probes
+# the compose-declared /health endpoint (and the /v1/ledger seam the
+# kernel uses) at the URL resolved from CONNMEM_URL or the local-dev
+# default (http://127.0.0.1:3290). When the service is down, the gate
+# reports reachable=false, which the FastAPI endpoint /v1/release-gate
+# propagates into the response's open_requirements list.
+def check_runtime_reachable() -> CheckResult:
+    import os
+    import urllib.error
+    import urllib.request
+
+    base_url = os.environ.get("CONNMEM_URL") or "http://127.0.0.1:3290"
+    try:
+        with urllib.request.urlopen(f"{base_url}/health", timeout=2.0) as r:
+            body = r.read().decode("utf-8", errors="replace")
+            if r.status != 200:
+                return CheckResult(
+                    name="runtime_reachable",
+                    passed=False,
+                    detail=f"GET {base_url}/health returned {r.status}",
+                )
+            if '"status":"ok"' not in body and '"status": "ok"' not in body:
+                return CheckResult(
+                    name="runtime_reachable",
+                    passed=False,
+                    detail=f"GET {base_url}/health body did not contain status=ok: {body[:200]}",
+                )
+    except (urllib.error.URLError, OSError) as exc:
+        return CheckResult(
+            name="runtime_reachable",
+            passed=False,
+            detail=f"GET {base_url}/health unreachable: {exc!r}",
+        )
+
+    # Also probe the /v1/ledger seam (CONNMEM-RT-04 surface). A 200
+    # here means the FastAPI service is wired up to the ledger, not
+    # just answering liveness.
+    try:
+        with urllib.request.urlopen(f"{base_url}/v1/ledger", timeout=2.0) as r:
+            if r.status != 200:
+                return CheckResult(
+                    name="runtime_reachable",
+                    passed=False,
+                    detail=f"GET {base_url}/v1/ledger returned {r.status}",
+                )
+    except (urllib.error.URLError, OSError) as exc:
+        return CheckResult(
+            name="runtime_reachable",
+            passed=False,
+            detail=f"GET {base_url}/v1/ledger unreachable: {exc!r}",
+        )
+
+    return CheckResult(name="runtime_reachable", passed=True, detail=f"probed {base_url}")
+
+
 def run_gate(
     checks: tuple[Callable[[], CheckResult], ...] = DEFAULT_CHECKS,
+    include_runtime_reachable: bool = False,
 ) -> GateVerdict:
     results: list[CheckResult] = []
-    for check in checks:
+    check_list = list(checks)
+    if include_runtime_reachable:
+        check_list.append(check_runtime_reachable)
+    for check in check_list:
         try:
             results.append(check())
         except Exception as exc:

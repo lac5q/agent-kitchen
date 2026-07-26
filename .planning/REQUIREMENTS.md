@@ -369,6 +369,8 @@
 - [x] **ADKA2A-FOLLOWUP-01**: Bounded ADK/A2A contract-compliance spike completed in `.planning/spikes/2026-06-27-adk-a2a-contract-compliance.md`; no ADK/Gemini core dependency, app copy, compliance-vertical claim, or runtime replacement approved.
 - [x] **QDRANT-FOLLOWUP-01**: Bounded Qdrant Cloud upgrade-readiness spike completed in `.planning/spikes/2026-06-27-qdrant-cloud-upgrade-readiness.md`; no local Qdrant, backend swap, vector rewrite, TurboQuant/named-vector migration, or production cluster upgrade approved.
 - [x] **HYPEREXTRACT-FOLLOWUP-01**: Bounded Hyper-Extract structured-memory spike completed in `.planning/spikes/2026-06-27-hyperextract-structured-memory.md`; no dependency adoption, production ingestion path, private-document upload, storage-layer replacement, or default extraction pipeline approved.
+- [x] **GRAPHGUIDE-FOLLOWUP-01**: Bounded Anthropic Knowledge Graph cookbook spike completed in `.planning/spikes/2026-07-23-knowledge-graph-cookbook-spike.md`; no dependency adoption, storage-backend swap, MCP gatekeeper bypass, hosted corpus upload, or "shared memory for agents" parity claim approved.
+- [x] **SIMPLIFY-FOLLOWUP-01**: Bounded simplify-code four-altitude / architecture-reviewer claim spike completed in `.planning/spikes/2026-07-24-simplify-code-four-altitude-claim.md`; no new architecture reviewer added to `simplify-code`, no fan-out beyond the existing three reviewers, no rewrite of the Reuse/Quality/Efficiency coverage model, and no claim that the skill currently ships a 4th architecture reviewer approved.
 - Automated DAST scanning in CI pipeline (post-audit baseline needed first)
 - Penetration test by external firm (after internal audit complete)
 - SOC 2 Type II controls mapping (separate compliance milestone)
@@ -456,6 +458,8 @@
 | ADKA2A-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
 | QDRANT-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
 | HYPEREXTRACT-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| GRAPHGUIDE-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
+| SIMPLIFY-FOLLOWUP-01 | 119 | Complete bounded spike; adoption deferred |
 | EFFTEL-01 | 117 | Done |
 | EFFTEL-02 | 117 | Done |
 | EFFTEL-03 | 117 | Done |

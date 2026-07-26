@@ -76,7 +76,7 @@ Implementation shipped on commit `2720841f`:
 - ✅ CONNMEM-06: projector (services/connmem/projections.py) — QMD + graph + mem0
 - ✅ CONNMEM-07: recall + cross-source linking (services/connmem/recall.py)
 - ✅ CONNMEM-08: governance (services/connmem/governance.py) — auth + privacy + retention + deletion
-- ✅ CONNMEM-09: operator dashboard (services/connmem/operator.py) — status, alerts, re-sync, replay
+- ✅ CONNMEM-09: operator dashboard (services/connmem/operator_surface.py) — status, alerts, re-sync, replay
 - ✅ CONNMEM-10: release gate (services/connmem/release_gate.py) — 9 default checks
 
 **Tests:** 141/141 pass in `services/connmem/tests/`. Release gate is green.

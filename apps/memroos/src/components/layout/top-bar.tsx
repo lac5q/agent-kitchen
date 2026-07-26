@@ -22,7 +22,10 @@ function formatClock() {
 }
 
 function useClock() {
-  const [now, setNow] = useState<string>(() => formatClock());
+  // Initialize from the clock formatter so the first render is correct
+  // without a synchronous setState in the effect (React 19 lint:
+  // react-hooks/set-state-in-effect).
+  const [now, setNow] = useState(() => formatClock());
   useEffect(() => {
     const id = window.setInterval(() => setNow(formatClock()), 30_000);
     return () => window.clearInterval(id);

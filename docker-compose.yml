@@ -102,6 +102,41 @@ services:
       timeout: 5s
       retries: 5
 
+  connmem:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.connmem
+    ports:
+      - "${CONNMEM_PORT:-3290}:3290"
+    environment:
+      CONNMEM_LEDGER_PATH: /data/connmem-ledger.db
+    volumes:
+      - connmem-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'
+import urllib.request
+urllib.request.urlopen('http://127.0.0.1:3290/health', timeout=3)
+PY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  knowledge-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.knowledge-mcp
+    ports:
+      - "${KNOWLEDGE_MCP_PORT:-3291}:3291"
+    environment:
+      KNOWLEDGE_BASE_PATH: /knowledge
+    volumes:
+      - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3291/health', timeout=3)""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
 volumes:
   memroos-data:
   mem0-logs:
