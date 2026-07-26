@@ -101,6 +101,30 @@ describe("nango-client: createNangoConnectSession", () => {
     expect(body.end_user.id).toBe("ops@example.com");
   });
 
+  // JWT sessions resolve email to '' (not null), which slipped past the
+  // earlier `?? fallback` and produced a live 400 on cordant-hermes-01:
+  // "expected string to have >=1 characters" + "Invalid email address".
+  it.each([["", "empty string"], ["   ", "whitespace"], ["not-an-email", "malformed"]])(
+    "uses the fallback id and omits email when the session email is %j (%s)",
+    async (email) => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            data: { session_token: "tok_e", expires_at: "2026-07-23T09:00:00Z" },
+          }),
+      });
+      await createNangoConnectSession({
+        endUserEmail: email,
+        allowedIntegrationIds: ["circleback-mcp"],
+      });
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.end_user.id).toBe("memroos-operator");
+      expect(body.end_user.email).toBeUndefined();
+    },
+  );
+
   it("falls back to a fixed end_user.id when no session email exists", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,

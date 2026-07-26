@@ -123,6 +123,17 @@ export async function listNangoConnections(): Promise<ToolConnection[]> {
  *
  * See https://docs.nango.dev/reference/api/connect-session
  */
+/**
+ * Nango rejects both empty strings and malformed emails. Session objects can
+ * carry `email: ''` (JWT path), so collapse blank/whitespace values to
+ * undefined and drop anything that is not a plausible address.
+ */
+function normalizeEndUser(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.includes("@") ? trimmed : undefined;
+}
+
 export async function createNangoConnectSession(opts: {
   endUserEmail: string | null;
   allowedIntegrationIds: string[];
@@ -132,13 +143,18 @@ export async function createNangoConnectSession(opts: {
     {
       method: "POST",
       body: JSON.stringify({
-        // Nango requires end_user.id (400 invalid_body without it — verified
-        // against the live API 2026-07-26). This is a single-operator install,
-        // so the email doubles as the stable end-user id, with a fixed
-        // fallback when no session email exists.
+        // Nango requires a non-empty end_user.id and, if email is present, a
+        // valid address (verified against the live API 2026-07-26):
+        //   missing id     -> 400 "expected string, received undefined"
+        //   empty-string id-> 400 "expected string to have >=1 characters"
+        //                     plus "Invalid email address" for email: ""
+        //
+        // JWT sessions resolve email to '' rather than null, so `?? fallback`
+        // is not enough — an empty string is falsy-but-present and slips
+        // through. Normalize empties to undefined before deciding.
         end_user: {
-          id: opts.endUserEmail ?? "memroos-operator",
-          email: opts.endUserEmail ?? undefined,
+          id: normalizeEndUser(opts.endUserEmail) ?? "memroos-operator",
+          email: normalizeEndUser(opts.endUserEmail),
         },
         allowed_integrations: opts.allowedIntegrationIds,
       }),
