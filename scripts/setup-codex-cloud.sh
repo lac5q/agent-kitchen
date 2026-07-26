@@ -355,6 +355,12 @@ if importlib.util.find_spec("fastmcp") is None and importlib.util.find_spec("mcp
 PY
 fi
 
+# 1Password CLI for scoped secrets access (no-ops unless the environment sets
+# OP_SERVICE_ACCOUNT_TOKEN; see scripts/setup-1password-cli.sh).
+if [[ "${CODEX_CLOUD_INSTALL_OP:-1}" != "0" && -f "$ROOT/scripts/setup-1password-cli.sh" ]]; then
+  bash "$ROOT/scripts/setup-1password-cli.sh" || echo "1Password CLI setup failed (non-fatal)." >&2
+fi
+
 echo "Codex Cloud MemRoOS setup complete ($MODE)."
 echo "MemRoOS root: $MEMROOS_ROOT"
 echo "Knowledge root: $KNOWLEDGE_ROOT"

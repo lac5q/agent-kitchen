@@ -95,6 +95,26 @@ Full contract, including the dispatch test and re-classification rules:
 `agents/AGENTS_TEMPLATE.md` § "Automatic Downshift". Lane table, invocation, and
 smoke gates: `docs/codex-cloud/skills/beastmode-cloud/SKILL.md` § "Worker Lanes".
 
+## Secrets in cloud sessions (1Password service account)
+
+Cloud agent sessions read secrets through a 1Password **service account**, not a
+personal vault login and not a claude.ai connector. The standing setup:
+
+- Each cloud environment (Claude Code Remote, Cursor Cloud, Codex Cloud) sets
+  `OP_SERVICE_ACCOUNT_TOKEN` in its environment variables. The token belongs to a
+  service account scoped **read-only** to the dedicated infra vault — never a
+  personal vault.
+- `scripts/setup-1password-cli.sh` installs the `op` CLI when that token is
+  present (no-op otherwise). The Cursor/Codex setup scripts call it automatically
+  (`CURSOR_CLOUD_INSTALL_OP=0` / `CODEX_CLOUD_INSTALL_OP=0` to skip).
+- The environment's network policy must allow `cache.agilebits.com` (CLI
+  download) and `*.1password.com` (API), or `op` cannot install/authenticate.
+- Read secrets with `op read 'op://<vault>/<item>/<field>'`. Never print secret
+  values into chat, logs, or commits; pipe them directly to their destination
+  (see `scripts/configure-nango-oracle1.sh` for the pattern).
+- If `op whoami` fails in a session, say so and fall back to asking the operator
+  to run the relevant script locally — do not claim secrets access you don't have.
+
 ## Production deployment
 
 Read `docs/production-deployment.md` before any deploy or onboarding task.
