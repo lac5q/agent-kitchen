@@ -15,7 +15,26 @@ progress:
 
 ## Latest Position (2026-07-26) — v8.31 added, v8.15 closed
 
-**Nango is RESOLVED.** The prior STATE flagged "Nango env/provider config still
+**Nango was on the WRONG KEY — fixed 2026-07-26.** oracle-1 was running the
+Nango **dev** key, not prod. Confirmed by hashing the live value against both
+1Password items (`NAngo API KEY Dev` / `Prod`, vaults AgentWritable +
+Clawdbot): the live key matched Dev exactly. That is why only
+`github-getting-started` appeared. The **prod** environment already has the
+three integrations the operator asked about — `linear`, `circleback-mcp`, and
+`notion` — with 0 connections so far (OAuth connects are the remaining step,
+done from the Connected Tools UI, not by adding secrets).
+
+Swapped oracle-1 to the prod key: `.env` backed up first, value piped over
+stdin so it never entered a command line or process list, restarted via
+`scripts/memroos-restart.sh`. Verified no data loss (users 2→2, agents 59→59),
+Aura still pinned, `/api/health` 200, and `/api/tools` now returns
+`authentication required` instead of `503 nango_not_configured`.
+
+This directly unblocks part of the Phase 176 `CONNMEM-LIVE-DEFER` ticket: the
+Linear and Circleback *provider authorization* path now has a real environment
+behind it.
+
+**Prior note (superseded):** The prior STATE flagged "Nango env/provider config still
 open for live OAuth connects." Verified 2026-07-26 from oracle-1: the production
 `NANGO_SECRET_KEY` in `/home/opc/memroos/.env` authenticates successfully —
 `/environment-variables` 200, `/connection` 200, `/connect/sessions` returns a
