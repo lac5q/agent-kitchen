@@ -43,6 +43,30 @@ describe("classification cascade", () => {
     expect(result.reasonCodes).toContain("default_private_sealed");
   });
 
+  it("does not escalate a harmless long transcript just because it exceeds the scanner chunk size", () => {
+    const result = classifyText({
+      content: `${"Routine engineering discussion. ".repeat(220)}final note`,
+      sourceType: "messages",
+      metadata: { project: "memroos" },
+    });
+
+    expect(result.requiresReview).toBe(false);
+    expect(result.reasonCodes).not.toContain("scanner:input_too_long");
+    expect(result.label.policy).toBe("sealed");
+  });
+
+  it("still finds sensitive evidence inside a long transcript", () => {
+    const result = classifyText({
+      content: `${"Routine engineering discussion. ".repeat(220)}SSN 123-45-6789`,
+      sourceType: "messages",
+      metadata: { project: "client-onboarding" },
+    });
+
+    expect(result.requiresReview).toBe(true);
+    expect(result.reasonCodes).toContain("scanner:ssn_us");
+    expect(result.label.policy).toBe("requires_human_review");
+  });
+
   it("routes secrets and PII to private human review with evidence spans", () => {
     const result = classifyText({
       content: "Customer SSN is 123-45-6789 and token='abcdefabcdefabcdefabcdefabcdefabcdefabcd'",

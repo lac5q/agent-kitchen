@@ -2040,6 +2040,7 @@ export interface EscalationWithCountdown {
 
 export interface EscalationsResponse {
   escalations: EscalationWithCountdown[];
+  total?: number;
   timestamp: string;
 }
 

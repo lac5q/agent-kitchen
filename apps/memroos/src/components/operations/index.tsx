@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useOperationsNoc } from "@/lib/api-client";
 import { nocWindowLabel, type NocFilters, type NocWindow, type NocWorkspace } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
@@ -238,30 +238,18 @@ const ADVANCED_PREFERENCE_KEY = "memroos:noc:show-advanced";
 export function OperationsNoc() {
   const [windowLabel, setWindowLabel] = useState<NocWindow>("24h");
   const [workspace, setWorkspace] = useState<NocWorkspace>("all");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true";
+    } catch {
+      // Storage can be disabled; the safe default remains off.
+      return false;
+    }
+  });
   const filters = useMemo<NocFilters>(
     () => ({ window: windowLabel, workspace }),
     [windowLabel, workspace]
   );
-
-  useEffect(() => {
-    // Move the localStorage read into a microtask so the synchronous
-    // setState call no longer trips the React 19
-    // `react-hooks/set-state-in-effect` lint. (Initialization from
-    // localStorage at first render would be ideal, but the surrounding
-    // state is `useState<boolean>(false)` and there are multiple other
-    // initial-state branches in this component; the microtask is the
-    // minimal change that satisfies the lint without restructuring.)
-    queueMicrotask(() => {
-      try {
-        if (window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true") {
-          setShowAdvanced(true);
-        }
-      } catch {
-        // Storage can be disabled; the safe default remains off.
-      }
-    });
-  }, []);
 
   function handleShowAdvancedChange(value: boolean) {
     setShowAdvanced(value);
