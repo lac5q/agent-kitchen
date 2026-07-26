@@ -72,6 +72,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
 - 📋 **v8.28 Enforcement Surface Parity** — Phases 186-187 (added 2026-07-24 from architecture review F2/F3; TOPOPROD-01..04 production topology profile for oracle-1 + AUTHGATE-01..03 filesystem-driven route-auth gate; Phase 187 is hours of work and should land first if capacity is tight)
 - 📋 **v8.29 Structural Debt Paydown** — Phases 188-190 (added 2026-07-24 from architecture review F4/F5/F6; STORE-01..04 governed data-access chokepoint with shrinking better-sqlite3 allowlist, LIBNORM-01..03 lib/ boundary normalization, CLIENTSPLIT-01..02 api-client barrel split; incremental, no big-bang rewrites)
+- 📋 **v8.30 Seamless Memory Adoption** — Phases 191-195 (added 2026-07-26 from operator session; PRIORWORK-01..05 agent-reachable prior-work probe wiring the orphaned Phase 118 kernel, SELFCAP-01..05 session hooks + agent self-capture + structured sidecar extraction, SAVEQ-01..05 save-quality gate + governed-tool parity + automatic silver→gold promotion, MEMHABIT-01..05 auto-load recall/save skills + skill-packs bootstrap fix, ADOPTTEL-01..05 NOC adoption panel + GSD memory-receipt closeout gate; design: `.planning/design/memory-adoption-v1.md`)
 
 ## Phases
 
@@ -3263,3 +3264,93 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 | 188. Data-Access Chokepoint | 0/1 | Planned (architecture review 2026-07-24, F4) | — |
 | 189. lib/ Boundary Normalization | 0/1 | Planned (architecture review 2026-07-24, F5) | — |
 | 190. Client Barrel Split | 0/1 | Planned (architecture review 2026-07-24, F6) | — |
+
+## v8.30 Seamless Memory Adoption (Phases 191-195) — PLANNED (2026-07-26)
+
+**Goal:** Keep the core product promise — "agents should not start from zero when a team already solved, discussed, debugged, or decided something" — by making memory recollection and capture the natural default behavior of every connected agent session, without injecting full memories into every session. Source: operator session 2026-07-26 (agents neither check MemRoOS for prior work nor store enough, and prose directives haven't changed behavior); design: `.planning/design/memory-adoption-v1.md`.
+
+**Grounding (2026-07-26 repo audit):** the machinery exists but the seams were never connected. The Phase 118 recollection kernel is shipped twice (`lib/recollection-policy.ts`, `lib/gsd/proactive-recollection.ts`) with zero live callers; `retrieval_trace` — the denominator of `retrievalBeforeWorkRate` — has no agent-reachable emitter; `/api/agent-memory/capture` is operator-key-only; the observe sidecar extracts 240 chars and is unscheduled; the default-visible MCP tools `memory_save`/`memory_search` bypass governance while governed `agent_memory_save` is not in `CORE_TOOLS`; silver→gold promotion never runs at runtime; the repo ships no session hooks; and the AGENTS.md skill bootstrap scans `$KNOWLEDGE_ROOT/skills`, which doesn't exist in a MemRoOS checkout.
+
+**Design principles (binding for all five phases):** pointer not payload (session brief ≤ ~600 tokens, full memories pull-on-demand only); first call free (hook), later calls habitual (skills + tool-description contracts), every call pays off (usefulness feedback into ranking/salience); structure beats exhortation (hooks, gates, detectors — not more AGENTS.md prose); one governed write path with coach-back receipts; adoption is an SLO on the NOC; Skills > Memory ordering preserved (procedures → SkillForge, class lessons → skills, decisions/outcomes/facts/handoff state → memory); recall fails open with receipts, write policy fails closed; no new backend, no LLM-only promotion, no transcript dumping, depth default stays `relevant`.
+
+### Phase 191 — Prior-Work Probe (agent-reachable recollection seam)
+
+**Depends on:** Phase 118 (recollection kernel), Phase 117 (efficiency telemetry), Phase 152 (federated `memory_recall`). Coordinates with Phase 189 LIBNORM-02 (recollection module move).
+**Requirements:** PRIORWORK-01, PRIORWORK-02, PRIORWORK-03, PRIORWORK-04, PRIORWORK-05
+
+**PRIORWORK requirement definitions:**
+- PRIORWORK-01 — Consolidate the two Phase 118 implementations into one canonical module under `lib/memory/recollection/` (LIBNORM-02-aligned): keep the richer trigger vocabulary (`source_changed`, `operator_reask`, `rediscovered_fact_risk`, `final_answer_citation_gap`) and the EFFTEL-04 rediscovery guard from `lib/gsd/proactive-recollection.ts`; keep the canonical `BeliefStage` export path stable; delete the losing module, don't deprecate it.
+- PRIORWORK-02 — `POST /api/memory/prior-work` authenticated via `authenticateAgentHeaders` (agent API keys work): task statement + optional repo/project/entity/recency hints in → trigger policy → bounded query planner → tier search → ranking → threshold → **digest pack** out: ≤5 items of `{title, one_liner, belief_stage, age, salience, fetch_ref}` plus an explicit headline ("Related prior work exists: N items" / "No prior work found (tiers searched: …)"). Never returns raw memory payloads; skip decisions return typed reason codes.
+- PRIORWORK-03 — MCP tool `memory_prior_work` added to `CORE_TOOLS`, wrapping PRIORWORK-02; its tool description carries the when-to-call contract (task start, topic shift, "have we done this before?" moments) so the trigger policy rides the one always-in-context surface.
+- PRIORWORK-04 — Every probe — served **or** skipped — emits a `retrieval_trace` efficiency event carrying the full recollection receipt through an agent-reachable path, populating `retrievalBeforeWorkRate` from real external sessions for the first time.
+- PRIORWORK-05 — `GET /api/agent-context` gains topic-based recall through the same recollection module (no `goal_id` required for the memories section), and an MCP wrapper exposes the context packet so agents don't need curl.
+
+**Success criteria:** a fresh agent session with a valid agent key can ask one MCP tool whether prior work exists on its topic and get a truthful, belief-staged, pointer-sized answer; the NOC `retrievalBeforeWorkRate` shows a real value from a real external session; recollection receipts (served and skipped) are visible in the NOC recollection panel.
+
+### Phase 192 — Session Hooks + Agent Self-Capture
+
+**Depends on:** Phase 191 (probe to call), Phase 96/167-171 (capture API + observe plane).
+**Requirements:** SELFCAP-01, SELFCAP-02, SELFCAP-03, SELFCAP-04, SELFCAP-05
+
+**SELFCAP requirement definitions:**
+- SELFCAP-01 — `/api/agent-memory/capture` accepts agent-key auth scoped so an agent may capture only its own sessions (operator key retained for the sidecar); rate-limited; depth policy (`relevant` default, `full` → vault only) enforced server-side regardless of caller.
+- SELFCAP-02 — Repo-shipped hook set installed by `scripts/install-agent-integrations.sh`: **memory-brief** on session start (calls the prior-work probe with repo/branch/cwd context, injects a ≤600-token pointer digest; fails open on timeout with a miss receipt) and **capture-gate** on stop/pre-compact (posts structured capture — decisions, outcomes, errors, commands, files, verification — or a typed skip receipt; bounded timeout; failure becomes a receipt + NOC Attention item, never a blocked session).
+- SELFCAP-03 — Hook capability matrix per harness (Claude Code native hooks; Codex via portable-hook equivalent; Hermes plugin; skill+sidecar fallback for the rest) committed and drift-gated like the observe-sidecar maturity matrix; no false full-coverage claims.
+- SELFCAP-04 — Observe sidecar structured extraction v2: replace the 240-char `summarize()` with deterministic-first extraction of decisions, outcomes/verification, errors, commands, files touched, and entities, populating the rich `captureCodingAgentSession` fields that already exist; LLM assist only where depth policy allows.
+- SELFCAP-05 — Sidecar actually scheduled (launchd/systemd/cron template installed by the installer) with heartbeat visible in NOC observe-harness health.
+
+**Success criteria:** ending a hooked Claude Code session produces a structured silver candidate (or typed skip receipt) with zero manual steps; starting one surfaces prior work without the agent asking; an unhooked harness still gets captured by the scheduled sidecar with real structure, not 240 chars.
+
+### Phase 193 — Storage Quality: Save-Quality Gate + Governed Defaults + Auto-Promotion
+
+**Depends on:** Phases 120-123 (belief/promotion), Phase 104 (memory traces), Memento save-quality spike (2026-06-27, deferred adoption).
+**Requirements:** SAVEQ-01, SAVEQ-02, SAVEQ-03, SAVEQ-04, SAVEQ-05
+
+**SAVEQ requirement definitions:**
+- SAVEQ-01 — Save-quality report on every governed write: scored for memory type, source/provenance, dedupe, specificity (outcome stated? project-scoped? entities named?), and promotion readiness; score persisted with the write (adopts the deferred Memento spike).
+- SAVEQ-02 — Coach-back receipts: sub-threshold writes return actionable in-band guidance ("no outcome stated", "duplicate of <id> — rediscovery flagged", "this is a procedure — propose a skill instead"); hard-reject only on policy violations. The rubric encodes the Skills > Memory ordering.
+- SAVEQ-03 — Governance parity: MCP `memory_save`/`memory_search` routed through the governed paths (policy + audit + dedup + telemetry), or demoted from `CORE_TOOLS` in favor of `agent_memory_save` + `memory_prior_work`; end state is that **no default-visible ungoverned memory write or untraced search exists** (decision D2 in the design doc, recommendation: route, don't remove).
+- SAVEQ-04 — Automatic silver→gold promotion scheduler running the existing five deterministic checks (`evaluatePromotionChecks`: provenance, freshness, policy, conflict, dedupe) over aging candidates on a cadence; pass → gold with hash-chained receipt; conflict → operator review queue; **no LLM-only promotion**.
+- SAVEQ-05 — Salience coverage extends to agent-written memories and candidates (today `memory_salience` keys on `messages.id` only), and `tool_record_outcome` usefulness feedback reinforces salience so recall ranking improves with use.
+
+**Success criteria:** a vague memory write gets a coach-back receipt naming what to add; a duplicate write is flagged as rediscovery in telemetry; a well-formed silver candidate becomes gold within one scheduler cadence with a hash-chained receipt and no human in the loop; no MCP-visible path writes memory without an audit row.
+
+### Phase 194 — Habit Layer: Skills + Bootstrap Fix
+
+**Depends on:** Phase 191 (tool to teach), v8.6 skill trust chain, skill-packs workspace.
+**Requirements:** MEMHABIT-01, MEMHABIT-02, MEMHABIT-03, MEMHABIT-04, MEMHABIT-05
+
+**MEMHABIT requirement definitions:**
+- MEMHABIT-01 — Fix the skill-packs root: the catalog falls back to the repo's own skills directories (`.agents/skills/`, private `~/.memroos/skills/`) when `$KNOWLEDGE_ROOT/skills` is absent, so the AGENTS.md auto-load bootstrap returns real skills in a MemRoOS checkout instead of an empty catalog.
+- MEMHABIT-02 — Ship `memroos-recall` as a real SKILL.md with `auto_load: true`, generalized from `docs/integrations/multica-memroos-skill.md`: start-of-task probe protocol, mid-task re-probe triggers (topic shift, unexpected error, repeated question), and belief-stage handling rules (rely on gold, caveat silver, bronze is evidence only).
+- MEMHABIT-03 — Upgrade `memroos-save`: the end-of-task persist checklist covers governed **memory** writes (decisions, outcomes, project facts, handoff state) alongside document writes, honoring Skills > Memory.
+- MEMHABIT-04 — GSD skills hardened: `$goal` step 4 changes from "load memory if available" to a named mandatory `memory_prior_work` probe with a receipt; beastmode/qwen-cloud skills gain the same start-of-goal probe and end-of-goal learnings checkpoints.
+- MEMHABIT-05 — Tool-description contract pass: memory-tool MCP descriptions and the `knowledge_system_orientation` prompt state the memory contract (probe at task start, governed save or skip receipt at task end) so the contract survives in harnesses where hooks and skills don't load.
+
+**Success criteria:** `knowledge_workspace_call("skill-packs","catalog",{"filter":"auto-load"})` returns the recall/save skills from a clean MemRoOS checkout; a `$goal` run without a probe receipt is visibly non-compliant; the orientation prompt read by any MCP-connected harness states the contract.
+
+### Phase 195 — Adoption Telemetry + GSD Gates
+
+**Depends on:** Phases 191-194 (the behaviors to measure and gate), Phase 117 (metric plumbing), v8.18 NOCUX rules.
+**Requirements:** ADOPTTEL-01, ADOPTTEL-02, ADOPTTEL-03, ADOPTTEL-04, ADOPTTEL-05
+
+**ADOPTTEL requirement definitions:**
+- ADOPTTEL-01 — NOC Memory Adoption panel (honest states per NOCUX): per-agent/per-harness recall-before-work rate, capture-per-session rate, rediscovered-fact rate, save-quality distribution, silver→gold throughput; known-unwired states remain explicit until producers verified.
+- ADOPTTEL-02 — `research-without-persist-detector` generalized across Wave-1 harness session roots (Claude Code, Codex, Hermes, OpenClaw, Pi); findings surface as NOC Attention items, not only cron logs.
+- ADOPTTEL-03 — GSD closeout gate: a phase/goal cannot close without a prior-work probe receipt at start and a learnings/decisions write (or typed skip receipt) at close; enforced by a check script wired into CI in the same pattern as `check-roadmap-priority`.
+- ADOPTTEL-04 — Adoption SLOs recorded and measured on live operator data (not fixtures): retrieval-before-work ≥70% of working sessions; ≥1 governed write or typed skip receipt per working session; rediscovered-fact rate declining over a 30-day window; automatic silver→gold throughput >0 weekly.
+- ADOPTTEL-05 — Eval fixtures for the adoption loop: "fresh employee, prior work exists" (probe must surface it), "no prior work" (must skip with receipt, no fabricated pack), "junk save" (coach-back fires), "duplicate save" (dedupe + rediscovery flag), "old-critical beats recent-noise" (regression-guards Phase 118 ranking through the new seam).
+
+**Success criteria:** the operator can answer "are my agents actually using the brain?" from one NOC panel; a GSD phase that skipped memory hygiene fails its closeout gate in CI; the eval suite proves the loop end-to-end and fails when any seam disconnects again.
+
+### Progress Table (v8.30 Seamless Memory Adoption)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 191. Prior-Work Probe | 0/1 | Planned (operator session 2026-07-26) | — |
+| 192. Session Hooks + Agent Self-Capture | 0/1 | Planned (operator session 2026-07-26) | — |
+| 193. Storage Quality Gate + Auto-Promotion | 0/1 | Planned (operator session 2026-07-26) | — |
+| 194. Habit Layer: Skills + Bootstrap Fix | 0/1 | Planned (operator session 2026-07-26) | — |
+| 195. Adoption Telemetry + GSD Gates | 0/1 | Planned (operator session 2026-07-26) | — |
+
+**Sequencing:** Phase 191 first — it creates the primitive everything else points at and turns on the headline metric. Phase 194 can run in parallel with 192/193. Phase 195 last. Smallest behavior-changing slice if capacity is tight: Phase 191 + the SELFCAP-02 hooks.
