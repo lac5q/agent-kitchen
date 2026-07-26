@@ -731,3 +731,28 @@
 | ADOPTTEL-05 | Eval fixtures: prior-work-exists surfaced, no-prior-work honest skip, junk-save coach-back, duplicate-save rediscovery flag, old-critical-beats-recent-noise regression | 195 | planned |
 
 **Locked:** Pointer, not payload — session briefs stay ≤ ~600 tokens; full memories are pull-on-demand only. Recall fails open with receipts (a degraded brain never blocks work); write policy fails closed. No new memory backend, no LLM-only silver→gold promotion, no transcript dumping into mem0, depth default stays `relevant`. Skills > Memory ordering preserved: procedures → SkillForge, class lessons → skills, decisions/outcomes/facts/handoff state → memory.
+| NOCUX-05 | Window (24h/7d/30d) and workspace filters apply consistently; Agent Activity remains message-backed when no hive delegations exist; empty-state probes respect the selected workspace. | 173, 174 | planned |
+## v8.31 Operator Config Durability + Storage Consolidation — Planned 2026-07-26
+
+**Sources:** oracle-1 hardening session 2026-07-25/26 (Aura config-drift discovery, full local→oracle-1 migration, disk-pressure remediation, health-check extension, systemd-timer re-arming); ROADMAP §v8.15 data-plane reconciliation.
+**Governing constraint:** no upgrade, restart, reinstall, or migration on any host may lose users, configuration, or memory/data. A requirement that cannot be met under that rule fails closed.
+
+| ID | Requirement | Phase | Status |
+|----|-------------|-------|--------|
+| CFGDUR-01 | Host backend topology (Aura vs local Neo4j; Qdrant Cloud vs local) is versioned in a committed, non-secret host-profile mechanism; secrets remain in `.env`/1Password and out of git | 196 | planned |
+| CFGDUR-02 | A plain `docker compose up` either produces the correct topology or refuses to start with an actionable error; correctness must not depend on remembering a wrapper script | 196 | planned |
+| CFGDUR-03 | `scripts/memroos-health-check.sh` is committed to the repo with tests for its failure branches; its checks (Aura env, Qdrant reachability, graph-catchup activity, users/registered_agents vs. previous run, profile presence, local-neo4j-not-running) are documented | 196 | planned |
+| CFGDUR-04 | The cron+SendGrid and systemd+GitHub-issue health systems are reconciled into one documented story with stated ownership per check and per alert channel | 196 | planned |
+| CFGDUR-05 | Timer/cron **liveness** is monitored — an `enabled`-but-unarmed timer (`systemctl list-timers` → `NEXT: -`) must alert; asserting `is-enabled` alone is insufficient and demonstrably missed the 2026-07-23 failure | 196, 197, 198 | planned |
+| CFGDUR-06 | An upgrade-safety regression runs the documented upgrade path on a disposable host with seeded data and asserts users>0, registered_agents>0, Aura-not-local, and non-placeholder Qdrant URL; extends the v8.21 `install-regression` harness | 196 | planned |
+| HOSTPAR-01 | A per-host inventory records graph backend, vector backend, SQLite path, restart path, monitoring coverage, and alert destination for oracle-1 and cordant-hermes-01; intentional divergence is allowed, undocumented divergence is not | 197 | planned |
+| HOSTPAR-02 | The Phase 185 durability mechanism and health check run on cordant-hermes-01 with host-appropriate expectations (local Neo4j there is correct and must not be flagged as drift) | 197 | planned |
+| HOSTPAR-03 | CFGDUR-05 timer/cron liveness monitoring covers cordant-hermes-01 | 197 | planned |
+| HOSTPAR-04 | A recorded decision states whether cordant-hermes-01 moves to Aura or deliberately stays on local Neo4j, with reasoning; either outcome closes this, leaving it unexamined does not | 197 | planned |
+| STORECON-01 | Sizing/cost baseline captured before any storage decision: `conversations.db` on-disk size, largest tables, growth rate, oracle-1 free-space headroom, and the Supabase tier the workload lands in | 198 | planned |
+| STORECON-02 | An ADR records the SQLite→Postgres decision and explicitly corrects the "maximize space" premise — local Postgres increases oracle-1 disk usage (WAL + index + server overhead); only managed/remote Postgres reduces local footprint. The ADR states which it chooses | 198 | planned |
+| STORECON-03 | Embedding generation is restored or explicitly deferred with a reason; current state is `[embeddings] provider disabled; embedding job not scheduled` with no provider key on the `memroos` or `mem0` containers, making all existing embeddings migrated history rather than live output | 198 | planned |
+| STORECON-04 | `graph-catchup`'s persistent `projected: 0` is diagnosed to a cause and labelled benign or defect-with-fix; the ambiguity may not be carried forward again | 198 | planned |
+| STORECON-05 | Scheduled jobs that **populate** Qdrant and Neo4j (not merely check reachability) exist, are documented, and have liveness covered by CFGDUR-05 | 198 | planned |
+
+**Locked:** Executing the Supabase project deletion (ApplyPilot delete; JobHunt export+delete; GrowthAlchemyLab untouched) is **excluded** from v8.31. It is irreversible, the operator confirmation predates multiple context compactions, and it must be re-confirmed immediately before execution. Migrating the SQLite kernel is likewise excluded — Phase 198 produces a decision and the population fix only; an approved migration is a separate phase requiring a verified restore rehearsal first. Backend replacement of mem0/Qdrant/Neo4j remains approval-gated per `.planning/MILESTONES.md` § Deferred / Approval-Gated.

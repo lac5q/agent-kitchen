@@ -62,12 +62,13 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.12 MemRoOS MCP Memory Gate Resilience** — Phases 154-156 (completed 2026-07-15; probe timeout honesty + Mem0 hang immunity + path-scoped disk / strict-gate diagnostics)
 - ✅ **v8.13 Memory Tier Catchup + Install Wiring** — Phases 157-159 (code complete 2026-07-18; live Aura oneshot Luis-gated)
 - ✅ **v8.14 Human Wiki Surface + Memory Digest** — Phases 160-162 (code complete 2026-07-18; vault-dependent live digest needs knowledge path)
-- 📋 **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; single operator on Oracle Free Tier + Cloudflare Tunnel; Ollama nomic embeds on-box; Voyage cloud embed fallback; decommission Heroku operator)
+- ✅ **v8.15 Always-On Cloud Operator (oracle-1)** — Phases 163-166 (added 2026-07-17; live cutover verified 2026-07-18; **data plane fully reconciled 2026-07-26** — Aura + Qdrant Cloud restored after a silent config-drift regression, full local→oracle-1 migration of ~123 tables / 45,750 `message_embeddings` / 59 registered agents; Phase 166 Voyage remains out of scope)
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 - ✅ **v8.18 NOC Metrics Rethink** — Phases 173-174 (code-complete on main: commits `07a419d0` "feat: add truthful NOC attention contract" and `720f7805` "feat: complete NOC operator layout"; 116/116 tests pass across NOC API + components; NOCUX-01..05 met)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 library complete on main** via 2026-07-23 beastmode session — `services/connmem` (25 modules, 141 tests). **Not yet integrated:** no service entrypoint, no compose/topology entry, no kernel route, and the 141 tests do not run in CI (2026-07-24 architecture review, F1). Live backfill is blocked on runtime integration (v8.27 Phase 185), not only on the Linear + Circleback credentials tracked in `CONNMEM-LIVE-DEFER`)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
+- 🔄 **v8.31 Operator Config Durability + Storage Consolidation** — Phases 196-198 (added 2026-07-26 from the oracle-1 hardening session; CFGDUR-01..06 + HOSTPAR-01..04 + STORECON-01..05; make host configuration survive upgrades by construction, bring cordant-hermes-01 to oracle-1 parity, and decide SQLite→Postgres/Supabase on measured evidence. This milestone exists because a silent config regression disconnected Neo4j Aura and was found by accident)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
 - 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
 - 📋 **v8.28 Enforcement Surface Parity** — Phases 186-187 (added 2026-07-24 from architecture review F2/F3; TOPOPROD-01..04 production topology profile for oracle-1 + AUTHGATE-01..03 filesystem-driven route-auth gate; Phase 187 is hours of work and should land first if capacity is tight)
@@ -2570,7 +2571,18 @@ Plans:
 
 *Added: 2026-07-17 · Version: 2026-07-18.2 · Creation: 2026-07-17 21:07 PDT · Updated: 2026-07-18 15:20 UTC*
 
-**Status:** 🟢 LIVE CUTOVER VERIFIED (2026-07-18) — Tailscale SSH to oracle-1, Cloudflare tunnel healthy, Heroku web=0, onboarding verify 403; Phase 166 Voyage still out of scope.  
+**Status:** 🟢 LIVE CUTOVER VERIFIED (2026-07-18); 🟢 **DATA PLANE RECONCILED (2026-07-26)** — Phase 164's "migrated/synced SQLite kernel" and "Aura + Qdrant env" criteria were only partially true at cutover and drifted afterward. Both are now closed on evidence; Phase 166 Voyage still out of scope.  
+
+**Data-plane reconciliation (2026-07-26 operator session) — what was actually wrong and what fixed it:**
+
+- **Neo4j Aura was silently disconnected.** The app on oracle-1 was resolving `NEO4J_HTTP_URL` to a *local Neo4j container*, not the Aura instance, because a plain `docker compose -f docker-compose.local.yml up -d` reintroduced the shared local `neo4j` service. Graph writes were landing in a throwaway container. Nothing alerted; it was found by accident. **Fixed** via a host-only `docker-compose.override.yml` (mode 600, git-ignored) that pins the Aura + Qdrant Cloud env and uses the Compose `!override` merge tag on `depends_on` plus a `profiles:` key to exclude the local `neo4j` service from default runs. No Aura data was lost — the Aura instance retained its contents throughout.
+- **Qdrant was pointed at a placeholder.** `QDRANT_URL` was literally `your-qdrant-cloud-endpoint`. **Fixed** in the same override; now verified reachable with 4 populated collections (`knowledge_docs` 43,305 pts, `agent_memory` 2,609, `agent_memory_local` 1,436, `user_context` 10).
+- **Restarts were the regression vector.** Any `docker compose up` that forgot the override silently reverted both fixes. **Fixed** by `scripts/memroos-restart.sh`, which always layers `-f docker-compose.local.yml -f docker-compose.override.yml`. See v8.31 CFGDUR-02 — measurement shows this wrapper is *not* sufficient as the primary control.
+- **Full local→oracle-1 data migration completed.** ~123 tables, 217,002 statements applied 217,002/217,002 with zero errors (`/tmp/fix_migration_load2.log`); 45,750 `message_embeddings` rows and 59 `registered_agents` verified on-host. An earlier attempt failed with 30,533 `database or disk is full` errors — root cause was disk exhaustion, not schema drift; resolved by freeing space *before* rerunning. Two migration hazards were found and eliminated: positional `.dump`-style `INSERT`s (silently corrupt across schema drift → replaced with named-column inserts) and `INSERT OR IGNORE` (silently no-ops on *any* constraint violation, not just PK collisions → replaced with explicit error accounting).
+- **Disk pressure relieved.** oracle-1 hit 4GB free / 89% used (crit). Reclaimed by deleting `/home/opc/inbox` (2.9GB, operator-confirmed), Docker prune, duplicate checkouts and non-critical temp files, and removing the now-dead local Neo4j container/volume/image.
+- **Monitoring restored and extended.** `scripts/memroos-health-check.sh` (cron `*/15`) now verifies Aura env, Qdrant reachability, graph-catchup activity, `users`/`registered_agents` counts against the previous run, override-file presence, and that the local `neo4j` container is *not* running. Separately, both pre-existing systemd timers (`memroos-healthcheck.timer` → GitHub-issue alerting, `memroos-disk-watch.timer`) were found `enabled` but **not armed** — last fired 2026-07-23 21:25 GMT, at almost exactly the moment disk hit crit. Both re-armed 2026-07-26.
+
+**Known-open on this host (tracked in v8.31, not here):** embedding generation is disabled (`[embeddings] provider disabled; embedding job not scheduled` — no provider key on either container), so all 45,750 embedding rows and 43,305 Qdrant points are migrated history, not live output; `graph-catchup` logs `projected: 0` every run, cause not yet distinguished from the same missing-provider root.  
 **Evidence:** `docs/uat/2026-07-18-oracle1-live-cutover-verification.md` (commit `5969968` + follow-on Tailscale SSH enablement `201cbe2`).  
 **Plan:** `~/.cursor/plans/mac-as-prod_memroos_d4133d54.plan.md` (Always-on Oracle MemRoOS)  
 **Depends on:** v8.13 graph catchup paths; Aura + Qdrant Cloud credentials; Tailscale reachability to `oracle-1`  
@@ -2621,8 +2633,8 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 163. Oracle readiness + nomic embeds | 1/2 docs + live | Live cutover verified 2026-07-18 via Tailscale SSH; see `docs/uat/2026-07-18-oracle1-live-cutover-verification.md` | 2026-07-18 |
-| 164. Operator deploy + data cutover | 1/2 docs + live | Host `main` ff + rebuild/restart verified on oracle-1 2026-07-18 | 2026-07-18 |
+| 163. Oracle readiness + nomic embeds | 1/2 docs + live | Live cutover verified 2026-07-18. **Disk headroom criterion (≥5G free) regressed to 4G/89% on 2026-07-23 and was restored 2026-07-26**; the `nomic-embed-text` install this phase specified was never completed — carried to v8.31 STORECON-03 | 2026-07-18 (reconciled 2026-07-26) |
+| 164. Operator deploy + data cutover | 2/2 | **Closed 2026-07-26.** Criterion 1 (Aura + Qdrant env) had silently regressed to a local Neo4j container + placeholder Qdrant URL — now pinned and continuously verified. Criterion 2 (SQLite migrated, inventory non-zero on-host) closed by the full 217,002/217,002-statement migration. Criterion 3 (graph-catchup enabled) runs but returns `projected: 0` — carried to v8.31 STORECON-04 | 2026-07-26 |
 | 165. Tunnel + Heroku decommission | 1/2 docs + live | CF `memroos-oracle` healthy; Heroku `web=0`; onboarding verify 403 | 2026-07-18 |
 | 166. Voyage embed provider | 0/? | Out of scope for active goal; do not implement Voyage in this pass | — |
 
@@ -3128,6 +3140,7 @@ request form at /forgot-password, and a confirm form at /reset-password/[token].
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 183. Password Reset UI | 1/1 | Shipped on `main` | 2026-07-23 |
+| 183b. SendGrid delivery for `delivery: "queued"` | 0/1 | **WIP, uncommitted on the operator Mac as of 2026-07-26** — `apps/memroos/src/lib/email/send.ts` (untracked) plus modified `api/auth/password-reset/route.ts`, `forgot-password/page.tsx`, `.env.example`. Phase 183 shipped the UI against `delivery: "manual"`; real email send was explicitly out of scope there. Not yet end-to-end tested against a live inbox | — |
 
 ### What we considered and DEFERRED
 
@@ -3430,3 +3443,98 @@ update both or fold the TS lib onto the script's parser.
 **Sequencing:** Phase 191 first — it creates the primitive everything else points at and turns on the headline metric. Phase 194 can run in parallel with 192/193. Phase 195 last, and its step 1 is a hard gate: verify each producer emits live before building any panel row, so v8.30 does not repeat Phase 117's outcome of correct metrics over empty tables. Smallest behavior-changing slice if capacity is tight: Phase 191 + the SELFCAP-02 hooks.
 
 **Cross-phase notes:** Phase 191's module consolidation collides with Phase 189 LIBNORM-02 (same file move) — whichever lands first owns it. Phase 193's salience migration should coordinate with Phase 188 STORE-02. Phase 193's auto-promotion is the highest-stakes change in the milestone (gold is what agents rely on directly); consider one shadow-mode cadence before it promotes anything.
+
+## v8.31 Operator Config Durability + Storage Consolidation (operator session, 2026-07-26)
+
+*Added: 2026-07-26 · Source: oracle-1 hardening session 2026-07-25/26*
+
+**Why this milestone exists.** A `docker compose up` that omitted a single
+host-only file silently repointed the operator's graph writes from Neo4j Aura
+to a throwaway local container, and left `QDRANT_URL` at the literal string
+`your-qdrant-cloud-endpoint`. Both persisted undetected and were found by
+accident, not by any alarm. v8.24 gave us `memroos doctor`/`repair`/`snapshot`;
+it did not make the *configuration itself* durable. Operator's framing:
+"all the configuration needs to be centralized and not so easily blown up."
+
+**Governing constraint (operator hard rule):** no upgrade, restart, reinstall,
+or migration on any host may lose users, configuration, or memory/data. Every
+phase below is subordinate to that rule and fails closed where it cannot
+satisfy it.
+
+**Relationship to v8.29:** v8.29 pays down *code* structural debt; v8.31 pays
+down *host/config* structural debt. They are independent and can run in
+parallel.
+
+**Requirements:** CFGDUR-01..06, HOSTPAR-01..04, STORECON-01..05
+
+### Phase 196 — Config Durability + Anti-Regression
+
+**Goal:** Make the oracle-1 fixes structural rather than conventional. They
+currently depend on a human remembering to invoke `scripts/memroos-restart.sh`
+and on a gitignored, hand-maintained file existing on exactly one host — a
+single point of failure guarded by discipline, which is what failed the first
+time.
+
+**Key measured finding (oracle-1, compose v5.3.0, 2026-07-26):** an explicit
+`-f` on the command line overrides **both** the automatic
+`docker-compose.override.yml` pickup **and** the `COMPOSE_FILE` env var. Since
+the outage command was `docker compose -f docker-compose.local.yml up -d`, no
+env-var-based control can defend against it. **The app-side startup assertion
+is therefore the primary control, not the fallback.**
+
+Full plan: `.planning/phases/196-config-durability-anti-regression/196-01-PLAN.md`
+
+### Phase 197 — cordant-hermes-01 Parity
+
+**Goal:** Bring the least-observed host in the fleet under the same durability
+and monitoring regime, with host-appropriate expectations.
+
+**Operator decision 2026-07-26 (HOSTPAR-04 closed):** cordant-hermes-01 **stays
+on local Neo4j**. Migrating it to Aura would mean a data migration on a host with
+no verified backup — precisely the risk the no-data-loss rule exists to prevent.
+This is recorded as intentional divergence. Consequence: the health check must
+assert *conformance to each host's declared profile*, not a fixed topology, or it
+will alert continuously here and get muted.
+
+Full plan: `.planning/phases/197-cordant-hermes-01-parity/197-01-PLAN.md`
+
+### Phase 198 — Storage Consolidation Decision + Population Cron
+
+**Goal:** Decide SQLite→managed Postgres on measured evidence, and fix that
+nothing currently *populates* embeddings or graph projections — only checks that
+the backends are reachable.
+
+**Operator decision 2026-07-26 (STORECON-03 provider chosen):** **Ollama
+`nomic-embed-text` on oracle-1, $0 per call.** This completes the original v8.15
+CLOUDOPS-01 plan that was never finished. Rejected OpenAI embeddings as a
+recurring per-call bill for a quality delta that is not the bottleneck. Hard
+gate: verify ≥6GB free before pulling the ~275MB model — the disk-watch warn
+threshold is not a courtesy.
+
+**Premise correction carried in STORECON-02:** the stated goal is "maximize use
+of space," but **local Postgres on oracle-1 would use MORE disk than SQLite**
+(WAL, per-index overhead, server process). Only *managed/remote* Postgres
+reduces local footprint. The ADR must state which it chooses; changing nothing
+is a legitimate outcome.
+
+Full plan: `.planning/phases/198-storage-consolidation-population/198-01-PLAN.md`
+
+### Progress Table (v8.31 Operator Config Durability + Storage Consolidation)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 196. Config Durability + Anti-Regression | 0/1 | Planned; partial groundwork live on oracle-1 (override + restart wrapper + extended health check + re-armed timers) — needs committing, testing, and generalizing | — |
+| 197. cordant-hermes-01 Parity | 0/1 | Planned; HOSTPAR-04 decided (stay local) | — |
+| 198. Storage Consolidation + Population | 0/1 | Planned; STORECON-03 provider decided (Ollama nomic, $0) | — |
+
+### Carried operator items NOT in this milestone
+
+- **Admin user creation** (`luis@epiloguecapital.com`, `luis.calderon@cordant.ai`)
+  — status never confirmed. oracle-1 shows 2 users; which two is unverified.
+- **Rotate the shared bootstrap password** set during 2026-07-25 provisioning
+  (value deliberately not recorded here) — outstanding. Should use Phase 183b's
+  live email path so the rotation exercises the real reset flow.
+- **Supabase cleanup** (ApplyPilot delete; JobHunt export+delete;
+  GrowthAlchemyLab untouched) — operator-confirmed but destructive and stale
+  across several context compactions. **Re-confirm immediately before executing.**
+  Not a MemRoOS-repo change.

@@ -1,17 +1,63 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.20+v8.21
-milestone_name: Connected Work Memory (Phase 176 first session) + Reproducible Local Install Hardening (Phase 177 partial closure)
+milestone: v8.31
+milestone_name: Operator Config Durability + Storage Consolidation (Phases 196-198)
 status: active
-stopped_at: Phase 179 nav wiring + main CI repair landed via PR #51 (claude/members-dashboard-auth-ui-82dpyh); Nango env/provider config still open for live OAuth connects
-last_updated: "2026-07-26T17:45:00Z"
+stopped_at: v8.31 added 2026-07-26 from the oracle-1 hardening session; v8.15 data plane reconciled and closed; three operator decisions recorded (health-system consolidation, Ollama embeddings, cordant stays local)
+last_updated: "2026-07-26T19:45:00Z"
 progress:
-  total_phases: 117
-  completed_phases: 84
-  total_plans: 159
-  completed_plans: 143
-  percent: 73
+  total_phases: 120
+  completed_phases: 85
+  total_plans: 162
+  completed_plans: 144
+  percent: 71
 ---
+
+## Latest Position (2026-07-26) — v8.31 added, v8.15 closed
+
+**Nango is RESOLVED.** The prior STATE flagged "Nango env/provider config still
+open for live OAuth connects." Verified 2026-07-26 from oracle-1: the production
+`NANGO_SECRET_KEY` in `/home/opc/memroos/.env` authenticates successfully —
+`/environment-variables` 200, `/connection` 200, `/connect/sessions` returns a
+valid session token and connect link. One integration configured
+(`github-getting-started`) with one live connection. The key works; what remains
+is adding the *intended production integrations* beyond the GitHub starter, which
+is configuration in the Nango dashboard, not a code or credential problem.
+
+**memroos MCP registered for Claude Code.** `/mcp` was failing locally because
+the server was registered in Cursor and Codex but had no entry under the
+`/Users/lcalderon/github/memroos` project scope in `~/.claude.json`. Added and
+handshake-verified (`initialize` returns `knowledge-system` v2.14.7). The server
+itself was never broken.
+
+**v8.15 Always-On Cloud Operator — reconciled and closed.** Phase 164's "Aura +
+Qdrant env" and "SQLite migrated" criteria were only partially true at the
+2026-07-18 cutover and had since drifted: the app resolved `NEO4J_HTTP_URL` to a
+local throwaway container instead of Aura, and `QDRANT_URL` was the literal
+placeholder. Both fixed and continuously verified. Full local→oracle-1 migration
+completed 217,002/217,002 statements, zero errors. Both systemd timers, found
+`enabled` but unarmed since 2026-07-23, re-armed. Detail in ROADMAP §v8.15.
+
+**v8.25 Phase 183 corrected.** Password-reset UI shipped against
+`delivery: "manual"`; real SendGrid send is uncommitted WIP, tracked as 183b.
+
+**v8.31 added — Phases 196-198.** The Aura disconnection was not a bug; it was a
+correct compose invocation that omitted a host-only file, on a system where
+omitting it produces a working-but-wrong stack with no error. Measured on
+oracle-1: an explicit `-f` defeats both the auto-override and `COMPOSE_FILE`, so
+the app-side startup assertion must be the primary control, not the wrapper
+script. Three operator decisions recorded: retire cron+SendGrid in favor of
+systemd+GitHub-issues; Ollama `nomic-embed-text` ($0) for embeddings;
+cordant-hermes-01 stays on local Neo4j.
+
+**Known-open, carried into Phase 198:** embedding generation disabled, so every
+existing embedding is migrated history rather than live output; `graph-catchup`
+returns `projected: 0` with cause not yet distinguished from that same root.
+
+**Excluded deliberately:** Supabase cleanup is operator-confirmed but
+irreversible and stale across several compactions — re-confirm before executing.
+
+## Prior Position (v8.20 + v8.21)
 
 # State: Memroos
 

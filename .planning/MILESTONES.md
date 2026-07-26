@@ -2,6 +2,24 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
+## Planned: v8.31 Operator Config Durability + Storage Consolidation (Added 2026-07-26)
+
+**Scope:**
+
+1. Make host configuration durable by construction — version the backend topology, make the wrong restart command fail loudly instead of silently producing a working-but-wrong stack, and commit the health check that currently lives only on one host. Measured: an explicit `-f` defeats both the auto-override and `COMPOSE_FILE`, so the app-side startup assertion is the primary control.
+2. Monitor the monitors — an `enabled`-but-unarmed systemd timer reported healthy for three days while dead; liveness must assert *recency of last run*, not configuration state.
+3. cordant-hermes-01 parity. **Decided 2026-07-26:** stays on local Neo4j (no verified backup ⇒ no migration); recorded as intentional divergence, health check made host-aware.
+4. Decide SQLite→Postgres on a measured baseline, and fix that nothing currently *populates* embeddings or graph projections. **Decided 2026-07-26:** Ollama `nomic-embed-text` on oracle-1, $0/call, completing the unfinished v8.15 CLOUDOPS-01.
+
+**Phases:** 196–198.  
+**Requirements:** CFGDUR-01..06, HOSTPAR-01..04, STORECON-01..05.  
+**Plans:** `.planning/phases/196-config-durability-anti-regression/196-01-PLAN.md`, `197-cordant-hermes-01-parity/197-01-PLAN.md`, `198-storage-consolidation-population/198-01-PLAN.md`.  
+**Origin:** oracle-1 hardening session 2026-07-25/26 — a config regression silently repointed graph writes from Neo4j Aura to a throwaway local container, undetected until found by accident.  
+**Governing constraint:** no upgrade, restart, reinstall, or migration may lose users, configuration, or memory/data on any host.  
+**Excluded (destructive, re-confirm first):** Supabase project deletion — ApplyPilot delete, JobHunt export-then-delete, GrowthAlchemyLab untouched. Operator-confirmed but stale across multiple compactions.
+
+---
+
 ## Planned: v8.16 Multi-Harness Observe Plane (Added 2026-07-17)
 
 **Scope:**
