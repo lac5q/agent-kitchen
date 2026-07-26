@@ -70,6 +70,51 @@ available on demand via the `catalog` and `read` actions.
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
 
+## Automatic downshift: menial work goes to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
+
+**This is automatic and dynamic — the operator never has to ask.** There is no
+trigger phrase; waiting to be told is a violation. Classify every unit of work
+before starting it, re-classify as its real shape emerges, and route without
+asking permission. Report which lane ran, after the fact.
+
+Menial — mechanical, inspection-verifiable, no architectural judgment (bulk
+mechanical edits, boilerplate, fixtures, format/lint/type cleanups, doc tidying,
+log triage, repetitive per-item passes) — goes to a **MiniMax-M3** bounded worker.
+The director keeps architecture, security, impact analysis, planning, verification,
+commits, and pushes. A "menial" task that surfaces a design or security question
+escalates back to the director immediately; a director task that turns out to be
+mechanical downshifts mid-flight.
+
+Prove the lane returns `MINIMAX OK` once per session before delegating; review
+everything it returns and run the real checks yourself. When MiniMax is not live,
+fall back automatically — next-cheapest worker lane, then cheapest subagent, then
+director-inline — and name the lane that actually ran. Never imply MiniMax ran when
+it did not.
+
+Full contract, including the dispatch test and re-classification rules:
+`agents/AGENTS_TEMPLATE.md` § "Automatic Downshift". Lane table, invocation, and
+smoke gates: `docs/codex-cloud/skills/beastmode-cloud/SKILL.md` § "Worker Lanes".
+
+## Secrets in cloud sessions (1Password service account)
+
+Cloud agent sessions read secrets through a 1Password **service account**, not a
+personal vault login and not a claude.ai connector. The standing setup:
+
+- Each cloud environment (Claude Code Remote, Cursor Cloud, Codex Cloud) sets
+  `OP_SERVICE_ACCOUNT_TOKEN` in its environment variables. The token belongs to a
+  service account scoped **read-only** to the dedicated infra vault — never a
+  personal vault.
+- `scripts/setup-1password-cli.sh` installs the `op` CLI when that token is
+  present (no-op otherwise). The Cursor/Codex setup scripts call it automatically
+  (`CURSOR_CLOUD_INSTALL_OP=0` / `CODEX_CLOUD_INSTALL_OP=0` to skip).
+- The environment's network policy must allow `cache.agilebits.com` (CLI
+  download) and `*.1password.com` (API), or `op` cannot install/authenticate.
+- Read secrets with `op read 'op://<vault>/<item>/<field>'`. Never print secret
+  values into chat, logs, or commits; pipe them directly to their destination
+  (see `scripts/configure-nango-oracle1.sh` for the pattern).
+- If `op whoami` fails in a session, say so and fall back to asking the operator
+  to run the relevant script locally — do not claim secrets access you don't have.
+
 ## Production deployment
 
 Read `docs/production-deployment.md` before any deploy or onboarding task.

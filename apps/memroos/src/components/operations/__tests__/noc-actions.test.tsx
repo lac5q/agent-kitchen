@@ -232,6 +232,7 @@ describe("Phase 173 Attention", () => {
     render(<AttentionPanel filters={{ window: "24h", workspace: "all" }} />);
 
     expect(screen.getByText("Cron needs attention")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
     expect(screen.getAllByRole("link", { name: "Open" }).map((link) => link.getAttribute("href"))).toEqual(["/escalations", "/audit", "/library"]);
     expect(document.querySelectorAll("[data-attention-severity='critical']")).toHaveLength(2);
     expect(screen.getByLabelText("Attention")).toBeInTheDocument();

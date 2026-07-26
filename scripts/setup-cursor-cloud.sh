@@ -327,6 +327,12 @@ fi
 
 installed_skill_count="$(find "$CURSOR_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
 
+# 1Password CLI for scoped secrets access (no-ops unless the environment sets
+# OP_SERVICE_ACCOUNT_TOKEN; see scripts/setup-1password-cli.sh).
+if [[ "${CURSOR_CLOUD_INSTALL_OP:-1}" != "0" && -f "$ROOT/scripts/setup-1password-cli.sh" ]]; then
+  bash "$ROOT/scripts/setup-1password-cli.sh" || echo "1Password CLI setup failed (non-fatal)." >&2
+fi
+
 echo "Cursor Cloud MemRoOS setup complete ($MODE)."
 echo "MemRoOS root: $MEMROOS_ROOT"
 echo "Knowledge root: $KNOWLEDGE_ROOT"

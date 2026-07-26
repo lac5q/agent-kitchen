@@ -78,12 +78,13 @@ const NAV_ITEMS = [
   {
     href: "/audit",
     label: "Governance",
-    description: "Audit · escalations · team · keys",
+    description: "Audit · team · integrations · keys",
     icon: ShieldCheck,
     match: [
       "/audit",
       "/escalations",
       "/team",
+      "/settings/tools",
       "/settings/api-keys",
       "/settings/compliance",
     ],

@@ -693,3 +693,41 @@
 | NOCUX-03 | Default panel order answers operator questions in order: alive, needs attention, learning, agent activity, cost, governance. | 174 | planned |
 | NOCUX-04 | EfficiencySignals and other useful-but-unwired panels are hidden behind Show advanced until their producers are verified. Known-unwired is explicit, not a generic empty/error state. | 173, 174 | planned |
 | NOCUX-05 | Window (24h/7d/30d) and workspace filters apply consistently; Agent Activity remains message-backed when no hive delegations exist; empty-state probes respect the selected workspace. | 173, 174 | planned |
+
+## v8.30 Seamless Memory Adoption — Planned 2026-07-26
+
+**Created:** 2026-07-26  
+**Version:** 2026-07-26.1  
+**Sources:** Operator session 2026-07-26 (agents neither check MemRoOS for prior work nor store enough; injection into every session rejected as the mechanism); repo audit in `.planning/design/memory-adoption-v1.md` §2; Phase 118 kernel (orphaned), Phase 117 telemetry (empty `retrieval_trace` stream), v8.16 observe plane, Memento save-quality spike (deferred), `agents/AGENTS_TEMPLATE.md` Skills > Memory directive, `content/research/memroos-persist-failure-rca-2026-07-05.md`
+
+**Design:** `.planning/design/memory-adoption-v1.md`
+
+| ID | Requirement | Phase | Status |
+|----|-------------|-------|--------|
+| PRIORWORK-01 | Consolidate the two Phase 118 recollection implementations into one canonical module under `lib/memory/recollection/` (richer trigger vocabulary + EFFTEL-04 guard survive; `BeliefStage` export path stable; loser deleted) | 191 | planned |
+| PRIORWORK-02 | `POST /api/memory/prior-work` (agent-key auth): task text + hints → recollection kernel → pointer-sized digest pack (≤5 items: title, one-liner, belief stage, age, salience, fetch ref) with explicit prior-work-exists headline; typed skip reason codes; never raw payloads | 191 | planned |
+| PRIORWORK-03 | MCP tool `memory_prior_work` in `CORE_TOOLS`; tool description carries the when-to-call contract | 191 | planned |
+| PRIORWORK-04 | Every probe (served or skipped) emits a `retrieval_trace` efficiency event with the full recollection receipt via an agent-reachable path; `retrievalBeforeWorkRate` populated from real external sessions | 191 | planned |
+| PRIORWORK-05 | `/api/agent-context` gains topic-based recall through the recollection module (no `goal_id` required for memories) + MCP wrapper for the context packet | 191 | planned |
+| SELFCAP-01 | `/api/agent-memory/capture` accepts agent-key auth scoped to the agent's own sessions; rate-limited; server-side depth policy unchanged (`relevant` default, `full` → vault) | 192 | planned |
+| SELFCAP-02 | Repo-shipped hooks installed by `install-agent-integrations.sh`: session-start memory-brief (≤600-token pointer digest; fails open with miss receipt) + stop/pre-compact capture-gate (structured capture or typed skip receipt; failure → receipt + NOC Attention, never a blocked session) | 192 | planned |
+| SELFCAP-03 | Per-harness hook capability matrix committed and drift-gated (native hooks, portable-hook equivalent, plugin, or skill+sidecar fallback); no false full-coverage claims | 192 | planned |
+| SELFCAP-04 | Observe sidecar structured extraction v2: decisions, outcomes/verification, errors, commands, files, entities replace the 240-char summary; deterministic-first, LLM assist only where depth policy allows | 192 | planned |
+| SELFCAP-05 | Sidecar scheduled (launchd/systemd/cron template via installer) with heartbeat in NOC observe-harness health | 192 | planned |
+| SAVEQ-01 | Save-quality report scored on every governed write (type, provenance, dedupe, specificity, promotion readiness); score persisted | 193 | planned |
+| SAVEQ-02 | Coach-back receipts for sub-threshold writes with actionable guidance; hard-reject only on policy violations; rubric encodes Skills > Memory | 193 | planned |
+| SAVEQ-03 | Governance parity: no default-visible ungoverned memory write or untraced search remains (`memory_save`/`memory_search` routed through governed paths, or demoted from `CORE_TOOLS`) | 193 | planned |
+| SAVEQ-04 | Automatic silver→gold promotion scheduler running the existing five deterministic checks; conflicts → operator review queue; no LLM-only promotion; hash-chained receipts | 193 | planned |
+| SAVEQ-05 | Salience coverage extends to agent-written memories/candidates; `tool_record_outcome` usefulness feedback reinforces salience and ranking | 193 | planned |
+| MEMHABIT-01 | skill-packs catalog falls back to repo skills dirs when `$KNOWLEDGE_ROOT/skills` is absent, so the AGENTS.md auto-load bootstrap returns real skills in a MemRoOS checkout | 194 | planned |
+| MEMHABIT-02 | `memroos-recall` shipped as SKILL.md with `auto_load: true` (generalized from `multica-memroos`): start-of-task probe protocol, mid-task re-probe triggers, belief-stage handling rules | 194 | planned |
+| MEMHABIT-03 | `memroos-save` upgraded: end-of-task persist checklist covers governed memory writes (decisions, outcomes, facts, handoff state), not only document writes | 194 | planned |
+| MEMHABIT-04 | GSD skills hardened: `$goal` step 4 becomes a named mandatory `memory_prior_work` probe with receipt; beastmode/qwen-cloud gain start/end memory checkpoints | 194 | planned |
+| MEMHABIT-05 | Memory-tool MCP descriptions + `knowledge_system_orientation` prompt state the memory contract (probe at start, governed save or skip receipt at end) | 194 | planned |
+| ADOPTTEL-01 | NOC Memory Adoption panel per agent/harness: recall-before-work, capture-per-session, rediscovered-fact rate, save-quality distribution, silver→gold throughput; NOCUX honest states | 195 | planned |
+| ADOPTTEL-02 | `research-without-persist-detector` generalized to all Wave-1 harness session roots; findings surface as NOC Attention items | 195 | planned |
+| ADOPTTEL-03 | GSD closeout gate: phase/goal close requires start probe receipt + close learnings write (or typed skip receipt); CI-wired check script | 195 | planned |
+| ADOPTTEL-04 | Adoption SLOs measured on live operator data: retrieval-before-work ≥70% of working sessions; ≥1 governed write or skip receipt per session; rediscovered-fact rate declining over 30d; auto silver→gold throughput >0 weekly | 195 | planned |
+| ADOPTTEL-05 | Eval fixtures: prior-work-exists surfaced, no-prior-work honest skip, junk-save coach-back, duplicate-save rediscovery flag, old-critical-beats-recent-noise regression | 195 | planned |
+
+**Locked:** Pointer, not payload — session briefs stay ≤ ~600 tokens; full memories are pull-on-demand only. Recall fails open with receipts (a degraded brain never blocks work); write policy fails closed. No new memory backend, no LLM-only silver→gold promotion, no transcript dumping into mem0, depth default stays `relevant`. Skills > Memory ordering preserved: procedures → SkillForge, class lessons → skills, decisions/outcomes/facts/handoff state → memory.

@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY services/connmem/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY services/connmem ./services/connmem
+ENV PYTHONPATH=/app
+EXPOSE 3290
+# uvicorn is invoked as a module so the package is on the import path
+# without setting PYTHONPATH at runtime.
+CMD ["uvicorn", "services.connmem.app:app", "--host", "0.0.0.0", "--port", "3290"]

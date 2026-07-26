@@ -18,6 +18,9 @@ import type {
 } from "./types";
 import { proposeShadowSuggestion } from "./llm-adjudicator";
 
+const CLASSIFICATION_SCAN_CHUNK_SIZE = 4096;
+const CLASSIFICATION_SCAN_OVERLAP = 512;
+
 type RawArtifactRow = {
   id: string;
   tenant_id: string;
@@ -241,8 +244,46 @@ function sensitivityFromScanner(patternNames: string[], domain: VaultDomain): Va
   return null;
 }
 
+/**
+ * Scan long vault/message bodies in bounded overlapping chunks.
+ *
+ * `scanContent` intentionally fails closed for inputs over 4096 characters.
+ * That contract is correct for a single untrusted request, but applying it
+ * directly to ingested transcripts turns every normal long conversation into
+ * a human-review escalation. Chunking preserves fail-closed scanning while
+ * treating `input_too_long` as a transport guard, not as security evidence.
+ */
+function scanForClassification(content: string) {
+  if (content.length <= CLASSIFICATION_SCAN_CHUNK_SIZE) {
+    return scanContent(content);
+  }
+
+  const matches = new Map<string, {
+    patternName: string;
+    severity: "HIGH" | "MEDIUM";
+    redacted: string;
+  }>();
+  let blocked = false;
+  const step = CLASSIFICATION_SCAN_CHUNK_SIZE - CLASSIFICATION_SCAN_OVERLAP;
+
+  for (let start = 0; start < content.length; start += step) {
+    const result = scanContent(content.slice(start, start + CLASSIFICATION_SCAN_CHUNK_SIZE));
+    for (const match of result.matches) {
+      if (match.patternName === "input_too_long") continue;
+      matches.set(match.patternName, match);
+      if (match.severity === "HIGH") blocked = true;
+    }
+  }
+
+  return {
+    blocked,
+    matches: Array.from(matches.values()),
+    cleanContent: content,
+  };
+}
+
 export function classifyText(input: ClassificationInput): ClassificationResult {
-  const scan = scanContent(input.content);
+  const scan = scanForClassification(input.content);
   const fixed = detectFixedSensitiveLabels(input);
   const domain = domainFromFixedKinds(fixed.kinds, detectDomain(input));
   const reasonCodes = ["default_private_sealed"];

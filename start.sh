@@ -14,10 +14,11 @@ NEXTJS_PORT="${NEXTJS_PORT:-$(node "$TOPOLOGY_CHECK" port memroos-app local-next
 PIPECAT_PORT="${PIPECAT_PORT:-$(node "$TOPOLOGY_CHECK" port voice-server pipecat-http)}"
 HEALTH_PORT="${HEALTH_PORT:-$(node "$TOPOLOGY_CHECK" port voice-server pipecat-health)}"
 AGENTMEMORY_PORT="${AGENTMEMORY_PORT:-$(node "$TOPOLOGY_CHECK" port agentmemory-engine agentmemory-http)}"
+CONNMEM_PORT="${CONNMEM_PORT:-$(node "$TOPOLOGY_CHECK" port connmem connmem-http)}"
 VENV="$VOICE_DIR/.venv/bin/python3.12"
 
 # ── Kill existing processes on our ports ─────────────────────────────────────
-for port in $NEXTJS_PORT $PIPECAT_PORT $HEALTH_PORT $AGENTMEMORY_PORT; do
+for port in $NEXTJS_PORT $PIPECAT_PORT $HEALTH_PORT $AGENTMEMORY_PORT $CONNMEM_PORT; do
   pids=$(lsof -ti ":$port" 2>/dev/null) || true
   if [ -n "$pids" ]; then
     echo "Killing existing process on port $port..."

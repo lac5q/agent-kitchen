@@ -66,9 +66,13 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.16 Multi-Harness Observe Plane** — Phases 167-171 (code complete 2026-07-18; live capture/operator keys still needed)
 - ✅ **v8.18 NOC Metrics Rethink** — Phases 173-174 (code-complete on main: commits `07a419d0` "feat: add truthful NOC attention contract" and `720f7805` "feat: complete NOC operator layout"; 116/116 tests pass across NOC API + components; NOCUX-01..05 met)
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
-- 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 LANDED on main via 2026-07-23 beastmode session** — 141/141 connmem tests pass, release gate green; live backfill proof still QUEUED behind `CONNMEM-LIVE-DEFER` ticket — requires real Linear + Circleback API credentials on cordant-hermes-01)
+- 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 library complete on main** via 2026-07-23 beastmode session — `services/connmem` (25 modules, 141 tests). **Not yet integrated:** no service entrypoint, no compose/topology entry, no kernel route, and the 141 tests do not run in CI (2026-07-24 architecture review, F1). Live backfill is blocked on runtime integration (v8.27 Phase 185), not only on the Linear + Circleback credentials tracked in `CONNMEM-LIVE-DEFER`)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
+- 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
+- 📋 **v8.28 Enforcement Surface Parity** — Phases 186-187 (added 2026-07-24 from architecture review F2/F3; TOPOPROD-01..04 production topology profile for oracle-1 + AUTHGATE-01..03 filesystem-driven route-auth gate; Phase 187 is hours of work and should land first if capacity is tight)
+- 📋 **v8.29 Structural Debt Paydown** — Phases 188-190 (added 2026-07-24 from architecture review F4/F5/F6; STORE-01..04 governed data-access chokepoint with shrinking better-sqlite3 allowlist, LIBNORM-01..03 lib/ boundary normalization, CLIENTSPLIT-01..02 api-client barrel split; incremental, no big-bang rewrites)
+- 📋 **v8.30 Seamless Memory Adoption** — Phases 191-195 (added 2026-07-26 from operator session; PRIORWORK-01..05 agent-reachable prior-work probe wiring the orphaned Phase 118 kernel, SELFCAP-01..05 session hooks + agent self-capture + structured sidecar extraction, SAVEQ-01..05 save-quality gate + governed-tool parity + automatic silver→gold promotion, MEMHABIT-01..05 auto-load recall/save skills + skill-packs bootstrap fix, ADOPTTEL-01..05 NOC adoption panel + GSD memory-receipt closeout gate; design: `.planning/design/memory-adoption-v1.md`)
 
 ## Phases
 
@@ -2924,11 +2928,55 @@ Operator host
 - OSI-strict OSS self-host at scale (Klavis self-host remains a future swap candidate, not v8.23 deliverable).
 - Memroos becoming an OAuth server itself for agents (separate concern; tracks via Better Auth `@better-auth/oauth-provider` or Ory Hydra if pursued).
 
+**Field report (2026-07-26, operator escalation — "integrations UI missing"):**
+
+Root cause of the repeated "no auth UI for Notion/Circleback/Linear" reports: the TOOLAUTH-02
+Connected Tools page shipped complete at `apps/memroos/src/app/settings/tools/page.tsx`
+(provider grid, Nango OAuth popup flow, API-key sheet, revoke, usage meter, activity strip),
+with all seven `/api/tools/*` routes and the `lib/tool-auth/` plane (registry with 16 providers
+incl. Notion, Circleback `circleback-mcp`, Linear; Nango client; vault credential store) — but it
+was **never wired into navigation**. No entry in `sidebar.tsx` `NAV_ITEMS[].match`, no tab in
+`shell.tsx` `ROUTE_TABS`, and no `<Link>` anywhere pointed at `/settings/tools`. The page was
+orphaned, so on the oracle-1 dev instance it appeared as if the feature did not exist.
+
+Fixed on `claude/members-dashboard-auth-ui-82dpyh`:
+- `shell.tsx` — added `Integrations` tab (`/settings/tools`) to the Governance tab group.
+- `sidebar.tsx` — added `/settings/tools` to the Governance `match[]`; description now names integrations.
+- `settings/tools/page.tsx` — converted from its own `<main>` (double padding + font override
+  under the Shell) to the standard Pattern A wrapper (`<div className="space-y-6">`) used by
+  api-keys/compliance/team; eyebrow aligned `Settings` → `Governance`.
+
+Remaining for a working end-to-end connect flow (ops, not code):
+1. Set `NANGO_SECRET_KEY` in the operator env (oracle-1: `/etc/memroos/web.env`; dev `.env.local`).
+   Without it the page renders and the connect buttons surface "Nango not configured" inline.
+2. Register provider configs in the Nango dashboard matching `providerConfigKey` values:
+   `notion`, `linear`, `circleback-mcp`, `slack`, `github`, `google-calendar`, `google-drive`,
+   `hubspot`, `salesforce`, `xero` — separate Nango environments for dev vs prod instances.
+3. TOOLAUTH-06 (refresh observability NOC tile), TOOLAUTH-07 (revocation webhook dispatch),
+   TOOLAUTH-08 (migrate Phase 176 Linear/Circleback + Phase 178 Paperclip consumers to
+   `tool_auth.getCredentials()`) remain open.
+4. Cited source docs (`.planning/spikes/2026-07-23-tool-auth-ux-*.md`,
+   `.planning/design/2026-07-23-connected-tools-ux-design.md`) are missing from disk — recover or re-derive.
+
+CI repairs shipped on the same PR (#51) because `Memroos tests and build` could not
+pass otherwise — all four were red on main before this branch touched anything:
+- `docs/next-trust-boundary-upgrade.md` baseline sha256 refreshed: `cc1483c` changed
+  `proxy.ts` (the `/api/tools/providers` public-catalog bypass) without the checklist's
+  step-7 refresh, so the trust-boundary gate failed every run since 2026-07-23.
+- `/api/connmem/sync` moved to `sync/[source]/route.ts` (see Phase 185 field note) —
+  was failing every `next build`, including all Vercel preview deploys.
+- `runtime-topology.ts` v1→v2 parity restored (see Phase 186 field note) — 7 tests.
+- `top-bar.tsx` SSR clock: `useSyncExternalStore` with an em-dash server snapshot
+  restores the stable-placeholder contract (hydration-mismatch risk) — 1 test.
+Still red and out of scope: `Scan for internal infrastructure leaks` (Tailscale IPs
+in `content/sandbox/sandboxed-fleet-plan-*.md`, on main since 2026-07-08; needs a
+separate redact-or-relocate decision).
+
 ### Progress Table (v8.23 Third-Party Tool Authentication Plane)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 179. Third-Party Tool Authentication Plane | 1/1 | UI + API shipped; nav wiring landed 2026-07-26 (`claude/members-dashboard-auth-ui-82dpyh`); Nango env/provider config + TOOLAUTH-06..08 open | 2026-07-23 |
 
 ## v8.24 Operator Lifecycle Toolkit (bin/memroos)
 
@@ -3153,3 +3201,232 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 184. Auth Surface Migration to NOC Theme | 0/1 | Planned (operator request 2026-07-23) | — |
+
+## v8.27 Connected Work Memory Runtime Integration (Phase 185) — PLANNED (2026-07-24)
+
+**Goal:** Give `services/connmem` a runtime path so the v8.20 library becomes a running subsystem, and put its 141 tests behind CI. Source: `.planning/notes/2026-07-24-architecture-review.md` finding F1 — the library is complete but has no entrypoint, no CI, no compose/topology entry, and no kernel route; credentials are not the blocker.
+
+### Phase 185 — Connmem Runtime Integration
+
+**Depends on:** v8.20 Phase 176 (library complete on main), v8.15 (oracle-1 operator).
+**Requirements:** CONNMEM-RT-01, CONNMEM-RT-02, CONNMEM-RT-03, CONNMEM-RT-04, CONNMEM-RT-05
+
+**CONNMEM-RT requirement definitions:**
+- CONNMEM-RT-01 — Service entrypoint: `services/connmem` exposes a supervised process (FastAPI + uvicorn, matching `services/orchestration`) with `/health`, or is explicitly re-scoped as an in-process library invoked by a named kernel route. Pick one and record the decision; the current state is neither.
+- CONNMEM-RT-02 — CI coverage: `.github/workflows/ci.yml` Python job runs `pytest services/connmem/tests`. 141/141 green on PR, not on a developer's machine.
+- CONNMEM-RT-03 — Topology + compose registration: `connmem` added to `runtime-topology.json` with ports, health path, `dependsOn`, and supervision modes; `docker-compose.local.yml` service added; `npm run check:runtime-topology` passes.
+- CONNMEM-RT-04 — Kernel seam: a `/api/connmem/*` route (or documented equivalent) that authenticates via the existing agent/operator path, appears in `check-route-auth-boundary` coverage, and lets the operator trigger sync + read ledger state.
+- CONNMEM-RT-05 — Release-gate honesty: the Phase 176 release gate cannot report green while RT-01..04 are open. Update the gate script to assert runtime reachability, not just test-suite exit code.
+
+**Success criteria:**
+1. `docker compose up` starts connmem; `/api/health` reports it; `memroos status` shows it.
+2. CI fails if a connmem test breaks.
+3. A dry-run sync against fixture data completes end-to-end through the kernel route with a sync-ledger row written.
+4. The only remaining blocker to live backfill is genuinely provider credentials.
+
+**Field note (2026-07-26, PR #51):** the CONNMEM-RT-04 kernel seam shipped early but
+mis-shaped: `apps/memroos/src/app/api/connmem/sync/route.ts` declared
+`params: Promise<{ source: string }>` at a static path, which failed `next build`'s
+route type check and broke every Vercel deploy and local build. Moved to
+`sync/[source]/route.ts` to match its documented contract
+(`POST /api/connmem/sync/{source}` → connmem `/v1/sync/{source}`). Two RT-04 gaps
+remain open: neither `/api/connmem/status` nor `/api/connmem/sync/[source]` is in
+`proxy.ts` `ROUTE_LOCAL_AUTH_API_ROUTES`, so the proxy demands a human JWT before the
+handlers' `authenticateAgentHeaders` ever runs — agents cannot reach the seam; and
+the routes are not yet in `check-route-auth-boundary` coverage as RT-04 requires.
+
+### Progress Table (v8.27 Connected Work Memory Runtime Integration)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 185. Connmem Runtime Integration | 0/1 | In progress — kernel seam routes exist (sync route path fixed 2026-07-26, PR #51); proxy allowlist + boundary coverage + entrypoint/CI still open | — |
+
+## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
+
+**Goal:** Make the drift gates cover the deployment and the routes that actually exist, rather than the ones enumerated when each gate was written. Source: `.planning/notes/2026-07-24-architecture-review.md` findings F2 (topology gate is local-dev only while production is oracle-1) and F3 (route-auth gate validates a hand-maintained file list and cannot see new files under exempted prefixes).
+
+### Phase 186 — Production Topology Profile
+
+**Requirements:** TOPOPROD-01, TOPOPROD-02, TOPOPROD-03, TOPOPROD-04
+
+**TOPOPROD requirement definitions:**
+- TOPOPROD-01 — `runtime-topology.json` gains a `production` profile (oracle-1) alongside `local-dev`; `knowledge-mcp` and `healthcheck` added to both.
+- TOPOPROD-02 — `check:runtime-topology` validates the production profile against the actual supervision mechanism on oracle-1 (systemd unit files / Cloudflare Tunnel config committed to `deploy/`), the same way it validates compose and launchd today.
+- TOPOPROD-03 — `docs/production-deployment.md` and `docs/cloud-operator-oracle1-runbook.md` derive their service/port/health tables from the manifest rather than restating them, so prose cannot drift from the gate.
+- TOPOPROD-04 — `scripts/verify-onboarding-deploy.sh` extended into a post-deploy profile check that asserts every `required: true` production service is healthy.
+
+**Success criteria:** changing a production port or health path without updating the manifest fails CI. The oracle-1 runbook and the manifest cannot disagree.
+
+**Field note (2026-07-26, PR #51):** TOPOPROD-01's version-2 manifest (profiles map,
+`production` profile, `healthcheck`/`knowledge-mcp` services) merged via PR #49
+(`af59905`) with `scripts/check-runtime-topology.mjs` updated — but
+`apps/memroos/src/lib/runtime-topology.ts` and its two test files were left on the
+v1 flat-services shape, so 7 vitest cases threw on main from 2026-07-24. Repaired by
+teaching the TS lib the v2 shape (profile resolution with unknown-profile throw,
+version-2 validation, port-less services allowed for the healthcheck systemd timer,
+`systemd` supervision mode and `script` health type admitted). Lesson for the phase:
+the manifest has two independent consumers (mjs gate + TS lib); TOPOPROD work must
+update both or fold the TS lib onto the script's parser.
+
+### Phase 187 — Filesystem-Driven Auth Gate
+
+**Requirements:** AUTHGATE-01, AUTHGATE-02, AUTHGATE-03
+
+**AUTHGATE requirement definitions:**
+- AUTHGATE-01 — `check-route-auth-boundary.mjs` enumerates the filesystem for every prefix pattern in `ROUTE_LOCAL_AUTH_API_ROUTES` and requires an auth marker on every matching `route.ts`. Public-metadata exceptions become an explicit allowlist with a stated reason, not an untested comment.
+- AUTHGATE-02 — The gate additionally asserts no `route.ts` exists outside both the proxy's default-deny path and the coverage list — closing the "new namespace, no auth" case.
+- AUTHGATE-03 — A regression test adds a fixture route under an exempt prefix with no auth marker and asserts the gate fails. Gates that have never been seen to fail are not known to work.
+
+**Success criteria:** creating `api/gsd/<anything>/route.ts` without a handler-local auth call fails CI. Phase 187 is small; it should land ahead of Phase 186 if capacity is tight.
+
+### Progress Table (v8.28 Enforcement Surface Parity)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 186. Production Topology Profile | 0/1 | Planned (architecture review 2026-07-24, F2) | — |
+| 187. Filesystem-Driven Auth Gate | 0/1 | Planned (architecture review 2026-07-24, F3) | — |
+
+## v8.29 Structural Debt Paydown (Phases 188-190) — PLANNED (2026-07-24)
+
+**Goal:** Remove the three structures that make every subsequent milestone more expensive: no data-access chokepoint under the governance spine (F4), `lib/` boundary drift (F5), and the `api-client.ts` client barrel (F6). Explicitly incremental — no big-bang rewrites; each phase lands behind a gate that prevents regression. Source: `.planning/notes/2026-07-24-architecture-review.md`.
+
+### Phase 188 — Data-Access Chokepoint
+
+**Requirements:** STORE-01, STORE-02, STORE-03, STORE-04
+
+**STORE requirement definitions:**
+- STORE-01 — `lib/store/` with per-domain modules owning their tables. Governance fields (`actor, action, asset, purpose, label, decision`) are required arguments on write paths, so an ungoverned write does not typecheck.
+- STORE-02 — `db-schema.ts` split by domain (`lib/store/<domain>/schema.ts`), migrations still ordered through the single `user_version` runner.
+- STORE-03 — ESLint rule: `better-sqlite3` may only be imported from `lib/store/**` and test files. Existing violations enter an explicit, shrinking allowlist; new ones fail CI. **Land this first even if the migration itself is slow — it stops the bleeding.**
+- STORE-04 — Two domains migrated as proof (recommend `memory` and `audit` — highest governance stakes), with the allowlist reduced accordingly.
+
+**Success criteria:** a new domain cannot write to SQLite without emitting an audit event, because the API offers no other path. Allowlist size is tracked and monotonically decreasing.
+
+### Phase 189 — lib/ Boundary Normalization
+
+**Requirements:** LIBNORM-01, LIBNORM-02, LIBNORM-03
+
+**LIBNORM requirement definitions:**
+- LIBNORM-01 — `docs/architecture.md` Placement Rules gain an explicit rule: domain logic lives in `lib/<domain>/`; `lib/` root is reserved for cross-cutting primitives (`env.ts`, `db.ts`, `paths.ts`, `constants.ts`, `api-error.ts`). Write the rule before moving files.
+- LIBNORM-02 — Consolidate the two worst offenders: all `memory-*.ts` plus `meeting-qmd-recall.ts` / `recollection-policy.ts` into `lib/memory/`; all `agent-*.ts` into `lib/agent/`. Use call-graph-aware `rename`, not find-and-replace.
+- LIBNORM-03 — `check:lib-boundary` script fails on new root-level files outside the reserved primitives list.
+
+**Success criteria:** `lib/` root drops from 79 files to the reserved set plus a declared, shrinking exception list. An agent asked to change memory behavior has exactly one directory to search.
+
+### Phase 190 — Client Barrel Split
+
+**Requirements:** CLIENTSPLIT-01, CLIENTSPLIT-02
+
+**CLIENTSPLIT requirement definitions:**
+- CLIENTSPLIT-01 — `lib/api-client.ts` (2,315 lines, 181 exports, imported by 83 files) split into `lib/api-client/<domain>.ts` mirroring the LIBNORM domain boundaries. Re-export shim kept for one milestone, then removed.
+- CLIENTSPLIT-02 — Measure and record client bundle size for the three heaviest routes before and after in the phase closeout.
+
+**Success criteria:** no single client module exceeds ~400 lines; measured bundle reduction on the NOC and operator console routes.
+
+### Progress Table (v8.29 Structural Debt Paydown)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 188. Data-Access Chokepoint | 0/1 | Planned (architecture review 2026-07-24, F4) | — |
+| 189. lib/ Boundary Normalization | 0/1 | Planned (architecture review 2026-07-24, F5) | — |
+| 190. Client Barrel Split | 0/1 | Planned (architecture review 2026-07-24, F6) | — |
+
+## v8.30 Seamless Memory Adoption (Phases 191-195) — PLANNED (2026-07-26)
+
+**Goal:** Keep the core product promise — "agents should not start from zero when a team already solved, discussed, debugged, or decided something" — by making memory recollection and capture the natural default behavior of every connected agent session, without injecting full memories into every session. Source: operator session 2026-07-26 (agents neither check MemRoOS for prior work nor store enough, and prose directives haven't changed behavior); design: `.planning/design/memory-adoption-v1.md`.
+
+**Grounding (2026-07-26 repo audit):** the machinery exists but the seams were never connected. The Phase 118 recollection kernel is shipped twice (`lib/recollection-policy.ts`, `lib/gsd/proactive-recollection.ts`) with zero live callers; `retrieval_trace` — the denominator of `retrievalBeforeWorkRate` — has no agent-reachable emitter; `/api/agent-memory/capture` is operator-key-only; the observe sidecar extracts 240 chars and is unscheduled; the default-visible MCP tools `memory_save`/`memory_search` bypass governance while governed `agent_memory_save` is not in `CORE_TOOLS`; silver→gold promotion never runs at runtime; the repo ships no session hooks; and the AGENTS.md skill bootstrap scans `$KNOWLEDGE_ROOT/skills`, which doesn't exist in a MemRoOS checkout.
+
+**Design principles (binding for all five phases):** pointer not payload (session brief ≤ ~600 tokens, full memories pull-on-demand only); first call free (hook), later calls habitual (skills + tool-description contracts), every call pays off (usefulness feedback into ranking/salience); structure beats exhortation (hooks, gates, detectors — not more AGENTS.md prose); one governed write path with coach-back receipts; adoption is an SLO on the NOC; Skills > Memory ordering preserved (procedures → SkillForge, class lessons → skills, decisions/outcomes/facts/handoff state → memory); recall fails open with receipts, write policy fails closed; no new backend, no LLM-only promotion, no transcript dumping, depth default stays `relevant`.
+
+### Phase 191 — Prior-Work Probe (agent-reachable recollection seam)
+
+**Depends on:** Phase 118 (recollection kernel), Phase 117 (efficiency telemetry), Phase 152 (federated `memory_recall`). Coordinates with Phase 189 LIBNORM-02 (recollection module move).
+**Requirements:** PRIORWORK-01, PRIORWORK-02, PRIORWORK-03, PRIORWORK-04, PRIORWORK-05
+
+**PRIORWORK requirement definitions:**
+- PRIORWORK-01 — Consolidate the two Phase 118 implementations into one canonical module under `lib/memory/recollection/` (LIBNORM-02-aligned): keep the richer trigger vocabulary (`source_changed`, `operator_reask`, `rediscovered_fact_risk`, `final_answer_citation_gap`) and the EFFTEL-04 rediscovery guard from `lib/gsd/proactive-recollection.ts`; keep the canonical `BeliefStage` export path stable; delete the losing module, don't deprecate it.
+- PRIORWORK-02 — `POST /api/memory/prior-work` authenticated via `authenticateAgentHeaders` (agent API keys work): task statement + optional repo/project/entity/recency hints in → trigger policy → bounded query planner → tier search → ranking → threshold → **digest pack** out: ≤5 items of `{title, one_liner, belief_stage, age, salience, fetch_ref}` plus an explicit headline ("Related prior work exists: N items" / "No prior work found (tiers searched: …)"). Never returns raw memory payloads; skip decisions return typed reason codes.
+- PRIORWORK-03 — MCP tool `memory_prior_work` added to `CORE_TOOLS`, wrapping PRIORWORK-02; its tool description carries the when-to-call contract (task start, topic shift, "have we done this before?" moments) so the trigger policy rides the one always-in-context surface.
+- PRIORWORK-04 — Every probe — served **or** skipped — emits a `retrieval_trace` efficiency event carrying the full recollection receipt through an agent-reachable path, populating `retrievalBeforeWorkRate` from real external sessions for the first time.
+- PRIORWORK-05 — `GET /api/agent-context` gains topic-based recall through the same recollection module (no `goal_id` required for the memories section), and an MCP wrapper exposes the context packet so agents don't need curl.
+
+**Success criteria:** a fresh agent session with a valid agent key can ask one MCP tool whether prior work exists on its topic and get a truthful, belief-staged, pointer-sized answer; the NOC `retrievalBeforeWorkRate` shows a real value from a real external session; recollection receipts (served and skipped) are visible in the NOC recollection panel.
+
+### Phase 192 — Session Hooks + Agent Self-Capture
+
+**Depends on:** Phase 191 (probe to call), Phase 96/167-171 (capture API + observe plane).
+**Requirements:** SELFCAP-01, SELFCAP-02, SELFCAP-03, SELFCAP-04, SELFCAP-05
+
+**SELFCAP requirement definitions:**
+- SELFCAP-01 — `/api/agent-memory/capture` accepts agent-key auth scoped so an agent may capture only its own sessions (operator key retained for the sidecar); rate-limited; depth policy (`relevant` default, `full` → vault only) enforced server-side regardless of caller.
+- SELFCAP-02 — Repo-shipped hook set installed by `scripts/install-agent-integrations.sh`: **memory-brief** on session start (calls the prior-work probe with repo/branch/cwd context, injects a ≤600-token pointer digest; fails open on timeout with a miss receipt) and **capture-gate** on stop/pre-compact (posts structured capture — decisions, outcomes, errors, commands, files, verification — or a typed skip receipt; bounded timeout; failure becomes a receipt + NOC Attention item, never a blocked session).
+- SELFCAP-03 — Hook capability matrix per harness (Claude Code native hooks; Codex via portable-hook equivalent; Hermes plugin; skill+sidecar fallback for the rest) committed and drift-gated like the observe-sidecar maturity matrix; no false full-coverage claims.
+- SELFCAP-04 — Observe sidecar structured extraction v2: replace the 240-char `summarize()` with deterministic-first extraction of decisions, outcomes/verification, errors, commands, files touched, and entities, populating the rich `captureCodingAgentSession` fields that already exist; LLM assist only where depth policy allows.
+- SELFCAP-05 — Sidecar actually scheduled (launchd/systemd/cron template installed by the installer) with heartbeat visible in NOC observe-harness health.
+
+**Success criteria:** ending a hooked Claude Code session produces a structured silver candidate (or typed skip receipt) with zero manual steps; starting one surfaces prior work without the agent asking; an unhooked harness still gets captured by the scheduled sidecar with real structure, not 240 chars.
+
+### Phase 193 — Storage Quality: Save-Quality Gate + Governed Defaults + Auto-Promotion
+
+**Depends on:** Phases 120-123 (belief/promotion), Phase 104 (memory traces), Memento save-quality spike (2026-06-27, deferred adoption).
+**Requirements:** SAVEQ-01, SAVEQ-02, SAVEQ-03, SAVEQ-04, SAVEQ-05
+
+**SAVEQ requirement definitions:**
+- SAVEQ-01 — Save-quality report on every governed write: scored for memory type, source/provenance, dedupe, specificity (outcome stated? project-scoped? entities named?), and promotion readiness; score persisted with the write (adopts the deferred Memento spike).
+- SAVEQ-02 — Coach-back receipts: sub-threshold writes return actionable in-band guidance ("no outcome stated", "duplicate of <id> — rediscovery flagged", "this is a procedure — propose a skill instead"); hard-reject only on policy violations. The rubric encodes the Skills > Memory ordering.
+- SAVEQ-03 — Governance parity: MCP `memory_save`/`memory_search` routed through the governed paths (policy + audit + dedup + telemetry), or demoted from `CORE_TOOLS` in favor of `agent_memory_save` + `memory_prior_work`; end state is that **no default-visible ungoverned memory write or untraced search exists** (decision D2 in the design doc, recommendation: route, don't remove).
+- SAVEQ-04 — Automatic silver→gold promotion scheduler running the existing five deterministic checks (`evaluatePromotionChecks`: provenance, freshness, policy, conflict, dedupe) over aging candidates on a cadence; pass → gold with hash-chained receipt; conflict → operator review queue; **no LLM-only promotion**.
+- SAVEQ-05 — Salience coverage extends to agent-written memories and candidates (today `memory_salience` keys on `messages.id` only), and `tool_record_outcome` usefulness feedback reinforces salience so recall ranking improves with use.
+
+**Success criteria:** a vague memory write gets a coach-back receipt naming what to add; a duplicate write is flagged as rediscovery in telemetry; a well-formed silver candidate becomes gold within one scheduler cadence with a hash-chained receipt and no human in the loop; no MCP-visible path writes memory without an audit row.
+
+### Phase 194 — Habit Layer: Skills + Bootstrap Fix
+
+**Depends on:** Phase 191 (tool to teach), v8.6 skill trust chain, skill-packs workspace.
+**Requirements:** MEMHABIT-01, MEMHABIT-02, MEMHABIT-03, MEMHABIT-04, MEMHABIT-05
+
+**MEMHABIT requirement definitions:**
+- MEMHABIT-01 — Fix the skill-packs root: the catalog falls back to the repo's own skills directories (`.agents/skills/`, private `~/.memroos/skills/`) when `$KNOWLEDGE_ROOT/skills` is absent, so the AGENTS.md auto-load bootstrap returns real skills in a MemRoOS checkout instead of an empty catalog.
+- MEMHABIT-02 — Ship `memroos-recall` as a real SKILL.md with `auto_load: true`, generalized from `docs/integrations/multica-memroos-skill.md`: start-of-task probe protocol, mid-task re-probe triggers (topic shift, unexpected error, repeated question), and belief-stage handling rules (rely on gold, caveat silver, bronze is evidence only).
+- MEMHABIT-03 — Upgrade `memroos-save`: the end-of-task persist checklist covers governed **memory** writes (decisions, outcomes, project facts, handoff state) alongside document writes, honoring Skills > Memory.
+- MEMHABIT-04 — GSD skills hardened: `$goal` step 4 changes from "load memory if available" to a named mandatory `memory_prior_work` probe with a receipt; beastmode/qwen-cloud skills gain the same start-of-goal probe and end-of-goal learnings checkpoints.
+- MEMHABIT-05 — Tool-description contract pass: memory-tool MCP descriptions and the `knowledge_system_orientation` prompt state the memory contract (probe at task start, governed save or skip receipt at task end) so the contract survives in harnesses where hooks and skills don't load.
+
+**Success criteria:** `knowledge_workspace_call("skill-packs","catalog",{"filter":"auto-load"})` returns the recall/save skills from a clean MemRoOS checkout; a `$goal` run without a probe receipt is visibly non-compliant; the orientation prompt read by any MCP-connected harness states the contract.
+
+### Phase 195 — Adoption Telemetry + GSD Gates
+
+**Depends on:** Phases 191-194 (the behaviors to measure and gate), Phase 117 (metric plumbing), v8.18 NOCUX rules.
+**Requirements:** ADOPTTEL-01, ADOPTTEL-02, ADOPTTEL-03, ADOPTTEL-04, ADOPTTEL-05
+
+**ADOPTTEL requirement definitions:**
+- ADOPTTEL-01 — NOC Memory Adoption panel (honest states per NOCUX): per-agent/per-harness recall-before-work rate, capture-per-session rate, rediscovered-fact rate, save-quality distribution, silver→gold throughput; known-unwired states remain explicit until producers verified.
+- ADOPTTEL-02 — `research-without-persist-detector` generalized across Wave-1 harness session roots (Claude Code, Codex, Hermes, OpenClaw, Pi); findings surface as NOC Attention items, not only cron logs.
+- ADOPTTEL-03 — GSD closeout gate: a phase/goal cannot close without a prior-work probe receipt at start and a learnings/decisions write (or typed skip receipt) at close; enforced by a check script wired into CI in the same pattern as `check-roadmap-priority`.
+- ADOPTTEL-04 — Adoption SLOs recorded and measured on live operator data (not fixtures): retrieval-before-work ≥70% of working sessions; ≥1 governed write or typed skip receipt per working session; rediscovered-fact rate declining over a 30-day window; automatic silver→gold throughput >0 weekly.
+- ADOPTTEL-05 — Eval fixtures for the adoption loop: "fresh employee, prior work exists" (probe must surface it), "no prior work" (must skip with receipt, no fabricated pack), "junk save" (coach-back fires), "duplicate save" (dedupe + rediscovery flag), "old-critical beats recent-noise" (regression-guards Phase 118 ranking through the new seam).
+
+**Success criteria:** the operator can answer "are my agents actually using the brain?" from one NOC panel; a GSD phase that skipped memory hygiene fails its closeout gate in CI; the eval suite proves the loop end-to-end and fails when any seam disconnects again.
+
+### Progress Table (v8.30 Seamless Memory Adoption)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 191. Prior-Work Probe | 0/1 | Planned (operator session 2026-07-26) | — |
+| 192. Session Hooks + Agent Self-Capture | 0/1 | Planned (operator session 2026-07-26) | — |
+| 193. Storage Quality Gate + Auto-Promotion | 0/1 | Planned (operator session 2026-07-26) | — |
+| 194. Habit Layer: Skills + Bootstrap Fix | 0/1 | Planned (operator session 2026-07-26) | — |
+| 195. Adoption Telemetry + GSD Gates | 0/1 | Planned (operator session 2026-07-26) | — |
+
+**Plans** (all written 2026-07-26; each carries its own audited baseline, design contract, implementation steps, verification list, and risks):
+
+- `.planning/phases/191-prior-work-probe/191-01-PLAN.md`
+- `.planning/phases/192-session-hooks-agent-self-capture/192-01-PLAN.md`
+- `.planning/phases/193-storage-quality-gate/193-01-PLAN.md`
+- `.planning/phases/194-memory-habit-layer/194-01-PLAN.md`
+- `.planning/phases/195-adoption-telemetry-gates/195-01-PLAN.md`
+
+**Sequencing:** Phase 191 first — it creates the primitive everything else points at and turns on the headline metric. Phase 194 can run in parallel with 192/193. Phase 195 last, and its step 1 is a hard gate: verify each producer emits live before building any panel row, so v8.30 does not repeat Phase 117's outcome of correct metrics over empty tables. Smallest behavior-changing slice if capacity is tight: Phase 191 + the SELFCAP-02 hooks.
+
+**Cross-phase notes:** Phase 191's module consolidation collides with Phase 189 LIBNORM-02 (same file move) — whichever lands first owns it. Phase 193's salience migration should coordinate with Phase 188 STORE-02. Phase 193's auto-promotion is the highest-stakes change in the milestone (gold is what agents rely on directly); consider one shadow-mode cadence before it promotes anything.

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useOperationsNoc } from "@/lib/api-client";
 import type { NocFilters } from "@/lib/noc-filters";
 import { NOC, NOC_FONT_MONO } from "@/lib/noc-theme";
@@ -13,6 +14,7 @@ const COLORS = {
 
 export function AttentionPanel({ filters }: { filters: NocFilters }) {
   const noc = useOperationsNoc(filters);
+  const [expanded, setExpanded] = useState(false);
   const items = noc.data?.attention ?? [];
   const sourceState = noc.data?.sourceStates?.attention;
   const state = noc.isLoading
@@ -31,6 +33,17 @@ export function AttentionPanel({ filters }: { filters: NocFilters }) {
           <span style={{ fontFamily: NOC_FONT_MONO, fontSize: 11, color: NOC.soft }}>
             {state === "loading" ? "loading" : state === "source-error" ? "unavailable" : `${items.length} item${items.length === 1 ? "" : "s"}`}
           </span>
+          {state === "items" ? (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+              className="ml-auto text-xs font-semibold underline underline-offset-2"
+              style={{ color: NOC.terraDeep }}
+            >
+              {expanded ? "Collapse" : "Expand"}
+            </button>
+          ) : null}
         </div>
         {state === "loading" ? (
           <div data-status="loading" style={{ color: NOC.soft, fontSize: 13 }}>
@@ -46,7 +59,7 @@ export function AttentionPanel({ filters }: { filters: NocFilters }) {
           </div>
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
-            {items.map((item) => (
+            {(expanded ? items : items.slice(0, 3)).map((item) => (
               <div
                 key={item.id}
                 data-attention-severity={item.severity}
@@ -63,6 +76,11 @@ export function AttentionPanel({ filters }: { filters: NocFilters }) {
                 {item.target ? <PillBtn href={item.target}>Open</PillBtn> : null}
               </div>
             ))}
+            {items.length > 3 && !expanded ? (
+              <div style={{ color: NOC.soft, fontFamily: NOC_FONT_MONO, fontSize: 11, paddingTop: 4 }}>
+                {items.length - 3} more attention item{items.length - 3 === 1 ? "" : "s"} hidden — expand to inspect.
+              </div>
+            ) : null}
           </div>
         )}
       </div>

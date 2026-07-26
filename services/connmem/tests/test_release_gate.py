@@ -13,6 +13,8 @@ from services.connmem.release_gate import (
     DEFAULT_CHECKS,
     CheckResult,
     GateVerdict,
+    check_runtime_reachable,
+    run_gate,
     run_gate,
 )
 
@@ -104,6 +106,37 @@ class GateEndToEndTests(TestCase):
         self.assertIn("passing", d)
         self.assertIn("failing", d)
         self.assertIn("checks", d)
+
+
+class RuntimeReachableTest(TestCase):
+    """CONNMEM-RT-05: the release gate must include a runtime
+    reachability check. The check probes the locally-bound service
+    at CONNMEM_URL (or http://127.0.0.1:3290 by default). In a unit
+    test the service is not running, so the check returns passed=False
+    with a detail that names the URL it tried."""
+
+    def test_runtime_reachable_fails_when_service_down(self) -> None:
+        # No service is running on 127.0.0.1:3290 in the unit-test
+        # environment, so the probe must fail closed.
+        result = check_runtime_reachable()
+        self.assertEqual(result.name, "runtime_reachable")
+        self.assertFalse(result.passed)
+        # The detail must name the URL the probe tried so operators
+        # can diagnose a misconfigured topology.
+        self.assertIn("127.0.0.1:3290", result.detail)
+
+    def test_run_gate_include_runtime_reachable_appends_the_check(self) -> None:
+        verdict = run_gate(include_runtime_reachable=True)
+        names = [c.name for c in verdict.checks]
+        self.assertIn("runtime_reachable", names)
+        # When the service is down, the runtime check fails and the
+        # overall verdict is false.
+        self.assertFalse(verdict.overall_pass)
+
+    def test_run_gate_without_runtime_reachable_omits_the_check(self) -> None:
+        verdict = run_gate(include_runtime_reachable=False)
+        names = [c.name for c in verdict.checks]
+        self.assertNotIn("runtime_reachable", names)
 
 
 if __name__ == "__main__":

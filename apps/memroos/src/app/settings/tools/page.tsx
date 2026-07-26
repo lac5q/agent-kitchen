@@ -129,9 +129,9 @@ export default function ConnectedToolsPage() {
   const hasAnyConnection = (connections.data?.connections ?? []).length > 0;
 
   return (
-    <main style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", padding: "24px 32px" }}>
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Settings"
+        eyebrow="Governance"
         title="Connected Tools"
         hint="Manage OAuth and API-key connections to third-party tools."
       />
@@ -140,7 +140,7 @@ export default function ConnectedToolsPage() {
 
       <RecentActivity events={activity.data?.events ?? []} />
 
-      <Card pad="md" style={{ marginBottom: 18 }}>
+      <Card pad="md">
         <div style={{ position: "relative" }}>
           <Search
             size={14}
@@ -166,7 +166,7 @@ export default function ConnectedToolsPage() {
         </Card>
       ) : (
         filtered.map(({ category, providers: list }) => (
-          <section key={category.id} style={{ marginBottom: 24 }}>
+          <section key={category.id}>
             <h2
               style={{
                 color: NOC.ink,
@@ -199,13 +199,13 @@ export default function ConnectedToolsPage() {
       )}
 
       {!hasAnyConnection && providers.data && (
-        <Card pad="md" style={{ marginTop: 8 }}>
+        <Card pad="md">
           <p style={{ color: NOC.muted, margin: 0, fontSize: 13 }}>
             No tools connected yet. Choose a provider above to connect via OAuth or API key.
           </p>
         </Card>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -224,7 +224,7 @@ function UsageMeter({
   const { used, limit, plan } = usage;
   const isUnlimited = !Number.isFinite(limit);
   return (
-    <Card pad="sm" style={{ marginBottom: 18 }}>
+    <Card pad="sm">
       <div
         style={{
           alignItems: "center",
@@ -258,7 +258,7 @@ function UsageMeter({
 function RecentActivity({ events }: { events: ConnectionActivityEvent[] }) {
   if (events.length === 0) return null;
   return (
-    <Card pad="sm" style={{ marginBottom: 18 }}>
+    <Card pad="sm">
       <div style={{ color: NOC.muted, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em" }}>
         RECENT ACTIVITY
       </div>

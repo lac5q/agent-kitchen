@@ -200,7 +200,7 @@ export function queryEscalations(
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const sql = `SELECT * FROM hil_escalations ${whereClause} ORDER BY sla_deadline ASC LIMIT ?`;
+  const sql = `SELECT * FROM hil_escalations ${whereClause} ORDER BY sla_deadline ASC, created_at ASC LIMIT ?`;
   params.push(limit);
 
   const rows = db.prepare(sql).all(...params) as HilEscalation[];
@@ -210,4 +210,31 @@ export function queryEscalations(
     ...row,
     isOverdue: row.status !== "resolved" && row.sla_deadline < now,
   }));
+}
+
+/** Returns the truthful row count for the same escalation filters. */
+export function countEscalations(
+  filter: {
+    status?: "open" | "resolved" | "sla_breached" | "all";
+    tenantId?: string;
+  } = {},
+  db: Database.Database = getDb()
+): number {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter.tenantId) {
+    conditions.push("tenant_id = ?");
+    params.push(filter.tenantId);
+  }
+  if (filter.status && filter.status !== "all") {
+    conditions.push("status = ?");
+    params.push(filter.status);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const row = db
+    .prepare(`SELECT COUNT(*) AS total FROM hil_escalations ${whereClause}`)
+    .get(...params) as { total: number };
+  return Number(row.total);
 }

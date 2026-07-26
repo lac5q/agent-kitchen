@@ -119,6 +119,93 @@ Agent → write_file(path="MEMROOS_ROOT/content/<slug>.md")
 - **Coordination**: many agents sharing one git repo need a gatekeeper to prevent clobbered writes
 - **Governance**: MemroOS is the single source of truth for agent knowledge
 
+## Automatic Downshift: Menial Work Goes to a MiniMax-M3 Coworker (operator directive 2026-07-26)
+
+Luis has directed, as a **permanent standing rule**, that menial work goes to a
+MiniMax-M3 coworker rather than to the expensive director model. The current
+agent stays director, reviewer, and merge gate; MiniMax-M3 is a bounded worker.
+
+**This is automatic and dynamic. Luis never has to ask.** Downshifting is a
+default posture, not a request-triggered behavior — there is no trigger phrase,
+and waiting to be told is itself a violation of this rule. Classify every unit of
+work at the moment you are about to start it, and re-classify continuously as the
+work reveals its real shape. Do not ask permission to downshift and do not
+announce the routing decision as a question; just route, then report what ran
+where.
+
+**Menial** means work that is mechanical, verifiable by inspection, and does not
+require architectural judgment: bulk find/replace-shaped edits across many files,
+boilerplate and scaffolding, test-fixture and mock generation, format/lint/type
+cleanups, doc and comment tidying, log and output triage, changelog and release
+notes from a known diff, data reshaping, and repetitive per-item passes over a
+list the director already scoped.
+
+**Not menial** — the director keeps these: architecture and design decisions,
+security and auth changes, anything touching secrets or credentials, impact
+analysis and blast-radius calls, final verification and truth claims, planning
+documents, commits, pushes, and merges.
+
+### Dispatch Test (run this before starting any unit of work)
+
+Ask, in order:
+
+1. Is the outcome checkable by inspection or by a command, without judgment about
+   whether it was the *right* thing to do? → menial.
+2. Did the director already decide the approach, leaving only execution? → menial.
+3. Is it the same operation repeated over a list? → menial, one worker per item or
+   one bounded batch.
+4. Would getting it wrong cost only a re-run, not a bad decision? → menial.
+
+Any "no" that involves design, security, or a truth claim keeps it with the
+director. When genuinely ambiguous, downshift with a tighter scope and review the
+result — a cheap attempt plus director review beats director-inline execution.
+
+### Dynamic Re-classification (mid-flight, both directions)
+
+- A task that turns out to be mechanical **downshifts mid-flight** — hand the
+  remainder to the worker instead of finishing it inline out of momentum.
+- A "menial" task that surfaces a design, security, or correctness question
+  **escalates back to the director immediately**; do not let the worker decide it.
+- A long task decomposes: route the mechanical slices down and keep only the
+  judgment slices. Prefer many bounded worker slices over one director pass.
+
+### Always Do
+
+- **MUST run the dispatch test unprompted** on every unit of work, and route
+  accordingly, without being asked and without asking.
+- **MUST route menial work to a MiniMax-M3 lane** when one is live. Lane table,
+  invocation, and smoke gates: `docs/codex-cloud/skills/beastmode-cloud/SKILL.md`.
+  Prefer the direct MiniMax API lane (`MiniMax-M3`, `MINIMAX_API_KEY`) when the
+  worker only needs to return a patch, plan, or analysis; prefer Droid MiniMax
+  (`droid exec --model minimax-m3`) when Factory's agent runtime or tool access
+  is required.
+- **MUST prove the lane is live before delegating** — the worker must return
+  exactly `MINIMAX OK` from the start-gate smoke check. Cache that result for the
+  session; do not re-smoke before every delegation.
+- **MUST hand the worker a bounded slice**: scope, allowed files, acceptance
+  checks, and blast-radius notes written by the director first.
+- **MUST review everything the worker returns** and run the real checks yourself
+  before applying it. The worker's claim of success is not evidence.
+- **MUST fall back down the lane order automatically** when MiniMax is not live:
+  next-cheapest available worker lane, then cheapest available subagent, then
+  director-inline as the last resort — each step taken without asking.
+- **MUST state which lane actually ran** in the final report — name the fallback
+  rather than implying MiniMax ran.
+
+### Never Do
+
+- NEVER wait for Luis to say "delegate this" or "use MiniMax." The routing
+  decision is yours, every time, silently.
+- NEVER ask permission to downshift, and never offer downshifting as an option to
+  choose. Route first; report after.
+- NEVER let the worker commit, push, access secrets, or make final verification
+  claims.
+- NEVER spend director tokens on a mechanical pass a bounded worker could do,
+  when a MiniMax lane is live.
+- NEVER delegate architecture, security, impact analysis, or planning judgment to
+  the menial lane.
+- NEVER report work as MiniMax-executed when it was not.
+
 ## MemroOS vs Artyfacts
 
 Artyfacts is a third-party filing-cabinet MCP server (28 tools, plugin name `artyfacts`, serverName `artyfacts`). It is **deprecated for knowledge storage** in this stack — MemroOS is primary.
