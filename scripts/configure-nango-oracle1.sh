@@ -26,28 +26,42 @@ if [ -z "$key" ]; then
   exit 1
 fi
 
-printf 'NANGO_SECRET_KEY=%s\n' "$key" | ssh "$ORACLE_HOST" '
-  set -euo pipefail
-  tmp=$(mktemp)
-  cat > "$tmp"
-  sudo sh -c "
-    touch '"$ENV_FILE"'
-    grep -v \"^NANGO_SECRET_KEY=\" '"$ENV_FILE"' > '"$ENV_FILE"'.new || true
-    cat \"$tmp\" >> '"$ENV_FILE"'.new
-    mv '"$ENV_FILE"'.new '"$ENV_FILE"'
-    chmod 600 '"$ENV_FILE"'
-  "
-  rm -f "$tmp"
-  sudo systemctl restart memroos-web
-'
+# The privileged remote shell reads the secret from stdin and never writes it
+# outside $ENV_FILE's own directory: the scratch file is created root-only
+# (umask 077) next to the destination and removed by an EXIT trap, so an
+# interrupted run cannot strand a plaintext key in a world-readable /tmp.
+remote_script="
+set -eu
+umask 077
+env_file='$ENV_FILE'
+tmp=\"\$env_file.new\"
+trap 'rm -f \"\$tmp\"' EXIT
+secret_line=\$(cat)
+touch \"\$env_file\"
+grep -v '^NANGO_SECRET_KEY=' \"\$env_file\" > \"\$tmp\" || true
+printf '%s\n' \"\$secret_line\" >> \"\$tmp\"
+chmod 600 \"\$tmp\"
+mv \"\$tmp\" \"\$env_file\"
+"
+
+# The script travels base64-encoded and is passed as a positional argument, so
+# stdin stays free for the secret and no quoting/newline handling depends on the
+# remote shell being bash (oracle-1's /bin/sh is POSIX).
+script_b64="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+
+printf 'NANGO_SECRET_KEY=%s\n' "$key" |
+  ssh "$ORACLE_HOST" "sudo sh -c 'eval \"\$(printf %s \"\$1\" | base64 -d)\"' _ '$script_b64'"
 unset key
+
+ssh "$ORACLE_HOST" 'sudo systemctl restart memroos-web'
 
 echo "NANGO_SECRET_KEY installed on $ORACLE_HOST and memroos-web restarted."
 echo "Verifying operator health..."
 sleep 5
-curl -sS 'https://memroos.epiloguecapital.com/api/health' >/dev/null \
+# -f so an HTTP 5xx from the operator counts as a failed health check.
+curl -fsS 'https://memroos.epiloguecapital.com/api/health' >/dev/null \
   && echo "Operator is responding." \
-  || echo "Health endpoint not responding yet — check: ssh $ORACLE_HOST 'sudo systemctl status memroos-web --no-pager'"
+  || echo "Health endpoint unhealthy or unreachable — check: ssh $ORACLE_HOST 'sudo systemctl status memroos-web --no-pager'"
 
 echo
 echo "Next: in the Nango dashboard, ensure provider configs exist for the"
