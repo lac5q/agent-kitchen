@@ -70,6 +70,22 @@ available on demand via the `catalog` and `read` actions.
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
 
+## Delegate menial work to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
+
+Menial work — mechanical, inspection-verifiable, no architectural judgment (bulk
+mechanical edits, boilerplate, fixtures, format/lint/type cleanups, doc tidying,
+log triage, repetitive per-item passes) — goes to a **MiniMax-M3** bounded worker,
+not the director model. The director keeps architecture, security, impact analysis,
+planning, verification, commits, and pushes.
+
+Prove the lane returns `MINIMAX OK` before delegating; review everything it returns
+and run the real checks yourself. If no MiniMax lane is live, say which fallback you
+used — never imply MiniMax ran when it did not.
+
+Full contract: `agents/AGENTS_TEMPLATE.md` § "Delegate Menial Work to a MiniMax-M3
+Coworker". Lane table, invocation, and smoke gates:
+`docs/codex-cloud/skills/beastmode-cloud/SKILL.md` § "Worker Lanes".
+
 ## Production deployment
 
 Read `docs/production-deployment.md` before any deploy or onboarding task.

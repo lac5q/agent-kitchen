@@ -119,6 +119,52 @@ Agent → write_file(path="MEMROOS_ROOT/content/<slug>.md")
 - **Coordination**: many agents sharing one git repo need a gatekeeper to prevent clobbered writes
 - **Governance**: MemroOS is the single source of truth for agent knowledge
 
+## Delegate Menial Work to a MiniMax-M3 Coworker (operator directive 2026-07-26)
+
+Luis has directed, as a **permanent standing rule**, that menial work goes to a
+MiniMax-M3 coworker rather than to the expensive director model. The current
+agent stays director, reviewer, and merge gate; MiniMax-M3 is a bounded worker.
+
+**Menial** means work that is mechanical, verifiable by inspection, and does not
+require architectural judgment: bulk find/replace-shaped edits across many files,
+boilerplate and scaffolding, test-fixture and mock generation, format/lint/type
+cleanups, doc and comment tidying, log and output triage, changelog and release
+notes from a known diff, data reshaping, and repetitive per-item passes over a
+list the director already scoped.
+
+**Not menial** — the director keeps these: architecture and design decisions,
+security and auth changes, anything touching secrets or credentials, impact
+analysis and blast-radius calls, final verification and truth claims, planning
+documents, commits, pushes, and merges.
+
+### Always Do
+
+- **MUST route menial work to a MiniMax-M3 lane** when one is live. Lane table,
+  invocation, and smoke gates: `docs/codex-cloud/skills/beastmode-cloud/SKILL.md`.
+  Prefer the direct MiniMax API lane (`MiniMax-M3`, `MINIMAX_API_KEY`) when the
+  worker only needs to return a patch, plan, or analysis; prefer Droid MiniMax
+  (`droid exec --model minimax-m3`) when Factory's agent runtime or tool access
+  is required.
+- **MUST prove the lane is live before delegating** — the worker must return
+  exactly `MINIMAX OK` from the start-gate smoke check.
+- **MUST hand the worker a bounded slice**: scope, allowed files, acceptance
+  checks, and blast-radius notes written by the director first.
+- **MUST review everything the worker returns** and run the real checks yourself
+  before applying it. The worker's claim of success is not evidence.
+- **MUST state the substitution honestly when no MiniMax lane is live** — name the
+  fallback used (cheapest available subagent or director-inline) rather than
+  implying MiniMax ran.
+
+### Never Do
+
+- NEVER let the worker commit, push, access secrets, or make final verification
+  claims.
+- NEVER spend director tokens on a mechanical pass a bounded worker could do,
+  when a MiniMax lane is live.
+- NEVER delegate architecture, security, impact analysis, or planning judgment to
+  the menial lane.
+- NEVER report work as MiniMax-executed when it was not.
+
 ## MemroOS vs Artyfacts
 
 Artyfacts is a third-party filing-cabinet MCP server (28 tools, plugin name `artyfacts`, serverName `artyfacts`). It is **deprecated for knowledge storage** in this stack — MemroOS is primary.
