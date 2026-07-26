@@ -78,6 +78,35 @@ Examples:
 | `scripts` | One-shot checks, provisioning, eval runners, migration helpers, launchd installers, and operational maintenance | Request/response behavior or business logic that must be imported by routes |
 | `docs` and `.planning` | Architecture contracts, operator-facing decisions, GSD requirements, phase plans, verification notes | Runtime source of truth for behavior |
 
+### `src/lib/` internal structure (LIBNORM-01, Phase 189)
+
+Within `apps/memroos/src/lib`, domain logic lives in `lib/<domain>/`. The
+`lib/` **root** is reserved for cross-cutting primitives that genuinely belong
+to no single domain:
+
+| Reserved at `lib/` root | Why |
+| --- | --- |
+| `env.ts` | Environment resolution, used by every domain |
+| `db.ts` | Connection handle, not domain behavior |
+| `paths.ts` | Filesystem layout, used by every domain |
+| `constants.ts` | Cross-domain constants |
+| `api-error.ts` | Shared error shape across all routes |
+
+Everything else belongs in a domain directory — `lib/memory/`, `lib/agent/`,
+`lib/store/`, and so on. The test: if a reader has to open the file to learn
+which part of the system it serves, it is domain logic and needs a directory.
+
+This rule is enforced by `npm run check:lib-boundary` (LIBNORM-03). A new
+root-level file fails CI. The 75 files currently at the root predate the rule
+and are listed as a shrinking baseline in `src/lib/lib-boundary-baseline.mjs`;
+that list may only get smaller. Relocations use call-graph-aware `rename`, not
+find-and-replace.
+
+A related boundary applies to data access: `better-sqlite3` may only be
+imported from `lib/store/**` or test files, enforced by
+`npm run check:sqlite-allowlist` (STORE-03). Governance fields are required
+arguments on `lib/store` write paths, so an ungoverned write does not typecheck.
+
 Rule of thumb:
 
 - If it serves an HTTP request or renders UI, start in the Next.js app.
