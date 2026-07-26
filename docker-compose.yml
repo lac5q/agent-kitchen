@@ -132,7 +132,7 @@ PY"]
     volumes:
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3291/health', timeout=3)""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3291/health', timeout=3)\""]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -144,3 +144,4 @@ volumes:
   neo4j-data:
   neo4j-logs:
   orchestration-data:
+  connmem-data:
