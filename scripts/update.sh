@@ -85,6 +85,103 @@ green() { printf '\033[32m✓\033[0m %s\n' "$1"; }
 blue()  { printf '\033[34m•\033[0m %s\n' "$1"; }
 yellow(){ printf '\033[33m!\033[0m %s\n' "$1"; }
 
+# ---------------------------------------------------------------------------
+# Pre-flight CI status check (fail closed)
+# ---------------------------------------------------------------------------
+# Pulls the GitHub Actions runs triggered by the target SHA and asserts
+# that every required CI gate completed with conclusion=success. Used by
+# `update.sh` after the target ref is resolved and BEFORE the snapshot is
+# taken, so the operator never eats a snapshot for a known-broken commit.
+#
+# Env vars:
+#   MEMROOS_UPDATE_REQUIRE_CI=0   Skip the check (offline / dev).
+#                                 Default: 1 (check + fail closed).
+#
+# Exit code 5: a required check is not SUCCESS (fail closed).
+# Exit code 6: a required check is still in progress.
+preflight_ci_status() {
+  local target_sha="$1"
+  if [ "${MEMROOS_UPDATE_REQUIRE_CI:-1}" = "0" ]; then
+    yellow "  CI pre-flight skipped (MEMROOS_UPDATE_REQUIRE_CI=0)"
+    return 0
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    red "  gh CLI not found; cannot verify CI status."
+    red "  Install gh (https://cli.github.com) or set MEMROOS_UPDATE_REQUIRE_CI=0 for offline hosts."
+    exit 5
+  fi
+  local runs_json
+  if ! runs_json="$(gh run list --commit "$target_sha" --json name,status,conclusion,databaseId 2>/dev/null)"; then
+    red "  gh run list failed for $target_sha; cannot verify CI status."
+    red "  Set MEMROOS_UPDATE_REQUIRE_CI=0 to skip (offline / dev only)."
+    exit 5
+  fi
+  if [ -z "$runs_json" ] || [ "$runs_json" = "[]" ]; then
+    red "  no CI runs found for $target_sha; cannot verify CI status."
+    red "  The commit may be unpushed or the workflow may be misconfigured."
+    red "  Set MEMROOS_UPDATE_REQUIRE_CI=0 to skip (offline / dev only)."
+    exit 5
+  fi
+  # The 8 wired-in CI gates (architecture review F8 noted "no `npm run
+  # verify` runs the enforced set" — this pre-flight is the
+  # operator-side enforcement of the wired set).
+  local required=(
+    "Memroos tests and build"
+    "Python service smoke tests"
+    "Operator load SLO gate (ENTOPS-01)"
+    "Memory recall canary"
+    "BELIEF-05 promotion eval canary"
+    "Policy regression corpus (POLGOV-05)"
+    "Secret Guard"
+    "full disposable-host reinstall"
+  )
+  # For each required check, find the most recent run with that name
+  # and report its status + conclusion. Re-runs are common; the most
+  # recent run is the source of truth.
+  local check_lines
+  check_lines="$(MEMROOS_REQUIRED_CHECK_NAMES="${required[*]}" python3 - <<'PY'
+import json, os, sys
+required = os.environ["MEMROOS_REQUIRED_CHECK_NAMES"].split()
+runs = json.load(sys.stdin)
+by_name = {}
+for r in runs:
+    by_name.setdefault(r["name"], []).append(r)
+for name in required:
+    if name not in by_name:
+        print(f"{name}\tmissing")
+        continue
+    latest = by_name[name][0]
+    status = latest.get("status", "unknown")
+    conclusion = latest.get("conclusion") or "pending"
+    print(f"{name}\t{status}\t{conclusion}")
+PY
+)"
+  local pending=()
+  local failed=()
+  while IFS=$'\t' read -r name status conclusion; do
+    [ -z "$name" ] && continue
+    if [ "$status" != "completed" ]; then
+      pending+=("$name ($status)")
+    elif [ "$conclusion" != "success" ]; then
+      failed+=("$name ($conclusion)")
+    fi
+  done <<< "$check_lines"
+  if [ "${#pending[@]}" -gt 0 ]; then
+    yellow "  CI pre-flight: ${#pending[@]} check(s) still in progress:"
+    printf "    - %s\n" "${pending[@]}"
+    red "  aborting update. Wait for CI to finish before re-running."
+    exit 6
+  fi
+  if [ "${#failed[@]}" -gt 0 ]; then
+    red "  CI pre-flight: target $target_sha has failing checks:"
+    printf "    - %s\n" "${failed[@]}"
+    red "  inspect at https://github.com/lac5q/memroos/commit/${target_sha}/checks"
+    red "  aborting update."
+    exit 5
+  fi
+  green "  CI pre-flight: all ${#required[@]} required checks passed"
+}
+
 cd "$MEMROOS_DIR"
 
 # ---------------------------------------------------------------------------
@@ -176,14 +273,44 @@ fi
 echo
 
 # ---------------------------------------------------------------------------
-# Phase 1 — Snapshot
+# Phase 1 — Resolve target ref
+# ---------------------------------------------------------------------------
+blue "[1/7] resolving target ref"
+case "$CHANNEL" in
+  current)
+    TARGET_REF="${OVERRIDE_REF:-$(git symbolic-ref --short HEAD 2>/dev/null || echo main)}"
+    ;;
+  stable)
+    TARGET_REF="$(git tag -l 'stable/*' --sort=-v:refname | head -1)"
+    [ -z "$TARGET_REF" ] && { red "no stable/* tags found"; exit 1; }
+    ;;
+  *) red "unknown channel: $CHANNEL"; exit 2 ;;
+esac
+git fetch origin --prune
+TARGET_HEAD="$(git rev-parse "origin/$TARGET_REF")"
+green "Target:  $TARGET_HEAD ($TARGET_REF)"
+echo
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Pre-flight CI status check (fail closed)
+# ---------------------------------------------------------------------------
+# The operator never eats a snapshot for a known-broken commit. Runs
+# BEFORE the snapshot so a red CI aborts cleanly with no partial state.
+# The check requires the gh CLI; on offline / dev hosts set
+# MEMROOS_UPDATE_REQUIRE_CI=0 to skip.
+blue "[2/7] pre-flight CI status check"
+preflight_ci_status "$TARGET_HEAD"
+echo
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Snapshot
 # ---------------------------------------------------------------------------
 SNAPSHOT_PATH=""
 if [ "$SKIP_SNAPSHOT" = "1" ]; then
-  yellow "[1/7] --skip-snapshot set; skipping pre-update snapshot"
+  yellow "[3/7] --skip-snapshot set; skipping pre-update snapshot"
   yellow "       this is NOT recommended unless you have a separate backup"
 else
-  blue "[1/7] writing pre-update snapshot"
+  blue "[3/7] writing pre-update snapshot"
   # If MEMROOS_SNAPSHOT_DIR points at /var/backups/memroos and we can't
   # create it (non-root user), fall back to a per-user snapshot dir.
   if ! mkdir -p "$SNAPSHOT_DIR" 2>/dev/null; then
@@ -217,28 +344,11 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Resolve target ref
+# Phase 4 — Version-bump classification + record decision
 # ---------------------------------------------------------------------------
-blue "[2/7] resolving target ref"
-case "$CHANNEL" in
-  current)
-    TARGET_REF="${OVERRIDE_REF:-$(git symbolic-ref --short HEAD 2>/dev/null || echo main)}"
-    ;;
-  stable)
-    TARGET_REF="$(git tag -l 'stable/*' --sort=-v:refname | head -1)"
-    [ -z "$TARGET_REF" ] && { red "no stable/* tags found"; exit 1; }
-    ;;
-  *) red "unknown channel: $CHANNEL"; exit 2 ;;
-esac
-git fetch origin --prune
-TARGET_HEAD="$(git rev-parse "origin/$TARGET_REF")"
-green "Target:  $TARGET_HEAD ($TARGET_REF)"
-echo
+blue "[4/7] version-bump classification + recording upgrade decision"
 
-# ---------------------------------------------------------------------------
-# Phase 3 — Version-bump classification
-# ---------------------------------------------------------------------------
-blue "[3/7] version-bump classification"
+# Classify the bump BEFORE recording so the decision log carries it.
 PREV_VERSION="${CURRENT_TAG#v}"
 NEW_TAG="$(git describe --tags --exact-match "$TARGET_HEAD" 2>/dev/null || echo "v$(git rev-list --count "$TARGET_HEAD")")"
 NEW_VER="${NEW_TAG#v}"
@@ -265,11 +375,9 @@ else
   BUMP="unknown"
   echo "  (no prior tag; treating as in-place update)"
 fi
-echo
 
-# ---------------------------------------------------------------------------
-# Phase 4 — Dry-run summary
-# ---------------------------------------------------------------------------
+# Dry-run short-circuit. The CI pre-flight (phase 2) already ran
+# against the target SHA, so a dry-run does NOT re-fetch.
 if [ "$DRY_RUN" = "1" ]; then
   yellow "DRY RUN — not changing anything"
   echo "  would pull:       $TARGET_REF ($TARGET_HEAD)"
@@ -286,10 +394,9 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Phase 5 — Record decision + checkout + dep refresh
-# ---------------------------------------------------------------------------
-blue "[4/7] recording upgrade decision"
+# Record the upgrade decision (audit trail). The decision log path
+# was resolved up top in the Paths block (the /var/log/memroos
+# fallback to $HOME/.memroos lives there).
 mkdir -p "$(dirname "$DECISION_LOG")"
 {
   echo "---"
@@ -306,6 +413,9 @@ mkdir -p "$(dirname "$DECISION_LOG")"
 green "decision recorded -> $DECISION_LOG"
 echo
 
+# ---------------------------------------------------------------------------
+# Phase 5 — Checkout + dep refresh
+# ---------------------------------------------------------------------------
 blue "[5/7] checkout $TARGET_REF + refresh language deps"
 git checkout "$TARGET_REF"
 git pull --ff-only origin "$TARGET_REF"
