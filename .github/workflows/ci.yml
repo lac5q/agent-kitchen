@@ -39,6 +39,9 @@ jobs:
       - name: Check route auth boundary
         run: npm run check:route-auth-boundary
 
+      - name: Check SQLite access boundary (STORE-03)
+        run: npm run check:sqlite-allowlist
+
       - name: Check Next trust boundary
         run: npm run check:next-trust-boundary
 

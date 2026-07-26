@@ -52,6 +52,7 @@
     "observe:sidecar": "node scripts/run-observe-sidecar.mjs",
     "check:runtime-topology": "node scripts/check-runtime-topology.mjs",
     "check:contracts": "node scripts/check-contract-manifest.mjs",
+    "check:sqlite-allowlist": "node scripts/check-sqlite-allowlist.mjs && node --test scripts/check-sqlite-allowlist.test.mjs",
     "check:route-auth-boundary": "node scripts/check-route-auth-boundary.mjs && node --test scripts/check-route-auth-boundary.test.mjs && npm run test --workspace apps/memroos -- --run src/lib/__tests__/operator-auth.test.ts src/app/api/agent-context/__tests__/route.test.ts src/app/api/agent-checkpoints/__tests__/route.test.ts src/app/api/agent-memory/traces/__tests__/route.test.ts src/app/api/agent-runtime/observability/__tests__/route.test.ts src/app/api/agents/versions/__tests__/route.test.ts src/app/api/hive/__tests__/route.test.ts src/app/api/model-routing/__tests__/route.test.ts",
     "check:next-trust-boundary": "node scripts/check-next-trust-boundary.mjs && npm run test --workspace apps/memroos -- --run src/__tests__/proxy.test.ts src/app/api/agent-checkpoints/__tests__/route.test.ts src/app/api/agent-memory/traces/__tests__/route.test.ts src/app/api/agent-runtime/observability/__tests__/route.test.ts src/app/api/agents/versions/__tests__/route.test.ts src/app/api/hive/__tests__/route.test.ts src/app/api/model-routing/__tests__/route.test.ts",
     "check:future-spikes": "node scripts/check-future-spikes.mjs && node --test scripts/check-future-spikes.test.mjs",
