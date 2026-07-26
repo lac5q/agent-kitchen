@@ -2927,11 +2927,41 @@ Operator host
 - OSI-strict OSS self-host at scale (Klavis self-host remains a future swap candidate, not v8.23 deliverable).
 - Memroos becoming an OAuth server itself for agents (separate concern; tracks via Better Auth `@better-auth/oauth-provider` or Ory Hydra if pursued).
 
+**Field report (2026-07-26, operator escalation — "integrations UI missing"):**
+
+Root cause of the repeated "no auth UI for Notion/Circleback/Linear" reports: the TOOLAUTH-02
+Connected Tools page shipped complete at `apps/memroos/src/app/settings/tools/page.tsx`
+(provider grid, Nango OAuth popup flow, API-key sheet, revoke, usage meter, activity strip),
+with all seven `/api/tools/*` routes and the `lib/tool-auth/` plane (registry with 16 providers
+incl. Notion, Circleback `circleback-mcp`, Linear; Nango client; vault credential store) — but it
+was **never wired into navigation**. No entry in `sidebar.tsx` `NAV_ITEMS[].match`, no tab in
+`shell.tsx` `ROUTE_TABS`, and no `<Link>` anywhere pointed at `/settings/tools`. The page was
+orphaned, so on the oracle-1 dev instance it appeared as if the feature did not exist.
+
+Fixed on `claude/members-dashboard-auth-ui-82dpyh`:
+- `shell.tsx` — added `Integrations` tab (`/settings/tools`) to the Governance tab group.
+- `sidebar.tsx` — added `/settings/tools` to the Governance `match[]`; description now names integrations.
+- `settings/tools/page.tsx` — converted from its own `<main>` (double padding + font override
+  under the Shell) to the standard Pattern A wrapper (`<div className="space-y-6">`) used by
+  api-keys/compliance/team; eyebrow aligned `Settings` → `Governance`.
+
+Remaining for a working end-to-end connect flow (ops, not code):
+1. Set `NANGO_SECRET_KEY` in the operator env (oracle-1: `/etc/memroos/web.env`; dev `.env.local`).
+   Without it the page renders and the connect buttons surface "Nango not configured" inline.
+2. Register provider configs in the Nango dashboard matching `providerConfigKey` values:
+   `notion`, `linear`, `circleback-mcp`, `slack`, `github`, `google-calendar`, `google-drive`,
+   `hubspot`, `salesforce`, `xero` — separate Nango environments for dev vs prod instances.
+3. TOOLAUTH-06 (refresh observability NOC tile), TOOLAUTH-07 (revocation webhook dispatch),
+   TOOLAUTH-08 (migrate Phase 176 Linear/Circleback + Phase 178 Paperclip consumers to
+   `tool_auth.getCredentials()`) remain open.
+4. Cited source docs (`.planning/spikes/2026-07-23-tool-auth-ux-*.md`,
+   `.planning/design/2026-07-23-connected-tools-ux-design.md`) are missing from disk — recover or re-derive.
+
 ### Progress Table (v8.23 Third-Party Tool Authentication Plane)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 179. Third-Party Tool Authentication Plane | 1/1 | Planned → Implementation in progress on `beastmode/v8.23-tool-auth-plane` | 2026-07-23 |
+| 179. Third-Party Tool Authentication Plane | 1/1 | UI + API shipped; nav wiring landed 2026-07-26 (`claude/members-dashboard-auth-ui-82dpyh`); Nango env/provider config + TOOLAUTH-06..08 open | 2026-07-23 |
 
 ## v8.24 Operator Lifecycle Toolkit (bin/memroos)
 
