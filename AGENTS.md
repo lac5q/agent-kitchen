@@ -70,21 +70,30 @@ available on demand via the `catalog` and `read` actions.
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
 
-## Delegate menial work to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
+## Automatic downshift: menial work goes to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
 
-Menial work — mechanical, inspection-verifiable, no architectural judgment (bulk
+**This is automatic and dynamic — the operator never has to ask.** There is no
+trigger phrase; waiting to be told is a violation. Classify every unit of work
+before starting it, re-classify as its real shape emerges, and route without
+asking permission. Report which lane ran, after the fact.
+
+Menial — mechanical, inspection-verifiable, no architectural judgment (bulk
 mechanical edits, boilerplate, fixtures, format/lint/type cleanups, doc tidying,
-log triage, repetitive per-item passes) — goes to a **MiniMax-M3** bounded worker,
-not the director model. The director keeps architecture, security, impact analysis,
-planning, verification, commits, and pushes.
+log triage, repetitive per-item passes) — goes to a **MiniMax-M3** bounded worker.
+The director keeps architecture, security, impact analysis, planning, verification,
+commits, and pushes. A "menial" task that surfaces a design or security question
+escalates back to the director immediately; a director task that turns out to be
+mechanical downshifts mid-flight.
 
-Prove the lane returns `MINIMAX OK` before delegating; review everything it returns
-and run the real checks yourself. If no MiniMax lane is live, say which fallback you
-used — never imply MiniMax ran when it did not.
+Prove the lane returns `MINIMAX OK` once per session before delegating; review
+everything it returns and run the real checks yourself. When MiniMax is not live,
+fall back automatically — next-cheapest worker lane, then cheapest subagent, then
+director-inline — and name the lane that actually ran. Never imply MiniMax ran when
+it did not.
 
-Full contract: `agents/AGENTS_TEMPLATE.md` § "Delegate Menial Work to a MiniMax-M3
-Coworker". Lane table, invocation, and smoke gates:
-`docs/codex-cloud/skills/beastmode-cloud/SKILL.md` § "Worker Lanes".
+Full contract, including the dispatch test and re-classification rules:
+`agents/AGENTS_TEMPLATE.md` § "Automatic Downshift". Lane table, invocation, and
+smoke gates: `docs/codex-cloud/skills/beastmode-cloud/SKILL.md` § "Worker Lanes".
 
 ## Production deployment
 
