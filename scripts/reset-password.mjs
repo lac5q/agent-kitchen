@@ -1,0 +1,221 @@
+#!/usr/bin/env node
+// scripts/reset-password.mjs — operator-driven password reset for memroos.
+//
+// The web flow at /api/auth/password-reset/confirm requires a token from
+// /api/auth/password-reset (which emails a link). When the operator
+// can't use that flow (no SMTP, off-host recovery, "I locked myself
+// out" debugging), this CLI writes the password_hash directly to the
+// SQLite database. Uses the same bcrypt cost factor as the app
+// (apps/memroos/src/lib/auth/password.ts).
+//
+// Usage:
+//   node scripts/reset-password.mjs
+//   node scripts/reset-password.mjs --email luis@epiloguecapital.com
+//   node scripts/reset-password.mjs --db /home/opc/memroos/data/conversations.db
+//
+// Interactive mode (no flags): prompts for email, then prompts for the
+// new password (twice, with confirmation).
+//
+// The password input is read from /dev/tty so the script is safe to
+// invoke from a pipe (echo pw | script would NOT leak the password in
+// the process list, but reading from /dev/tty keeps the password off
+// the parent's stdin/stdout as well).
+
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import readline from "node:readline";
+import url from "node:url";
+
+import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
+
+const BCRYPT_COST = 12;
+const MIN_PASSWORD_LENGTH = 8;
+const __filename = url.fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const REPO_ROOT = path.resolve(__dirname, "..");
+
+function parseArgs(argv) {
+  const args = { db: null, email: null, generate: false };
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--db") args.db = argv[++i];
+    else if (a === "--email") args.email = argv[++i];
+    else if (a === "--generate") args.generate = true;
+    else if (a === "-h" || a === "--help") {
+      console.error(`Usage: node scripts/reset-password.mjs [--email <addr>] [--db <path>] [--generate]
+
+  --email     email of the user to reset (prompts if not given)
+  --db        path to conversations.db (auto-detected if not given)
+  --generate  generate a random password instead of prompting`);
+      process.exit(0);
+    } else {
+      console.error(`unknown flag: ${a}`);
+      process.exit(2);
+    }
+  }
+  return args;
+}
+
+function defaultDbPath() {
+  // Match the same resolution order as the app's runtime db.
+  const envPath = process.env.SQLITE_DB_PATH;
+  if (envPath) return envPath;
+  // Most common operator layout.
+  const candidates = [
+    path.join(REPO_ROOT, "data", "conversations.db"),
+    path.join(REPO_ROOT, "apps/memroos", "data", "conversations.db"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+function prompt(question, { silent = false } = {}) {
+  // Read from /dev/tty when available so the password is not echoed
+  // and is not visible in the parent's stdin/stdout. Fall back to
+  // stdin for non-interactive environments.
+  const input = process.stdin.isTTY
+    ? process.stdin
+    : (fs.existsSync("/dev/tty") ? fs.createReadStream("/dev/tty") : process.stdin);
+  const output = silent && process.stdout.isTTY ? null : process.stderr;
+  const rl = readline.createInterface({ input, output, terminal: true });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+function promptSecret(prompt) {
+  return prompt(prompt, { silent: true });
+}
+
+function generatePassword() {
+  // 18 random bytes (24 base64 chars) is comfortably above the 8-char
+  // minimum. Strip the base64 padding and ambiguous chars so the
+  // password is copy-pasteable.
+  return crypto.randomBytes(18).toString("base64").replace(/[+/=]/g, "").slice(0, 24);
+}
+
+function findUser(db, email) {
+  return db
+    .prepare(
+      `SELECT id, email, display_name, role, length(password_hash) AS hash_len
+       FROM users WHERE email = ?`
+    )
+    .get(email);
+}
+
+function logEvent(db, userId, eventType, metadata) {
+  // Mirror the auth_events table the app uses. The schema is
+  // intentionally minimal so this CLI doesn't have to import the
+  // app's auth_events helper.
+  const id = crypto.randomBytes(8).toString("hex");
+  const json = JSON.stringify(metadata);
+  db.prepare(
+    `INSERT INTO auth_events (id, user_id, event_type, metadata_json) VALUES (?, ?, ?, ?)`
+  ).run(id, userId, eventType, json);
+}
+
+async function main() {
+  const args = parseArgs(process.argv);
+  const dbPath = args.db || defaultDbPath();
+  if (!fs.existsSync(dbPath)) {
+    console.error(`db not found: ${dbPath}`);
+    console.error("  pass --db /path/to/conversations.db explicitly, or set SQLITE_DB_PATH.");
+    process.exit(1);
+  }
+  // Confirm we're about to mutate state. The CLI logs to stderr so
+  // stdout stays free for machine-readable output (a future shell-out
+  // hook could pipe this).
+  console.error(`opening db: ${dbPath}`);
+  const db = new Database(dbPath);
+  try {
+    // 1. Resolve the target user. Interactive prompt if --email not given.
+    let email = args.email;
+    if (!email) {
+      email = (await prompt("email of the user to reset: ")).trim().toLowerCase();
+    } else {
+      email = email.trim().toLowerCase();
+    }
+    if (!email) {
+      console.error("email is required");
+      process.exit(2);
+    }
+    const user = findUser(db, email);
+    if (!user) {
+      console.error(`no user found with email ${email}`);
+      const counts = db.prepare("SELECT COUNT(*) AS n FROM users").get();
+      console.error(`(users table currently has ${counts.n} row(s))`);
+      process.exit(1);
+    }
+    console.error(`found user: id=${user.id} email=${user.email} display_name=${user.display_name ?? ""} role=${user.role ?? ""} hash_len=${user.hash_len}`);
+
+    // 2. Resolve the new password. Interactive unless --generate.
+    let password;
+    if (args.generate) {
+      password = generatePassword();
+      console.error(`generated random password (${password.length} chars)`);
+    } else {
+      const first = await promptSecret("new password (>=8 chars, input hidden): ");
+      const second = await promptSecret("confirm new password:                       ");
+      if (first !== second) {
+        console.error("passwords do not match");
+        process.exit(1);
+      }
+      if (first.length < MIN_PASSWORD_LENGTH) {
+        console.error(`password too short (${first.length} < ${MIN_PASSWORD_LENGTH})`);
+        process.exit(1);
+      }
+      password = first;
+    }
+    if (!password || password.length < MIN_PASSWORD_LENGTH) {
+      console.error("password failed validation");
+      process.exit(1);
+    }
+
+    // 3. Hash with the same cost factor the app uses (bcrypt cost 12).
+    const passwordHash = bcrypt.hashSync(password, BCRYPT_COST);
+
+    // 4. Write the new hash + revoke outstanding refresh tokens (so any
+    // existing session cookies for this user stop working immediately)
+    // + record an auth_event for the audit trail. The app's own
+    // /api/auth/password-reset/confirm route does the same; we mirror
+    // it here for the operator-driven path.
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+        passwordHash,
+        user.id,
+      );
+      db.prepare(
+        "UPDATE user_refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL"
+      ).run(now, user.id);
+      logEvent(db, user.id, "password_reset_operator_cli", {
+        source: "scripts/reset-password.mjs",
+        operator: process.env.USER || "unknown",
+      });
+    })();
+
+    console.error(`✓ password updated for ${user.email}`);
+    if (args.generate) {
+      // Emit the generated password on stdout so the operator can
+      // copy-paste it. The password is the only secret the script
+      // produces, so a single line on stdout is the right channel.
+      console.log(password);
+    } else {
+      console.error("  (no echo: password was entered interactively)");
+    }
+  } finally {
+    db.close();
+  }
+}
+
+main().catch((err) => {
+  console.error(`reset-password: ${err && err.stack ? err.stack : err}`);
+  process.exit(1);
+});

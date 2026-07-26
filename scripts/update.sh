@@ -36,6 +36,49 @@
 
 set -euo pipefail
 
+red()   { printf '\033[31m✗\033[0m %s\n' "$1" >&2; }
+green() { printf '\033[32m✓\033[0m %s\n' "$1"; }
+blue()  { printf '\033[34m•\033[0m %s\n' "$1"; }
+yellow(){ printf '\033[33m!\033[0m %s\n' "$1"; }
+
+# Resolve MEMROOS_DIR early so the pre-update pull (below) and every
+# subsequent phase run inside the operator's repo. The Paths block
+# later re-declares MEMROOS_DIR as a defaultable variable; this `cd`
+# is the actual change of directory.
+MEMROOS_DIR="${MEMROOS_DIR:-$HOME/memroos}"
+cd "$MEMROOS_DIR" || { echo "fatal: cannot cd to $MEMROOS_DIR" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Pre-update: pull the local working copy to the target ref BEFORE phase 0
+# ---------------------------------------------------------------------------
+# The state-preservation contract protects the protected state (users,
+# passwords, configs, vault key) — not the source code. Pulling the
+# script itself before running any state-touching step is safe. Without
+# this, an operator on an OLD local commit (e.g. cordant-hermes-01 was
+# on 511d9443 when 1507e6f5 + 60a0ba27 had landed) would run the pre-fix
+# script and hit the very DECISION_LOG / permission bug we are
+# patching. Pulling first guarantees every run uses the canonical
+# update.sh + tests + the wired-in CI gates.
+#
+# Opt-out: MEMROOS_UPDATE_SKIP_PULL=1 (offline / dev). Opt-out of
+# network entirely: MEMROOS_UPDATE_OFFLINE=1 (also skips the CI
+# pre-flight in phase 2).
+if [ "${MEMROOS_UPDATE_SKIP_PULL:-0}" != "1" ]; then
+  if [ -d .git ] && command -v git >/dev/null; then
+    CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+    if [ -n "$CURRENT_BRANCH" ]; then
+      if git fetch origin --prune >/dev/null 2>&1; then
+        if ! git pull --rebase --autostash origin "$CURRENT_BRANCH" >/dev/null 2>&1; then
+          yellow "pre-update pull failed (conflicts?); continuing with local code."
+          yellow "  fix: 'cd $(pwd) && git pull --rebase origin $CURRENT_BRANCH' then re-run."
+        else
+          green "pre-update: pulled origin/$CURRENT_BRANCH"
+        fi
+      fi
+    fi
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 # Args
 # ---------------------------------------------------------------------------
@@ -65,6 +108,7 @@ done
 MEMROOS_DIR="${MEMROOS_DIR:-$HOME/memroos}"
 COMPOSE_FILE="${MEMROOS_COMPOSE_FILE:-docker-compose.local.yml}"
 DECISION_LOG="${MEMROOS_DECISION_LOG:-/var/log/memroos/upgrade-decisions.log}"
+
 SNAPSHOT_DIR="${MEMROOS_SNAPSHOT_DIR:-/var/backups/memroos}"
 
 # Fall back to $HOME/.memroos for DECISION_LOG when the default
@@ -79,11 +123,6 @@ APP_URL="${MEMROOS_APP_URL:-http://localhost:3000}"
 
 # Vault key location (default matches bin/memroos)
 VAULT_KEY_PATH="${MEMROOS_VAULT_KEY_PATH:-$HOME/.memroos/vault.key}"
-
-red()   { printf '\033[31m✗\033[0m %s\n' "$1" >&2; }
-green() { printf '\033[32m✓\033[0m %s\n' "$1"; }
-blue()  { printf '\033[34m•\033[0m %s\n' "$1"; }
-yellow(){ printf '\033[33m!\033[0m %s\n' "$1"; }
 
 # ---------------------------------------------------------------------------
 # Pre-flight CI status check (fail closed)
