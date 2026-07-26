@@ -45,6 +45,9 @@ jobs:
       - name: Check lib/ root boundary (LIBNORM-03)
         run: npm run check:lib-boundary
 
+      - name: Health-check branch tests (CFGDUR-03)
+        run: npm run check:health-check
+
       - name: Check Next trust boundary
         run: npm run check:next-trust-boundary
 
