@@ -105,6 +105,13 @@ assert "local-profile host with local neo4j PASSES" 0
 setup; rm -f "$TMP/profile.env"
 assert "missing host profile FAILS" 1
 
+# REQUIRE_FILES: declared file present -> pass; missing -> fail.
+setup; touch "$TMP/override.yml"; echo "REQUIRE_FILES=$TMP/override.yml" >> "$TMP/profile.env"
+assert "declared required file present PASSES" 0
+
+setup; echo "REQUIRE_FILES=$TMP/does-not-exist.yml" >> "$TMP/profile.env"
+assert "declared required file missing FAILS" 1
+
 echo ""
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

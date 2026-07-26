@@ -51,6 +51,7 @@ CONTAINER="${CONTAINER_NAME:-memroos-local-memroos-1}"
 EXPECT_GRAPH="${EXPECT_GRAPH_BACKEND:-aura}"
 EXPECT_VECTOR="${EXPECT_VECTOR_BACKEND:-qdrant-cloud}"
 EXPECT_LOCAL_NEO4J="${EXPECT_LOCAL_NEO4J_RUNNING:-no}"
+REQUIRE_FILES="${REQUIRE_FILES:-}"
 TO_EMAIL="${ALERT_EMAIL:-}"
 
 FAILURES=0
@@ -166,6 +167,19 @@ elif [ "$EXPECT_LOCAL_NEO4J" = "yes" ] && [ "$RUNNING_NEO4J" = "0" ]; then
 else
   ok "local neo4j container state matches profile (expected running: $EXPECT_LOCAL_NEO4J)"
 fi
+
+# ── required files ───────────────────────────────────────────────────────────
+# A host may declare files that must exist for its topology to survive the
+# NEXT restart (e.g. oracle-1's docker-compose.override.yml). Topology
+# conformance alone only notices a deleted override after a restart lands the
+# drift; this notices within one check interval, while recovery is still easy.
+for req in $REQUIRE_FILES; do
+  if [ ! -f "$req" ]; then
+    fail "Required file MISSING: $req. The current stack still runs, but the next restart will come up with the wrong topology. Restore it before restarting anything."
+  else
+    ok "required file present: $(basename "$req")"
+  fi
+done
 
 if [ "$FAILURES" -eq 0 ]; then
   exit 0
