@@ -67,7 +67,12 @@ export async function POST(req: NextRequest) {
       message: "OAuth flow initiated",
     });
     const response: ConnectOAuthResponse = {
-      authorizeUrl: buildAuthorizeUrl(nangoSession.sessionToken, provider.providerConfigKey),
+      // Prefer Nango's own connect_link. Hand-assembling the URL is what let a
+      // renamed response field (session_token -> token) reach the browser as
+      // `?session_token=undefined`, which Nango reports as an expired session.
+      authorizeUrl:
+        nangoSession.connectLink ??
+        buildAuthorizeUrl(nangoSession.sessionToken, provider.providerConfigKey),
       providerKey: provider.key,
       popupWidth: 600,
       popupHeight: 700,
@@ -91,6 +96,14 @@ export async function POST(req: NextRequest) {
 }
 
 function buildAuthorizeUrl(sessionToken: string, integrationId: string): string {
+  if (!sessionToken) {
+    // Fail loudly here rather than opening a popup at
+    // `?session_token=undefined`, where the only symptom is Nango's
+    // misleading "Your session has expired" message.
+    throw new Error(
+      "Nango returned no session token; refusing to open the connect popup.",
+    );
+  }
   // Nango's hosted connect UI takes a session token and opens a flow scoped
   // to the allowed integrations. The exact URL pattern is stable as of
   // 2026-07-23.

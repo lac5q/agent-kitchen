@@ -82,7 +82,15 @@ interface NangoConnection {
 
 interface NangoConnectSessionResponse {
   data: {
-    session_token: string;
+    // Nango returns `token`, not `session_token` (verified against the live
+    // API 2026-07-26). Reading the wrong field yielded
+    // `?session_token=undefined` in the popup URL and Nango answered
+    // "Your session has expired, please refresh the modal".
+    token: string;
+    // Nango also hands back a ready-made connect URL. Prefer it over
+    // hand-assembling one, so a future change to their URL shape does not
+    // silently break the flow again.
+    connect_link?: string;
     expires_at: string;
   };
 }
@@ -137,7 +145,7 @@ function normalizeEndUser(value: string | null | undefined): string | undefined 
 export async function createNangoConnectSession(opts: {
   endUserEmail: string | null;
   allowedIntegrationIds: string[];
-}): Promise<{ sessionToken: string; expiresAt: string }> {
+}): Promise<{ sessionToken: string; connectLink?: string; expiresAt: string }> {
   const res = await nangoFetch<NangoConnectSessionResponse>(
     "/connect/sessions",
     {
@@ -161,7 +169,8 @@ export async function createNangoConnectSession(opts: {
     },
   );
   return {
-    sessionToken: res.data.session_token,
+    sessionToken: res.data.token,
+    connectLink: res.data.connect_link,
     expiresAt: res.data.expires_at,
   };
 }

@@ -79,7 +79,7 @@ describe("nango-client: createNangoConnectSession", () => {
       ok: true,
       text: async () =>
         JSON.stringify({
-          data: { session_token: "tok_abc", expires_at: "2026-07-23T09:00:00Z" },
+          data: { token: "tok_abc", connect_link: "https://connect.nango.dev/?session_token=tok_abc", expires_at: "2026-07-23T09:00:00Z" },
         }),
     });
 
@@ -101,6 +101,30 @@ describe("nango-client: createNangoConnectSession", () => {
     expect(body.end_user.id).toBe("ops@example.com");
   });
 
+  // Nango's response field is `token`, not `session_token`. Reading the wrong
+  // name returned undefined, the popup opened at `?session_token=undefined`,
+  // and Nango showed "Your session has expired, please refresh the modal".
+  it("reads the session token from data.token and surfaces connect_link", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          data: {
+            token: "nango_connect_session_real",
+            connect_link: "https://connect.nango.dev/?session_token=nango_connect_session_real",
+            expires_at: "2026-07-23T09:00:00Z",
+          },
+        }),
+    });
+    const result = await createNangoConnectSession({
+      endUserEmail: "ops@example.com",
+      allowedIntegrationIds: ["notion"],
+    });
+    expect(result.sessionToken).toBe("nango_connect_session_real");
+    expect(result.sessionToken).toBeDefined();
+    expect(result.connectLink).toContain("session_token=nango_connect_session_real");
+  });
+
   // JWT sessions resolve email to '' (not null), which slipped past the
   // earlier `?? fallback` and produced a live 400 on cordant-hermes-01:
   // "expected string to have >=1 characters" + "Invalid email address".
@@ -111,7 +135,7 @@ describe("nango-client: createNangoConnectSession", () => {
         ok: true,
         text: async () =>
           JSON.stringify({
-            data: { session_token: "tok_e", expires_at: "2026-07-23T09:00:00Z" },
+            data: { token: "tok_e", expires_at: "2026-07-23T09:00:00Z" },
           }),
       });
       await createNangoConnectSession({
@@ -130,7 +154,7 @@ describe("nango-client: createNangoConnectSession", () => {
       ok: true,
       text: async () =>
         JSON.stringify({
-          data: { session_token: "tok_x", expires_at: "2026-07-23T09:00:00Z" },
+          data: { token: "tok_x", expires_at: "2026-07-23T09:00:00Z" },
         }),
     });
     await createNangoConnectSession({
