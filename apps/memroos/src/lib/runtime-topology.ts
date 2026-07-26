@@ -5,6 +5,7 @@ export type RuntimeSupervisionMode =
   | "launchd"
   | "manual-script"
   | "systemd"
+  | "cloudflare-tunnel"
   | "external";
 
 export interface RuntimePortDeclaration {
@@ -16,7 +17,7 @@ export interface RuntimePortDeclaration {
 }
 
 export interface RuntimeHealthCheck {
-  type: "http" | "script";
+  type: "http" | "https" | "script";
   path: string;
   timeoutMs: number;
 }
@@ -100,8 +101,11 @@ export function validateRuntimeTopologyManifest(
   for (const service of manifest.services) {
     if (!service.id.trim()) errors.push("Runtime service id is required");
     if (!service.displayName.trim()) errors.push(`Runtime service ${service.id} displayName is required`);
-    // ports may be empty: some services (e.g. the healthcheck systemd timer)
-    // run on a schedule and listen on nothing — mirrors check-runtime-topology.mjs.
+    // healthcheck is the one service allowed to declare no ports (it's a
+    // systemd timer, not a listener) — mirrors check-runtime-topology.mjs.
+    if (service.ports.length === 0 && service.id !== "healthcheck") {
+      errors.push(`Runtime service ${service.id} must declare at least one port`);
+    }
     if (service.supervisionModes.length === 0) {
       errors.push(`Runtime service ${service.id} must declare supervision modes`);
     }

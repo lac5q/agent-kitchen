@@ -102,17 +102,19 @@ describe("validateRuntimeTopologyManifest", () => {
     );
   });
 
-  it("allows port-less services (systemd timers) but rejects missing supervision modes", () => {
+  it("exempts only the healthcheck timer from the port rule", () => {
     const manifest: RuntimeTopologyManifest = {
       version: 2,
       profile: "local-dev",
       services: [
+        minimalService({ id: "healthcheck", ports: [] }),
         minimalService({ id: "no-ports", ports: [] }),
         minimalService({ id: "no-modes", supervisionModes: [] }),
       ],
     };
     const result = validateRuntimeTopologyManifest(manifest);
-    expect(result.errors).not.toContain("Runtime service no-ports must declare at least one port");
+    expect(result.errors).not.toContain("Runtime service healthcheck must declare at least one port");
+    expect(result.errors).toContain("Runtime service no-ports must declare at least one port");
     expect(result.errors).toContain("Runtime service no-modes must declare supervision modes");
   });
 
