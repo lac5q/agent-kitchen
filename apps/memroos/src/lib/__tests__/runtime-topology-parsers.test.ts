@@ -37,11 +37,11 @@ describe("runtime-topology manifest defaults", () => {
     const local = defaultRuntimeTopologyManifest("local-dev");
     expect(local.profile).toBe("local-dev");
 
-    const single = defaultRuntimeTopologyManifest("single-host");
-    expect(single.profile).toBe("single-host");
+    const production = defaultRuntimeTopologyManifest("production");
+    expect(production.profile).toBe("production");
     // services payload should be cloned, not shared with the module-level json
     const a = defaultRuntimeTopologyManifest("local-dev");
-    const b = defaultRuntimeTopologyManifest("docker-demo");
+    const b = defaultRuntimeTopologyManifest("local-dev");
     a.services[0].displayName = "mutated";
     expect(b.services[0].displayName).not.toBe("mutated");
   });
@@ -49,7 +49,13 @@ describe("runtime-topology manifest defaults", () => {
   it("defaults to the local-dev profile when none is supplied", () => {
     const manifest = defaultRuntimeTopologyManifest();
     expect(manifest.profile).toBe("local-dev");
-    expect(manifest.version).toBe(1);
+    expect(manifest.version).toBe(2);
+  });
+
+  it("throws on an unknown profile name", () => {
+    expect(() =>
+      defaultRuntimeTopologyManifest("docker-demo" as never),
+    ).toThrow(/Unknown runtime topology profile: docker-demo/);
   });
 });
 
@@ -65,10 +71,10 @@ describe("validateRuntimeTopologyManifest", () => {
 
   it("rejects unsupported version numbers", () => {
     const manifest = clone(defaultRuntimeTopologyManifest());
-    (manifest as { version: number }).version = 2;
+    (manifest as { version: number }).version = 3;
     const result = validateRuntimeTopologyManifest(manifest);
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain("Unsupported runtime topology version: 2");
+    expect(result.errors).toContain("Unsupported runtime topology version: 3");
   });
 
   it("rejects duplicate service ids", () => {
@@ -81,7 +87,7 @@ describe("validateRuntimeTopologyManifest", () => {
 
   it("rejects services with blank id or displayName", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({ id: "   " }),
@@ -96,9 +102,9 @@ describe("validateRuntimeTopologyManifest", () => {
     );
   });
 
-  it("rejects services with no ports or no supervision modes", () => {
+  it("allows port-less services (systemd timers) but rejects missing supervision modes", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({ id: "no-ports", ports: [] }),
@@ -106,13 +112,13 @@ describe("validateRuntimeTopologyManifest", () => {
       ],
     };
     const result = validateRuntimeTopologyManifest(manifest);
-    expect(result.errors).toContain("Runtime service no-ports must declare at least one port");
+    expect(result.errors).not.toContain("Runtime service no-ports must declare at least one port");
     expect(result.errors).toContain("Runtime service no-modes must declare supervision modes");
   });
 
   it("rejects duplicate port ids within a service", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -130,7 +136,7 @@ describe("validateRuntimeTopologyManifest", () => {
 
   it("rejects ports outside the legal TCP range", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -146,7 +152,7 @@ describe("validateRuntimeTopologyManifest", () => {
 
   it("rejects containerPorts outside the legal TCP range", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -163,7 +169,7 @@ describe("validateRuntimeTopologyManifest", () => {
 
   it("warns (but keeps ok=true) when a required service lacks a health check", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [minimalService({ id: "no-health", required: true, health: undefined })],
     };
@@ -176,7 +182,7 @@ describe("validateRuntimeTopologyManifest", () => {
 describe("validateRuntimeTopologyArtifacts", () => {
   it("validates docker-compose ports, manual-script ports, and launchd ports", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -227,7 +233,7 @@ describe("validateRuntimeTopologyArtifacts", () => {
 
   it("falls back to the raw defaultPort in docker-compose when env or containerPort is missing", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -250,7 +256,7 @@ describe("validateRuntimeTopologyArtifacts", () => {
 
   it("skips manual-script checks when no env is declared", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -270,7 +276,7 @@ describe("validateRuntimeTopologyArtifacts", () => {
 
   it("returns an error when the docker-compose does not declare the expected port mapping", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
@@ -300,7 +306,7 @@ describe("validateRuntimeTopologyArtifacts", () => {
 
   it("returns errors when scripts miss the manual-script or launchd port markers", () => {
     const manifest: RuntimeTopologyManifest = {
-      version: 1,
+      version: 2,
       profile: "local-dev",
       services: [
         minimalService({
