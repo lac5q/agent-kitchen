@@ -3,6 +3,13 @@ export async function register() {
     const { validateMemroosEnvAtStartup } = await import('./lib/env');
     validateMemroosEnvAtStartup();
 
+    // CFGDUR-02: refuse to boot into a backend topology the host did not
+    // declare. An explicit `docker compose -f` defeats both the compose
+    // override and COMPOSE_FILE, so this is the only control that survives
+    // the invocation that silently disconnected Aura for months.
+    const { assertHostTopology } = await import('./lib/host-profile/assert-topology');
+    assertHostTopology();
+
     const { tryAcquireSchedulerLock } = await import('./lib/scheduler-singleton');
     if (!tryAcquireSchedulerLock()) {
       // Another memroos process owns the schedulers; serve HTTP only.
