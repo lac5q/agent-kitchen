@@ -37,18 +37,30 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
 
 function parseArgs(argv) {
-  const args = { db: null, email: null, generate: false };
+  const args = { db: null, email: null, generate: false, create: false, role: "admin", force: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--db") args.db = argv[++i];
     else if (a === "--email") args.email = argv[++i];
     else if (a === "--generate") args.generate = true;
+    else if (a === "--create") args.create = true;
+    else if (a === "--force") args.force = true;
+    else if (a === "--role") args.role = argv[++i];
     else if (a === "-h" || a === "--help") {
-      console.error(`Usage: node scripts/reset-password.mjs [--email <addr>] [--db <path>] [--generate]
+      console.error(`Usage: node scripts/reset-password.mjs [options]
 
-  --email     email of the user to reset (prompts if not given)
-  --db        path to conversations.db (auto-detected if not given)
-  --generate  generate a random password instead of prompting`);
+  --email <addr>      email of the user to reset or create (prompts if not given)
+  --db <path>         path to conversations.db (auto-detected if not given)
+  --generate          generate a random password instead of prompting
+  --create            create a new user (default mode is reset-existing)
+  --role <role>       role for --create (default: admin)
+
+Default mode resets an existing user's password. With --create, inserts a
+new row into users (id, email, display_name, password_hash, created_at,
+tenant_id='default-tenant') and a corresponding user_roles row with the
+requested role. Fails closed on email collision (the user already
+exists) unless --force is also set, in which case the existing row is
+updated and the password is reset (--create --force = upsert).`);
       process.exit(0);
     } else {
       console.error(`unknown flag: ${a}`);
@@ -90,8 +102,8 @@ function prompt(question, { silent = false } = {}) {
   });
 }
 
-function promptSecret(prompt) {
-  return prompt(prompt, { silent: true });
+function promptSecret(question) {
+  return prompt(question, { silent: true });
 }
 
 function generatePassword() {
@@ -102,10 +114,15 @@ function generatePassword() {
 }
 
 function findUser(db, email) {
+  // role lives in user_roles, not on users. LEFT JOIN so a user with
+  // no role row (anomalous) still surfaces with role=null.
   return db
     .prepare(
-      `SELECT id, email, display_name, role, length(password_hash) AS hash_len
-       FROM users WHERE email = ?`
+      `SELECT u.id, u.email, u.display_name, ur.role,
+              length(u.password_hash) AS hash_len
+       FROM users u
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       WHERE u.email = ?`
     )
     .get(email);
 }
@@ -148,12 +165,25 @@ async function main() {
     }
     const user = findUser(db, email);
     if (!user) {
-      console.error(`no user found with email ${email}`);
-      const counts = db.prepare("SELECT COUNT(*) AS n FROM users").get();
-      console.error(`(users table currently has ${counts.n} row(s))`);
+      if (args.create) {
+        // OK; we'll create below.
+      } else {
+        console.error(`no user found with email ${email}`);
+        const counts = db.prepare("SELECT COUNT(*) AS n FROM users").get();
+        console.error(`(users table currently has ${counts.n} row(s))`);
+        console.error("  pass --create to insert this user, or check the email.");
+        process.exit(1);
+      }
+    } else if (user && args.create && !args.force) {
+      console.error(`user ${email} already exists (id=${user.id}, role=${user.role ?? ""})`);
+      console.error("  pass --force to upsert (overwrites password_hash and role).");
       process.exit(1);
     }
-    console.error(`found user: id=${user.id} email=${user.email} display_name=${user.display_name ?? ""} role=${user.role ?? ""} hash_len=${user.hash_len}`);
+    if (user) {
+      console.error(`found user: id=${user.id} email=${user.email} display_name=${user.display_name ?? ""} role=${user.role ?? ""} hash_len=${user.hash_len}`);
+    } else {
+      console.error(`will create new user: email=${email} role=${args.role}`);
+    }
 
     // 2. Resolve the new password. Interactive unless --generate.
     let password;
@@ -187,21 +217,63 @@ async function main() {
     // /api/auth/password-reset/confirm route does the same; we mirror
     // it here for the operator-driven path.
     const now = new Date().toISOString();
+    const userId = user ? user.id : crypto.randomBytes(10).toString("hex");
+    const displayName = email.split("@")[0];
     db.transaction(() => {
-      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-        passwordHash,
-        user.id,
-      );
+      if (user && args.create && args.force) {
+        // Upsert: --create --force on an existing email rewrites the
+        // password and bumps the role. role lives in user_roles, NOT
+        // on users — UPDATE the password on users then refresh the
+        // user_roles row.
+        db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+          passwordHash,
+          user.id,
+        );
+        db.prepare("DELETE FROM user_roles WHERE user_id = ?").run(user.id);
+        db.prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(
+          user.id,
+          args.role,
+        );
+      } else if (user) {
+        // Plain reset.
+        db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+          passwordHash,
+          user.id,
+        );
+      } else {
+        // New user.
+        db.prepare(
+          "INSERT INTO users (id, email, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+        ).run(userId, email, displayName, passwordHash, now);
+        db.prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(
+          userId,
+          args.role,
+        );
+      }
+      // Revoke outstanding refresh tokens so any existing session
+      // cookies for this user stop working immediately. For new users
+      // this is a no-op.
       db.prepare(
         "UPDATE user_refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL"
-      ).run(now, user.id);
-      logEvent(db, user.id, "password_reset_operator_cli", {
+      ).run(now, userId);
+      const eventType = user
+        ? (args.create ? "password_reset_operator_cli" : "password_reset_operator_cli")
+        : "password_create_operator_cli";
+      logEvent(db, userId, eventType, {
         source: "scripts/reset-password.mjs",
         operator: process.env.USER || "unknown",
+        role: user ? args.role : undefined,
       });
     })();
 
-    console.error(`✓ password updated for ${user.email}`);
+    if (user && args.create && args.force) {
+      console.error(`✓ password + role updated for ${email}`);
+    } else if (user) {
+      console.error(`✓ password updated for ${email}`);
+    } else {
+      console.error(`✓ user created: ${email} (role=${args.role})`);
+    }
+
     if (args.generate) {
       // Emit the generated password on stdout so the operator can
       // copy-paste it. The password is the only secret the script
