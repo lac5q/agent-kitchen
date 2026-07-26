@@ -3353,4 +3353,14 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 | 194. Habit Layer: Skills + Bootstrap Fix | 0/1 | Planned (operator session 2026-07-26) | — |
 | 195. Adoption Telemetry + GSD Gates | 0/1 | Planned (operator session 2026-07-26) | — |
 
-**Sequencing:** Phase 191 first — it creates the primitive everything else points at and turns on the headline metric. Phase 194 can run in parallel with 192/193. Phase 195 last. Smallest behavior-changing slice if capacity is tight: Phase 191 + the SELFCAP-02 hooks.
+**Plans** (all written 2026-07-26; each carries its own audited baseline, design contract, implementation steps, verification list, and risks):
+
+- `.planning/phases/191-prior-work-probe/191-01-PLAN.md`
+- `.planning/phases/192-session-hooks-agent-self-capture/192-01-PLAN.md`
+- `.planning/phases/193-storage-quality-gate/193-01-PLAN.md`
+- `.planning/phases/194-memory-habit-layer/194-01-PLAN.md`
+- `.planning/phases/195-adoption-telemetry-gates/195-01-PLAN.md`
+
+**Sequencing:** Phase 191 first — it creates the primitive everything else points at and turns on the headline metric. Phase 194 can run in parallel with 192/193. Phase 195 last, and its step 1 is a hard gate: verify each producer emits live before building any panel row, so v8.30 does not repeat Phase 117's outcome of correct metrics over empty tables. Smallest behavior-changing slice if capacity is tight: Phase 191 + the SELFCAP-02 hooks.
+
+**Cross-phase notes:** Phase 191's module consolidation collides with Phase 189 LIBNORM-02 (same file move) — whichever lands first owns it. Phase 193's salience migration should coordinate with Phase 188 STORE-02. Phase 193's auto-promotion is the highest-stakes change in the milestone (gold is what agents rely on directly); consider one shadow-mode cadence before it promotes anything.
