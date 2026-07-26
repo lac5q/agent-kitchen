@@ -96,6 +96,27 @@ describe("nango-client: createNangoConnectSession", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.allowed_integrations).toEqual(["slack"]);
     expect(body.end_user.email).toBe("ops@example.com");
+    // Nango rejects sessions without end_user.id (400 invalid_body, verified
+    // live 2026-07-26). The email doubles as the id.
+    expect(body.end_user.id).toBe("ops@example.com");
+  });
+
+  it("falls back to a fixed end_user.id when no session email exists", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          data: { session_token: "tok_x", expires_at: "2026-07-23T09:00:00Z" },
+        }),
+    });
+    await createNangoConnectSession({
+      endUserEmail: null,
+      allowedIntegrationIds: ["notion"],
+    });
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.end_user.id).toBe("memroos-operator");
+    expect(body.end_user.email).toBeUndefined();
   });
 });
 
