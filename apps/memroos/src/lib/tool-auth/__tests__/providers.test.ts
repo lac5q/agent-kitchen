@@ -34,14 +34,18 @@ describe("tool-auth/providers", () => {
     }
   });
 
-  it("registers 12 providers across 4+ categories", () => {
-    expect(Object.keys(PROVIDERS_BY_KEY).length).toBeGreaterThanOrEqual(12);
+  it("registers 9+ providers across all 5 categories", () => {
+    expect(Object.keys(PROVIDERS_BY_KEY).length).toBeGreaterThanOrEqual(9);
     const grouped = getGroupedProviders();
     expect(grouped.length).toBe(5);
-    // At minimum 2 providers in productivity, developer, crm, finance.
-    for (const cat of ["productivity", "developer", "crm", "finance"] as const) {
-      const list = getProvidersByCategory(cat);
-      expect(list.length).toBeGreaterThanOrEqual(2);
+    // Every category carries at least one provider. This was ">= 2 in
+    // productivity/developer/crm/finance" until 2026-07-27, when the HubSpot,
+    // Salesforce, and Xero cards were removed for pointing at Nango
+    // integrations that do not exist — leaving crm with Intercom alone. A
+    // minimum-count assertion should not be what forces an unusable card to
+    // stay in the registry.
+    for (const cat of PROVIDER_CATEGORIES) {
+      expect(getProvidersByCategory(cat).length).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -94,5 +98,41 @@ describe("tool-auth/providers", () => {
   it("getCategories returns ordered category metadata", () => {
     const cats = getCategories();
     expect(cats.map((c) => c.id)).toEqual([...PROVIDER_CATEGORIES]);
+  });
+
+  /**
+   * Every OAuth card drives a Connect button that hands its providerConfigKey
+   * straight to Nango. A key with no matching Nango integration renders a card
+   * that can only fail — which is exactly how Linear shipped (pointing at
+   * `linear` when prod only had an admin-gated OAuth app plus `linear-mcp`),
+   * and how Slack and Google Calendar were pointing at names without the `-mcp`
+   * suffix prod actually uses.
+   *
+   * This list mirrors the live Nango prod integration list (verified against
+   * GET https://api.nango.dev/integrations on 2026-07-27). When you add an
+   * integration in the Nango dashboard, add it here in the same commit — a
+   * card whose key is absent here is a card no user can connect.
+   */
+  const NANGO_PROD_INTEGRATIONS = [
+    "circleback-mcp",
+    "github",
+    "google",
+    "google-calendar-mcp",
+    "google-drive",
+    "google-mail",
+    "linear",
+    "linear-mcp",
+    "mcp-generic",
+    "notion",
+    "slack-mcp",
+  ];
+
+  it("every OAuth provider's providerConfigKey exists in Nango prod", () => {
+    const orphans = Object.values(PROVIDERS_BY_KEY)
+      .filter(isOAuthProvider)
+      .filter((p) => !NANGO_PROD_INTEGRATIONS.includes(p.providerConfigKey))
+      .map((p) => `${p.key} -> ${p.providerConfigKey}`);
+
+    expect(orphans).toEqual([]);
   });
 });

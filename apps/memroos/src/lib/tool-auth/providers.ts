@@ -8,14 +8,11 @@ import {
   GitBranch, // GitHub stand-in (source control)
   Cloud,
   MessageSquare,
-  Users,
   Banknote,
-  Receipt,
   Calendar,
   Database,
   Box,
   Video,
-  LayoutGrid,
   Layers,
   Code2,
 } from "lucide-react";
@@ -125,7 +122,9 @@ const PROVIDERS: readonly Provider[] = [
     description: "Read channels, send messages, and react on your behalf.",
     category: "productivity",
     authMode: "oauth",
-    providerConfigKey: "slack",
+    // Nango prod registers this as `slack-mcp`, not `slack` — see the
+    // providerConfigKey/Nango parity test in __tests__/providers.test.ts.
+    providerConfigKey: "slack-mcp",
     scopes: [
       "channels:read",
       "channels:history",
@@ -169,7 +168,8 @@ const PROVIDERS: readonly Provider[] = [
     description: "List, create, and update events across your calendars.",
     category: "productivity",
     authMode: "oauth",
-    providerConfigKey: "google-calendar",
+    // Nango prod registers this as `google-calendar-mcp`, not `google-calendar`.
+    providerConfigKey: "google-calendar-mcp",
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
@@ -207,7 +207,13 @@ const PROVIDERS: readonly Provider[] = [
     description: "Create and update issues, projects, and cycles.",
     category: "developer",
     authMode: "oauth",
-    providerConfigKey: "linear",
+    // Nango prod registers both `linear` (plain OAuth, needs a Linear OAuth app
+    // that requires workspace-admin rights) and `linear-mcp` (MCP-backed, no
+    // admin app required). Pointing at `linear` sent Connect down the OAuth
+    // branch and failed asking for a client ID/secret. Same shape as Circleback
+    // above — see providerKeyFromConfigKey below for the card-matching this
+    // key feeds. Verified against the live Nango prod integration list.
+    providerConfigKey: "linear-mcp",
     scopes: ["read", "write", "issues:create"],
   },
   {
@@ -232,32 +238,11 @@ const PROVIDERS: readonly Provider[] = [
   },
 
   // ------------------------------------ crm ---------------------------------
-  {
-    key: "hubspot",
-    label: "HubSpot",
-    icon: Users,
-    description: "Contacts, companies, deals, and tickets.",
-    category: "crm",
-    authMode: "oauth",
-    providerConfigKey: "hubspot",
-    scopes: [
-      "crm.objects.contacts.read",
-      "crm.objects.contacts.write",
-      "crm.objects.deals.read",
-      "crm.objects.deals.write",
-      "tickets",
-    ],
-  },
-  {
-    key: "salesforce",
-    label: "Salesforce",
-    icon: LayoutGrid,
-    description: "Accounts, opportunities, and custom objects.",
-    category: "crm",
-    authMode: "oauth",
-    providerConfigKey: "salesforce",
-    scopes: ["api", "refresh_token", "offline_access"],
-  },
+  // HubSpot and Salesforce OAuth cards were removed 2026-07-27: both pointed at
+  // Nango integrations that do not exist in prod, so their Connect buttons could
+  // only ever fail. Re-add them alongside creating the Nango integration (and
+  // its vendor OAuth app credentials) — not before. See the providerConfigKey
+  // parity test in __tests__/providers.test.ts.
   {
     key: "intercom",
     label: "Intercom",
@@ -280,23 +265,8 @@ const PROVIDERS: readonly Provider[] = [
     apiKeyField: "Restricted secret key (rk_live_... or rk_test_...)",
     docsUrl: "https://dashboard.stripe.com/apikeys",
   },
-  {
-    key: "xero",
-    label: "Xero",
-    icon: Receipt,
-    description: "Invoices, contacts, and reports from your Xero org.",
-    category: "finance",
-    authMode: "oauth",
-    providerConfigKey: "xero",
-    scopes: [
-      "openid",
-      "profile",
-      "email",
-      "accounting.transactions",
-      "accounting.contacts",
-      "accounting.reports.read",
-    ],
-  },
+  // The Xero OAuth card was removed 2026-07-27 for the same reason as HubSpot
+  // and Salesforce above: no `xero` integration exists in Nango prod.
   {
     key: "plaid",
     label: "Plaid",
