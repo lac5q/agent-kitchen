@@ -2,9 +2,9 @@
 
 **Document version:** 2.0  
 **Created:** 2026-07-01  
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-07-27  
 **Creation date/time:** 2026-07-01  
-**Update date/time:** 2026-07-18 21:42 PDT  
+**Update date/time:** 2026-07-27 01:15 PDT  
 **Source:** lac5q/memroos cutover to oracle-1; live checks against `memroos.epiloguecapital.com`
 
 ## Production map
@@ -27,34 +27,75 @@
 
 GitHub PR checks include **Vercel – memroos**. That deploys the **marketing site** and preview builds. It does **not** deploy the operator app.
 
-**Operator production = oracle-1 systemd units healthy + public tunnel smoke.**
+**Operator production = oracle-1 Docker stack healthy + public tunnel smoke.**
 
 ## oracle-1 runtime
 
-| Unit | Role |
-|------|------|
-| `memroos-web.service` | Next.js operator on `:3000` |
-| `memroos-mem0.service` | mem0 HTTP service |
-| `ollama.service` | Local embeddings (`nomic-embed-text`) |
-| `cloudflared.service` | Tunnel `memroos-oracle` only |
+The operator runs as a **Docker Compose stack**, not systemd units. `memroos-web.service`
+and `memroos-mem0.service` still exist on the host but are **inactive and disabled** —
+legacy from before the Docker migration. Restarting them appears to succeed and changes
+nothing (verified against the live host 2026-07-27; same finding as commit `dda51060`).
 
-**Env files (host):** `/etc/memroos/web.env`, `/etc/memroos/mem0.env`  
-**App checkout:** `/home/opc/github/memroos`  
-**SQLite:** `SQLITE_DB_PATH` → `/home/opc/github/memroos/data/conversations.db`  
-**Disk watch:** `memroos-disk-watch.timer` every 30m — warns at ≤6G free, critical at ≤4G (`/var/log/memroos/disk-watch.log`, `/run/memroos-disk-watch.state`)
+| Container | Role |
+|-----------|------|
+| `memroos-local-memroos-1` | Next.js operator on `127.0.0.1:3000` |
+| `memroos-local-mem0-1` | mem0 HTTP service |
+| `memroos-local-orchestration-1` | orchestration service |
+| `memroos-local-connmem-1` | connected-memory service |
+
+| systemd unit | State | Role |
+|--------------|-------|------|
+| `ollama.service` | active | Local embeddings (`nomic-embed-text`) |
+| `cloudflared.service` | active | Tunnel `memroos-oracle` only |
+| `memroos-disk-watch.timer` | active | Disk watch, every 30m |
+| `memroos-web.service` | **inactive + disabled** | legacy — do not use |
+| `memroos-mem0.service` | **inactive + disabled** | legacy — do not use |
+
+**App checkout:** `/home/opc/memroos` (**not** `/home/opc/github/memroos` — that path does not exist)
+**Env file:** `/home/opc/memroos/.env`, owned `opc:opc`. `/etc/memroos/` holds only
+`gh-token` and `host-profile.env`; there is no `web.env` or `mem0.env` there.
+**Disk watch:** warns at ≤6G free, critical at ≤4G (`/var/log/memroos/disk-watch.log`, `/run/memroos-disk-watch.state`)
 
 ### Deploy / restart on oracle-1
 
+The `memroos` service **builds from source**. `git pull` plus a restart alone leaves the
+old image running — the deploy looks successful and ships nothing. Always rebuild.
+
 ```bash
 ssh oracle-1
-cd /home/opc/github/memroos
-git pull --ff-only   # or rsync schema-compatible code
-npm --prefix apps/memroos ci
-# arm64 natives if needed after npm ci
-npm --prefix apps/memroos run build
-sudo systemctl restart memroos-mem0 memroos-web
-sudo systemctl status memroos-web memroos-mem0 ollama cloudflared --no-pager
+cd /home/opc/memroos
+git pull --ff-only
+docker compose -f docker-compose.local.yml -f docker-compose.override.yml build memroos
+./scripts/memroos-restart.sh
 ```
+
+**Never run plain `docker compose -f docker-compose.local.yml up -d` on oracle-1.**
+This host has a git-ignored `docker-compose.override.yml` pointing at the real Neo4j
+Aura instance and Qdrant Cloud cluster. Omitting it silently reverts to the empty local
+Neo4j container and an unconfigured Qdrant — this has happened once and cost hours.
+`scripts/memroos-restart.sh` exists to enforce this; use it rather than raw compose.
+
+## cordant-hermes-01 (second instance)
+
+A separate self-contained MemRoOS instance, **not** a replica of prod. No public entry
+point (`cloudflared` inactive; serves `127.0.0.1:3000` only) and it uses its own local
+`memroos-local-neo4j-1` container rather than Aura. It shares the same
+`NANGO_SECRET_KEY` as prod, so both resolve to the same Nango environment.
+
+**App checkout:** `/home/ubuntu/memroos` · **User:** `ubuntu` · **No** `docker-compose.override.yml`, and no `scripts/memroos-restart.sh`.
+
+```bash
+ssh cordant-hermes-01
+cd /home/ubuntu/memroos
+git pull --ff-only
+docker compose -f docker-compose.local.yml build memroos
+docker compose -f docker-compose.local.yml up -d memroos
+```
+
+The explicit `-f docker-compose.local.yml` matters here for the opposite reason it does
+on oracle-1: bare `docker compose` resolves a **different** service set on this host
+(it picks up `docker-compose.yml` and adds `knowledge-mcp`, which is not part of the
+running stack). There is no override file to lose — the risk is gaining services.
 
 ### Tunnel notes
 
@@ -96,7 +137,7 @@ Signing secret resolution (`apps/memroos/src/lib/agent-onboarding.ts`):
 2. else `MEMROOS_OPERATOR_API_KEY`
 3. else `local-dev-memroos-onboarding` (dev only)
 
-Ensure `/etc/memroos/web.env` on oracle-1 has the same secret used when creating invites, plus:
+Ensure `/home/opc/memroos/.env` on oracle-1 has the same secret used when creating invites, plus:
 
 ```bash
 MEMROOS_PUBLIC_BASE_URL=https://memroos.epiloguecapital.com
@@ -116,7 +157,7 @@ curl -fsSL 'https://memroos.epiloguecapital.com/api/onboarding/script?token=<TOK
 
 ## Secrets hygiene
 
-If Aura/Qdrant credentials were ever printed via `heroku config:set` or chat logs, **rotate** them in Aura + Qdrant Cloud and update `/etc/memroos/*.env` (and local `.env.local` for Mac dev).
+If Aura/Qdrant credentials were ever printed via `heroku config:set` or chat logs, **rotate** them in Aura + Qdrant Cloud and update `/home/opc/memroos/.env` on oracle-1, `/home/ubuntu/memroos/.env` on cordant-hermes-01 (and local `.env.local` for Mac dev).
 
 ## Agent / CI rules
 
