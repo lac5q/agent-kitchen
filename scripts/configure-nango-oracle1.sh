@@ -16,7 +16,13 @@ set -euo pipefail
 
 OP_ITEM="${OP_ITEM:?Set OP_ITEM to the 1Password secret reference, e.g. op://Infra/Nango/credential}"
 ORACLE_HOST="${ORACLE_HOST:?Set ORACLE_HOST, e.g. opc@<oracle-1 tailscale hostname>}"
-ENV_FILE="/etc/memroos/web.env"
+# oracle-1 runs the operator as a Docker Compose stack whose `memroos` service
+# declares `env_file: .env` (relative to the repo). /etc/memroos/web.env belongs
+# to the legacy memroos-web.service, which is present but inactive+disabled —
+# writing there installs the key somewhere the container never reads.
+# Verified against the live host 2026-07-27.
+ENV_FILE="${MEMROOS_ENV_FILE:-/home/opc/memroos/.env}"
+MEMROOS_DIR="${MEMROOS_DIR:-/home/opc/memroos}"
 
 command -v op >/dev/null || { echo "1Password CLI (op) not found" >&2; exit 1; }
 
@@ -41,6 +47,7 @@ touch \"\$env_file\"
 grep -v '^NANGO_SECRET_KEY=' \"\$env_file\" > \"\$tmp\" || true
 printf '%s\n' \"\$secret_line\" >> \"\$tmp\"
 chmod 600 \"\$tmp\"
+chown --reference=\"\$env_file\" \"\$tmp\" 2>/dev/null || true
 mv \"\$tmp\" \"\$env_file\"
 "
 
@@ -53,11 +60,14 @@ printf 'NANGO_SECRET_KEY=%s\n' "$key" |
   ssh "$ORACLE_HOST" "sudo sh -c 'eval \"\$(printf %s \"\$1\" | base64 -d)\"' _ '$script_b64'"
 unset key
 
-ssh "$ORACLE_HOST" 'sudo systemctl restart memroos-web'
+# Restart through the wrapper, never a bare `docker compose up`: this host
+# needs docker-compose.override.yml layered or it silently reverts to the local
+# Neo4j container and an unconfigured Qdrant (CFGDUR-02).
+ssh "$ORACLE_HOST" "cd '$MEMROOS_DIR' && ./scripts/memroos-restart.sh >/dev/null"
 
-echo "NANGO_SECRET_KEY installed on $ORACLE_HOST and memroos-web restarted."
+echo "NANGO_SECRET_KEY installed on $ORACLE_HOST and the operator restarted."
 echo "Verifying operator health..."
-sleep 5
+sleep 25   # the container needs longer than a systemd unit to become healthy
 # -f so an HTTP 5xx from the operator counts as a failed health check.
 curl -fsS 'https://memroos.epiloguecapital.com/api/health' >/dev/null \
   && echo "Operator is responding." \
