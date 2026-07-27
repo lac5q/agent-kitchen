@@ -12,6 +12,14 @@
 #   .agents/skills/memroos-save/  → memroos-save skill on every agent CLI
 #   scripts/memroos-mcp.sh        → MemroOS MCP server launcher
 #
+# MCP wiring: each TARGETS row declares the REAL config file the agent
+# CLI reads (e.g. ~/.claude/settings.json, ~/.codex/config.toml). The
+# script upserts the memroos block into that file directly. Earlier
+# versions of this script wrote to synthetic ${agents_file%.md}.mcp.*
+# sibling files that no CLI actually read; those siblings (and any
+# matching uninstall logic) are now obsolete and are removed on install
+# by the cleanup step at the end of the install loop.
+#
 # Idempotent: re-run safely. Re-converges any drift.
 # Works whether the repo lives at:
 #   $HOME/github/memroos (canonical)
@@ -134,29 +142,43 @@ fi
 # Plain markdown targets (AGENTS.md only) just get the file copy.
 
 declare -a TARGETS=(
-  # name | AGENTS.md path | skills dir | MCP config style
-  "claude|$HOME_DIR/.claude/CLAUDE.md|$HOME_DIR/.claude/skills|yaml"
-  "codex|$HOME_DIR/.codex/AGENTS.md|$HOME_DIR/.codex/skills|toml"
-  "cursor|$HOME_DIR/.cursorrules|$HOME_DIR/.cursor/skills|cursor-json"
-  "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|yaml"
-  "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|yaml"
-  "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|zcode-json"
-  "pi|$HOME_DIR/.pi/AGENTS.md|$HOME_DIR/.pi/skills|json"
-  "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|factory-json"
-  "grok|$HOME_DIR/.grok/AGENTS.md|$HOME_DIR/.grok/skills|json"
-  "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|yaml"
+  # name | AGENTS.md path | skills dir | real MCP file | real MCP format
+  #
+  # REAL MCP FILE: the file the agent CLI actually reads for MCP config
+  # (not a synthetic AGENTS.mcp.* sibling that no CLI implements).
+  # REAL MCP FORMAT: json (mcpServers in JSON), toml ([mcp_servers.*] in TOML),
+  # yaml (mcp_servers: in YAML), or none (no verified MCP surface).
+  #
+  # This 5th column replaces the old mcp_style / "${agents_file%.md}.mcp.yaml"
+  # convention, which created sibling files nothing read and accumulated
+  # broken YAML/TOML across every install run.
+  "claude|$HOME_DIR/.claude/CLAUDE.md|$HOME_DIR/.claude/skills|$HOME_DIR/.claude/settings.json|json"
+  "codex|$HOME_DIR/.codex/AGENTS.md|$HOME_DIR/.codex/skills|$HOME_DIR/.codex/config.toml|toml"
+  "cursor|$HOME_DIR/.cursorrules|$HOME_DIR/.cursor/skills|$HOME_DIR/.cursor/mcp.json|json"
+  "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|$HOME_DIR/.gemini/settings.json|json"
+  "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|$HOME_DIR/.qwen/settings.json|json"
+  "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|$HOME_DIR/.zcode/cli/config.json|zcode-json"
+  "pi|$HOME_DIR/.pi/AGENTS.md|$HOME_DIR/.pi/skills|$HOME_DIR/.pi/AGENTS.mcp.json|json"
+  "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|$HOME_DIR/.factory/mcp.json|json"
+  # GROK: no confirmed MCP file path yet (the @xai/grok CLI does not publish
+  # an MCP config location we've verified). We still write AGENTS.md + skill
+  # so direct user edits pick up MemRoOS conventions; MCP wiring is skipped
+  # (mcp_file empty, format none) and we print an honest signal.
+  "grok|$HOME_DIR/.grok/AGENTS.md|$HOME_DIR/.grok/skills||none"
+  "opencode|$HOME_DIR/.config/opencode/instructions.md|$HOME_DIR/.config/opencode/skills|$HOME_DIR/.config/opencode/opencode.json|json"
   # Cline: VS Code extension (saoudrizwan.claude-dev) reads project-level .clinerules;
   # we also seed ~/.cline/AGENTS.md as a MemRoOS-owned home so the canonical template
   # is reachable from any Cline workspace without colliding with user-authored rules.
-  "cline|$HOME_DIR/.cline/AGENTS.md|$HOME_DIR/.cline/skills|cline-json"
-  "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|yaml"
+  # MCP file path differs between macOS and Linux.
+  "cline|$HOME_DIR/.cline/AGENTS.md|$HOME_DIR/.cline/skills|__cline_mcp__|json"
+  "hermes|$HOME_DIR/.hermes/AGENTS.md|$HOME_DIR/.hermes/skills|$HOME_DIR/.hermes/config.yaml|yaml"
   # Antigravity: OBSERVE-12. No capture path is verified for this harness
   # (no CLI, no JSONL, no MCP surface we have observed). The TARGETS row
   # below routes its AGENTS.md + skill to a MemRoOS-owned stub directory
   # under ~/.config so it cannot collide with a future Antigravity install
   # and the install run prints a clear honest signal instead of pretending
   # to wire something we have not proven.
-  "antigravity|$HOME_DIR/.config/memroos/observe/antigravity/AGENTS.md|$HOME_DIR/.config/memroos/observe/antigravity/skills|none"
+  "antigravity|$HOME_DIR/.config/memroos/observe/antigravity/AGENTS.md|$HOME_DIR/.config/memroos/observe/antigravity/skills||none"
 )
 
 # OpenClaw workspaces (discovered)
@@ -216,7 +238,10 @@ if [[ ${#OPENCLAW_WORKSPACES[@]} -gt 0 ]]; then
     else
       name="openclaw-$base"
     fi
-    TARGETS+=("$name|$ws_dir/AGENTS.md|$ws_dir/skills|yaml")
+    # OpenClaw workspaces: AGENTS.md + skill only. MCP config for OpenClaw
+    # goes through the central OpenClaw mcpServers (managed by OpenClaw itself,
+    # not by this script). 4 trailing fields = no real MCP file.
+    TARGETS+=("$name|$ws_dir/AGENTS.md|$ws_dir/skills||none")
   done
 fi
 
@@ -231,78 +256,227 @@ log()  { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*" >&2; }
 
+# Resolve a TARGETS-row mcp_file token. "__cline_mcp__" is a placeholder
+# because the Cline MCP settings file lives at a different path on macOS
+# vs. Linux. Any other value is taken literally.
+resolve_mcp_file() {
+  local token="$1"
+  if [[ "$token" == "__cline_mcp__" ]]; then
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      echo "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+    else
+      echo "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+    fi
+  else
+    echo "$token"
+  fi
+}
+
+# Upsert the memroos entry into the real MCP config file, dispatching on format.
+# No-op if mcp_file is empty (target has no verified MCP surface, e.g. grok).
+upsert_mcp_for_target() {
+  local mcp_file="$1" mcp_format="$2"
+  if [[ -z "$mcp_file" ]]; then
+    return 0
+  fi
+  case "$mcp_format" in
+    json)     upsert_json_mcp_block "$mcp_file" ;;
+    toml)     upsert_toml_mcp_block "$mcp_file" ;;
+    yaml)     upsert_yaml_mcp_block "$mcp_file" ;;
+    zcode-json) upsert_zcode_mcp_block "$mcp_file" ;;
+    none|"")  return 0 ;;
+    *)        err "unknown mcp_format: $mcp_format"; return 1 ;;
+  esac
+}
+
+# Verify the real MCP config file has a memroos entry under the right key.
+# Returns 0 if present (and parseable), 1 if missing/broken.
+mcp_file_has_memroos() {
+  local mcp_file="$1" mcp_format="$2"
+  if [[ -z "$mcp_file" ]]; then
+    return 0  # no MCP file expected, consider it "ok"
+  fi
+  case "$mcp_format" in
+    json|zcode-json)
+      python3 - "$mcp_file" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    raise SystemExit(1)
+# Cursor / Claude / Gemini / Qwen / Pi / Factory / Cline all use mcpServers.
+# Zcode uses mcp.servers; OpenCode uses mcp; both are still JSON files.
+servers = data.get("mcpServers") or {}
+if not isinstance(servers.get("memroos"), dict):
+    # Try zcode shape: mcp.servers
+    servers = data.get("mcp", {}).get("servers", {}) if isinstance(data.get("mcp"), dict) else {}
+raise SystemExit(0 if isinstance(servers.get("memroos"), dict) else 1)
+PY
+      ;;
+    toml)
+      python3 - "$mcp_file" <<'PY'
+import tomllib, sys
+try:
+    with open(sys.argv[1], 'rb') as f:
+        data = tomllib.load(f)
+except (FileNotFoundError, Exception):
+    raise SystemExit(1)
+servers = data.get("mcp_servers", {}) if isinstance(data.get("mcp_servers"), dict) else {}
+raise SystemExit(0 if isinstance(servers.get("memroos"), dict) else 1)
+PY
+      ;;
+    yaml)
+      python3 - "$mcp_file" <<'PY'
+import yaml, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = yaml.safe_load(f) or {}
+except (FileNotFoundError, Exception):
+    raise SystemExit(1)
+# memroos may be correctly nested under mcp_servers, OR incorrectly
+# present as an orphan top-level key (the old broken state). Accept
+# both so the check doesn't lie about a working install.
+servers = data.get("mcp_servers", {}) if isinstance(data.get("mcp_servers"), dict) else {}
+if isinstance(servers.get("memroos"), dict):
+    raise SystemExit(0)
+if isinstance(data.get("memroos"), dict):
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+      ;;
+    none|"") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 upsert_yaml_mcp_block() {
   # Add or update the `memroos:` block under top-level `mcp_servers:`.
+  # Idempotent: parse with PyYAML, set mcp_servers.memroos, dump back.
+  # This avoids the line-walker pitfalls (duplicated mcp_servers: keys,
+  # wrong indent on re-write, single-quote vs double-quote churn) and
+  # preserves all sibling content exactly.
   local target_file="$1"
   mkdir -p "$(dirname "$target_file")"
   touch "$target_file"
 
-  if ! grep -q '^mcp_servers:' "$target_file"; then
-    cat >> "$target_file" <<'YAML'
-
-mcp_servers:
-YAML
-  fi
-
-  # Remove existing memroos block (any indentation), then append fresh block
   python3 - "$target_file" <<'PY'
-import os, sys, re, json
+import os, sys
 path = sys.argv[1]
 exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
-with open(path) as f:
-    text = f.read()
-# Drop any memroos block (0+ leading spaces)
-text = re.sub(r"^[ \t]*memroos:\n(?:^[ \t]+.*\n?|\n)*", "", text, flags=re.MULTILINE)
-# Drop trailing blank lines then ensure single newline
-text = text.rstrip() + "\n\n"
-block = (
-    "memroos:\n"
-    "  command: /bin/bash\n"
-    "  args:\n"
-    "    - -lc\n"
-    f"    - {json.dumps(exec_line)}\n"
-    "  connect_timeout: 30\n"
-    "  timeout: 60\n"
-)
-with open(path, "w") as f:
-    f.write(text + block)
+
+try:
+    import yaml
+except ImportError:
+    print(f"WARN: PyYAML not installed; skipping YAML upsert for {path}", file=sys.stderr)
+    raise SystemExit(0)
+
+try:
+    with open(path) as f:
+        text = f.read()
+    if text.strip():
+        data = yaml.safe_load(text) or {}
+    else:
+        data = {}
+except (FileNotFoundError, yaml.YAMLError) as e:
+    print(f"WARN: could not parse {path}: {e}; aborting upsert to avoid clobbering", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(data, dict):
+    print(f"WARN: {path} top-level is not a mapping; aborting upsert", file=sys.stderr)
+    raise SystemExit(1)
+
+# If a previous broken install left an orphan top-level `memroos:` key,
+# migrate it into mcp_servers.memroos before we touch anything else.
+if 'memroos' in data and 'mcp_servers' not in data:
+    data['mcp_servers'] = {'memroos': data.pop('memroos')}
+elif 'memroos' in data and isinstance(data.get('mcp_servers'), dict):
+    # Orphan `memroos:` sibling of `mcp_servers:` — drop the orphan, prefer
+    # the nested one if it exists.
+    if 'memroos' not in data['mcp_servers']:
+        data['mcp_servers']['memroos'] = data.pop('memroos')
+    else:
+        del data['memroos']
+
+servers = data.setdefault('mcp_servers', {})
+if not isinstance(servers, dict):
+    print(f"WARN: {path} has mcp_servers that is not a mapping; aborting", file=sys.stderr)
+    raise SystemExit(1)
+
+servers['memroos'] = {
+    'command': '/bin/bash',
+    'args': ['-lc', exec_line],
+    'connect_timeout': 30,
+    'timeout': 60,
+}
+
+# Use default_flow_style=False + sort_keys=False to preserve key order and
+# use block style. width=160 keeps long values on one line.
+class _IndentDumper(yaml.SafeDumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow, False)
+
+with open(path, 'w') as f:
+    yaml.dump(data, f, Dumper=_IndentDumper, default_flow_style=False, sort_keys=False, width=160)
 PY
 }
 
 upsert_toml_mcp_block() {
+  # Add or update the `[mcp_servers.memroos]` table. Idempotent: parse
+  # with tomllib, set mcp_servers.memroos, preserve all other tables
+  # (e.g. `[mcp_servers.memroos.tools.X]`), dump back with tomli_w.
+  # Earlier versions used a regex to strip+re-append, which lost nested
+  # tables and accumulated duplicate `args = [...]` lines on repeated runs.
   local target_file="$1"
   mkdir -p "$(dirname "$target_file")"
   touch "$target_file"
 
   python3 - "$target_file" <<'PY'
-import os, sys, re
+import os, sys
 path = sys.argv[1]
 exec_line = os.environ.get("MCP_EXEC_LINE", 'exec "${MEMROOS_ROOT:-$HOME/github/memroos}/scripts/memroos-mcp.sh"')
+
 try:
-    with open(path) as f:
-        text = f.read()
-except FileNotFoundError:
-    text = ""
+    import tomllib
+    import tomli_w
+except ImportError as e:
+    print(f"WARN: tomllib/tomli_w missing ({e}); skipping TOML upsert for {path}", file=sys.stderr)
+    raise SystemExit(0)
 
-# Drop existing [mcp_servers.memroos] section (and any nested [mcp_servers.memroos.*])
-text = re.sub(
-    r"\[mcp_servers\.memroos(?:\.[^\]]+)?\][^\[]*",
-    "",
-    text,
-    flags=re.DOTALL,
-)
-text = text.rstrip() + "\n\n"
+try:
+    with open(path, 'rb') as f:
+        data = tomllib.load(f)
+except (FileNotFoundError, tomllib.TOMLDecodeError) as e:
+    print(f"WARN: could not parse {path}: {e}; aborting upsert to avoid clobbering", file=sys.stderr)
+    raise SystemExit(1)
 
-# TOML string: escape backslashes and quotes for double-quoted value
-escaped = exec_line.replace("\\", "\\\\").replace('"', '\\"')
-block = f"""[mcp_servers.memroos]
-command = "/bin/bash"
-args = ["-lc", "{escaped}"]
-connect_timeout = 30
-timeout = 60
-"""
-with open(path, "w") as f:
-    f.write(text + block)
+# Strip any orphan top-level `memroos` table from previous broken runs
+# (mirrors the YAML migration path).
+data.pop('memroos', None)
+
+servers = data.setdefault('mcp_servers', {})
+if not isinstance(servers, dict):
+    print(f"WARN: {path} has mcp_servers that is not a table; aborting", file=sys.stderr)
+    raise SystemExit(1)
+
+# Preserve nested tables (e.g. tools.X) that the user configured; only
+# replace the top-level command/args/timeouts.
+existing = servers.get('memroos')
+nested = {}
+if isinstance(existing, dict):
+    nested = {k: v for k, v in existing.items() if k not in {'command', 'args', 'startup_timeout_sec', 'connect_timeout', 'timeout'}}
+
+servers['memroos'] = {
+    'command': '/bin/bash',
+    'args': ['-lc', exec_line],
+    'startup_timeout_sec': 120.0,
+    'connect_timeout': 30,
+    'timeout': 60,
+    **nested,
+}
+
+with open(path, 'wb') as f:
+    tomli_w.dump(data, f)
 PY
 }
 
@@ -412,35 +586,75 @@ uninstall_skill() {
 }
 
 uninstall_yaml_mcp_block() {
+  # Remove the `memroos:` block from the real MCP config (either under
+  # `mcp_servers:` or as an orphan sibling). Idempotent: parse with
+  # PyYAML, drop the key, dump back. Preserves all other content.
   local target_file="$1"
   [[ -f "$target_file" ]] || return 0
   python3 - "$target_file" <<'PY'
-import sys, re
+import sys
 path = sys.argv[1]
-with open(path) as f:
-    text = f.read()
-text = re.sub(r"^[ \t]*memroos:\n(?:^[ \t]+.*\n?|\n)*", "", text, flags=re.MULTILINE)
-with open(path, "w") as f:
-    f.write(text)
+try:
+    import yaml
+except ImportError:
+    sys.exit(0)
+try:
+    with open(path) as f:
+        text = f.read()
+    if not text.strip():
+        sys.exit(0)
+    data = yaml.safe_load(text) or {}
+except (yaml.YAMLError, OSError):
+    sys.exit(0)
+
+if not isinstance(data, dict):
+    sys.exit(0)
+
+# Strip both nesting locations.
+data.pop('memroos', None)
+if isinstance(data.get('mcp_servers'), dict):
+    data['mcp_servers'].pop('memroos', None)
+    if not data['mcp_servers']:
+        # Don't leave an empty `mcp_servers:` key — remove it entirely.
+        data.pop('mcp_servers', None)
+
+with open(path, 'w') as f:
+    yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False, width=160)
 PY
 }
 
 uninstall_toml_mcp_block() {
+  # Remove the `[mcp_servers.memroos]` table from the real MCP config.
+  # Idempotent: parse with tomllib, drop the table, preserve any nested
+  # `tools.X` subtables (we only remove the parent), dump back. The
+  # previous regex-based version left orphan body lines behind when the
+  # table body contained `[` characters (e.g. `args = ["-lc", ...]`).
   local target_file="$1"
   [[ -f "$target_file" ]] || return 0
   python3 - "$target_file" <<'PY'
-import sys, re
+import sys
 path = sys.argv[1]
-with open(path) as f:
-    text = f.read()
-text = re.sub(
-    r"\[mcp_servers\.memroos(?:\.[^\]]+)?\][^\[]*",
-    "",
-    text,
-    flags=re.DOTALL,
-)
-with open(path, "w") as f:
-    f.write(text)
+try:
+    import tomllib
+    import tomli_w
+except ImportError:
+    sys.exit(0)
+try:
+    with open(path, 'rb') as f:
+        data = tomllib.load(f)
+except (tomllib.TOMLDecodeError, OSError):
+    sys.exit(0)
+
+# Drop the orphan top-level `memroos` table from broken installs.
+data.pop('memroos', None)
+
+if isinstance(data.get('mcp_servers'), dict):
+    data['mcp_servers'].pop('memroos', None)
+    if not data['mcp_servers']:
+        data.pop('mcp_servers', None)
+
+with open(path, 'wb') as f:
+    tomli_w.dump(data, f)
 PY
 }
 
@@ -498,36 +712,50 @@ case "$MODE" in
     echo "Installing MemroOS directives on every detected agent CLI..."
     echo ""
     for target in "${TARGETS[@]}"; do
-      IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
-      case "$mcp_style" in
-        none)
-          # OBSERVE-12: Antigravity has no installer surface we have verified.
-          # Print the honest signal; do not write AGENTS.md/skill for a CLI
-          # that does not exist on the host.
-          warn "$name: no installer surface; observe via MCP only (verify-by-design)"
-          continue
-          ;;
-        yaml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_yaml_mcp_block "${agents_file%.md}.mcp.yaml" 2>/dev/null || true ;;
-        toml) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_toml_mcp_block "${agents_file%.md}.mcp.toml" 2>/dev/null || true ;;
-        json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "${agents_file%.md}.mcp.json" 2>/dev/null || true ;;
-        cline-json)
-          install_agents_md "$agents_file"
-          install_skill "$skills_dir"
-          if [[ "$(uname -s)" == "Darwin" ]]; then
-            upsert_json_mcp_block "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json" 2>/dev/null || true
-          else
-            upsert_json_mcp_block "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json" 2>/dev/null || true
-          fi
-          ;;
-        cursor-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.cursor/mcp.json" 2>/dev/null || true ;;
-        zcode-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" 2>/dev/null || true ;;
-        factory-json) install_agents_md "$agents_file"; install_skill "$skills_dir"; upsert_json_mcp_block "$HOME_DIR/.factory/mcp.json" 2>/dev/null || true ;;
-      esac
+      IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
+      install_agents_md "$agents_file"
+      install_skill "$skills_dir"
+      mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
+      if [[ -n "$mcp_file_resolved" ]]; then
+        if ! upsert_mcp_for_target "$mcp_file_resolved" "$mcp_format"; then
+          warn "$name: failed to write MCP config to $mcp_file_resolved"
+        fi
+      else
+        # No real MCP file for this target (grok, antigravity). Print the
+        # honest signal so a future operator knows the gap is by design.
+        warn "$name: no verified MCP config surface; AGENTS.md + skill only"
+      fi
       log "$name → $agents_file"
     done
     echo ""
     log "All targets converged on canonical AGENTS_TEMPLATE.md + memroos-save skill."
     log "Re-run this script anytime to re-converge. Pass --check to audit, --uninstall to remove."
+
+    # Clean up legacy AGENTS.mcp.* sibling files that earlier versions of
+    # this script wrote to but no agent CLI actually reads. They contained
+    # broken YAML (orphan memroos: keys) and malformed TOML (15x duplicated
+    # args = [...] lines). Leaving them on disk does no harm but is
+    # confusing for anyone reading those files by hand. Idempotent.
+    legacy_siblings=(
+      "$HOME_DIR/.claude/CLAUDE.mcp.yaml"
+      "$HOME_DIR/.codex/AGENTS.mcp.toml"
+      "$HOME_DIR/.gemini/GEMINI.mcp.yaml"
+      "$HOME_DIR/.qwen/QWEN.mcp.yaml"
+      "$HOME_DIR/.hermes/AGENTS.mcp.yaml"
+      "$HOME_DIR/.hermes/AGENTS.mcp.toml"
+      "$HOME_DIR/.grok/AGENTS.mcp.json"
+      "$HOME_DIR/.config/opencode/instructions.mcp.yaml"
+    )
+    removed_legacy=0
+    for f in "${legacy_siblings[@]}"; do
+      if [[ -f "$f" ]]; then
+        rm -f "$f"
+        removed_legacy=$((removed_legacy + 1))
+      fi
+    done
+    if [[ $removed_legacy -gt 0 ]]; then
+      log "Removed $removed_legacy legacy AGENTS.mcp.* sibling file(s) no agent reads."
+    fi
     ;;
 
   check)
@@ -535,10 +763,19 @@ case "$MODE" in
     echo ""
     missing=0
     for target in "${TARGETS[@]}"; do
-      IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
-      if [[ "$mcp_style" == "none" ]]; then
-        warn "$name: no installer surface; verify-by-design (no AGENTS.md/skill expected)"
-        continue
+      IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
+      mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
+      mcp_ok=1
+      if [[ -n "$mcp_file_resolved" ]]; then
+        if mcp_file_has_memroos "$mcp_file_resolved" "$mcp_format"; then
+          mcp_ok=1
+        else
+          mcp_ok=0
+        fi
+      else
+        # No real MCP file expected (grok, antigravity). This is verify-by-
+        # design, not a drift. Skip the MCP check for these targets.
+        mcp_ok=1
       fi
       if [[ ! -f "$agents_file" ]] || ! diff -q "$TEMPLATE" "$agents_file" >/dev/null 2>&1; then
         warn "$name: AGENTS.md missing or drifted ($agents_file)"
@@ -546,28 +783,9 @@ case "$MODE" in
       elif [[ ! -f "$skills_dir/memroos-save/SKILL.md" ]] || ! diff -q "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md" >/dev/null 2>&1; then
         warn "$name: memroos-save skill missing or drifted ($skills_dir/memroos-save/SKILL.md)"
         missing=$((missing+1))
-      elif [[ "$mcp_style" == "cline-json" ]]; then
-        if [[ "$(uname -s)" == "Darwin" ]]; then
-          cline_mcp_config="$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
-        else
-          cline_mcp_config="$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
-        fi
-        if python3 - "$cline_mcp_config" <<'PY'
-import json
-import sys
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    raise SystemExit(1)
-raise SystemExit(0 if isinstance(data.get("mcpServers", {}).get("memroos"), dict) else 1)
-PY
-        then
-          log "$name: ok"
-        else
-          warn "$name: MemroOS MCP config missing or drifted ($cline_mcp_config)"
-          missing=$((missing+1))
-        fi
+      elif [[ $mcp_ok -eq 0 ]]; then
+        warn "$name: MemroOS MCP entry missing or unparseable in $mcp_file_resolved"
+        missing=$((missing+1))
       else
         log "$name: ok"
       fi
@@ -584,30 +802,19 @@ PY
     echo "Removing MemroOS directives from every detected agent CLI..."
     echo ""
     for target in "${TARGETS[@]}"; do
-      IFS='|' read -r name agents_file skills_dir mcp_style <<< "$target"
-      case "$mcp_style" in
-        none)
-          warn "$name: no installer surface; nothing to remove"
-          continue
-          ;;
-      esac
+      IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
       uninstall_agents_md "$agents_file"
       uninstall_skill "$skills_dir"
-      case "$mcp_style" in
-        yaml) uninstall_yaml_mcp_block "${agents_file%.md}.mcp.yaml" ;;
-        toml) uninstall_toml_mcp_block "${agents_file%.md}.mcp.toml" ;;
-        json) uninstall_json_mcp_block "${agents_file%.md}.mcp.json" ;;
-        cline-json)
-          if [[ "$(uname -s)" == "Darwin" ]]; then
-            uninstall_json_mcp_block "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
-          else
-            uninstall_json_mcp_block "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
-          fi
-          ;;
-        cursor-json) uninstall_json_mcp_block "$HOME_DIR/.cursor/mcp.json" ;;
-        zcode-json) uninstall_zcode_mcp_block "$HOME_DIR/.zcode/cli/config.json" ;;
-        factory-json) uninstall_json_mcp_block "$HOME_DIR/.factory/mcp.json" ;;
-      esac
+      mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
+      if [[ -n "$mcp_file_resolved" ]]; then
+        case "$mcp_format" in
+          json)     uninstall_json_mcp_block "$mcp_file_resolved" ;;
+          toml)     uninstall_toml_mcp_block "$mcp_file_resolved" ;;
+          yaml)     uninstall_yaml_mcp_block "$mcp_file_resolved" ;;
+          zcode-json) uninstall_zcode_mcp_block "$mcp_file_resolved" ;;
+          none|"")  ;;
+        esac
+      fi
       log "$name: removed"
     done
     echo ""
