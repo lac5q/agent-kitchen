@@ -401,10 +401,21 @@ describe("agent registry service", () => {
     process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER = "1";
     const writeSpy = vi.fn(async () => {});
     const adapter = { tiers: ["vector"], write: writeSpy, search: vi.fn(), health: vi.fn() };
+
+    // loadRegistry() calls vi.resetModules(), which swaps in a fresh instance
+    // of every module including memory/registry — so the adapter must be
+    // registered AFTER that reset, against the same module instance
+    // recordMemoryWrite() will resolve getAdapters() through, not before it.
+    const { recordMemoryWrite, registerAgent } = await loadRegistry();
     const registryMod = await import("../memory/registry");
     registryMod.registerAdapter(adapter as unknown as Parameters<typeof registryMod.registerAdapter>[0]);
-
-    const { recordMemoryWrite } = await loadRegistry();
+    registerAgent({
+      id: "memx-agent",
+      name: "Memx Agent",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+    });
     recordMemoryWrite("memx-agent", {
       type: "vector",
       content: "MEMX-3 fan-out probe",
@@ -430,7 +441,14 @@ describe("agent registry service", () => {
     const registryMod = await import("../memory/registry");
     registryMod.registerAdapter(adapter as unknown as Parameters<typeof registryMod.registerAdapter>[0]);
 
-    const { recordMemoryWrite } = await loadRegistry();
+    const { recordMemoryWrite, registerAgent } = await loadRegistry();
+    registerAgent({
+      id: "memx-agent",
+      name: "Memx Agent",
+      role: "Writes memory",
+      platform: "codex",
+      protocol: "rest",
+    });
     recordMemoryWrite("memx-agent", {
       type: "vector",
       content: "should not push",
