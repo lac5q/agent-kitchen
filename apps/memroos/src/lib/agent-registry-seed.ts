@@ -148,10 +148,22 @@ function seedAppliesToThisHost(agent: SeedAgent, parsed: Record<string, unknown>
   return fileDefault === "*" || fileDefault === hostId;
 }
 
+/**
+ * Config-file seeding is OFF unless explicitly enabled.
+ *
+ * It used to default on in production, which populated every host from an
+ * operator-wide list: cordant-hermes-01 advertised "Cursor Desktop" and
+ * "Codex Desktop" (sessions on a laptop) and the OpenClaw crew (personas that
+ * run elsewhere). None were on that machine.
+ *
+ * A registry that claims agents the host does not have is worse than an empty
+ * one, so the source of truth is now `scripts/sync-host-agents.sh`, which
+ * detects what is genuinely installed. Set
+ * MEMROOS_SEED_REGISTERED_AGENTS=1 to opt a host back in.
+ */
 function shouldSeedRegisteredAgents(): boolean {
   const explicit = process.env.MEMROOS_SEED_REGISTERED_AGENTS?.trim().toLowerCase();
-  if (explicit) return ["1", "true", "yes", "on"].includes(explicit);
-  return process.env.NODE_ENV === "production";
+  return explicit ? ["1", "true", "yes", "on"].includes(explicit) : false;
 }
 
 export function seedRegisteredAgents(db: Database.Database): void {

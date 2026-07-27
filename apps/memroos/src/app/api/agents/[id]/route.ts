@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import {
   deregisterAgent,
   getRegisteredAgent,
+  updateAgentDetails,
 } from "@/lib/agent-registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
@@ -71,6 +72,61 @@ export async function GET(
     liveness: livenessView,
     timestamp: new Date().toISOString(),
   });
+}
+
+/**
+ * Rename / re-describe an agent.
+ *
+ * Only display fields are accepted — see updateAgentDetails. Anything
+ * describing where the agent physically is stays derived, so the registry
+ * cannot be hand-edited into disagreeing with the machine.
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  if (!authorizeRegistryWrite(request)) {
+    return registryWriteUnauthorizedResponse();
+  }
+
+  const { id } = await params;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null) {
+    return Response.json({ error: "Body must be an object" }, { status: 400 });
+  }
+
+  const { name, role, company } = body as Record<string, unknown>;
+  for (const [key, value] of Object.entries({ name, role })) {
+    if (value !== undefined && typeof value !== "string") {
+      return Response.json({ error: `${key} must be a string` }, { status: 400 });
+    }
+  }
+  if (company !== undefined && company !== null && typeof company !== "string") {
+    return Response.json({ error: "company must be a string or null" }, { status: 400 });
+  }
+
+  try {
+    const agent = updateAgentDetails(id, {
+      name: name as string | undefined,
+      role: role as string | undefined,
+      company: company as string | null | undefined,
+    });
+    if (!agent) {
+      return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
+    }
+    return Response.json({ ok: true, agent, timestamp: new Date().toISOString() });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Update failed" },
+      { status: 400 }
+    );
+  }
 }
 
 export async function DELETE(

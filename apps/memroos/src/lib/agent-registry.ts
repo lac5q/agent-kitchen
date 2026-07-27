@@ -355,6 +355,56 @@ export function getRegisteredAgent(
   return row ? rowToRegisteredAgent(row) : null;
 }
 
+/** Fields an operator may edit by hand from the Agents UI. */
+export interface AgentEditableFields {
+  name?: string;
+  role?: string;
+  company?: string | null;
+}
+
+/**
+ * Rename or re-describe an agent.
+ *
+ * Deliberately narrow: only the display fields. Host, port, platform and
+ * protocol describe where the agent actually is — editing those by hand would
+ * let the registry disagree with reality, which is the failure this whole area
+ * has been fighting. `scripts/sync-host-agents.sh` re-detects on every run and
+ * pointedly does NOT overwrite name/role, so an operator rename survives.
+ */
+export function updateAgentDetails(
+  agentId: string,
+  fields: AgentEditableFields
+): RegisteredAgent | null {
+  const existing = getRegisteredAgent(agentId, { includeDeregistered: true });
+  if (!existing) return null;
+
+  const name = fields.name?.trim();
+  const role = fields.role?.trim();
+  if (name !== undefined && name.length === 0) {
+    throw new Error("name cannot be empty");
+  }
+  if (role !== undefined && role.length === 0) {
+    throw new Error("role cannot be empty");
+  }
+
+  const timestamp = nowIso();
+  getDb()
+    .prepare(
+      `UPDATE registered_agents
+       SET name = ?, role = ?, company = ?, updated_at = ?
+       WHERE id = ?`
+    )
+    .run(
+      name ?? existing.name,
+      role ?? existing.role,
+      fields.company === undefined ? existing.company : fields.company,
+      timestamp,
+      agentId
+    );
+
+  return getRegisteredAgent(agentId, { includeDeregistered: true });
+}
+
 export function deregisterAgent(agentId: string): RegisteredAgent | null {
   const timestamp = nowIso();
   getDb()

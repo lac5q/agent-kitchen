@@ -84,7 +84,13 @@ describe("seedRegisteredAgents — gating", () => {
     expect(rows.c).toBe(1);
   });
 
-  it("seeds when NODE_ENV=production and no explicit flag is set", () => {
+  // Changed 2026-07-27: production no longer seeds by default. Seeding an
+  // operator-wide config file onto every host is what put "Cursor Desktop"
+  // (a laptop session) into cordant-hermes-01's registry. A registry that
+  // claims agents the host does not have is worse than an empty one, so the
+  // source of truth is now scripts/sync-host-agents.sh, which detects what is
+  // actually installed. Opt back in with MEMROOS_SEED_REGISTERED_AGENTS=1.
+  it("does NOT seed in production without an explicit opt-in", () => {
     delete process.env.MEMROOS_SEED_REGISTERED_AGENTS;
     process.env.NODE_ENV = "production";
     writeConfig({
@@ -102,7 +108,7 @@ describe("seedRegisteredAgents — gating", () => {
     const db = freshDb();
     seedRegisteredAgents(db);
     const rows = db.prepare("SELECT COUNT(*) AS c FROM registered_agents").get() as { c: number };
-    expect((rows.c as unknown as number)).toBe(1);
+    expect((rows.c as unknown as number)).toBe(0);
   });
 
   it("treats MEMROOS_SEED_REGISTERED_AGENTS=0 as off", () => {
