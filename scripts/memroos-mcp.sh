@@ -3,6 +3,11 @@
 # Keep stdout clean for MCP JSON-RPC; all setup/status messages go to stderr.
 set -euo pipefail
 
+# Agent CLIs (Hermes, etc.) can leak their own venv's PYTHONPATH into this
+# process; a py3.11 pydantic under the py3.12 venv breaks fastmcp at import.
+# Scrub before any python starts.
+unset PYTHONPATH PYTHONHOME
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
