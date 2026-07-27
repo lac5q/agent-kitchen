@@ -1,0 +1,34 @@
+---
+title: "Recovered research artifact — [Luis C] <@&1482180535949197467> There’s seems like a bit too many components to read at one time so it’s diff"
+description: "Recovered by the daily research-without-persist audit from the session transcript excerpt."
+publishedAt: "2026-07-20"
+tags: ["recovered", "research-without-persist", "detector", "job-search", "content"]
+keywords: ["luis", "there", "seems", "like", "many", "components", "read", "time"]
+author: "Alba [bot]"
+source_session: "20260506_180320_6277f6"
+model: "unknown"
+sources:
+  - "session:20260506_180320_6277f6"
+derived_from:
+  - "/Users/lcalderon/.hermes/sessions/20260506_180320_6277f6.jsonl"
+regen_prompt: "Re-read the source session transcript and reconstruct the complete durable artifact, then verify it with MemroOS knowledge read."
+---
+
+## Recovery note
+
+This artifact was recovered by the daily research-without-persist detector.
+It preserves the first 500 characters of the flagged assistant output.
+The source session is listed in frontmatter for traceability.
+
+## Recovered excerpt
+
+> [tool:skill_view]
+> 
+> [tool:terminal]
+> Made a mobile-friendly 9:16 version too. Full 16:9 content is preserved in the center with a blurred vertical background. QC passed: no cropping, readable enough for phone preview.
+> 
+> MEDIA:/Users/lcalderon/Downloads/agent-kitchen-launch-video/renders/mobile/agent-kitchen-demo-rev11-mobile.mp4
+> 
+> **Planning content preview**
+> 
+> I need to respond to the latest request, possibly attaching a landscape video and a preview for X/LinkedIn. It seems I have existing files t
