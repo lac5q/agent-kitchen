@@ -4,8 +4,8 @@ date: 2026-07-14
 model: gpt-5.6-terra
 sources:
   - X API user timeline for @mrluiscalderon, 2026-07-13 00:00 to 23:59 PDT
-  - /Users/lcalderon/.hermes/logs/postpeer.log
-  - /Users/lcalderon/content-os/drafts/weekly-repos-2026-07-13.md
+  - /Users/<you>/.hermes/logs/postpeer.log
+  - /Users/<you>/content-os/drafts/weekly-repos-2026-07-13.md
 derived_from: Daily Content Optimizer cron
 regen_prompt: Analyze the prior PDT day of X and LinkedIn performance, compare it with the active weekly slate, and name one action for today.
 ---

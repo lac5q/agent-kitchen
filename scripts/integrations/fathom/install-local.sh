@@ -132,7 +132,7 @@ Fathom local wiring complete.
 
 Next:
 1. Confirm 1Password items exist for both accounts (or edit $ACCOUNTS_DST):
-   - Fathom API Epilogue  (luis@epiloguecapital.com)
+   - Fathom API Epilogue  (<you>@epiloguecapital.com)
    - Fathom API Gmail     (luis.calderon@gmail.com)
    Note: op:// refs cannot contain '@' — do not put the raw email in the secret reference.
 2. Authenticate 1Password CLI (op signin) or set OP_SERVICE_ACCOUNT_TOKEN.

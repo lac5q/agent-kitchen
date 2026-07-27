@@ -266,7 +266,7 @@ def synthetic_session_direct_write_fallback(tmp: Path) -> Path:
                     "function": {
                         "name": "write_file",
                         "arguments": json.dumps({
-                            "path": "/Users/x/github/knowledge/projects/agency/vendors/vendasta.md",
+                            "path": "/Users/<you>/github/knowledge/projects/agency/vendors/vendasta.md",
                         }),
                     },
                 }
@@ -294,7 +294,7 @@ def synthetic_session_direct_write_shell(tmp: Path) -> Path:
                     "function": {
                         "name": "terminal",
                         "arguments": json.dumps({
-                            "command": "cat > /Users/x/github/knowledge/x.md <<'EOF'\n# stuff\nEOF"
+                            "command": "cat > /Users/<you>/github/knowledge/x.md <<'EOF'\n# stuff\nEOF"
                         }),
                     },
                 }

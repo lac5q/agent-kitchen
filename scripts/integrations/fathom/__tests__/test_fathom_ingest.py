@@ -35,9 +35,9 @@ class FathomIngestTests(unittest.TestCase):
             "recording_start_time": "2026-07-02T17:00:00Z",
             "recording_end_time": "2026-07-02T17:45:00Z",
             "share_url": "https://fathom.video/share/abc",
-            "recorded_by": {"name": "Luis Calderon", "email": "luis@epiloguecapital.com"},
+            "recorded_by": {"name": "Luis Calderon", "email": "<you>@epiloguecapital.com"},
             "calendar_invitees": [
-                {"name": "Luis", "email": "luis@epiloguecapital.com"},
+                {"name": "Luis", "email": "<you>@epiloguecapital.com"},
                 {"name": "Eric", "email": "eric@example.com"},
             ],
             "default_summary": {"markdown_formatted": "Discussed retainer and GTM stack."},
@@ -45,7 +45,7 @@ class FathomIngestTests(unittest.TestCase):
                 {
                     "description": "Send revised proposal",
                     "completed": False,
-                    "assignee": {"email": "luis@epiloguecapital.com"},
+                    "assignee": {"email": "<you>@epiloguecapital.com"},
                 }
             ],
             "transcript": [
@@ -57,12 +57,12 @@ class FathomIngestTests(unittest.TestCase):
             ],
         }
         md = self.mod.render_meeting_markdown(
-            meeting, account_email="luis@epiloguecapital.com"
+            meeting, account_email="<you>@epiloguecapital.com"
         )
         self.assertIn("# Luis <> Eric GTM", md)
         self.assertIn("## Transcript", md)
         self.assertIn("**Luis** (00:01:02): Let's review the stack.", md)
-        self.assertIn("Account: luis@epiloguecapital.com", md)
+        self.assertIn("Account: <you>@epiloguecapital.com", md)
         self.assertIn("- [ ] Send revised proposal", md)
 
     def test_write_dedupes_by_recording_id_filename(self):
@@ -97,7 +97,7 @@ class FathomIngestTests(unittest.TestCase):
 
     def test_resolve_prefers_env_over_op(self):
         account = {
-            "email": "luis@epiloguecapital.com",
+            "email": "<you>@epiloguecapital.com",
             "api_key_env": "FATHOM_API_KEY_EPILOGUE",
             "api_key_op_ref": "op://Private/missing/credential",
         }
@@ -114,7 +114,7 @@ class FathomIngestTests(unittest.TestCase):
         emails = {a["email"] for a in example["accounts"]}
         self.assertEqual(
             emails,
-            {"luis@epiloguecapital.com", "luis.calderon@gmail.com"},
+            {"<you>@epiloguecapital.com", "luis.calderon@gmail.com"},
         )
 
 
