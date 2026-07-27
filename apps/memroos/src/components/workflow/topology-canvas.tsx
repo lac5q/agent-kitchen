@@ -1,82 +1,23 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
+import type {
+  EdgeKind,
+  NodeType,
+  TopoEdge,
+  TopoNode,
+  Topology,
+} from "@/lib/workflow/topology";
 
-type NodeType = "src" | "gate" | "core" | "store" | "agent" | "sink";
-type EdgeKind = "flow" | "ctx" | "pack" | "fb" | "loop";
-
-interface TopoNode {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  t: NodeType;
-  label: string;
-  sub: string;
-}
-
-const NODES: Record<string, TopoNode> = {
-  telegram: { x: 90,  y: 80,  w: 130, h: 56,  t: "src",   label: "Telegram",               sub: "inbound" },
-  email:    { x: 90,  y: 160, w: 130, h: 56,  t: "src",   label: "Email",                  sub: "inbound" },
-  slack:    { x: 90,  y: 240, w: 130, h: 56,  t: "src",   label: "Slack",                  sub: "inbound" },
-  gong:     { x: 90,  y: 320, w: 130, h: 56,  t: "src",   label: "Calls (Gong)",           sub: "inbound" },
-  repo:     { x: 90,  y: 400, w: 130, h: 56,  t: "src",   label: "Repos · CI",             sub: "events" },
-  gateway:  { x: 300, y: 240, w: 140, h: 72,  t: "gate",  label: "Gateway",                sub: "Iris preflight" },
-  memroos:  { x: 510, y: 200, w: 200, h: 150, t: "core",  label: "MemroOS",                sub: "memory · skills · context packs" },
-  memory:   { x: 770, y: 140, w: 140, h: 56,  t: "store", label: "Memory",                 sub: "live inventory" },
-  skills:   { x: 770, y: 220, w: 140, h: 56,  t: "store", label: "Skills",                 sub: "registry" },
-  knowledge:{ x: 770, y: 300, w: 140, h: 56,  t: "store", label: "Knowledge",              sub: "corpus" },
-  sophia:   { x: 980, y: 80,  w: 130, h: 50,  t: "agent", label: "Sophia",                 sub: "marketing" },
-  maria:    { x: 980, y: 140, w: 130, h: 50,  t: "agent", label: "Maria",                  sub: "content" },
-  alba:     { x: 980, y: 200, w: 130, h: 50,  t: "agent", label: "Alba",                   sub: "engineering" },
-
-  gwen:     { x: 980, y: 320, w: 130, h: 50,  t: "agent", label: "Gwen",                   sub: "social" },
-  cto:      { x: 980, y: 380, w: 130, h: 50,  t: "agent", label: "Cto",                    sub: "eng" },
-  outcomes: { x: 510, y: 410, w: 200, h: 56,  t: "sink",  label: "Outcomes → Memory loop", sub: "feedback" },
-};
-
-const EDGES: [string, string, number, EdgeKind][] = [
-  ["telegram", "gateway",  0.3, "flow"],
-  ["email",    "gateway",  0.5, "flow"],
-  ["slack",    "gateway",  0.9, "flow"],
-  ["gong",     "gateway",  0.2, "flow"],
-  ["repo",     "gateway",  0.7, "flow"],
-  ["gateway",  "memroos",  0.9, "flow"],
-  ["memroos",  "memory",   0.85, "ctx"],
-  ["memroos",  "skills",   0.7,  "ctx"],
-  ["memroos",  "knowledge",0.6,  "ctx"],
-  ["memory",   "sophia",   0.5,  "pack"],
-  ["memory",   "maria",    0.45, "pack"],
-  ["memory",   "alba",     0.3,  "pack"],
-
-  ["skills",   "sophia",   0.4,  "pack"],
-  ["skills",   "alba",     0.6,  "pack"],
-
-  ["skills",   "cto",      0.2,  "pack"],
-  ["knowledge","maria",    0.5,  "pack"],
-  ["knowledge","gwen",     0.3,  "pack"],
-  ["sophia",   "outcomes", 0.4,  "fb"],
-  ["maria",    "outcomes", 0.3,  "fb"],
-  ["alba",     "outcomes", 0.5,  "fb"],
-
-  ["gwen",     "outcomes", 0.2,  "fb"],
-  ["outcomes", "memroos",  0.7,  "loop"],
-];
-
-const PULSE_EDGES: [string, string, string][] = [
-  ["gateway", "memroos", NOC.ink],
-  ["memory",  "sophia",  NOC.terra],
-  ["skills",  "alba",    NOC.terra],
-  ["alba",    "outcomes",NOC.success],
-];
-
-const COLUMN_HEADERS: [number, string][] = [
-  [155, "SOURCES"],
-  [370, "GATEWAY"],
-  [610, "MEMROOS"],
-  [840, "STORES"],
-  [1045, "AGENTS"],
-];
+/**
+ * The node/edge sets used to be hardcoded literals here — five fixed agent
+ * names at hand-typed pixel coordinates, with edge weights that rendered like
+ * telemetry but were invented. On any host whose registry held different
+ * agents (cordant-hermes-01 holds none) the map showed the wrong ones
+ * confidently. Everything now comes from /api/flow/topology.
+ */
 
 const KPI_STRIP: [string, string][] = [];
 
@@ -122,9 +63,48 @@ function makeLoopPath(a: TopoNode, b: TopoNode): string {
 interface TopologyCanvasProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Emits the live node so the detail rail can describe the real thing. */
+  onSelectNode?: (node: { label: string; sub: string } | null) => void;
 }
 
-export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
+export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyCanvasProps) {
+  const [topology, setTopology] = useState<Topology | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/flow/topology", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((t: Topology) => !cancelled && setTopology(t))
+      .catch((e: Error) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <div style={{ background: NOC.paper, border: `1px solid ${NOC.rule}`, padding: 24, color: NOC.soft, fontFamily: NOC_FONT_MONO, fontSize: 12 }}>
+        Workflow map unavailable: {error}
+      </div>
+    );
+  }
+  if (!topology) {
+    return (
+      <div style={{ background: NOC.paper, border: `1px solid ${NOC.rule}`, padding: 24, color: NOC.soft, fontFamily: NOC_FONT_MONO, fontSize: 12 }}>
+        Loading live topology…
+      </div>
+    );
+  }
+
+  const { nodes, edges, columns, notices } = topology;
+  const byId: Record<string, TopoNode> = Object.fromEntries(
+    nodes.map((n) => [n.id, n]),
+  );
+  // Animate only edges backed by a real measurement — a pulse on an invented
+  // weight is the same false signal the hardcoded map gave.
+  const pulses: TopoEdge[] = edges.filter((e) => e.measured).slice(0, 4);
+
   return (
     <div style={{ background: NOC.paper, border: `1px solid ${NOC.rule}`, padding: 12 }}>
       {/* Legend */}
@@ -136,7 +116,7 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
           </span>
         ))}
         <span style={{ marginLeft: "auto", fontSize: 11, color: NOC.soft, fontFamily: NOC_FONT_MONO }}>
-          click any node for live detail · {Object.keys(NODES).length} nodes · {EDGES.length} active edges
+          click any node for live detail · {nodes.length} nodes · {edges.length} edges
         </span>
       </div>
 
@@ -152,7 +132,7 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
         }}
       >
         {/* Column headers */}
-        {COLUMN_HEADERS.map(([x, label]) => (
+        {columns.map(({ x, label }) => (
           <text
             key={label}
             x={x}
@@ -168,8 +148,9 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
         ))}
 
         {/* Edges */}
-        {EDGES.map(([from, to, throughput, kind], i) => {
-          const a = NODES[from], b = NODES[to];
+        {edges.map((e, i) => {
+          const { from, to, weight: throughput, kind } = e;
+          const a = byId[from], b = byId[to];
           if (!a || !b) return null;
           const d = kind === "loop" ? makeLoopPath(a, b) : makePath(a, b);
           return (
@@ -186,11 +167,11 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
         })}
 
         {/* Animated pulse dots on key edges */}
-        {PULSE_EDGES.map(([from, to, color], i) => {
-          const a = NODES[from], b = NODES[to];
+        {pulses.map((e, i) => {
+          const a = byId[e.from], b = byId[e.to];
           if (!a || !b) return null;
           return (
-            <circle key={i} r={3.5} fill={color}>
+            <circle key={`${e.from}-${e.to}`} r={3.5} fill={edgeColor(e.kind)}>
               <animateMotion
                 dur={`${2 + i * 0.6}s`}
                 repeatCount="indefinite"
@@ -201,11 +182,12 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
         })}
 
         {/* Nodes */}
-        {Object.entries(NODES).map(([id, n]) => {
+        {nodes.map((n) => {
+          const id = n.id;
           const isSel = selectedId === id;
           const stroke = isSel ? NOC.terra : n.t === "core" ? NOC.terra : NOC.ruleStrong;
           return (
-            <g key={id} style={{ cursor: "pointer" }} onClick={() => onSelect(id)}>
+            <g key={id} style={{ cursor: "pointer" }} onClick={() => { onSelect(id); onSelectNode?.({ label: n.label, sub: n.sub }); }}>
               <rect
                 x={n.x} y={n.y}
                 width={n.w} height={n.h}
@@ -245,6 +227,27 @@ export function TopologyCanvas({ selectedId, onSelect }: TopologyCanvasProps) {
           );
         })}
       </svg>
+
+      {/* Notices — an empty column must say why, not render blank */}
+      {notices.length > 0 && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          {notices.map((n) => (
+            <div
+              key={n}
+              style={{
+                fontSize: 11.5,
+                fontFamily: NOC_FONT_MONO,
+                color: NOC.terraDeep,
+                background: NOC.peach,
+                border: `1px solid ${NOC.rule}`,
+                padding: "6px 10px",
+              }}
+            >
+              {n}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* KPI stats strip */}
       <div

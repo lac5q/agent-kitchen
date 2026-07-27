@@ -11,53 +11,56 @@ interface NodeDetail {
   notes: string;
 }
 
-// Node details: titles and routes only. Stats are wired from real APIs — no hardcoded numbers.
-const NODE_DETAILS: Record<string, NodeDetail> = {
-  memroos:   { title: "MemroOS core",  sub: "Routing + memory + skills assembly + trust preflight", stats: [], notes: "" },
-  memory:    { title: "Memory store",  sub: "Semantic + episodic + graph",                         stats: [], notes: "" },
-  skills:    { title: "Skills",        sub: "Skill registry",                                      stats: [], notes: "" },
-  knowledge: { title: "Knowledge",     sub: "Knowledge corpus + QMD index",                        stats: [], notes: "" },
-  gateway:   { title: "Gateway",       sub: "A2A · REST · MCP routing with Iris preflight",        stats: [], notes: "" },
-  outcomes:  { title: "Outcomes",      sub: "Feeds back into memory and SEAL substrate",           stats: [], notes: "" },
-  sophia:    { title: "Sophia",        sub: "Marketing agent",                                     stats: [], notes: "" },
-  maria:     { title: "Maria",         sub: "Content agent",                                       stats: [], notes: "" },
-  alba:      { title: "Alba",          sub: "Engineering agent",                                   stats: [], notes: "" },
-  gwen:      { title: "Gwen",          sub: "Social agent",                                        stats: [], notes: "" },
-  cto:       { title: "Cto",           sub: "Engineering agent",                                   stats: [], notes: "" },
-  telegram:  { title: "Telegram",      sub: "Webhook · group + DM",                                stats: [], notes: "" },
-  email:     { title: "Email",         sub: "IMAP inbound",                                        stats: [], notes: "" },
-  slack:     { title: "Slack",         sub: "Events API inbound",                                  stats: [], notes: "" },
-  gong:      { title: "Calls (Gong)",  sub: "Webhook · transcripts",                               stats: [], notes: "" },
-  repo:      { title: "Repos · CI",    sub: "GitHub + GitNexus",                                   stats: [], notes: "" },
+/**
+ * Detail for a selected node.
+ *
+ * This used to be a second hardcoded surface alongside the canvas: the same
+ * five fixed agent names, so clicking a node on a host with a different
+ * registry showed a confidently wrong description. Structural nodes stay
+ * declared here (there is exactly one Gateway); everything derived carries its
+ * own label and sub from the topology payload.
+ */
+const STRUCTURAL_DETAILS: Record<string, NodeDetail> = {
+  memroos:   { title: "MemroOS core", sub: "Routing + memory + skills assembly + trust preflight", stats: [], notes: "" },
+  gateway:   { title: "Gateway",      sub: "A2A · REST · MCP routing with Iris preflight",         stats: [], notes: "" },
+  outcomes:  { title: "Outcomes",     sub: "Feeds back into memory and SEAL substrate",            stats: [], notes: "" },
 };
 
-const NODE_ROUTES: Record<string, string> = {
-  memroos: "/",
-  memory: "/notebooks",
-  skills: "/skills",
-  knowledge: "/library",
-  gateway: "/agents",
-  outcomes: "/business-ops",
-  sophia: "/dispatch",
-  maria: "/dispatch",
-  alba: "/dispatch",
-
-  gwen: "/dispatch",
-  cto: "/dispatch",
-  telegram: "/flow",
-  email: "/flow",
-  slack: "/flow",
-  gong: "/flow",
-  repo: "/library",
-};
+/**
+ * Route for a node. Derived ids are prefixed (`agent:`, `src:`) by the
+ * topology builder, so a prefix match covers every agent and source without
+ * enumerating them.
+ */
+function routeFor(nodeId: string | null): string {
+  if (!nodeId) return "/";
+  if (nodeId.startsWith("agent:")) return "/dispatch";
+  // Sources are already drawn on this page, so they route to /flow and the CTA
+  // suppresses itself rather than offering a link to the current page.
+  if (nodeId.startsWith("src:")) return "/flow";
+  const structural: Record<string, string> = {
+    memroos: "/",
+    gateway: "/agents",
+    outcomes: "/business-ops",
+    memory: "/notebooks",
+    skills: "/skills",
+    knowledge: "/library",
+  };
+  return structural[nodeId] ?? "/";
+}
 
 interface NodeDetailRailProps {
   nodeId: string | null;
+  /** Live label/sub for the selected node, from the topology payload. */
+  node?: { label: string; sub: string } | null;
 }
 
-export function NodeDetailRail({ nodeId }: NodeDetailRailProps) {
-  const detail = (nodeId ? NODE_DETAILS[nodeId] : null) ?? NODE_DETAILS.memroos;
-  const route = (nodeId && NODE_ROUTES[nodeId]) || "/";
+export function NodeDetailRail({ nodeId, node }: NodeDetailRailProps) {
+  // Prefer the live node: its label and sub are whatever the registry or store
+  // actually reports. Fall back to the structural table, then to the core.
+  const detail: NodeDetail = node
+    ? { title: node.label, sub: node.sub, stats: [], notes: "" }
+    : (nodeId ? STRUCTURAL_DETAILS[nodeId] : null) ?? STRUCTURAL_DETAILS.memroos;
+  const route = routeFor(nodeId);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

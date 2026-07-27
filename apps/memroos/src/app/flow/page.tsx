@@ -30,6 +30,12 @@ export default function FlowPage() {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [showFlow, setShowFlow] = useState(false);
   const [topoSelectedId, setTopoSelectedId] = useState<string | null>("memroos");
+  // The canvas owns the topology fetch; it hands the selected node up so the
+  // detail rail describes what is actually there rather than a fixed table.
+  const [topoSelectedNode, setTopoSelectedNode] = useState<{
+    label: string;
+    sub: string;
+  } | null>(null);
 
   const services = healthData?.services || [];
   const agentCount = agentsData?.agents.length || 0;
@@ -99,8 +105,12 @@ export default function FlowPage() {
       {/* Primary view: topology (default) or ReactFlow (toggle) */}
       {!showFlow ? (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
-          <TopologyCanvas selectedId={topoSelectedId} onSelect={setTopoSelectedId} />
-          <NodeDetailRail nodeId={topoSelectedId} />
+          <TopologyCanvas
+            selectedId={topoSelectedId}
+            onSelect={setTopoSelectedId}
+            onSelectNode={setTopoSelectedNode}
+          />
+          <NodeDetailRail nodeId={topoSelectedId} node={topoSelectedNode} />
         </div>
       ) : (
         <div className="relative">

@@ -20,7 +20,8 @@ describe("NodeDetailRail", () => {
   });
 
   it("does not render a current-page Open page link for source nodes already shown on the map", () => {
-    render(<NodeDetailRail nodeId="slack" />);
+    // Source ids are namespaced `src:<provider>` by the topology builder.
+    render(<NodeDetailRail nodeId="src:slack" />);
 
     expect(screen.queryByRole("link", { name: /open page/i })).not.toBeInTheDocument();
     expect(screen.getByText(/already on map/i)).toBeInTheDocument();
