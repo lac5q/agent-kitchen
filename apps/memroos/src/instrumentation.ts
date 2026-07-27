@@ -23,6 +23,12 @@ export async function register() {
     const { prewarmResponseCaches } = await import('./lib/response-cache');
     const { startSlaScheduler } = await import('./lib/hil/sla-scheduler');
     const { startEmbeddingJob } = await import('./lib/embeddings/embedding-job');
+    // Pulls connected providers (Linear, Circleback, Notion) into `messages`,
+    // from which the embedding cycle and FTS index below pick them up. Without
+    // this, "Connected" in Settings->Integrations means only that an agent can
+    // query the provider on demand — nothing is ever indexed as memory.
+    // No-ops when NANGO_SECRET_KEY is unset.
+    const { startConnectorJob } = await import('./lib/connectors/sync-job');
     startConsolidationScheduler();
     startDecayScheduler();
     startRetentionExpiryScheduler();
@@ -30,6 +36,7 @@ export async function register() {
     startWikiDigestScheduler();
     startSlaScheduler();
     startEmbeddingJob();
+    startConnectorJob();
     void prewarmResponseCaches();
   }
 }
