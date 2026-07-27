@@ -438,10 +438,14 @@ describe("agent registry service", () => {
     delete process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER;
     const writeSpy = vi.fn(async () => {});
     const adapter = { tiers: ["vector"], write: writeSpy, search: vi.fn(), health: vi.fn() };
+
+    // Same module-reset ordering requirement as the test above: register
+    // against the instance recordMemoryWrite() will actually resolve.
+    // Without this the negative assertion below passes for the wrong
+    // reason (adapter never visible) rather than because the env guard works.
+    const { recordMemoryWrite, registerAgent } = await loadRegistry();
     const registryMod = await import("../memory/registry");
     registryMod.registerAdapter(adapter as unknown as Parameters<typeof registryMod.registerAdapter>[0]);
-
-    const { recordMemoryWrite, registerAgent } = await loadRegistry();
     registerAgent({
       id: "memx-agent",
       name: "Memx Agent",

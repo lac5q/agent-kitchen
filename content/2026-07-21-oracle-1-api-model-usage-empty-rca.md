@@ -10,7 +10,7 @@ sources:
   - /home/opc/github/memroos/apps/memroos/src/lib/constants.ts (env mapping)
   - /home/opc/github/memroos/apps/memroos/src/lib/env.ts (loadMemroosEnv fallback)
   - /etc/memroos/web.env (oracle-1 systemd EnvironmentFile)
-  - production UI screenshots: /Users/lcalderon/.hermes/cache/images/img_26f2d9a89945.webp, img_2be8f5078ba1.png
+  - production UI screenshots: /Users/<you>/.hermes/cache/images/img_26f2d9a89945.webp, img_2be8f5078ba1.png
 derived_from: standing goal "can you repull the repo for maeve-u1 and start implementing using beastmode-hermes the gsd plan", 2026-07-20 22:21 — Luis reports "still one day" and "still no data"
 ---
 

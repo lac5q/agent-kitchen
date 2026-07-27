@@ -11,7 +11,7 @@
 1. **Recovered stranded work.** The user's prior "fix cordant-hermes-01"
    session had run in the wrong checkout — uncommitted changes
    (`instrumentation.ts` connector-job wiring, `scripts/memroos-env-gaps.sh`)
-   were sitting in the main checkout (`/Users/lcalderon/github/memroos`), not
+   were sitting in the main checkout (the primary, non-worktree checkout), not
    the worktree the new session started in
    (`.claude/worktrees/memroos-hermes-completion-d3be6e`, which was clean and
    identical to `main`). Lesson: uncommitted work does not travel between
