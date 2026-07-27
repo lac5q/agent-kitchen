@@ -31,6 +31,26 @@ independent validator model when the authoring worker was MiniMax.
 
 ## Start Gate
 
+**Check 1Password before declaring a lane unavailable.** `$MINIMAX_API_KEY` is
+often unset in the shell even when the key exists — it lives in 1Password, not
+the environment. Never conclude MiniMax is "not live" from an absent env var
+alone. Retrieve it first:
+
+```bash
+op item list --format=json | python3 -c "
+import json,sys
+for i in json.load(sys.stdin):
+    if 'minimax' in i.get('title','').lower():
+        print(i['id'], i['title'], i['vault']['name'])
+"
+# Use the "Minimax Coding Plan API Key" item (AgentWritable or Clawdbot vault),
+# NOT "Minimax API Key Audio" — that's a different product/key.
+export MINIMAX_API_KEY="$(op item get <item-id> --vault <vault> --fields credential --reveal)"
+```
+
+Never print the retrieved key to stdout, logs, or chat — pipe it straight into
+an env var or the request that needs it.
+
 Before delegating, prove the selected lane is live:
 
 ```bash
