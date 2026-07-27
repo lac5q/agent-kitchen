@@ -22,7 +22,7 @@ import {
   listNangoConnections,
 } from "@/lib/tool-auth/nango-client";
 
-import { callTool, initialize } from "./mcp-client";
+import { callRest, callTool, initialize } from "./mcp-client";
 import { getManifest, type ConnectorManifest, type SyncTool } from "./manifest";
 import {
   ensureConnectorSpace,
@@ -44,6 +44,8 @@ export interface ConnectorCycleResult {
   duplicates: number;
   skipped: number;
   degraded: boolean;
+  /** Which provider (or provider/tool) failed, so `degraded` is actionable. */
+  degradedProviders: string[];
 }
 
 /**
@@ -69,23 +71,46 @@ async function syncTool(
   const { manifest, tool, connectionId, accessToken, spaceId, labels } = opts;
   const state = readSyncState(db, connectionId, tool.tool);
 
-  const args: Record<string, unknown> = { limit: CONNECTOR_PAGE_SIZE };
+  const args: Record<string, unknown> = { ...(tool.staticArgs ?? {}) };
   if (tool.incrementalArg && state.cursorValue) {
     args[tool.incrementalArg] = state.cursorValue;
   }
-  if (state.pageCursor) {
-    args.cursor = state.pageCursor;
+
+  // Each provider paginates differently, and the page-index form has no
+  // natural "no more pages" signal — a short page is the only stop condition.
+  if (tool.pagination === "page-index") {
+    args.pageIndex = state.pageCursor ? Number(state.pageCursor) : 0;
+  } else if (state.pageCursor) {
+    args[tool.cursorArg ?? "cursor"] = state.pageCursor;
   }
 
-  const { payload } = await callTool(
-    manifest.mcpEndpoint,
-    accessToken,
-    tool.tool,
-    args,
-  );
+  let payload: unknown;
+  if (manifest.transport === "rest") {
+    args.page_size = CONNECTOR_PAGE_SIZE;
+    ({ payload } = await callRest(manifest.endpoint, accessToken, {
+      method: tool.method ?? "POST",
+      path: tool.path ?? "/",
+      headers: tool.headers,
+      body: args,
+    }));
+  } else {
+    args.limit = CONNECTOR_PAGE_SIZE;
+    ({ payload } = await callTool(
+      manifest.endpoint,
+      accessToken,
+      tool.tool,
+      args,
+    ));
+  }
 
-  const records = Array.isArray(payload[tool.resultKey])
-    ? (payload[tool.resultKey] as Array<Record<string, unknown>>)
+  // `resultKey: null` means the payload IS the array (Circleback). Reading it
+  // through a key would silently yield zero records instead of failing.
+  const raw =
+    tool.resultKey === null
+      ? payload
+      : (payload as Record<string, unknown>)?.[tool.resultKey];
+  const records = Array.isArray(raw)
+    ? (raw as Array<Record<string, unknown>>)
     : [];
 
   let written = 0;
@@ -93,8 +118,17 @@ async function syncTool(
   let skipped = 0;
   let newestSeen = state.cursorValue;
 
+  // Set only when the whole page was processed. If the budget cuts the loop
+  // short, the high-water mark must NOT advance: records arrive newest-first,
+  // so a mark derived from the processed prefix would jump past the unread
+  // tail and those records would never be requested again.
+  let pageComplete = true;
+
   for (const record of records) {
-    if (written >= opts.budget) break;
+    if (written >= opts.budget) {
+      pageComplete = false;
+      break;
+    }
 
     const outcome = writeConnectorRecord({
       db,
@@ -110,23 +144,42 @@ async function syncTool(
     else if (outcome.status === "duplicate") duplicates += 1;
     else skipped += 1;
 
-    const updatedAt = record.updatedAt;
-    if (typeof updatedAt === "string" && (!newestSeen || updatedAt > newestSeen)) {
-      newestSeen = updatedAt;
+    const ts = record[tool.timestampField];
+    if (typeof ts === "string" && (!newestSeen || ts > newestSeen)) {
+      newestSeen = ts;
     }
   }
 
-  const hasNextPage = payload.hasNextPage === true;
-  const nextCursor = typeof payload.cursor === "string" ? payload.cursor : null;
+  const obj = (payload ?? {}) as Record<string, unknown>;
+  let hasNextPage: boolean;
+  let nextCursor: string | null;
+
+  if (tool.pagination === "page-index") {
+    // No cursor and no hasNextPage field — a full page implies more, a short
+    // page means the sweep is done.
+    hasNextPage = records.length >= CONNECTOR_PAGE_SIZE;
+    const current = state.pageCursor ? Number(state.pageCursor) : 0;
+    nextCursor = hasNextPage ? String(current + 1) : null;
+  } else {
+    hasNextPage = obj[tool.hasMoreField ?? "hasNextPage"] === true;
+    const c = obj[tool.cursorField ?? "cursor"];
+    nextCursor = typeof c === "string" ? c : null;
+  }
+
+  // A budget-truncated page is not done: leave the page cursor where it was so
+  // the next cycle re-reads the same page and picks up the tail.
+  const moreWork = hasNextPage || !pageComplete;
 
   writeSyncState(db, {
     connectionId,
     providerKey: manifest.providerKey,
     tool: tool.tool,
-    // Only commit the high-water mark on a completed sweep — see the note above.
-    cursorValue: hasNextPage ? state.cursorValue : newestSeen,
-    pageCursor: hasNextPage ? nextCursor : null,
-    status: hasNextPage ? "backfilling" : "ok",
+    // Advance the high-water mark only when the sweep finished AND the last
+    // page was fully processed. Either alone is not enough — advancing on a
+    // truncated page permanently strands its unread tail.
+    cursorValue: moreWork ? state.cursorValue : newestSeen,
+    pageCursor: pageComplete ? (hasNextPage ? nextCursor : null) : state.pageCursor,
+    status: moreWork ? "backfilling" : "ok",
     rowsWritten: written,
   });
 
@@ -141,6 +194,7 @@ export async function runConnectorCycle(
   let written = 0;
   let duplicates = 0;
   let skipped = 0;
+  const degradedProviders: string[] = [];
 
   try {
     const connections = await listNangoConnections();
@@ -150,45 +204,72 @@ export async function runConnectorCycle(
       if (!manifest) continue; // no sync manifest — credential brokerage only
       if (written >= CONNECTOR_CYCLE_LIMIT) break;
 
-      const creds = await fetchNangoCredentials(
-        conn.connectionId,
-        manifest.providerConfigKey,
-      );
-      if (!creds?.accessToken) {
-        console.warn(
-          `[connectors] ${conn.providerKey}: no access token; skipping`,
+      // Per-connection boundary. Providers are iterated in a stable order, so
+      // without this one provider that throws every cycle would starve every
+      // provider after it — permanently, and reported only as `degraded`.
+      try {
+        const creds = await fetchNangoCredentials(
+          conn.connectionId,
+          manifest.providerConfigKey,
         );
-        continue;
-      }
+        if (!creds?.accessToken) {
+          console.warn(
+            `[connectors] ${conn.providerKey}: no access token; skipping`,
+          );
+          continue;
+        }
 
-      const { spaceId, labels } = ensureConnectorSpace(db, {
-        tenantId,
-        providerKey: manifest.providerKey,
-      });
-
-      await initialize(manifest.mcpEndpoint, creds.accessToken);
-
-      for (const tool of manifest.tools) {
-        if (written >= CONNECTOR_CYCLE_LIMIT) break;
-        const res = await syncTool(db, {
-          manifest,
-          tool,
-          connectionId: conn.connectionId,
-          accessToken: creds.accessToken,
-          spaceId,
-          labels,
-          budget: CONNECTOR_CYCLE_LIMIT - written,
+        const { spaceId, labels } = ensureConnectorSpace(db, {
+          tenantId,
+          providerKey: manifest.providerKey,
         });
-        written += res.written;
-        duplicates += res.duplicates;
-        skipped += res.skipped;
+
+        // REST providers have no handshake; only MCP needs initialize.
+        if (manifest.transport === "mcp") {
+          await initialize(manifest.endpoint, creds.accessToken);
+        }
+
+        for (const tool of manifest.tools) {
+          if (written >= CONNECTOR_CYCLE_LIMIT) break;
+          // Per-tool boundary for the same reason: one broken tool must not
+          // cost the provider its other tools.
+          try {
+            const res = await syncTool(db, {
+              manifest,
+              tool,
+              connectionId: conn.connectionId,
+              accessToken: creds.accessToken,
+              spaceId,
+              labels,
+              budget: CONNECTOR_CYCLE_LIMIT - written,
+            });
+            written += res.written;
+            duplicates += res.duplicates;
+            skipped += res.skipped;
+          } catch (err) {
+            degradedProviders.push(`${conn.providerKey}/${tool.tool}`);
+            console.error(
+              `[connectors] ${conn.providerKey}/${tool.tool} failed:`,
+              err,
+            );
+          }
+        }
+      } catch (err) {
+        degradedProviders.push(conn.providerKey);
+        console.error(`[connectors] ${conn.providerKey} failed:`, err);
       }
     }
 
-    return { written, duplicates, skipped, degraded: false };
+    return {
+      written,
+      duplicates,
+      skipped,
+      degraded: degradedProviders.length > 0,
+      degradedProviders,
+    };
   } catch (err) {
     console.error("[connectors] sync cycle failed:", err);
-    return { written, duplicates, skipped, degraded: true };
+    return { written, duplicates, skipped, degraded: true, degradedProviders };
   }
 }
 

@@ -14,8 +14,12 @@
 const PROTOCOL_VERSION = "2025-06-18";
 
 export interface McpCallResult {
-  /** Parsed JSON payload from the tool's text content block. */
-  payload: Record<string, unknown>;
+  /**
+   * Parsed JSON payload. Deliberately `unknown`: Linear returns an object
+   * keyed by record type, Circleback returns a bare array. The manifest's
+   * `resultKey` decides how to read it.
+   */
+  payload: unknown;
 }
 
 class McpError extends Error {
@@ -120,6 +124,45 @@ export async function callTool(
     throw new McpError(`MCP tool ${tool} returned no text content`);
   }
 
-  const payload = JSON.parse(block.text) as Record<string, unknown>;
+  // Circleback returns a bare JSON array where Linear returns an object, so
+  // the decoded value is `unknown` rather than a record — the caller reads it
+  // through the manifest's `resultKey` (null meaning "the payload is the
+  // array"). Typing this as an object here would have made a bare array read
+  // as zero records instead of failing loudly.
+  const payload = JSON.parse(block.text) as unknown;
   return { payload };
+}
+
+/**
+ * Issue a REST call for providers Nango brokers with plain OAuth2 rather than
+ * MCP (Notion). Same return shape as `callTool` so the sync loop does not
+ * branch on transport beyond choosing the caller.
+ */
+export async function callRest(
+  baseUrl: string,
+  accessToken: string,
+  opts: {
+    method: string;
+    path: string;
+    headers?: Record<string, string>;
+    body?: Record<string, unknown>;
+  },
+  signal?: AbortSignal,
+): Promise<McpCallResult> {
+  const res = await fetch(`${baseUrl}${opts.path}`, {
+    method: opts.method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...opts.headers,
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    signal,
+  });
+
+  if (!res.ok) {
+    throw new McpError(`REST ${opts.path} returned HTTP ${res.status}`);
+  }
+
+  return { payload: (await res.json()) as unknown };
 }

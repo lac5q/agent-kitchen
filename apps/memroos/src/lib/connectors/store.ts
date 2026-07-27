@@ -112,6 +112,7 @@ export interface WriteRecordInput {
 
 export type WriteOutcome =
   | { status: "written"; id: number }
+  /** Already stored and unchanged (or an older copy) — nothing to do. */
   | { status: "duplicate" }
   | { status: "empty" }
   | { status: "quarantined"; rules: string[] }
@@ -156,17 +157,33 @@ export function writeConnectorRecord(input: WriteRecordInput): WriteOutcome {
   const domain = typeof labels.domain === "string" ? labels.domain : null;
   const sensitivity = typeof labels.sensitivity === "string" ? labels.sensitivity : null;
 
+  // Each provider names its own timestamp field: Linear has updatedAt,
+  // Circleback only createdAt, Notion last_edited_time. Hardcoding `updatedAt`
+  // collapsed every Circleback and Notion record onto the ingest date, which
+  // corrupts recency ranking and time-range recall.
+  const tsField = tool.timestampField;
   const timestamp =
-    typeof record.updatedAt === "string"
-      ? record.updatedAt
+    tsField && typeof record[tsField] === "string"
+      ? (record[tsField] as string)
       : new Date().toISOString();
 
+  // Upsert, not INSERT OR IGNORE. The unique constraint absorbs unchanged
+  // records, but an edited one must overwrite: with OR IGNORE, a rewritten
+  // issue body conflicted and was silently discarded, so memory served the
+  // first-ever version of every record forever — defeating the incremental
+  // fetch entirely. The timestamp guard keeps it idempotent: a re-fetch of an
+  // unchanged record changes nothing, and an out-of-order older copy cannot
+  // clobber a newer one.
   const result = db
     .prepare(
-      `INSERT OR IGNORE INTO messages
+      `INSERT INTO messages
          (session_id, project, agent_id, role, content, timestamp,
           space_id, request_id, visibility, policy, domain, sensitivity)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, request_id) DO UPDATE SET
+         content   = excluded.content,
+         timestamp = excluded.timestamp
+       WHERE excluded.timestamp > messages.timestamp`,
     )
     .run(
       connectorSessionId(providerKey, connectionId),

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { initSchema } from "@/lib/db-schema";
 import { createSpace, filterBySpace } from "@/lib/space";
 
-import { getManifest, connectorProject } from "../manifest";
+import { CONNECTOR_MANIFESTS, getManifest, connectorProject } from "../manifest";
 import {
   connectorAgentId,
   ensureConnectorSpace,
@@ -271,5 +271,143 @@ describe("connectors/sync-state", () => {
       .prepare(`SELECT rows_written FROM connector_sync_state WHERE connection_id = ?`)
       .get("conn-1") as { rows_written: number };
     expect(row.rows_written).toBe(15);
+  });
+});
+
+/**
+ * Regression tests for defects an adversarial validation pass confirmed on
+ * 2026-07-27. Each of these was a real, silent failure.
+ */
+describe("connectors/store — validated regressions", () => {
+  it("an EDITED record overwrites rather than being discarded", () => {
+    // Was INSERT OR IGNORE: a rewritten issue body conflicted on
+    // UNIQUE(session_id, request_id) and was silently thrown away, so memory
+    // served the first-ever version forever and the incremental fetch was moot.
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const base = {
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: ISSUES,
+    };
+
+    writeConnectorRecord({
+      ...base,
+      record: { id: "ENG-1", title: "Original", updatedAt: "2026-07-01T00:00:00Z" },
+    });
+    const second = writeConnectorRecord({
+      ...base,
+      record: { id: "ENG-1", title: "REWRITTEN", updatedAt: "2026-07-27T00:00:00Z" },
+    });
+    expect(second.status).toBe("written");
+
+    const row = db
+      .prepare(`SELECT content, timestamp FROM messages WHERE request_id = ?`)
+      .get("ENG-1") as { content: string; timestamp: string };
+    expect(row.content).toContain("REWRITTEN");
+    expect(row.timestamp).toBe("2026-07-27T00:00:00Z");
+
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM messages`).get() as { n: number };
+    expect(n.n).toBe(1);
+  });
+
+  it("an OLDER copy cannot clobber a newer stored record", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const base = { db, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
+
+    writeConnectorRecord({
+      ...base,
+      record: { id: "ENG-1", title: "Newer", updatedAt: "2026-07-27T00:00:00Z" },
+    });
+    writeConnectorRecord({
+      ...base,
+      record: { id: "ENG-1", title: "Stale", updatedAt: "2026-07-01T00:00:00Z" },
+    });
+
+    const row = db
+      .prepare(`SELECT content FROM messages WHERE request_id = ?`)
+      .get("ENG-1") as { content: string };
+    expect(row.content).toContain("Newer");
+  });
+
+  it("uses each provider's own timestamp field, not a hardcoded updatedAt", () => {
+    // Circleback records carry createdAt and no updatedAt; Notion carries
+    // last_edited_time. Hardcoding updatedAt collapsed both onto the ingest
+    // date, corrupting recency ranking.
+    const cb = getManifest("circleback")!;
+    const meetings = cb.tools.find((t) => t.tool === "SearchMeetings")!;
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "circleback",
+    });
+
+    writeConnectorRecord({
+      db,
+      providerKey: "circleback",
+      connectionId: "cb-1",
+      spaceId,
+      labels,
+      tool: meetings,
+      record: {
+        id: "mtg-1",
+        name: "Juan / Luis",
+        notes: "GTM sequencing is the priority",
+        createdAt: "2026-07-01T00:00:00Z",
+      },
+    });
+
+    const row = db
+      .prepare(`SELECT timestamp FROM messages WHERE request_id = ?`)
+      .get("mtg-1") as { timestamp: string };
+    expect(row.timestamp).toBe("2026-07-01T00:00:00Z");
+  });
+});
+
+describe("connectors/manifest — provider coverage", () => {
+  it("every manifest names a providerConfigKey that exists in Nango prod", () => {
+    // Verified against GET https://api.nango.dev/integrations on 2026-07-27.
+    // A manifest naming an absent integration fetches nothing, silently.
+    const NANGO_PROD = [
+      "circleback-mcp",
+      "github",
+      "google",
+      "google-calendar-mcp",
+      "google-drive",
+      "google-mail",
+      "linear-mcp",
+      "mcp-generic",
+      "notion",
+      "slack-mcp",
+    ];
+    const orphans = CONNECTOR_MANIFESTS.filter(
+      (m) => !NANGO_PROD.includes(m.providerConfigKey),
+    ).map((m) => `${m.providerKey} -> ${m.providerConfigKey}`);
+    expect(orphans).toEqual([]);
+  });
+
+  it("every tool declares an id and timestamp field", () => {
+    for (const m of CONNECTOR_MANIFESTS) {
+      for (const t of m.tools) {
+        expect(t.idField.length).toBeGreaterThan(0);
+        expect(t.timestampField.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("rest manifests declare method and path", () => {
+    for (const m of CONNECTOR_MANIFESTS.filter((x) => x.transport === "rest")) {
+      for (const t of m.tools) {
+        expect(t.method).toBeTruthy();
+        expect(t.path).toBeTruthy();
+      }
+    }
   });
 });
