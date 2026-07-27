@@ -23,17 +23,27 @@ CRITICAL: Check provider auth before retrying blocked work.
 \`\`\`
 `;
 
-async function loadRoute() {
+async function loadRoute(extraEnv: Record<string, string> = {}) {
   vi.resetModules();
   vi.stubEnv("APO_PROPOSALS_PATH", proposalsPath);
   vi.stubEnv("APO_SKILLS_PATH", skillsPath);
   vi.stubEnv("APO_AGENT_CONFIGS_PATH", agentsPath);
   vi.stubEnv("APO_CRON_LOG_PATH", cronLogPath);
+  vi.stubEnv("SKILLS_PATH", skillsPath);
   // The route falls back to real $HOME skill/agent roots (~/github/PMO/agents,
   // ~/.claude/skills, ...) when the configured roots miss. Without pinning HOME
-  // to the fixture, "target is missing" tests resolve against the developer's
-  // actual machine and return 200 instead of 404.
+  // to the fixture AND creating those roots, "target is missing" tests resolve
+  // against the developer's actual machine and return 200 instead of 404.
   vi.stubEnv("HOME", root);
+  mkdirSync(path.join(root, "github"), { recursive: true });
+  mkdirSync(path.join(root, "github", "PMO", "agents"), { recursive: true });
+  mkdirSync(path.join(root, "github", "knowledge", "agent-configs"), { recursive: true });
+  mkdirSync(path.join(root, "github", "knowledge", "skills"), { recursive: true });
+  mkdirSync(path.join(root, ".openclaw", "skills"), { recursive: true });
+  mkdirSync(path.join(root, ".claude", "skills"), { recursive: true });
+  for (const [name, value] of Object.entries(extraEnv)) {
+    vi.stubEnv(name, value);
+  }
   return import("../route");
 }
 
@@ -289,6 +299,7 @@ describe("POST /api/apo validation and errors", () => {
     expect(missingConstraint.status).toBe(422);
 
     rmSync(path.join(skillsPath, "ceo"), { recursive: true, force: true });
+    rmSync(path.join(agentsPath, "ceo"), { recursive: true, force: true });
     const missingTarget = await POST(makeApproveRequest({ action: "approve", proposalId: proposalFilename }));
     expect(missingTarget.status).toBe(404);
     expect((await missingTarget.json()).searched.skillRoots).toEqual(expect.any(Array));
