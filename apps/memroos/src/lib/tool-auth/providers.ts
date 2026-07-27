@@ -7,13 +7,8 @@ import {
   FileText, // Notion stand-in (docs)
   GitBranch, // GitHub stand-in (source control)
   Cloud,
-  MessageSquare,
-  Banknote,
   Calendar,
-  Database,
-  Box,
   Video,
-  Layers,
   Code2,
 } from "lucide-react";
 
@@ -51,6 +46,13 @@ export interface OAuthProvider extends ProviderBase {
   providerConfigKey: string;
   /** OAuth scopes to request when initiating the connect flow. */
   scopes: string[];
+  /**
+   * Set when the Nango integration exists but cannot complete a connect yet —
+   * e.g. a plain OAUTH2 provider whose client id/secret has not been filled in.
+   * The card renders disabled with this reason instead of offering a Connect
+   * button that fails with a raw Nango error.
+   */
+  unavailableReason?: string;
 }
 
 export interface ApiKeyProvider extends ProviderBase {
@@ -170,6 +172,16 @@ const PROVIDERS: readonly Provider[] = [
     authMode: "oauth",
     // Nango prod registers this as `google-calendar-mcp`, not `google-calendar`.
     providerConfigKey: "google-calendar-mcp",
+    // The integration exists but is auth_mode OAUTH2 with client_id and
+    // client_secret both null, so Connect fails with 'Provider Config
+    // "google-calendar-mcp" is missing client ID, secret and/or scopes'.
+    // Unlike linear-mcp/circleback-mcp (credentials: null = dynamic client
+    // registration, no app needed), this one needs a Google Cloud OAuth app
+    // whose id and secret are pasted into the Nango dashboard. Verified
+    // against the live Nango API 2026-07-27. Surfacing the reason beats
+    // letting the user hit a raw upstream error.
+    unavailableReason:
+      "Needs a Google Cloud OAuth client id + secret in the Nango dashboard.",
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
@@ -216,79 +228,20 @@ const PROVIDERS: readonly Provider[] = [
     providerConfigKey: "linear-mcp",
     scopes: ["read", "write", "issues:create"],
   },
-  {
-    key: "supabase",
-    label: "Supabase",
-    icon: Database,
-    description: "Query rows and manage tables in your Supabase project.",
-    category: "developer",
-    authMode: "api-key",
-    apiKeyField: "Service role key (starts with eyJ...)",
-    docsUrl: "https://supabase.com/dashboard/project/_/settings/api",
-  },
-  {
-    key: "aws",
-    label: "Amazon Web Services",
-    icon: Cloud,
-    description: "Read S3, SES, and select AWS services via IAM keys.",
-    category: "developer",
-    authMode: "api-key",
-    apiKeyField: "Access key id (AKIA...) and secret access key",
-    docsUrl: "https://console.aws.amazon.com/iam/home#/security_credentials",
-  },
 
-  // ------------------------------------ crm ---------------------------------
-  // HubSpot and Salesforce OAuth cards were removed 2026-07-27: both pointed at
-  // Nango integrations that do not exist in prod, so their Connect buttons could
-  // only ever fail. Re-add them alongside creating the Nango integration (and
-  // its vendor OAuth app credentials) — not before. See the providerConfigKey
-  // parity test in __tests__/providers.test.ts.
-  {
-    key: "intercom",
-    label: "Intercom",
-    icon: MessageSquare,
-    description: "Read and reply to conversations in your Intercom inbox.",
-    category: "crm",
-    authMode: "api-key",
-    apiKeyField: "Access token (starts with dG9r...)",
-    docsUrl: "https://app.intercom.com/a/apps/_/developer-hub",
-  },
+  // ------------------------------- crm · finance · other -------------------
+  // These categories are intentionally empty.
+  //
+  // They previously held supabase, aws, intercom, stripe, plaid and
+  // generic-rest as `api-key` cards. Every one rendered a Connect button, and
+  // none of them had a Nango integration behind it — Nango prod contains only
+  // circleback-mcp, github, google, google-calendar-mcp, google-drive,
+  // google-mail, linear-mcp, mcp-generic, notion and slack-mcp. The operator
+  // never set any of the six up, so the cards were an aspirational list
+  // presented as working functionality. Removed 2026-07-27.
+  //
+  // Re-add a provider here only alongside creating its Nango integration.
 
-  // ---------------------------------- finance --------------------------------
-  {
-    key: "stripe",
-    label: "Stripe",
-    icon: Banknote,
-    description: "Customers, charges, subscriptions, and payouts.",
-    category: "finance",
-    authMode: "api-key",
-    apiKeyField: "Restricted secret key (rk_live_... or rk_test_...)",
-    docsUrl: "https://dashboard.stripe.com/apikeys",
-  },
-  // The Xero OAuth card was removed 2026-07-27 for the same reason as HubSpot
-  // and Salesforce above: no `xero` integration exists in Nango prod.
-  {
-    key: "plaid",
-    label: "Plaid",
-    icon: Layers,
-    description: "Link bank accounts and pull balances and transactions.",
-    category: "finance",
-    authMode: "api-key",
-    apiKeyField: "Client id and secret (from Plaid dashboard)",
-    docsUrl: "https://dashboard.plaid.com/team/keys",
-  },
-
-  // ----------------------------------- other ---------------------------------
-  {
-    key: "generic-rest",
-    label: "Generic REST API",
-    icon: Box,
-    description: "Hit any HTTPS endpoint with a bearer token.",
-    category: "other",
-    authMode: "api-key",
-    apiKeyField: "Bearer token",
-    docsUrl: "https://memroos.dev/docs/integrations/generic-rest",
-  },
 ];
 
 // ---------------------------------------------------------------------------

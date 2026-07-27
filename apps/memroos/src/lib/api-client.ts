@@ -758,6 +758,35 @@ export function deregisterAgent(agentId: string) {
   );
 }
 
+/**
+ * Rename / re-describe an agent.
+ *
+ * Only display fields — host, port, platform and protocol stay derived from
+ * the host so the registry cannot be hand-edited into disagreeing with the
+ * machine. See updateAgentDetails in lib/agent-registry.ts.
+ */
+export function updateAgentDetails(input: {
+  agentId: string;
+  name?: string;
+  role?: string;
+}) {
+  const { agentId, ...fields } = input;
+  return mutateJSON<{ ok: boolean; agent: RegisteredAgent; timestamp: string }>(
+    `/api/agents/${encodeURIComponent(agentId)}`,
+    { method: "PATCH", body: JSON.stringify(fields) }
+  );
+}
+
+export function useUpdateAgentDetailsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateAgentDetails,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
 export function useRegisterAgentMutation() {
   const queryClient = useQueryClient();
   return useMutation({

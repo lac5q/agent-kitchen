@@ -372,6 +372,13 @@ export default function AgentRegistryPage() {
           agents={filtered}
           onSelect={setSelected}
           onDeregister={(agentId) => deregisterMutation.mutate(agentId)}
+          onAgentUpdated={(updated) =>
+            setSelected((current) =>
+              current && current.id === updated.id
+                ? { ...current, ...updated }
+                : current
+            )
+          }
           isDeregistering={deregisterMutation.isPending}
           emptyTitle={emptyTitle}
           emptyReason={emptyReason}

@@ -29,6 +29,10 @@ export async function GET(_req: NextRequest) {
         label: p.label,
         description: p.description,
         authMode: isOAuthProvider(p) ? "oauth" : isApiKeyProvider(p) ? "api-key" : "oauth",
+        // Non-null when the integration exists but cannot connect yet, so the
+        // UI can disable the card with a reason instead of surfacing a raw
+        // Nango error after the user clicks.
+        unavailableReason: isOAuthProvider(p) ? p.unavailableReason ?? null : null,
       })),
     })),
   };

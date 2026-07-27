@@ -326,6 +326,7 @@ function ProviderCard({
   const Icon = provider.icon;
   const status: ConnectionStatus = connection?.status ?? "not_connected";
   const authMode: ConnectionAuthMode = connection?.authMode ?? (isOAuthProvider(provider) ? "oauth" : "api-key");
+  const unavailableReason = isOAuthProvider(provider) ? provider.unavailableReason : undefined;
 
   return (
     <Card pad="md" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -347,8 +348,41 @@ function ProviderCard({
         </div>
       )}
 
+      {unavailableReason && status === "not_connected" && (
+        <div
+          style={{
+            background: NOC.peach,
+            border: `1px solid ${NOC.rule}`,
+            color: NOC.terraDeep,
+            fontSize: 11,
+            lineHeight: 1.4,
+            padding: "6px 8px",
+          }}
+        >
+          Not connectable yet — {unavailableReason}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 8 }}>
-        {status === "not_connected" || status === "expired" ? (
+        {unavailableReason && status === "not_connected" ? (
+          // Offering Connect here would fail with a raw upstream error
+          // ("Provider Config ... is missing client ID, secret and/or scopes").
+          // Saying why up front beats letting the user discover it by clicking.
+          <button
+            type="button"
+            disabled
+            style={{
+              background: NOC.fog,
+              border: `1px solid ${NOC.rule}`,
+              color: NOC.soft,
+              cursor: "not-allowed",
+              fontSize: 12,
+              padding: "6px 11px",
+            }}
+          >
+            Unavailable
+          </button>
+        ) : status === "not_connected" || status === "expired" ? (
           <ConnectButton providerKey={providerKey} authMode={authMode} variant={status === "expired" ? "terra" : "ink"} />
         ) : (
           <>

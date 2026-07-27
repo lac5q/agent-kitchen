@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+
+import { useUpdateAgentDetailsMutation } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AgentLivenessBadge } from "@/components/agents/agent-liveness-badge";
@@ -15,9 +18,81 @@ interface AgentRegistryTableProps {
   agents: RegistryAgentRow[];
   onSelect: (agent: RegistryAgentRow) => void;
   onDeregister: (agentId: string) => void;
+  /** Fired after a successful rename so the parent can refetch. */
+  onAgentUpdated?: (agent: RegisteredAgent) => void;
   isDeregistering?: boolean;
   emptyTitle?: string;
   emptyReason?: string;
+}
+
+/**
+ * Inline rename for the agent's display fields.
+ *
+ * Names are auto-detected from the host (`scripts/sync-host-agents.sh`), which
+ * makes them accurate but not always useful — "Claude Code" says what the
+ * harness is, not what this instance does. Only name and description are
+ * editable: host, port, platform and protocol describe where the agent
+ * physically is and stay derived, so the registry can never be hand-edited
+ * into disagreeing with the machine. The sync script omits name/role from its
+ * upsert, so a rename survives re-detection.
+ */
+function InlineAgentEditor({
+  agent,
+  onDone,
+  onSaved,
+}: {
+  agent: RegisteredAgent;
+  onDone: () => void;
+  onSaved?: (agent: RegisteredAgent) => void;
+}) {
+  const [name, setName] = useState(agent.name);
+  const [role, setRole] = useState(agent.role);
+  const [error, setError] = useState<string | null>(null);
+  const mutation = useUpdateAgentDetailsMutation();
+  const saving = mutation.isPending;
+
+  function save() {
+    setError(null);
+    mutation.mutate(
+      { agentId: agent.id, name: name.trim(), role: role.trim() },
+      {
+        onSuccess: (result) => {
+          onSaved?.(result.agent);
+          onDone();
+        },
+        onError: (e: unknown) =>
+          setError(e instanceof Error ? e.message : "Save failed"),
+      }
+    );
+  }
+
+  const invalid = !name.trim() || !role.trim();
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <input
+        aria-label="Agent name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="border border-stone-300 px-1 py-0.5 text-sm font-medium text-stone-950"
+      />
+      <input
+        aria-label="Agent description"
+        value={role}
+        onChange={(e) => setRole(e.target.value)}
+        className="border border-stone-300 px-1 py-0.5 text-xs text-stone-600"
+      />
+      {error && <span className="text-xs text-red-700">{error}</span>}
+      <div className="flex gap-1">
+        <Button size="sm" disabled={saving || invalid} onClick={save}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        <Button size="sm" variant="outline" disabled={saving} onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function formatHeartbeat(value: string | null): string {
@@ -42,10 +117,13 @@ export function AgentRegistryTable({
   agents,
   onSelect,
   onDeregister,
+  onAgentUpdated,
   isDeregistering = false,
   emptyTitle = "No registered agents match this view.",
   emptyReason,
 }: AgentRegistryTableProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   if (agents.length === 0) {
     return (
       <div
@@ -79,13 +157,21 @@ export function AgentRegistryTable({
           data-agent-status={agent.status}
           data-agent-liveness={agent.liveness?.state ?? "unknown"}
         >
-          <button
-            className="min-w-0 text-left"
-            onClick={() => onSelect(agent)}
-          >
-            <span className="block truncate font-medium text-stone-950">{agent.name}</span>
-            <span className="block truncate text-xs text-stone-500">{agent.role}</span>
-          </button>
+          {editingId === agent.id ? (
+            <InlineAgentEditor
+              agent={agent}
+              onDone={() => setEditingId(null)}
+              onSaved={onAgentUpdated}
+            />
+          ) : (
+            <button
+              className="min-w-0 text-left"
+              onClick={() => onSelect(agent)}
+            >
+              <span className="block truncate font-medium text-stone-950">{agent.name}</span>
+              <span className="block truncate text-xs text-stone-500">{agent.role}</span>
+            </button>
+          )}
           <div className="flex flex-wrap gap-1">
             {agent.protocol === "a2a" ? (
               <Badge variant="outline" className="border-sky-700 text-sky-300">A2A</Badge>
@@ -114,7 +200,16 @@ export function AgentRegistryTable({
               </Badge>
             )}
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeregistering || editingId === agent.id}
+              onClick={() => setEditingId(agent.id)}
+              data-testid={`edit-agent-${agent.id}`}
+            >
+              Edit
+            </Button>
             <Button
               variant="destructive"
               size="sm"

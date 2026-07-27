@@ -158,7 +158,24 @@ declare -a TARGETS=(
   "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|$HOME_DIR/.gemini/settings.json|json"
   "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|$HOME_DIR/.qwen/settings.json|json"
   "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|$HOME_DIR/.zcode/cli/config.json|zcode-json"
-  "pi|$HOME_DIR/.pi/AGENTS.md|$HOME_DIR/.pi/skills|$HOME_DIR/.pi/AGENTS.mcp.json|json"
+  # PI: two separate findings, both verified on cordant-hermes-01 2026-07-27
+  # against pi 0.80.7.
+  #
+  # 1. Config lives in $PI_CODING_AGENT_DIR, which defaults to ~/.pi/agent —
+  #    NOT ~/.pi. AGENTS.md and skills were being written one level too high.
+  #
+  # 2. pi has NO MCP support. `pi --help` contains no MCP flag, option or
+  #    command; it loads capability through its own extension/package system
+  #    (`pi install <source>`). The AGENTS.mcp.json this installer used to
+  #    write was therefore never read by anything, which is why a pi session on
+  #    that host reported "MCP is configured but not loaded" and fell back to
+  #    filesystem reads. Writing that file was worse than skipping it: it made
+  #    the wiring look done.
+  #
+  # So MCP is skipped for pi (empty mcp_file, format none), matching how grok
+  # is handled below. Restore it when pi ships MCP and the config path is
+  # confirmed.
+  "pi|$HOME_DIR/.pi/agent/AGENTS.md|$HOME_DIR/.pi/agent/skills||none"
   "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|$HOME_DIR/.factory/mcp.json|json"
   # GROK: no confirmed MCP file path yet (the @xai/grok CLI does not publish
   # an MCP config location we've verified). We still write AGENTS.md + skill

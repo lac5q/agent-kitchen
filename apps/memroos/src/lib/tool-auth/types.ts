@@ -124,6 +124,8 @@ export interface ListProvidersResponse {
       label: string;
       description: string;
       authMode: ConnectionAuthMode;
+      /** Non-null when the provider exists but cannot be connected yet. */
+      unavailableReason?: string | null;
     }>;
   }>;
 }

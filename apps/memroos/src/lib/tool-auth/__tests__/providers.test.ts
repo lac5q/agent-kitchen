@@ -34,18 +34,20 @@ describe("tool-auth/providers", () => {
     }
   });
 
-  it("registers 9+ providers across all 5 categories", () => {
-    expect(Object.keys(PROVIDERS_BY_KEY).length).toBeGreaterThanOrEqual(9);
+  it("registers only Nango-backed providers", () => {
+    // Changed 2026-07-27: the six api-key cards (supabase, aws, intercom,
+    // stripe, plaid, generic-rest) were removed. Each rendered a Connect
+    // button with no Nango integration behind it — an aspirational list shown
+    // as working functionality. crm/finance/other are now legitimately empty.
+    expect(Object.keys(PROVIDERS_BY_KEY).length).toBeGreaterThanOrEqual(5);
     const grouped = getGroupedProviders();
     expect(grouped.length).toBe(5);
-    // Every category carries at least one provider. This was ">= 2 in
-    // productivity/developer/crm/finance" until 2026-07-27, when the HubSpot,
-    // Salesforce, and Xero cards were removed for pointing at Nango
-    // integrations that do not exist — leaving crm with Intercom alone. A
-    // minimum-count assertion should not be what forces an unusable card to
-    // stay in the registry.
-    for (const cat of PROVIDER_CATEGORIES) {
-      expect(getProvidersByCategory(cat).length).toBeGreaterThanOrEqual(1);
+    for (const key of ["stripe", "plaid", "intercom", "supabase", "aws", "generic-rest"]) {
+      expect(PROVIDERS_BY_KEY[key]).toBeUndefined();
+    }
+    // Every remaining provider is OAuth and Nango-backed.
+    for (const p of Object.values(PROVIDERS_BY_KEY)) {
+      expect(isOAuthProvider(p)).toBe(true);
     }
   });
 
@@ -88,10 +90,25 @@ describe("tool-auth/providers", () => {
       // @ts-expect-error — authMode is narrowed to "oauth" here
       expect(slack.apiKeyField).toBeUndefined();
     }
-    const stripe = getProvider("stripe");
-    expect(stripe).toBeDefined();
-    if (stripe && isApiKeyProvider(stripe)) {
-      expect(stripe.apiKeyField).toMatch(/key/i);
+    // No api-key providers remain — the type guard still narrows, there is
+    // simply nothing to narrow to.
+    expect(Object.values(PROVIDERS_BY_KEY).some(isApiKeyProvider)).toBe(false);
+  });
+
+  it("marks a provider unavailable when Nango cannot complete a connect", () => {
+    // google-calendar-mcp exists in Nango but is auth_mode OAUTH2 with a null
+    // client_id/secret, so Connect fails with 'missing client ID, secret
+    // and/or scopes'. The card must say so rather than offering a button that
+    // dead-ends on a raw upstream error.
+    const gcal = getProvider("google-calendar");
+    expect(gcal).toBeDefined();
+    if (gcal && isOAuthProvider(gcal)) {
+      expect(gcal.unavailableReason).toBeTruthy();
+    }
+    // Providers with dynamic client registration need no app and stay live.
+    const linear = getProvider("linear");
+    if (linear && isOAuthProvider(linear)) {
+      expect(linear.unavailableReason).toBeUndefined();
     }
   });
 
@@ -120,7 +137,6 @@ describe("tool-auth/providers", () => {
     "google-calendar-mcp",
     "google-drive",
     "google-mail",
-    "linear",
     "linear-mcp",
     "mcp-generic",
     "notion",
