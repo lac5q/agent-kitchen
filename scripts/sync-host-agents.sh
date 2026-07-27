@@ -20,17 +20,28 @@
 #   - anything with a heartbeat or a current task is left alone, even if it is
 #     not detected, so a live agent is never removed by a stale scan
 #   - --dry-run prints the plan and changes nothing
+#   - refuses to run when detection finds far fewer agents than are already
+#     registered, so it cannot gut a registration hub like oracle-1 (whose
+#     agents register over the API and are not host-installed CLIs)
+#
+# Detected agents are ONBOARDED, not just listed: each gets an API key and a
+# first heartbeat, because a registry row alone shows "liveness: never" and
+# cannot call /api/heartbeat (that endpoint requires Bearer <agent key>).
+# Keys are written to ~/.memroos/agent-keys/<id>.key, mode 600, and never
+# printed.
 #
 # Usage:
-#   bash scripts/sync-host-agents.sh [--dry-run] [--container NAME]
+#   bash scripts/sync-host-agents.sh [--dry-run] [--container NAME] [--force]
 
 set -euo pipefail
 
 DRY_RUN=0
+FORCE=0
 CONTAINER="${CONTAINER_NAME:-memroos-local-memroos-1}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
+    --force) FORCE=1; shift ;;
     --container) CONTAINER="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -104,7 +115,10 @@ fi
 printf '%s' "$detected" > /tmp/host-agents.json
 cat > /tmp/sync-agents.js <<'JSEOF'
 const fs = require("fs");
+const crypto = require("crypto");
 const Database = require("better-sqlite3");
+
+const force = process.env.SYNC_FORCE === "1";
 
 const detected = JSON.parse(fs.readFileSync("/tmp/host-agents.json", "utf8"));
 const db = new Database(process.env.SQLITE_DB_PATH || "/data/conversations.db");
@@ -144,10 +158,49 @@ const tx = db.transaction(() => {
     (r) => !keep.has(r.id) && (r.last_heartbeat_at || r.current_task)
   );
 
+  // HUB GUARD. On a registration hub (oracle-1: 59 agents that register over
+  // the API and are not host-installed CLIs) detection finds ~1 binary, and
+  // deregistering the rest would destroy real state. Refuse when the sweep
+  // would remove most of the registry.
+  if (!force && live.length >= 10 && stale.length > live.length / 2) {
+    throw new Error(
+      `refusing to deregister ${stale.length} of ${live.length} agents — ` +
+      `this host looks like a registration hub, not a workstation. ` +
+      `Re-run with --force if you are certain.`
+    );
+  }
+
   const dereg = db.prepare("UPDATE registered_agents SET deregistered_at = ? WHERE id = ?");
   for (const r of stale) dereg.run(now, r.id);
 
+  // ONBOARD: a registry row alone renders "liveness: never" and cannot call
+  // /api/heartbeat, which requires `Bearer <agent key>`. Issue a key for any
+  // detected agent that lacks one, and record a first heartbeat so the agent
+  // is live immediately rather than waiting for its first self-report.
+  const hasKey = db.prepare(
+    "SELECT 1 FROM agent_api_keys WHERE agent_id = ? AND revoked_at IS NULL LIMIT 1"
+  );
+  const insertKey = db.prepare(
+    "INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash) VALUES (?, ?, ?)"
+  );
+  const beat = db.prepare(
+    "UPDATE registered_agents SET last_heartbeat_at = ?, status = 'idle', updated_at = ? WHERE id = ?"
+  );
+  const issued = [];
+  for (const a of detected) {
+    if (!hasKey.get(a.id)) {
+      // Mirrors generateApiKey/createAgentApiKey in lib/agent-registry.ts.
+      const key = `ak_${a.id}_${crypto.randomBytes(32).toString("base64url")}`;
+      insertKey.run(a.id, key.slice(0, 12), crypto.createHash("sha256").update(key).digest("hex"));
+      issued.push({ id: a.id, key });
+    }
+    beat.run(now, now, a.id);
+  }
+  fs.writeFileSync("/tmp/issued-keys.json", JSON.stringify(issued));
+
   console.log(`registered/refreshed: ${detected.length}`);
+  console.log(`api keys issued: ${issued.length}`);
+  console.log(`heartbeat recorded: ${detected.length}`);
   console.log(`deregistered (not installed, no activity): ${stale.length}`);
   if (protectedRows.length) {
     console.log(`KEPT despite not being detected (has activity): ${protectedRows.map((r) => r.id).join(", ")}`);
@@ -162,6 +215,31 @@ JSEOF
 
 docker cp /tmp/host-agents.json "$CONTAINER:/tmp/host-agents.json" >/dev/null
 docker cp /tmp/sync-agents.js "$CONTAINER:/app/sync-agents.js" >/dev/null
-docker exec -e MEMROOS_HOST_ID="$HOST_ID" "$CONTAINER" sh -c "cd /app && node sync-agents.js; rm -f sync-agents.js /tmp/host-agents.json"
+docker exec -e MEMROOS_HOST_ID="$HOST_ID" -e SYNC_FORCE="$FORCE" "$CONTAINER" \
+  sh -c "cd /app && node sync-agents.js; rm -f sync-agents.js /tmp/host-agents.json"
+
+# Persist any freshly-issued keys to the host, 600, one file per agent. The
+# values are moved via docker cp and never echoed.
+KEYS_DIR="${HOME}/.memroos/agent-keys"
+mkdir -p "$KEYS_DIR"; chmod 700 "$KEYS_DIR"
+if docker cp "$CONTAINER:/tmp/issued-keys.json" /tmp/issued-keys.json >/dev/null 2>&1; then
+  python3 - "$KEYS_DIR" <<'PYEOF'
+import json, os, sys
+keys_dir = sys.argv[1]
+try:
+    issued = json.load(open("/tmp/issued-keys.json"))
+except Exception:
+    issued = []
+for item in issued:
+    path = os.path.join(keys_dir, item["id"].replace("/", "_") + ".key")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(item["key"] + "\n")
+    print(f"  key -> {path}")
+PYEOF
+  rm -f /tmp/issued-keys.json
+  docker exec "$CONTAINER" rm -f /tmp/issued-keys.json 2>/dev/null || true
+fi
+
 rm -f /tmp/sync-agents.js /tmp/host-agents.json
 echo "[sync-host-agents] done"
