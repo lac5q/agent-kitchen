@@ -73,6 +73,73 @@ describe("nango-client: listNangoConnections", () => {
   });
 });
 
+describe("nango-client: provider_config_key mapping", () => {
+  // Circleback is registered in Nango as "circleback-mcp" but the UI keys its
+  // card by "circleback". Without translation, a real connection never matched
+  // its card — the operator connected Circleback twice and the page still
+  // read "Not connected" (2026-07-26).
+  it("maps circleback-mcp back to the circleback provider key", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          connections: [
+            {
+              id: 2098666,
+              provider_config_key: "circleback-mcp",
+              connection_id: "conn-cb",
+              created_at: "2026-07-26T23:00:00.000Z",
+              updated_at: "2026-07-26T23:00:00.000Z",
+              end_user: { email: "ops@example.com" },
+            },
+          ],
+        }),
+    });
+    const result = await listNangoConnections();
+    expect(result[0].providerKey).toBe("circleback");
+  });
+
+  it("leaves matching keys untouched", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          connections: [
+            {
+              id: 1,
+              provider_config_key: "notion",
+              connection_id: "conn-n",
+              created_at: "2026-07-26T23:00:00.000Z",
+              updated_at: "2026-07-26T23:00:00.000Z",
+            },
+          ],
+        }),
+    });
+    const result = await listNangoConnections();
+    expect(result[0].providerKey).toBe("notion");
+  });
+
+  it("falls back to the raw key for unknown integrations", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          connections: [
+            {
+              id: 2,
+              provider_config_key: "some-future-thing",
+              connection_id: "conn-f",
+              created_at: "2026-07-26T23:00:00.000Z",
+              updated_at: "2026-07-26T23:00:00.000Z",
+            },
+          ],
+        }),
+    });
+    const result = await listNangoConnections();
+    expect(result[0].providerKey).toBe("some-future-thing");
+  });
+});
+
 describe("nango-client: createNangoConnectSession", () => {
   it("posts the session request with allowed integrations", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

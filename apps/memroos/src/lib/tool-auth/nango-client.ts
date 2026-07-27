@@ -11,6 +11,7 @@
 // four operations the tool-auth plane uses.
 
 import type { ConnectionUsage, ToolConnection } from "./types";
+import { providerKeyFromConfigKey } from "./providers";
 
 const NANGO_API_BASE = "https://api.nango.dev";
 
@@ -111,7 +112,10 @@ export async function listNangoConnections(): Promise<ToolConnection[]> {
   );
   const list = res.connections ?? [];
   return list.map((c) => ({
-    providerKey: c.provider_config_key,
+    // Nango speaks provider_config_key ("circleback-mcp"); the UI keys cards
+    // by the memroos provider key ("circleback"). Translate or the card never
+    // matches its own connection.
+    providerKey: providerKeyFromConfigKey(c.provider_config_key),
     connectionId: String(c.id),
     status: "connected",
     accountEmail: c.end_user?.email ?? null,

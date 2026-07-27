@@ -385,3 +385,22 @@ export function isOAuthProvider(p: Provider): p is OAuthProvider {
 export function isApiKeyProvider(p: Provider): p is ApiKeyProvider {
   return p.authMode === "api-key";
 }
+
+/**
+ * Map a Nango `provider_config_key` back to the memroos provider key.
+ *
+ * These are usually identical, but not always: Circleback is registered in
+ * Nango as `circleback-mcp` while memroos knows it as `circleback`. Keying
+ * connections by the raw Nango value meant a genuinely-connected Circleback
+ * account never matched its card and the UI kept showing "Not connected"
+ * (observed 2026-07-26 with two live connections present).
+ *
+ * Falls back to the input so an unrecognized integration still surfaces
+ * rather than vanishing.
+ */
+export function providerKeyFromConfigKey(configKey: string): string {
+  const match = PROVIDERS.find(
+    (p) => isOAuthProvider(p) && p.providerConfigKey === configKey,
+  );
+  return match?.key ?? configKey;
+}
