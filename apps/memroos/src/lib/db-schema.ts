@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 31;
+export const CURRENT_SCHEMA_VERSION = 32;
 
 type SchemaMigration = {
   version: number;
@@ -240,6 +240,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 31,
     name: 'graph-catchup-checkpoints',
     up: applyGraphCatchupCheckpointsSchema,
+  },
+  {
+    version: 32,
+    name: 'connector-sync-state',
+    up: applyConnectorSyncStateSchema,
   },
 ];
 
@@ -2255,6 +2260,32 @@ function applyGraphCatchupCheckpointsSchema(db: Database.Database): void {
   ).run();
 }
 
+/**
+ * connector_sync_state: per-(connection, tool) high-water mark for the
+ * connector ingestion job. Mirrors ingest_meta's role for JSONL files.
+ *
+ * `cursor_value` holds the provider's incremental key (for Linear, the
+ * `updatedAt` of the newest record seen) so the next cycle asks only for what
+ * changed. `page_cursor` is non-null only mid-backfill: a first sync over a
+ * large workspace spans many cycles, and parking the page cursor here makes it
+ * resumable rather than restarting the sweep every interval.
+ */
+function applyConnectorSyncStateSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS connector_sync_state (
+      connection_id TEXT NOT NULL,
+      provider_key  TEXT NOT NULL,
+      tool          TEXT NOT NULL,
+      cursor_value  TEXT,
+      page_cursor   TEXT,
+      last_run_at   TEXT,
+      last_status   TEXT,
+      rows_written  INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (connection_id, tool)
+    );
+  `);
+}
+
 function applyOntologyRequiredContextPersistenceSchema(db: Database.Database): void {
   // Ontology-sensitive sources and queued belief reviews retain only
   // server-verified coordinates. The source lifecycle is re-resolved at use
@@ -2472,6 +2503,10 @@ function applyCurrentSchema(db: Database.Database): void {
       value TEXT
     );
   `);
+
+  // connector_sync_state is created by migration 32 (applyConnectorSyncStateSchema)
+  // so existing databases pick it up too — a table added only here would never
+  // reach a DB already stamped at an earlier version.
 
   // hive_actions: append-only cross-agent action log (HIVE-01, HIVE-02, HIVE-05)
   db.exec(`

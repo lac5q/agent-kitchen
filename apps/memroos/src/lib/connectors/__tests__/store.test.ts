@@ -1,0 +1,275 @@
+// apps/memroos/src/lib/connectors/__tests__/store.test.ts
+// Connector ingestion — the two failure modes that are silent in production.
+
+import Database from "better-sqlite3";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { initSchema } from "@/lib/db-schema";
+import { createSpace, filterBySpace } from "@/lib/space";
+
+import { getManifest, connectorProject } from "../manifest";
+import {
+  connectorAgentId,
+  ensureConnectorSpace,
+  readSyncState,
+  writeConnectorRecord,
+  writeSyncState,
+} from "../store";
+
+const LINEAR = getManifest("linear")!;
+const ISSUES = LINEAR.tools.find((t) => t.tool === "list_issues")!;
+
+let db: Database.Database;
+
+function setup() {
+  const fresh = new Database(":memory:");
+  initSchema(fresh);
+  return fresh;
+}
+
+beforeEach(() => {
+  db = setup();
+});
+
+describe("connectors/store", () => {
+  it("creates the connector space with indexable labels", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+
+    expect(spaceId).toBeTruthy();
+    // The whole point: rows inherit these, and messages_fts only indexes
+    // policy='indexable' with a non-private visibility.
+    expect(labels.policy).toBe("indexable");
+    expect(labels.visibility).toBe("internal");
+  });
+
+  it("is idempotent — a second cycle reuses the space rather than throwing", () => {
+    const a = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" });
+    // createSpace throws on duplicate (tenant_id, name); the job runs every
+    // 15 minutes, so a non-idempotent ensure would fail on run two.
+    const b = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" });
+    expect(b.spaceId).toBe(a.spaceId);
+  });
+
+  it("registers the synthetic connector agent as a space member", () => {
+    const { spaceId } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const row = db
+      .prepare(
+        `SELECT member_type FROM space_members WHERE space_id = ? AND member_id = ?`,
+      )
+      .get(spaceId, connectorAgentId("linear")) as { member_type: string } | undefined;
+    expect(row?.member_type).toBe("agent");
+  });
+
+  /**
+   * FAILURE MODE 1: labels default to policy='sealed', visibility='private'.
+   * A row written with defaults embeds but never reaches messages_fts — it
+   * looks indexed and is unfindable. This asserts the row actually lands in
+   * the FTS index.
+   */
+  it("a written record is full-text searchable", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+
+    const outcome = writeConnectorRecord({
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: ISSUES,
+      record: {
+        id: "ENG-95",
+        title: "Scoping API rework",
+        description: "Pass scope into find() instead of construction-time binding",
+        updatedAt: "2026-07-27T00:00:00Z",
+      },
+    });
+    expect(outcome.status).toBe("written");
+
+    const hits = db
+      .prepare(`SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?`)
+      .all("Scoping");
+    expect(hits.length).toBe(1);
+  });
+
+  it("sealed space labels keep content out of the FTS index", () => {
+    // The operator lever: tightening a space stops content being searchable
+    // without breaking ingestion.
+    const sealed = createSpace(db, {
+      tenantId: "default-tenant",
+      name: "connector/sealed",
+      defaultLabels: { policy: "sealed", visibility: "private" },
+    });
+
+    writeConnectorRecord({
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId: sealed.id,
+      labels: { policy: "sealed", visibility: "private" },
+      tool: ISSUES,
+      record: { id: "ENG-1", title: "Secret roadmap", updatedAt: "2026-07-27T00:00:00Z" },
+    });
+
+    const hits = db
+      .prepare(`SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?`)
+      .all("Secret");
+    expect(hits.length).toBe(0);
+  });
+
+  /**
+   * FAILURE MODE 2: filterBySpace falls back to matching `project` against the
+   * space NAME when space_id is null or mismatched. A connector row must not
+   * leak into an unrelated space through that fallback.
+   */
+  it("a connector row does not leak into another space", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const other = createSpace(db, { tenantId: "default-tenant", name: "engineering" });
+
+    writeConnectorRecord({
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: ISSUES,
+      record: { id: "ENG-95", title: "Private issue", updatedAt: "2026-07-27T00:00:00Z" },
+    });
+
+    const rows = db
+      .prepare(`SELECT space_id, project FROM messages`)
+      .all() as Array<{ space_id: string | null; project: string }>;
+
+    // Every connector row carries a real space_id — never null, which is what
+    // would trigger the project-name fallback.
+    expect(rows.every((r) => r.space_id !== null)).toBe(true);
+
+    const visibleInOther = filterBySpace(rows, "engineering", other.id);
+    expect(visibleInOther).toEqual([]);
+  });
+
+  it("namespaces project so it cannot collide with a space name", () => {
+    // A bare "linear" project would match a space named "linear" through the
+    // filterBySpace fallback.
+    expect(connectorProject("linear")).toBe("connector/linear");
+    expect(connectorProject("linear")).toContain("/");
+  });
+
+  it("re-syncing an unchanged record is a no-op, not a duplicate", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const record = {
+      id: "ENG-95",
+      title: "Scoping API rework",
+      updatedAt: "2026-07-27T00:00:00Z",
+    };
+    const args = {
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: ISSUES,
+      record,
+    };
+
+    expect(writeConnectorRecord(args).status).toBe("written");
+    expect(writeConnectorRecord(args).status).toBe("duplicate");
+
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM messages`).get() as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it("quarantines a record carrying a credential", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+
+    const outcome = writeConnectorRecord({
+      db,
+      providerKey: "linear",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: ISSUES,
+      record: {
+        id: "ENG-96",
+        title: "Deploy notes",
+        description: "AKIAIOSFODNN7EXAMPLE is the key, also sk-abcdefghijklmnopqrstuvwxyz012345",
+        updatedAt: "2026-07-27T00:00:00Z",
+      },
+    });
+
+    // Untrusted provider content must not become agent-readable memory.
+    expect(["quarantined", "review_required"]).toContain(outcome.status);
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM messages`).get() as { n: number };
+    expect(count.n).toBe(0);
+  });
+
+  it("skips records with no id or no content", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "linear",
+    });
+    const base = { db, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
+
+    expect(writeConnectorRecord({ ...base, record: { title: "no id" } }).status).toBe("empty");
+    expect(writeConnectorRecord({ ...base, record: { id: "X-1" } }).status).toBe("empty");
+  });
+});
+
+describe("connectors/sync-state", () => {
+  it("round-trips the high-water mark", () => {
+    expect(readSyncState(db, "conn-1", "list_issues")).toEqual({
+      cursorValue: null,
+      pageCursor: null,
+    });
+
+    writeSyncState(db, {
+      connectionId: "conn-1",
+      providerKey: "linear",
+      tool: "list_issues",
+      cursorValue: "2026-07-27T00:00:00Z",
+      pageCursor: null,
+      status: "ok",
+      rowsWritten: 12,
+    });
+
+    expect(readSyncState(db, "conn-1", "list_issues")).toEqual({
+      cursorValue: "2026-07-27T00:00:00Z",
+      pageCursor: null,
+    });
+  });
+
+  it("accumulates rows_written across cycles", () => {
+    const base = {
+      connectionId: "conn-1",
+      providerKey: "linear",
+      tool: "list_issues",
+      cursorValue: null,
+      pageCursor: null,
+      status: "ok",
+    };
+    writeSyncState(db, { ...base, rowsWritten: 10 });
+    writeSyncState(db, { ...base, rowsWritten: 5 });
+
+    const row = db
+      .prepare(`SELECT rows_written FROM connector_sync_state WHERE connection_id = ?`)
+      .get("conn-1") as { rows_written: number };
+    expect(row.rows_written).toBe(15);
+  });
+});

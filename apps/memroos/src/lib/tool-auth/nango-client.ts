@@ -195,6 +195,38 @@ export async function deleteNangoConnection(connectionId: string): Promise<void>
 }
 
 /**
+ * Fetches the live provider credential Nango holds for a connection.
+ *
+ * Nango owns the refresh cycle, so this returns a currently-valid token
+ * rather than whatever was minted at connect time. The token is provider-
+ * scoped: for an MCP integration it authenticates against that provider's MCP
+ * endpoint, NOT its REST/GraphQL API (a Linear `linear-mcp` token returns 401
+ * from api.linear.app and handshakes cleanly with mcp.linear.app).
+ *
+ * Returns null when the connection is unknown, so callers can skip rather
+ * than fail the whole cycle.
+ */
+export async function fetchNangoCredentials(
+  connectionId: string,
+  providerConfigKey: string,
+): Promise<{ accessToken: string; expiresAt: string | null } | null> {
+  try {
+    const res = await nangoFetch<{
+      credentials?: { access_token?: string; expires_at?: string };
+    }>(
+      `/connection/${encodeURIComponent(connectionId)}` +
+        `?provider_config_key=${encodeURIComponent(providerConfigKey)}`,
+    );
+    const token = res.credentials?.access_token;
+    if (!token) return null;
+    return { accessToken: token, expiresAt: res.credentials?.expires_at ?? null };
+  } catch (err) {
+    if (err instanceof ToolAuthUpstreamError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
  * Reports current Nango connection usage for this secret key. Used by the
  * "8 of 10 connections used" meter on the settings page.
  */
