@@ -394,4 +394,51 @@ describe("agent registry service", () => {
     expect(() => createAgentApiKey("gone-agent")).toThrow(/unknown or deregistered/);
     expect(() => createAgentApiKey("missing-agent")).toThrow(/unknown or deregistered/);
   });
+
+  // MEMX-3 regression: recordMemoryWrite must fan-out to the matching tier adapter
+  // so vector/graph tiers actually persist, not just the audit row.
+  it("MEMX-3 pushes to the matching tier adapter when MEMROOS_MEMORY_WRITE_PUSH_ADAPTER=1", async () => {
+    process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER = "1";
+    const writeSpy = vi.fn(async () => {});
+    const adapter = { tiers: ["vector"], write: writeSpy, search: vi.fn(), health: vi.fn() };
+    const registryMod = await import("../memory/registry");
+    registryMod.registerAdapter(adapter as unknown as Parameters<typeof registryMod.registerAdapter>[0]);
+
+    const { recordMemoryWrite } = await loadRegistry();
+    recordMemoryWrite("memx-agent", {
+      type: "vector",
+      content: "MEMX-3 fan-out probe",
+      metadata: { source: "memx-3-test" },
+    });
+
+    // allow the microtask to flush the fire-and-forget promise
+    await new Promise((r) => setImmediate(r));
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: "memx-agent", content: "MEMX-3 fan-out probe" }),
+    );
+
+    // cleanup: unregister so other tests in the suite see an empty registry
+    registryMod.clearRegistry();
+    delete process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER;
+  });
+
+  it("MEMX-3 does NOT push to adapter when env flag is off (default)", async () => {
+    delete process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER;
+    const writeSpy = vi.fn(async () => {});
+    const adapter = { tiers: ["vector"], write: writeSpy, search: vi.fn(), health: vi.fn() };
+    const registryMod = await import("../memory/registry");
+    registryMod.registerAdapter(adapter as unknown as Parameters<typeof registryMod.registerAdapter>[0]);
+
+    const { recordMemoryWrite } = await loadRegistry();
+    recordMemoryWrite("memx-agent", {
+      type: "vector",
+      content: "should not push",
+      metadata: {},
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(writeSpy).not.toHaveBeenCalled();
+
+    registryMod.clearRegistry();
+  });
 });
