@@ -40,22 +40,65 @@ describe("workflow/topology", () => {
     expect(t.notices.join(" ")).toMatch(/no agents registered/i);
   });
 
-  it("spaces agents evenly without overlap at any count", () => {
+  it("spaces agents without overlap at any count", () => {
     for (const count of [1, 3, 12, 59]) {
       const agents = Array.from({ length: count }, (_, i) => ({
         id: `a${i}`,
         name: `Agent ${i}`,
         role: "role",
       }));
-      const ys = buildTopology(db, { agents, sources: [] })
-        .nodes.filter((n) => n.t === "agent")
-        .map((n) => n.y);
+      const t = buildTopology(db, { agents, sources: [] });
+      const boxes = t.nodes.filter((n) => n.t === "agent");
 
-      expect(ys.length).toBe(count);
-      expect(new Set(ys).size).toBe(count); // no two agents share a y
-      expect(Math.min(...ys)).toBeGreaterThanOrEqual(80);
-      expect(Math.max(...ys)).toBeLessThanOrEqual(460);
+      expect(boxes.length).toBe(count);
+      // No two cards may occupy the same slot.
+      const slots = new Set(boxes.map((n) => `${n.x}:${n.y}`));
+      expect(slots.size).toBe(count);
+      // Every card stays legible and inside the canvas.
+      for (const b of boxes) {
+        expect(b.h).toBeGreaterThanOrEqual(34);
+        expect(b.y).toBeGreaterThanOrEqual(80);
+        expect(b.y + b.h).toBeLessThanOrEqual(465);
+        expect(b.x + b.w).toBeLessThanOrEqual(t.canvas.width);
+      }
+      // No pairwise overlap within a sub-column.
+      for (let i = 0; i < boxes.length; i += 1) {
+        for (let j = i + 1; j < boxes.length; j += 1) {
+          const a = boxes[i], c = boxes[j];
+          const overlap =
+            a.x < c.x + c.w && c.x < a.x + a.w &&
+            a.y < c.y + c.h && c.y < a.y + a.h;
+          expect(overlap).toBe(false);
+        }
+      }
     }
+  });
+
+  it("wraps a large roster into multiple sub-columns", () => {
+    // 59 agents is oracle-1's real count. One column would be a solid bar.
+    const agents = Array.from({ length: 59 }, (_, i) => ({
+      id: `a${i}`, name: `Agent ${i}`, role: "role",
+    }));
+    const boxes = buildTopology(db, { agents, sources: [] })
+      .nodes.filter((n) => n.t === "agent");
+    const columns = new Set(boxes.map((n) => n.x));
+    expect(columns.size).toBeGreaterThan(1);
+  });
+
+  it("thins edges once the roster is dense, and says so", () => {
+    const agents = Array.from({ length: 59 }, (_, i) => ({
+      id: `a${i}`, name: `Agent ${i}`, role: "role",
+    }));
+    const t = buildTopology(db, {
+      agents,
+      sources: [],
+      agentActivity: { a0: 10, a1: 5 },
+    });
+    const packs = t.edges.filter((e) => e.kind === "pack");
+    // Only the two agents with recorded activity get edges.
+    expect(packs.length).toBe(2);
+    expect(packs.every((e) => e.measured)).toBe(true);
+    expect(t.notices.join(" ")).toMatch(/keep the map readable/i);
   });
 
   it("derives sources from connected providers", () => {

@@ -97,7 +97,7 @@ export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyC
     );
   }
 
-  const { nodes, edges, columns, notices } = topology;
+  const { nodes, edges, columns, notices, canvas } = topology;
   const byId: Record<string, TopoNode> = Object.fromEntries(
     nodes.map((n) => [n.id, n]),
   );
@@ -122,7 +122,7 @@ export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyC
 
       {/* SVG topology */}
       <svg
-        viewBox="0 0 1180 520"
+        viewBox={`0 0 ${canvas.width} ${canvas.height}`}
         width="100%"
         style={{
           display: "block",
@@ -195,12 +195,21 @@ export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyC
                 stroke={stroke}
                 strokeWidth={isSel ? 2 : 1}
               />
-              <text x={n.x + 12} y={n.y + 22} fontSize={13} fontFamily={NOC_FONT_BODY} fontWeight="600" fill={NOC.ink}>
+              <text
+                x={n.x + (n.h < 44 ? 7 : 12)}
+                y={n.y + (n.h < 44 ? n.h / 2 + 4 : 22)}
+                fontSize={n.h < 44 ? 10 : 13}
+                fontFamily={NOC_FONT_BODY}
+                fontWeight="600"
+                fill={NOC.ink}
+              >
                 {n.label}
               </text>
-              <text x={n.x + 12} y={n.y + 38} fontSize={10.5} fontFamily={NOC_FONT_MONO} fill={NOC.soft}>
-                {n.sub}
-              </text>
+              {n.sub && (
+                <text x={n.x + 12} y={n.y + 38} fontSize={10.5} fontFamily={NOC_FONT_MONO} fill={NOC.soft}>
+                  {n.sub}
+                </text>
+              )}
 
               {/* Agent status dot — wired to real agent state when available */}
               {n.t === "agent" && (

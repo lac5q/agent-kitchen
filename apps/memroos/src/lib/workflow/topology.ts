@@ -58,6 +58,8 @@ export interface Topology {
   nodes: TopoNode[];
   edges: TopoEdge[];
   columns: Array<{ x: number; label: string }>;
+  /** SVG viewBox. Width grows so a large agent grid stays on canvas. */
+  canvas: { width: number; height: number };
   /** Populated when a column is legitimately empty, so the UI can say so. */
   notices: string[];
   generatedAt: string;
@@ -84,6 +86,9 @@ const COLUMN_HEADER_X: Array<{ x: number; label: string }> = [
 
 const CANVAS_TOP = 80;
 const CANVAS_BOTTOM = 460;
+/** Default drawable width. Grows when a large agent grid needs more room. */
+const CANVAS_WIDTH = 1180;
+const CANVAS_HEIGHT = 520;
 
 /**
  * Distribute n nodes down a column. Even spacing computed from the count is
@@ -96,6 +101,79 @@ function layoutColumn(count: number, h: number): number[] {
   const span = CANVAS_BOTTOM - CANVAS_TOP - h;
   const step = span / (count - 1);
   return Array.from({ length: count }, (_, i) => CANVAS_TOP + i * step);
+}
+
+/** Node height below which labels stop being legible. */
+const MIN_AGENT_H = 34;
+/** Full-size agent card. */
+const AGENT_H = 50;
+const AGENT_W = 130;
+/** Horizontal gap when agents wrap into multiple sub-columns. */
+const AGENT_COL_GAP = 8;
+/** Narrowest card that still shows a readable name. */
+const MIN_AGENT_W = 76;
+
+interface GridSlot {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Lay agents out as a grid that grows sideways, not a single column that
+ * compresses to nothing.
+ *
+ * A single evenly-spaced column is fine at 5 agents and unreadable at 59: the
+ * cards overlap into a solid bar and every label is lost. Instead, cap how many
+ * fit legibly in one column, then wrap into additional sub-columns — the same
+ * thing a person does when a list outgrows the page.
+ *
+ * Cards also shrink (down to MIN_AGENT_H) before wrapping, so a mid-size
+ * roster stays in one tidy column rather than jumping straight to a grid.
+ */
+function layoutAgentGrid(
+  count: number,
+  baseX: number,
+): { slots: GridSlot[]; canvasWidth: number } {
+  if (count <= 0) return { slots: [], canvasWidth: CANVAS_WIDTH };
+
+  const available = CANVAS_BOTTOM - CANVAS_TOP;
+  const maxPerColumn = Math.max(1, Math.floor(available / MIN_AGENT_H));
+  const columns = Math.ceil(count / maxPerColumn);
+  const perColumn = Math.ceil(count / columns);
+
+  // Shrink to fit the fullest column, never below the legibility floor.
+  const h = Math.max(
+    MIN_AGENT_H,
+    Math.min(AGENT_H, available / perColumn - 4),
+  );
+  // Narrow the cards as columns multiply, down to a readable floor.
+  const w =
+    columns === 1 ? AGENT_W : Math.max(MIN_AGENT_W, AGENT_W - (columns - 1) * 12);
+
+  // The canvas GROWS to fit the grid rather than the grid being crushed into a
+  // fixed 190px gutter. At 59 agents a fixed canvas forced cards below the
+  // legibility floor or off the right edge; the SVG scales to width, so a wider
+  // viewBox simply renders everything slightly smaller and stays readable.
+  const gridRight = baseX + columns * w + (columns - 1) * AGENT_COL_GAP;
+  const canvasWidth = Math.max(CANVAS_WIDTH, gridRight + 10);
+
+  const slots: GridSlot[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const col = Math.floor(i / perColumn);
+    const row = i % perColumn;
+    const rowsHere = Math.min(perColumn, count - col * perColumn);
+    const usedHeight = rowsHere * h + (rowsHere - 1) * 4;
+    const top = CANVAS_TOP + (available - usedHeight) / 2;
+    slots.push({
+      x: baseX + col * (w + AGENT_COL_GAP),
+      y: top + row * (h + 4),
+      w,
+      h,
+    });
+  }
+  return { slots, canvasWidth };
 }
 
 function tableExists(db: Database.Database, table: string): boolean {
@@ -220,17 +298,25 @@ export function buildTopology(
   });
 
   // ---- AGENTS (live registry) ---------------------------------------------
-  const agentY = layoutColumn(input.agents.length, 50);
+  // Grid, not a single column: oracle-1 carries 59 agents, which as one column
+  // renders an illegible solid bar.
+  const { slots: agentSlots, canvasWidth } = layoutAgentGrid(
+    input.agents.length,
+    COLUMN_X.agents,
+  );
   input.agents.forEach((a, i) => {
+    const s = agentSlots[i];
     nodes.push({
       id: `agent:${a.id}`,
-      x: COLUMN_X.agents,
-      y: agentY[i],
-      w: 130,
-      h: 50,
+      x: s.x,
+      y: s.y,
+      w: s.w,
+      h: s.h,
       t: "agent",
       label: a.name,
-      sub: a.role,
+      // At a compressed height there is no room for a second line, so the role
+      // is dropped rather than overlapping the label.
+      sub: s.h >= 44 ? a.role : "",
       live: true,
     });
   });
@@ -254,14 +340,26 @@ export function buildTopology(
   // at 0.5" with nothing behind it.
   const activity = input.agentActivity ?? {};
   const maxActivity = Math.max(1, ...Object.values(activity));
+  // Past this many agents, drawing two edges each turns the canvas into a
+  // solid wash that hides the topology it is meant to show. Beyond the
+  // threshold only agents with measured activity get edges — the ones actually
+  // doing work — and the rest render as cards without lines.
+  const EDGE_DENSITY_LIMIT = 24;
+  const dense = input.agents.length > EDGE_DENSITY_LIMIT;
   for (const a of input.agents) {
     const observed = activity[a.id];
     const measured = typeof observed === "number";
+    if (dense && !measured) continue;
     const weight = measured
       ? Math.max(0.15, Math.min(1, observed / maxActivity))
       : UNIFORM_WEIGHT;
     edges.push({ from: "memory", to: `agent:${a.id}`, weight, kind: "pack", measured });
     edges.push({ from: `agent:${a.id}`, to: "outcomes", weight, kind: "fb", measured });
+  }
+  if (dense) {
+    notices.push(
+      `${input.agents.length} agents — edges shown for those with recorded activity; the rest are listed without lines to keep the map readable.`,
+    );
   }
   edges.push({ from: "outcomes", to: "memroos", weight: UNIFORM_WEIGHT, kind: "loop", measured: false });
 
@@ -269,6 +367,7 @@ export function buildTopology(
     nodes,
     edges,
     columns: COLUMN_HEADER_X,
+    canvas: { width: canvasWidth, height: CANVAS_HEIGHT },
     notices,
     generatedAt: new Date().toISOString(),
   };

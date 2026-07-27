@@ -9,7 +9,12 @@
       "location": "tailscale",
       "host": "100.x.x.x",
       "port": 18889,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "maria",
@@ -19,7 +24,12 @@
       "location": "tailscale",
       "host": "100.x.x.x",
       "port": 8644,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "lucia",
@@ -29,7 +39,12 @@
       "location": "local",
       "host": "localhost",
       "port": 3001,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "alba",
@@ -45,15 +60,24 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
-      ]
+      ],
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "gwen",
@@ -64,7 +88,12 @@
       "host": "localhost",
       "port": 18792,
       "healthEndpoint": "/health",
-      "tunnelUrl": "https://gwen.example.com"
+      "tunnelUrl": "https://gwen.example.com",
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "opencode",
@@ -80,15 +109,24 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
-      ]
+      ],
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "cline-desktop-luis-mbp",
@@ -102,19 +140,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "cline",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -129,19 +174,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "claude",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -156,19 +208,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "qwen",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -183,19 +242,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "gemini",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -210,19 +276,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "openclaw",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -233,7 +306,12 @@
       "location": "local",
       "host": "localhost",
       "port": 3000,
-      "healthEndpoint": "/health"
+      "healthEndpoint": "/health",
+      "metadata": {
+        "hosts": [
+          "*"
+        ]
+      }
     },
     {
       "id": "cursor-desktop-luis-mbp",
@@ -247,19 +325,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "cursor",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -274,19 +359,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "cursor",
         "runtimeKind": "cloud",
-        "environment": "lac5q/memroos"
+        "environment": "lac5q/memroos",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -301,19 +393,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "codex",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -328,19 +427,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "codex",
         "runtimeKind": "cloud",
-        "environment": "lac5q/memroos"
+        "environment": "lac5q/memroos",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -355,19 +461,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "zcode",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -382,19 +495,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "pi",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -409,19 +529,26 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "grok",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     },
     {
@@ -436,20 +563,28 @@
           "id": "memory:write:vector",
           "name": "Write Vector Memory",
           "description": "Persist compact semantic memories through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         },
         {
           "id": "memory:write:episodic",
           "name": "Write Episodic Memory",
           "description": "Persist compact task events and handoffs through MemRoOS",
-          "tags": ["memory"]
+          "tags": [
+            "memory"
+          ]
         }
       ],
       "metadata": {
         "agentFamily": "droid",
         "runtimeKind": "desktop",
-        "environment": "Luis MacBook Pro"
+        "environment": "Luis MacBook Pro",
+        "hosts": [
+          "oracle-1"
+        ]
       }
     }
-  ]
+  ],
+  "defaultHost": "oracle-1"
 }

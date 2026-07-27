@@ -104,6 +104,50 @@ function parseSeedAgent(value: unknown): SeedAgent | null {
   };
 }
 
+/**
+ * Decide whether a seed entry belongs on THIS host.
+ *
+ * The seed list is operator-wide: it holds Luis's desktop coding agents
+ * (`*-luis-mbp`), the OpenClaw crew, and cloud agents. Seeding it wholesale
+ * put 20 agents on cordant-hermes-01 — including "Cursor Desktop" and "Codex
+ * Desktop", which live on a laptop and have nothing to do with that host. The
+ * workflow map then faithfully rendered all 20, which is how the mistake
+ * surfaced.
+ *
+ * `MEMROOS_HOST_ID` is already set per host (`/etc/memroos/host-profile.env`),
+ * so an entry can declare where it belongs:
+ *
+ *   "hosts": ["oracle-1"]   → only that host
+ *   "hosts": ["*"]          → every host
+ *   (absent)                → defaults to DEFAULT_SEED_HOST
+ *
+ * Defaulting to oracle-1 rather than "everywhere" is deliberate: oracle-1 is
+ * the canonical operator host that should carry the full roster, and a new
+ * host should start near-empty and gain agents by real registration.
+ */
+const DEFAULT_SEED_HOST = "oracle-1";
+
+function seedAppliesToThisHost(agent: SeedAgent, parsed: Record<string, unknown>): boolean {
+  const hostId = process.env.MEMROOS_HOST_ID?.trim();
+  // No host identity (local dev, a fresh container) — seed everything rather
+  // than silently producing an empty registry.
+  if (!hostId) return true;
+
+  const declared = agent.metadata?.hosts;
+  const hosts = Array.isArray(declared)
+    ? declared.filter((h): h is string => typeof h === "string")
+    : null;
+
+  if (hosts && hosts.length > 0) {
+    return hosts.includes("*") || hosts.includes(hostId);
+  }
+
+  // Undeclared entries fall back to the file-level default, then to oracle-1.
+  const fileDefault =
+    typeof parsed.defaultHost === "string" ? parsed.defaultHost : DEFAULT_SEED_HOST;
+  return fileDefault === "*" || fileDefault === hostId;
+}
+
 function shouldSeedRegisteredAgents(): boolean {
   const explicit = process.env.MEMROOS_SEED_REGISTERED_AGENTS?.trim().toLowerCase();
   if (explicit) return ["1", "true", "yes", "on"].includes(explicit);
@@ -121,7 +165,8 @@ export function seedRegisteredAgents(db: Database.Database): void {
   }
   if (!isRecord(parsed) || !Array.isArray(parsed.remoteAgents)) return;
 
-  const agents = parsed.remoteAgents.map(parseSeedAgent).filter((agent): agent is SeedAgent => Boolean(agent));
+  const all = parsed.remoteAgents.map(parseSeedAgent).filter((agent): agent is SeedAgent => Boolean(agent));
+  const agents = all.filter((agent) => seedAppliesToThisHost(agent, parsed));
   if (agents.length === 0) return;
 
   const timestamp = new Date().toISOString();
