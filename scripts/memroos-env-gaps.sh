@@ -48,7 +48,15 @@ else
   gap "MEMROOS_EMBEDDING_PROVIDER is '${PROVIDER:-unset}' — embedding cycle will no-op (needs exactly 'ollama')"
 fi
 
-OLLAMA_URL="$(cenv OLLAMA_BASE_URL)"
+# Check BOTH names. The app reads OLLAMA_URL; deployments set OLLAMA_BASE_URL.
+# This script previously only checked OLLAMA_BASE_URL and so reported OK on a
+# host where embeddings were silently dead.
+OLLAMA_URL="$(cenv OLLAMA_URL)"
+OLLAMA_BASE_URL_VAL="$(cenv OLLAMA_BASE_URL)"
+if [ -z "$OLLAMA_URL" ] && [ -n "$OLLAMA_BASE_URL_VAL" ]; then
+  gap "OLLAMA_URL unset (app reads this); only OLLAMA_BASE_URL=$OLLAMA_BASE_URL_VAL is set — embeddings fall back to localhost and silently degrade unless the app aliases it"
+  OLLAMA_URL="$OLLAMA_BASE_URL_VAL"
+fi
 case "$OLLAMA_URL" in
   *localhost*|*127.0.0.1*)
     gap "OLLAMA_BASE_URL=$OLLAMA_URL — inside a container localhost is the container itself, not the ollama service"

@@ -56,6 +56,13 @@ const rawEnvSchema = z
     MEMROOS_JWT_SECRET: nonEmptyString.optional(),
     MEMROOS_EMBEDDING_PROVIDER: embeddingProvider.optional(),
     OLLAMA_URL: httpUrl.optional(),
+    // Deployed hosts, docker-compose, and scripts/memroos-env-gaps.sh all set
+    // OLLAMA_BASE_URL. Only OLLAMA_URL was ever read, so a host could have a
+    // perfectly correct OLLAMA_BASE_URL=http://ollama:11434 while the app
+    // silently fell back to localhost:11434 — which inside a container is the
+    // container itself. embedText() degrades without throwing, so this
+    // surfaced only as embeddings staying at 0 forever.
+    OLLAMA_BASE_URL: httpUrl.optional(),
     QDRANT_URL: httpUrl.optional(),
     QDRANT_API_KEY: nonEmptyString.optional(),
     NEO4J_HTTP_URL: httpUrl.optional(),
@@ -165,7 +172,10 @@ export function loadMemroosEnv(source: NodeJS.ProcessEnv = process.env): Memroos
     MEMROOS_INTERNAL_API_KEY: parsed.data.MEMROOS_INTERNAL_API_KEY,
     MEMROOS_JWT_SECRET: parsed.data.MEMROOS_JWT_SECRET,
     MEMROOS_EMBEDDING_PROVIDER: parsed.data.MEMROOS_EMBEDDING_PROVIDER ?? "null",
-    OLLAMA_URL: parsed.data.OLLAMA_URL ?? "http://localhost:11434",
+    OLLAMA_URL:
+      parsed.data.OLLAMA_URL ??
+      parsed.data.OLLAMA_BASE_URL ??
+      "http://localhost:11434",
     QDRANT_URL: parsed.data.QDRANT_URL,
     QDRANT_API_KEY: parsed.data.QDRANT_API_KEY,
     NEO4J_HTTP_URL: parsed.data.NEO4J_HTTP_URL,
