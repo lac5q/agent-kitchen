@@ -105,6 +105,24 @@ memroos_host_id() {
   return 1
 }
 
+bind_tenant_from_host_profile() {
+  # Operator mode switches on implicitly whenever MEMROOS_APP_URL and an agent
+  # key are both present — which the repo .mcp.json and load_local_agent_key
+  # arrange between them. In that mode every knowledge op fail-closes with
+  # "operator mode requires a bound tenant_id" unless a tenant is bound, and
+  # nothing was binding one: knowledge_search returned a hard error on every
+  # host. Bind it from the host profile (same source as MEMROOS_HOST_ID) so
+  # single-tenant hosts work without weakening isolation — a host that
+  # declares no tenant still fail-closes exactly as before.
+  [[ -z "${MEMROOS_TENANT_ID:-}" ]] || return 0
+  local profile="${MEMROOS_HOST_PROFILE:-/etc/memroos/host-profile.env}"
+  [[ -r "$profile" ]] || return 0
+  local tid
+  tid="$(sed -n 's/^[[:space:]]*MEMROOS_TENANT_ID=//p' "$profile" | tr -d '"'"'"' \r' | head -1)"
+  [[ -n "$tid" ]] && export MEMROOS_TENANT_ID="$tid"
+  return 0
+}
+
 host_scoped_agent_id() {
   # Agent onboarding writes host-scoped keys ("cordant-hermes-01:pi.key").
   # Prefer the declared host id; otherwise glob for any "<host>:<client>.key"
@@ -407,6 +425,7 @@ HELP
 done
 
 load_local_agent_key
+bind_tenant_from_host_profile
 
 if [[ "$MEMROOS_MCP_AGENT_ENV_STATUS" == "1" ]]; then
   if [[ -n "${MEMROOS_AGENT_API_KEY:-}" ]]; then

@@ -100,6 +100,14 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { pattern: /^\/api\/skillforge\// },
   { method: "POST", pattern: /^\/api\/operations\/telemetry$/ },
   { method: "POST", pattern: /^\/api\/tool-attention\/record$/ },
+  // The MCP's central-audit bridge. This route authenticates itself against
+  // MEMROOS_AGENT_API_KEY with a constant-time compare (see its
+  // verifyAgentApiKey) precisely because the caller is a server-side MCP
+  // process with no user session and therefore no JWT. Without this entry the
+  // proxy answered every POST with 401 "authentication required" before the
+  // handler ran, and since knowledge reads fail closed when the audit POST
+  // fails, every knowledge_search/read in operator mode was dead.
+  { method: "POST", pattern: /^\/api\/audit\/knowledge$/ },
 ];
 
 function hasRouteLocalAuth(pathname: string, method: string): boolean {
