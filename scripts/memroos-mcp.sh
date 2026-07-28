@@ -381,14 +381,53 @@ if [[ "$MEMROOS_MCP_STRICT_MEMORY_CHECK" == "1" ]]; then
   exit 0
 fi
 
+# fastmcp>=2.0 requires Python >=3.10. oracle-1 shipped a venv built by a bare
+# `python3` that resolved to 3.9, so every dependency refresh failed with
+# "No matching distribution found for fastmcp" and the MCP server never started
+# — for months, silently, because the venv was reused unconditionally once it
+# existed. Both halves are fixed here: build with a >=3.10 interpreter, and
+# refuse to reuse an existing venv that is too old.
+MEMROOS_MCP_MIN_PY_MINOR=10
+
+python_is_modern() {
+  # $1 = python executable. True when it is CPython >= 3.$MEMROOS_MCP_MIN_PY_MINOR.
+  [[ -x "$1" ]] || return 1
+  "$1" -c "import sys; sys.exit(0 if sys.version_info >= (3, $MEMROOS_MCP_MIN_PY_MINOR) else 1)" 2>/dev/null
+}
+
+find_modern_python() {
+  # Prefer the newest explicitly-versioned interpreter available, then bare
+  # python3 — which is only acceptable if it is itself new enough.
+  local candidate
+  for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+    local resolved
+    resolved="$(command -v "$candidate" 2>/dev/null)" || continue
+    if python_is_modern "$resolved"; then
+      printf '%s' "$resolved"
+      return 0
+    fi
+  done
+  return 1
+}
+
 PYTHON="${KNOWLEDGE_PYTHON:-}"
 if [[ -z "$PYTHON" ]]; then
-  if [[ -x "$MEMROOS_ROOT/.venv/bin/python" ]]; then
+  if python_is_modern "$MEMROOS_ROOT/.venv/bin/python"; then
     PYTHON="$MEMROOS_ROOT/.venv/bin/python"
-  elif [[ -x "$HOME/github/knowledge/.venv/bin/python" ]]; then
+  elif python_is_modern "$HOME/github/knowledge/.venv/bin/python"; then
     PYTHON="$HOME/github/knowledge/.venv/bin/python"
   else
-    python3 -m venv "$MEMROOS_ROOT/.venv" >&2
+    BUILDER_PYTHON="$(find_modern_python)" || {
+      echo "Memroos MCP: no Python >=3.$MEMROOS_MCP_MIN_PY_MINOR found on this host; fastmcp cannot be installed. Install a newer Python (e.g. python3.11) and re-run." >&2
+      exit 1
+    }
+    # An existing-but-too-old venv is the oracle-1 failure mode: it must be
+    # replaced, not reused, or the version check above loops forever.
+    if [[ -e "$MEMROOS_ROOT/.venv" ]]; then
+      echo "Memroos MCP: replacing venv at $MEMROOS_ROOT/.venv (Python <3.$MEMROOS_MCP_MIN_PY_MINOR, cannot run fastmcp)." >&2
+      rm -rf "$MEMROOS_ROOT/.venv"
+    fi
+    "$BUILDER_PYTHON" -m venv "$MEMROOS_ROOT/.venv" >&2
     PYTHON="$MEMROOS_ROOT/.venv/bin/python"
   fi
 fi
