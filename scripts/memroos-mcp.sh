@@ -89,9 +89,57 @@ detect_mcp_client() {
   return 1
 }
 
+memroos_host_id() {
+  # The canonical per-host identity. `hostname` is NOT it — cordant-hermes-01
+  # reports `ip-172-31-43-250` — so the host profile is the source of truth.
+  if [[ -n "${MEMROOS_HOST_ID:-}" ]]; then
+    printf '%s' "$MEMROOS_HOST_ID"
+    return 0
+  fi
+  local profile="${MEMROOS_HOST_PROFILE:-/etc/memroos/host-profile.env}"
+  if [[ -r "$profile" ]]; then
+    local id
+    id="$(sed -n 's/^[[:space:]]*MEMROOS_HOST_ID=//p' "$profile" | tr -d '"'"'"' \r' | head -1)"
+    [[ -n "$id" ]] && { printf '%s' "$id"; return 0; }
+  fi
+  return 1
+}
+
+host_scoped_agent_id() {
+  # Agent onboarding writes host-scoped keys ("cordant-hermes-01:pi.key").
+  # Prefer the declared host id; otherwise glob for any "<host>:<client>.key"
+  # so a host whose profile is missing still resolves its own key rather than
+  # falling through to another machine's hardcoded identity.
+  local client="$1" host_id key_file
+  [[ -n "$client" ]] || return 1
+  if host_id="$(memroos_host_id)"; then
+    key_file="$(agent_key_file_for "${host_id}:${client}")"
+    if [[ -r "$key_file" && -s "$key_file" ]]; then
+      printf '%s' "${host_id}:${client}"
+      return 0
+    fi
+  fi
+  local candidate
+  for candidate in "$MEMROOS_AGENT_KEYS_DIR"/*:"${client}".key; do
+    [[ -r "$candidate" && -s "$candidate" ]] || continue
+    candidate="$(basename "$candidate")"
+    printf '%s' "${candidate%.key}"
+    return 0
+  done
+  return 1
+}
+
 infer_agent_id() {
   local mcp_client
   mcp_client="$(detect_mcp_client || true)"
+
+  # A host-scoped key for this client always beats the hardcoded per-machine
+  # names below, which are Mac-specific and wrong on every deployed host.
+  local scoped
+  if scoped="$(host_scoped_agent_id "$mcp_client")"; then
+    printf '%s' "$scoped"
+    return 0
+  fi
 
   case "$mcp_client" in
     codex)
