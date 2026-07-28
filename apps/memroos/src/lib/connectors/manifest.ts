@@ -222,10 +222,57 @@ const NOTION: ConnectorManifest = {
   ],
 };
 
+/**
+ * Google Drive — REST (Nango registers `google-drive` as OAUTH2, so the
+ * brokered token is a plain Google access token).
+ *
+ * Verified against the live API 2026-07-28: GET /drive/v3/files returns
+ * `{ files: [...], nextPageToken }`, and each record carries id, name,
+ * mimeType, modifiedTime, webViewLink. Unlike Notion this is a GET, so every
+ * argument travels in the query string — see callRest's bodyless branch.
+ *
+ * `fields` must be requested explicitly; Drive's default projection omits
+ * modifiedTime and webViewLink, which would collapse every record onto the
+ * ingest date and leave it unlinkable.
+ */
+const GOOGLE_DRIVE: ConnectorManifest = {
+  providerKey: "google-drive",
+  providerConfigKey: "google-drive",
+  transport: "rest",
+  endpoint: "https://www.googleapis.com",
+  tools: [
+    {
+      tool: "list_files",
+      resultKey: "files",
+      // Drive's time filter rides inside the `q` expression rather than a
+      // standalone argument, which this manifest shape cannot express. Newest
+      // first plus the UNIQUE(session_id, request_id) constraint gives correct
+      // steady-state behaviour, same as Notion.
+      incrementalArg: null,
+      idField: "id",
+      timestampField: "modifiedTime",
+      // Drive exposes no file body here; name + link is thin but honest, and
+      // makes the file findable and openable.
+      contentFields: ["name", "webViewLink"],
+      pagination: "cursor",
+      method: "GET",
+      path: "/drive/v3/files",
+      staticArgs: {
+        orderBy: "modifiedTime desc",
+        fields:
+          "nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink)",
+      },
+      cursorField: "nextPageToken",
+      cursorArg: "pageToken",
+    },
+  ],
+};
+
 export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
   LINEAR,
   CIRCLEBACK,
   NOTION,
+  GOOGLE_DRIVE,
 ];
 
 export function getManifest(providerKey: string): ConnectorManifest | undefined {

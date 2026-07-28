@@ -149,14 +149,30 @@ export async function callRest(
   },
   signal?: AbortSignal,
 ): Promise<McpCallResult> {
-  const res = await fetch(`${baseUrl}${opts.path}`, {
+  // GET/HEAD cannot carry a body — fetch rejects one outright, and a server
+  // that tolerated it would ignore the params and silently return defaults.
+  // Providers like Google Drive take every argument (pageSize, orderBy,
+  // fields, pageToken) in the query string, so serialize there instead.
+  const bodyless = opts.method === "GET" || opts.method === "HEAD";
+  let url = `${baseUrl}${opts.path}`;
+  if (bodyless && opts.body) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts.body)) {
+      if (v === undefined || v === null) continue;
+      qs.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+    }
+    const q = qs.toString();
+    if (q) url += (url.includes("?") ? "&" : "?") + q;
+  }
+
+  const res = await fetch(url, {
     method: opts.method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       ...opts.headers,
     },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    body: !bodyless && opts.body ? JSON.stringify(opts.body) : undefined,
     signal,
   });
 
