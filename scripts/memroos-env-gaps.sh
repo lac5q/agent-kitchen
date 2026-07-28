@@ -57,9 +57,17 @@ case "$OLLAMA_URL" in
   *)  ok "OLLAMA_BASE_URL=$OLLAMA_URL" ;;
 esac
 
-if docker exec "$CONTAINER" sh -c "curl -sf --max-time 8 \"${OLLAMA_URL:-http://ollama:11434}/api/tags\"" >/dev/null 2>&1; then
+# The app image doesn't ship curl (it's a slim Next.js runtime) — use node's
+# built-in fetch instead, which is always present since node IS the runtime.
+OLLAMA_TAGS="$(docker exec -e "OLLAMA_PROBE_URL=${OLLAMA_URL:-http://ollama:11434}" "$CONTAINER" node -e "
+fetch(process.env.OLLAMA_PROBE_URL + '/api/tags', { signal: AbortSignal.timeout(8000) })
+  .then(r => r.text()).then(t => { process.stdout.write(t); })
+  .catch(() => process.exit(1));
+" 2>/dev/null)"
+
+if [ -n "$OLLAMA_TAGS" ]; then
   ok "ollama reachable from the app container"
-  if docker exec "$CONTAINER" sh -c "curl -sf --max-time 8 \"${OLLAMA_URL}/api/tags\"" 2>/dev/null | grep -q "nomic-embed-text"; then
+  if printf '%s' "$OLLAMA_TAGS" | grep -q "nomic-embed-text"; then
     ok "nomic-embed-text model present"
   else
     gap "nomic-embed-text not pulled — run: docker exec <ollama-container> ollama pull nomic-embed-text"
