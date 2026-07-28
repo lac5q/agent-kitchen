@@ -34,13 +34,17 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   tenant_id: z.string().min(1).max(128),
-  // `.nullish()`, not `.optional()`: the MCP client is Python and serializes an
-  // absent user as JSON `null`, which `.optional()` rejects (it permits only
-  // `undefined`). Knowledge reads fail closed when this POST fails, so that
-  // one-word mismatch killed every knowledge_search/read whenever
-  // MEMROOS_USER_ID was unset — i.e. every agent-initiated call. The consumer
-  // below already normalizes with `?? null`.
-  user_id: z.string().min(1).max(128).nullish(),
+  // "No user" reaches this endpoint in two shapes and BOTH were rejected,
+  // failing closed and killing every agent-initiated knowledge_search/read:
+  //   - `null`, which `.optional()` refuses (it permits only `undefined`)
+  //   - `""`, which store.py sends via `user_id=user_id or ""` and which
+  //     `.min(1)` refuses
+  // Normalize both to undefined before validating; the consumer below already
+  // finishes the job with `?? null`.
+  user_id: z.preprocess(
+    (v) => (v === "" || v === null ? undefined : v),
+    z.string().min(1).max(128).optional(),
+  ),
   agent_id: z.string().min(1).max(128),
   operation: z.enum(["write", "read", "delete", "search"]),
   path: z.string().min(1).max(2048),
