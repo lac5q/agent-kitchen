@@ -4,7 +4,7 @@
       "command": "/bin/bash",
       "args": [
         "-lc",
-        "export MEMROOS_APP_URL=\"${MEMROOS_APP_URL:-https://memroos.epiloguecapital.com}\"; export MEMROOS_OPERATOR_URL=\"${MEMROOS_OPERATOR_URL:-$MEMROOS_APP_URL}\"; export MEMROOS_REQUIRE_SERVER_MEMORY=\"${MEMROOS_REQUIRE_SERVER_MEMORY:-1}\"; export MEMROOS_ALLOWED_MEMORY_TIER_STATUSES=\"${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}\"; for __c in \"$MEMROOS_ROOT\" \"$PWD\" \"$HOME/memroos\" \"$HOME/github/memroos\"; do [ -n \"$__c\" ] && [ -x \"$__c/scripts/memroos-mcp.sh\" ] && { export MEMROOS_ROOT=\"$__c\"; break; }; done; exec \"$MEMROOS_ROOT/scripts/memroos-mcp.sh\""
+        "export MEMROOS_ALLOWED_MEMORY_TIER_STATUSES=\"${MEMROOS_ALLOWED_MEMORY_TIER_STATUSES:-not_configured}\"; if [ -n \"${MEMROOS_APP_URL:-}\" ]; then export MEMROOS_OPERATOR_URL=\"${MEMROOS_OPERATOR_URL:-$MEMROOS_APP_URL}\"; fi; for __c in \"$MEMROOS_ROOT\" \"$PWD\" \"$HOME/memroos\" \"$HOME/github/memroos\"; do [ -n \"$__c\" ] && [ -x \"$__c/scripts/memroos-mcp.sh\" ] && { export MEMROOS_ROOT=\"$__c\"; break; }; done; exec \"$MEMROOS_ROOT/scripts/memroos-mcp.sh\""
       ]
     }
   }
