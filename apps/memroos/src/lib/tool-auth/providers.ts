@@ -172,16 +172,15 @@ const PROVIDERS: readonly Provider[] = [
     authMode: "oauth",
     // Nango prod registers this as `google-calendar-mcp`, not `google-calendar`.
     providerConfigKey: "google-calendar-mcp",
-    // The integration exists but is auth_mode OAUTH2 with client_id and
-    // client_secret both null, so Connect fails with 'Provider Config
-    // "google-calendar-mcp" is missing client ID, secret and/or scopes'.
-    // Unlike linear-mcp/circleback-mcp (credentials: null = dynamic client
-    // registration, no app needed), this one needs a Google Cloud OAuth app
-    // whose id and secret are pasted into the Nango dashboard. Verified
-    // against the live Nango API 2026-07-27. Surfacing the reason beats
-    // letting the user hit a raw upstream error.
-    unavailableReason:
-      "Needs a Google Cloud OAuth client id + secret in the Nango dashboard.",
+    // Was unavailable until 2026-07-28: the integration existed with
+    // client_id and client_secret both null, so Connect failed with 'Provider
+    // Config "google-calendar-mcp" is missing client ID, secret and/or
+    // scopes'. Unlike linear-mcp/circleback-mcp (credentials: null = dynamic
+    // client registration, no app needed), this one needs a real Google Cloud
+    // OAuth app. Those credentials are now configured in Nango, verified by
+    // POST /connect/sessions returning 201 for this integration where it
+    // previously errored — so the card is connectable and no longer carries an
+    // unavailableReason.
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",

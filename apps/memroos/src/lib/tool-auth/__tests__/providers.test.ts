@@ -95,20 +95,30 @@ describe("tool-auth/providers", () => {
     expect(Object.values(PROVIDERS_BY_KEY).some(isApiKeyProvider)).toBe(false);
   });
 
-  it("marks a provider unavailable when Nango cannot complete a connect", () => {
-    // google-calendar-mcp exists in Nango but is auth_mode OAUTH2 with a null
-    // client_id/secret, so Connect fails with 'missing client ID, secret
-    // and/or scopes'. The card must say so rather than offering a button that
-    // dead-ends on a raw upstream error.
+  it("only marks a provider unavailable when it genuinely cannot connect", () => {
+    // google-calendar-mcp WAS unavailable (OAUTH2 with null client_id/secret,
+    // so Connect died on 'missing client ID, secret and/or scopes'). Real
+    // Google Cloud OAuth credentials were configured in Nango on 2026-07-28
+    // and POST /connect/sessions now returns 201, so the card must offer a
+    // working button rather than a stale "Unavailable" state.
     const gcal = getProvider("google-calendar");
     expect(gcal).toBeDefined();
     if (gcal && isOAuthProvider(gcal)) {
-      expect(gcal.unavailableReason).toBeTruthy();
+      expect(gcal.unavailableReason).toBeUndefined();
     }
     // Providers with dynamic client registration need no app and stay live.
     const linear = getProvider("linear");
     if (linear && isOAuthProvider(linear)) {
       expect(linear.unavailableReason).toBeUndefined();
+    }
+    // The mechanism itself must still work: any provider that declares a
+    // reason is surfaced as unavailable rather than silently offering a
+    // button that dead-ends on an upstream error.
+    for (const p of Object.values(PROVIDERS_BY_KEY)) {
+      if (isOAuthProvider(p) && p.unavailableReason !== undefined) {
+        expect(typeof p.unavailableReason).toBe("string");
+        expect(p.unavailableReason.length).toBeGreaterThan(0);
+      }
     }
   });
 
