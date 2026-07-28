@@ -28,6 +28,7 @@ import { buildKnowledgeAuditEntry } from "@/lib/audit/knowledge-chain";
 import { writeAuditEntry } from "@/lib/audit/write";
 import type { NewAuditEntry } from "@/lib/audit/schema";
 import { getDb } from "@/lib/db";
+import { authenticateAgentKey } from "@/lib/agent-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -58,14 +59,30 @@ function safeEqual(a: string, b: string): boolean {
  * server is configured with. Both must be non-empty.
  */
 function verifyAgentApiKey(req: NextRequest): { ok: true } | { ok: false; status: number; error: string } {
-  const expected = process.env.MEMROOS_AGENT_API_KEY?.trim() ?? "";
-  if (!expected) {
-    // Operator mode disabled -- the MCP should not be posting in solo.
-    return { ok: false, status: 503, error: "central audit disabled (no MEMROOS_AGENT_API_KEY)" };
-  }
   const presented = extractBearer(req);
   if (!presented) {
     return { ok: false, status: 401, error: "missing bearer token" };
+  }
+
+  // Per-agent keys are the real deployment shape: onboarding issues one
+  // `ak_…` per agent per host (cordant-hermes-01:pi, :claude, :codex, …) and
+  // memroos-mcp.sh loads that agent's own key into MEMROOS_AGENT_API_KEY. A
+  // single shared server-side secret cannot match five distinct agent keys,
+  // so comparing against one env value rejected every real caller. This path
+  // is also strictly stronger: keys are stored hashed, checked against
+  // revoked_at, and resolve to a named agent for the audit row.
+  if (presented.startsWith("ak_") && authenticateAgentKey(presented)) {
+    return { ok: true };
+  }
+
+  // Shared-secret fallback, retained for deployments that configure one.
+  const expected = process.env.MEMROOS_AGENT_API_KEY?.trim() ?? "";
+  if (!expected) {
+    return {
+      ok: false,
+      status: 503,
+      error: "central audit disabled (no per-agent key matched and no MEMROOS_AGENT_API_KEY)",
+    };
   }
   if (!safeEqual(presented, expected)) {
     return { ok: false, status: 403, error: "invalid api key" };
