@@ -56,7 +56,12 @@ describe("nango-client: listNangoConnections", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       providerKey: "slack",
-      connectionId: "12345",
+      // MUST be `connection_id`, not the internal numeric `id`. Nango's
+      // GET /connection/:id credentials endpoint only accepts connection_id;
+      // passing `id` 404s and every provider silently reports
+      // "no access token; skipping". This assertion previously encoded the
+      // bug (expecting "12345") and so let it ship.
+      connectionId: "conn-1",
       status: "connected",
       accountEmail: "ops@example.com",
       authMode: "oauth",

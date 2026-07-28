@@ -116,7 +116,12 @@ export async function listNangoConnections(): Promise<ToolConnection[]> {
     // by the memroos provider key ("circleback"). Translate or the card never
     // matches its own connection.
     providerKey: providerKeyFromConfigKey(c.provider_config_key),
-    connectionId: String(c.id),
+    // Nango's `id` is an internal numeric row id; every Nango API path that
+    // takes a connection (notably GET /connection/:id for credentials) expects
+    // the `connection_id` UUID. Sending `id` 404s, which fetchNangoCredentials
+    // maps to null — surfacing as "no access token; skipping" and silently
+    // disabling Linear/Notion/Circleback sync despite live OAuth connections.
+    connectionId: c.connection_id,
     status: "connected",
     accountEmail: c.end_user?.email ?? null,
     scopes: null,
