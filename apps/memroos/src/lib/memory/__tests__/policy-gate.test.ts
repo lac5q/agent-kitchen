@@ -260,3 +260,130 @@ describe("memory policy gate", () => {
     expect("ownerUserId" in decision.label).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Space gate (TEAMSCALE / connector scoping).
+//
+// Before this gate, `spaces`/`space_members` existed but nothing in the recall
+// path consulted `messages.space_id` — so a space-scoped row was readable by
+// any non-anonymous actor via the plain internal+indexable allow rule. These
+// tests pin the gate that makes space scoping real.
+// ---------------------------------------------------------------------------
+
+describe("memory policy gate — space scoping", () => {
+  it("denies a space-scoped row when the actor is not a member", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "agent:outsider", role: "agent", spaceIds: ["spc_other"] },
+      purpose: "recall",
+      // Exactly the labels every connector row carries today.
+      label: { visibility: "internal", policy: "indexable", spaceId: "spc_notion" },
+    });
+
+    expect(decision).toMatchObject({ decision: "deny", reason: "space_not_member" });
+  });
+
+  it("allows a space-scoped row for a member", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "agent:member", role: "agent", spaceIds: ["spc_notion"] },
+      purpose: "recall",
+      label: { visibility: "internal", policy: "indexable", spaceId: "spc_notion" },
+    });
+
+    expect(decision.decision).toBe("allow");
+  });
+
+  it("fails closed when the actor's memberships were never resolved", () => {
+    // A caller that forgot to resolve memberships must not thereby gain
+    // access to every space-scoped row.
+    const decision = authorizeMemoryUse({
+      actor: { id: "agent:unresolved", role: "agent" },
+      purpose: "recall",
+      label: { visibility: "internal", policy: "indexable", spaceId: "spc_notion" },
+    });
+
+    expect(decision).toMatchObject({ decision: "deny", reason: "space_not_member" });
+  });
+
+  it("lets admins through regardless of membership", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:admin", role: "admin" },
+      purpose: "recall",
+      label: { visibility: "internal", policy: "indexable", spaceId: "spc_notion" },
+    });
+
+    expect(decision.decision).toBe("allow");
+  });
+
+  it("leaves rows with no space_id exactly as they were (backward compat)", () => {
+    // The ~130k existing messages and 401 connector rows all have NULL
+    // space_id; this gate must not revoke any of them.
+    const decision = authorizeMemoryUse({
+      actor: { id: "agent:test", role: "agent" },
+      purpose: "recall",
+      label: { visibility: "internal", policy: "indexable", spaceId: null },
+    });
+
+    expect(decision.decision).toBe("allow");
+  });
+
+  it("space gate outranks an otherwise-permissive private owner allow", () => {
+    const decision = authorizeMemoryUse({
+      actor: { id: "user:owner", role: "reviewer", spaceIds: [] },
+      purpose: "recall",
+      label: {
+        visibility: "private",
+        policy: "agent_visible",
+        ownerUserId: "user:owner",
+        spaceId: "spc_notion",
+      },
+    });
+
+    expect(decision).toMatchObject({ decision: "deny", reason: "space_not_member" });
+  });
+
+  it("filterAuthorizedMessageRows resolves memberships from space_members", () => {
+    db.prepare(
+      `INSERT INTO spaces(id, tenant_id, name) VALUES ('spc_notion', 'default-tenant', 'notion-conn-1')`
+    ).run();
+    db.prepare(
+      `INSERT INTO space_members(space_id, member_id, member_type) VALUES ('spc_notion', 'user:member', 'human')`
+    ).run();
+    db.prepare(
+      `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy, space_id)
+       VALUES
+       ('notion:c1', 'memroos', 'connector', 'connector', 'scoped needle', '2026-07-29T00:00:00Z', 'internal', 'indexable', 'spc_notion'),
+       ('linear:c1', 'memroos', 'connector', 'connector', 'unscoped needle', '2026-07-29T00:01:00Z', 'internal', 'indexable', NULL)`
+    ).run();
+
+    const rows = db.prepare("SELECT id FROM messages ORDER BY id").all() as Array<{ id: number }>;
+
+    // Non-member sees only the unscoped row.
+    const nonMember = filterAuthorizedMessageRows(
+      db,
+      rows,
+      { id: "user:stranger", role: "reviewer" },
+      "recall"
+    );
+    expect(nonMember).toHaveLength(1);
+    expect(nonMember[0].id).toBe(rows[1].id);
+
+    // Member sees both — memberships resolved from the DB, not passed in.
+    const member = filterAuthorizedMessageRows(
+      db,
+      rows,
+      { id: "user:member", role: "reviewer" },
+      "recall"
+    );
+    expect(member).toHaveLength(2);
+  });
+
+  it("extracts space_id from snake_case records", () => {
+    const label = extractMemoryLabelSnapshot({
+      id: 1,
+      visibility: "internal",
+      policy: "indexable",
+      space_id: "spc_notion",
+    });
+    expect(label?.spaceId).toBe("spc_notion");
+  });
+});

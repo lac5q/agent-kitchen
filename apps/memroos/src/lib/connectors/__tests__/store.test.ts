@@ -9,6 +9,7 @@ import { createSpace, filterBySpace } from "@/lib/space";
 
 import { CONNECTOR_MANIFESTS, getManifest, connectorProject } from "../manifest";
 import {
+  backfillConnectorSpaceReaders,
   connectorAgentId,
   ensureConnectorSpace,
   readSyncState,
@@ -409,5 +410,239 @@ describe("connectors/manifest — provider coverage", () => {
         expect(t.path).toBeTruthy();
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reader enrolment.
+//
+// Regression guard for a live near-miss: on cordant-hermes-01 all 401
+// connector rows sat in four spaces whose only member was the synthetic
+// writer agent. That was harmless while `space_id` was inert, but the moment
+// the space gate started enforcing, every one of those rows became
+// unrecallable by any real user or agent. Enrolment is what keeps the gate
+// from being a silent outage.
+// ---------------------------------------------------------------------------
+
+describe("connectors/store — notion enrichment reaches the FTS index", () => {
+  const NOTION = getManifest("notion")!;
+  const SEARCH = NOTION.tools.find((t) => t.tool === "search")!;
+
+  it("indexes the page body, not just the URL", () => {
+    // The original defect: a Notion record whose only content was its URL is
+    // in messages_fts but matches no semantic query. Assert the body is
+    // actually searchable, which is the acceptance criterion — not merely
+    // that a row was written.
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+
+    const outcome = writeConnectorRecord({
+      db,
+      providerKey: "notion",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: SEARCH,
+      record: {
+        id: "page-1",
+        url: "https://notion.so/page-1",
+        last_edited_time: "2026-07-29T00:00:00Z",
+        // What enrichRecord writes in the sync loop.
+        _content: "Q3 Roadmap\n\nShip the connector recall lane by August.",
+      },
+    });
+    expect(outcome.status).toBe("written");
+
+    const hit = db
+      .prepare(
+        `SELECT m.id FROM messages_fts
+         JOIN messages m ON m.id = messages_fts.rowid
+         WHERE messages_fts MATCH 'connector'`
+      )
+      .all() as Array<{ id: number }>;
+    expect(hit).toHaveLength(1);
+
+    const stored = db
+      .prepare(`SELECT content FROM messages WHERE id = ?`)
+      .get(hit[0].id) as { content: string };
+    expect(stored.content).toContain("Q3 Roadmap");
+    // The URL still rides along as the way back to the source...
+    expect(stored.content).toContain("https://notion.so/page-1");
+    // ...exactly once, not duplicated by _content also carrying it.
+    expect(stored.content.match(/https:\/\/notion\.so\/page-1/g)).toHaveLength(1);
+  });
+
+  it("upgrades an existing URL-only row once enrichment produces a body", () => {
+    // REGRESSION: the upsert guard used to be `excluded.timestamp >
+    // messages.timestamp` alone. Notion's timestamp is last_edited_time, so
+    // for the 14 rows already stored as bare URLs the timestamps are EQUAL on
+    // the next sync — the update was suppressed and those rows could never
+    // gain their body. The rows that motivated the whole enrichment feature
+    // were precisely the ones it could not fix.
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    const base = {
+      id: "page-3",
+      url: "https://notion.so/page-3",
+      last_edited_time: "2026-07-29T00:00:00Z",
+    };
+
+    // First cycle: enrichment unavailable (throttled) -> URL-only.
+    expect(
+      writeConnectorRecord({
+        db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+        tool: SEARCH, record: { ...base },
+      }).status
+    ).toBe("written");
+
+    // Second cycle: same last_edited_time, but now enriched.
+    const second = writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH,
+      record: { ...base, _content: "Q3 Roadmap\n\nShip the connector recall lane." },
+    });
+    expect(second.status).toBe("written");
+
+    const stored = db
+      .prepare(`SELECT content FROM messages WHERE request_id = 'page-3'`)
+      .get() as { content: string };
+    expect(stored.content).toContain("Q3 Roadmap");
+  });
+
+  it("still no-ops on a genuinely unchanged re-fetch", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    const record = {
+      id: "page-4",
+      url: "https://notion.so/page-4",
+      last_edited_time: "2026-07-29T00:00:00Z",
+      _content: "Same body",
+    };
+    writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH, record: { ...record },
+    });
+    const again = writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH, record: { ...record },
+    });
+    expect(again.status).toBe("duplicate");
+  });
+
+  it("falls back to the URL-only record when enrichment produced nothing", () => {
+    // A page whose blocks could not be read must still be findable/linkable
+    // rather than skipped as empty.
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+
+    const outcome = writeConnectorRecord({
+      db,
+      providerKey: "notion",
+      connectionId: "conn-1",
+      spaceId,
+      labels,
+      tool: SEARCH,
+      record: {
+        id: "page-2",
+        url: "https://notion.so/page-2",
+        last_edited_time: "2026-07-29T00:00:00Z",
+      },
+    });
+
+    expect(outcome.status).toBe("written");
+    const stored = db
+      .prepare(`SELECT content FROM messages WHERE request_id = 'page-2'`)
+      .get() as { content: string };
+    expect(stored.content).toBe("https://notion.so/page-2");
+  });
+});
+
+describe("connectors/store — reader enrolment", () => {
+  function seedPrincipals(target: Database.Database) {
+    target
+      .prepare(
+        `INSERT INTO users (id, email, display_name, password_hash, tenant_id)
+         VALUES ('user-1', 'a@example.com', 'A', 'x', 'default-tenant')`
+      )
+      .run();
+    target
+      .prepare(
+        `INSERT INTO registered_agents (id, name, role, platform, protocol)
+         VALUES ('host:claude', 'claude', 'coder', 'claude-code', 'local')`
+      )
+      .run();
+  }
+
+  it("enrols tenant users and registered agents when the space is ensured", () => {
+    seedPrincipals(db);
+    const { spaceId } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+
+    const members = db
+      .prepare(`SELECT member_id FROM space_members WHERE space_id = ? ORDER BY member_id`)
+      .all(spaceId) as Array<{ member_id: string }>;
+    const ids = members.map((m) => m.member_id);
+
+    expect(ids).toContain("user-1");
+    expect(ids).toContain("host:claude");
+    // The synthetic writer is still a member.
+    expect(ids).toContain(connectorAgentId("notion"));
+  });
+
+  it("is idempotent across repeated sync cycles", () => {
+    seedPrincipals(db);
+    const { spaceId } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
+
+    const count = db
+      .prepare(`SELECT COUNT(*) AS c FROM space_members WHERE space_id = ?`)
+      .get(spaceId) as { c: number };
+    expect(count.c).toBe(3);
+  });
+
+  it("enrols principals registered AFTER the space already existed", () => {
+    // The drift case: space created on an empty DB, users added later.
+    const { spaceId } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    seedPrincipals(db);
+
+    expect(backfillConnectorSpaceReaders(db)).toBe(1);
+
+    const ids = (
+      db
+        .prepare(`SELECT member_id FROM space_members WHERE space_id = ?`)
+        .all(spaceId) as Array<{ member_id: string }>
+    ).map((m) => m.member_id);
+    expect(ids).toContain("user-1");
+    expect(ids).toContain("host:claude");
+  });
+
+  it("backfill ignores non-connector spaces", () => {
+    seedPrincipals(db);
+    const other = createSpace(db, { tenantId: "default-tenant", name: "team/eng" });
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
+
+    backfillConnectorSpaceReaders(db);
+
+    const count = db
+      .prepare(`SELECT COUNT(*) AS c FROM space_members WHERE space_id = ?`)
+      .get(other.id) as { c: number };
+    expect(count.c).toBe(0);
   });
 });

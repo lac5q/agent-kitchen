@@ -34,11 +34,15 @@ interface ConnectorRow {
   request_id: string | null;
   content: string;
   timestamp: string;
+  space_id: string | null;
   rank: number | null;
 }
 
+// The space gate is applied in SQL, before LIMIT — not by filtering the
+// result set afterwards. Post-filtering would silently shrink a member's
+// page: ask for 10, get however many of that top-10 happened to be visible.
 const SQL = `
-  SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp,
+  SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp, m.space_id,
          bm25(messages_fts) AS rank
   FROM messages_fts
   JOIN messages m ON m.id = messages_fts.rowid
@@ -46,6 +50,13 @@ const SQL = `
     AND m.role = 'connector'
     AND m.policy = 'indexable'
     AND m.visibility IN ('internal', 'public_safe', 'public_approved')
+    AND (
+      m.space_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM space_members sm
+        WHERE sm.space_id = m.space_id AND sm.member_id = ?
+      )
+    )
   ORDER BY rank
   LIMIT ?
 `;
@@ -63,6 +74,21 @@ export async function GET(req: NextRequest) {
   const limitRaw = Number(searchParams.get("limit") ?? "10");
   const limit = Math.max(1, Math.min(20, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 10));
 
+  // Space-scoped connector rows (e.g. per-connection Notion spaces) are only
+  // readable by members. This endpoint bypasses the normal recall route, so it
+  // must apply the same gate itself or it becomes the bypass — loopback auth
+  // says "this process may ask", not "this process may read everything".
+  //
+  // Identity comes from the MCP caller (memory_recall passes its resolved
+  // MEMROOS_USER_ID / MEMROOS_AGENT_ID). It is a self-asserted parameter from
+  // a trusted loopback process, so this gate is defense-in-depth and scoping,
+  // NOT a trust boundary against a hostile caller — anything able to reach
+  // loopback could assert any id. The boundary is authorizeRegistryWrite above.
+  //
+  // Absent identity matches no space_members row, so space-scoped content
+  // stays hidden — fail closed.
+  const actorId = (searchParams.get("user_id") ?? searchParams.get("agent_id") ?? "").trim();
+
   try {
     const db = getDb();
     const stmt = db.prepare(SQL);
@@ -70,12 +96,12 @@ export async function GET(req: NextRequest) {
     // FTS5 raises on unbalanced quotes / bare metacharacters in the query text.
     let rows: ConnectorRow[];
     try {
-      rows = stmt.all(`"${query}"`, limit) as ConnectorRow[];
+      rows = stmt.all(`"${query}"`, actorId, limit) as ConnectorRow[];
       if (rows.length === 0) {
-        rows = stmt.all(query, limit) as ConnectorRow[];
+        rows = stmt.all(query, actorId, limit) as ConnectorRow[];
       }
     } catch {
-      rows = stmt.all(query, limit) as ConnectorRow[];
+      rows = stmt.all(query, actorId, limit) as ConnectorRow[];
     }
 
     return NextResponse.json({ status: "ok", results: rows });

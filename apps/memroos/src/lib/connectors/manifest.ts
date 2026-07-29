@@ -86,6 +86,17 @@ export interface SyncTool {
   cursorArg?: string;
   /** REST only: boolean key indicating another page exists. */
   hasMoreField?: string;
+  /**
+   * Optional per-record second pass, for providers whose list endpoint omits
+   * the actual content. Costs one extra request per record, so it is opt-in
+   * per tool rather than a default.
+   *
+   * `notion-page` fetches `/v1/blocks/{id}/children` and folds the flattened
+   * text (plus the real page title) into the indexed body — without it a
+   * Notion record is a bare URL, which embeds and indexes but can never match
+   * a semantic query.
+   */
+  enrich?: "notion-page";
 }
 
 export interface ConnectorManifest {
@@ -204,10 +215,12 @@ const NOTION: ConnectorManifest = {
       idField: "id",
       timestampField: "last_edited_time",
       // Notion's search response carries `properties` and `url` but no page
-      // body — extracting the title out of the title property and fetching
-      // block content are both follow-on work. `url` alone is a thin but
-      // honest record: it makes the page findable and linkable.
-      contentFields: ["url"],
+      // body. `enrich: "notion-page"` performs the follow-on fetch and writes
+      // the assembled title + body + url into `_content`; `url` remains the
+      // fallback for a page whose blocks cannot be read, which is exactly the
+      // URL-only record this used to produce for everything.
+      contentFields: ["_content", "url"],
+      enrich: "notion-page",
       pagination: "cursor",
       method: "POST",
       path: "/v1/search",

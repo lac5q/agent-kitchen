@@ -244,6 +244,7 @@ def http_connector_search(
     limit: int = 10,
     base_url: Optional[str] = None,
     timeout: float = 5.0,
+    actor_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Fallback lane for hosts where conversations.db is only reachable
     inside a Docker-managed volume (e.g. cordant-hermes-01: the host-side
@@ -266,7 +267,14 @@ def http_connector_search(
     import urllib.request
 
     url_base = (base_url or _connector_app_base_url()).rstrip("/")
-    qs = urllib.parse.urlencode({"q": query, "limit": max(1, int(limit))})
+    params: dict[str, Any] = {"q": query, "limit": max(1, int(limit))}
+    # Identity for the route's space gate. Omitted when unresolved, which the
+    # route treats as "no memberships" and therefore withholds space-scoped
+    # rows — same fail-closed posture as the direct-sqlite path.
+    who = connector_actor_id() if actor_id is None else actor_id
+    if who:
+        params["user_id"] = who
+    qs = urllib.parse.urlencode(params)
     url = f"{url_base}/api/internal/connector-search?{qs}"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 — loopback only
@@ -297,12 +305,60 @@ def http_connector_search(
     return _format_connector_rows(rows)
 
 
-def _connector_fts_query(conn: sqlite3.Connection, query: str, limit: int) -> list[tuple]:
+def connector_actor_id() -> str:
+    """Identity this MCP process recalls as, for the space gate. Mirrors
+    mcp_server.py's own env resolution order."""
+    return (
+        os.environ.get("MEMROOS_USER_ID", "").strip()
+        or os.environ.get("MEMROOS_AGENT_ID", "").strip()
+    )
+
+
+def _connector_fts_query(
+    conn: sqlite3.Connection,
+    query: str,
+    limit: int,
+    *,
+    actor_id: str = "",
+) -> list[tuple]:
     """Phrase-first, plain-fallback MATCH — mirrors `recallByKeyword`'s
     pattern (apps/memroos/src/lib/db-ingest.ts) so an FTS5 metacharacter in
     the query text (unbalanced quote, bare hyphen, colon, ...) degrades to a
-    plain-token match instead of erroring the whole connector lane."""
-    sql = """
+    plain-token match instead of erroring the whole connector lane.
+
+    Applies the same space gate as the TypeScript policy gate
+    (apps/memroos/src/lib/memory/policy-gate.ts): a row carrying `space_id`
+    is only returned to a member of that space. Rows with NULL space_id are
+    unaffected. This must stay in lockstep with the HTTP path's filter —
+    a control enforced on only one of the two lanes is a bypass, and this
+    lane is the one that runs on hosts where the DB is directly readable.
+    """
+    # Whether the space tables exist decides the shape of the gate, and it is
+    # resolved explicitly rather than by catching an error from the main
+    # query: folding "no such table: space_members" into the same except that
+    # handles malformed-query degradation would turn a missing table into a
+    # silent zero-result lane — the exact silent-healthy failure this module
+    # exists to stop. Without space_members no membership can exist, so
+    # space-scoped rows are withheld while NULL-space rows still return.
+    has_space_members = bool(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='space_members' LIMIT 1"
+        ).fetchone()
+    )
+    space_predicate = (
+        """
+          AND (
+            m.space_id IS NULL
+            OR EXISTS (
+              SELECT 1 FROM space_members sm
+              WHERE sm.space_id = m.space_id AND sm.member_id = ?
+            )
+          )
+        """
+        if has_space_members
+        else " AND m.space_id IS NULL "
+    )
+    sql = f"""
         SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp,
                bm25(messages_fts) AS rank
         FROM messages_fts
@@ -311,18 +367,26 @@ def _connector_fts_query(conn: sqlite3.Connection, query: str, limit: int) -> li
           AND m.role = 'connector'
           AND m.policy = 'indexable'
           AND m.visibility IN ('internal', 'public_safe', 'public_approved')
+          {space_predicate}
         ORDER BY rank
         LIMIT ?
     """
     safe_limit = max(1, int(limit))
+    # Empty actor_id matches no space_members row, so space-scoped content
+    # stays hidden when this process has no resolved identity — fail closed.
+    def args(match_term: str) -> tuple:
+        if has_space_members:
+            return (match_term, actor_id, safe_limit)
+        return (match_term, safe_limit)
+
     try:
-        rows = conn.execute(sql, (f'"{query}"', safe_limit)).fetchall()
+        rows = conn.execute(sql, args(f'"{query}"')).fetchall()
         if rows:
             return rows
     except sqlite3.OperationalError:
         pass
     try:
-        return conn.execute(sql, (query, safe_limit)).fetchall()
+        return conn.execute(sql, args(query)).fetchall()
     except sqlite3.OperationalError:
         # A malformed query string (e.g. an unescaped quote) is a client-input
         # shape, not a lane-health failure — degrade to no matches rather
@@ -335,6 +399,7 @@ def sqlite_connector_search(
     *,
     limit: int = 10,
     db_path: Optional[Path] = None,
+    actor_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Search connector-sourced `messages` rows via the existing `messages_fts` index.
 
@@ -355,15 +420,16 @@ def sqlite_connector_search(
       "try the other lane" — silently swallowing it is exactly how the
       original defect (indexed, never searched) went unnoticed.
     """
+    who = connector_actor_id() if actor_id is None else actor_id
     path = db_path or conversations_db_path()
     if path is None:
-        return http_connector_search(query, limit=limit)
+        return http_connector_search(query, limit=limit, actor_id=who)
     try:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     except sqlite3.OperationalError as exc:
         raise ConnectorLaneError(f"could not open conversations.db at {path}: {exc}") from exc
     try:
-        rows = _connector_fts_query(conn, query, limit)
+        rows = _connector_fts_query(conn, query, limit, actor_id=who)
     except sqlite3.OperationalError as exc:
         raise ConnectorLaneError(f"connector query failed against {path}: {exc}") from exc
     finally:
@@ -381,8 +447,17 @@ def recall(
     memory_search_fn: Optional[Callable[..., dict]] = None,
     qmd_runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
     connector_search_fn: Optional[Callable[..., list]] = None,
+    actor_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Federate meeting QMD + knowledge literal + mem0 into one result set."""
+    """Federate meeting QMD + knowledge literal + mem0 + connectors.
+
+    `actor_id` is the identity the connector lane's space gate authorizes
+    against. The MCP tool resolves it from its own tool args/env
+    (`_memroos_user_id` / `_memroos_agent_id`) and passes it here; without
+    that thread-through the lane would fall back to process env only, and a
+    caller-supplied user_id would be silently ignored while appearing to
+    scope the query.
+    """
     q = (query or "").strip()
     if not q:
         return {"status": "error", "error": "query is required", "results": [], "lanes": {}}
@@ -530,8 +605,16 @@ def recall(
     # separately in `lanes["connector"]`.
     connector_hits: list[dict[str, Any]] = []
     search_connectors = connector_search_fn or sqlite_connector_search
+    resolved_actor = connector_actor_id() if actor_id is None else (actor_id or "")
     try:
-        raw_hits = search_connectors(query=q, limit=min(limit, 20)) or []
+        raw_hits = (
+            search_connectors(
+                query=q,
+                limit=min(limit, 20),
+                actor_id=resolved_actor,
+            )
+            or []
+        )
         seen_connector_keys: set[str] = set()
         for hit in raw_hits:
             if not isinstance(hit, dict):
@@ -548,6 +631,20 @@ def recall(
             connector_hits.append(hit)
             results.append(hit)
         lanes["connector"] = {"count": len(connector_hits), "ok": True}
+        # An unresolved identity is a misconfiguration, and its symptom —
+        # space-scoped connector content silently missing from every recall —
+        # is indistinguishable from "nothing matched". Say so explicitly
+        # rather than letting the lane report a clean `ok: True` while
+        # withholding rows the caller was entitled to. Identity resolution is
+        # fragile in practice: scripts/memroos-mcp.sh infers the agent id by
+        # walking the process tree for the spawning client, and skips
+        # inference entirely when MEMROOS_AGENT_API_KEY is already in the env.
+        if not resolved_actor:
+            lanes["connector"]["identityUnresolved"] = True
+            lanes["connector"]["warning"] = (
+                "No MEMROOS_USER_ID/MEMROOS_AGENT_ID resolved; space-scoped "
+                "connector content was withheld. Unscoped rows are unaffected."
+            )
     except Exception as exc:  # noqa: BLE001
         lanes["connector"] = {"count": 0, "ok": False, "error": str(exc)}
 

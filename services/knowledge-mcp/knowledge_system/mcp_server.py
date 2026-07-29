@@ -613,11 +613,19 @@ def memory_recall(
             agent_role=agent_role,
         )
 
+    # Connector rows are space-scoped, so the lane authorizes against a
+    # concrete identity. Resolve it the same way knowledge_search does —
+    # explicit arg first, then env — rather than letting the lane fall back
+    # to process env alone, which would silently ignore a caller-supplied
+    # user_id while looking like it had scoped the query.
+    resolved_actor = _memroos_user_id(user_id) or _memroos_agent_id() or ""
+
     return memory_recall_mod.recall(
         query,
         limit=limit,
         knowledge_search_fn=_knowledge,
         memory_search_fn=lambda query, limit=5, **_: memory_search(query=query, limit=limit),
+        actor_id=resolved_actor,
     )
 
 

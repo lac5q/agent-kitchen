@@ -24,12 +24,48 @@ import {
 
 import { callRest, callTool, initialize } from "./mcp-client";
 import { getManifest, type ConnectorManifest, type SyncTool } from "./manifest";
+import { buildNotionContent, extractNotionTitle } from "./notion-content";
+import { fetchNotionPageText } from "./notion-fetch";
 import {
   ensureConnectorSpace,
   readSyncState,
   writeConnectorRecord,
   writeSyncState,
 } from "./store";
+
+/**
+ * Run a tool's optional per-record second pass, mutating `record` in place
+ * with the fields the manifest's `contentFields` expects.
+ *
+ * Mutates rather than returns so the caller's write path is unchanged, and
+ * never throws: an enrichment failure must downgrade the record to what it
+ * would have been without enrichment (for Notion, the URL-only form), not
+ * abort the page and strand every record behind it.
+ */
+async function enrichRecord(input: {
+  manifest: ConnectorManifest;
+  tool: SyncTool;
+  record: Record<string, unknown>;
+  accessToken: string;
+}): Promise<void> {
+  if (input.tool.enrich !== "notion-page") return;
+
+  const pageId = input.record[input.tool.idField];
+  if (typeof pageId !== "string" || !pageId) return;
+
+  try {
+    const title = extractNotionTitle(input.record);
+    const bodyText = await fetchNotionPageText({
+      endpoint: input.manifest.endpoint,
+      accessToken: input.accessToken,
+      pageId,
+    });
+    const content = buildNotionContent({ title, bodyText });
+    if (content) input.record._content = content;
+  } catch (err) {
+    console.warn(`[connectors] notion enrichment failed for ${pageId}:`, err);
+  }
+}
 
 /** Records pulled per (connection, tool) per cycle. One page of Linear issues. */
 export const CONNECTOR_PAGE_SIZE = 100;
@@ -129,6 +165,13 @@ async function syncTool(
       pageComplete = false;
       break;
     }
+
+    await enrichRecord({
+      manifest,
+      tool,
+      record,
+      accessToken,
+    });
 
     const outcome = writeConnectorRecord({
       db,
