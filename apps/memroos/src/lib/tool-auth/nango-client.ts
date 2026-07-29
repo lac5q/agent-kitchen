@@ -255,3 +255,32 @@ export async function getNangoUsage(): Promise<ConnectionUsage> {
     limit <= 10 ? "free" : limit <= 100 ? "starter" : limit <= 1000 ? "growth" : "enterprise";
   return { used: current, limit, plan };
 }
+/**
+ * The set of integration keys that actually exist in this Nango workspace.
+ *
+ * The provider catalog is static, but whether a card can connect is a live
+ * fact about Nango. Hardcoding availability let the two drift: Gmail was
+ * configured in Nango for weeks with no card in the UI, while Google Calendar
+ * kept offering a Connect button after its integration stopped working.
+ *
+ * `null` means "could not determine" (Nango unset or unreachable) and callers
+ * MUST fail open — marking every provider unavailable because Nango had a bad
+ * minute is worse than showing a button that might error.
+ */
+export async function listNangoIntegrationKeys(): Promise<Set<string> | null> {
+  try {
+    const res = await nangoFetch<{
+      data?: Array<{ unique_key?: string; uniqueKey?: string }>;
+      configs?: Array<{ unique_key?: string; uniqueKey?: string }>;
+    }>("/integrations");
+    const rows = res.data ?? res.configs ?? [];
+    const keys = rows
+      .map((r) => r.unique_key ?? r.uniqueKey)
+      .filter((k): k is string => typeof k === "string" && k.length > 0);
+    // An empty list is far more likely to be a shape change than a workspace
+    // with zero integrations; treat it as unknown rather than blanking the UI.
+    return keys.length > 0 ? new Set(keys) : null;
+  } catch {
+    return null;
+  }
+}

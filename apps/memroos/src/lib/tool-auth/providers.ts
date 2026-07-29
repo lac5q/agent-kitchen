@@ -8,6 +8,7 @@ import {
   GitBranch, // GitHub stand-in (source control)
   Cloud,
   Calendar,
+  Mail,
   Video,
   Code2,
 } from "lucide-react";
@@ -205,6 +206,25 @@ const PROVIDERS: readonly Provider[] = [
     scopes: [
       "https://www.googleapis.com/auth/drive.readonly",
       "https://www.googleapis.com/auth/drive.file",
+    ],
+  },
+  {
+    // Gmail has been configured in Nango as `google-mail` the whole time and
+    // is already a first-class ContextSourceType, with the classification
+    // cascade reading `gmail_labels` — but no card existed, so there was no
+    // way to authorize it from the UI. Availability is resolved against the
+    // live Nango integration list, so this card reflects reality rather than
+    // a second hardcoded guess.
+    key: "google-mail",
+    label: "Gmail",
+    icon: Mail,
+    description: "Read mail and labels for memory and classification.",
+    category: "productivity",
+    authMode: "oauth",
+    providerConfigKey: "google-mail",
+    scopes: [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.metadata",
     ],
   },
 

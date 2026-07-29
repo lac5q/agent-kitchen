@@ -10,11 +10,33 @@ import {
   isApiKeyProvider,
   isOAuthProvider,
 } from "@/lib/tool-auth/providers";
+import { listNangoIntegrationKeys } from "@/lib/tool-auth/nango-client";
 import type { ListProvidersResponse } from "@/lib/tool-auth/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
+  // Availability is a live fact about the Nango workspace, not a property of
+  // the catalog. Resolving it here keeps the two from drifting: Gmail sat
+  // configured in Nango with no way to reach it, while Google Calendar kept
+  // offering a Connect button after its integration stopped working.
+  //
+  // Null means "could not determine" (Nango unset or unreachable) and we fail
+  // OPEN — blanking every card because Nango had a bad minute is worse than
+  // showing a button that might error.
+  const nangoKeys = await listNangoIntegrationKeys();
+
+  const reasonFor = (p: ReturnType<typeof getProvidersByCategory>[number]): string | null => {
+    if (!isOAuthProvider(p)) return null;
+    // A statically-known blocker (e.g. a deleted upstream OAuth client) is
+    // more specific than "not configured", so it wins.
+    if (p.unavailableReason) return p.unavailableReason;
+    if (nangoKeys && !nangoKeys.has(p.providerConfigKey)) {
+      return `Not configured in Nango — add the "${p.providerConfigKey}" integration to enable it.`;
+    }
+    return null;
+  };
+
   // /api/tools/providers is a public directory of available providers; the
   // catalog is the same for every installation. Per-user state (connections,
   // activity) lives behind the auth-gated sibling routes. This also lets
@@ -32,7 +54,7 @@ export async function GET(_req: NextRequest) {
         // Non-null when the integration exists but cannot connect yet, so the
         // UI can disable the card with a reason instead of surfacing a raw
         // Nango error after the user clicks.
-        unavailableReason: isOAuthProvider(p) ? p.unavailableReason ?? null : null,
+        unavailableReason: reasonFor(p),
       })),
     })),
   };
