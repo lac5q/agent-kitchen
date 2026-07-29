@@ -2462,18 +2462,38 @@ function applyCurrentSchema(db: Database.Database): void {
       VALUES (new.id, new.content, new.project, new.timestamp, new.agent_id);
     END;
 
-    CREATE TRIGGER messages_au_delete AFTER UPDATE ON messages
-    WHEN old.policy = 'indexable' AND old.visibility IN ('internal','public_safe','public_approved')
+    -- ONE update trigger, not a delete-trigger plus an insert-trigger.
+    --
+    -- SQLite does not guarantee the firing order of two AFTER UPDATE triggers
+    -- on the same table, and in practice the insert fired first: the paired
+    -- 'delete' then removed the tokens the insert had just written. The net
+    -- effect was that every term appearing in BOTH the old and the new
+    -- content silently vanished from the index, while terms unique to the new
+    -- content survived — an index that looks populated and is quietly wrong.
+    --
+    -- Reproduced on cordant-hermes-01 after connector rows began being
+    -- rewritten: a Notion page stored as
+    --   https://app.notion.com/p/Teamspace-Home-...
+    -- and updated to "Teamspace Home. Give your colleagues a place..."
+    -- matched 'colleagues' but NOT 'Teamspace' or 'Home'. This was latent for
+    -- as long as nothing rewrote indexed content, and affects any connector
+    -- record edited upstream (a reworded Linear issue), not just Notion.
+    --
+    -- Both statements now live in one trigger body, where SQLite executes
+    -- them in written order, so the delete always precedes the insert. The
+    -- per-row label conditions move from WHEN into each statement's WHERE so
+    -- the old-row and new-row cases stay independently gated.
+    CREATE TRIGGER messages_au AFTER UPDATE ON messages
     BEGIN
       INSERT INTO messages_fts(messages_fts, rowid, content, project, timestamp, agent_id)
-      VALUES('delete', old.id, old.content, old.project, old.timestamp, old.agent_id);
-    END;
+      SELECT 'delete', old.id, old.content, old.project, old.timestamp, old.agent_id
+      WHERE old.policy = 'indexable'
+        AND old.visibility IN ('internal','public_safe','public_approved');
 
-    CREATE TRIGGER messages_au_insert AFTER UPDATE ON messages
-    WHEN new.policy = 'indexable' AND new.visibility IN ('internal','public_safe','public_approved')
-    BEGIN
       INSERT INTO messages_fts(rowid, content, project, timestamp, agent_id)
-      VALUES (new.id, new.content, new.project, new.timestamp, new.agent_id);
+      SELECT new.id, new.content, new.project, new.timestamp, new.agent_id
+      WHERE new.policy = 'indexable'
+        AND new.visibility IN ('internal','public_safe','public_approved');
     END;
 
     CREATE TRIGGER messages_ad AFTER DELETE ON messages
@@ -2503,6 +2523,33 @@ function applyCurrentSchema(db: Database.Database): void {
       value TEXT
     );
   `);
+
+  // One-time repair for indexes written under the old two-AFTER-UPDATE-trigger
+  // scheme (see messages_au above). Those triggers could fire insert-before-
+  // delete, so every term common to a row's old and new content was silently
+  // removed. Fixing the trigger stops further damage but cannot restore tokens
+  // already dropped — only a rebuild can, and a stale index is invisible: it
+  // returns plausible results while quietly missing rows.
+  //
+  // Guarded by a meta key rather than run every startup: 'rebuild' reindexes
+  // the whole table, which is cheap on a connector-only DB (hundreds of rows)
+  // and decidedly not on one with ~130k messages.
+  try {
+    const REBUILD_KEY = "messages_fts_rebuild_shared_token_repair";
+    const done = db.prepare("SELECT value FROM meta WHERE key = ?").get(REBUILD_KEY);
+    if (!done) {
+      db.exec("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')");
+      db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)").run(
+        REBUILD_KEY,
+        new Date().toISOString(),
+      );
+    }
+  } catch (err) {
+    // A rebuild failure must not block startup — the index stays as it was,
+    // which is the status quo rather than a regression. Surfaced loudly
+    // because silently skipping it leaves recall quietly lossy.
+    console.error("[db-schema] messages_fts rebuild failed:", err);
+  }
 
   // connector_sync_state is created by migration 32 (applyConnectorSyncStateSchema)
   // so existing databases pick it up too — a table added only here would never
