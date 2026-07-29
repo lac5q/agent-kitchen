@@ -75,6 +75,9 @@ def test_recall_federates_qmd_without_agent_passing_collection():
         collections=["meet-recordings-circleback", "meet-recordings-epilogue"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     assert payload["status"] == "ok"
@@ -106,6 +109,9 @@ def test_recall_fathom_impromptu_without_dash_c():
         collections=["meet-recordings-epilogue"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     assert any("Impromptu" in (r.get("title") or "") for r in payload["results"])
@@ -147,6 +153,9 @@ def test_recall_surfaces_per_collection_status_for_spark_recordings():
         collections=["spark-recordings"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     # Parity requirement: same content qmd finds must come back through recall.
@@ -175,6 +184,9 @@ def test_recall_marks_collection_indexed_unrecalled_when_qmd_finds_zero():
         collections=["meet-recordings-zoom"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     coll = payload["collections"]["meet-recordings-zoom"]
@@ -210,6 +222,9 @@ def test_recall_personal_mirror_returns_known_hit():
         collections=["meet-recordings-personal"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     coll = payload["collections"]["meet-recordings-personal"]
@@ -240,6 +255,9 @@ def test_recall_mixed_state_aggregate_uses_deepest_failed_stage():
         collections=["spark-recordings", "meet-recordings-circleback"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fake_run,
     )
     assert payload["collections"]["spark-recordings"]["status"] == "recalled"
@@ -262,6 +280,9 @@ def test_recall_qmd_subprocess_failure_records_error(tmp_path: Path, monkeypatch
         collections=["spark-recordings"],
         knowledge_search_fn=lambda **_: [],
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        # Isolate from the real connector lane: without this the test
+        # passes locally (no DB reachable) and fails on a host where one is.
+        connector_search_fn=lambda **_: [],
         qmd_runner=fail_run,
     )
     coll = payload["collections"]["spark-recordings"]
