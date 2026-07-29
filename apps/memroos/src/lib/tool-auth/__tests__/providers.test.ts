@@ -96,15 +96,14 @@ describe("tool-auth/providers", () => {
   });
 
   it("only marks a provider unavailable when it genuinely cannot connect", () => {
-    // google-calendar-mcp WAS unavailable (OAUTH2 with null client_id/secret,
-    // so Connect died on 'missing client ID, secret and/or scopes'). Real
-    // Google Cloud OAuth credentials were configured in Nango on 2026-07-28
-    // and POST /connect/sessions now returns 201, so the card must offer a
-    // working button rather than a stale "Unavailable" state.
+    // google-calendar-mcp stays unavailable: the Google Cloud OAuth client on
+    // file was deleted, so the consent screen fails with 401 deleted_client.
+    // Offering a Connect button here dead-ends the user in a raw Google error,
+    // which is exactly what unavailableReason exists to prevent.
     const gcal = getProvider("google-calendar");
     expect(gcal).toBeDefined();
     if (gcal && isOAuthProvider(gcal)) {
-      expect(gcal.unavailableReason).toBeUndefined();
+      expect(gcal.unavailableReason).toBeTruthy();
     }
     // Providers with dynamic client registration need no app and stay live.
     const linear = getProvider("linear");

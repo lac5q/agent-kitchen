@@ -172,15 +172,23 @@ const PROVIDERS: readonly Provider[] = [
     authMode: "oauth",
     // Nango prod registers this as `google-calendar-mcp`, not `google-calendar`.
     providerConfigKey: "google-calendar-mcp",
-    // Was unavailable until 2026-07-28: the integration existed with
-    // client_id and client_secret both null, so Connect failed with 'Provider
-    // Config "google-calendar-mcp" is missing client ID, secret and/or
-    // scopes'. Unlike linear-mcp/circleback-mcp (credentials: null = dynamic
-    // client registration, no app needed), this one needs a real Google Cloud
-    // OAuth app. Those credentials are now configured in Nango, verified by
-    // POST /connect/sessions returning 201 for this integration where it
-    // previously errored — so the card is connectable and no longer carries an
-    // unavailableReason.
+    // Needs a real Google Cloud OAuth app; unlike linear-mcp/circleback-mcp
+    // (credentials: null = dynamic client registration, no app needed) there
+    // is nothing Nango can register on our behalf.
+    //
+    // 2026-07-28: credentials WERE loaded into the Nango integration, and
+    // POST /connect/sessions duly returned 201 — but that only proves Nango
+    // accepted the shape. The actual consent screen then failed with
+    // "Error 401: deleted_client — The OAuth client was deleted", because the
+    // stored client no longer exists in Google Cloud. Both Google OAuth
+    // clients on file are deleted, confirmed by probing
+    // POST oauth2.googleapis.com/token (a live client answers invalid_grant;
+    // a dead one answers deleted_client).
+    //
+    // So a 201 from connect/sessions is NOT sufficient evidence this works —
+    // probe the client for liveness before clearing this field again.
+    unavailableReason:
+      "Needs a Google Cloud OAuth client that still exists — the configured client was deleted (Google error 401 deleted_client).",
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
