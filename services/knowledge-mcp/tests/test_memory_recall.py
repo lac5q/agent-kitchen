@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from knowledge_system import memory_recall as mr
 
@@ -286,3 +289,333 @@ def test_source_status_enum_values_are_canonical():
     assert coerce_status(" totally bogus ") == "provider_absent"
     assert SourceStatus.is_terminal("recalled") is True
     assert SourceStatus.is_terminal("indexed_unrecalled") is False
+
+
+# ---------------------------------------------------------------------------
+# CORDANT-HERMES-RECALL-01: connector lane (Linear/Circleback/Notion/GDrive)
+#
+# Regression: 401+ connector rows were indexed into `messages_fts` (correct
+# labels: policy='indexable', visibility='internal') but `recall()` had no
+# lane that queried `conversations.db` at all — indexed, unreachable. These
+# tests assert actual end-to-end retrievability, not just that a lane key
+# exists in the response.
+# ---------------------------------------------------------------------------
+
+
+def _build_conversations_db(path: Path) -> None:
+    """Minimal `messages` + `messages_fts` schema mirroring db-schema.ts,
+    including the eligibility-gated FTS trigger, so the real
+    `sqlite_connector_search` SQL runs against production-shaped data."""
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE messages (
+          id          INTEGER PRIMARY KEY,
+          session_id  TEXT NOT NULL,
+          project     TEXT NOT NULL,
+          agent_id    TEXT NOT NULL,
+          role        TEXT NOT NULL,
+          content     TEXT NOT NULL,
+          timestamp   TEXT NOT NULL,
+          request_id  TEXT,
+          visibility  TEXT NOT NULL DEFAULT 'private',
+          policy      TEXT NOT NULL DEFAULT 'sealed',
+          UNIQUE(session_id, request_id)
+        );
+        CREATE VIRTUAL TABLE messages_fts USING fts5(
+          content, project UNINDEXED, timestamp UNINDEXED, agent_id UNINDEXED,
+          content=messages, content_rowid=id, tokenize='unicode61'
+        );
+        CREATE TRIGGER messages_ai AFTER INSERT ON messages
+          WHEN new.policy = 'indexable' AND new.visibility IN ('internal','public_safe','public_approved')
+          BEGIN
+            INSERT INTO messages_fts(rowid, content, project, timestamp, agent_id)
+            VALUES (new.id, new.content, new.project, new.timestamp, new.agent_id);
+          END;
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def _insert_message(path: Path, **row) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """
+        INSERT INTO messages (session_id, project, agent_id, role, content,
+                               timestamp, request_id, visibility, policy)
+        VALUES (:session_id, :project, :agent_id, :role, :content,
+                :timestamp, :request_id, :visibility, :policy)
+        """,
+        row,
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_connector_lane_returns_known_linear_issue_end_to_end(tmp_path: Path):
+    """A real Linear issue synced into `messages` must come back from
+    `recall()` via the actual SQL lane — not a mocked connector_search_fn."""
+    db_path = tmp_path / "conversations.db"
+    _build_conversations_db(db_path)
+    _insert_message(
+        db_path,
+        session_id="linear:23f85f83-2633-4c35-aa60-128871f502dd",
+        project="memroos",
+        agent_id="connector-sync",
+        role="connector",
+        content="COR-101 Draft Alacriti FI CAB segment concepts",
+        timestamp="2026-07-20T00:00:00Z",
+        request_id="COR-101",
+        visibility="internal",
+        policy="indexable",
+    )
+    # A row that must NOT surface: sealed/private, same as ordinary chat.
+    _insert_message(
+        db_path,
+        session_id="linear:23f85f83-2633-4c35-aa60-128871f502dd",
+        project="memroos",
+        agent_id="connector-sync",
+        role="connector",
+        content="COR-999 Alacriti internal secret notes",
+        timestamp="2026-07-20T00:00:00Z",
+        request_id="COR-999",
+        visibility="private",
+        policy="sealed",
+    )
+
+    payload = mr.recall(
+        "Alacriti",
+        limit=10,
+        collections=[],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        connector_search_fn=lambda **kw: mr.sqlite_connector_search(
+            kw["query"], limit=kw.get("limit", 10), db_path=db_path
+        ),
+    )
+    assert payload["status"] == "ok"
+    titles = [r.get("title") for r in payload["results"]]
+    assert any("COR-101" in (t or "") for t in titles)
+    assert not any("COR-999" in (t or "") for t in titles)
+    assert lane_counts(payload)["connector"] == 1
+
+
+def lane_counts(payload: dict) -> dict:
+    counts: dict = {}
+    for r in payload["results"]:
+        counts[r["lane"]] = counts.get(r["lane"], 0) + 1
+    return counts
+
+
+def test_connector_lane_collapses_duplicate_circleback_sync_connections(tmp_path: Path):
+    """Two Circleback sync connections indexing the same meeting under two
+    different session_ids must collapse to ONE hit — the provider-native
+    request_id is identical across both, and that is the dedup key."""
+    db_path = tmp_path / "conversations.db"
+    _build_conversations_db(db_path)
+    for session_id in (
+        "circleback:3aba3a81-49bd-4b2c-970e-258c9069fa52",
+        "circleback:89f3fbd3-89e7-4433-a70e-d08d1fa3e2f7",
+    ):
+        _insert_message(
+            db_path,
+            session_id=session_id,
+            project="memroos",
+            agent_id="connector-sync",
+            role="connector",
+            content="Eric <> Luis\n\nGTM operating system discussion",
+            timestamp="2026-07-15T00:00:00Z",
+            request_id="3RzgElh63z0RLHXbeoEzP",
+            visibility="internal",
+            policy="indexable",
+        )
+
+    payload = mr.recall(
+        "GTM operating system",
+        limit=10,
+        collections=[],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        connector_search_fn=lambda **kw: mr.sqlite_connector_search(
+            kw["query"], limit=kw.get("limit", 10), db_path=db_path
+        ),
+    )
+    assert lane_counts(payload)["connector"] == 1
+
+
+def test_connector_lane_does_not_affect_aggregate_status():
+    """A query with zero connector hits must not drag `aggregateStatus` down.
+    Connector match/no-match is a normal retrieval outcome, not a pipeline
+    stage — folding it into compute_aggregate_status would produce constant
+    false alerts on every query with no connector hit (see Phase 186's
+    warning about un-tuned health checks training operators to ignore them)."""
+
+    def fake_qmd_run(args, **kwargs):
+        collection = args[args.index("-c") + 1] if "-c" in args else ""
+        hits = []
+        if collection == "spark-recordings":
+            hits = [{"file": "x.md", "title": "x", "snippet": "matched", "score": 1.0}]
+        return SimpleNamespace(returncode=0, stdout=json.dumps(hits), stderr="")
+
+    payload = mr.recall(
+        "x",
+        limit=5,
+        collections=["spark-recordings"],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        qmd_runner=fake_qmd_run,
+        connector_search_fn=lambda **_: [],  # zero connector hits
+    )
+    assert payload["collections"]["spark-recordings"]["status"] == "recalled"
+    assert payload["aggregateStatus"] == "recalled"
+    assert "connector" not in payload["collections"]
+    assert payload["lanes"]["connector"] == {"count": 0, "ok": True}
+
+
+def test_connector_lane_falls_through_to_http_when_no_db_resolvable(monkeypatch):
+    """No conversations.db resolvable at all (the cordant-hermes-01 shape:
+    the file is Docker-volume-only) -> falls through to the HTTP fallback,
+    which raises ConnectorLaneError when nothing is listening. `recall()`
+    must catch that and report `ok: False`, not silently `ok: True`/empty —
+    that silent-healthy shape is exactly the original defect."""
+    monkeypatch.delenv("MEMROOS_CONVERSATIONS_DB", raising=False)
+    monkeypatch.delenv("SQLITE_DB_PATH", raising=False)
+    monkeypatch.delenv("MEMROOS_ROOT", raising=False)
+    monkeypatch.delenv("MEMROOS_APP_URL", raising=False)
+    monkeypatch.delenv("MEMROOS_BASE_URL", raising=False)
+    # Port 1 is a reserved, always-unused TCP port -> guaranteed connection refusal.
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://127.0.0.1:1")
+
+    payload = mr.recall(
+        "anything",
+        limit=10,
+        collections=[],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+    )
+    assert payload["lanes"]["connector"]["ok"] is False
+    assert "connector" not in payload["collections"]
+
+
+def test_sqlite_connector_search_raises_when_explicit_path_unusable(tmp_path: Path):
+    """An explicitly resolved path (not 'nothing configured') that fails to
+    open is a real error — schema drift or corruption — and must raise
+    rather than silently degrade to an empty result."""
+    missing = tmp_path / "does-not-exist.db"
+    with pytest.raises(mr.ConnectorLaneError):
+        mr.sqlite_connector_search("anything", limit=10, db_path=missing)
+
+
+# ---------------------------------------------------------------------------
+# HTTP fallback lane (cordant-hermes-01: conversations.db lives inside a
+# Docker-managed volume the host-side MCP process cannot traverse into).
+# Auth is loopback-based (GET /api/internal/connector-search) — no
+# credential is passed from this side, matching that route's auth model.
+# ---------------------------------------------------------------------------
+
+
+def test_http_connector_search_raises_on_non_200(monkeypatch):
+    class FakeResponse:
+        status = 401
+        def read(self):
+            return b"{}"
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: FakeResponse())
+    with pytest.raises(mr.ConnectorLaneError):
+        mr.http_connector_search("q", limit=5, base_url="http://x")
+
+
+def test_http_connector_search_raises_on_connection_error(monkeypatch):
+    def boom(*a, **kw):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    with pytest.raises(mr.ConnectorLaneError):
+        mr.http_connector_search("q", limit=5, base_url="http://x")
+
+
+def test_http_connector_search_raises_on_non_ok_payload(monkeypatch):
+    class FakeResponse:
+        status = 200
+        def read(self):
+            return json.dumps({"status": "error", "error": "boom"}).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: FakeResponse())
+    with pytest.raises(mr.ConnectorLaneError):
+        mr.http_connector_search("q", limit=5, base_url="http://x")
+
+
+def test_http_connector_search_parses_successful_response(monkeypatch):
+    class FakeResponse:
+        status = 200
+        def read(self):
+            return json.dumps(
+                {
+                    "status": "ok",
+                    "results": [
+                        {
+                            "id": 1,
+                            "session_id": "linear:conn-1",
+                            "request_id": "COR-101",
+                            "content": "COR-101 Draft Alacriti FI CAB segment concepts",
+                            "timestamp": "2026-07-20T00:00:00Z",
+                            "rank": -2.5,
+                        }
+                    ],
+                }
+            ).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    captured = {}
+
+    def fake_urlopen(url, timeout=None):
+        captured["url"] = url
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    hits = mr.http_connector_search("Alacriti", limit=5, base_url="http://127.0.0.1:3000")
+
+    assert captured["url"].startswith("http://127.0.0.1:3000/api/internal/connector-search?")
+    assert "q=Alacriti" in captured["url"]
+    assert len(hits) == 1
+    assert hits[0]["metadata"]["request_id"] == "COR-101"
+    assert hits[0]["collection"] == "linear"
+
+
+def test_connector_fts_query_falls_back_to_plain_match_on_metacharacters(tmp_path: Path):
+    """A query containing FTS5 metacharacters (unbalanced quote) must not
+    error the whole lane — it degrades to a plain-token match, same as
+    recallByKeyword (apps/memroos/src/lib/db-ingest.ts)."""
+    db_path = tmp_path / "conversations.db"
+    _build_conversations_db(db_path)
+    _insert_message(
+        db_path,
+        session_id="notion:conn-1",
+        project="memroos",
+        agent_id="connector-sync",
+        role="connector",
+        content="Q3 roadmap: multi-tenant rollout",
+        timestamp="2026-07-20T00:00:00Z",
+        request_id="notion-page-1",
+        visibility="internal",
+        policy="indexable",
+    )
+    hits = mr.sqlite_connector_search('multi-tenant"unbalanced', limit=5, db_path=db_path)
+    # The malformed phrase-quoted form raises internally and is caught;
+    # the plain-token fallback still finds nothing for that exact garbled
+    # term, but the call itself must not raise.
+    assert hits == []
+    hits2 = mr.sqlite_connector_search("multi-tenant", limit=5, db_path=db_path)
+    assert len(hits2) == 1

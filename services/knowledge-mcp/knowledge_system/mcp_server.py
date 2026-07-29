@@ -596,11 +596,13 @@ def memory_recall(
     user_id: str = "",
     agent_role: str = "",
 ) -> dict:
-    """Unified meeting/memory recall across QMD meeting collections + knowledge + mem0.
+    """Unified recall across QMD meeting collections + knowledge + connectors + mem0.
 
     Prefer this over collection-aware `qmd -c` or naive `knowledge_search` when
-    the task is “find the meeting” (Circleback / Fathom / Zoom / Google Meet).
-    Agents do not need to know private collection names.
+    the task is “find the meeting” (Circleback / Fathom / Zoom / Google Meet)
+    or "find the issue/doc/page" (Linear / Notion / Google Drive — anything
+    synced in as a `role='connector'` row in `conversations.db`). Agents do
+    not need to know private collection names or connector session ids.
     """
     def _knowledge(**kwargs):
         return knowledge_search(

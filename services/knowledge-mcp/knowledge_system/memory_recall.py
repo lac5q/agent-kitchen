@@ -1,13 +1,24 @@
-"""Unified meeting/memory recall — federate QMD meeting collections + knowledge + mem0.
+"""Unified meeting/memory recall — federate QMD meeting collections + knowledge + mem0 + connectors.
 
 Agents call `memory_recall(query)` without knowing Circleback vs Fathom vs Zoom
 collection names. Storage stays federated at query time (private data/context
 never merges into git).
+
+Connector lane (CORDANT-HERMES-RECALL-01): `messages` rows with `role='connector'`
+(Linear, Circleback, Notion, Google Drive, ...) land in `conversations.db` and
+are indexed into `messages_fts` by the same trigger that indexes chat messages
+(WHEN policy='indexable' AND visibility IN ('internal','public_safe',
+'public_approved')). Prior to this lane, those 401+ indexed connector records
+were unreachable through `recall()` — indexed but never searched. See
+`services/connmem/recall.py` for a *separate*, currently-unwired attempt at
+this that searches a projected QMD file tree; that tree does not exist on
+disk anywhere this has been verified, so it is not used here.
 """
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -161,6 +172,206 @@ def qmd_search_collection(
     return hits
 
 
+def conversations_db_path() -> Optional[Path]:
+    """Resolve `conversations.db` the same way the app does (SQLITE_DB_PATH)."""
+    env = os.environ.get("MEMROOS_CONVERSATIONS_DB") or os.environ.get("SQLITE_DB_PATH")
+    if env:
+        p = Path(env)
+        return p if p.is_file() else None
+    repo = os.environ.get("MEMROOS_ROOT", "").strip()
+    if repo:
+        p = Path(repo) / "data" / "conversations.db"
+        if p.is_file():
+            return p
+    return None
+
+
+def _format_connector_rows(
+    rows: list[tuple],
+) -> list[dict[str, Any]]:
+    """Shared row -> hit formatting for both the direct-sqlite and HTTP-fallback
+    paths, so source/title/dedup-id derivation lives in exactly one place."""
+    hits: list[dict[str, Any]] = []
+    for row_id, session_id, request_id, content, timestamp, rank in rows:
+        source = str(session_id or "").split(":", 1)[0] or "connector"
+        body = str(content or "")
+        title = body.splitlines()[0].strip() if body.strip() else source
+        hits.append(
+            {
+                "lane": "connector",
+                "collection": source,
+                "title": title[:200] or source,
+                "content": body[:4000],
+                "score": -float(rank) if rank is not None else None,
+                "path": None,
+                # request_id is the provider-native id (e.g. a Circleback
+                # meeting id or a Linear issue key) and is stable across
+                # duplicate sync connections for the same underlying
+                # record — this is the dedup key, not the row id.
+                "id": f"connector:{source}:{request_id or row_id}",
+                "metadata": {
+                    "source": source,
+                    "session_id": session_id,
+                    "request_id": request_id,
+                    "timestamp": timestamp,
+                },
+            }
+        )
+    return hits
+
+
+class ConnectorLaneError(RuntimeError):
+    """Raised when the connector lane could not execute at all — as opposed
+    to executing and finding zero matches. Callers MUST NOT report the lane
+    as `ok: True` when this is raised: a lane that swallows a real failure
+    into an empty result is exactly the "indexed but never searched" shape
+    of the original defect this lane exists to fix, just moved one layer
+    down. `recall()` catches this (and any other exception) and records
+    `lanes["connector"] = {"ok": False, "error": ...}`."""
+
+
+def _connector_app_base_url() -> str:
+    return (
+        os.environ.get("MEMROOS_APP_URL", "").strip()
+        or os.environ.get("MEMROOS_BASE_URL", "").strip()
+        or f"http://127.0.0.1:{os.environ.get('MEMROOS_PORT', '3000').strip()}"
+    )
+
+
+def http_connector_search(
+    query: str,
+    *,
+    limit: int = 10,
+    base_url: Optional[str] = None,
+    timeout: float = 5.0,
+) -> list[dict[str, Any]]:
+    """Fallback lane for hosts where conversations.db is only reachable
+    inside a Docker-managed volume (e.g. cordant-hermes-01: the host-side
+    MCP process runs as an unprivileged user that cannot traverse
+    /var/lib/docker). Calls the app's GET /api/internal/connector-search,
+    which authorizes loopback callers with no credential required (see that
+    route's docstring) — this process and the app share the same host.
+
+    Uses stdlib `urllib` rather than `httpx` so this fallback keeps working
+    even if a dependency refresh is needed on the host — the MCP entrypoint
+    (scripts/memroos-mcp.sh) does not run `pip install` on a plain
+    `git pull`, only when its own httpx/fastmcp import check fails.
+
+    Raises ConnectorLaneError on any failure (unreachable, non-200,
+    malformed JSON) — never silently degrades to an empty list here; the
+    caller decides what "lane unavailable" should look like.
+    """
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    url_base = (base_url or _connector_app_base_url()).rstrip("/")
+    qs = urllib.parse.urlencode({"q": query, "limit": max(1, int(limit))})
+    url = f"{url_base}/api/internal/connector-search?{qs}"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 — loopback only
+            status = getattr(resp, "status", 200)
+            raw = resp.read().decode("utf-8")
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise ConnectorLaneError(f"connector HTTP fallback unreachable at {url_base}: {exc}") from exc
+    if status != 200:
+        raise ConnectorLaneError(f"connector HTTP fallback returned HTTP {status}")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConnectorLaneError(f"connector HTTP fallback returned invalid JSON: {exc}") from exc
+    if not isinstance(payload, dict) or payload.get("status") != "ok":
+        raise ConnectorLaneError(f"connector HTTP fallback returned a non-ok payload: {payload!r}")
+    rows = [
+        (
+            r.get("id"),
+            r.get("session_id"),
+            r.get("request_id"),
+            r.get("content"),
+            r.get("timestamp"),
+            r.get("rank"),
+        )
+        for r in (payload.get("results") or [])
+        if isinstance(r, dict)
+    ]
+    return _format_connector_rows(rows)
+
+
+def _connector_fts_query(conn: sqlite3.Connection, query: str, limit: int) -> list[tuple]:
+    """Phrase-first, plain-fallback MATCH — mirrors `recallByKeyword`'s
+    pattern (apps/memroos/src/lib/db-ingest.ts) so an FTS5 metacharacter in
+    the query text (unbalanced quote, bare hyphen, colon, ...) degrades to a
+    plain-token match instead of erroring the whole connector lane."""
+    sql = """
+        SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp,
+               bm25(messages_fts) AS rank
+        FROM messages_fts
+        JOIN messages m ON m.id = messages_fts.rowid
+        WHERE messages_fts MATCH ?
+          AND m.role = 'connector'
+          AND m.policy = 'indexable'
+          AND m.visibility IN ('internal', 'public_safe', 'public_approved')
+        ORDER BY rank
+        LIMIT ?
+    """
+    safe_limit = max(1, int(limit))
+    try:
+        rows = conn.execute(sql, (f'"{query}"', safe_limit)).fetchall()
+        if rows:
+            return rows
+    except sqlite3.OperationalError:
+        pass
+    try:
+        return conn.execute(sql, (query, safe_limit)).fetchall()
+    except sqlite3.OperationalError:
+        # A malformed query string (e.g. an unescaped quote) is a client-input
+        # shape, not a lane-health failure — degrade to no matches rather
+        # than raising, matching recallByKeyword's own catch-and-return-[].
+        return []
+
+
+def sqlite_connector_search(
+    query: str,
+    *,
+    limit: int = 10,
+    db_path: Optional[Path] = None,
+) -> list[dict[str, Any]]:
+    """Search connector-sourced `messages` rows via the existing `messages_fts` index.
+
+    Mirrors the FTS trigger's eligibility predicate exactly
+    (`policy='indexable' AND visibility IN (...)`) — this is defense-in-depth
+    against drift, since any row that made it into `messages_fts` already
+    satisfies it. Scoped to `role='connector'` so chat messages (already
+    covered by other lanes/products) are not duplicated here.
+
+    Resolution order:
+    - No `conversations.db` resolvable at all (the normal case on hosts
+      where it lives inside a Docker-managed volume, e.g. cordant-hermes-01)
+      -> fall through to `http_connector_search`.
+    - A path IS resolved (explicit `db_path`, or `conversations_db_path()`
+      found a file) but fails to open or query -> raise `ConnectorLaneError`.
+      This is deliberately NOT a silent fallback to `[]`: a resolved path
+      that fails to query is schema drift or corruption, a real bug, not
+      "try the other lane" — silently swallowing it is exactly how the
+      original defect (indexed, never searched) went unnoticed.
+    """
+    path = db_path or conversations_db_path()
+    if path is None:
+        return http_connector_search(query, limit=limit)
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.OperationalError as exc:
+        raise ConnectorLaneError(f"could not open conversations.db at {path}: {exc}") from exc
+    try:
+        rows = _connector_fts_query(conn, query, limit)
+    except sqlite3.OperationalError as exc:
+        raise ConnectorLaneError(f"connector query failed against {path}: {exc}") from exc
+    finally:
+        conn.close()
+
+    return _format_connector_rows(rows)
+
+
 def recall(
     query: str,
     *,
@@ -169,6 +380,7 @@ def recall(
     knowledge_search_fn: Optional[Callable[..., list]] = None,
     memory_search_fn: Optional[Callable[..., dict]] = None,
     qmd_runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
+    connector_search_fn: Optional[Callable[..., list]] = None,
 ) -> dict[str, Any]:
     """Federate meeting QMD + knowledge literal + mem0 into one result set."""
     q = (query or "").strip()
@@ -306,8 +518,41 @@ def recall(
     else:
         lanes["mem0"] = {"count": 0, "ok": False, "error": "memory_search not wired"}
 
-    # Prefer QMD meeting hits first, then knowledge, then mem0; soft score sort within lane
-    lane_rank = {"qmd": 0, "knowledge": 1, "mem0": 2}
+    # Connector lane (Linear, Circleback, Notion, Google Drive, ...) — quaternary.
+    # Deliberately NOT folded into `collections_status` / `compute_aggregate_status`:
+    # that rollup reports the weakest *pipeline* stage (provider_absent ->
+    # indexed_unrecalled -> recalled) for the QMD meeting collections it was
+    # designed for. "This query matched no connector record" is a normal
+    # retrieval outcome, not a degraded pipeline stage — folding it in would
+    # drag aggregateStatus down on every query with no connector hit and train
+    # operators to ignore it (the exact alert-fatigue failure Phase 186 warns
+    # about for host-aware health checks). Connector lane health is reported
+    # separately in `lanes["connector"]`.
+    connector_hits: list[dict[str, Any]] = []
+    search_connectors = connector_search_fn or sqlite_connector_search
+    try:
+        raw_hits = search_connectors(query=q, limit=min(limit, 20)) or []
+        seen_connector_keys: set[str] = set()
+        for hit in raw_hits:
+            if not isinstance(hit, dict):
+                continue
+            key = str(hit.get("id") or "")
+            # Dedup on the connector-native id (request_id), not row id/path —
+            # duplicate sync connections (e.g. two Circleback connections
+            # indexing the same meeting under different session_ids) share the
+            # same request_id and must collapse to one hit.
+            if key in seen or key in seen_connector_keys:
+                continue
+            seen.add(key)
+            seen_connector_keys.add(key)
+            connector_hits.append(hit)
+            results.append(hit)
+        lanes["connector"] = {"count": len(connector_hits), "ok": True}
+    except Exception as exc:  # noqa: BLE001
+        lanes["connector"] = {"count": 0, "ok": False, "error": str(exc)}
+
+    # Prefer QMD meeting hits first, then knowledge, then connector, then mem0.
+    lane_rank = {"qmd": 0, "knowledge": 1, "connector": 2, "mem0": 3}
 
     def sort_key(item: dict[str, Any]):
         score = item.get("score")
