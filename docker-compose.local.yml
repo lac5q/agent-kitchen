@@ -239,10 +239,13 @@ services:
     volumes:
       - connmem-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'
-import urllib.request
-urllib.request.urlopen('http://127.0.0.1:3290/health', timeout=3)
-PY"]
+      # Single line, no heredoc: this is YAML *flow* style (inside [...]), where a
+      # double-quoted scalar spanning lines folds its newlines into spaces. The
+      # heredoc that used to live here therefore reached /bin/sh as one line, so
+      # the shell parsed the "(" itself and the check failed with
+      # 'Syntax error: "(" unexpected' every 30s — connmem reported unhealthy
+      # for days while /health was returning 200 the whole time.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3290/health', timeout=3)\""]
       interval: 30s
       timeout: 5s
       retries: 5
