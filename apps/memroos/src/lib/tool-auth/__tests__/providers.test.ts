@@ -96,14 +96,14 @@ describe("tool-auth/providers", () => {
   });
 
   it("only marks a provider unavailable when it genuinely cannot connect", () => {
-    // google-calendar-mcp stays unavailable: the Google Cloud OAuth client on
-    // file was deleted, so the consent screen fails with 401 deleted_client.
-    // Offering a Connect button here dead-ends the user in a raw Google error,
-    // which is exactly what unavailableReason exists to prevent.
+    // Calendar now points at the plain `google-calendar` template, which uses
+    // Nango's shared developer app like Drive and Gmail — so it carries no
+    // hardcoded blocker. Availability is resolved live against Nango instead.
     const gcal = getProvider("google-calendar");
     expect(gcal).toBeDefined();
     if (gcal && isOAuthProvider(gcal)) {
-      expect(gcal.unavailableReason).toBeTruthy();
+      expect(gcal.providerConfigKey).toBe("google-calendar");
+      expect(gcal.unavailableReason).toBeUndefined();
     }
     // Providers with dynamic client registration need no app and stay live.
     const linear = getProvider("linear");
@@ -143,6 +143,7 @@ describe("tool-auth/providers", () => {
     "circleback-mcp",
     "github",
     "google",
+    "google-calendar",
     "google-calendar-mcp",
     "google-drive",
     "google-mail",

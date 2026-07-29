@@ -171,25 +171,21 @@ const PROVIDERS: readonly Provider[] = [
     description: "List, create, and update events across your calendars.",
     category: "productivity",
     authMode: "oauth",
-    // Nango prod registers this as `google-calendar-mcp`, not `google-calendar`.
-    providerConfigKey: "google-calendar-mcp",
-    // Needs a real Google Cloud OAuth app; unlike linear-mcp/circleback-mcp
-    // (credentials: null = dynamic client registration, no app needed) there
-    // is nothing Nango can register on our behalf.
+    // The plain `google-calendar` template, NOT `google-calendar-mcp`.
     //
-    // 2026-07-28: credentials WERE loaded into the Nango integration, and
-    // POST /connect/sessions duly returned 201 — but that only proves Nango
-    // accepted the shape. The actual consent screen then failed with
-    // "Error 401: deleted_client — The OAuth client was deleted", because the
-    // stored client no longer exists in Google Cloud. Both Google OAuth
-    // clients on file are deleted, confirmed by probing
-    // POST oauth2.googleapis.com/token (a live client answers invalid_grant;
-    // a dead one answers deleted_client).
+    // The MCP variant cannot use Nango's built-in shared developer app:
+    // linear-mcp and circleback-mcp get away with it because those servers
+    // support dynamic client registration, and Google does not. So the MCP
+    // variant demands a self-registered Google Cloud OAuth app, and the one
+    // it had was deleted upstream — every consent attempt died on
+    // "401 deleted_client".
     //
-    // So a 201 from connect/sessions is NOT sufficient evidence this works —
-    // probe the client for liveness before clearing this field again.
-    unavailableReason:
-      "Needs a Google Cloud OAuth client that still exists — the configured client was deleted (Google error 401 deleted_client).",
+    // The plain template rides the same shared app as google-drive
+    // (client 902122474599-…), which is why Drive and Gmail worked all along
+    // while Calendar did not. Availability is resolved live against Nango, so
+    // this needs no hardcoded unavailableReason — if the integration is ever
+    // removed, the card says so on its own.
+    providerConfigKey: "google-calendar",
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
@@ -262,8 +258,8 @@ const PROVIDERS: readonly Provider[] = [
   // They previously held supabase, aws, intercom, stripe, plaid and
   // generic-rest as `api-key` cards. Every one rendered a Connect button, and
   // none of them had a Nango integration behind it — Nango prod contains only
-  // circleback-mcp, github, google, google-calendar-mcp, google-drive,
-  // google-mail, linear-mcp, mcp-generic, notion and slack-mcp. The operator
+  // circleback-mcp, github, google, google-calendar, google-calendar-mcp,
+  // google-drive, google-mail, linear-mcp, mcp-generic, notion and slack-mcp. The operator
   // never set any of the six up, so the cards were an aspirational list
   // presented as working functionality. Removed 2026-07-27.
   //
