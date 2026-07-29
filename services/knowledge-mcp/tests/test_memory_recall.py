@@ -320,7 +320,15 @@ def _build_conversations_db(path: Path) -> None:
           request_id  TEXT,
           visibility  TEXT NOT NULL DEFAULT 'private',
           policy      TEXT NOT NULL DEFAULT 'sealed',
+          space_id    TEXT,
           UNIQUE(session_id, request_id)
+        );
+        CREATE TABLE space_members (
+          space_id    TEXT NOT NULL,
+          member_id   TEXT NOT NULL,
+          member_type TEXT NOT NULL DEFAULT 'human',
+          role        TEXT NOT NULL DEFAULT 'member',
+          PRIMARY KEY (space_id, member_id)
         );
         CREATE VIRTUAL TABLE messages_fts USING fts5(
           content, project UNINDEXED, timestamp UNINDEXED, agent_id UNINDEXED,
@@ -339,15 +347,26 @@ def _build_conversations_db(path: Path) -> None:
 
 
 def _insert_message(path: Path, **row) -> None:
+    row.setdefault("space_id", None)
     conn = sqlite3.connect(path)
     conn.execute(
         """
         INSERT INTO messages (session_id, project, agent_id, role, content,
-                               timestamp, request_id, visibility, policy)
+                               timestamp, request_id, visibility, policy, space_id)
         VALUES (:session_id, :project, :agent_id, :role, :content,
-                :timestamp, :request_id, :visibility, :policy)
+                :timestamp, :request_id, :visibility, :policy, :space_id)
         """,
         row,
+    )
+    conn.commit()
+    conn.close()
+
+
+def _add_space_member(path: Path, space_id: str, member_id: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "INSERT OR REPLACE INTO space_members (space_id, member_id) VALUES (?, ?)",
+        (space_id, member_id),
     )
     conn.commit()
     conn.close()
@@ -592,6 +611,139 @@ def test_http_connector_search_parses_successful_response(monkeypatch):
     assert len(hits) == 1
     assert hits[0]["metadata"]["request_id"] == "COR-101"
     assert hits[0]["collection"] == "linear"
+
+
+def _seed_space_scoped_db(tmp_path: Path) -> Path:
+    db_path = tmp_path / "conversations.db"
+    _build_conversations_db(db_path)
+    _insert_message(
+        db_path,
+        session_id="notion:conn-1",
+        project="memroos",
+        agent_id="connector-sync",
+        role="connector",
+        content="Alacriti private notion page body",
+        timestamp="2026-07-29T00:00:00Z",
+        request_id="notion-page-1",
+        visibility="internal",
+        policy="indexable",
+        space_id="spc_notion",
+    )
+    _insert_message(
+        db_path,
+        session_id="linear:conn-1",
+        project="memroos",
+        agent_id="connector-sync",
+        role="connector",
+        content="Alacriti unscoped linear issue",
+        timestamp="2026-07-29T00:01:00Z",
+        request_id="COR-101",
+        visibility="internal",
+        policy="indexable",
+    )
+    return db_path
+
+
+def test_space_scoped_connector_row_hidden_from_non_member(tmp_path: Path):
+    """The whole point of space scoping: a Notion page in a per-connection
+    space must not come back for someone outside that space, even though its
+    labels (internal/indexable) would otherwise allow any actor."""
+    db_path = _seed_space_scoped_db(tmp_path)
+    hits = mr.sqlite_connector_search(
+        "Alacriti", limit=10, db_path=db_path, actor_id="user:stranger"
+    )
+    ids = [h["id"] for h in hits]
+    assert ids == ["connector:linear:COR-101"]
+
+
+def test_space_scoped_connector_row_visible_to_member(tmp_path: Path):
+    db_path = _seed_space_scoped_db(tmp_path)
+    _add_space_member(db_path, "spc_notion", "user:member")
+    hits = mr.sqlite_connector_search(
+        "Alacriti", limit=10, db_path=db_path, actor_id="user:member"
+    )
+    ids = sorted(h["id"] for h in hits)
+    assert ids == ["connector:linear:COR-101", "connector:notion:notion-page-1"]
+
+
+def test_space_scoped_row_hidden_when_actor_identity_is_unresolved(tmp_path: Path):
+    """No resolvable identity must not mean 'see everything'."""
+    db_path = _seed_space_scoped_db(tmp_path)
+    _add_space_member(db_path, "spc_notion", "user:member")
+    hits = mr.sqlite_connector_search("Alacriti", limit=10, db_path=db_path, actor_id="")
+    ids = [h["id"] for h in hits]
+    assert ids == ["connector:linear:COR-101"]
+
+
+def test_space_scoped_rows_withheld_when_space_members_table_absent(tmp_path: Path):
+    """A DB predating the spaces machinery cannot express membership, so
+    space-scoped rows must be withheld — but unscoped rows must still return
+    (a silent empty lane here would be the original defect all over again)."""
+    db_path = tmp_path / "conversations.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE messages (
+          id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, project TEXT NOT NULL,
+          agent_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
+          timestamp TEXT NOT NULL, request_id TEXT,
+          visibility TEXT NOT NULL DEFAULT 'private',
+          policy TEXT NOT NULL DEFAULT 'sealed', space_id TEXT,
+          UNIQUE(session_id, request_id)
+        );
+        CREATE VIRTUAL TABLE messages_fts USING fts5(
+          content, project UNINDEXED, timestamp UNINDEXED, agent_id UNINDEXED,
+          content=messages, content_rowid=id, tokenize='unicode61'
+        );
+        CREATE TRIGGER messages_ai AFTER INSERT ON messages
+          WHEN new.policy = 'indexable' AND new.visibility IN ('internal','public_safe','public_approved')
+          BEGIN
+            INSERT INTO messages_fts(rowid, content, project, timestamp, agent_id)
+            VALUES (new.id, new.content, new.project, new.timestamp, new.agent_id);
+          END;
+        """
+    )
+    conn.commit()
+    conn.close()
+    _insert_message(
+        db_path,
+        session_id="notion:conn-1", project="memroos", agent_id="connector-sync",
+        role="connector", content="Alacriti scoped", timestamp="2026-07-29T00:00:00Z",
+        request_id="n-1", visibility="internal", policy="indexable", space_id="spc_notion",
+    )
+    _insert_message(
+        db_path,
+        session_id="linear:conn-1", project="memroos", agent_id="connector-sync",
+        role="connector", content="Alacriti unscoped", timestamp="2026-07-29T00:01:00Z",
+        request_id="COR-101", visibility="internal", policy="indexable",
+    )
+
+    hits = mr.sqlite_connector_search("Alacriti", limit=10, db_path=db_path, actor_id="user:x")
+    ids = [h["id"] for h in hits]
+    assert ids == ["connector:linear:COR-101"]
+
+
+def test_http_connector_search_sends_actor_identity(monkeypatch):
+    """The HTTP lane must carry identity too, or the space gate is a bypass
+    on exactly the hosts that use it (cordant-hermes-01)."""
+    class FakeResponse:
+        status = 200
+        def read(self):
+            return json.dumps({"status": "ok", "results": []}).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    captured = {}
+
+    def fake_urlopen(url, timeout=None):
+        captured["url"] = url
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    mr.http_connector_search("q", limit=5, base_url="http://x", actor_id="user:member")
+    assert "user_id=user%3Amember" in captured["url"]
 
 
 def test_connector_fts_query_falls_back_to_plain_match_on_metacharacters(tmp_path: Path):

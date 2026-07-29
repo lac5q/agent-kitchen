@@ -25,6 +25,15 @@ export interface MemoryUseActor {
   project?: string | null;
   /** Reserved for delegated agent acting-for; unused for allow decisions in owner-ACL slice A. */
   actingForUserId?: string | null;
+  /**
+   * Space ids this actor is a member of (see `space_members`). Required to
+   * read any row carrying a `space_id`; see the space gate in
+   * `authorizeMemoryUse`. `undefined`/omitted is treated as "no memberships"
+   * and therefore denies space-scoped rows — fail closed, because a caller
+   * that forgot to resolve memberships must not thereby gain access.
+   * `filterAuthorizedMessageRows` resolves this for you.
+   */
+  spaceIds?: readonly string[] | null;
 }
 
 export interface MemoryLabelSnapshot {
@@ -34,6 +43,13 @@ export interface MemoryLabelSnapshot {
   policy?: VaultPolicy | null;
   /** Mailbox/meeting owner; required for private agent_visible|indexable allow path. */
   ownerUserId?: string | null;
+  /**
+   * `messages.space_id`. When set, the row is space-scoped: only members of
+   * that space (plus admins) may use it, regardless of visibility/policy.
+   * NULL/absent preserves pre-space behaviour exactly — which is what every
+   * existing row has, so this gate is additive rather than a broad revocation.
+   */
+  spaceId?: string | null;
 }
 
 export interface MemoryUseDecisionResult {
@@ -78,6 +94,14 @@ function readOwnerUserId(record: Record<string, unknown>): string | null | undef
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function readSpaceId(record: Record<string, unknown>): string | null | undefined {
+  const raw = record.spaceId ?? record.space_id;
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function labelFromRecord(record: Record<string, unknown>): MemoryLabelSnapshot | undefined {
   const visibility = typeof record.visibility === "string" && VAULT_VISIBILITIES.has(record.visibility as VaultVisibility)
     ? (record.visibility as VaultVisibility)
@@ -98,9 +122,17 @@ function labelFromRecord(record: Record<string, unknown>): MemoryLabelSnapshot |
     ? (record.policy as VaultPolicy)
     : undefined;
   const ownerUserId = readOwnerUserId(record);
+  const spaceId = readSpaceId(record);
 
-  if (visibility || domain !== undefined || sensitivity !== undefined || policy || ownerUserId !== undefined) {
-    return { visibility, domain, sensitivity, policy, ownerUserId };
+  if (
+    visibility ||
+    domain !== undefined ||
+    sensitivity !== undefined ||
+    policy ||
+    ownerUserId !== undefined ||
+    spaceId !== undefined
+  ) {
+    return { visibility, domain, sensitivity, policy, ownerUserId, spaceId };
   }
   return undefined;
 }
@@ -139,6 +171,7 @@ export function extractMemoryLabelSnapshot(value: unknown): MemoryLabelSnapshot 
       sensitivity: snapshot.sensitivity !== undefined ? snapshot.sensitivity : label.sensitivity,
       policy: snapshot.policy ?? label.policy,
       ownerUserId: snapshot.ownerUserId !== undefined ? snapshot.ownerUserId : label.ownerUserId,
+      spaceId: snapshot.spaceId !== undefined ? snapshot.spaceId : label.spaceId,
     };
   }
   return snapshot;
@@ -162,6 +195,24 @@ function isOwnerOrAdmin(actor: MemoryUseActor, ownerUserId: string | null | unde
   return typeof ownerUserId === "string" && ownerUserId.length > 0 && actor.id === ownerUserId;
 }
 
+/**
+ * Space gate. A row carrying `space_id` is readable only by members of that
+ * space. Admins bypass, consistent with `isOwnerOrAdmin`.
+ *
+ * Fails closed on a missing `spaceIds`: a caller that never resolved the
+ * actor's memberships gets no space-scoped rows rather than all of them.
+ * That matters because this gate is the *only* thing standing between a
+ * space-scoped row and any authenticated actor — visibility='internal' +
+ * policy='indexable' otherwise resolves to allow for everyone.
+ */
+function isSpaceAuthorized(actor: MemoryUseActor, spaceId: string | null | undefined): boolean {
+  if (!spaceId) return true; // Not space-scoped — pre-space behaviour.
+  if (actor.role === "admin") return true;
+  const memberships = actor.spaceIds;
+  if (!memberships || memberships.length === 0) return false;
+  return memberships.includes(spaceId);
+}
+
 export function authorizeMemoryUse(input: {
   actor: MemoryUseActor;
   purpose: MemoryUsePurpose;
@@ -177,6 +228,13 @@ export function authorizeMemoryUse(input: {
   }
   if (label.policy === "requires_redaction") {
     return { decision: "redact", reason: "redaction_required", label };
+  }
+  // Space gate runs before the visibility/policy ladder below: membership is a
+  // precondition for a space-scoped row, not something an `internal` +
+  // `indexable` label can satisfy on its own. Rows with no space_id skip this
+  // entirely and behave exactly as they did pre-spaces.
+  if (!isSpaceAuthorized(input.actor, input.label.spaceId)) {
+    return { decision: "deny", reason: "space_not_member", label };
   }
   if (label.visibility === "private") {
     const usablePrivatePolicy = label.policy === "agent_visible" || label.policy === "indexable";
@@ -203,13 +261,40 @@ function labelRowsByMessageId(
   const placeholders = ids.map(() => "?").join(",");
   const rows = db
     .prepare(
-      `SELECT id, visibility, domain, sensitivity, policy
+      // space_id is selected as spaceId so it lands on MemoryLabelSnapshot
+      // directly — without it the space gate sees undefined on every row and
+      // silently never engages.
+      `SELECT id, visibility, domain, sensitivity, policy, space_id AS spaceId
        FROM messages
        WHERE id IN (${placeholders})`
     )
     .all(...ids) as Array<MemoryLabelSnapshot & { id: number }>;
 
   return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * Resolve the space ids an actor belongs to, for the space gate.
+ *
+ * Returns `actor.spaceIds` untouched when the caller already resolved them.
+ * Anonymous actors are never members of anything, so we skip the query.
+ */
+export function resolveActorSpaceIds(
+  db: Database.Database,
+  actor: MemoryUseActor
+): readonly string[] {
+  if (actor.spaceIds) return actor.spaceIds;
+  if (!actor.id || actor.role === "anonymous") return [];
+  try {
+    const rows = db
+      .prepare(`SELECT space_id FROM space_members WHERE member_id = ?`)
+      .all(actor.id) as Array<{ space_id: string }>;
+    return rows.map((row) => row.space_id);
+  } catch {
+    // space_members missing (pre-Phase-130 DB) — no space-scoped rows can
+    // exist either, so an empty membership set is the correct answer.
+    return [];
+  }
 }
 
 function auditDecision(
@@ -242,13 +327,20 @@ export function filterAuthorizedMessageRows<T extends RowWithId>(
   purpose: MemoryUsePurpose
 ): T[] {
   const labels = labelRowsByMessageId(db, rows.map((row) => row.id));
+  // Resolve memberships once per call, not per row: the gate fails closed on
+  // an unresolved membership list, so this must happen even when the caller
+  // did not think about spaces at all.
+  const actorWithSpaces: MemoryUseActor = {
+    ...actor,
+    spaceIds: resolveActorSpaceIds(db, actor),
+  };
   return rows.filter((row) => {
     const decision = authorizeMemoryUse({
-      actor,
+      actor: actorWithSpaces,
       purpose,
       label: labels.get(row.id) ?? {},
     });
-    auditDecision(db, actor, purpose, `message:${row.id}`, decision);
+    auditDecision(db, actorWithSpaces, purpose, `message:${row.id}`, decision);
     return decision.decision === "allow";
   });
 }

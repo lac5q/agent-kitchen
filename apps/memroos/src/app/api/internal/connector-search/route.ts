@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
+import { resolveActorSpaceIds } from "@/lib/memory/policy-gate";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +35,12 @@ interface ConnectorRow {
   request_id: string | null;
   content: string;
   timestamp: string;
+  space_id: string | null;
   rank: number | null;
 }
 
 const SQL = `
-  SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp,
+  SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp, m.space_id,
          bm25(messages_fts) AS rank
   FROM messages_fts
   JOIN messages m ON m.id = messages_fts.rowid
@@ -63,6 +65,16 @@ export async function GET(req: NextRequest) {
   const limitRaw = Number(searchParams.get("limit") ?? "10");
   const limit = Math.max(1, Math.min(20, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 10));
 
+  // Space-scoped connector rows (e.g. per-connection Notion spaces) are only
+  // readable by members. This endpoint bypasses the normal recall route, so it
+  // must apply the same gate itself or it becomes the bypass — loopback auth
+  // says "this process may ask", not "this process may read everything".
+  //
+  // Identity comes from the MCP caller (memory_recall passes its resolved
+  // MEMROOS_USER_ID / MEMROOS_AGENT_ID). Absent identity means no memberships,
+  // so space-scoped rows are withheld — fail closed.
+  const actorId = (searchParams.get("user_id") ?? searchParams.get("agent_id") ?? "").trim();
+
   try {
     const db = getDb();
     const stmt = db.prepare(SQL);
@@ -78,7 +90,14 @@ export async function GET(req: NextRequest) {
       rows = stmt.all(query, limit) as ConnectorRow[];
     }
 
-    return NextResponse.json({ status: "ok", results: rows });
+    const memberSpaceIds = new Set(
+      actorId
+        ? resolveActorSpaceIds(db, { id: actorId, role: "agent" })
+        : []
+    );
+    const visible = rows.filter((row) => !row.space_id || memberSpaceIds.has(row.space_id));
+
+    return NextResponse.json({ status: "ok", results: visible });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : String(error) },
