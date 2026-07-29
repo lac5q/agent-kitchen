@@ -103,6 +103,73 @@ describe("messages_fts stays correct when an indexed row is rewritten", () => {
     db.close();
   });
 
+  it("migration repairs a database already stamped at the old version", () => {
+    // The failure this catches: the trigger DDL lives in the main schema body,
+    // which only re-runs for a DB below its migration version. Editing that
+    // DDL in place fixes fresh databases and silently leaves every deployed
+    // one broken — observed on cordant-hermes-01, where the rebuild never ran
+    // and the old triggers stayed in place after a full redeploy.
+    const db = new Database(":memory:");
+    initSchema(db);
+
+    // Recreate the pre-migration state: old two-trigger scheme, and a DB
+    // stamped below the migration that fixes it.
+    db.exec(`
+      DROP TRIGGER IF EXISTS messages_au;
+      CREATE TRIGGER messages_au_delete AFTER UPDATE ON messages
+      WHEN old.policy = 'indexable' AND old.visibility IN ('internal','public_safe','public_approved')
+      BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content, project, timestamp, agent_id)
+        VALUES('delete', old.id, old.content, old.project, old.timestamp, old.agent_id);
+      END;
+      CREATE TRIGGER messages_au_insert AFTER UPDATE ON messages
+      WHEN new.policy = 'indexable' AND new.visibility IN ('internal','public_safe','public_approved')
+      BEGIN
+        INSERT INTO messages_fts(rowid, content, project, timestamp, agent_id)
+        VALUES (new.id, new.content, new.project, new.timestamp, new.agent_id);
+      END;
+    `);
+    db.pragma("user_version = 32");
+
+    insertIndexable(db, 1, "https://app.notion.com/p/Teamspace-Home-abc123");
+    db.prepare("UPDATE messages SET content = ? WHERE id = 1").run(
+      "Teamspace Home\n\nGive your colleagues a place."
+    );
+    // Damaged, as in production.
+    expect(ftsRowIds(db, "Teamspace")).toEqual([]);
+
+    // Re-running initSchema must migrate and repair.
+    initSchema(db);
+    expect(ftsRowIds(db, "Teamspace")).toEqual([1]);
+    expect(ftsRowIds(db, "colleagues")).toEqual([1]);
+    // And the stale URL tokens are gone.
+    expect(ftsRowIds(db, "notion")).toEqual([]);
+
+    db.close();
+  });
+
+  it("repair does not expose sealed or private rows", () => {
+    // A bare FTS 'rebuild' would index every row regardless of label, turning
+    // an index repair into a disclosure. The projection must keep the same
+    // predicate the triggers use.
+    const db = new Database(":memory:");
+    initSchema(db);
+
+    db.prepare(
+      `INSERT INTO messages (id, session_id, project, agent_id, role, content, timestamp, visibility, policy)
+       VALUES (1, 's', 'p', 'a', 'user', 'sealedsecret material', '2026-07-29T00:00:00Z', 'private', 'sealed')`
+    ).run();
+    insertIndexable(db, 2, "public indexable material");
+
+    db.pragma("user_version = 32");
+    initSchema(db);
+
+    expect(ftsRowIds(db, "sealedsecret")).toEqual([]);
+    expect(ftsRowIds(db, "indexable")).toEqual([2]);
+
+    db.close();
+  });
+
   it("passes FTS5 integrity-check after a rewrite", () => {
     const db = new Database(":memory:");
     initSchema(db);

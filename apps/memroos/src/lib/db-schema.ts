@@ -65,7 +65,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 32;
+export const CURRENT_SCHEMA_VERSION = 33;
 
 type SchemaMigration = {
   version: number;
@@ -246,6 +246,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     name: 'connector-sync-state',
     up: applyConnectorSyncStateSchema,
   },
+  {
+    version: 33,
+    name: 'messages-fts-single-update-trigger',
+    up: applyMessagesFtsUpdateTriggerFix,
+  },
 ];
 
 function runSchemaMigrations(db: Database.Database): void {
@@ -264,6 +269,47 @@ function runSchemaMigrations(db: Database.Database): void {
       setSchemaVersion(db, migration.version);
     })();
   }
+}
+
+/**
+ * Migration 33 — repair messages_fts and stop it losing shared terms.
+ *
+ * The FTS triggers live in the main schema body, which only re-runs for a DB
+ * below its migration version. An already-stamped database therefore keeps
+ * whatever triggers it was created with, so editing the DDL in place fixes
+ * new databases and silently leaves every existing one broken. This migration
+ * is what actually reaches the deployed hosts.
+ *
+ * Two steps, and both are needed: recreate the triggers so no further updates
+ * corrupt the index, then reproject, because fixing the trigger cannot restore
+ * tokens already dropped.
+ */
+function applyMessagesFtsUpdateTriggerFix(db: Database.Database): void {
+  db.exec(`
+    DROP TRIGGER IF EXISTS messages_au;
+    DROP TRIGGER IF EXISTS messages_au_delete;
+    DROP TRIGGER IF EXISTS messages_au_insert;
+
+    CREATE TRIGGER messages_au AFTER UPDATE ON messages
+    BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content, project, timestamp, agent_id)
+      SELECT 'delete', old.id, old.content, old.project, old.timestamp, old.agent_id
+      WHERE old.policy = 'indexable'
+        AND old.visibility IN ('internal','public_safe','public_approved');
+
+      INSERT INTO messages_fts(rowid, content, project, timestamp, agent_id)
+      SELECT new.id, new.content, new.project, new.timestamp, new.agent_id
+      WHERE new.policy = 'indexable'
+        AND new.visibility IN ('internal','public_safe','public_approved');
+    END;
+  `);
+
+  // Reproject rather than 'rebuild': the projection is label-filtered, so a
+  // bare rebuild would index rows the triggers deliberately exclude (sealed,
+  // private) and make them searchable — turning an index repair into a
+  // disclosure. rebuildMessageFtsProjection applies the same predicate the
+  // triggers do.
+  rebuildMessageFtsProjection(db);
 }
 
 export function rebuildMessageFtsProjection(db: Database.Database): void {
@@ -2524,32 +2570,6 @@ function applyCurrentSchema(db: Database.Database): void {
     );
   `);
 
-  // One-time repair for indexes written under the old two-AFTER-UPDATE-trigger
-  // scheme (see messages_au above). Those triggers could fire insert-before-
-  // delete, so every term common to a row's old and new content was silently
-  // removed. Fixing the trigger stops further damage but cannot restore tokens
-  // already dropped — only a rebuild can, and a stale index is invisible: it
-  // returns plausible results while quietly missing rows.
-  //
-  // Guarded by a meta key rather than run every startup: 'rebuild' reindexes
-  // the whole table, which is cheap on a connector-only DB (hundreds of rows)
-  // and decidedly not on one with ~130k messages.
-  try {
-    const REBUILD_KEY = "messages_fts_rebuild_shared_token_repair";
-    const done = db.prepare("SELECT value FROM meta WHERE key = ?").get(REBUILD_KEY);
-    if (!done) {
-      db.exec("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')");
-      db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)").run(
-        REBUILD_KEY,
-        new Date().toISOString(),
-      );
-    }
-  } catch (err) {
-    // A rebuild failure must not block startup — the index stays as it was,
-    // which is the status quo rather than a regression. Surfaced loudly
-    // because silently skipping it leaves recall quietly lossy.
-    console.error("[db-schema] messages_fts rebuild failed:", err);
-  }
 
   // connector_sync_state is created by migration 32 (applyConnectorSyncStateSchema)
   // so existing databases pick it up too — a table added only here would never
