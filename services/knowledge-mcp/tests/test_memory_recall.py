@@ -485,11 +485,15 @@ def test_connector_lane_does_not_affect_aggregate_status():
         memory_search_fn=lambda **_: {"status": "ok", "results": []},
         qmd_runner=fake_qmd_run,
         connector_search_fn=lambda **_: [],  # zero connector hits
+        # Supplied so this test isolates the aggregate-status question rather
+        # than also picking up the unresolved-identity warning.
+        actor_id="cordant-hermes-01:claude",
     )
     assert payload["collections"]["spark-recordings"]["status"] == "recalled"
     assert payload["aggregateStatus"] == "recalled"
     assert "connector" not in payload["collections"]
-    assert payload["lanes"]["connector"] == {"count": 0, "ok": True}
+    assert payload["lanes"]["connector"]["count"] == 0
+    assert payload["lanes"]["connector"]["ok"] is True
 
 
 def test_connector_lane_falls_through_to_http_when_no_db_resolvable(monkeypatch):
@@ -721,6 +725,37 @@ def test_space_scoped_rows_withheld_when_space_members_table_absent(tmp_path: Pa
     hits = mr.sqlite_connector_search("Alacriti", limit=10, db_path=db_path, actor_id="user:x")
     ids = [h["id"] for h in hits]
     assert ids == ["connector:linear:COR-101"]
+
+
+def test_recall_flags_unresolved_identity_on_the_connector_lane(monkeypatch):
+    """Silently withholding space-scoped rows because identity failed to
+    resolve is indistinguishable from 'nothing matched'. The lane must say so."""
+    monkeypatch.delenv("MEMROOS_USER_ID", raising=False)
+    monkeypatch.delenv("MEMROOS_AGENT_ID", raising=False)
+
+    payload = mr.recall(
+        "anything",
+        limit=5,
+        collections=[],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        connector_search_fn=lambda **_: [],
+    )
+    assert payload["lanes"]["connector"]["identityUnresolved"] is True
+    assert "withheld" in payload["lanes"]["connector"]["warning"]
+
+
+def test_recall_does_not_flag_identity_when_resolved():
+    payload = mr.recall(
+        "anything",
+        limit=5,
+        collections=[],
+        knowledge_search_fn=lambda **_: [],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        connector_search_fn=lambda **_: [],
+        actor_id="cordant-hermes-01:claude",
+    )
+    assert "identityUnresolved" not in payload["lanes"]["connector"]
 
 
 def test_http_connector_search_sends_actor_identity(monkeypatch):

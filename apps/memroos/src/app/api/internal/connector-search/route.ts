@@ -24,7 +24,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
-import { resolveActorSpaceIds } from "@/lib/memory/policy-gate";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +38,9 @@ interface ConnectorRow {
   rank: number | null;
 }
 
+// The space gate is applied in SQL, before LIMIT — not by filtering the
+// result set afterwards. Post-filtering would silently shrink a member's
+// page: ask for 10, get however many of that top-10 happened to be visible.
 const SQL = `
   SELECT m.id, m.session_id, m.request_id, m.content, m.timestamp, m.space_id,
          bm25(messages_fts) AS rank
@@ -48,6 +50,13 @@ const SQL = `
     AND m.role = 'connector'
     AND m.policy = 'indexable'
     AND m.visibility IN ('internal', 'public_safe', 'public_approved')
+    AND (
+      m.space_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM space_members sm
+        WHERE sm.space_id = m.space_id AND sm.member_id = ?
+      )
+    )
   ORDER BY rank
   LIMIT ?
 `;
@@ -71,8 +80,13 @@ export async function GET(req: NextRequest) {
   // says "this process may ask", not "this process may read everything".
   //
   // Identity comes from the MCP caller (memory_recall passes its resolved
-  // MEMROOS_USER_ID / MEMROOS_AGENT_ID). Absent identity means no memberships,
-  // so space-scoped rows are withheld — fail closed.
+  // MEMROOS_USER_ID / MEMROOS_AGENT_ID). It is a self-asserted parameter from
+  // a trusted loopback process, so this gate is defense-in-depth and scoping,
+  // NOT a trust boundary against a hostile caller — anything able to reach
+  // loopback could assert any id. The boundary is authorizeRegistryWrite above.
+  //
+  // Absent identity matches no space_members row, so space-scoped content
+  // stays hidden — fail closed.
   const actorId = (searchParams.get("user_id") ?? searchParams.get("agent_id") ?? "").trim();
 
   try {
@@ -82,22 +96,15 @@ export async function GET(req: NextRequest) {
     // FTS5 raises on unbalanced quotes / bare metacharacters in the query text.
     let rows: ConnectorRow[];
     try {
-      rows = stmt.all(`"${query}"`, limit) as ConnectorRow[];
+      rows = stmt.all(`"${query}"`, actorId, limit) as ConnectorRow[];
       if (rows.length === 0) {
-        rows = stmt.all(query, limit) as ConnectorRow[];
+        rows = stmt.all(query, actorId, limit) as ConnectorRow[];
       }
     } catch {
-      rows = stmt.all(query, limit) as ConnectorRow[];
+      rows = stmt.all(query, actorId, limit) as ConnectorRow[];
     }
 
-    const memberSpaceIds = new Set(
-      actorId
-        ? resolveActorSpaceIds(db, { id: actorId, role: "agent" })
-        : []
-    );
-    const visible = rows.filter((row) => !row.space_id || memberSpaceIds.has(row.space_id));
-
-    return NextResponse.json({ status: "ok", results: visible });
+    return NextResponse.json({ status: "ok", results: rows });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : String(error) },

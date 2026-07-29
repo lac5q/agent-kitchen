@@ -447,8 +447,17 @@ def recall(
     memory_search_fn: Optional[Callable[..., dict]] = None,
     qmd_runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
     connector_search_fn: Optional[Callable[..., list]] = None,
+    actor_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Federate meeting QMD + knowledge literal + mem0 into one result set."""
+    """Federate meeting QMD + knowledge literal + mem0 + connectors.
+
+    `actor_id` is the identity the connector lane's space gate authorizes
+    against. The MCP tool resolves it from its own tool args/env
+    (`_memroos_user_id` / `_memroos_agent_id`) and passes it here; without
+    that thread-through the lane would fall back to process env only, and a
+    caller-supplied user_id would be silently ignored while appearing to
+    scope the query.
+    """
     q = (query or "").strip()
     if not q:
         return {"status": "error", "error": "query is required", "results": [], "lanes": {}}
@@ -596,8 +605,16 @@ def recall(
     # separately in `lanes["connector"]`.
     connector_hits: list[dict[str, Any]] = []
     search_connectors = connector_search_fn or sqlite_connector_search
+    resolved_actor = connector_actor_id() if actor_id is None else (actor_id or "")
     try:
-        raw_hits = search_connectors(query=q, limit=min(limit, 20)) or []
+        raw_hits = (
+            search_connectors(
+                query=q,
+                limit=min(limit, 20),
+                actor_id=resolved_actor,
+            )
+            or []
+        )
         seen_connector_keys: set[str] = set()
         for hit in raw_hits:
             if not isinstance(hit, dict):
@@ -614,6 +631,20 @@ def recall(
             connector_hits.append(hit)
             results.append(hit)
         lanes["connector"] = {"count": len(connector_hits), "ok": True}
+        # An unresolved identity is a misconfiguration, and its symptom —
+        # space-scoped connector content silently missing from every recall —
+        # is indistinguishable from "nothing matched". Say so explicitly
+        # rather than letting the lane report a clean `ok: True` while
+        # withholding rows the caller was entitled to. Identity resolution is
+        # fragile in practice: scripts/memroos-mcp.sh infers the agent id by
+        # walking the process tree for the spawning client, and skips
+        # inference entirely when MEMROOS_AGENT_API_KEY is already in the env.
+        if not resolved_actor:
+            lanes["connector"]["identityUnresolved"] = True
+            lanes["connector"]["warning"] = (
+                "No MEMROOS_USER_ID/MEMROOS_AGENT_ID resolved; space-scoped "
+                "connector content was withheld. Unscoped rows are unaffected."
+            )
     except Exception as exc:  # noqa: BLE001
         lanes["connector"] = {"count": 0, "ok": False, "error": str(exc)}
 

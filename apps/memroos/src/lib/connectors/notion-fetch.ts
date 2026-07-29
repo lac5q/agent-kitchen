@@ -20,6 +20,12 @@ export const NOTION_VERSION = "2022-06-28";
 export const MAX_BLOCK_DEPTH = 2;
 /** Hard ceiling on block-children requests per page, across all depths. */
 export const MAX_BLOCK_REQUESTS_PER_PAGE = 6;
+/**
+ * Ceiling on stored body text per page, applied across ALL requests for that
+ * page rather than per request. Per-request would let a paginated or deeply
+ * nested page reach MAX_BLOCK_REQUESTS_PER_PAGE times this budget.
+ */
+export const MAX_PAGE_TEXT_CHARS = 12_000;
 
 interface BlockChildrenPayload {
   results?: unknown[];
@@ -43,6 +49,7 @@ export async function fetchNotionPageText(input: {
   signal?: AbortSignal;
 }): Promise<string> {
   let requests = 0;
+  let charsUsed = 0;
 
   async function walk(blockId: string, depth: number): Promise<string[]> {
     if (depth > MAX_BLOCK_DEPTH) return [];
@@ -51,6 +58,7 @@ export async function fetchNotionPageText(input: {
 
     do {
       if (requests >= MAX_BLOCK_REQUESTS_PER_PAGE) break;
+      if (charsUsed >= MAX_PAGE_TEXT_CHARS) break;
       requests += 1;
 
       const body: Record<string, unknown> = { page_size: 100 };
@@ -70,8 +78,12 @@ export async function fetchNotionPageText(input: {
 
       const page = (payload ?? {}) as BlockChildrenPayload;
       const results = Array.isArray(page.results) ? page.results : [];
-      const text = notionBlocksToText(results);
-      if (text) chunks.push(text);
+      // Spend from the page-wide budget, not a fresh one per request.
+      const text = notionBlocksToText(results, MAX_PAGE_TEXT_CHARS - charsUsed);
+      if (text) {
+        chunks.push(text);
+        charsUsed += text.length;
+      }
 
       // Recurse into blocks that declare children (toggles, callouts,
       // columns). Depth is capped above; without the cap a deeply nested

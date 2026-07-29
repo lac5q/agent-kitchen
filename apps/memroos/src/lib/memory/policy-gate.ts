@@ -353,13 +353,21 @@ export function filterAuthorizedMemoryItems<T>(
   labelForItem: (item: T) => MemoryLabelSnapshot | null | undefined,
   targetForItem: (item: T, index: number) => string = (_item, index) => `memory:${index}`
 ): T[] {
+  // Resolve memberships for the same reason filterAuthorizedMessageRows does.
+  // No external memory item carries a spaceId today, so this changes nothing
+  // now — but the gate fails closed, so without it the first labelled item
+  // would be denied for everyone, silently, in whichever lane introduced it.
+  const actorWithSpaces: MemoryUseActor = {
+    ...actor,
+    spaceIds: resolveActorSpaceIds(db, actor),
+  };
   return items.filter((item, index) => {
     const decision = authorizeMemoryUse({
-      actor,
+      actor: actorWithSpaces,
       purpose,
       label: labelForItem(item) ?? {},
     });
-    auditDecision(db, actor, purpose, targetForItem(item, index), decision);
+    auditDecision(db, actorWithSpaces, purpose, targetForItem(item, index), decision);
     return decision.decision === "allow";
   });
 }

@@ -474,6 +474,67 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     expect(stored.content.match(/https:\/\/notion\.so\/page-1/g)).toHaveLength(1);
   });
 
+  it("upgrades an existing URL-only row once enrichment produces a body", () => {
+    // REGRESSION: the upsert guard used to be `excluded.timestamp >
+    // messages.timestamp` alone. Notion's timestamp is last_edited_time, so
+    // for the 14 rows already stored as bare URLs the timestamps are EQUAL on
+    // the next sync — the update was suppressed and those rows could never
+    // gain their body. The rows that motivated the whole enrichment feature
+    // were precisely the ones it could not fix.
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    const base = {
+      id: "page-3",
+      url: "https://notion.so/page-3",
+      last_edited_time: "2026-07-29T00:00:00Z",
+    };
+
+    // First cycle: enrichment unavailable (throttled) -> URL-only.
+    expect(
+      writeConnectorRecord({
+        db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+        tool: SEARCH, record: { ...base },
+      }).status
+    ).toBe("written");
+
+    // Second cycle: same last_edited_time, but now enriched.
+    const second = writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH,
+      record: { ...base, _content: "Q3 Roadmap\n\nShip the connector recall lane." },
+    });
+    expect(second.status).toBe("written");
+
+    const stored = db
+      .prepare(`SELECT content FROM messages WHERE request_id = 'page-3'`)
+      .get() as { content: string };
+    expect(stored.content).toContain("Q3 Roadmap");
+  });
+
+  it("still no-ops on a genuinely unchanged re-fetch", () => {
+    const { spaceId, labels } = ensureConnectorSpace(db, {
+      tenantId: "default-tenant",
+      providerKey: "notion",
+    });
+    const record = {
+      id: "page-4",
+      url: "https://notion.so/page-4",
+      last_edited_time: "2026-07-29T00:00:00Z",
+      _content: "Same body",
+    };
+    writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH, record: { ...record },
+    });
+    const again = writeConnectorRecord({
+      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      tool: SEARCH, record: { ...record },
+    });
+    expect(again.status).toBe("duplicate");
+  });
+
   it("falls back to the URL-only record when enrichment produced nothing", () => {
     // A page whose blocks could not be read must still be findable/linkable
     // rather than skipped as empty.

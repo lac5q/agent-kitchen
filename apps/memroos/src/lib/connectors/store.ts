@@ -265,9 +265,27 @@ export function writeConnectorRecord(input: WriteRecordInput): WriteOutcome {
   // records, but an edited one must overwrite: with OR IGNORE, a rewritten
   // issue body conflicted and was silently discarded, so memory served the
   // first-ever version of every record forever — defeating the incremental
-  // fetch entirely. The timestamp guard keeps it idempotent: a re-fetch of an
-  // unchanged record changes nothing, and an out-of-order older copy cannot
-  // clobber a newer one.
+  // fetch entirely.
+  //
+  // Two distinct cases the guard must separate:
+  //
+  //   newer timestamp                  -> provider edit, take it.
+  //   SAME timestamp, changed content  -> our stored shape improved, take it.
+  //   older timestamp                  -> out-of-order copy, never take it.
+  //
+  // The middle case is not hypothetical: Notion's timestamp is
+  // last_edited_time, so when enrichment starts producing a body for a page
+  // previously stored as a bare URL, the timestamps are EQUAL. With a
+  // `>`-only guard those rows are pinned at their original content forever —
+  // the records that motivated enrichment are precisely the ones it could
+  // not fix. The same trap applies to any record first written in a degraded
+  // form because its enrichment fetch was throttled.
+  //
+  // The content clause is deliberately scoped to equal timestamps rather
+  // than applied unconditionally: an unqualified `OR content <>` would let a
+  // genuinely older out-of-order copy overwrite a newer stored record.
+  //
+  // Idempotent throughout: an unchanged re-fetch satisfies neither clause.
   const result = db
     .prepare(
       `INSERT INTO messages
@@ -277,7 +295,9 @@ export function writeConnectorRecord(input: WriteRecordInput): WriteOutcome {
        ON CONFLICT(session_id, request_id) DO UPDATE SET
          content   = excluded.content,
          timestamp = excluded.timestamp
-       WHERE excluded.timestamp > messages.timestamp`,
+       WHERE excluded.timestamp > messages.timestamp
+          OR (excluded.timestamp = messages.timestamp
+              AND excluded.content <> messages.content)`,
     )
     .run(
       connectorSessionId(providerKey, connectionId),
