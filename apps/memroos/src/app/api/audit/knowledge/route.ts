@@ -51,6 +51,46 @@ const BodySchema = z.object({
   op_hash: z.string().min(8).max(128),
 });
 
+/**
+ * The audit bridge is an internal, host-local endpoint: its only caller is the
+ * MCP server running beside the app, which reaches it over loopback.
+ *
+ * It sits in ROUTE_LOCAL_AUTH_API_ROUTES so the proxy lets it past the JWT
+ * gate — necessary, because a server-side MCP process has no user session.
+ * On a Tailscale-only host that is unremarkable, but oracle-1 is published to
+ * the internet through a Cloudflare Tunnel, so without this check the route
+ * would be reachable from anywhere with only a bearer key in front of it.
+ *
+ * Tunnelled and proxied traffic always arrives with forwarding headers; a
+ * loopback call from the sibling MCP process does not. So the presence of
+ * those headers is the signal that a request came from outside the host.
+ *
+ * Escape hatch for deployments that genuinely front this with their own proxy:
+ * MEMROOS_AUDIT_ALLOW_REMOTE=1.
+ */
+function isHostLocalRequest(req: NextRequest): boolean {
+  if (process.env.MEMROOS_AUDIT_ALLOW_REMOTE === "1") return true;
+
+  // Any of these means the request traversed a proxy/tunnel to get here.
+  for (const h of ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "cf-ray"]) {
+    if (req.headers.get(h)) return false;
+  }
+
+  try {
+    const host = new URL(req.url).hostname;
+    return (
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host === "localhost" ||
+      // Compose service name — the MCP and app share a Docker network.
+      host === "memroos"
+    );
+  } catch {
+    // An unparseable URL is not something to fail open on.
+    return false;
+  }
+}
+
 function extractBearer(req: NextRequest): string | null {
   const header = req.headers.get("authorization") ?? "";
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -101,6 +141,12 @@ function verifyAgentApiKey(req: NextRequest): { ok: true } | { ok: false; status
 }
 
 export async function POST(req: NextRequest) {
+  // Origin check first: a remote caller should learn nothing about whether a
+  // key is valid, so this runs before the bearer is even inspected.
+  if (!isHostLocalRequest(req)) {
+    return Response.json({ error: "not found" }, { status: 404 });
+  }
+
   const auth = verifyAgentApiKey(req);
   if (!auth.ok) {
     return Response.json({ error: auth.error }, { status: auth.status });
