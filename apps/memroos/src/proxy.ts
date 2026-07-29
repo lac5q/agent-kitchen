@@ -108,6 +108,12 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   // handler ran, and since knowledge reads fail closed when the audit POST
   // fails, every knowledge_search/read in operator mode was dead.
   { method: "POST", pattern: /^\/api\/audit\/knowledge$/ },
+  // Loopback-authorized connector-search fallback for the host-side
+  // memory_recall MCP process (scripts/memroos-mcp.sh runs natively on the
+  // host, outside Docker, and cannot always read conversations.db directly —
+  // see that route's docstring). Its caller has no user session, so it must
+  // reach `authorizeRegistryWrite` rather than be blocked here first.
+  { method: "GET", pattern: /^\/api\/internal\/connector-search$/ },
 ];
 
 function hasRouteLocalAuth(pathname: string, method: string): boolean {

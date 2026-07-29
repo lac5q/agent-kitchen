@@ -293,6 +293,18 @@ describe("proxy", () => {
     expect(await response.text()).toBe("");
   });
 
+  it("lets connector-search handle its own loopback authorization", async () => {
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/api/internal/connector-search?q=Alacriti", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+  });
+
   it("lets SkillForge routes handle their own local/operator authorization", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/skillforge/status", {
