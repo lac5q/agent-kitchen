@@ -93,11 +93,105 @@ export function ensureConnectorSpace(
     role: "member",
   });
 
+  syncConnectorSpaceReaders(db, { spaceId, tenantId });
+
   return { spaceId, labels: getSpaceDefaultLabels(db, spaceId) };
+}
+
+/**
+ * Enrol the tenant's users and registered agents as readers of a connector
+ * space.
+ *
+ * Until the space gate landed (`authorizeMemoryUse`), `space_id` on connector
+ * rows was inert — nothing consulted it, so the only member being the
+ * synthetic writer agent cost nothing. With the gate live, that membership
+ * set means *nobody* can recall connector content: verified against
+ * cordant-hermes-01, where all 401 rows sat in four spaces whose only members
+ * were `connector:<provider>`.
+ *
+ * Enrolling readers here (rather than one-shot backfill) makes it
+ * self-healing: `ensureConnectorSpace` runs every sync cycle, so a user or
+ * agent registered after the space was created still gets access instead of
+ * silently seeing nothing.
+ *
+ * Idempotent — `addSpaceMember` upserts on (space_id, member_id).
+ */
+export function syncConnectorSpaceReaders(
+  db: Database.Database,
+  input: { spaceId: string; tenantId: string },
+): { humans: number; agents: number } {
+  let humans = 0;
+  let agents = 0;
+
+  try {
+    const users = db
+      .prepare(`SELECT id FROM users WHERE tenant_id = ?`)
+      .all(input.tenantId) as Array<{ id: string }>;
+    for (const user of users) {
+      addSpaceMember(db, {
+        spaceId: input.spaceId,
+        memberId: user.id,
+        memberType: "human",
+        role: "member",
+      });
+      humans += 1;
+    }
+  } catch {
+    // users table absent (fresh/partial DB) — nothing to enrol yet. The next
+    // sync cycle re-runs this, so a later-seeded admin still gets access.
+  }
+
+  try {
+    // registered_agents, not agent_api_keys: an agent that exists but has not
+    // minted a key yet still needs to recall, and agent_api_keys rows are
+    // per-key rather than per-agent.
+    const registered = db
+      .prepare(`SELECT id FROM registered_agents`)
+      .all() as Array<{ id: string }>;
+    for (const agent of registered) {
+      addSpaceMember(db, {
+        spaceId: input.spaceId,
+        memberId: agent.id,
+        memberType: "agent",
+        role: "member",
+      });
+      agents += 1;
+    }
+  } catch {
+    // registered_agents absent — same reasoning as above.
+  }
+
+  return { humans, agents };
 }
 
 export function connectorAgentId(providerKey: string): string {
   return `connector:${providerKey}`;
+}
+
+/**
+ * Re-enrol readers into every existing connector space.
+ *
+ * `ensureConnectorSpace` covers spaces as they are synced, but a sync cycle
+ * may be hours away — and between the space gate going live and the next
+ * cycle, connector recall would return nothing. Running this at startup
+ * closes that window: by the time the app can serve a recall, the spaces it
+ * already has are enrolled.
+ *
+ * Safe on a DB with no connector spaces (returns 0) and idempotent.
+ */
+export function backfillConnectorSpaceReaders(db: Database.Database): number {
+  let spaces: Array<{ id: string; tenant_id: string }>;
+  try {
+    spaces = db
+      .prepare(`SELECT id, tenant_id FROM spaces WHERE name LIKE 'connector/%'`)
+      .all() as Array<{ id: string; tenant_id: string }>;
+  } catch {
+    return 0; // spaces table absent — nothing to backfill.
+  }
+  for (const space of spaces) {
+    syncConnectorSpaceReaders(db, { spaceId: space.id, tenantId: space.tenant_id });
+  }
+  return spaces.length;
 }
 
 export interface WriteRecordInput {

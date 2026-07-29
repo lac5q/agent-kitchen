@@ -6,6 +6,7 @@ import { initSchema } from './db-schema';
 import { resolveFromRepoRoot } from './paths';
 import { seedDefaultAdmin } from './auth/seed';
 import { seedRegisteredAgents } from './agent-registry-seed';
+import { backfillConnectorSpaceReaders } from './connectors/store';
 
 let _db: Database.Database | null = null;
 
@@ -27,6 +28,11 @@ export function getDb(): Database.Database {
     initSchema(db);
     seedDefaultAdmin(db);
     seedRegisteredAgents(db);
+    // Must run after both seeds: it enrols exactly the users and agents they
+    // create. Connector rows are space-scoped and the space gate denies
+    // non-members, so without this the first recall after startup returns
+    // nothing until the next sync cycle happens to re-enrol.
+    backfillConnectorSpaceReaders(db);
     _db = db;
   }
   return _db;
