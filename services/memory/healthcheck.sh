@@ -52,6 +52,38 @@ mkdir -p "$(dirname "$LOG_FILE")"
 # ── Helpers ─────────────────────────────────────────────────────────────────
 log() { echo "[$LOG_TS] $1" | tee -a "$LOG_FILE"; }
 
+# Canonical host identity for alerts.
+#
+# Every alert used to read "Memroos Memory Alert" with no host anywhere in the
+# subject or body, so an operator running this on the Mac, oracle-1 and
+# cordant-hermes-01 could not tell which box was failing — the alert named the
+# stack, not the machine.
+#
+# `hostname` alone is NOT sufficient and is why the host profile exists:
+# cordant-hermes-01 reports `ip-172-31-43-250` and oracle-1 reports
+# `paperclip-arm-2026`, neither of which an operator would recognise. The
+# declared MEMROOS_HOST_ID is the source of truth (same resolution order as
+# scripts/memroos-mcp.sh), with hostname as a last resort so an unprofiled
+# host still labels itself with something rather than nothing.
+memroos_host_label() {
+  if [ -n "${MEMROOS_HOST_ID:-}" ]; then
+    printf '%s' "$MEMROOS_HOST_ID"
+    return 0
+  fi
+  local profile="${MEMROOS_HOST_PROFILE:-/etc/memroos/host-profile.env}"
+  if [ -r "$profile" ]; then
+    local id
+    id="$(sed -n 's/^[[:space:]]*MEMROOS_HOST_ID=//p' "$profile" | tr -d '"'"'"' \r' | head -1)"
+    if [ -n "$id" ]; then
+      printf '%s' "$id"
+      return 0
+    fi
+  fi
+  printf '%s' "$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown-host)"
+}
+
+HOST_LABEL="$(memroos_host_label)"
+
 send_telegram() {
   if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then return 1; fi
   curl -s --max-time 10 \
@@ -166,10 +198,13 @@ alert() {
   local message="$2"
   if should_alert "$alert_id"; then
     log "ALERT: $message"
-    notify "Memroos Memory Alert" "🚨 *Knowledge Stack Alert*
+    # Host goes in the SUBJECT, not just the body: an email client preview and
+    # a phone notification usually show only the subject, which is exactly when
+    # "which server is this?" needs answering.
+    notify "[$HOST_LABEL] Memroos Memory Alert" "🚨 *Knowledge Stack Alert* — \`$HOST_LABEL\`
 $message
 
-_$(date '+%Y-%m-%d %H:%M:%S')_"
+_$(date '+%Y-%m-%d %H:%M:%S') · host: ${HOST_LABEL}_"
   else
     log "SUPPRESSED (cooldown): $message"
   fi
@@ -179,10 +214,10 @@ recover() {
   local state_file="${ALERT_STATE_DIR}/${1}.last"
   if [ -f "$state_file" ]; then
     log "RECOVERED: $2"
-    notify "Memroos Memory Recovered" "✅ *Knowledge Stack Recovered*
+    notify "[$HOST_LABEL] Memroos Memory Recovered" "✅ *Knowledge Stack Recovered* — \`$HOST_LABEL\`
 $2
 
-_$(date '+%Y-%m-%d %H:%M:%S')_"
+_$(date '+%Y-%m-%d %H:%M:%S') · host: ${HOST_LABEL}_"
     clear_alert "$1"
   fi
 }
