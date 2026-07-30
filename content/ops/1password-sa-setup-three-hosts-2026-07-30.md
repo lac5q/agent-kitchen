@@ -136,13 +136,19 @@ tokens do not. Mission accomplished.
 ## What was NOT done (and why)
 
 - **No new service accounts created.** Luis's explicit constraint was "agents should have access
-  to specific service accounts". I did not create per-agent SAs because:
-  1. Per-agent SA creation requires the 1Password.com web UI (the `op` CLI does support
-     `op service-account create`, but the new SA must then be granted vault access via
-     `op vault user grant` / `op vault group grant` — these are admin actions Luis should
-     review before approving).
-  2. Luis's profiles (`alba`, `contentpublisher`, `maria`) currently share one SA. Splitting
-     them out requires Luis to decide vault-sharing policy per profile.
+  to specific service accounts". I attempted `op service-account create` as a sanity check and
+  got `[ERROR] failed to create service account: authenticated as a service account. Please unset
+  'OP_SERVICE_ACCOUNT_TOKEN' environment variable and sign in as a user who can create service
+  accounts.` This is a 1Password design constraint: only a human user with workspace admin can
+  mint new SAs. The agent cannot do this on Luis's behalf. To split per-agent SAs, Luis must:
+  1. Sign in to 1Password.com as a human admin (not a service account).
+  2. For each agent profile that needs its own SA: go to Developer → Service Accounts → New, name
+     it (`alba-agent`, `contentpublisher-agent`, `maria-agent`, etc.), grant it access to the
+     specific vaults that profile should see.
+  3. Drop each new token into the corresponding `~/.hermes/profiles/<profile>/.env` (mode 0600)
+     as the `OP_SERVICE_ACCOUNT_TOKEN` value. Existing files are already prepared; just
+     overwrite the `OP_SERVICE_ACCOUNT_TOKEN=ops_...` line.
+  4. Restart the affected agent process. Done.
 - **No automatic token rotation**. The wrapper pattern makes rotation a one-file change
   (`~/.op/service_account_token`), but rotation cadence is a policy Luis should set.
 - **No `op://`-style resolution wired into Hermes tools/skills**. The `op` CLI works fine for
@@ -150,6 +156,21 @@ tokens do not. Mission accomplished.
   `op` directly. The pattern for that integration is in
   `~/.hermes/profiles/alba/skills/agent-operations/.../1password-service-account-rotation.md`
   ("Use `hermes secrets onepassword` to resolve `op://` references").
+
+## The complete picture in 30 seconds
+
+- Agents on all three hosts can call `op read "op://AgentWritable/<id>/title"` (or any field) and
+  get back a real secret without any human approval. The token grants `read_items` (and on the
+  shared SA also `write_items`) on the `AgentWritable` and `Clawdbot` vaults.
+- The token is loaded from a single canonical mode-0600 file (`~/.op/service_account_token`)
+  via three different injection mechanisms depending on the host:
+  - macOS: launchd `ProgramArguments[0]=/bin/sh` invokes a wrapper that `.`-sources the env file.
+  - Linux (Ubuntu WSL2): systemd `EnvironmentFile=` with literal KEY=VALUE (no shell syntax).
+  - Linux (Oracle): env var sourced from `~/.memroos/agent-env` AND/OR op CLI's default file
+    lookup at `~/.config/op/service_account_token`.
+- Per-profile SA scoping is scaffolding-ready: `~/.hermes/profiles/{alba,contentpublisher,maria}/.env`
+  and `~/.openclaw/.env.1password` each carry their own `OP_SERVICE_ACCOUNT_TOKEN` line. Swap in
+  a new token per profile to scope per-agent.
 
 ## Audit trail
 
