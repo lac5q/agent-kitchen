@@ -656,8 +656,46 @@ def recall(
         score_val = -float(score) if isinstance(score, (int, float)) else 0.0
         return (lane_rank.get(str(item.get("lane")), 9), score_val)
 
+    # Sort first to establish score order within each lane and tie-break by lane_rank.
     results.sort(key=sort_key)
-    trimmed = results[: max(1, min(int(limit), 25))]
+
+    final_limit = max(1, min(int(limit), 25))
+
+    # Group sorted results by lane, preserving lane priority order (qmd, knowledge,
+    # connector, mem0, then any other lane), so the round-robin below iterates lanes
+    # in the same priority order the old flat sort used.
+    bucket_order = sorted(
+        {str(item.get("lane")) for item in results},
+        key=lambda ln: lane_rank.get(ln, 9),
+    )
+    buckets: dict[str, list[dict[str, Any]]] = {ln: [] for ln in bucket_order}
+    for item in results:
+        buckets[str(item.get("lane"))].append(item)
+
+    # Round-robin pick, not a flat sort+slice: qmd fans out across up to 6
+    # meeting collections and can produce 40+ raw hits, which used to
+    # monopolize the whole trim and silently starve knowledge/connector/mem0
+    # from the final `results` list even when those lanes found real matches
+    # (their `lanes[...]['count']` was still reported correctly — only the
+    # surfaced `results` array was starved).
+    fair_selected: list[dict[str, Any]] = []
+    while len(fair_selected) < final_limit:
+        progressed = False
+        for ln in bucket_order:
+            group = buckets[ln]
+            if group:
+                fair_selected.append(group.pop(0))
+                progressed = True
+                if len(fair_selected) >= final_limit:
+                    break
+        if not progressed:
+            break
+
+    # Re-sort the round-robin survivors so final presentation order matches
+    # the original lane/score ordering — round-robin only changes which
+    # items survive the trim, not their display order.
+    fair_selected.sort(key=sort_key)
+    trimmed = fair_selected
 
     # Aggregate per-collection evidence bundle for operators. The dominant
     # status is the deepest-stage value reached across any collection, so a

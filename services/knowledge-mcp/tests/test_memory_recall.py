@@ -827,3 +827,104 @@ def test_connector_fts_query_falls_back_to_plain_match_on_metacharacters(tmp_pat
     assert hits == []
     hits2 = mr.sqlite_connector_search("multi-tenant", limit=5, db_path=db_path)
     assert len(hits2) == 1
+
+
+# ---------------------------------------------------------------------------
+# Lane-fairness regression (BEASTMODE standing-issue #2).
+#
+# recall() sorted all lanes together by (lane_rank, score) and then did a
+# flat `results[:limit]` slice. qmd fans out across up to 6 meeting
+# collections and can legitimately produce dozens of raw hits, so a flat
+# slice let it monopolize the entire trim -- knowledge/connector/mem0 hits
+# were silently absent from the final `results` array even though their
+# `lanes[...]['count']` correctly reported that they had matches. Live
+# repro: query 'Cordant' against the real knowledge base returned
+# lanes.knowledge.count == 3 but zero lane=='knowledge' items in `results`
+# at limit=5, because qmd alone produced 14 raw hits.
+# ---------------------------------------------------------------------------
+
+
+def test_recall_does_not_let_qmd_starve_other_lanes_at_a_tight_limit():
+    """A lane with real matches must be able to surface at least one hit
+    even when a higher-priority lane (qmd) alone exceeds the requested limit."""
+
+    def fake_qmd_run(args, **kwargs):
+        # 8 hits per collection call -- comfortably more than any limit
+        # this test uses, reproducing qmd's real fan-out behavior.
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {"file": f"m{i}.md", "title": f"Meeting {i}", "snippet": "x", "score": 10.0 - i}
+                    for i in range(8)
+                ]
+            ),
+            stderr="",
+        )
+
+    def fake_knowledge(**_):
+        return [{"path": "roadmap.md", "line": 1, "preview": "Cordant roadmap notes"}]
+
+    payload = mr.recall(
+        "anything",
+        limit=5,
+        collections=["meet-recordings"],
+        knowledge_search_fn=fake_knowledge,
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        qmd_runner=fake_qmd_run,
+        connector_search_fn=lambda **_: [],
+    )
+
+    # The lane genuinely found something (this part never broke).
+    assert payload["lanes"]["knowledge"]["count"] == 1
+    # The regression: that hit must actually be in the surfaced results,
+    # not silently dropped by the trim.
+    lanes_in_results = {r["lane"] for r in payload["results"]}
+    assert "knowledge" in lanes_in_results, (
+        "knowledge lane had a real match but was starved out of `results` "
+        f"by qmd's fan-out; surfaced lanes were {lanes_in_results}"
+    )
+    assert len(payload["results"]) == 5
+
+
+def test_recall_fair_trim_preserves_lane_priority_order_when_no_starvation_risk():
+    """When every lane's raw hits already fit under the limit, the fairness
+    round-robin must not change presentation order from the original
+    (lane priority, then score) ordering."""
+
+    def fake_qmd_run(args, **kwargs):
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps([{"file": "m.md", "title": "M", "snippet": "x", "score": 5.0}]),
+            stderr="",
+        )
+
+    payload = mr.recall(
+        "anything",
+        limit=10,
+        collections=["meet-recordings"],
+        knowledge_search_fn=lambda **_: [{"path": "k.md", "line": 1, "preview": "hit"}],
+        memory_search_fn=lambda **_: {
+            "status": "ok",
+            "results": [{"id": "m1", "memory": "mem hit", "score": 1.0}],
+        },
+        qmd_runner=fake_qmd_run,
+        connector_search_fn=lambda **_: [],
+    )
+    lanes_order = [r["lane"] for r in payload["results"]]
+    assert lanes_order == sorted(lanes_order, key=lambda ln: {"qmd": 0, "knowledge": 1, "connector": 2, "mem0": 3}.get(ln, 9))
+
+
+def test_recall_fair_trim_stops_early_when_all_lanes_exhausted_before_limit():
+    """If every lane combined has fewer hits than the requested limit, the
+    round-robin must stop instead of looping forever or padding output."""
+    payload = mr.recall(
+        "anything",
+        limit=25,
+        collections=["meet-recordings"],
+        knowledge_search_fn=lambda **_: [{"path": "k.md", "line": 1, "preview": "hit"}],
+        memory_search_fn=lambda **_: {"status": "ok", "results": []},
+        qmd_runner=lambda args, **kwargs: SimpleNamespace(returncode=0, stdout="[]", stderr=""),
+        connector_search_fn=lambda **_: [],
+    )
+    assert len(payload["results"]) == 1
