@@ -392,7 +392,8 @@
         {
           "id": "knowledge-mcp",
           "displayName": "Knowledge MCP service",
-          "required": true,
+          "required": false,
+          "_requiredNote": "Verified live on oracle-1 (2026-07-30): no knowledge-mcp systemd unit is installed, and it is not in the running docker compose stack (memroos/mem0/orchestration/connmem only). The base docker-compose.yml defines it, but production runs docker-compose.local.yml + override, which deliberately excludes it -- the actual memory_recall/knowledge_search MCP tools run via scripts/memroos-mcp.sh natively on the host, not this container. required:true here was a manifest/reality drift, not an enforced deployment: it made verify-onboarding-deploy.sh fail on every run against a service that was never meant to be live. Matches local-dev, which already has required:false for the same service. Revisit if a containerized knowledge-mcp is actually deployed.",
           "ports": [
             {
               "id": "knowledge-mcp-http",
