@@ -63,8 +63,14 @@ import('node:fs').then(async (fs) => {
       continue;
     }
     // Pick the first port with an integer defaultPort. The previous
-    // predicate (`p.defaultPort < 1024 || Number.isInteger(p.defaultPort)`)
-    // was tautological — the right side is always true when p is well-formed.
+    // predicate (\`p.defaultPort < 1024 || Number.isInteger(p.defaultPort)\`)
+    // was tautological -- the right side is always true when p is well-formed.
+    // NOTE: those two backticks MUST stay backslash-escaped: this whole node
+    // script is embedded inside a bash double-quoted string, and an
+    // unescaped backtick pair here is command substitution to bash, not a
+    // JS code span -- bash tries to run the quoted text as a shell command
+    // and fails with a syntax error, on every real invocation, even though
+    // the JS logic itself is already correct. Verified live on oracle-1.
     // Prefer the loopback-reachable port (low defaultPort) so the
     // probe works from inside oracle-1.
     const port = (svc.ports ?? []).find((p) => Number.isInteger(p.defaultPort));
