@@ -26,6 +26,25 @@ STATE_DIR="${MEMROOS_HEALTH_STATE_DIR:-$MEMROOS_ROOT/.health}"
 LOG="$STATE_DIR/liveness.log"
 mkdir -p "$STATE_DIR"
 
+# Host label for alert subjects. Every alert this script sent used to read
+# "[memroos] a monitor stopped running" with no host anywhere in it -- on a
+# host whose own `hostname` is meaningless (cordant-hermes-01 reports
+# `ip-172-31-43-250`), that is indistinguishable from an alert about any other
+# machine. Same profile-file resolution memroos-health-check.sh already uses
+# successfully in production, not a new mechanism: MEMROOS_HOST_ID env, then
+# the declared id in /etc/memroos/host-profile.env, then hostname as a last
+# resort so an unprofiled host still labels itself with something.
+if [ -z "${MEMROOS_HOST_ID:-}" ]; then
+  for _candidate in /etc/memroos/host-profile.env "$MEMROOS_ROOT/host-profile.env"; do
+    if [ -f "$_candidate" ]; then
+      # shellcheck disable=SC1090
+      . "$_candidate"
+      break
+    fi
+  done
+fi
+HOST_LABEL="${MEMROOS_HOST_ID:-$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown-host)}"
+
 # A 15-min cron job is stale after 45 min (three missed runs). A 30-min timer
 # is stale after 90. Tolerates one blip; catches a real stop quickly.
 CRON_STALE_SECONDS="${MEMROOS_CRON_STALE_SECONDS:-2700}"
@@ -51,7 +70,7 @@ alert() {
   if [ ! -f "$LAST" ] || [ $(( $(date +%s) - $(mtime "$LAST") )) -gt 21600 ]; then
     curl -s -X POST https://api.sendgrid.com/v3/mail/send \
       -H "Authorization: Bearer $SG_KEY" -H 'Content-Type: application/json' \
-      -d "{\"personalizations\":[{\"to\":[{\"email\":\"$TO\"}]}],\"from\":{\"email\":\"$FROM\"},\"subject\":\"[memroos] a monitor stopped running\",\"content\":[{\"type\":\"text/plain\",\"value\":\"$1\"}]}" > /dev/null
+      -d "{\"personalizations\":[{\"to\":[{\"email\":\"$TO\"}]}],\"from\":{\"email\":\"$FROM\"},\"subject\":\"[memroos $HOST_LABEL] a monitor stopped running\",\"content\":[{\"type\":\"text/plain\",\"value\":\"$1\n\nhost: $HOST_LABEL\"}]}" > /dev/null
     touch "$LAST"
   fi
 }
