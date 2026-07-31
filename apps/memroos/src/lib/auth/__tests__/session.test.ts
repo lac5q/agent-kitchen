@@ -2,21 +2,23 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { signAccessToken } from '../jwt';
 
-// Mock the DB module to avoid needing a real database.
-// This is hoisted to module level by Vitest's vi.mock mechanism.
+type MockRow = Record<string, unknown> | undefined;
+let mockGetResult: MockRow = undefined;
+
 vi.mock('@/lib/db', () => ({
   getDb: () => ({
     prepare: () => ({
-      get: () => undefined,
+      get: () => mockGetResult,
       run: () => undefined,
       all: () => [],
     }),
   }),
 }));
 
-// Set required env var for JWT tests
 beforeEach(() => {
   process.env.MEMROOS_JWT_SECRET = 'test-secret-that-is-long-enough-32ch';
+  mockGetResult = { disabled_at: null };
+  vi.resetModules();
 });
 
 describe('authenticateUser — JWT path', () => {
@@ -35,7 +37,7 @@ describe('authenticateUser — JWT path', () => {
   it('returns null for invalid JWT', async () => {
     const { authenticateUser } = await import('../session');
     const req = new Request('http://localhost/', {
-      headers: { Authorization: 'Bearer not.a.valid.token' },
+      headers: { Authorization: 'Bearer not.a.jwt' },
     });
     const session = await authenticateUser(req);
     expect(session).toBeNull();
@@ -59,18 +61,27 @@ describe('authenticateUser — JWT path', () => {
     expect(session!.userId).toBe('user-cookie');
     expect(session!.role).toBe('reviewer');
   });
+
+  it('returns null when user is soft-disabled', async () => {
+    mockGetResult = { disabled_at: '2026-07-31T00:00:00.000Z' };
+    const { authenticateUser } = await import('../session');
+    const token = await signAccessToken('user-disabled', 'operator');
+    const req = new Request('http://localhost/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(await authenticateUser(req)).toBeNull();
+  });
 });
 
 describe('authenticateUser — API key path', () => {
   it('returns null for unknown API key (no DB match)', async () => {
+    mockGetResult = undefined;
     const { authenticateUser } = await import('../session');
-    // A 64-char hex string looks like a user API key (no dots, not JWT-shaped)
     const fakeKey = 'a'.repeat(64);
     const req = new Request('http://localhost/', {
       headers: { Authorization: `Bearer ${fakeKey}` },
     });
     const session = await authenticateUser(req);
-    // DB mock returns undefined for key lookup, so should return null
     expect(session).toBeNull();
   });
 });

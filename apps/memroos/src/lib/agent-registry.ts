@@ -48,6 +48,18 @@ interface AgentCapabilityRow {
 interface AgentApiKeyRow {
   agent_id: string;
   key_hash: string;
+  expires_at: string | null;
+}
+
+/** Default agent API key lifetime. Override with MEMROOS_AGENT_API_KEY_TTL_DAYS. */
+export const AGENT_API_KEY_DEFAULT_TTL_DAYS = 90;
+
+export function agentApiKeyExpiresAt(now = new Date()): string {
+  const raw = process.env.MEMROOS_AGENT_API_KEY_TTL_DAYS;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  const days =
+    Number.isFinite(parsed) && parsed > 0 ? parsed : AGENT_API_KEY_DEFAULT_TTL_DAYS;
+  return new Date(now.getTime() + days * 86_400_000).toISOString();
 }
 
 interface ListAgentsOptions {
@@ -432,26 +444,30 @@ export function createAgentApiKey(agentId: string): string {
   }
 
   const key = generateApiKey(agentId);
+  const expiresAt = agentApiKeyExpiresAt();
   getDb()
     .prepare(
-      `INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash)
-       VALUES (?, ?, ?)`
+      `INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash, expires_at)
+       VALUES (?, ?, ?, ?)`
     )
-    .run(agentId, key.slice(0, 12), hashKey(key));
+    .run(agentId, key.slice(0, 12), hashKey(key), expiresAt);
   return key;
 }
 
 export function authenticateAgentKey(rawKey: string, agentIdHint?: string): RegisteredAgent | null {
   const keyHash = hashKey(rawKey);
+  const now = nowIso();
   const row = getDb()
     .prepare(
-      `SELECT agent_id, key_hash
+      `SELECT agent_id, key_hash, expires_at
        FROM agent_api_keys
        WHERE key_hash = ? AND revoked_at IS NULL`
     )
     .get(keyHash) as AgentApiKeyRow | undefined;
 
   if (!row) return null;
+  // Fail closed: missing expires_at is treated as expired (Phase 199).
+  if (!row.expires_at || row.expires_at <= now) return null;
   if (agentIdHint && row.agent_id !== agentIdHint) return null;
 
   const agent = getRegisteredAgent(row.agent_id);
@@ -459,7 +475,7 @@ export function authenticateAgentKey(rawKey: string, agentIdHint?: string): Regi
 
   getDb()
     .prepare("UPDATE agent_api_keys SET last_used_at = ? WHERE key_hash = ?")
-    .run(nowIso(), keyHash);
+    .run(now, keyHash);
   return agent;
 }
 

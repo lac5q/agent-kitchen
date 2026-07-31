@@ -25,6 +25,9 @@ export function getDb(): Database.Database {
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
     db.pragma('busy_timeout = 5000');
+    // Phase 199: cascades and REFERENCES are decorative until this is ON.
+    // SQLite defaults foreign_keys OFF per connection.
+    db.pragma('foreign_keys = ON');
     initSchema(db);
     seedDefaultAdmin(db);
     seedRegisteredAgents(db);

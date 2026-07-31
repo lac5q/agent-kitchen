@@ -5,6 +5,23 @@ import { initBehavioralJobSchema } from './seal/behavioral-schema';
 import { assertNotDefaultInternalApiKey } from './internal-api-key';
 import { scrubLegacyPackProvenance } from './ontology/pack-contract';
 
+/**
+ * Run a table rebuild with foreign_keys OFF, then restore prior state.
+ * Must execute outside a transaction — SQLite silently ignores the pragma
+ * inside a txn (Phase 199 criterion 6).
+ */
+export function withForeignKeysDisabled(db: Database.Database, fn: () => void): void {
+  const wasOn = Boolean(db.pragma('foreign_keys', { simple: true }));
+  try {
+    db.pragma('foreign_keys = OFF');
+    fn();
+  } finally {
+    if (wasOn) {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+}
+
 const LABEL_TABLES = [
   "messages",
   "audit_log",
@@ -808,13 +825,8 @@ function applySkillTrustChainSchema(db: Database.Database): void {
       if (missing.length === 0) {
         const quotedColumns = required.map((c) => `"${c}"`).join(", ");
 
-        // VAL-SKILL-040: FK-safe rebuild. Disable foreign_keys during DROP/RENAME
-        // so child tables (skill_quarantine, pins, etc.) that may exist on rerun
-        // do not cause SQLITE_CONSTRAINT. Re-enable afterwards. The meta flag
-        // ensures this path is only taken once, but defensively handle reruns.
-        const fkWasOn = db.prepare(`PRAGMA foreign_keys`).get() as unknown as number;
-        try {
-          db.exec(`PRAGMA foreign_keys = OFF`);
+        // VAL-SKILL-040 / Phase 199: FK-safe rebuild outside a transaction.
+        withForeignKeysDisabled(db, () => {
           db.exec(`
             CREATE TABLE skill_registry_new (
               id                  INTEGER PRIMARY KEY,
@@ -857,11 +869,7 @@ function applySkillTrustChainSchema(db: Database.Database): void {
             DROP TABLE skill_registry;
             ALTER TABLE skill_registry_new RENAME TO skill_registry;
           `);
-        } finally {
-          if (fkWasOn) {
-            db.exec(`PRAGMA foreign_keys = ON`);
-          }
-        }
+        });
       }
     }
 
@@ -2711,29 +2719,32 @@ function applyCurrentSchema(db: Database.Database): void {
     .prepare(`SELECT value FROM meta WHERE key = 'hive_delegations_v2_migrated'`)
     .get() as { value: string } | undefined;
   if (!migrated) {
-    db.exec(`
-      CREATE TABLE hive_delegations_new (
-        id            INTEGER PRIMARY KEY,
-        task_id       TEXT    NOT NULL UNIQUE,
-        from_agent    TEXT    NOT NULL,
-        to_agent      TEXT    NOT NULL,
-        task_summary  TEXT    NOT NULL,
-        priority      INTEGER NOT NULL DEFAULT 5,
-        status        TEXT    NOT NULL DEFAULT 'pending'
-                      CHECK(status IN ('pending','active','paused','completed','failed','canceled')),
-        checkpoint    TEXT,
-        context_id    TEXT,
-        result        TEXT,
-        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-      );
-      INSERT INTO hive_delegations_new
-        SELECT id, task_id, from_agent, to_agent, task_summary, priority, status,
-               checkpoint, context_id, result, created_at, updated_at
-        FROM hive_delegations;
-      DROP TABLE hive_delegations;
-      ALTER TABLE hive_delegations_new RENAME TO hive_delegations;
-    `);
+    // Phase 199: rebuild outside a transaction with FK toggled OFF/ON.
+    withForeignKeysDisabled(db, () => {
+      db.exec(`
+        CREATE TABLE hive_delegations_new (
+          id            INTEGER PRIMARY KEY,
+          task_id       TEXT    NOT NULL UNIQUE,
+          from_agent    TEXT    NOT NULL,
+          to_agent      TEXT    NOT NULL,
+          task_summary  TEXT    NOT NULL,
+          priority      INTEGER NOT NULL DEFAULT 5,
+          status        TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','active','paused','completed','failed','canceled')),
+          checkpoint    TEXT,
+          context_id    TEXT,
+          result        TEXT,
+          created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+          updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        INSERT INTO hive_delegations_new
+          SELECT id, task_id, from_agent, to_agent, task_summary, priority, status,
+                 checkpoint, context_id, result, created_at, updated_at
+          FROM hive_delegations;
+        DROP TABLE hive_delegations;
+        ALTER TABLE hive_delegations_new RENAME TO hive_delegations;
+      `);
+    });
     db.prepare(`INSERT OR REPLACE INTO meta(key,value) VALUES('hive_delegations_v2_migrated','1')`).run();
   }
 
@@ -2906,13 +2917,20 @@ function applyCurrentSchema(db: Database.Database): void {
       key_hash     TEXT    NOT NULL UNIQUE,
       created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
       last_used_at TEXT,
-      revoked_at   TEXT
+      revoked_at   TEXT,
+      expires_at   TEXT
     );
     CREATE INDEX IF NOT EXISTS agent_api_keys_hash
       ON agent_api_keys(key_hash);
     CREATE INDEX IF NOT EXISTS agent_api_keys_agent
       ON agent_api_keys(agent_id, revoked_at);
   `);
+  // Phase 199: additive expires_at for existing DBs created before this column.
+  try {
+    db.exec(`ALTER TABLE agent_api_keys ADD COLUMN expires_at TEXT`);
+  } catch {
+    // Column already exists.
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_capabilities (
@@ -3084,31 +3102,34 @@ function applyCurrentSchema(db: Database.Database): void {
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'business_outcome_events'")
     .get() as { sql: string } | undefined;
   if (boeSchema?.sql.includes("UNIQUE(correlation_id, adapter, event_type, polled_at)")) {
-    db.exec(`
-      CREATE TABLE business_outcome_events_new (
-        id              INTEGER PRIMARY KEY,
-        tenant_id       TEXT    NOT NULL DEFAULT 'default-tenant',
-        correlation_id  TEXT    NOT NULL,
-        source_system   TEXT    NOT NULL CHECK(source_system IN ('crm','helpdesk','finance')),
-        adapter         TEXT    NOT NULL,
-        event_type      TEXT    NOT NULL,
-        kpi_key         TEXT    NOT NULL,
-        kpi_value       REAL    NOT NULL,
-        raw_json        TEXT    NOT NULL,
-        agent_id        TEXT,
-        polled_at       TEXT    NOT NULL,
-        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-        UNIQUE(tenant_id, correlation_id, adapter, event_type, polled_at)
-      );
-      INSERT OR IGNORE INTO business_outcome_events_new
-        (id, tenant_id, correlation_id, source_system, adapter, event_type,
-         kpi_key, kpi_value, raw_json, agent_id, polled_at, created_at)
-      SELECT id, tenant_id, correlation_id, source_system, adapter, event_type,
-             kpi_key, kpi_value, raw_json, agent_id, polled_at, created_at
-      FROM business_outcome_events;
-      DROP TABLE business_outcome_events;
-      ALTER TABLE business_outcome_events_new RENAME TO business_outcome_events;
-    `);
+    // Phase 199: rebuild outside a transaction with FK toggled OFF/ON.
+    withForeignKeysDisabled(db, () => {
+      db.exec(`
+        CREATE TABLE business_outcome_events_new (
+          id              INTEGER PRIMARY KEY,
+          tenant_id       TEXT    NOT NULL DEFAULT 'default-tenant',
+          correlation_id  TEXT    NOT NULL,
+          source_system   TEXT    NOT NULL CHECK(source_system IN ('crm','helpdesk','finance')),
+          adapter         TEXT    NOT NULL,
+          event_type      TEXT    NOT NULL,
+          kpi_key         TEXT    NOT NULL,
+          kpi_value       REAL    NOT NULL,
+          raw_json        TEXT    NOT NULL,
+          agent_id        TEXT,
+          polled_at       TEXT    NOT NULL,
+          created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+          UNIQUE(tenant_id, correlation_id, adapter, event_type, polled_at)
+        );
+        INSERT OR IGNORE INTO business_outcome_events_new
+          (id, tenant_id, correlation_id, source_system, adapter, event_type,
+           kpi_key, kpi_value, raw_json, agent_id, polled_at, created_at)
+        SELECT id, tenant_id, correlation_id, source_system, adapter, event_type,
+               kpi_key, kpi_value, raw_json, agent_id, polled_at, created_at
+        FROM business_outcome_events;
+        DROP TABLE business_outcome_events;
+        ALTER TABLE business_outcome_events_new RENAME TO business_outcome_events;
+      `);
+    });
   }
   db.exec(`
     CREATE INDEX IF NOT EXISTS boe_correlation
@@ -3473,7 +3494,8 @@ function applyCurrentSchema(db: Database.Database): void {
       tenant_id     TEXT NOT NULL DEFAULT 'default-tenant'
                     REFERENCES tenants(id) ON DELETE CASCADE,
       created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-      last_login_at TEXT
+      last_login_at TEXT,
+      disabled_at   TEXT
     );
     CREATE INDEX IF NOT EXISTS users_email ON users(email);
     CREATE INDEX IF NOT EXISTS users_tenant ON users(tenant_id);
@@ -3550,6 +3572,13 @@ function applyCurrentSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS auth_events_type_created
       ON auth_events(event_type, created_at DESC);
   `);
+
+  // Phase 199: soft-disable column for existing DBs (offboarding without hard delete).
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN disabled_at TEXT`);
+  } catch {
+    // Column already exists.
+  }
 
   // Phase 64: audit_entries unified immutable log (AUDIT-01)
   // Two-layer immutability: SQLite triggers + service code convention (no UPDATE/DELETE exports).

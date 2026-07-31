@@ -46,8 +46,10 @@ export async function POST(req: NextRequest) {
   const db = getDb();
 
   const user = db
-    .prepare('SELECT id, email, display_name, password_hash, tenant_id FROM users WHERE email = ?')
-    .get(email) as UserRow | undefined;
+    .prepare(
+      'SELECT id, email, display_name, password_hash, tenant_id, disabled_at FROM users WHERE email = ?'
+    )
+    .get(email) as (UserRow & { disabled_at: string | null; tenant_id: string }) | undefined;
 
   // Always run verifyPassword to avoid timing attacks
   const dummyHash = '$2a$12$invalidhashfortimingprotection000000000000000000000000';
@@ -56,6 +58,11 @@ export async function POST(req: NextRequest) {
     : await verifyPassword(password, dummyHash).then(() => false);
 
   if (!user || !passwordOk) {
+    return Response.json({ error: 'invalid email or password' }, { status: 401 });
+  }
+
+  // Phase 199: soft-disabled users cannot log in.
+  if (user.disabled_at) {
     return Response.json({ error: 'invalid email or password' }, { status: 401 });
   }
 

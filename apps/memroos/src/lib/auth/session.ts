@@ -40,6 +40,15 @@ export async function authenticateUser(req: Request): Promise<SessionUser | null
   if (isJwt) {
     const payload = await verifyAccessToken(token);
     if (!payload) return null;
+    try {
+      const db = await getDbLazy();
+      const disabled = db
+        .prepare('SELECT disabled_at FROM users WHERE id = ?')
+        .get(payload.sub) as { disabled_at: string | null } | undefined;
+      if (!disabled || disabled.disabled_at) return null;
+    } catch {
+      return null;
+    }
     return {
       userId: payload.sub,
       role: payload.role,
@@ -60,12 +69,20 @@ export async function authenticateUser(req: Request): Promise<SessionUser | null
 
     if (!apiKey || apiKey.revoked_at) return null;
 
-    type UserRow = { id: string; email: string; display_name: string; tenant_id: string };
+    type UserRow = {
+      id: string;
+      email: string;
+      display_name: string;
+      tenant_id: string;
+      disabled_at: string | null;
+    };
     const user = db
-      .prepare('SELECT id, email, display_name, tenant_id FROM users WHERE id = ?')
+      .prepare(
+        'SELECT id, email, display_name, tenant_id, disabled_at FROM users WHERE id = ?'
+      )
       .get(apiKey.user_id) as UserRow | undefined;
 
-    if (!user) return null;
+    if (!user || user.disabled_at) return null;
 
     type RoleRow = { role: UserRole };
     const roleRow = db

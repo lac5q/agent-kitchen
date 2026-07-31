@@ -43,6 +43,15 @@ import type Database from "better-sqlite3";
 import { writeAuditEntry } from "@/lib/audit/write";
 
 const TENANT_ID = "default-tenant";
+const AGENT_API_KEY_DEFAULT_TTL_DAYS = 90;
+
+function agentApiKeyExpiresAt(from: Date): string {
+  const raw = process.env.MEMROOS_AGENT_API_KEY_TTL_DAYS;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  const days =
+    Number.isFinite(parsed) && parsed > 0 ? parsed : AGENT_API_KEY_DEFAULT_TTL_DAYS;
+  return new Date(from.getTime() + days * 86_400_000).toISOString();
+}
 
 export interface OnboardingReceipt {
   userId: string;
@@ -232,10 +241,11 @@ export function onboardUser(
     }
 
     // 6. agent_api_keys row.
+    const expiresAt = agentApiKeyExpiresAt(new Date(createdAt));
     db.prepare(
-      `INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash, created_at)
-       VALUES (?, ?, ?, ?)`
-    ).run(agentId, apiKey.slice(0, 12), keyHash, createdAt);
+      `INSERT INTO agent_api_keys (agent_id, key_prefix, key_hash, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(agentId, apiKey.slice(0, 12), keyHash, createdAt, expiresAt);
 
     // 7. agent membership in each space (so the NOC sees the agent there).
     const insertAgentMember = db.prepare(
