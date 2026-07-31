@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
+import { resolvePublicMemroosUrl } from '@/lib/public-base-url';
 import type { UserRole } from '@/lib/auth/types';
 
 interface InviteBody {
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(inviteId, tokenHash, role, session.userId, emailHint ?? null, expiresAt);
 
-  const baseUrl = process.env.MEMROOS_BASE_URL ?? `https://${req.headers.get('host')}`;
+  const baseUrl = resolvePublicMemroosUrl(req);
   const inviteUrl = `${baseUrl}/invite/${rawToken}`;
 
   return Response.json({ inviteUrl }, { status: 201 });

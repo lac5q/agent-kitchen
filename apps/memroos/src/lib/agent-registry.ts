@@ -36,6 +36,7 @@ interface RegisteredAgentRow {
   created_at: string;
   updated_at: string;
   deregistered_at: string | null;
+  owner_id?: string | null;
 }
 
 interface AgentCapabilityRow {
@@ -230,6 +231,7 @@ function rowToRegisteredAgent(row: RegisteredAgentRow): RegisteredAgent {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deregisteredAt: row.deregistered_at,
+    ownerId: row.owner_id ?? null,
   };
 }
 
@@ -294,12 +296,12 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       `INSERT INTO registered_agents (
          id, name, role, company, platform, protocol, status, current_task,
          last_heartbeat_at, location, host, port, health_endpoint, tunnel_url,
-         latency_ms, metadata, created_at, updated_at, deregistered_at
+         latency_ms, metadata, created_at, updated_at, deregistered_at, owner_id
        )
        VALUES (
          @id, @name, @role, @company, @platform, @protocol, 'dormant', NULL,
          NULL, @location, @host, @port, @healthEndpoint, @tunnelUrl,
-         NULL, @metadata, @timestamp, @timestamp, NULL
+         NULL, @metadata, @timestamp, @timestamp, NULL, @ownerId
        )
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
@@ -314,7 +316,8 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
          tunnel_url = excluded.tunnel_url,
          metadata = excluded.metadata,
          updated_at = excluded.updated_at,
-         deregistered_at = NULL`
+         deregistered_at = NULL,
+         owner_id = COALESCE(excluded.owner_id, registered_agents.owner_id)`
     ).run({
       id: input.id,
       name: input.name,
@@ -329,6 +332,7 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       tunnelUrl: input.tunnelUrl ?? null,
       metadata: stringifyJson(metadata),
       timestamp,
+      ownerId: input.ownerId ?? null,
     });
 
     // Only replace capabilities when the caller explicitly sends them.

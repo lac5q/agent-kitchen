@@ -138,6 +138,8 @@ export interface RegisteredAgent extends Agent {
   createdAt: string;
   updatedAt: string;
   deregisteredAt: string | null;
+  /** Owning human user id when set (invite bootstrap path). */
+  ownerId?: string | null;
 }
 
 export interface RegisterAgentInput {
@@ -155,6 +157,8 @@ export interface RegisterAgentInput {
   capabilities?: RegisteredAgentCapability[];
   metadata?: Record<string, unknown>;
   issueApiKey?: boolean;
+  /** Optional owning human user id; leave unset for legacy/A2A callers. */
+  ownerId?: string;
 }
 
 export interface RegisterAgentResult {

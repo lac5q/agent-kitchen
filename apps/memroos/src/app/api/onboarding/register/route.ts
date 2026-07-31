@@ -65,6 +65,8 @@ export async function POST(request: Request) {
     platform: parsed.input.platform ?? verified.payload.defaultPlatform ?? "codex",
     protocol: parsed.input.protocol ?? verified.payload.defaultProtocol ?? "rest",
     capabilities: verified.payload.capabilities ?? parsed.input.capabilities ?? [],
+    // Ownership claim comes only from the signed token — never from request JSON.
+    ownerId: verified.payload.ownerUserId,
     metadata: {
       ...parsed.input.metadata,
       onboardedVia: "memroos",

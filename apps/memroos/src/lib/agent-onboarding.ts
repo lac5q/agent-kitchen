@@ -11,6 +11,8 @@ export interface AgentOnboardingTokenPayload {
   defaultProtocol?: AgentProtocol;
   capabilities?: RegisteredAgentCapability[];
   nonce: string;
+  /** Human user id that will own agents registered with this token. */
+  ownerUserId?: string;
 }
 
 export interface CreateAgentOnboardingTokenInput {
@@ -21,6 +23,7 @@ export interface CreateAgentOnboardingTokenInput {
   defaultPlatform?: AgentPlatform;
   defaultProtocol?: AgentProtocol;
   capabilities?: RegisteredAgentCapability[];
+  ownerUserId?: string;
 }
 
 export interface VerifiedOnboardingToken {
@@ -86,6 +89,7 @@ export function createAgentOnboardingToken(input: CreateAgentOnboardingTokenInpu
     defaultProtocol: input.defaultProtocol,
     capabilities: input.capabilities,
     nonce: crypto.randomBytes(16).toString("base64url"),
+    ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
   };
 
   const body = base64UrlJson(payload);
