@@ -3555,6 +3555,10 @@ where they multi-select harnesses and get clear one-line install commands.
 Agents registered this way set `owner_id` to the new user. Team invite UI
 includes a copyable email draft (SendGrid deferred).
 
+**Deploy / invite target for Eric (Cordant):** `cordant-hermes-01` via Cloudflare
+Tunnel `memroos-cordant` → `https://memroos-cordant.epiloguecapital.com`
+— **not** oracle-1 / `memroos.epiloguecapital.com`. PUBLIC_* URLs set on hermes 2026-07-31.
+
 **Context:** `.planning/phases/201-invite-multi-harness-agent-bootstrap/201-CONTEXT.md`
 
 **Requirement IDs:** INVBOOT-01..06
@@ -3563,7 +3567,7 @@ includes a copyable email draft (SendGrid deferred).
 |----|-----------|
 | INVBOOT-01 | Invitee register → Connect agents step (not login-only) |
 | INVBOOT-02 | Multi-select harnesses → one command per harness |
-| INVBOOT-03 | Commands use public base URL (not localhost when public host known) |
+| INVBOOT-03 | Commands use `https://memroos-cordant.epiloguecapital.com` (not localhost, not oracle epiloguecapital for Eric) |
 | INVBOOT-04 | Registered agents persist `owner_id` = invitee user id |
 | INVBOOT-05 | Team page shows copyable 3-step email draft after invite create |
 | INVBOOT-06 | Tests cover bootstrap mint + owner_id + easy copy presence |
@@ -3571,10 +3575,10 @@ includes a copyable email draft (SendGrid deferred).
 **Plans:** 1 plan
 
 Plans:
-- [ ] 201-01-PLAN.md — Ownership + public URL + bootstrap API + invite Connect UX + Team email draft (INVBOOT-01..06)
+- [x] 201-01-PLAN.md — Ownership + public URL + bootstrap API + invite Connect UX + Team email draft (INVBOOT-01..06)
 
 ### Progress Table (v8.32 Easy Human + Agent Onboarding)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 201. Invite + Multi-Harness Agent Bootstrap | 0/1 | Planned; ready to execute | — |
+| 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Complete (deploy/smoke Eric on hermes remaining) | 2026-07-31 |

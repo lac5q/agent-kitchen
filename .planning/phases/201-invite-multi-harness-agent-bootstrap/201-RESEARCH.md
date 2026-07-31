@@ -430,20 +430,13 @@ Questions? Reply to this email.
 
 **If this table is empty:** N/A — assumptions listed above need planner confirmation only where marked.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Register Set-Cookie parity?**
-   - What we know: Login sets HttpOnly cookies; register returns body token only.
-   - What's unclear: Product preference for auto-session after Done.
-   - Recommendation: Do set cookies on register (mirrors login); still keep Bearer for bootstrap in same page session.
+1. **Register Set-Cookie parity?** — **RESOLVED** (Plan 201-01 Task 2): yes — set cookies on register for login parity; Connect step still uses Bearer `accessToken` in the same page session.
 
-2. **Claude label constant change?**
-   - What we know: `PLATFORM_LABELS.claude === "Claude"`; D-05 wants “Claude Code”.
-   - What's unclear: Whether Agents UI should also say “Claude Code”.
-   - Recommendation: Update shared `PLATFORM_LABELS` (small, consistent).
+2. **Claude label constant change?** — **RESOLVED** (Plan 201-01 Task 1): set `PLATFORM_LABELS.claude = "Claude Code"` (shared constant; Agents UI stays consistent with D-05).
 
-3. **Skip for now?**
-   - Recommendation: Yes — secondary button to login/console without minting.
+3. **Skip for now?** — **RESOLVED** (Plan 201-01 Task 3): yes — secondary “Skip for now” continues without minting.
 
 ## Environment Availability
 

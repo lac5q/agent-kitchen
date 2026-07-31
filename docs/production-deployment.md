@@ -1,18 +1,19 @@
 # MemRoOS Production Deployment
 
-**Document version:** 2.0  
+**Document version:** 2.1  
 **Created:** 2026-07-01  
-**Last updated:** 2026-07-27  
+**Last updated:** 2026-07-31  
 **Creation date/time:** 2026-07-01  
-**Update date/time:** 2026-07-27 01:15 PDT  
-**Source:** lac5q/memroos cutover to oracle-1; live checks against `memroos.epiloguecapital.com`
+**Update date/time:** 2026-07-31 15:54 PDT  
+**Source:** lac5q/memroos cutover to oracle-1; Cordant hermes tunnel `memroos-cordant` live 2026-07-31; live checks against `memroos.epiloguecapital.com` + `memroos-cordant.epiloguecapital.com`
 
 ## Production map
 
 | Host | Role | Platform | Deploy path |
 |------|------|----------|-------------|
 | `memroos.com` | Public marketing / landing | Vercel | Push to `main` → Vercel (`vercel.json`) |
-| `memroos.epiloguecapital.com` | **Operator app** (login, APIs, agent onboarding) | **oracle-1** via Cloudflare Tunnel | Deploy on `oracle-1`; tunnel `memroos-oracle` |
+| `memroos.epiloguecapital.com` | **Operator app** (Luis / Epilogue) | **oracle-1** via Cloudflare Tunnel | Deploy on `oracle-1`; tunnel `memroos-oracle` |
+| `memroos-cordant.epiloguecapital.com` | **Cordant operator** (Eric) | **cordant-hermes-01** via Cloudflare Tunnel | Deploy on hermes; tunnel `memroos-cordant` |
 | Mac (`localhost`) | Dev / burst only | Local `npm run dev` | Not production |
 
 **Canonical operator host:** `oracle-1` (Tailscale hostname `oracle-1`)  
@@ -77,10 +78,14 @@ Neo4j container and an unconfigured Qdrant — this has happened once and cost h
 
 ## cordant-hermes-01 (second instance)
 
-A separate self-contained MemRoOS instance, **not** a replica of prod. No public entry
-point (`cloudflared` inactive; serves `127.0.0.1:3000` only) and it uses its own local
-`memroos-local-neo4j-1` container rather than Aura. It shares the same
-`NANGO_SECRET_KEY` as prod, so both resolve to the same Nango environment.
+A separate self-contained MemRoOS instance, **not** a replica of prod. It uses
+its own local `memroos-local-neo4j-1` container rather than Aura. It shares the
+same `NANGO_SECRET_KEY` as prod, so both resolve to the same Nango environment.
+
+**Public URL (Cordant / Eric):** `https://memroos-cordant.epiloguecapital.com`  
+**Tunnel:** Cloudflare `memroos-cordant` (`a5016402-755f-42a5-aebe-be028bdb1660`)
+on the host → `http://127.0.0.1:3000` (`cloudflared.service` enabled)  
+**Do not** route Cordant traffic through `memroos-oracle` / `memroos.epiloguecapital.com`.
 
 **App checkout:** `/home/ubuntu/memroos` · **User:** `ubuntu` · **No** `docker-compose.override.yml`, and no `scripts/memroos-restart.sh`.
 

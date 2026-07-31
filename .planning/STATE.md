@@ -3,17 +3,32 @@ gsd_state_version: 1.0
 milestone: v8.32
 milestone_name: Easy Human + Agent Onboarding (Phase 201)
 status: active
-stopped_at: Phase 201 planned (201-01-PLAN.md); execute-phase next
-last_updated: "2026-07-31T22:35:00Z"
+stopped_at: Phase 201 code complete; hermes deploy + Eric invite/smoke remaining
+last_updated: "2026-07-31T23:10:00Z"
 progress:
   total_phases: 120
-  completed_phases: 85
-  total_plans: 162
-  completed_plans: 144
-  percent: 71
+  completed_phases: 86
+  total_plans: 163
+  completed_plans: 145
+  percent: 72
 ---
 
-## Latest Position (2026-07-26) — v8.31 added, v8.15 closed
+## Latest Position (2026-07-31) — Phase 201 executed
+
+**Phase 201 (INVBOOT-01..06) shipped in code.** Invitees now land on Connect
+your agents after register, mint one public-URL command per harness via
+`POST /api/onboarding/bootstrap` (60m TTL, `ownerUserId` from session), and
+agents persist `registered_agents.owner_id` from the signed onboarding token
+only. Team shows a copyable 3-step email draft (no SendGrid). Commits:
+`01a9c9a7`, `7456380b`, `d1f89850`. Phase gate: public-base-url +
+invite-email-draft + session-cookies + slow onboarding (22) green.
+
+**Still open for Eric:** deploy memroos build to **cordant-hermes-01**, smoke
+`https://memroos-cordant.epiloguecapital.com`, then invite from hermes Team UI.
+
+**Lane:** director-inline (auth). GitNexus MCP unavailable this session.
+
+## Prior Position (2026-07-26) — v8.31 added, v8.15 closed
 
 **Nango was on the WRONG KEY — fixed 2026-07-26.** oracle-1 was running the
 Nango **dev** key, not prod. Confirmed by hashing the live value against both
