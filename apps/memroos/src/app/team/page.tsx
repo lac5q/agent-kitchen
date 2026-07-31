@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, Copy, Check } from "lucide-react";
 import { Btn, PageHeader, Pill } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
+import { buildInviteEmailDraft } from "@/lib/invite-email-draft";
 
 interface UserRecord {
   id: string;
@@ -52,6 +53,7 @@ export default function TeamPage() {
   const [emailHint, setEmailHint] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [draftCopied, setDraftCopied] = useState(false);
   const [inviteError, setInviteError] = useState("");
 
   const { data, isLoading, error } = useQuery({
@@ -85,6 +87,13 @@ export default function TeamPage() {
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleCopyDraft() {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(buildInviteEmailDraft(inviteUrl));
+    setDraftCopied(true);
+    setTimeout(() => setDraftCopied(false), 2000);
   }
 
   return (
@@ -132,6 +141,26 @@ export default function TeamPage() {
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" style={{ color: NOC.ink }}>
+                    Email draft (copy and send)
+                  </p>
+                  <textarea
+                    readOnly
+                    value={buildInviteEmailDraft(inviteUrl)}
+                    rows={10}
+                    className="w-full border px-3 py-2 text-xs focus:outline-none"
+                    style={{ background: NOC.fog, borderColor: NOC.rule, color: NOC.ink }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyDraft()}
+                    className="w-full border px-4 py-2 text-sm"
+                    style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+                  >
+                    {draftCopied ? "Email draft copied" : "Copy email draft"}
                   </button>
                 </div>
                 <button
