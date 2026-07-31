@@ -1,19 +1,46 @@
 ---
 gsd_state_version: 1.0
 milestone: v8.32
-milestone_name: Easy Human + Agent Onboarding (Phase 201)
+milestone_name: Easy Human + Agent Onboarding (Phases 201–202)
 status: active
-stopped_at: Phase 201 code complete; hermes deploy + Eric invite/smoke remaining
-last_updated: "2026-07-31T23:10:00Z"
+stopped_at: Phase 201 code complete; hermes deploy + Eric smoke open; Phase 202 Cowork planned
+last_updated: "2026-07-31T23:20:02Z"
 progress:
-  total_phases: 120
+  total_phases: 121
   completed_phases: 86
   total_plans: 163
   completed_plans: 145
-  percent: 72
+  percent: 71
 ---
 
-## Latest Position (2026-07-31) — Phase 201 executed
+## Latest Position (2026-07-31) — Cloudflare live; Cowork plan added
+
+**Cloudflare for Cordant is live.** Tunnel `memroos-cordant` →
+`https://memroos-cordant.epiloguecapital.com` → `127.0.0.1:3000` on
+**cordant-hermes-01**. Invitees (Eric / Cordant) do **not** need Tailscale for
+the operator UI. Phase 201 CONTEXT D-11/D-12 and deferred list refreshed to
+match (stale Tailscale / “Cloudflare deferred” language removed).
+
+**Phase 201 (INVBOOT-01..06) remains code-complete.** Still open: deploy
+memroos build to hermes, smoke invite/Connect against the Cordant URL, invite
+Eric from hermes Team UI.
+
+**Phase 202 added (COWORK-01..05) — Claude Cowork Remote MCP.** CEO/workers
+primary client is Cowork, not Claude Code. Phase 201 curl|bash does not satisfy
+Cowork. Need public Streamable HTTP `/mcp` on the Cordant hostname (tunnel
+today is UI-only), auth for Anthropic-originated traffic, and Cowork
+connector/plugin onboarding UX. Context:
+`.planning/phases/202-claude-cowork-remote-mcp/202-CONTEXT.md`.
+
+**Revised enablement plan (no Tailscale):**
+1. Keep Phase 201 deploy/smoke for Claude Code / other local harnesses.
+2. Plan/execute Phase 202: route `/mcp` → knowledge-mcp, auth, Cowork custom
+   connector + optional plugin/deep-link.
+3. Workers: Connectors → MemRoOS (no laptop MCP install).
+
+**Lane:** director-inline (planning). GitNexus MCP unavailable this session.
+
+## Prior Position (2026-07-31) — Phase 201 executed
 
 **Phase 201 (INVBOOT-01..06) shipped in code.** Invitees now land on Connect
 your agents after register, mint one public-URL command per harness via

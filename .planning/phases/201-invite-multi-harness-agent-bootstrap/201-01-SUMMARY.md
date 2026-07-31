@@ -134,6 +134,7 @@ None for code. **Deploy/smoke for Eric:**
 
 - Code complete for INVBOOT-01..06; ready for hermes deploy + Eric invite
 - Optional follow-up: invite page unit test for Connect step; GitNexus impact re-check when index MCP is live
+- **Phase 202** drafted for Claude Cowork remote MCP (CEO/workers; Cloudflare UI live, public `/mcp` still open) — see `.planning/phases/202-claude-cowork-remote-mcp/202-CONTEXT.md`
 
 ---
 *Phase: 201-invite-multi-harness-agent-bootstrap*

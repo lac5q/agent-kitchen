@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **memroos** (21526 symbols, 47013 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **memroos-product** (21715 symbols, 47350 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -31,10 +31,10 @@ This project is indexed by GitNexus as **memroos** (21526 symbols, 47013 relatio
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/memroos/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/memroos/clusters` | All functional areas |
-| `gitnexus://repo/memroos/processes` | All execution flows |
-| `gitnexus://repo/memroos/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/memroos-product/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/memroos-product/clusters` | All functional areas |
+| `gitnexus://repo/memroos-product/processes` | All execution flows |
+| `gitnexus://repo/memroos-product/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

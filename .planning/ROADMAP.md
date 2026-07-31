@@ -68,7 +68,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 library complete on main** via 2026-07-23 beastmode session — `services/connmem` (25 modules, 141 tests). **Not yet integrated:** no service entrypoint, no compose/topology entry, no kernel route, and the 141 tests do not run in CI (2026-07-24 architecture review, F1). Live backfill is blocked on runtime integration (v8.27 Phase 185), not only on the Linear + Circleback credentials tracked in `CONNMEM-LIVE-DEFER`)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
-- 🔄 **v8.32 Easy Human + Agent Onboarding** — Phase 201 (added 2026-07-31; INVBOOT-01..06; invitee post-register multi-harness agent bootstrap + Team email draft)
+- 🔄 **v8.32 Easy Human + Agent Onboarding** — Phases 201–202 (added 2026-07-31; INVBOOT-01..06 shipped in code; COWORK-01..05 planned — Claude Cowork remote MCP on Cordant Cloudflare)
 - 🔄 **v8.31 Operator Config Durability + Storage Consolidation** — Phases 196-198 (added 2026-07-26 from the oracle-1 hardening session; CFGDUR-01..06 + HOSTPAR-01..04 + STORECON-01..05; make host configuration survive upgrades by construction, bring cordant-hermes-01 to oracle-1 parity, and decide SQLite→Postgres/Supabase on measured evidence. This milestone exists because a silent config regression disconnected Neo4j Aura and was found by accident)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
 - 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
@@ -3577,8 +3577,42 @@ Tunnel `memroos-cordant` → `https://memroos-cordant.epiloguecapital.com`
 Plans:
 - [x] 201-01-PLAN.md — Ownership + public URL + bootstrap API + invite Connect UX + Team email draft (INVBOOT-01..06)
 
+### Phase 202 — Claude Cowork Remote MCP (Cordant)
+
+**Goal:** Let Cordant CEO/workers who primarily use **Claude Cowork** (not Claude
+Code) connect to MemRoOS on `cordant-hermes-01` with **no Tailscale** and no
+local MCP process. Build on the live Cloudflare Tunnel
+`memroos-cordant` → `https://memroos-cordant.epiloguecapital.com`.
+
+**Why now:** Phase 201 ships curl|bash harness install for Claude Code/Cursor/etc.
+Cowork only accepts **remote custom connectors** (Anthropic’s cloud dials your
+HTTPS MCP). The Cordant tunnel currently terminates at the operator app
+(`127.0.0.1:3000`); onboarding tokens already advertise `${publicUrl}/mcp`, but
+Streamable HTTP MCP is not yet publicly routed/authenticated for Anthropic.
+
+**Context:** `.planning/phases/202-claude-cowork-remote-mcp/202-CONTEXT.md`
+
+**Requirement IDs:** COWORK-01..05
+
+| ID | Criterion |
+|----|-----------|
+| COWORK-01 | Public Streamable HTTP MCP reachable at Cordant hostname (path `/mcp` or dedicated host) from Anthropic’s network — not Tailscale, not localhost |
+| COWORK-02 | Auth for remote connector traffic (bearer via Claude Request headers and/or Cloudflare Access / OAuth); no open anonymous write surface |
+| COWORK-03 | Invite Connect + Team draft include **Claude Cowork** path (deep link / numbered connector steps — not curl\|bash as primary) |
+| COWORK-04 | Optional Claude plugin (or deep-link) that references the Cordant remote MCP URL for one-click-ish Cowork install |
+| COWORK-05 | External smoke: add custom connector → tools list; CEO/worker laptop without Tailscale succeeds |
+
+**Plans:** TBD after discuss/plan (ops-heavy: cloudflared path + knowledge-mcp on hermes + invite UX)
+
+**Locked direction (research 2026-07-31):**
+- Prefer same hostname path route `https://memroos-cordant.epiloguecapital.com/mcp` → local knowledge-mcp `:8765` (matches existing `mcpUrl` minting) over a second hostname unless ops prefers split.
+- Desktop `.mcpb` extensions are **out** — they do not work in Cowork.
+- Public Connectors Directory submission is **out** for private Cordant brain.
+- No Tailscale for workers (Cloudflare already removes that requirement for public reachability).
+
 ### Progress Table (v8.32 Easy Human + Agent Onboarding)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Complete (deploy/smoke Eric on hermes remaining) | 2026-07-31 |
+| 202. Claude Cowork Remote MCP (Cordant) | 0/TBD | Planned (Cloudflare UI live; public `/mcp` + Cowork UX open) | — |

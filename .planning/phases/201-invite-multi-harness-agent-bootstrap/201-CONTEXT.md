@@ -31,7 +31,8 @@ Ship one continuous invitee journey:
 - Fixing oracle-1 `MEMROOS_PUBLIC_BASE_URL=localhost` (separate ops; Eric is **not** on oracle-1)
 - Redesigning full Team admin beyond email draft + any tiny helper text
 - New agent platforms beyond the existing onboarding `PLATFORMS` set
-- Making cordant-hermes-01 share the oracle-1 `memroos-oracle` tunnel (dedicated `memroos-cordant` tunnel only)
+- Making cordant-hermes-01 share the oracle-1 `memroos-oracle` tunnel (dedicated `memroos-cordant` tunnel only — **already live**)
+- Claude Cowork custom-connector UX (Phase 202; Cloudflare UI hostname is live, public `/mcp` not yet)
 
 </domain>
 
@@ -60,10 +61,10 @@ Ship one continuous invitee journey:
 - **D-10:** Default onboarding token TTL may stay short (15m) **or** be raised for invitee bootstrap (planner discretion, prefer ≤60m with clear “commands expire” copy). Refresh button re-mints while session valid.
 
 ### Public / fleet URL (locked)
-- **D-11:** Commands must use a **non-localhost fleet URL**: prefer `MEMROOS_PUBLIC_BASE_URL` / `MEMROOS_APP_URL` / `MEMROOS_BASE_URL` when set and not localhost; else request origin / forwarded host / Tailscale hostname. On hermes for Eric, that resolves to `http://cordant-hermes-01:3000`. Never mint `http://localhost` when a Tailscale or other non-local host is known.
+- **D-11:** Commands must use a **non-localhost fleet URL**: prefer `MEMROOS_PUBLIC_BASE_URL` / `MEMROOS_APP_URL` / `MEMROOS_BASE_URL` when set and not localhost; else request origin / forwarded host. On hermes for Eric, that resolves to `https://memroos-cordant.epiloguecapital.com` (Cloudflare Tunnel `memroos-cordant`, live 2026-07-31). Never mint `http://localhost` when a public host is known. Tailscale is **not** required for Cordant invitees.
 
 ### Email (locked)
-- **D-12:** v1 = **copyable draft only** on Team after invite generate. No SendGrid in this phase. Draft assumes hermes Tailscale URL for Cordant/Eric invites.
+- **D-12:** v1 = **copyable draft only** on Team after invite generate. No SendGrid in this phase. Draft uses the Cordant public Cloudflare URL (`https://memroos-cordant.epiloguecapital.com`) for invite links.
 
 ### Claude's Discretion
 - Exact route shape (`POST /api/onboarding/bootstrap` vs nested under `/api/auth/...`)
@@ -87,17 +88,23 @@ Ship one continuous invitee journey:
 ```
 Eric opens invite from https://memroos-cordant.epiloguecapital.com/invite/...
   → creates account on hermes SQLite
-  → picks Claude Code
+  → picks Claude Code (and/or Cursor, etc.)
   → runs curl|bash against https://memroos-cordant.epiloguecapital.com/...
-  → Claude Code MCP points at hermes /mcp with hermes-issued agent key
+  → Claude Code MCP points at hermes mcpUrl (issued agent key)
 ```
+
+**CEO / workers on Claude Cowork (not Claude Code):** Phase 201 curl|bash does **not**
+satisfy Cowork. Anthropic’s cloud must reach a public Streamable HTTP MCP URL.
+Cloudflare Tunnel `memroos-cordant` already publishes the operator UI (`:3000`).
+Public `/mcp` + Cowork connector/plugin onboarding is **Phase 202**.
 
 Admin creates the invite on **hermes Team UI**
 (`https://memroos-cordant.epiloguecapital.com/team`), not on
 `memroos.epiloguecapital.com` (oracle-1).
 
 Tunnel: Cloudflare `memroos-cordant` (`a5016402-755f-42a5-aebe-be028bdb1660`)
-on cordant-hermes-01 → `http://127.0.0.1:3000`.
+on cordant-hermes-01 → `http://127.0.0.1:3000` (live 2026-07-31). No Tailscale
+required for invitees.
 
 </specifics>
 
@@ -151,7 +158,7 @@ on cordant-hermes-01 → `http://127.0.0.1:3000`.
 - SendGrid live invite mail
 - Admin-side harness preselection (option B)
 - oracle-1 `.env` PUBLIC_BASE_URL fix (ops; not Eric’s host)
-- Cloudflare public hostname for hermes
 - In-app “my agents” ownership dashboard polish beyond what’s needed to verify owner_id
+- **Claude Cowork remote connector** (CEO/workers primary client) — public Streamable HTTP `/mcp` on the Cordant tunnel + custom-connector / plugin UX. Operator UI tunnel is live; MCP path still needs Phase 202 (tunnel currently terminates at `:3000` only). See ROADMAP §v8.32 Phase 202.
 
 </deferred>
