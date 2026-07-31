@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.31
-milestone_name: Operator Config Durability + Storage Consolidation (Phases 196-198)
+milestone: v8.32
+milestone_name: Easy Human + Agent Onboarding (Phase 201)
 status: active
-stopped_at: v8.31 added 2026-07-26 from the oracle-1 hardening session; v8.15 data plane reconciled and closed; three operator decisions recorded (health-system consolidation, Ollama embeddings, cordant stays local)
-last_updated: "2026-07-26T19:45:00Z"
+stopped_at: Phase 201 planned (201-01-PLAN.md); execute-phase next
+last_updated: "2026-07-31T22:35:00Z"
 progress:
   total_phases: 120
   completed_phases: 85
