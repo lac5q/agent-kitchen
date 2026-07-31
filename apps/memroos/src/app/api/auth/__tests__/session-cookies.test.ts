@@ -122,4 +122,53 @@ describe('auth session cookies', () => {
     expect(cookies).toContain('access_token=');
     expect(cookies).toContain('Max-Age=0');
   });
+
+  it('register issues HttpOnly access and refresh cookies like login', async () => {
+    const run = vi.fn();
+    mocks.db.prepare.mockImplementation((sql: string) => {
+      if (sql.includes('SELECT COUNT(*) as cnt FROM users')) {
+        return { get: () => ({ cnt: 0 }) };
+      }
+      if (sql.includes('SELECT id FROM users WHERE email')) {
+        return { get: () => undefined };
+      }
+      return { run, get: () => undefined };
+    });
+    (mocks.db as { transaction?: (fn: () => unknown) => () => unknown }).transaction = (fn) => () =>
+      fn();
+
+    vi.resetModules();
+    vi.doMock('@/lib/db', () => ({
+      getDb: () => ({
+        prepare: mocks.db.prepare,
+        transaction: (fn: () => unknown) => () => fn(),
+      }),
+    }));
+    vi.doMock('@/lib/auth/password', () => ({
+      hashPassword: async () => 'hashed',
+      verifyPassword: mocks.verifyPassword,
+    }));
+
+    const { POST } = await import('../register/route');
+    const response = await POST(
+      new Request('http://localhost/api/auth/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'eric@example.com',
+          password: 'secret-password',
+          displayName: 'Eric',
+        }),
+      }) as never
+    );
+
+    const cookies = setCookieHeader(response);
+    const body = await response.json();
+    expect(response.status).toBe(201);
+    expect(body.accessToken).toBeTruthy();
+    expect(body.userId).toBeTruthy();
+    expect(cookies).toContain('memroos_refresh=');
+    expect(cookies).toContain('access_token=');
+    expect(cookies).toContain('HttpOnly');
+  });
 });

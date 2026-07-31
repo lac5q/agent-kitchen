@@ -13,13 +13,23 @@ async function loadRoutes() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
   process.env.MEMROOS_ONBOARDING_SECRET = "onboarding-secret";
+  process.env.MEMROOS_JWT_SECRET = "test-secret-that-is-long-enough-32ch";
   vi.resetModules();
   const inviteRoute = await import("../invite/route");
   const registerRoute = await import("../register/route");
   const scriptRoute = await import("../script/route");
+  const bootstrapRoute = await import("../bootstrap/route");
   const agentsRoute = await import("../../agents/route");
   const dbModule = await import("@/lib/db");
-  return { inviteRoute, registerRoute, scriptRoute, agentsRoute, closeDb: dbModule.closeDb };
+  return {
+    inviteRoute,
+    registerRoute,
+    scriptRoute,
+    bootstrapRoute,
+    agentsRoute,
+    getDb: dbModule.getDb,
+    closeDb: dbModule.closeDb,
+  };
 }
 
 describe("agent onboarding routes", { tags: ["slow"] }, () => {
@@ -35,6 +45,8 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     delete process.env.SQLITE_DB_PATH;
     delete process.env.MEMROOS_OPERATOR_API_KEY;
     delete process.env.MEMROOS_ONBOARDING_SECRET;
+    delete process.env.MEMROOS_JWT_SECRET;
+    delete process.env.MEMROOS_PUBLIC_BASE_URL;
   });
 
   it("rejects invite minting without operator authorization", async () => {
@@ -303,12 +315,12 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
           HOME: home,
           PATH: `${binDir}:${process.env.PATH}`,
         };
-        if (platform === "darwin") {
-          const siteDir = path.join(tempRoot, "sitecustomize");
-          fs.mkdirSync(siteDir, { recursive: true });
-          fs.writeFileSync(path.join(siteDir, "sitecustomize.py"), 'import sys\nsys.platform = "darwin"\n');
-          env.PYTHONPATH = siteDir;
-        }
+        // Force Python's sys.platform so Linux/macOS path branches are exercised
+        // regardless of the host OS running the test suite.
+        const siteDir = path.join(tempRoot, `sitecustomize-${platform}`);
+        fs.mkdirSync(siteDir, { recursive: true });
+        fs.writeFileSync(path.join(siteDir, "sitecustomize.py"), `import sys\nsys.platform = "${platform}"\n`);
+        env.PYTHONPATH = siteDir;
 
         execFileSync("bash", [scriptPath, "--id", "cline-agent", "--name", "Cline Agent", "--platform", "cline"], {
           env,
@@ -375,4 +387,103 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
       expect(agents).toContainEqual(expect.objectContaining({ id: agentId, platform }));
     }
   );
+
+  it("rejects bootstrap without authentication", async () => {
+    const { bootstrapRoute } = await loadRoutes();
+    const response = await bootstrapRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/bootstrap", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ platforms: ["claude"] }),
+      })
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("lets a reviewer mint multi-platform bootstrap commands with public URL and owner_id", async () => {
+    const { bootstrapRoute, registerRoute, getDb } = await loadRoutes();
+    const { signAccessToken } = await import("@/lib/auth/jwt");
+
+    const userId = "revieweruser001";
+    const db = getDb();
+    db.prepare(
+      "INSERT INTO users (id, email, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(userId, "eric@example.com", "Eric", "hash", new Date().toISOString());
+    db.prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(userId, "reviewer");
+
+    process.env.MEMROOS_PUBLIC_BASE_URL = "http://localhost:3000";
+    const token = await signAccessToken(userId, "reviewer");
+    const response = await bootstrapRoute.POST(
+      new Request("https://127.0.0.1:3000/api/onboarding/bootstrap", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+          "x-forwarded-host": "memroos-cordant.epiloguecapital.com",
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({ platforms: ["claude", "cursor"] }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.commands).toHaveLength(2);
+    expect(body.commands[0].label).toBe("Claude Code");
+    expect(body.commands[0].command).toContain(
+      "https://memroos-cordant.epiloguecapital.com/api/onboarding/script?token="
+    );
+    expect(body.commands[0].command).toContain("--platform 'claude'");
+    expect(body.commands[0].command).toContain("--mcp-target 'auto'");
+    expect(body.commands[0].agentId).toBe(`${userId.slice(0, 8)}-claude`);
+
+    const tokenMatch = body.commands[0].command.match(/token=([^']+)'/);
+    expect(tokenMatch).toBeTruthy();
+    const onboardingToken = decodeURIComponent(tokenMatch![1]);
+
+    const registerResponse = await registerRoute.POST(
+      new Request("https://memroos-cordant.epiloguecapital.com/api/onboarding/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: onboardingToken,
+          id: `${userId.slice(0, 8)}-claude`,
+          name: "Eric Claude",
+          role: "Cordant worker",
+          platform: "claude",
+          ownerId: "attacker-should-be-ignored",
+        }),
+      })
+    );
+    expect(registerResponse.status).toBe(200);
+
+    const owned = db
+      .prepare("SELECT owner_id FROM registered_agents WHERE id = ?")
+      .get(`${userId.slice(0, 8)}-claude`) as { owner_id: string | null };
+    expect(owned.owner_id).toBe(userId);
+  });
+
+  it("rejects unknown bootstrap platforms", async () => {
+    const { bootstrapRoute, getDb } = await loadRoutes();
+    const { signAccessToken } = await import("@/lib/auth/jwt");
+    const userId = "revieweruser002";
+    const db = getDb();
+    db.prepare(
+      "INSERT INTO users (id, email, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(userId, "eric2@example.com", "Eric2", "hash", new Date().toISOString());
+    db.prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(userId, "reviewer");
+    const token = await signAccessToken(userId, "reviewer");
+
+    const response = await bootstrapRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/bootstrap", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ platforms: ["not-a-platform"] }),
+      })
+    );
+    expect(response.status).toBe(400);
+  });
 });

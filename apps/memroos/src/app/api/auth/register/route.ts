@@ -2,7 +2,15 @@ import { NextRequest } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { hashPassword } from '@/lib/auth/password';
+import { isHttpsRequest } from '@/lib/auth/secure-cookie';
 import { signAccessToken } from '@/lib/auth/jwt';
+import {
+  ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS,
+  ACCESS_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_COOKIE_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_TTL_DAYS,
+} from '@/lib/auth/session-limits';
 import type { UserRole } from '@/lib/auth/types';
 
 interface RegisterBody {
@@ -81,5 +89,22 @@ export async function POST(req: NextRequest) {
 
   const accessToken = await signAccessToken(userId, role);
 
-  return Response.json({ accessToken, userId }, { status: 201 });
+  // Login parity: issue refresh + HttpOnly cookies while keeping JSON accessToken
+  // for same-page Bearer bootstrap (INVBOOT Connect step).
+  const rawRefresh = randomBytes(32).toString('hex');
+  const refreshHash = createHash('sha256').update(rawRefresh).digest('hex');
+  const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 86400_000).toISOString();
+  const refreshId = randomBytes(8).toString('hex');
+  db.prepare(
+    'INSERT INTO user_refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)'
+  ).run(refreshId, userId, refreshHash, refreshExpiresAt);
+
+  const secureFlag = isHttpsRequest(req) ? '; Secure' : '';
+  const refreshCookie = `${REFRESH_TOKEN_COOKIE_NAME}=${rawRefresh}; HttpOnly; SameSite=Lax${secureFlag}; Path=/; Max-Age=${REFRESH_TOKEN_COOKIE_MAX_AGE_SECONDS}`;
+  const accessCookie = `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; HttpOnly; SameSite=Lax${secureFlag}; Path=/; Max-Age=${ACCESS_TOKEN_COOKIE_MAX_AGE_SECONDS}`;
+
+  const response = Response.json({ accessToken, userId }, { status: 201 });
+  response.headers.append('Set-Cookie', refreshCookie);
+  response.headers.append('Set-Cookie', accessCookie);
+  return response;
 }
