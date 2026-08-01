@@ -100,18 +100,34 @@ Until the creds exist:
 
 ### 3. Apply the credentials on `oracle-1`
 
-As `opc`. Do **not** commit `.env`.
+As `opc`. Do **not** commit `.env`. **All three vars are mandatory** — see the warning below about `GOOGLE_REDIRECT_URI`.
 
 ```bash
+# guard: ensure the file ends in a newline before appending, or the first
+# new key gets glued onto the last existing line and silently dropped
+tail -c1 /home/opc/memroos/.env | read -r _ || echo >> /home/opc/memroos/.env
+
 cat >> /home/opc/memroos/.env <<'EOF'
 GOOGLE_CLIENT_ID=<paste-client-id>
 GOOGLE_CLIENT_SECRET=<paste-client-secret>
 GOOGLE_REDIRECT_URI=https://memroos.epiloguecapital.com/api/auth/google/callback
 EOF
 chmod 600 /home/opc/memroos/.env
+
+# verify: exactly three GOOGLE_ lines, no duplicates, each on its own line
+grep -n '^GOOGLE_' /home/opc/memroos/.env
 ```
 
-`GOOGLE_REDIRECT_URI` must byte-match the Authorized redirect URI from step 2. If it is omitted entirely, the app falls back to deriving it from `MEMROOS_PUBLIC_BASE_URL` — setting it explicitly is preferred and avoids a silent mismatch.
+> **`GOOGLE_REDIRECT_URI` is required here, not optional.** `getGoogleOidcConfig()`
+> falls back to deriving the callback from `MEMROOS_PUBLIC_BASE_URL` when the explicit
+> var is absent — and on oracle-1 that value is currently
+> **`http://localhost:3000`** (`.env:117`). Omitting `GOOGLE_REDIRECT_URI` would
+> therefore derive `http://localhost:3000/api/auth/google/callback`, which does not
+> match the URI registered with Google, and the callback fails with
+> `redirect_uri_mismatch`. Set it explicitly and byte-match step 2.
+>
+> (Verified 2026-08-01: `.env` currently contains **zero** `GOOGLE_` keys and does end
+> in a newline, so a clean append is safe today.)
 
 ### 4. Restart
 
@@ -161,3 +177,4 @@ Then the button renders and the smoke test below becomes runnable.
 - **M3 is a reasoning model.** `max_tokens: 20` was fully consumed by `reasoning_content` and returned an empty `content` — a false failure. Budget ≥256, and ≥2,000 for doc drafts.
 - **`git pull` on oracle-1 without a rebuild is a silent no-op deploy.** The host sitting at the right SHA proves nothing. Compare the container's image ID before and after, and grep the built image for the new route — exit code 0 on `build` is not evidence when layers are cached.
 - **Verify through both surfaces.** Checking `localhost:3000` on the host and the public Cloudflare URL separates app-layer from tunnel-layer failures.
+- **A "sensible fallback" can be a live trap.** `getGoogleOidcConfig()` deriving the redirect URI from `MEMROOS_PUBLIC_BASE_URL` reads as a convenience, but oracle-1 has that set to `http://localhost:3000` — so the fallback path silently produces a URI Google will reject. Any config fallback should be checked against the *actual* production value before it's documented as optional.
