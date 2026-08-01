@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.33
 milestone_name: Ledger + Dashboard Data Honesty (Phases 204–205)
 status: active
-stopped_at: Phase 204 code complete on working tree (uncommitted); Phase 205 operator-gated; Phase 203 Google registration planned
-last_updated: "2026-08-01T02:45:00Z"
+stopped_at: Phases 203/204/205 code committed + pushed (through 33aff816); oracle-1 deploy of Google-auth commit + Google OAuth client creds + live dashboard re-verify remaining
+last_updated: "2026-08-01T04:25:00Z"
 progress:
   total_phases: 124
   completed_phases: 90
@@ -13,27 +13,55 @@ progress:
   percent: 73
 ---
 
-## Latest Position (2026-07-31) — v8.33 dashboard-accuracy session + roadmap reconciliation
+## Latest Position (2026-07-31 late session, paused by operator) — 203/204/205 shipped to main; oracle deploy of 203 pending
 
-**Working tree (uncommitted, Phase 204):** Ledger RTK removal (KPIs, Savings
-Breakdown, `useTokenStats`), `/api/model-usage` double-count guard
-(`model_routing_events` fallback-only vs `token_ledger`, `modelRoutingUsedAsFallback`
-in sources), empty-state writer diagnostics, Workflow Map responsive-grid + SVG
-sizing render fix, ledger test suite updated + new `model-routing-token-usage`
-test. Next: commit (run `detect_changes()` first), deploy oracle-1, live re-verify
-`/ledger` + `/flow`.
+**Committed + pushed to `main` (verify with `git log`):**
+- Phase 204 Ledger honesty + Workflow render — committed earlier this session and
+  **already deployed to oracle-1** (Ledger shows real token data; `/flow` renders).
+- Durable token tracking (`60aad51d`, `908c6570`): `scripts/ship-claude-token-usage.mjs`
+  reads local Claude JSONL and POSTs to `POST /api/model-routing/telemetry`
+  (operator-key auth; proxy bypass added to `ROUTE_LOCAL_AUTH_API_ROUTES` +
+  route-auth-boundary coverage). launchd agent
+  `~/Library/LaunchAgents/com.memroos.token-ship.plist` runs it every 30 min on
+  the operator Mac with env file `~/.memroos/token-ship.env`. `token_ledger` now
+  carries explicit `inputTokens`/`outputTokens`; **verified live on oracle-1** —
+  Ledger displays shipped input/output/cacheRead counts.
+- Phase 205 knowledge/vector fixes — **deployed + verified live on oracle-1**:
+  mem0 → Qdrant Cloud (memory_count 1436; compose env-driven config, public DNS,
+  runc runtime), `agent-knowledge` cloned at `/home/opc/github/agent-knowledge`
+  with 6-hourly pull timer, `collections.config.json` mounted, `SKILLS_PATH`
+  set (350 skills), `knowledge-mcp` container fixed (Dockerfile module layout,
+  `KNOWLEDGE_ROOT`, systemd Type=simple, `/health` route) and running.
+- Phase 203 Google registration (`33aff816`): arctic OIDC PKCE —
+  `src/lib/auth/google-oidc.ts` (`resolveGoogleSignIn`: invite binding,
+  first-admin bootstrap, email linking, `user_identities` table),
+  routes `/api/auth/google` + `/callback` + `/status`, Continue-with-Google
+  buttons on `/login` + `/invite/[token]` (invite resumes at connect step via
+  `?google=connected`), unit tests for resolution matrix + routes. Full suite
+  green (3,568 tests), typecheck clean, detect-changes low risk (2 lint errors
+  pre-existing in `agent-registry-drawer.tsx`, untouched).
 
-**Diagnosed, operator-gated (Phase 205):** oracle-1 `/knowledge` is a stub —
-no `agent-knowledge` clone, no `collections.config.json`, no `SKILLS_PATH`,
-empty `skill_registry`; mem0 `memory_count: null`. Point-and-index plan filed
-in ROADMAP §v8.33; awaiting operator confirmation of vault source + host scope.
+**NOT done yet (exact resume steps):**
+1. Deploy `33aff816` to oracle-1: `ssh oracle-1; cd /home/opc/memroos;
+   git pull --ff-only; docker compose -f docker-compose.local.yml -f
+   docker-compose.override.yml build memroos; ./scripts/memroos-restart.sh`
+   (per docs/production-deployment.md — never plain compose up on oracle-1).
+2. Google OAuth client does not exist yet: operator must create a Google Cloud
+   OAuth 2.0 Client ID (Web), authorized redirect
+   `https://memroos.epiloguecapital.com/api/auth/google/callback`, then add
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` to
+   `/home/opc/memroos/.env` and restart. Until then `/api/auth/google/status`
+   returns configured:false and the UI hides the button (safe to deploy first).
+3. Live smoke: `/login` shows Google button once configured; invite→Google→
+   connect-step round trip; re-check `/ledger`, `/flow`, Memory Inventory
+   counts after restart.
+4. Roadmap tables not yet updated for this session's completions: v8.32 row
+   "203. Google Account Registration" still says 0/1 Planned (code is now on
+   main, deploy-gated), and v8.33 rows for 204/205 still say 0/1 despite being
+   deployed + live-verified. Update both progress tables + the Phase 204/205
+   "Status" paragraphs, then commit.
 
-**Roadmap reconciliation this session:** v8.27/v8.28 section headers corrected
-PLANNED→COMPLETE (2026-07-31); Phase 203 (Google account registration — console
-auth only, not Cowork MCP) registered under v8.32 with progress row; v8.33
-milestone added (Phases 204-205, LEDGHON-01..05 + KNOWPROV-01..05).
-
-**Lane:** director-inline (dashboard-honesty + planning-doc work; no menial batch).
+**Lane:** director-inline (auth/security work; MiniMax not used).
 
 ## Prior Position (2026-07-31) — Phase 202 closed
 

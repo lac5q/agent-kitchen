@@ -3633,7 +3633,7 @@ cookies as register; buttons on invite register + login pages only; env
 |-------|----------------|--------|-----------|
 | 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Deployed oracle-1 + hermes (Eric invite smoke still manual) | 2026-07-31 |
 | 202. Claude Cowork Remote MCP (Cordant) | 1/1 | Live `/mcp` + bearer + Invite/Team UX; SUMMARY + checklist | 2026-07-31 |
-| 203. Google Account Registration | 0/1 | Planned — context filed 2026-07-31; copy fixes for the 202 Google-confusion already landed (`bc58d28a`) | — |
+| 203. Google Account Registration | 1/1 | Code on main (`33aff816`): OIDC PKCE routes + user_identities + invite/login buttons + tests (3,568 green). Remaining: oracle-1 deploy + operator creates Google OAuth client creds + live smoke | — |
 
 ## v8.33 Ledger + Dashboard Data Honesty (Phases 204-205) — IN PROGRESS (2026-07-31)
 
@@ -3662,9 +3662,10 @@ superior knowledge center and indexes it, rather than copying files in.
 | LEDGHON-04 | Workflow Map renders at all viewport widths: responsive grid (stack below `xl`), SVG `minWidth` + `preserveAspectRatio` + horizontal scroll wrapper |
 | LEDGHON-05 | Tests updated: ledger-page suite green without RTK mocks; new `model-routing-token-usage` aggregation test proves no double-count |
 
-**Status 2026-07-31:** implementation complete on working tree (uncommitted);
-tests green locally. Remaining: commit + deploy to oracle-1, then re-verify
-`/ledger` and `/flow` on the live host.
+**Status 2026-07-31 (closed):** committed, deployed to oracle-1, live-verified —
+`/ledger` shows real token data (shipper-fed token_ledger with explicit
+input/output split) and `/flow` renders. Token writer: `scripts/ship-claude-token-usage.mjs`
+on the operator Mac (launchd, 30-min interval) → `POST /api/model-routing/telemetry`.
 
 ### Phase 205 — Knowledge Vault Point-and-Index Provisioning (operator-gated)
 
@@ -3682,13 +3683,16 @@ tests green locally. Remaining: commit + deploy to oracle-1, then re-verify
 `memory_count: null` on oracle-1 — determine whether Qdrant collection is empty
 or mem0 count reporting is broken, and surface the true state.
 
-**Status 2026-07-31:** diagnosed; awaiting operator confirmation of the superior
-knowledge center location and scope (oracle-1 only vs oracle-1 + cordant-hermes-01)
-before ops execution.
+**Status 2026-07-31 (closed):** operator confirmed scope = oracle-1 only; executed
+and live-verified. mem0 → Qdrant Cloud (memory_count 1436; env-driven compose config,
+public DNS, runc runtime), `agent-knowledge` cloned at `/home/opc/github/agent-knowledge`
+with 6-hourly systemd pull timer, `collections.config.json` mounted, `SKILLS_PATH=/knowledge/skills`
+(350 skills), `knowledge-mcp` container fixed (module layout, KNOWLEDGE_ROOT,
+Type=simple, `/health`) and running.
 
 ### Progress Table (v8.33 Ledger + Dashboard Data Honesty)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 204. Ledger Honesty + RTK Removal + Workflow Render | 0/1 | Code complete on working tree; commit + oracle deploy + live re-verify remaining | — |
-| 205. Knowledge Vault Point-and-Index Provisioning | 0/1 | Diagnosed; operator-gated (confirm vault source + host scope) | — |
+| 204. Ledger Honesty + RTK Removal + Workflow Render | 1/1 | Deployed oracle-1 + live-verified; durable token shipper (`ship-claude-token-usage.mjs` + launchd 30-min timer) feeds token_ledger with explicit input/output split | 2026-07-31 |
+| 205. Knowledge Vault Point-and-Index Provisioning | 1/1 | Deployed oracle-1 + live-verified: mem0→Qdrant Cloud (1436 memories), agent-knowledge clone + 6h pull timer, collections.config.json mounted, SKILLS_PATH (350 skills), knowledge-mcp running with /health | 2026-07-31 |
