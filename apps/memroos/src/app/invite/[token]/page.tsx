@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
+import {
+  buildCoworkConnectorSteps,
+  buildCoworkDeepLinkHint,
+  COWORK_PLATFORM_ID,
+  resolveCoworkMcpUrl,
+} from "@/lib/cowork-connector";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
 
 interface InviteInfo {
@@ -23,6 +29,7 @@ const HARNESS_OPTIONS = Object.entries(PLATFORM_LABELS).filter(([id]) =>
   [
     "cursor",
     "claude",
+    "cowork",
     "codex",
     "hermes",
     "openclaw",
@@ -58,7 +65,21 @@ export default function InvitePage() {
   const [selected, setSelected] = useState<string[]>(["claude"]);
   const [commands, setCommands] = useState<BootstrapCommand[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedCoworkUrl, setCopiedCoworkUrl] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [includeCowork, setIncludeCowork] = useState(false);
+
+  const coworkMcpUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return "https://memroos-cordant.epiloguecapital.com/mcp";
+    }
+    return resolveCoworkMcpUrl(window.location.origin);
+  }, [step]);
+
+  const coworkSteps = useMemo(
+    () => buildCoworkConnectorSteps(coworkMcpUrl),
+    [coworkMcpUrl]
+  );
 
   // Pitfall 1: once past register, do not re-validate consumed invite.
   useEffect(() => {
@@ -129,14 +150,22 @@ export default function InvitePage() {
     }
     setError("");
     setSubmitting(true);
+    const wantsCowork = selected.includes(COWORK_PLATFORM_ID);
+    const shellPlatforms = selected.filter((id) => id !== COWORK_PLATFORM_ID);
     try {
+      setIncludeCowork(wantsCowork);
+      if (shellPlatforms.length === 0) {
+        setCommands([]);
+        setStep("commands");
+        return;
+      }
       const res = await fetch("/api/onboarding/bootstrap", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ platforms: selected }),
+        body: JSON.stringify({ platforms: shellPlatforms }),
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -151,6 +180,12 @@ export default function InvitePage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function copyCoworkUrl() {
+    await navigator.clipboard.writeText(coworkMcpUrl);
+    setCopiedCoworkUrl(true);
+    setTimeout(() => setCopiedCoworkUrl(false), 2000);
   }
 
   async function copyCommand(cmd: BootstrapCommand) {
@@ -192,8 +227,8 @@ export default function InvitePage() {
           <div>
             <h1 className="text-xl font-semibold text-zinc-100">Connect your AI tools</h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Account created. Pick the tools you use — we&apos;ll give you a one-line
-              command for each.
+              Account created. Pick the tools you use — Claude Cowork gets connector
+              steps; other tools get a one-line install command.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -243,16 +278,51 @@ export default function InvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-10">
         <div className="w-full max-w-2xl space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
           <div>
-            <h1 className="text-xl font-semibold text-zinc-100">Run these commands</h1>
-            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-400">
-              <li>Open Terminal on your computer.</li>
-              <li>Copy a command below and paste it, then press Enter.</li>
-              <li>Restart that AI app so it picks up MemRoOS.</li>
-            </ol>
-            <p className="mt-3 text-sm text-zinc-500">
-              These commands expire in about an hour — use Refresh if they stop working.
-            </p>
+            <h1 className="text-xl font-semibold text-zinc-100">
+              {includeCowork && commands.length === 0
+                ? "Connect Claude Cowork"
+                : "Finish connecting"}
+            </h1>
+            {commands.length > 0 && (
+              <>
+                <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-400">
+                  <li>Open Terminal on your computer.</li>
+                  <li>Copy a command below and paste it, then press Enter.</li>
+                  <li>Restart that AI app so it picks up MemRoOS.</li>
+                </ol>
+                <p className="mt-3 text-sm text-zinc-500">
+                  These commands expire in about an hour — use Refresh if they stop working.
+                </p>
+              </>
+            )}
           </div>
+          {includeCowork && (
+            <div className="space-y-3 rounded-lg border border-amber-500/40 bg-zinc-950 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-amber-100">Claude Cowork connector</p>
+                <button
+                  type="button"
+                  onClick={() => void copyCoworkUrl()}
+                  className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-300 hover:border-amber-500"
+                >
+                  {copiedCoworkUrl ? "Copied" : "Copy URL"}
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500">{buildCoworkDeepLinkHint(coworkMcpUrl)}</p>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-zinc-900 p-3 text-xs text-amber-100">
+                {coworkMcpUrl}
+              </pre>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-zinc-400">
+                {coworkSteps.map((stepText) => (
+                  <li key={stepText}>{stepText}</li>
+                ))}
+              </ol>
+              <p className="text-xs text-zinc-500">
+                Bearer token comes from your Cordant Team admin (not this page email). Do not put
+                long-lived tokens in chat or invite mail.
+              </p>
+            </div>
+          )}
           <div className="space-y-4">
             {commands.map((cmd, index) => (
               <div key={cmd.agentId} className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950 p-4">
@@ -276,14 +346,16 @@ export default function InvitePage() {
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void mintCommands()}
-              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300"
-            >
-              Refresh commands
-            </button>
+            {commands.length > 0 && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void mintCommands()}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300"
+              >
+                Refresh commands
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
@@ -301,8 +373,8 @@ export default function InvitePage() {
           </div>
           {showAdvanced && (
             <p className="text-xs text-zinc-500">
-              After the command finishes, restart Claude Code / Cursor (or your other tool)
-              so it reloads MemRoOS. You can re-run Refresh later while signed in.
+              After curl|bash finishes, restart Claude Code / Cursor so it reloads MemRoOS.
+              Cowork only needs the custom connector URL above — no Terminal install.
             </p>
           )}
         </div>

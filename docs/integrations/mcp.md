@@ -127,6 +127,36 @@ Verify the exported contract with:
 npm run check:mcp-schema
 ```
 
+## Cordant public Streamable HTTP (Claude Cowork)
+
+Cordant workers who use **Claude Cowork** (not Claude Code) need a public HTTPS
+MCP endpoint — Tailscale and local `memroos-mcp.sh` are not required on the
+laptop.
+
+| Item | Value |
+|------|--------|
+| URL | `https://memroos-cordant.epiloguecapital.com/mcp` |
+| Host process | systemd `memroos-mcp-http` → `scripts/memroos-mcp.sh --http --host 127.0.0.1 --port 8765` |
+| Tunnel | Cloudflare `memroos-cordant` path `/mcp*` → `127.0.0.1:8765` (before UI `:3000`) |
+| Auth | `Authorization: Bearer <token>` from `~/.memroos/memroos-mcp-http.env` on hermes |
+
+Install on hermes:
+
+```bash
+bash scripts/install-memroos-mcp-systemd.sh
+# then reload cloudflared from deploy/cordant-hermes-01/cloudflared/memroos-cordant.yml
+```
+
+Invite Connect + Team email drafts describe this connector path; they never embed
+the long-lived bearer. Optional deep-link hint:
+
+```text
+Claude Cowork custom connector → https://memroos-cordant.epiloguecapital.com/mcp
+```
+
+**Not the same service as** docker `knowledge-mcp` on port `3291` (FastAPI health
+sidecar). Cowork must hit `:8765` / public `/mcp`.
+
 ## Goal-state handoffs
 
 Long agent runs should persist their active state through MemRoOS before compaction, restart, or cross-agent transfer. Keep the project-local `GOAL_STATE.md` current, then send it through the audited agent-context bus:

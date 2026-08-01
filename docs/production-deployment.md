@@ -84,8 +84,17 @@ same `NANGO_SECRET_KEY` as prod, so both resolve to the same Nango environment.
 
 **Public URL (Cordant / Eric):** `https://memroos-cordant.epiloguecapital.com`  
 **Tunnel:** Cloudflare `memroos-cordant` (`a5016402-755f-42a5-aebe-be028bdb1660`)
-on the host → `http://127.0.0.1:3000` (`cloudflared.service` enabled)  
+on the host → UI `http://127.0.0.1:3000` plus path `/mcp*` → Streamable HTTP MCP
+`http://127.0.0.1:8765` (`memroos-mcp-http.service`; see
+`deploy/cordant-hermes-01/cloudflared/memroos-cordant.yml`).  
 **Do not** route Cordant traffic through `memroos-oracle` / `memroos.epiloguecapital.com`.
+**Do not** confuse docker `knowledge-mcp` on `:3291` with Streamable HTTP MCP on `:8765`.
+
+**Claude Cowork connector (no Tailscale):**
+`https://memroos-cordant.epiloguecapital.com/mcp` with
+`Authorization: Bearer <MEMROOS_MCP_BEARER_TOKEN>` from
+`~/.memroos/memroos-mcp-http.env` on hermes (share out-of-band; never in invite email).
+Install/restart: `bash scripts/install-memroos-mcp-systemd.sh`.
 
 **App checkout:** `/home/ubuntu/memroos` · **User:** `ubuntu` · **No** `docker-compose.override.yml`, and no `scripts/memroos-restart.sh`.
 

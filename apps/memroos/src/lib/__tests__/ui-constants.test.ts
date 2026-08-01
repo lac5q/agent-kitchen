@@ -44,7 +44,8 @@ describe("ui-constants", () => {
   it("resolves human-friendly platform labels for every supported agent", () => {
     expect(PLATFORM_LABELS["pi"]).toBe("Pi");
     expect(PLATFORM_LABELS["droid"]).toBe("Droid");
-    expect(PLATFORM_LABELS["claude"]).toBe("Claude");
+    expect(PLATFORM_LABELS["claude"]).toBe("Claude Code");
+    expect(PLATFORM_LABELS["cowork"]).toBe("Claude Cowork");
     expect(PLATFORM_LABELS["cursor"]).toBe("Cursor");
     expect(PLATFORM_LABELS["codex"]).toBe("Codex");
     expect(PLATFORM_LABELS["qwen"]).toBe("Qwen");

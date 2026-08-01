@@ -3,17 +3,30 @@ gsd_state_version: 1.0
 milestone: v8.32
 milestone_name: Easy Human + Agent Onboarding (Phases 201–202)
 status: active
-stopped_at: Closed 185/186/187 with evidence; Phase 202 Cowork UX still open
-last_updated: "2026-08-01T00:50:00Z"
+stopped_at: Closed Phase 202 Cowork with SUMMARY + live /mcp smoke; next waves 188+
+last_updated: "2026-08-01T01:05:00Z"
 progress:
   total_phases: 121
-  completed_phases: 89
-  total_plans: 163
-  completed_plans: 148
-  percent: 71
+  completed_phases: 90
+  total_plans: 164
+  completed_plans: 149
+  percent: 72
 ---
 
-## Latest Position (2026-07-31) — Closed verified phases only
+## Latest Position (2026-07-31) — Phase 202 closed
+
+**Closed with evidence:**
+- Phase **202** COWORK-01..05 — SUMMARY + Cordant `/mcp` smoke (401 unauth; bearer→FastMCP) + Invite/Team Cowork UX + unit tests
+- Phases **185/186/187** and **201** already closed earlier
+
+**Still open (do not mark complete):**
+- Waves **188–198**, **175**, **191–195**, **126–127**
+- Voyage / Phase **166** — excluded
+- Operator: Claude Cowork UI tools-list confirmation on a Tailscale-less laptop (checklist § laptop)
+
+**Lane:** director-inline (GitNexus MCP unavailable; MiniMax not used for auth/onboarding close).
+
+## Prior Position (2026-07-31) — Closed verified phases only
 
 **Closed with evidence (not checkbox theater):**
 - Phase **185** CONNMEM-RT-01..05 — SUMMARY + oracle probes + CI/topology/proxy gates
@@ -21,12 +34,7 @@ progress:
 - Phase **187** AUTHGATE-01..03 — route-auth-boundary green
 - Phase **201** already shipped/deployed earlier
 
-**Still open (do not mark complete):**
-- Phase **202** Cowork — public `/mcp` + bearer live on Cordant; Invite/Team UX + COWORK-03..05 client smoke remaining
-- Waves 188–198, 175, 191–195, 126–127 — not closed
-- Voyage / Phase 166 — excluded
-
-**Lane:** director-inline.
+**Note (superseded by Latest Position):** Phase 202 was still open here; closed later same day with SUMMARY.
 
 ## Prior Position (2026-07-31) — Full deploy + GSD campaign queued
 
