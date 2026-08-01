@@ -3253,7 +3253,7 @@ the routes are not yet in `check-route-auth-boundary` coverage as RT-04 requires
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 185. Connmem Runtime Integration | 0/1 | In progress — kernel seam routes exist (sync route path fixed 2026-07-26, PR #51); proxy allowlist + boundary coverage + entrypoint/CI still open | — |
+| 185. Connmem Runtime Integration | 0/1 | In progress — RT-01..03 largely landed; **RT-04 proxy allowlist + ledger + boundary coverage verified** (`bcbe692e`, gate green). Still open: RT-05 strict release-gate wiring + `/api/health` connmem probe; **not complete** | — |
 
 ## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
 
