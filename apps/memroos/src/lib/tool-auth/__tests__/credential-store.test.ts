@@ -225,4 +225,61 @@ describe("Phase 179 appendActivityEvent + listActivityEvents round-trip", () => 
       }),
     ).not.toThrow();
   });
+
+  it("returns a fallback activity event when audit metadata_json is invalid", async () => {
+    db.prepare(
+      `INSERT INTO audit_entries (id, tenant_id, actor_id, actor_role, event_type, entity_type, entity_id, reason, metadata_json, created_at)
+       VALUES (?, 'default-tenant', 'op', 'operator', 'tool_auth.connection_established', 'tool_connection', 'slack', NULL, ?, ?)`
+    ).run("bad-meta", "{not-json", "2026-07-18T00:00:00.000Z");
+
+    const store = await importStore();
+    const events = store.listActivityEvents(5);
+    expect(events.some((event) => event.id === "unknown" && event.providerKey === "unknown")).toBe(true);
+  });
+});
+
+describe("Phase 179 storeOAuthConnection + readApiKey", () => {
+  it("stores OAuth connections and lists them alongside API-key connections", async () => {
+    const store = await importStore();
+    const oauth = await store.storeOAuthConnection({
+      providerKey: "slack",
+      nangoConnectionId: "nango-123",
+      accountEmail: "ops@example.com",
+      scopes: ["channels:read"],
+    });
+    expect(oauth.authMode).toBe("oauth");
+    expect(oauth.accountEmail).toBe("ops@example.com");
+
+    const list = store.listVaultConnections();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ providerKey: "slack", authMode: "oauth" });
+  });
+
+  it("readApiKey returns the stored key and undefined for OAuth providers", async () => {
+    const store = await importStore();
+    await store.storeApiKeyConnection({ providerKey: "stripe", apiKey: "rk_live_test_key" });
+    await store.storeOAuthConnection({
+      providerKey: "slack",
+      nangoConnectionId: "nango-456",
+      accountEmail: null,
+      scopes: null,
+    });
+
+    expect(await store.readApiKey("stripe")).toBe("rk_live_test_key");
+    expect(await store.readApiKey("slack")).toBeUndefined();
+    expect(await store.readApiKey("missing")).toBeUndefined();
+  });
+
+  it("listVaultConnections skips unreadable artifacts instead of failing the whole list", async () => {
+    const store = await importStore();
+    await store.storeApiKeyConnection({ providerKey: "good", apiKey: "rk_good" });
+    db.prepare(
+      `INSERT INTO raw_artifacts (id, tenant_id, source_type, source_id, artifact_uri, artifact_path, content_hash)
+       VALUES (?, 'default-tenant', 'tool_connection', 'broken', 'vault://broken', 'missing/broken.enc', 'deadbeef')`
+    ).run("artifact-broken");
+
+    const list = store.listVaultConnections();
+    expect(list).toHaveLength(1);
+    expect(list[0]?.providerKey).toBe("good");
+  });
 });

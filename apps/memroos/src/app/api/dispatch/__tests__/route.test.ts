@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { clearAuthRateLimit } from "@/lib/auth/rate-limit";
 
 vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
 vi.mock("@/lib/agent-registry", () => ({
@@ -21,6 +22,9 @@ vi.mock("@/lib/dispatch/skill-lookup", async (importOriginal) => {
 vi.mock("@/lib/skills/skill-sync-governance", () => ({
   getAgentVersionPin: vi.fn(),
 }));
+vi.mock("@/lib/auth/session", () => ({
+  authenticateUser: vi.fn(() => Promise.resolve(null)),
+}));
 
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
@@ -32,6 +36,7 @@ const { checkDispatchPolicy } = await import("@/lib/security-policy");
 const { selectAdapter } = await import("@/lib/dispatch/adapter-factory");
 const { lookupSkillContract } = await import("@/lib/dispatch/skill-lookup");
 const { getAgentVersionPin } = await import("@/lib/skills/skill-sync-governance");
+const { authenticateUser } = await import("@/lib/auth/session");
 
 const mockGetDb = vi.mocked(getDb);
 const mockAuthenticateAgentHeaders = vi.mocked(authenticateAgentHeaders);
@@ -44,6 +49,7 @@ const mockCheckDispatchPolicy = vi.mocked(checkDispatchPolicy);
 const mockSelectAdapter = vi.mocked(selectAdapter);
 const mockLookupSkillContract = vi.mocked(lookupSkillContract);
 const mockGetAgentVersionPin = vi.mocked(getAgentVersionPin);
+const mockAuthenticateUser = vi.mocked(authenticateUser);
 
 function makeDb() {
   const stmtMock = {
@@ -73,6 +79,7 @@ const hivePollStub = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAuthRateLimit();
   mockGetDb.mockReturnValue(makeDb() as any);
   mockAuthenticateAgentHeaders.mockReturnValue(null);
   mockGetRemoteAgents.mockReturnValue([sophiaAgent]);
@@ -99,6 +106,7 @@ beforeEach(() => {
   mockSelectAdapter.mockReturnValue(hivePollStub as any);
   mockLookupSkillContract.mockReturnValue(null);
   mockGetAgentVersionPin.mockReturnValue(null);
+  mockAuthenticateUser.mockResolvedValue(null);
 });
 
 function makeRequest(body: object) {
@@ -414,6 +422,226 @@ describe("POST /api/dispatch", () => {
     expect(body.context_id).toBe("fixed-ctx-id");
   });
 
+  it("403 FORBIDDEN — reviewer session cannot dispatch", async () => {
+    mockAuthenticateUser.mockResolvedValue({
+      userId: "reviewer-1",
+      email: "reviewer@example.com",
+      role: "reviewer",
+    } as Awaited<ReturnType<typeof authenticateUser>>);
+
+    const res = await POST(makeRemoteRequest(
+      { to_agent: "sophia", task_summary: "Draft blog post" },
+      { authorization: "Bearer session-token" },
+    ) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe("FORBIDDEN");
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
+  });
+
+  it("derives from_agent from an authenticated operator session", async () => {
+    mockAuthenticateUser.mockResolvedValue({
+      userId: "op-42",
+      email: "op@example.com",
+      role: "operator",
+    } as Awaited<ReturnType<typeof authenticateUser>>);
+
+    const res = await POST(makeRemoteRequest(
+      { to_agent: "sophia", task_summary: "Draft blog post" },
+      { authorization: "Bearer session-token" },
+    ) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockCheckDispatchPolicy).toHaveBeenCalledWith("user:op-42", expect.anything());
+  });
+
+  it("409 SKILL_AMBIGUOUS — refuses dispatch when skill harness is ambiguous", async () => {
+    mockLookupSkillContract.mockReturnValue({
+      kind: "ambiguous",
+      skill_name: "review-pr",
+      reason: "Skill exists in multiple harnesses",
+      candidate_harnesses: ["claude", "codex"],
+    });
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Review the pull request",
+      skill_name: "review-pr",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("SKILL_AMBIGUOUS");
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      action: "policy_denied",
+      severity: "high",
+    }));
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
+  });
+
+  it("403 SKILL_GOVERNANCE_DENIED — lookup denial blocks dispatch before adapter invocation", async () => {
+    mockLookupSkillContract.mockReturnValue({
+      kind: "denied",
+      skill_name: "disabled-skill",
+      reason: "dispatch_status is disabled",
+      dispatch_status: "disabled",
+      trust_level: "unsigned",
+    });
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Run disabled skill",
+      skill_name: "disabled-skill",
+    }) as any);
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe("SKILL_GOVERNANCE_DENIED");
+    expect(body.error).toMatch(/dispatch_status is disabled/i);
+    expect(mockSelectAdapter).not.toHaveBeenCalled();
+  });
+
+  it("audits content_flagged when scan matches without blocking", async () => {
+    mockScanContent.mockReturnValue({
+      blocked: false,
+      matches: [{ patternName: "credential_leak", severity: "MEDIUM", redacted: "sk-***" }],
+      cleanContent: "Draft blog post",
+    });
+
+    const res = await POST(makeRequest({ to_agent: "sophia", task_summary: "Draft blog post" }) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockWriteAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      action: "content_flagged",
+      target: "dispatch",
+      severity: "medium",
+    }));
+  });
+
+  it("maps registered agent capabilities into adapter dispatch config", async () => {
+    mockGetRemoteAgents.mockReturnValue([]);
+    mockListRegisteredAgents.mockReturnValue([{
+      id: "capable-agent",
+      name: "Capable Agent",
+      role: "Worker",
+      platform: "claude",
+      protocol: "rest",
+      status: "active",
+      location: "local",
+      host: "localhost",
+      port: 8080,
+      healthEndpoint: "/health",
+      currentTask: null,
+      lastHeartbeat: null,
+      lessonsCount: 0,
+      todayMemoryCount: 0,
+      isRemote: false,
+      latencyMs: null,
+      capabilities: [{
+        id: "summarize",
+        name: "Summarize",
+        description: "Summarize text",
+        tags: ["nlp"],
+      }],
+      metadata: {},
+      tunnelUrl: null,
+      createdAt: "2026-04-19T10:00:00Z",
+      updatedAt: "2026-04-19T10:00:00Z",
+      deregisteredAt: null,
+    }]);
+
+    await POST(makeRequest({ to_agent: "capable-agent", task_summary: "Summarize this" }) as any);
+
+    expect(mockSelectAdapter).toHaveBeenCalledWith(expect.objectContaining({
+      id: "capable-agent",
+      skills: [expect.objectContaining({
+        id: "summarize",
+        name: "Summarize",
+        inputModes: ["text"],
+        outputModes: ["text"],
+      })],
+    }));
+  });
+
+  it("resolves pin harness via named registry row when skill_id is absent", async () => {
+    const pinnedStatement = {
+      run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }),
+      get: vi.fn((arg?: unknown) => {
+        if (arg === "review-pr") return { source_harness: "codex" };
+        return undefined;
+      }),
+      all: vi.fn().mockReturnValue([]),
+    };
+    mockGetDb.mockReturnValue({ prepare: vi.fn().mockReturnValue(pinnedStatement) } as any);
+    mockAuthenticateAgentHeaders.mockReturnValue({
+      ...sophiaAgent,
+      protocol: "rest",
+      status: "active",
+      currentTask: null,
+      lastHeartbeat: null,
+      lessonsCount: 0,
+      todayMemoryCount: 0,
+      isRemote: true,
+      latencyMs: null,
+      capabilities: [],
+      metadata: {},
+      tunnelUrl: null,
+      createdAt: "2026-04-19T10:00:00Z",
+      updatedAt: "2026-04-19T10:00:00Z",
+      deregisteredAt: null,
+    });
+    mockGetAgentVersionPin.mockReturnValue({
+      id: 1,
+      agent_id: "sophia",
+      skill_name: "review-pr",
+      skill_id: null,
+      current_version: "1.0.0",
+      current_content_hash: "b".repeat(64),
+      prior_version: null,
+      prior_content_hash: null,
+      prior_skill_id: null,
+      actor: "operator",
+      created_at: "2026-07-12T00:00:00Z",
+      updated_at: "2026-07-12T00:00:00Z",
+      rolled_back_at: null,
+      rolled_back_by: null,
+      last_rollback_event_id: null,
+    });
+    mockLookupSkillContract.mockReturnValue({
+      kind: "hit",
+      skill: {
+        id: 7,
+        name: "review-pr",
+        source_harness: "codex",
+        version: "1.0.0",
+        risk_tier: "low",
+        dispatch_status: "enabled",
+        completeness_pct: 100,
+        trust_level: "unsigned",
+        signature: null,
+        content_hash: "b".repeat(64),
+      },
+    });
+
+    const res = await POST(makeRemoteRequest(
+      { to_agent: "sophia", task_summary: "Review", skill_name: "review-pr" },
+      { "x-agent-id": "sophia", authorization: "Bearer agent-key" },
+    ) as any);
+
+    expect(res.status).toBe(200);
+    expect(mockLookupSkillContract).toHaveBeenCalledWith(
+      expect.anything(),
+      "review-pr",
+      expect.objectContaining({
+        pinned: expect.objectContaining({
+          source_harness: "codex",
+          current_version: "1.0.0",
+        }),
+      }),
+    );
+  });
+
   it("policy-gates memory context before handing dispatch input to an agent", async () => {
     const allowedMemory = {
       id: "visible-memory",
@@ -442,6 +670,35 @@ describe("POST /api/dispatch", () => {
         },
       }),
       expect.anything()
+    );
+  });
+
+  it("policy-gates alternate memory keys in dispatch input", async () => {
+    const allowedMemory = {
+      id: "visible-memory",
+      content: "approved context",
+      metadata: { visibility: "internal", policy: "agent_visible" },
+    };
+
+    const res = await POST(makeRequest({
+      to_agent: "sophia",
+      task_summary: "Draft blog post",
+      input: {
+        memories: [
+          { content: "unlabeled context" },
+          allowedMemory,
+        ],
+      },
+    }) as any);
+
+    expect(res.status).toBe(200);
+    expect(hivePollStub.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: {
+          memories: [allowedMemory],
+        },
+      }),
+      expect.anything(),
     );
   });
 

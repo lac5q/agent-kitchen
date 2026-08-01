@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -132,5 +132,54 @@ describe("Hermes memory client v2", () => {
     const purged = purgeExpiredMemories(hermesRoot, new Date());
     expect(purged.archived).toContain(expired.id);
     expect(searchMemories(hermesRoot, "legacy compatible fact")).toHaveLength(1);
+  });
+
+  it("returns empty search results when the store file is corrupt", () => {
+    const hermesRoot = root();
+    mkdirSync(path.join(hermesRoot, "memory", "v2"), { recursive: true });
+    writeFileSync(path.join(hermesRoot, "memory", "v2", "memories.json"), "{not-json");
+
+    expect(searchMemories(hermesRoot, "anything")).toEqual([]);
+  });
+
+  it("keeps ttlDays=0 memories during purge", () => {
+    const hermesRoot = root();
+    const immortal = addMemory(hermesRoot, { content: "never expires", ttlDays: 0 });
+    const purged = purgeExpiredMemories(hermesRoot, new Date());
+    expect(purged.archived).not.toContain(immortal.id);
+    expect(searchMemories(hermesRoot, "never expires")).toHaveLength(1);
+  });
+
+  it("truncates injected context when maxChars is exceeded", () => {
+    const hermesRoot = root();
+    addMemory(hermesRoot, { content: "A".repeat(200), tags: ["long"] });
+    addMemory(hermesRoot, { content: "B".repeat(200), tags: ["long"] });
+
+    const injection = buildContextInjection(hermesRoot, "long context", {
+      maxChars: 120,
+      limit: 5,
+    });
+
+    expect(injection.text.length).toBeLessThanOrEqual(120);
+    expect(injection.memories.length).toBeLessThanOrEqual(1);
+  });
+
+  it("validates memory tool inputs and rejects unsupported actions", () => {
+    const hermesRoot = root();
+
+    expect(memoryTool(hermesRoot, { action: "add" })).toEqual({
+      ok: false,
+      error: "content is required",
+    });
+    expect(memoryTool(hermesRoot, { action: "replace", content: "x" })).toEqual({
+      ok: false,
+      error: "id and content are required",
+    });
+    expect(memoryTool(hermesRoot, { action: "remove", id: "missing" })).toEqual({ ok: true });
+    expect(memoryTool(hermesRoot, { action: "replace", id: "missing", content: "updated" })).toEqual({ ok: true });
+    expect(memoryTool(hermesRoot, { action: "merge" } as never)).toEqual({
+      ok: false,
+      error: "unsupported action",
+    });
   });
 });

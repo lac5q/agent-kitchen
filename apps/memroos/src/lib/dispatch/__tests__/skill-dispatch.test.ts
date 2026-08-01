@@ -289,6 +289,62 @@ describe("lookupSkillContract", () => {
     expect(openaiDenied!.kind).toBe("denied");
   });
 
+  it("returns denial when requireSigned is true but the row is unsigned", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "unsigned-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+    });
+    db.prepare(`UPDATE skill_registry SET signature = NULL WHERE name = ?`).run("unsigned-skill");
+
+    const result = lookupSkillContract(db, "unsigned-skill", { requireSigned: true });
+    expect(result!.kind).toBe("denied");
+    if (result!.kind !== "denied") throw new Error("narrow");
+    expect(result.reason).toMatch(/unsigned/i);
+    expect(result.dispatch_status).toBe("enabled");
+  });
+
+  it("returns denial with quarantined status label for quarantined contracts", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "quarantined-skill",
+      dispatch_status: "quarantined",
+      completeness_pct: 100,
+    });
+
+    const result = lookupSkillContract(db, "quarantined-skill");
+    expect(result!.kind).toBe("denied");
+    if (result!.kind !== "denied") throw new Error("narrow");
+    expect(result.reason).toMatch(/quarantined/i);
+  });
+
+  it("returns lifecycle-aware denial reasons for draft and deprecated skills", async () => {
+    const { lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, {
+      name: "draft-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+    });
+    db.prepare(`UPDATE skill_registry SET lifecycle_state = 'draft' WHERE name = ?`).run("draft-skill");
+
+    const draft = lookupSkillContract(db, "draft-skill");
+    expect(draft!.kind).toBe("denied");
+    if (draft!.kind !== "denied") throw new Error("narrow");
+    expect(draft.reason).toMatch(/draft/i);
+
+    insertSkill(db, {
+      name: "deprecated-skill",
+      dispatch_status: "enabled",
+      completeness_pct: 100,
+    });
+    db.prepare(`UPDATE skill_registry SET lifecycle_state = 'deprecated' WHERE name = ?`).run("deprecated-skill");
+    const deprecated = lookupSkillContract(db, "deprecated-skill");
+    expect(deprecated!.kind).toBe("denied");
+    if (deprecated!.kind !== "denied") throw new Error("narrow");
+    expect(deprecated.reason).toMatch(/deprecated/i);
+  });
+
   it("multi-harness: same skill name disabled in all harnesses — ambiguous without binding, denied with binding (VAL-SKILL-018)", async () => {
     const { lookupSkillContract } = await getSkillLookup();
     insertSkill(db, { name: "all-disabled", source_harness: "openai", dispatch_status: "disabled", completeness_pct: 100 });
@@ -349,6 +405,42 @@ describe("buildSkillEvidence", () => {
     expect(evidence.skill_governance.selected_skill).toBeUndefined();
     expect(evidence.skill_governance.denial_reason).toBeUndefined();
     expect(evidence.skill_governance.mode).toBe("fallback");
+  });
+
+  it("includes required_trust_level and ambiguous harness evidence when configured", async () => {
+    const { buildSkillEvidence, lookupSkillContract } = await getSkillLookup();
+    insertSkill(db, { name: "amb-ev", source_harness: "claude", dispatch_status: "enabled", completeness_pct: 100 });
+    insertSkill(db, { name: "amb-ev", source_harness: "openai", dispatch_status: "enabled", completeness_pct: 100 });
+
+    const ambiguous = lookupSkillContract(db, "amb-ev");
+    expect(ambiguous!.kind).toBe("ambiguous");
+    const ambEvidence = buildSkillEvidence(ambiguous!, "verified");
+    expect(ambEvidence.skill_governance.required_trust_level).toBe("verified");
+    expect(ambEvidence.skill_governance.denial_reason).toMatch(/multiple harnesses/i);
+
+    const deniedEvidence = buildSkillEvidence(
+      {
+        kind: "denied",
+        skill_name: "x",
+        reason: "denied",
+        dispatch_status: "disabled",
+        trust_level: "unsigned",
+      },
+      "signed"
+    );
+    expect(deniedEvidence.skill_governance.denied_dispatch_status).toBe("disabled");
+    expect(deniedEvidence.skill_governance.denied_trust_level).toBe("unsigned");
+    expect(deniedEvidence.skill_governance.required_trust_level).toBe("signed");
+  });
+});
+
+describe("parseTrustLevel", () => {
+  it("accepts canonical trust levels and rejects unknown values", async () => {
+    const { parseTrustLevel } = await getSkillLookup();
+    expect(parseTrustLevel("verified")).toBe("verified");
+    expect(parseTrustLevel(" SIGNED ")).toBe("signed");
+    expect(parseTrustLevel("bogus")).toBeNull();
+    expect(parseTrustLevel(undefined)).toBeNull();
   });
 });
 

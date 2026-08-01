@@ -60,6 +60,32 @@ describe("matchDimensions — subject matching", () => {
     expect(matchDimensions(rule, undefined)).toBe(false);
     expect(matchDimensions(rule, {})).toBe(false);
   });
+
+  it("matches role, userId, and agentId when all specified fields align", () => {
+    const rule: PolicyDimensionRule = {
+      subject: { role: ["operator"], userId: "u-1", agentId: "agent-9" },
+      effect: "deny",
+    };
+    expect(matchDimensions(rule, {
+      subject: { role: ["operator"], userId: "u-1", agentId: "agent-9" },
+    })).toBe(true);
+    expect(matchDimensions(rule, {
+      subject: { role: ["operator"], userId: "u-2", agentId: "agent-9" },
+    })).toBe(false);
+    expect(matchDimensions(rule, {
+      subject: { role: ["reviewer"], userId: "u-1", agentId: "agent-9" },
+    })).toBe(false);
+  });
+
+  it("treats scalar subject team values as a one-element array", () => {
+    const rule: PolicyDimensionRule = {
+      subject: { team: ["GTM"] },
+      effect: "deny",
+    };
+    expect(matchDimensions(rule, {
+      subject: { team: "GTM" as unknown as string[] },
+    })).toBe(true);
+  });
 });
 
 describe("matchDimensions — object matching", () => {
@@ -119,6 +145,31 @@ describe("matchDimensions — object matching", () => {
         object: { domain: ["legal"], sensitivity: ["privileged"] },
       })
     ).toBe(false);
+  });
+
+  it("matches visibility, beliefStage, and ontologyType overlaps", () => {
+    const rule: PolicyDimensionRule = {
+      object: {
+        visibility: ["private"],
+        beliefStage: ["silver_candidate_claim"],
+        ontologyType: ["memory"],
+      },
+      effect: "deny",
+    };
+    expect(matchDimensions(rule, {
+      object: {
+        visibility: ["private"],
+        beliefStage: ["silver_candidate_claim"],
+        ontologyType: ["memory"],
+      },
+    })).toBe(true);
+    expect(matchDimensions(rule, {
+      object: {
+        visibility: ["internal"],
+        beliefStage: ["silver_candidate_claim"],
+        ontologyType: ["memory"],
+      },
+    })).toBe(false);
   });
 });
 

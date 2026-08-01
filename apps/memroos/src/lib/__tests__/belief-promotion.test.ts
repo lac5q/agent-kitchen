@@ -1319,4 +1319,33 @@ describe("belief promotion pipeline", () => {
     expect(parsed.supersedesCandidateId).toBe(f2.candidateId);
   });
 
+  it("resolveReview rejects malformed queue rows and invalid resolutions", () => {
+    const f = insertFixture(db, { category: "pricing", memoryType: "runbook" });
+    const queueId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO belief_review_queue
+         (id, tenant_id, candidate_id, category, status, opened_by, opened_at)
+       VALUES (?, ?, ?, ?, 'open', ?, ?)`
+    ).run(queueId, TENANT, f.candidateId, "pricing", "operator", new Date().toISOString());
+
+    expect(() =>
+      resolveReview(db, {
+        queueId,
+        tenantId: TENANT,
+        resolution: "maybe" as "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/invalid resolution/);
+
+    db.prepare(`UPDATE belief_review_queue SET category = '' WHERE id = ?`).run(queueId);
+    expect(() =>
+      resolveReview(db, {
+        queueId,
+        tenantId: TENANT,
+        resolution: "approved",
+        operatorId: "operator-2",
+      })
+    ).toThrow(/malformed/);
+  });
+
 });

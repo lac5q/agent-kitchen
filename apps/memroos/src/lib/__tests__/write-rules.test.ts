@@ -536,4 +536,36 @@ describe("write-rules.ts (Phase 138 / WRITERULES-01..06)", () => {
       }),
     ).toThrow(/already exists/);
   });
+
+  it("33) updateDocumentDirectoryEntry rejects duplicate names in the same space", () => {
+    createDocumentDirectoryEntry(db, { spaceId, name: "shared.md", actorId });
+    const second = createDocumentDirectoryEntry(db, { spaceId, name: "other.md", actorId });
+    expect(() =>
+      updateDocumentDirectoryEntry(db, second.id, {
+        name: "shared.md",
+        actorId,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/already exists/);
+  });
+
+  it("34) updateWriteRule and deleteWriteRule reject empty actorId", () => {
+    const rule = createWriteRule(db, {
+      spaceId,
+      dataType: "actor_guard",
+      targetDocument: "guard.md",
+      actorId,
+    });
+    expect(() =>
+      updateWriteRule(db, rule.id, { targetDocument: "x.md", actorId: " ", expectedVersion: 1 }),
+    ).toThrow(/actorId is required/);
+    expect(() => deleteWriteRule(db, rule.id, { actorId: " ", expectedVersion: 1 })).toThrow(
+      /actorId is required/,
+    );
+  });
+
+  it("35) checkWriteRuleDrift treats blank spaceId as current with version 0", () => {
+    const result = checkWriteRuleDrift(db, "   ", 99);
+    expect(result).toEqual({ isStale: false, currentVersion: 0, driftReceiptReason: "current" });
+  });
 });

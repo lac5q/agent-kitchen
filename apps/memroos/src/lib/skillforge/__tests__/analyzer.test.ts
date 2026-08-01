@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import Database from "better-sqlite3";
 import { analyzeTelemetry, logFailure } from "../analyzer";
 import type { SkillForgeIntakeEntry, SkillForgeConfig } from "../types";
 
@@ -88,5 +89,62 @@ describe("SkillForge Analyzer", () => {
 
     const results = analyzeTelemetry(entries, config);
     expect(results[0].confidence).toBeGreaterThanOrEqual(results[1]?.confidence ?? 0);
+  });
+
+  it("classifies dispatch_disabled and eval_failure patterns with suggested fixes", () => {
+    const disabled = analyzeTelemetry([
+      makeEntry("skill-1", "failure", { input: "deploy app", dispatchStatus: "disabled" }),
+    ], config);
+    expect(disabled[0].patterns[0].suggestedFix).toMatch(/dispatch_status/i);
+
+    const evalFailure = analyzeTelemetry([
+      makeEntry("skill-1", "failure", { query: "run eval", passed: false }),
+    ], config);
+    expect(evalFailure[0].patterns[0].suggestedFix).toMatch(/eval candidate/i);
+  });
+
+  it("uses payload.input when query is absent and logs failures when table exists", () => {
+    const results = analyzeTelemetry([
+      makeEntry("skill-1", "failure", { input: "configure models", expected: "guide", actual: "error" }),
+    ], config);
+    expect(results[0].testCases[0].input).toBe("configure models");
+
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE skillforge_failure_log (
+        id TEXT PRIMARY KEY,
+        operation TEXT NOT NULL,
+        input TEXT NOT NULL,
+        deterministic_result TEXT,
+        llm_result TEXT,
+        pattern TEXT,
+        skill_id TEXT,
+        timestamp TEXT NOT NULL
+      );
+    `);
+    logFailure(db, {
+      operation: "analyze",
+      input: "configure models",
+      deterministicResult: "fail",
+      llmResult: "pass",
+      pattern: "configure models",
+      skillId: "skill-1",
+    });
+    const row = db.prepare(`SELECT operation, skill_id FROM skillforge_failure_log`).get() as {
+      operation: string;
+      skill_id: string;
+    };
+    expect(row.operation).toBe("analyze");
+    expect(row.skill_id).toBe("skill-1");
+
+    const missingTableDb = new Database(":memory:");
+    expect(() => logFailure(missingTableDb, {
+      operation: "analyze",
+      input: "x",
+      deterministicResult: null,
+      llmResult: null,
+      pattern: "x",
+      skillId: "skill-1",
+    })).not.toThrow();
   });
 });

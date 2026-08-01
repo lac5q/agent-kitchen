@@ -200,4 +200,163 @@ describe("SkillForge Operator Approval", () => {
     expect(result.proposalState).toBe("pending_approval");
     expect(getProposal(db, "rollback-1")?.status).toBe("pending_approval");
   });
+
+  it("returns not found for missing proposals in applyApprovalAction and markApplied", () => {
+    expect(applyApprovalAction(db, { proposalId: "missing", action: "approve", operator: "op" }).error).toBe(
+      "Proposal not found"
+    );
+    expect(markApplied(db, "missing").error).toBe("Proposal not found");
+  });
+
+  it("approves a gated proposal and rejects rollback while still pending", () => {
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("gated-1", "skill-1", "1.0.0", "diff", "gated", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+
+    const rollbackDenied = applyApprovalAction(db, {
+      proposalId: "gated-1",
+      action: "rollback",
+      operator: "reviewer",
+    });
+    expect(rollbackDenied.success).toBe(false);
+    expect(rollbackDenied.error).toMatch(/Cannot rollback/);
+
+    const approved = applyApprovalAction(db, { proposalId: "gated-1", action: "approve", operator: "reviewer" });
+    expect(approved.success).toBe(true);
+    expect(approved.postState).toBe("approved");
+  });
+
+  it("restores registry state from export history during rollbackProposal", () => {
+    db.exec(`
+      CREATE TABLE skill_registry (
+        id INTEGER PRIMARY KEY,
+        version TEXT,
+        content_hash TEXT,
+        raw_body TEXT,
+        imported_at TEXT
+      );
+    `);
+    db.prepare(
+      `INSERT INTO skill_registry (id, version, content_hash, raw_body, imported_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(42, "2.0.0", "hash-new", "## New body", new Date().toISOString());
+
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("restore-1", "42", "2.0.0", "diff", "exported", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+
+    db.prepare(
+      `INSERT INTO skillforge_exports (proposal_id, pre_version, pre_hash, pre_raw_body, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run("restore-1", "1.0.0", "hash-old", "## Old body", new Date().toISOString());
+
+    const result = rollbackProposal(db, "restore-1", "operator", "restore prior export");
+    expect(result.success).toBe(true);
+    expect(result.restored).toBe(true);
+    expect(result.preVersion).toBe("2.0.0");
+    expect(result.postVersion).toBe("1.0.0");
+
+    const row = db.prepare(`SELECT version, content_hash, raw_body FROM skill_registry WHERE id = ?`).get(42) as {
+      version: string;
+      content_hash: string;
+      raw_body: string;
+    };
+    expect(row.version).toBe("1.0.0");
+    expect(row.content_hash).toBe("hash-old");
+    expect(row.raw_body).toBe("## Old body");
+  });
+
+  it("applyApprovalAction rollback restores registry and writes audit metadata", () => {
+    db.exec(`
+      CREATE TABLE skill_registry (
+        id INTEGER PRIMARY KEY,
+        version TEXT,
+        content_hash TEXT,
+        raw_body TEXT,
+        imported_at TEXT
+      );
+    `);
+    db.prepare(
+      `INSERT INTO skill_registry (id, version, content_hash, raw_body, imported_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(7, "9.9.9", "hash-live", "## Live", new Date().toISOString());
+
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("rb-action", "7", "9.9.9", "diff", "approved", "[]", "[]", new Date().toISOString(), new Date().toISOString());
+    db.prepare(
+      `INSERT INTO skillforge_exports (proposal_id, pre_version, pre_hash, pre_raw_body, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run("rb-action", "1.0.0", null, "## Restored via action", new Date().toISOString());
+
+    const result = applyApprovalAction(db, {
+      proposalId: "rb-action",
+      action: "rollback",
+      operator: "operator",
+      reasoning: "undo",
+    });
+    expect(result.success).toBe(true);
+    expect(result.restored).toBe(true);
+    expect(result.postState).toBe("pending_approval");
+
+    const audit = db
+      .prepare(`SELECT metadata_json FROM audit_entries WHERE event_type = 'skillforge.rolled_back'`)
+      .get() as { metadata_json: string };
+    const meta = JSON.parse(audit.metadata_json) as Record<string, unknown>;
+    expect(meta.restored).toBe(true);
+    expect(meta.post_version).toBe("1.0.0");
+  });
+
+  it("logs seal audit entries when seal_proposal_id is present", () => {
+    db.exec(`
+      CREATE TABLE seal_audit_log (
+        proposal_id TEXT,
+        event TEXT,
+        detail TEXT,
+        timestamp TEXT
+      );
+    `);
+    db.prepare(
+      `INSERT INTO skillforge_proposals (id, seal_proposal_id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "seal-1",
+      "seal-prop-1",
+      "skill-1",
+      "1.0.0",
+      "diff",
+      "pending_approval",
+      "[]",
+      "[]",
+      new Date().toISOString(),
+      new Date().toISOString()
+    );
+
+    applyApprovalAction(db, { proposalId: "seal-1", action: "approve", operator: "seal-op", reasoning: "ok" });
+    const row = db.prepare(`SELECT event, detail FROM seal_audit_log WHERE proposal_id = ?`).get("seal-prop-1") as {
+      event: string;
+      detail: string;
+    };
+    expect(row.event).toBe("approved");
+    expect(JSON.parse(row.detail).operator).toBe("seal-op");
+  });
+
+  it("lists analyzing, eval_running, applied, and exported proposals in the right queues", () => {
+    const insert = db.prepare(
+      `INSERT INTO skillforge_proposals (id, source_skill_id, source_version, proposed_diff, status, rejected_edits, residual_risks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const now = new Date().toISOString();
+    insert.run("analyzing-1", "skill-1", "1.0.0", "d", "analyzing", "[]", "[]", now, now);
+    insert.run("eval-1", "skill-1", "1.0.0", "d", "eval_running", "[]", "[]", now, now);
+    insert.run("applied-1", "skill-1", "1.0.0", "d", "applied", "[]", "[]", now, now);
+    insert.run("exported-1", "skill-1", "1.0.0", "d", "exported", "[]", "[]", now, now);
+
+    const queue = listProposals(db);
+    expect(queue.pending.map((p) => p.id).sort()).toEqual(["analyzing-1", "eval-1"]);
+    expect(queue.approved.map((p) => p.id).sort()).toEqual(["applied-1", "exported-1"]);
+  });
 });

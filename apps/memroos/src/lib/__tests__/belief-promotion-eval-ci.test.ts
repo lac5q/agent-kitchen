@@ -9,13 +9,14 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { initSchema } from "../db-schema";
 import {
   loadBeliefPromotionEvalCases,
   runBeliefPromotionEvalSuite,
 } from "../evals/belief-promotion-eval";
+import * as promotion from "../belief/promotion";
 
 describe("BELIEF-05 promotion eval CI canary", () => {
   let db: Database.Database | undefined;
@@ -133,5 +134,38 @@ describe("BELIEF-05 promotion eval CI canary", () => {
       clock: () => fixed,
     });
     expect(run.startedAt).toBe(fixed.toISOString());
+  });
+
+  it("gold mode filters out non-invariant case ids", async () => {
+    db = new Database(":memory:");
+    initSchema(db);
+    const casesPath = path.join(os.tmpdir(), `belief-non-gold-${Date.now()}.json`);
+    fs.writeFileSync(
+      casesPath,
+      JSON.stringify([
+        { id: "bronze_citation_only", description: "gold", expectations: {} },
+        { id: "custom_non_gold_case", description: "not gold", expectations: {} },
+      ]),
+      "utf8"
+    );
+    const run = await runBeliefPromotionEvalSuite({ mode: "gold", db, casesPath });
+    expect(run.summary.totalCases).toBe(1);
+    expect(run.cases[0]?.name).toBe("bronze_citation_only");
+    fs.unlinkSync(casesPath);
+  });
+
+  it("runBeliefPromotionEvalSuite captures handler exceptions as failed cases", async () => {
+    db = new Database(":memory:");
+    initSchema(db);
+    const promoteSpy = vi.spyOn(promotion, "promoteCandidate").mockImplementation(() => {
+      throw new Error("handler_boom");
+    });
+    try {
+      const run = await runBeliefPromotionEvalSuite({ mode: "gold", db });
+      expect(run.pass).toBe(false);
+      expect(run.cases.some((c) => c.reason === "handler_boom")).toBe(true);
+    } finally {
+      promoteSpy.mockRestore();
+    }
   });
 });

@@ -300,4 +300,44 @@ describe("VAL-MEM-025: consolidation failure and replay are safe", () => {
     expect(durability?.failure_reason).toMatch(/vault_replay_failed/);
   });
 
+  it("skips consolidation when any source requires human review", async () => {
+    const database = freshDb();
+    const eligible = makeSource({ canonicalId: "canon_eligible_review_gate" });
+    const reviewRequired = makeSource({
+      canonicalId: "canon_review_required",
+      classification: { visibility: "internal", policy: "requires_human_review" },
+    });
+    const result = await runConsolidationCycle(database, {
+      runKey: "run-human-review",
+      scope: { tenantId: "default-tenant", purpose: "recall" },
+      sources: [eligible, reviewRequired],
+      actorId: "operator",
+    });
+    expect(result.status).toBe("protected_skipped");
+    expect(result.failureReason).toBe("requires_human_review_classification");
+  });
+
+  it("records completed_replayed when the same lineage is inserted twice", async () => {
+    const database = freshDb();
+    const source = makeSource({ canonicalId: "canon_dup_lineage" });
+    const first = await runConsolidationCycle(database, {
+      runKey: "run-lineage-1",
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      sources: [source],
+      actorId: "operator",
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    expect(first.status).toBe("completed");
+
+    const second = await runConsolidationCycle(database, {
+      runKey: "run-lineage-2",
+      scope: { tenantId: "default-tenant", purpose: "recall", project: "alpha" },
+      sources: [source],
+      actorId: "operator",
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    expect(second.status).toBe("completed_replayed");
+    expect(second.failureReason).toBe("duplicate_lineage");
+  });
+
 });

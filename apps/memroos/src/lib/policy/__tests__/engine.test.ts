@@ -17,10 +17,11 @@ import {
 import { initSchema } from "@/lib/db-schema";
 import { authorizeMemoryUse } from "@/lib/memory/policy-gate";
 import { checkDispatchPolicy } from "@/lib/security-policy";
-import type { RemoteAgentConfig } from "@/types";
+import type { RegisteredAgent, RemoteAgentConfig } from "@/types";
 
 import {
   POLICY_VERSION,
+  buildReceipt,
   evaluateKnowledgePolicy,
   evaluatePolicy,
 } from "../engine";
@@ -172,6 +173,82 @@ describe("policy engine — capability domain", () => {
     // Sanity: the underlying decision is also a deny so the wrapper didn't
     // accidentally flip the outcome.
     expect(evaluation.capability?.allowed).toBe(false);
+  });
+
+  it("a2a-send capability evaluation matches checkA2aSendPolicy", async () => {
+    const { checkA2aSendPolicy } = await import("@/lib/security-policy");
+    const agent: RegisteredAgent = {
+      id: "agent:no-a2a",
+      name: "No A2A",
+      role: "worker",
+      platform: "claude",
+      protocol: "a2a",
+      status: "active",
+      location: "local",
+      host: null,
+      port: null,
+      healthEndpoint: null,
+      currentTask: null,
+      lastHeartbeat: null,
+      lessonsCount: 0,
+      todayMemoryCount: 0,
+      isRemote: false,
+      latencyMs: null,
+      capabilities: [{ id: "summarize", name: "Summarize", description: "n/a", tags: [] }],
+      metadata: {},
+      tunnelUrl: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      deregisteredAt: null,
+    };
+
+    const evaluation = evaluatePolicy({
+      domain: "capability",
+      action: "a2a.send",
+      actor: { id: "agent:from", role: "agent" },
+      capability: { kind: "a2a-send", agent },
+    });
+
+    expect(evaluation.receipt.ruleMatched).toBe("capability.a2a-send");
+    expect(evaluation.capability).toEqual(checkA2aSendPolicy(agent));
+  });
+
+  it("memory-write capability evaluation matches checkMemoryWritePolicy", async () => {
+    const { checkMemoryWritePolicy } = await import("@/lib/security-policy");
+    const agent: RegisteredAgent = {
+      id: "agent:no-write",
+      name: "No Write",
+      role: "worker",
+      platform: "claude",
+      protocol: "local",
+      status: "active",
+      location: "local",
+      host: null,
+      port: null,
+      healthEndpoint: null,
+      currentTask: null,
+      lastHeartbeat: null,
+      lessonsCount: 0,
+      todayMemoryCount: 0,
+      isRemote: false,
+      latencyMs: null,
+      capabilities: [{ id: "summarize", name: "Summarize", description: "n/a", tags: [] }],
+      metadata: {},
+      tunnelUrl: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      deregisteredAt: null,
+    };
+
+    const evaluation = evaluatePolicy({
+      domain: "capability",
+      action: "memory.write",
+      actor: { id: "agent:from", role: "agent" },
+      capability: { kind: "memory-write", agent, tier: "episodic" },
+    });
+
+    expect(evaluation.receipt.ruleMatched).toBe("capability.memory-write");
+    expect(evaluation.capability).toEqual(checkMemoryWritePolicy(agent, "episodic"));
   });
 });
 
@@ -436,5 +513,96 @@ describe("policy engine — knowledge domain (declarative pass-through)", () => 
     expect(evaluation.receipt.reason).toBe("ontology_context_unavailable");
 
     db.exec(`DROP TRIGGER deny_policy_receipt_audit;`);
+  });
+
+  it("requires db when ontologyReference is supplied", () => {
+    expect(() => evaluateKnowledgePolicy({
+      action: "knowledge.read",
+      actor: { id: "agent:test", role: "agent" },
+      ontologyReference: {
+        tenantId: "default-tenant",
+        spaceId: "space",
+        recordType: "knowledge",
+        recordId: "record-1",
+      },
+    })).toThrow("ontology-sensitive decisions require persistence");
+  });
+});
+
+describe("policy engine — dimension tightening", () => {
+  it("tightens an allow receipt to deny when a manifest dimension rule matches", () => {
+    const evaluation = evaluatePolicy({
+      domain: "memory-use",
+      action: "export.gtm-client",
+      actor: { id: "agent:gtm", role: "agent" },
+      memoryUse: {
+        actor: { id: "agent:gtm", role: "agent" },
+        purpose: "export",
+        label: {
+          visibility: "internal",
+          domain: "client",
+          sensitivity: "privileged",
+          policy: "agent_visible",
+        },
+      },
+      dimensions: {
+        subject: { team: ["GTM"] },
+        object: { domain: ["client"], sensitivity: ["privileged"] },
+        purpose: "export",
+      },
+    });
+
+    expect(evaluation.memoryUse?.decision).toBe("allow");
+    expect(evaluation.receipt.outcome).toBe("deny");
+    expect(evaluation.receipt.ruleMatched).toBe("gtm.meeting-prep-export-deny");
+    expect(evaluation.receipt.reason).toBe("dimension_deny:gtm.meeting-prep-export-deny");
+  });
+});
+
+describe("policy engine — request validation", () => {
+  it("throws when domain or action is missing", () => {
+    expect(() => evaluatePolicy({ domain: "", action: "x" } as never)).toThrow(/domain is required/);
+    expect(() => evaluatePolicy({ domain: "memory-use", action: "" } as never)).toThrow(/action is required/);
+  });
+
+  it("rejects caller-supplied ontology context on evaluatePolicy", () => {
+    expect(() => evaluatePolicy({
+      domain: "memory-use",
+      action: "recall.test",
+      ontologyContext: {
+        ontologyId: "forged",
+        ontologyVersion: "1.0.0",
+        ontologyContentHash: "sha256:forged",
+        namespace: "forged",
+        canonicalId: "forged",
+        aliasMigrationPath: [],
+      },
+      memoryUse: {
+        actor: { id: "agent:test", role: "agent" },
+        purpose: "recall",
+        label: { visibility: "private", policy: "agent_visible" },
+      },
+    })).toThrow("caller-supplied ontology context is not accepted");
+  });
+
+  it("buildReceipt collapses admin roles and preserves tenant metadata", () => {
+    const receipt = buildReceipt({
+      domain: "memory-use",
+      action: "audit.test",
+      actor: { id: "admin-1", role: "admin", tenantId: "tenant-a" },
+      memoryUse: {
+        actor: { id: "agent:test", role: "agent" },
+        purpose: "recall",
+        label: { visibility: "private", policy: "agent_visible" },
+      },
+    }, {
+      outcome: "allow",
+      reason: "allowed",
+      ruleMatched: "memsec.memory-use",
+    });
+
+    expect(receipt.actorRole).toBe("admin");
+    expect(receipt.tenantId).toBe("tenant-a");
+    expect(receipt.policyVersion).toBe(POLICY_VERSION);
   });
 });

@@ -12,6 +12,8 @@ import {
   redactSecrets,
   runWikiDigest,
   shouldSkipMemory,
+  watermarkPath,
+  writeWikiDigestWatermark,
   WIKI_DIGEST_CRON_ID,
 } from "@/lib/wiki-digest";
 import {
@@ -364,5 +366,60 @@ describe("wiki-digest", () => {
     expect(graph.exists).toBe(true);
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(["nolabel", "ok"]);
     expect(graph.edges).toEqual([{ source: "ok", target: "nolabel", type: "mentions" }]);
+  });
+
+  it("persists watermark files and creates index/log when missing", async () => {
+    const kb = makeVault();
+    const wiki = path.join(kb, "llm-wiki", "wiki");
+    fs.rmSync(path.join(wiki, "index.md"), { force: true });
+    fs.rmSync(path.join(wiki, "log.md"), { force: true });
+
+    const watermark = {
+      lastCreatedAt: "2026-07-18T11:00:00.000Z",
+      lastId: "wm-1",
+      updatedAt: "2026-07-18T12:00:00.000Z",
+      pagesWritten: 2,
+    };
+    writeWikiDigestWatermark(kb, watermark);
+    expect(fs.existsSync(watermarkPath(kb))).toBe(true);
+    expect(readWikiDigestWatermark(kb).lastId).toBe("wm-1");
+
+    const summary = await runWikiDigest({
+      knowledgeBasePath: kb,
+      dryRun: false,
+      now: new Date("2026-07-18T13:00:00.000Z"),
+      fetchMemories: async () => [
+        {
+          id: "wm-2",
+          content: "Creates fresh index and log files for the digest.",
+          createdAt: "2026-07-18T12:30:00.000Z",
+          agentId: "luis",
+        },
+      ],
+      log: () => undefined,
+    });
+    expect(summary.status).toBe("completed");
+    expect(fs.existsSync(path.join(wiki, "index.md"))).toBe(true);
+    expect(fs.existsSync(path.join(wiki, "log.md"))).toBe(true);
+    expect(fs.readFileSync(path.join(wiki, "index.md"), "utf8")).toContain("MemRoOS digest");
+  });
+
+  it("reports episodic fallback skip reasons when the vault is missing", async () => {
+    const kb = makeVault();
+    fs.rmSync(path.join(kb, "llm-wiki"), { recursive: true, force: true });
+    const episodicDb = new Database(":memory:");
+    initSchema(episodicDb);
+    const summary = await runWikiDigest({
+      knowledgeBasePath: kb,
+      allowEpisodicFallback: true,
+      db: episodicDb,
+      fetchMemories: async () => {
+        throw new Error("mem0_down");
+      },
+      log: () => undefined,
+    });
+    episodicDb.close();
+    expect(summary.status).toBe("skipped");
+    expect(summary.reason).toBe("nothing_new_missing_vault_ok_episodic_fallback");
   });
 });

@@ -311,4 +311,66 @@ describe("marketplace", () => {
     expect(missingId.success).toBe(false);
     expect(missingId.code).toBe("missing_skill_id");
   });
+
+  it("publishGovernedSkill rejects unsigned skills when requireSigned is set", () => {
+    registerSkill(db, "unsigned-skill");
+    const result = publishGovernedSkill(
+      db,
+      "unsigned-skill",
+      {
+        name: "Unsigned",
+        description: "Desc",
+        author: "a",
+        tags: [],
+        category: "cat",
+        changelog: "",
+      },
+      { requireSigned: true },
+    );
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("unsigned");
+  });
+
+  it("checkDispatchEligibility rejects tampered registry rows and retired lifecycle", () => {
+    registerSkill(db, "tampered");
+    db.prepare(`UPDATE skill_registry SET content_hash = ?, raw_body = ? WHERE name = ?`).run(
+      "a".repeat(64),
+      "original body",
+      "tampered",
+    );
+    const tampered = db.prepare(
+      `SELECT id, name, source_harness, dispatch_status, completeness_pct, lifecycle_state, content_hash, raw_body, signature, version
+         FROM skill_registry WHERE name = ?`
+    ).get("tampered") as Parameters<typeof checkDispatchEligibility>[0];
+    expect(checkDispatchEligibility(tampered).eligible).toBe(false);
+
+    registerSkill(db, "retired-skill");
+    db.prepare(`UPDATE skill_registry SET lifecycle_state = 'retired' WHERE name = ?`).run("retired-skill");
+    const retired = db.prepare(
+      `SELECT id, name, source_harness, dispatch_status, completeness_pct, lifecycle_state, content_hash, raw_body, signature, version
+         FROM skill_registry WHERE name = ?`
+    ).get("retired-skill") as Parameters<typeof checkDispatchEligibility>[0];
+    expect(checkDispatchEligibility(retired).eligible).toBe(false);
+    expect(checkDispatchEligibility(retired).reason).toMatch(/retired/i);
+  });
+
+  it("searchListings marks quarantine-rejected registry rows as not dispatchable", () => {
+    registerSkill(db, "quarantined");
+    const registryId = db.prepare(`SELECT id FROM skill_registry WHERE name = ?`).get("quarantined") as { id: number };
+    db.exec(`
+      CREATE TABLE skill_quarantine (
+        skill_id INTEGER PRIMARY KEY,
+        stage TEXT NOT NULL
+      );
+    `);
+    db.prepare(`INSERT INTO skill_quarantine (skill_id, stage) VALUES (?, 'rejected')`).run(registryId.id);
+    db.prepare(
+      `INSERT INTO skill_marketplace
+       (id, skill_id, name, description, author, tags, version, changelog, rating, review_count, download_count, category, published_at, updated_at, deprecated)
+       VALUES ('listing-quarantined', ?, 'Quarantined', 'Desc', 'a', '[]', '1.0.0', '', 0, 0, 0, 'cat', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0)`
+    ).run(String(registryId.id));
+    const results = searchListings(db, { query: "Quarantined" });
+    expect(results.listings[0].isDispatchable).toBe(false);
+    expect(results.listings[0].dispatchDenialReason).toMatch(/rejected/i);
+  });
 });
