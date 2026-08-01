@@ -129,7 +129,7 @@ def _introspect_token(candidate: str) -> bool:
     authenticated" — an unreachable authority must never grant access.
     """
     url = os.environ.get("MEMROOS_MCP_INTROSPECTION_URL", "").strip()
-    key = os.environ.get("MEMROOS_OPERATOR_API_KEY", "").strip()
+    key = os.environ.get("MEMROOS_MCP_INTROSPECTION_SECRET", "").strip()
     if not url or not key or not candidate:
         return False
 

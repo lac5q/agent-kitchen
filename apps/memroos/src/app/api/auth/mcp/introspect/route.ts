@@ -16,8 +16,12 @@ export const dynamic = "force-dynamic";
  * own caller — otherwise it would be an oracle for testing stolen tokens.
  */
 function callerAuthorized(request: Request): boolean {
-  const expected = (process.env.MEMROOS_OPERATOR_API_KEY ?? "").trim();
-  if (!expected) return false;
+  // A dedicated secret, not the operator key: this endpoint is called by one
+  // service for one purpose, and overloading a broader credential widens the
+  // blast radius if it leaks. It also refuses obvious placeholders, because a
+  // compose default like "demo-key" must never be what guards token lookup.
+  const expected = (process.env.MEMROOS_MCP_INTROSPECTION_SECRET ?? "").trim();
+  if (!expected || expected.length < 24 || expected === "demo-key") return false;
 
   const header = request.headers.get("authorization") ?? "";
   const presented = header.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? "";
