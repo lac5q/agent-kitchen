@@ -41,7 +41,12 @@ import {
   connectorSessionId,
   connectorSpaceName,
   type SyncTool,
-} from "./manifest";
+} from "@/lib/connectors/manifest";
+import {
+  assertGovernance,
+  recordGovernedWrite,
+  type GovernanceContext,
+} from "@/lib/store/governance";
 
 /** Labels applied to a connector space when it is first created. */
 const DEFAULT_CONNECTOR_LABELS = {
@@ -69,7 +74,9 @@ export interface ConnectorSpace {
 export function ensureConnectorSpace(
   db: Database.Database,
   input: { tenantId: string; providerKey: string },
+  gov: GovernanceContext,
 ): ConnectorSpace {
+  assertGovernance(gov);
   const tenantId = (input.tenantId || "default-tenant").trim() || "default-tenant";
   const name = connectorSpaceName(input.providerKey);
 
@@ -80,6 +87,11 @@ export function ensureConnectorSpace(
       name,
       defaultLabels: { ...DEFAULT_CONNECTOR_LABELS },
     }).id;
+    // Audited on creation only. This runs every sync cycle and is otherwise a
+    // no-op lookup; recording each pass would bury real events under per-cycle
+    // noise while telling an auditor nothing new. The membership upserts below
+    // are likewise idempotent.
+    recordGovernedWrite(db, { ...gov, asset: `spaces/${spaceId}` });
   }
 
   // The synthetic actor that "owns" connector rows. Nobody in memroos authored
@@ -93,7 +105,7 @@ export function ensureConnectorSpace(
     role: "member",
   });
 
-  syncConnectorSpaceReaders(db, { spaceId, tenantId });
+  syncConnectorSpaceReaders(db, { spaceId, tenantId }, gov);
 
   return { spaceId, labels: getSpaceDefaultLabels(db, spaceId) };
 }
@@ -119,7 +131,13 @@ export function ensureConnectorSpace(
 export function syncConnectorSpaceReaders(
   db: Database.Database,
   input: { spaceId: string; tenantId: string },
+  gov: GovernanceContext,
 ): { humans: number; agents: number } {
+  // Requires a context because it writes memberships — the STORE-01 contract is
+  // on the write path, not on whether a given call happens to mutate. It emits
+  // no audit row of its own: `addSpaceMember` upserts and this runs every
+  // cycle, so the caller records the material event instead.
+  assertGovernance(gov);
   let humans = 0;
   let agents = 0;
 
@@ -179,7 +197,11 @@ export function connectorAgentId(providerKey: string): string {
  *
  * Safe on a DB with no connector spaces (returns 0) and idempotent.
  */
-export function backfillConnectorSpaceReaders(db: Database.Database): number {
+export function backfillConnectorSpaceReaders(
+  db: Database.Database,
+  gov: GovernanceContext,
+): number {
+  assertGovernance(gov);
   let spaces: Array<{ id: string; tenant_id: string }>;
   try {
     spaces = db
@@ -189,7 +211,7 @@ export function backfillConnectorSpaceReaders(db: Database.Database): number {
     return 0; // spaces table absent — nothing to backfill.
   }
   for (const space of spaces) {
-    syncConnectorSpaceReaders(db, { spaceId: space.id, tenantId: space.tenant_id });
+    syncConnectorSpaceReaders(db, { spaceId: space.id, tenantId: space.tenant_id }, gov);
   }
   return spaces.length;
 }
@@ -202,6 +224,8 @@ export interface WriteRecordInput {
   labels: Record<string, unknown>;
   tool: SyncTool;
   record: Record<string, unknown>;
+  /** STORE-01: required — an unattributed row write is the hole this closes. */
+  gov: GovernanceContext;
 }
 
 export type WriteOutcome =
@@ -221,7 +245,8 @@ export type WriteOutcome =
  * separate dedupe table and no content hashing.
  */
 export function writeConnectorRecord(input: WriteRecordInput): WriteOutcome {
-  const { db, providerKey, connectionId, spaceId, labels, tool, record } = input;
+  const { db, providerKey, connectionId, spaceId, labels, tool, record, gov } = input;
+  assertGovernance(gov);
 
   const providerId = record[tool.idField];
   if (typeof providerId !== "string" || providerId.length === 0) {
@@ -357,7 +382,12 @@ export function writeSyncState(
     status: string;
     rowsWritten: number;
   },
+  gov: GovernanceContext,
 ): void {
+  // Bookkeeping watermark, written every cycle per tool. Context is required
+  // (write path) but no audit row is emitted — cursor movement is operational
+  // state, not a governed data change, and would swamp the log.
+  assertGovernance(gov);
   db.prepare(
     `INSERT INTO connector_sync_state
        (connection_id, provider_key, tool, cursor_value, page_cursor,

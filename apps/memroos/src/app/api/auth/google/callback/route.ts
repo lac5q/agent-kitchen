@@ -18,9 +18,9 @@ import {
   GOOGLE_VERIFIER_COOKIE,
   getGoogleOidcConfig,
   makeUnusablePasswordHash,
-  resolveGoogleSignIn,
   type GoogleIdentityClaims,
 } from "@/lib/auth/google-oidc";
+import { resolveGoogleSignIn } from "@/lib/store/google-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +93,17 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
   const unusableHash = await makeUnusablePasswordHash();
-  const result = resolveGoogleSignIn(db, claims, inviteToken, unusableHash);
+  const result = resolveGoogleSignIn(db, claims, inviteToken, unusableHash, {
+    // The Google subject is the only identifier available before a local user
+    // exists; the email is recorded as the asset so a refusal is still
+    // traceable to who attempted it.
+    actor: `google:${claims.sub}`,
+    action: "auth.google.sign_in",
+    asset: `users/email/${claims.email}`,
+    purpose: "console sign-in via Google OIDC",
+    label: { visibility: "private", domain: "identity", sensitivity: "high", policy: "sealed" },
+    decision: "allow",
+  });
 
   if (result.status !== "ok") {
     return redirect(errorRedirect(inviteToken, `google_${result.status}`));

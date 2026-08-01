@@ -2,7 +2,19 @@
 import { createHash } from "crypto";
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
-import { resolveGoogleSignIn, type GoogleIdentityClaims } from "@/lib/auth/google-oidc";
+import { resolveGoogleSignIn } from "@/lib/store/google-identity";
+import type { GoogleIdentityClaims } from "@/lib/auth/google-oidc";
+import type { GovernanceContext } from "@/lib/store/governance";
+
+/** Minimal valid context — these tests assert persistence, not audit shape. */
+const GOV: GovernanceContext = {
+  actor: "google:test-subject",
+  action: "auth.google.sign_in",
+  asset: "users/email/test@example.com",
+  purpose: "unit test",
+  label: { visibility: "private", policy: "sealed" },
+  decision: "allow",
+};
 
 const UNUSABLE_HASH = "$2a$12$unusablehashforgoogleaccounts0000000000000000000000000";
 
@@ -79,12 +91,12 @@ describe("resolveGoogleSignIn", () => {
   });
 
   it("rejects unverified Google emails", () => {
-    const result = resolveGoogleSignIn(db, claims({ emailVerified: false }), null, UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims({ emailVerified: false }), null, UNUSABLE_HASH, GOV);
     expect(result.status).toBe("email_unverified");
   });
 
   it("seeds the first user as admin without an invite (register parity)", () => {
-    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV);
     expect(result).toMatchObject({ status: "ok", role: "admin" });
     const identity = db
       .prepare("SELECT user_id FROM user_identities WHERE provider='google' AND subject=?")
@@ -94,7 +106,7 @@ describe("resolveGoogleSignIn", () => {
 
   it("requires an invite for new users once users exist", () => {
     insertUser(db, "admin-1", "admin@example.com", "admin");
-    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV);
     expect(result.status).toBe("invite_required");
   });
 
@@ -102,7 +114,7 @@ describe("resolveGoogleSignIn", () => {
     insertUser(db, "admin-1", "admin@example.com", "admin");
     insertInvite(db, "tok-1", "operator");
 
-    const result = resolveGoogleSignIn(db, claims(), "tok-1", UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims(), "tok-1", UNUSABLE_HASH, GOV);
     expect(result).toMatchObject({ status: "ok", role: "operator" });
 
     const invite = db.prepare("SELECT used_at FROM team_invitations WHERE id='inv-tok-1'").get() as {
@@ -113,7 +125,7 @@ describe("resolveGoogleSignIn", () => {
     const user = db
       .prepare("SELECT email, password_hash FROM users WHERE email=?")
       .get("person@example.com") as { email: string; password_hash: string };
-    expect(user.password_hash).toBe(UNUSABLE_HASH);
+    expect(user.password_hash).toBe(UNUSABLE_HASH, GOV);
   });
 
   it("rejects used and expired invites", () => {
@@ -122,14 +134,14 @@ describe("resolveGoogleSignIn", () => {
     db.prepare("UPDATE team_invitations SET used_at=? WHERE id='inv-tok-used'").run(new Date().toISOString());
     insertInvite(db, "tok-expired", "operator", -1000);
 
-    expect(resolveGoogleSignIn(db, claims(), "tok-used", UNUSABLE_HASH).status).toBe("token_used");
-    expect(resolveGoogleSignIn(db, claims(), "tok-expired", UNUSABLE_HASH).status).toBe("token_expired");
-    expect(resolveGoogleSignIn(db, claims(), "tok-nope", UNUSABLE_HASH).status).toBe("invalid_token");
+    expect(resolveGoogleSignIn(db, claims(), "tok-used", UNUSABLE_HASH, GOV).status).toBe("token_used");
+    expect(resolveGoogleSignIn(db, claims(), "tok-expired", UNUSABLE_HASH, GOV).status).toBe("token_expired");
+    expect(resolveGoogleSignIn(db, claims(), "tok-nope", UNUSABLE_HASH, GOV).status).toBe("invalid_token");
   });
 
   it("links a Google identity onto an existing email account and logs in", () => {
     insertUser(db, "user-2", "person@example.com", "operator");
-    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV);
     expect(result).toMatchObject({ status: "ok", userId: "user-2", role: "operator" });
     const identity = db
       .prepare("SELECT user_id FROM user_identities WHERE provider='google' AND subject=?")
@@ -143,13 +155,13 @@ describe("resolveGoogleSignIn", () => {
       "INSERT INTO user_identities (provider, subject, user_id, created_at) VALUES ('google', ?, ?, ?)"
     ).run("google-sub-1", "user-3", new Date().toISOString());
 
-    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH);
+    const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV);
     expect(result).toMatchObject({ status: "ok", userId: "user-3", role: "reviewer" });
   });
 
   it("blocks disabled users on both identity and email paths", () => {
     insertUser(db, "user-4", "person@example.com", "operator");
     db.prepare("UPDATE users SET disabled_at=? WHERE id='user-4'").run(new Date().toISOString());
-    expect(resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH).status).toBe("user_disabled");
+    expect(resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV).status).toBe("user_disabled");
   });
 });

@@ -6,7 +6,11 @@ import { initSchema } from './db-schema';
 import { resolveFromRepoRoot } from './paths';
 import { seedDefaultAdmin } from './auth/seed';
 import { seedRegisteredAgents } from './agent-registry-seed';
-import { backfillConnectorSpaceReaders } from './connectors/store';
+import { backfillConnectorSpaceReaders } from './store/connectors';
+// `systemGovernance` only builds a plain object — it must not pull anything
+// that reaches back for `getDb()`, or this import becomes a cycle through the
+// singleton it is defined inside.
+import { systemGovernance } from './store/governance';
 
 let _db: Database.Database | null = null;
 
@@ -35,7 +39,14 @@ export function getDb(): Database.Database {
     // create. Connector rows are space-scoped and the space gate denies
     // non-members, so without this the first recall after startup returns
     // nothing until the next sync cycle happens to re-enrol.
-    backfillConnectorSpaceReaders(db);
+    backfillConnectorSpaceReaders(
+      db,
+      systemGovernance(
+        'connector.space.backfill_readers',
+        'spaces/connector/*',
+        'startup re-enrolment so connector recall is not empty until the next sync cycle',
+      ),
+    );
     _db = db;
   }
   return _db;

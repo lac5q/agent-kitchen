@@ -14,9 +14,10 @@
  * restarting the sweep each interval.
  */
 
-import type Database from "better-sqlite3";
 
 import { getDb } from "@/lib/db";
+/** Opaque DB handle. Typed off `getDb` so this module needs no driver import. */
+type DbHandle = ReturnType<typeof getDb>;
 import {
   fetchNangoCredentials,
   listNangoConnections,
@@ -31,7 +32,8 @@ import {
   readSyncState,
   writeConnectorRecord,
   writeSyncState,
-} from "./store";
+} from "@/lib/store/connectors";
+import { systemGovernance } from "@/lib/store/governance";
 
 /**
  * Run a tool's optional per-record second pass, mutating `record` in place
@@ -93,7 +95,7 @@ export interface ConnectorCycleResult {
  * to the older pages.
  */
 async function syncTool(
-  db: Database.Database,
+  db: DbHandle,
   opts: {
     manifest: ConnectorManifest;
     tool: SyncTool;
@@ -175,6 +177,11 @@ async function syncTool(
 
     const outcome = writeConnectorRecord({
       db,
+      gov: systemGovernance(
+        "connector.record.write",
+        `messages/${manifest.providerKey}/${tool.tool}`,
+        "scheduled connector sync ingesting provider records into memory",
+      ),
       providerKey: manifest.providerKey,
       connectionId,
       spaceId,
@@ -224,13 +231,17 @@ async function syncTool(
     pageCursor: pageComplete ? (hasNextPage ? nextCursor : null) : state.pageCursor,
     status: moreWork ? "backfilling" : "ok",
     rowsWritten: written,
-  });
+  }, systemGovernance(
+    "connector.sync_state.write",
+    `connector_sync_state/${connectionId}/${tool.tool}`,
+    "advancing the connector sync high-water mark",
+  ));
 
   return { written, duplicates, skipped };
 }
 
 export async function runConnectorCycle(
-  db: Database.Database = getDb(),
+  db: DbHandle = getDb(),
   opts: { tenantId?: string } = {},
 ): Promise<ConnectorCycleResult> {
   const tenantId = opts.tenantId ?? "default-tenant";
@@ -262,10 +273,15 @@ export async function runConnectorCycle(
           continue;
         }
 
-        const { spaceId, labels } = ensureConnectorSpace(db, {
-          tenantId,
-          providerKey: manifest.providerKey,
-        });
+        const { spaceId, labels } = ensureConnectorSpace(
+          db,
+          { tenantId, providerKey: manifest.providerKey },
+          systemGovernance(
+            "connector.space.ensure",
+            `spaces/connector/${manifest.providerKey}`,
+            "scheduled connector sync provisioning the provider's space",
+          ),
+        );
 
         // REST providers have no handshake; only MCP needs initialize.
         if (manifest.transport === "mcp") {
