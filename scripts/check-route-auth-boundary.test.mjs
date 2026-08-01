@@ -38,6 +38,7 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { method: "POST", pattern: /^\\/api\\/audit\\/knowledge$/ },
   { method: "GET", pattern: /^\\/api\\/internal\\/connector-search$/ },
   { pattern: /^\\/api\\/connmem(?:\\/|$)/ },
+  { method: "POST", pattern: /^\\/api\\/model-routing\\/telemetry$/ },
 ];
 `;
 
@@ -94,6 +95,7 @@ function goodFiles() {
     ["apps/memroos/src/app/api/connmem/status/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/connmem/sync/[source]/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/connmem/ledger/route.ts", AUTH_MARKERS.agent],
+    ["apps/memroos/src/app/api/model-routing/telemetry/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/onboarding/invite/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/evals/config/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/evals/run/route.ts", AUTH_MARKERS.operator],
@@ -140,6 +142,7 @@ describe("route auth boundary checker", () => {
       "/^\\/api\\/audit\\/knowledge$/",
       "/^\\/api\\/internal\\/connector-search$/",
       "/^\\/api\\/connmem(?:\\/|$)/",
+      "/^\\/api\\/model-routing\\/telemetry$/",
     ]);
   });
 

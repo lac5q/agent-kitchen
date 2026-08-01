@@ -116,6 +116,10 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { method: "GET", pattern: /^\/api\/internal\/connector-search$/ },
   // CONNMEM-RT-04: agent/operator kernel seam — handlers use authenticateAgentHeaders.
   { pattern: /^\/api\/connmem(?:\/|$)/ },
+  // Token-usage shippers (scripts/ship-claude-token-usage.mjs) post model
+  // token telemetry with the operator key from host machines — no user
+  // session, so no JWT. The handler enforces authorizeRegistryWrite.
+  { method: "POST", pattern: /^\/api\/model-routing\/telemetry$/ },
 ];
 
 function hasRouteLocalAuth(pathname: string, method: string): boolean {

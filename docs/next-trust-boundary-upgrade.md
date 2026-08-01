@@ -7,9 +7,21 @@ the defense-in-depth layer for privileged APIs.
 ## Reviewed Baseline
 
 - Reviewed Next.js dependency: `^16.2.7`
-- Reviewed proxy sha256: `fdc825842e8d759a6d4333554f73d4e950e28c76b059b54969a6779d8d5c7874`
+- Reviewed proxy sha256: `0df324c2bfe8c4a29faa12299eaa10f3d4b8199e3d3189dfd6f12a0f10113339`
 
-  Re-attested 2026-07-28. Change: added `POST /api/audit/knowledge` to
+  Re-attested 2026-07-31. Change: added `POST /api/model-routing/telemetry` to
+  `ROUTE_LOCAL_AUTH_API_ROUTES`. Token-usage shippers
+  (`scripts/ship-claude-token-usage.mjs`) post model token telemetry from host
+  machines using the operator key — no user session, so no JWT. The handler
+  enforces `authorizeRegistryWrite` (operator key or loopback);
+  route-auth-boundary coverage was extended in the same change and the
+  pre-existing "blocks direct non-local telemetry writes" regression test
+  verifies the handler-local denial. Verified `proxy.ts` still exports a
+  named `proxy` function (not `middleware`) and configures no Edge runtime.
+
+  Prior attestation (2026-07-28,
+  `fdc825842e8d759a6d4333554f73d4e950e28c76b059b54969a6779d8d5c7874`):
+  added `POST /api/audit/knowledge` to
   `ROUTE_LOCAL_AUTH_API_ROUTES`. That route is the MCP's central-audit bridge
   and authenticates itself against `MEMROOS_AGENT_API_KEY` with a
   constant-time compare (`verifyAgentApiKey`), because its caller is a

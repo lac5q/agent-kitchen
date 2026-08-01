@@ -182,6 +182,10 @@ const routeLocalAuthCoverage = [
       ["apps/memroos/src/app/api/connmem/ledger/route.ts", ["authenticateAgentHeaders("]],
     ],
   },
+  {
+    pattern: "/^\\/api\\/model-routing\\/telemetry$/",
+    files: [["apps/memroos/src/app/api/model-routing/telemetry/route.ts", ["authorizeRegistryWrite("]]],
+  },
 ];
 
 const proxyOperatorCoverage = [
