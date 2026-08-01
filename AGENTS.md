@@ -70,6 +70,16 @@ available on demand via the `catalog` and `read` actions.
 Private skills in `~/.memroos/skills/` are merged into catalog results and never
 committed to the repo. They take precedence over public skills with the same name.
 
+## Outbound Actions (Operator Directive)
+
+Prep is not permission to send. Before any post/send/upload/DM/publish/comment
+to a third party: show the exact payload + target, then wait for an explicit
+**GO**. Never invent channel/chat IDs. Never treat cron delivery options as
+send authorization. Push/merge to the default branch needs explicit "ship it"
+(or equivalent); checkout/commit/PR are fine. Canonical full text:
+`agents/AGENTS_TEMPLATE.md` § Outbound Actions (rolled to agent CLIs by
+`scripts/install-agent-integrations.sh`).
+
 ## Automatic downshift: menial work goes to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
 
 **This is automatic and dynamic — the operator never has to ask.** There is no

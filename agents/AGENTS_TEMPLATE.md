@@ -268,6 +268,29 @@ When a repo has a long-running dev server (Next, Vite, Rails, Django, Phoenix, F
 Full reference (load on demand): `~/github/knowledge/content/devops/dev-log-convention-2026-07-06.md`
 Wrapper script: `~/github/knowledge/scripts/dev-log.sh`
 
+## Outbound Actions (Operator Directive)
+
+Every agent acts on behalf of the user, but the user is the gateway for things that leave the machine. "File the form", "queue the post", "draft the response" — none of these imply "send."
+
+### Always Do
+
+- **MUST ask for an explicit GO before any outbound action** that posts, sends, uploads, tags, DMs, comments, publishes, or otherwise transmits the work to a third party. The user's "GO" is the only valid trigger.
+- **MUST show the user the exact payload** (channel, target, content) before asking for GO. Don't ask "ready to send?" without showing what would be sent.
+- **MUST confirm the channel/target ID** the user provided. If no target was given, ask — don't synthesise a plausible chat ID, topic, or handle.
+
+### Never Do
+
+- NEVER post, send, upload, tag, DM, comment, publish, retweet, or otherwise transmit anything outbound as a side effect of completion. Finishing the prep work is not permission to fire it.
+- NEVER push to the default branch without explicit "ship it" / equivalent. Checkout, commit, and PR are fine; the user is the merge gate.
+- NEVER invent private channel IDs, topic IDs, chat handles, repos, file paths, or URLs. If the user didn't provide it, ask; do not plausibly construct one.
+- NEVER treat a `cron` delivery option (`origin`, `local`, `all`, `platform:chat_id`) as authorization to send. The user defines time + target; the agent only fills the body.
+
+### Boundary Examples
+
+- "Draft the LinkedIn post" → write the draft, show it, ask "say GO and I push" — do not auto-publish.
+- "Queue the Discord thread" → prepare the thread, return the JSON, wait for GO — do not auto-post.
+- "Open the PR" → make the branch and PR (commit is local), stop. The user pushes and merges.
+
 ## Source
 
 - Repo: https://github.com/lac5q/memroos
