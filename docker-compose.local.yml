@@ -119,10 +119,15 @@ services:
     ports:
       - "${MEMROOS_BIND:-127.0.0.1}:${MEM0_PORT:-3201}:3201"
     environment:
-      # Local mode: no Qdrant required (embedded Chroma vector store).
-      # Pinned empty so the repo .env's cloud Qdrant placeholders can't leak in.
-      QDRANT_URL: ""
-      QDRANT_API_KEY: ""
+      # Local mode default: no Qdrant required (embedded Chroma vector store).
+      # Deliberately NOT wired to the repo .env's QDRANT_* keys so the shipped
+      # cloud placeholders can't leak in. Production (oracle-1) opts into
+      # Qdrant Cloud explicitly by setting in the host .env:
+      #   MEM0_CONFIG_FILE=./services/memory/mem0-config.yaml
+      #   MEM0_QDRANT_URL=<qdrant cloud url>
+      #   MEM0_QDRANT_API_KEY=<qdrant cloud key>
+      QDRANT_URL: ${MEM0_QDRANT_URL:-}
+      QDRANT_API_KEY: ${MEM0_QDRANT_API_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
       ANONYMIZED_TELEMETRY: "False"
       CHROMA_PRODUCT_TELEMETRY_IMPL: chroma_noop_telemetry.NoopTelemetry
@@ -131,7 +136,9 @@ services:
     volumes:
       - mem0-logs:/app/services/memory/logs
       - mem0-history:/root/.mem0
-      - ./services/memory/mem0-config.demo.yaml:/app/services/memory/mem0-config.yaml:ro
+      # Vector-store config: demo (embedded Chroma) by default; production
+      # sets MEM0_CONFIG_FILE to services/memory/mem0-config.yaml for Qdrant Cloud.
+      - ${MEM0_CONFIG_FILE:-./services/memory/mem0-config.demo.yaml}:/app/services/memory/mem0-config.yaml:ro
     depends_on:
       ollama-pull:
         # With COMPOSE_PROFILES=cloud the local ollama services are
