@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull the agent-knowledge vault every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+AccuracySec=5min
+Unit=agent-knowledge-pull.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=Pull the agent-knowledge vault (MemRoOS knowledge source, KNOWPROV-01)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=opc
+Group=opc
+ExecStart=/usr/bin/git -C /home/opc/github/agent-knowledge pull --ff-only origin main
+TimeoutStartSec=300s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
