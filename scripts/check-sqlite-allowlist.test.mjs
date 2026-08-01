@@ -3,7 +3,7 @@
 // fail is not known to work — these prove it fails on a real violation.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -42,7 +42,13 @@ test("fails when a new file imports better-sqlite3 outside lib/store", () => {
 });
 
 test("allows the same import from inside lib/store", () => {
-  const storeFixture = path.join(ROOT, "apps", "memroos", "src", "lib", "store", "__store03_fixture__");
+  const storeDir = path.join(ROOT, "apps", "memroos", "src", "lib", "store");
+  const storeFixture = path.join(storeDir, "__store03_fixture__");
+  // Whether `lib/store/` is ours to delete. Before STORE-01 landed it did not
+  // exist, so this test created it and tore the whole thing down afterwards.
+  // Now it holds the real store modules, and that teardown deleted committed
+  // source on every run — silently, because the gate still exited 0.
+  const storeDirPreexisted = existsSync(storeDir);
   mkdirSync(storeFixture, { recursive: true });
   writeFileSync(
     path.join(storeFixture, "governed.ts"),
@@ -52,7 +58,9 @@ test("allows the same import from inside lib/store", () => {
     const { code } = runGate();
     assert.equal(code, 0, "lib/store/** is the sanctioned home for direct access");
   } finally {
-    rmSync(path.join(ROOT, "apps", "memroos", "src", "lib", "store"), { recursive: true, force: true });
+    // Remove only what this test created.
+    rmSync(storeFixture, { recursive: true, force: true });
+    if (!storeDirPreexisted) rmSync(storeDir, { recursive: true, force: true });
   }
 });
 
