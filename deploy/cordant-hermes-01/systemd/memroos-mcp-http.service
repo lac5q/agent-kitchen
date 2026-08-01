@@ -1,0 +1,28 @@
+[Unit]
+Description=MemRoOS Streamable HTTP MCP (Cordant Cowork / remote connectors)
+Documentation=https://github.com/lac5q/memroos-product/blob/main/docs/integrations/mcp.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/memroos
+EnvironmentFile=-/home/ubuntu/.memroos/memroos-mcp-http.env
+Environment=MEMROOS_ROOT=/home/ubuntu/memroos
+Environment=MEMROOS_APP_URL=https://memroos-cordant.epiloguecapital.com
+Environment=MEMROOS_PUBLIC_BASE_URL=https://memroos-cordant.epiloguecapital.com
+Environment=MEMROOS_MCP_TRANSPORT=streamable-http
+Environment=MEMROOS_MCP_HOST=127.0.0.1
+Environment=MEMROOS_MCP_PORT=8765
+Environment=MEMROOS_MCP_STREAMABLE_HTTP_PATH=/mcp
+ExecStart=/home/ubuntu/memroos/scripts/memroos-mcp.sh --http --host 127.0.0.1 --port 8765 --path /mcp
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# Cordant Cloudflare Tunnel — committed reference copy.
+# Live file on host: /etc/cloudflared/memroos-cordant.yml
+# Phase 202: /mcp* must hit Streamable HTTP MCP before the UI catch-all.
+tunnel: a5016402-755f-42a5-aebe-be028bdb1660
+credentials-file: /etc/cloudflared/a5016402-755f-42a5-aebe-be028bdb1660.json
+
+ingress:
+  - hostname: memroos-cordant.epiloguecapital.com
+    path: /mcp*
+    service: http://127.0.0.1:8765
+  - hostname: memroos-cordant.epiloguecapital.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404
