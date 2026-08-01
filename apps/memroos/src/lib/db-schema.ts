@@ -82,7 +82,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 33;
+export const CURRENT_SCHEMA_VERSION = 34;
 
 type SchemaMigration = {
   version: number;
@@ -268,6 +268,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     name: 'messages-fts-single-update-trigger',
     up: applyMessagesFtsUpdateTriggerFix,
   },
+  {
+    version: 34,
+    name: 'user-identities-oidc',
+    up: applyUserIdentitiesSchema,
+  },
 ];
 
 function runSchemaMigrations(db: Database.Database): void {
@@ -327,6 +332,31 @@ function applyMessagesFtsUpdateTriggerFix(db: Database.Database): void {
   // disclosure. rebuildMessageFtsProjection applies the same predicate the
   // triggers do.
   rebuildMessageFtsProjection(db);
+}
+
+/**
+ * Migration 34 — create user_identities on already-stamped databases.
+ *
+ * Phase 203 added the table to the main schema body only. That body re-runs
+ * for a database below its migration version, so fresh installs got the table
+ * and every existing deployment silently did not — the same trap migration 33
+ * documents. oracle-1 sat at version 33 and returned HTTP 500 on the Google
+ * callback with `no such table: user_identities` for exactly this reason.
+ *
+ * The DDL is a verbatim copy of the main-body definition; keep them identical
+ * so a fresh install and a migrated one converge on the same shape.
+ */
+function applyUserIdentitiesSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_identities (
+      provider   TEXT NOT NULL CHECK(provider IN ('google')),
+      subject    TEXT NOT NULL,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (provider, subject)
+    );
+    CREATE INDEX IF NOT EXISTS user_identities_user ON user_identities(user_id);
+  `);
 }
 
 export function rebuildMessageFtsProjection(db: Database.Database): void {
