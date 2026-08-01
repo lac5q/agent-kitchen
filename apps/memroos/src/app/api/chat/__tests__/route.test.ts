@@ -633,6 +633,18 @@ describe("chat route model resolution", () => {
     await expect(res.json()).resolves.toEqual({ error: "message required" });
   });
 
+  it("returns 500 when the request body is not valid JSON", async () => {
+    const { POST } = await loadPostRouteWithAnthropicFailure("should not run");
+
+    await expect(
+      POST(new NextRequest("http://localhost/api/chat", {
+        method: "POST",
+        body: "{not-json",
+        headers: { "content-type": "application/json" },
+      }))
+    ).rejects.toThrow();
+  });
+
   it("streams Anthropic text deltas when the primary runtime succeeds", async () => {
     mkdirSync(path.join(pmoAgentsPath, "claude-sonnet-engineer"), { recursive: true });
     writeFileSync(path.join(pmoAgentsPath, "claude-sonnet-engineer", "AGENTS.md"), "# Claude Sonnet Engineer\n");

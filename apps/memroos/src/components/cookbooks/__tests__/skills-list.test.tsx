@@ -99,4 +99,114 @@ describe("SkillsList", () => {
     });
     expect(screen.getByText("Skill approved for general use.")).toBeTruthy();
   });
+
+  it("renders fallback skills when skillDetails is empty", () => {
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["alpha-skill", "beta-skill"]}
+        coverageGaps={["beta-skill"]}
+        coverageTelemetryStatus="untracked"
+      />,
+    );
+    expect(screen.getByText(/coverage untracked/)).toBeInTheDocument();
+    expect(screen.getAllByText("alpha-skill").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("beta-skill").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Skill metadata is still being indexed/i).length).toBeGreaterThan(0);
+  });
+
+  it("filters skills via search and switches selection", () => {
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["agent-standup", "enterprise-review"]}
+        skillDetails={skillDetails}
+        coverageGaps={[]}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "enterprise" } });
+    expect(screen.queryByRole("button", { name: /Agent Standup/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Enterprise Review"));
+    expect(screen.getByText("Approved body.")).toBeInTheDocument();
+    expect(screen.getByText("governance")).toBeInTheDocument();
+  });
+
+  it("shows edit proposed badge in detail panel", () => {
+    const details: SkillWorkflowItem[] = [
+      {
+        ...skillDetails[0],
+        draftBody: "Proposed rewrite",
+        bodyPreview: "Original preview",
+        tags: ["ops", "workflow"],
+      },
+    ];
+    render(
+      <SkillsList
+        totalSkills={1}
+        allSkills={["agent-standup"]}
+        skillDetails={details}
+        coverageGaps={[]}
+      />,
+    );
+    expect(screen.getByText("edit proposed")).toBeInTheDocument();
+    expect(screen.getAllByText("ops").length).toBeGreaterThan(0);
+  });
+
+  it("start-from-current draft helper copies body preview into draft field", () => {
+    render(
+      <SkillsList
+        totalSkills={1}
+        allSkills={["agent-standup"]}
+        skillDetails={skillDetails}
+        coverageGaps={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start from current content/i }));
+    expect(screen.getByLabelText("Skill edit draft")).toHaveValue(
+      "Use when operators need a structured fifteen minute standup.",
+    );
+  });
+
+  it("runs save-draft, request-changes, and promote-enterprise actions", async () => {
+    render(
+      <SkillsList
+        totalSkills={2}
+        allSkills={["agent-standup", "enterprise-review"]}
+        skillDetails={skillDetails}
+        coverageGaps={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "save-draft" }),
+      );
+    });
+    expect(screen.getByText("Draft saved.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /request changes/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Changes requested and saved.")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Enterprise Review"));
+    fireEvent.click(screen.getByRole("button", { name: /promote enterprise/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Skill promoted to enterprise review.")).toBeInTheDocument();
+    });
+
+    mutateAsync.mockRejectedValueOnce(new Error("mutation failed"));
+    fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/mutation failed/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders empty card when no skills exist", () => {
+    render(
+      <SkillsList totalSkills={0} allSkills={[]} coverageGaps={[]} />,
+    );
+    expect(screen.getByText("No skills found.")).toBeInTheDocument();
+  });
 });

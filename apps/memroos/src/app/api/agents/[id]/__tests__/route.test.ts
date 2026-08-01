@@ -157,3 +157,187 @@ describe("GET /api/agents/[id]", () => {
     expect(body.liveness.state).toBe("never");
   });
 });
+
+describe("PATCH /api/agents/[id]", () => {
+  beforeEach(() => {
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+  });
+
+  afterEach(async () => {
+    const { closeDb } = await loadRoutes();
+    closeDb();
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    delete process.env.SQLITE_DB_PATH;
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
+    vi.doUnmock("@/lib/local-agent-runtime");
+  });
+
+  it("updates display fields for a registered agent", async () => {
+    const { registerRoute, agentRoute } = await loadRoutes();
+    await registerAgent(registerRoute, "patch-agent");
+
+    const res = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-agent", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Renamed Agent",
+          role: "Updated role",
+          company: "MemRoOS",
+        }),
+      }),
+      { params: Promise.resolve({ id: "patch-agent" }) }
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.agent).toMatchObject({
+      id: "patch-agent",
+      name: "Renamed Agent",
+      role: "Updated role",
+      company: "MemRoOS",
+    });
+    expect(body.timestamp).toEqual(expect.any(String));
+  });
+
+  it("returns 404 when patching a missing agent", async () => {
+    const { agentRoute } = await loadRoutes();
+
+    const res = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/missing-patch", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Ghost" }),
+      }),
+      { params: Promise.resolve({ id: "missing-patch" }) }
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: "Agent not found: missing-patch" });
+  });
+
+  it("rejects invalid JSON, non-object bodies, and invalid field types", async () => {
+    const { registerRoute, agentRoute } = await loadRoutes();
+    await registerAgent(registerRoute, "patch-validate");
+
+    const badJson = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-validate", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: "{not-json",
+      }),
+      { params: Promise.resolve({ id: "patch-validate" }) }
+    );
+    expect(badJson.status).toBe(400);
+    expect(await badJson.json()).toMatchObject({ error: "Invalid JSON body" });
+
+    const notObject = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-validate", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify("not-an-object"),
+      }),
+      { params: Promise.resolve({ id: "patch-validate" }) }
+    );
+    expect(notObject.status).toBe(400);
+    expect(await notObject.json()).toMatchObject({ error: "Body must be an object" });
+
+    const badName = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-validate", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: 42 }),
+      }),
+      { params: Promise.resolve({ id: "patch-validate" }) }
+    );
+    expect(badName.status).toBe(400);
+    expect(await badName.json()).toMatchObject({ error: "name must be a string" });
+
+    const badCompany = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-validate", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ company: 99 }),
+      }),
+      { params: Promise.resolve({ id: "patch-validate" }) }
+    );
+    expect(badCompany.status).toBe(400);
+    expect(await badCompany.json()).toMatchObject({ error: "company must be a string or null" });
+  });
+
+  it("returns 400 when update validation fails", async () => {
+    const { registerRoute, agentRoute } = await loadRoutes();
+    await registerAgent(registerRoute, "patch-empty-name");
+
+    const res = await agentRoute.PATCH(
+      new Request("http://localhost/api/agents/patch-empty-name", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "   " }),
+      }),
+      { params: Promise.resolve({ id: "patch-empty-name" }) }
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "name cannot be empty" });
+  });
+
+  it("requires operator authorization for non-local PATCH writes", async () => {
+    process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
+    const { registerRoute, agentRoute } = await loadRoutes();
+    await registerAgent(registerRoute, "remote-patch");
+
+    const rejected = await agentRoute.PATCH(
+      new Request("https://memroos.example.com/api/agents/remote-patch", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Blocked" }),
+      }),
+      { params: Promise.resolve({ id: "remote-patch" }) }
+    );
+    expect(rejected.status).toBe(403);
+
+    const accepted = await agentRoute.PATCH(
+      new Request("https://memroos.example.com/api/agents/remote-patch", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ name: "Remote Rename" }),
+      }),
+      { params: Promise.resolve({ id: "remote-patch" }) }
+    );
+    expect(accepted.status).toBe(200);
+    expect((await accepted.json()).agent.name).toBe("Remote Rename");
+  });
+});
+
+describe("DELETE /api/agents/[id]", () => {
+  beforeEach(() => {
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+  });
+
+  afterEach(async () => {
+    const { closeDb } = await loadRoutes();
+    closeDb();
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+    delete process.env.SQLITE_DB_PATH;
+    vi.doUnmock("@/lib/local-agent-runtime");
+  });
+
+  it("returns 404 when deleting a missing agent", async () => {
+    const { agentRoute } = await loadRoutes();
+
+    const res = await agentRoute.DELETE(
+      new Request("http://localhost/api/agents/missing-delete"),
+      { params: Promise.resolve({ id: "missing-delete" }) }
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: "Agent not found: missing-delete" });
+  });
+});

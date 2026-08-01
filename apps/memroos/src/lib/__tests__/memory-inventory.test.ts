@@ -260,4 +260,87 @@ describe("buildMemoryInventory", () => {
     expect(row).toBeTruthy();
     expect(row?.project).toBeNull();
   });
+
+  it("parses Neo4j graph counts from nested HTTP result rows", async () => {
+    process.env.NEO4J_PASSWORD = "graph-pass";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/tx/commit")) {
+          return {
+            ok: true,
+            json: async () => ({
+              results: [
+                {
+                  data: [
+                    { row: ["skip"] },
+                    { row: [9] },
+                  ],
+                },
+              ],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({ memory_count: 4, last_write: "2026-05-24T10:00:00Z" }),
+        };
+      })
+    );
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const graph = response.categories.find((c) => c.id === "graph_fact");
+    expect(graph?.count).toBe(9);
+    delete process.env.NEO4J_PASSWORD;
+  });
+
+  it("warns when vector store is connected but mem0 omits a countable total", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          vector_store: "connected",
+          last_write: "2026-05-24T10:00:00Z",
+        }),
+      })
+    );
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const vector = response.categories.find((c) => c.id === "vector_memory");
+    expect(vector?.count).toBeNull();
+    expect(vector?.warnings.some((w) => /missing from mem0 health/i.test(w))).toBe(true);
+  });
+
+  it("filters ingested messages by agent and excludes rows outside the date window", async () => {
+    seedMessage("agent filter hit");
+    testDb
+      .prepare(`UPDATE messages SET agent_id = ?, timestamp = ? WHERE content = ?`)
+      .run("special-agent", "2026-05-20T00:00:00Z", "agent filter hit");
+    seedMessage("in-window row");
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const byAgent = await buildMemoryInventory(
+      new URL("http://localhost/api/memory-inventory?category=ingested_message&agent=special-agent")
+    );
+    expect(byAgent.rows.some((r) => r.content === "agent filter hit")).toBe(true);
+    expect(byAgent.rows.every((r) => r.source === "special-agent")).toBe(true);
+
+    const byDate = await buildMemoryInventory(
+      new URL(
+        "http://localhost/api/memory-inventory?category=ingested_message&dateFrom=2026-05-24T00:00:00Z"
+      )
+    );
+    expect(byDate.rows.some((r) => r.content === "agent filter hit")).toBe(false);
+    expect(byDate.rows.some((r) => r.content === "in-window row")).toBe(true);
+  });
+
+  it("records knowledge scan failures as category warnings", async () => {
+    const collections = await import("@/lib/knowledge-collections");
+    vi.spyOn(collections, "collectCollectionFiles").mockRejectedValueOnce(new Error("scan failed"));
+    const { buildMemoryInventory } = await import("../memory-inventory");
+    const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
+    const knowledge = response.categories.find((c) => c.id === "knowledge_file");
+    expect(knowledge?.warnings.some((w) => /scan failed/i.test(w))).toBe(true);
+    vi.restoreAllMocks();
+  });
 });

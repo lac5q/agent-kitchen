@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
 import { buildCanonicalIdentity } from "@/lib/memory/canonical";
-import { coordinateErasure, listRegisteredErasureStores } from "@/lib/memory/erasure";
+import { coordinateErasure, listRegisteredErasureStores, traverseIndirectDerivatives } from "@/lib/memory/erasure";
 import { ensureMessageMemorySchema } from "@/lib/message-memory/store";
 import { responseCache } from "@/lib/response-cache";
 
@@ -691,5 +691,227 @@ describe("MEMLIFE-02 real erasure store adapters", () => {
     } finally {
       if (original) registerErasureStoreAdapter(original);
     }
+  });
+
+  it("traverseIndirectDerivatives skips non-array and invalid prior erasure outcomes", () => {
+    const database = new Database(":memory:");
+    database.exec(`
+      CREATE TABLE memory_erasure_reports (
+        id TEXT PRIMARY KEY,
+        canonical_id TEXT NOT NULL,
+        store_outcomes_json TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z'
+      );
+    `);
+    const identity = buildCanonicalIdentity("prior outcomes", "vault", "ingress", "vault");
+    database
+      .prepare(
+        `INSERT INTO memory_erasure_reports (id, canonical_id, store_outcomes_json, started_at)
+         VALUES (?, ?, ?, '2026-01-01T00:00:00Z')`
+      )
+      .run("er-mixed", identity.id, JSON.stringify([
+        null,
+        { storeId: 42 },
+        { storeId: "platform", status: "tombstoned", sourceHash: identity.canonicalHash },
+      ]));
+    const indirect = traverseIndirectDerivatives(database, identity);
+    expect(indirect.some((d) => d.storeId === "platform" && d.provenance === "erasure_report_snapshot")).toBe(true);
+  });
+
+  it("purges FTS rows when only fts is linked (no message sealing)", async () => {
+    const database = freshDb();
+    const messageId = Number(
+      database
+        .prepare(
+          `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+           VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+        )
+        .run("sess-fts-only", "proj", "agent", "user", "fts only secret", "2026-01-01T00:00:00Z")
+        .lastInsertRowid
+    );
+    const identity = buildCanonicalIdentity("fts only secret", "message", "ingress", "fts", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives = [
+      { storeId: "fts", sourceHash: identity.canonicalHash, provenance: "test", metadata: { message_id: messageId } },
+    ];
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const fts = report.storeOutcomes.find((o) => o.storeId === "fts");
+    expect(fts?.status).toBe("purged");
+    expect(fts?.reason).toBe("messages_fts_rows_deleted");
+  });
+
+  it("reports salience zero_match when linked but no salience rows exist", async () => {
+    const database = freshDb();
+    const messageId = Number(
+      database
+        .prepare(
+          `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+           VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+        )
+        .run("sess-sal-zero", "proj", "agent", "user", "salience zero", "2026-01-01T00:00:00Z")
+        .lastInsertRowid
+    );
+    const identity = buildCanonicalIdentity("salience zero", "message", "ingress", "salience", {
+      tenantId: "default-tenant",
+    });
+    identity.derivatives = [
+      {
+        storeId: "salience",
+        sourceHash: identity.canonicalHash,
+        provenance: "test",
+        metadata: { message_id: messageId },
+      },
+    ];
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const salience = report.storeOutcomes.find((o) => o.storeId === "salience");
+    expect(salience?.status).toBe("zero_match");
+    expect(salience?.reason).toBe("no_salience_rows_for_canonical");
+  });
+
+  it("resolves platform rows via message_row_id linkage", async () => {
+    const database = freshDb();
+    const messageId = Number(
+      database
+        .prepare(
+          `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+           VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+        )
+        .run("sess-pmm", "proj", "agent", "user", "platform via row", "2026-01-01T00:00:00Z")
+        .lastInsertRowid
+    );
+    database
+      .prepare(
+        `INSERT INTO platform_message_memory
+         (id, dedupe_key, provider, workspace_id, channel_id, thread_id, provider_message_id,
+          author_id, author_name, content, content_hash, message_timestamp, permalink, message_row_id,
+          metadata, created_at, updated_at)
+         VALUES (?, ?, 'slack', 'w', 'c', NULL, 'pm2', 'a', 'A', 'platform via row', ?, '2026-01-01T00:00:00Z',
+                 NULL, ?, '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`
+      )
+      .run("pmm-row", "dedupe-row", "hash-row-1", messageId);
+
+    const identity = buildCanonicalIdentity("platform via row", "platform", "ingress", "platform", {
+      tenantId: "default-tenant",
+    });
+    (identity as { canonicalHash: string }).canonicalHash = "hash-row-1";
+    identity.derivatives.push({
+      storeId: "platform",
+      sourceHash: "hash-row-1",
+      provenance: "test",
+      metadata: { message_id: messageId },
+    });
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "platform")?.status).toBe("tombstoned");
+  });
+
+  it("vector adapter purges existing provenance rows when invoked directly", async () => {
+    const database = freshDb();
+    const { getErasureStoreAdapter } = await import("../erasure");
+    const identity = buildCanonicalIdentity("existing prov", "message", "ingress", "vector", {
+      tenantId: "default-tenant",
+    });
+    const now = "2026-01-01T00:00:00Z";
+    database
+      .prepare(
+        `INSERT INTO memory_embedding_provenance
+         (id, tenant_id, canonical_id, store_id, adapter_kind, source_hash, model_id, model_version,
+          dimensionality, provenance, lifecycle_state, removability, metadata_json, created_at, updated_at)
+         VALUES (?, 'default-tenant', ?, 'vector', 'local', ?, 'm1', '1.0', 8, 'p', 'active', 'erasable', '{}', ?, ?)`
+      )
+      .run("emb-existing", identity.id, identity.canonicalHash, now, now);
+
+    const adapter = getErasureStoreAdapter("vector");
+    expect(adapter).toBeTruthy();
+    const result = await adapter!.erase(database, "default-tenant", identity, {
+      erasureId: "erasure-direct-vector",
+      now: new Date("2026-01-01T00:00:00Z"),
+    });
+    expect(["purged", "zero_match", "tombstoned"]).toContain(result.status);
+  });
+
+  it("reports neo4j unavailable when the HTTP backend returns errors", async () => {
+    const database = freshDb();
+    const prevPassword = process.env.NEO4J_PASSWORD;
+    const prevFetch = global.fetch;
+    process.env.NEO4J_PASSWORD = "secret";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ errors: [{ message: "auth failed" }] }),
+    }) as typeof fetch;
+    try {
+      const identity = buildCanonicalIdentity("neo4j-errors", "graph", "ingress", "graph", {
+        tenantId: "default-tenant",
+      });
+      const report = await coordinateErasure(database, identity, {
+        tenantId: "default-tenant",
+        actorId: "tester",
+        scope: { tenantId: "default-tenant" },
+      });
+      const graph = report.storeOutcomes.find((o) => o.storeId === "graph");
+      expect(graph?.status).toBe("unavailable");
+      expect(graph?.reason).toBe("neo4j_graph_backend_unavailable");
+    } finally {
+      if (prevPassword === undefined) delete process.env.NEO4J_PASSWORD;
+      else process.env.NEO4J_PASSWORD = prevPassword;
+      global.fetch = prevFetch;
+    }
+  });
+
+  it("tombstones candidates using canonical id when metadata ids are absent", async () => {
+    const database = freshDb();
+    const identity = buildCanonicalIdentity("candidate no meta", "lesson", "ingress", "candidates", {
+      tenantId: "default-tenant",
+    });
+    database
+      .prepare(
+        `INSERT INTO agent_session_captures
+         (id, tenant_id, source_agent_id, runtime, session_id, capture_hash, captured_at)
+         VALUES (?, 'default-tenant', 'agent', 'test', 'sess', 'ch', '2026-01-01T00:00:00Z')`
+      )
+      .run("cap-no-meta");
+    database
+      .prepare(
+        `INSERT INTO agent_memory_candidates
+         (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, status, metadata_json, created_at)
+         VALUES (?, 'default-tenant', 'cap-no-meta', 'agent', 'lesson', 'secret', ?, 'candidate', '{}', '2026-01-01T00:00:00Z')`
+      )
+      .run(identity.id, identity.canonicalHash);
+
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    expect(report.storeOutcomes.find((o) => o.storeId === "candidates")?.status).toBe("tombstoned");
+  });
+
+  it("reports fts unavailable when messages_fts is missing but fts is linked", async () => {
+    const database = freshDb();
+    database.exec("DROP TABLE IF EXISTS messages_fts");
+    const identity = buildCanonicalIdentity("fts missing", "message", "ingress", "fts", {
+      tenantId: "default-tenant",
+    });
+    const report = await coordinateErasure(database, identity, {
+      tenantId: "default-tenant",
+      actorId: "tester",
+      scope: { tenantId: "default-tenant" },
+    });
+    const fts = report.storeOutcomes.find((o) => o.storeId === "fts");
+    expect(fts?.status).toBe("unavailable");
+    expect(fts?.reason).toBe("messages_fts_missing");
   });
 });

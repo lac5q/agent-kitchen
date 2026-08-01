@@ -270,6 +270,62 @@ describe("POST /api/skills/sign", () => {
     expect(res.status).toBe(400);
     closeDb();
   });
+
+  it("400 — invalid JSON body and non-object payloads", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = newTempDb();
+    fs.writeFileSync(dbPath, "");
+    const { signRoute, closeDb } = await loadRoutesAndDb(dbPath);
+
+    const badJson = await signRoute.POST(
+      new Request("https://memroos.example.com/api/skills/sign", {
+        method: "POST",
+        headers: { authorization: "Bearer secret-key", "content-type": "application/json" },
+        body: "not-json",
+      })
+    );
+    expect(badJson.status).toBe(400);
+    expect(await badJson.json()).toMatchObject({ ok: false, error: "Invalid JSON body" });
+
+    const notObject = await signRoute.POST(
+      makePostRequest([], { authorization: "Bearer secret-key" })
+    );
+    expect(notObject.status).toBe(400);
+    expect(await notObject.json()).toMatchObject({ ok: false, error: "Body must be an object" });
+    closeDb();
+  });
+
+  it("404 — skill_name with source_harness filter", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = await setupDbWithRegistryRow(SAMPLE_BODY, { source_harness: "claude" });
+    const { signRoute, closeDb } = await loadRoutesAndDb(dbPath);
+    const res = await signRoute.POST(
+      makePostRequest(
+        { skill_name: "api-skill", source_harness: "codex" },
+        { authorization: "Bearer secret-key" }
+      )
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toContain("for harness 'codex'");
+    closeDb();
+  });
+
+  it("422 — registry row missing raw_body", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "secret-key";
+    const dbPath = await setupDbWithRegistryRow(SAMPLE_BODY);
+    const { signRoute, getDb, closeDb } = await loadRoutesAndDb(dbPath);
+    getDb().prepare(`UPDATE skill_registry SET raw_body = '' WHERE name = 'api-skill'`).run();
+
+    const res = await signRoute.POST(
+      makePostRequest(
+        { skill_name: "api-skill" },
+        { authorization: "Bearer secret-key" }
+      )
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toContain("no raw_body");
+    closeDb();
+  });
 });
 
 describe("POST /api/skills/verify", () => {

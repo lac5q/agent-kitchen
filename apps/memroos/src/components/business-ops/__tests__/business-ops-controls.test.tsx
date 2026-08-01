@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import BusinessOpsPage from "@/app/business-ops/page";
@@ -146,5 +146,103 @@ describe("Business Ops controls", () => {
     render(<KpiTimelinePanel dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
     // L3 unavailable is now surfaced as a non-live envelope.
     expect(screen.getByText(/l3: unavailable/i)).toBeInTheDocument();
+  });
+
+  it("KpiTimelinePanel shows loading and empty states with scoped filters", () => {
+    apiMock.useEvalHistory.mockReturnValue({
+      data: null,
+      isLoading: true,
+      error: null,
+    });
+    const { rerender } = render(<KpiTimelinePanel agentId="ops-agent" dateRange={{ since: "2026-06-01T00:00:00.000Z" }} />);
+    expect(screen.getByText(/loading timeline/i)).toBeInTheDocument();
+
+    apiMock.useEvalHistory.mockReturnValue({
+      data: { runs: [], timestamp: "2026-07-20T00:00:00.000Z" },
+      isLoading: false,
+      error: null,
+    });
+    rerender(
+      <KpiTimelinePanel
+        agentId="ops-agent"
+        dateRange={{ since: "2026-06-01T00:00:00.000Z", until: "2026-07-01T00:00:00.000Z" }}
+      />,
+    );
+    expect(screen.getByText(/No eval runs found for agent ops-agent/i)).toBeInTheDocument();
+    expect(document.querySelector("[data-kpi-timeline-empty-reason]")).toBeTruthy();
+  });
+
+  it("KpiTimelinePanel toggles layer visibility and renders live L3 line", () => {
+    apiMock.useEvalHistory.mockReturnValue({
+      data: {
+        runs: [
+          {
+            id: "run-live",
+            traceId: "trace-live",
+            agentId: "agent-1",
+            role: "default",
+            compositeW: 0.9,
+            trusted: true,
+            completedAt: "2026-07-17T16:26:39.788Z",
+            layers: {
+              l1: { score: 0.9, scorers: [] },
+              l2: { score: 0.85, scorers: [] },
+              l3: { score: 0.7, scorers: [{ metadata: { unavailable: false } }] },
+            },
+            scorerResults: [],
+            judge: {},
+            driftGuard: { status: "passed" },
+          },
+        ],
+        timestamp: "2026-07-20T00:00:00.000Z",
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<KpiTimelinePanel dateRange={{ since: "2026-06-01T00:00:00.000Z" }} />);
+    expect(screen.getByText("W Score Timeline")).toBeInTheDocument();
+    expect(document.querySelector("[data-kpi-timeline-l3-status]")).toHaveTextContent("l3: live");
+
+    fireEvent.click(screen.getByLabelText("L1"));
+    fireEvent.click(screen.getByLabelText("L2"));
+    fireEvent.click(screen.getByLabelText("L3"));
+    expect(screen.getByLabelText("L1")).not.toBeChecked();
+  });
+
+  it("AdapterStatusPanel shows loading, error, and live event rows", () => {
+    apiMock.useBusinessOutcomeEvents.mockReturnValue({
+      data: null,
+      isLoading: true,
+      error: null,
+    });
+    const { rerender } = render(<AdapterStatusPanel agentId="agent-1" dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
+    expect(screen.getByTestId ? document.querySelector("[data-adapter-loading]") : null).toBeTruthy();
+    expect(screen.getByText(/source: \/api\/l3\/events\?agentId=agent-1/i)).toBeInTheDocument();
+
+    apiMock.useBusinessOutcomeEvents.mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: new Error("upstream 500"),
+    });
+    rerender(<AdapterStatusPanel dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
+    const panel = document.querySelector("[data-adapter-panel]")!;
+    expect(panel.querySelector("[data-adapter-error]")).toHaveTextContent(/upstream 500/i);
+
+    apiMock.useBusinessOutcomeEvents.mockReturnValue({
+      data: {
+        events: [
+          { adapter: "hubspot", polledAt: "2026-05-21T10:00:00.000Z" },
+          { adapter: "hubspot", polledAt: "2026-05-21T11:00:00.000Z" },
+          { adapter: "intercom", polledAt: "2026-05-21T09:00:00.000Z" },
+        ],
+        timestamp: "2026-05-21T12:00:00.000Z",
+      },
+      isLoading: false,
+      error: null,
+    });
+    rerender(<AdapterStatusPanel dateRange={{ since: "2026-05-01T00:00:00.000Z" }} />);
+    expect(document.querySelector("[data-adapter-events='hubspot']")).toHaveTextContent("2");
+    expect(document.querySelector("[data-adapter-row-status='live']")).toBeTruthy();
   });
 });

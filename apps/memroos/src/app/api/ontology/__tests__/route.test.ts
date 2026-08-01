@@ -435,4 +435,63 @@ describe("ontology registry route", () => {
       code: "invalid",
     });
   });
+
+  it("requires operator authorization for non-local ontology reads and writes", async () => {
+    process.env["MEMROOS_OPERATOR_API_KEY"] = "ontology-secret";
+    vi.resetModules();
+    ontologyRoute = await import("../route");
+
+    const remoteGet = ontologyRoute.GET(
+      new Request("https://memroos.example.com/api/ontology")
+    );
+    expect(remoteGet.status).toBe(403);
+
+    const remotePost = await ontologyRoute.POST(
+      new Request("https://memroos.example.com/api/ontology", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "ensure_canonical", actor: "operator" }),
+      })
+    );
+    expect(remotePost.status).toBe(403);
+    delete process.env["MEMROOS_OPERATOR_API_KEY"];
+  });
+
+  it("rejects unknown POST actions and invalid revoke reasons", async () => {
+    const unknown = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({ action: "not_a_real_action", actor: "operator" }),
+    }));
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toMatchObject({ ok: false, code: "invalid" });
+
+    const badReason = await ontologyRoute.POST(operatorRequest("/api/ontology", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "revoke_source",
+        tenantId: "route-tenant",
+        spaceId: "route-space",
+        sourceId: "route-source",
+        sourceHash: SOURCE_HASH,
+        actor: "operator",
+        reason: "unsupported_reason",
+      }),
+    }));
+    expect(badReason.status).toBe(400);
+    expect(await badReason.json()).toMatchObject({ ok: false, code: "invalid" });
+  });
+
+  it("returns 400 when alias lookup is missing a version parameter", async () => {
+    await ensureCanonical();
+
+    const response = ontologyRoute.GET(
+      operatorRequest("/api/ontology?alias=invoice-alias&namespace=route.alias")
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: "ontology request rejected",
+      code: "invalid",
+    });
+  });
 });

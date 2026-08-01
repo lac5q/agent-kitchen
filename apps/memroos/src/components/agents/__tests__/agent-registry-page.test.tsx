@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RegisteredAgent } from "@/types";
 
@@ -286,6 +286,99 @@ describe("AgentRegistryPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/Operator key required/i)).toBeInTheDocument();
     });
+  });
+
+  it("shows one-time API key after successful registration", async () => {
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "New Agent" } });
+    fireEvent.change(screen.getByLabelText("Agent role"), { target: { value: "Does work" } });
+    fireEvent.change(screen.getByLabelText("Agent capabilities"), { target: { value: "Memory" } });
+    fireEvent.click(screen.getByText("Register"));
+    const registerOptions = mutateRegister.mock.calls.at(-1)?.[1];
+    registerOptions?.onSuccess?.({ apiKey: "one-time-secret-key" });
+    await waitFor(() => {
+      expect(screen.getByText("One-time API key")).toBeInTheDocument();
+      expect(screen.getByText("one-time-secret-key")).toBeInTheDocument();
+    });
+  });
+
+  it("filters agents by status and liveness", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents: [
+          {
+            ...agents[0],
+            status: "idle",
+            liveness: { state: "stale", observedAt: null, freshnessMs: null, source: "test", reason: "old" },
+          },
+          {
+            ...agents[1],
+            liveness: { state: "live", observedAt: "2026-05-05T06:00:00.000Z", freshnessMs: 1000, source: "test", reason: "fresh" },
+          },
+        ],
+        timestamp: "",
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+    render(<AgentRegistryPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "idle", exact: true }));
+    expect(screen.getByText("REST Agent")).toBeInTheDocument();
+    expect(screen.queryByText("ADK Prime Agent")).not.toBeInTheDocument();
+
+    const protocolRow = document.querySelector('[data-agents-filter-row="protocol"]')!;
+    fireEvent.click(within(protocolRow).getByRole("button", { name: "all" }));
+    const statusRow = document.querySelector('[data-agents-filter-row="status"]')!;
+    fireEvent.click(within(statusRow).getByRole("button", { name: "all" }));
+    const livenessRow = document.querySelector('[data-agents-filter-row="liveness"]')!;
+    fireEvent.click(within(livenessRow).getByRole("button", { name: "live" }));
+    expect(screen.getByText("ADK Prime Agent")).toBeInTheDocument();
+    expect(screen.queryByText("REST Agent")).not.toBeInTheDocument();
+  });
+
+  it("surfaces invite response without command and supports manual copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<AgentRegistryPage />);
+    fireEvent.click(screen.getByText("Copy Invite"));
+    const [, options] = mutateInvite.mock.calls[0];
+    await options.onSuccess({ command: null });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Invite response did not include a command/i)).toBeInTheDocument();
+    });
+
+    await options.onSuccess({ command: "curl invite" });
+    await waitFor(() => {
+      expect(screen.getByText("Agent onboarding prompt")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
+    });
+  });
+
+  it("renders envelope stat labels for non-live summary metrics", () => {
+    mockUseRegisteredAgents.mockReturnValue({
+      data: {
+        agents,
+        timestamp: "",
+        summary: {
+          total: { value: null, status: "blocked", source: "registry", reason: "loading" },
+          active: { value: 0, status: "zero", source: "registry", reason: "none active" },
+        },
+        liveness: { value: null, status: "degraded", source: "heartbeat", reason: "stale aggregate" },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useRegisteredAgents>);
+    render(<AgentRegistryPage />);
+    expect(screen.getByTestId("agents-liveness-banner")).toHaveTextContent(/stale aggregate/);
   });
 
   it("renders liveness and readiness banners when envelopes are present", () => {

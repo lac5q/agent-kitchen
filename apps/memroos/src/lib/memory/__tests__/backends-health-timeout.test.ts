@@ -1,5 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkVectorHealth, checkGraphHealth, mem0HealthTimeoutMs, neo4jConfig, queryGraphMemory } from "../backends";
+import {
+  checkGraphHealth,
+  checkVectorHealth,
+  EpisodicMemoryAdapter,
+  GraphMemoryAdapter,
+  mem0HealthTimeoutMs,
+  neo4jConfig,
+  neo4jHttpQuery,
+  neo4jUsesQueryApi,
+  queryGraphMemory,
+  searchVectorMemory,
+  VectorMemoryAdapter,
+} from "../backends";
 import * as registry from "../registry";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -201,5 +213,236 @@ describe("checkVectorHealth timeout honesty", () => {
     const health = await checkGraphHealth();
     expect(health).toMatchObject({ tier: "graph", backend: "neo4j", status: "up" });
     getAdaptersSpy.mockRestore();
+  });
+});
+
+describe("neo4jHttpQuery and neo4jUsesQueryApi", () => {
+  it("detects Aura Query API hosts", () => {
+    expect(neo4jUsesQueryApi("https://abc.databases.neo4j.io")).toBe(true);
+    expect(neo4jUsesQueryApi("http://localhost:7474")).toBe(false);
+  });
+
+  it("throws when Neo4j password is not configured", async () => {
+    process.env.NEO4J_HTTP_URL = "http://localhost:7474";
+    process.env.NEO4J_PASSWORD = "";
+    let error: unknown;
+    try {
+      await neo4jHttpQuery("MATCH (n) RETURN n");
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Neo4j password is not configured");
+  });
+
+  it("uses query/v2 for Aura URLs and normalizes the response shape", async () => {
+    process.env.NEO4J_HTTP_URL = "https://unit-test.databases.neo4j.io";
+    process.env.NEO4J_PASSWORD = "aura-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(String(url)).toContain("/query/v2");
+        return Response.json({ data: { fields: ["count"], values: [[17]] } });
+      }),
+    );
+
+    const result = await neo4jHttpQuery("MATCH (n) RETURN count(n) AS count");
+    expect(result.results[0]?.data[0]?.row[0]).toBe(17);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("throws when query/v2 returns a non-OK HTTP status", async () => {
+    process.env.NEO4J_HTTP_URL = "https://unit-test.databases.neo4j.io";
+    process.env.NEO4J_PASSWORD = "aura-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ errors: [{ code: "Neo.ClientError", message: "bad cypher" }] }, { status: 400 })
+      ),
+    );
+
+    let error: unknown;
+    try {
+      await neo4jHttpQuery("INVALID");
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/query\/v2 failed/);
+  });
+
+  it("throws when tx/commit returns graph errors", async () => {
+    process.env.NEO4J_HTTP_URL = "http://localhost:7474";
+    process.env.NEO4J_PASSWORD = "local-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ errors: [{ message: "commit failed" }] })),
+    );
+
+    let error: unknown;
+    try {
+      await neo4jHttpQuery("MATCH (n) RETURN n");
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Graph memory backend unavailable");
+  });
+});
+
+describe("direct backend error and adapter paths", () => {
+  beforeEach(() => {
+    vi.spyOn(registry, "getAdapters").mockReturnValue([]);
+  });
+
+  it("searchVectorMemory surfaces mem0 search failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ detail: "vector search offline" }, { status: 503 })),
+    );
+
+    let error: unknown;
+    try {
+      await searchVectorMemory("roadmap", 3);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("vector search offline");
+  });
+
+  it("VectorMemoryAdapter write throws when mem0 add fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/memory/add")) {
+          return new Response("write failed", { status: 500 });
+        }
+        return Response.json({ memories: [] });
+      }),
+    );
+
+    const adapter = new VectorMemoryAdapter();
+    let error: unknown;
+    try {
+      await adapter.write({ content: "payload" });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Vector memory write failed");
+  });
+
+  it("GraphMemoryAdapter write falls back to mem0 when Neo4j is not configured", async () => {
+    delete process.env.NEO4J_PASSWORD;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes("/memory/add")) {
+          expect(init?.method).toBe("POST");
+          return new Response(null, { status: 201 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const adapter = new GraphMemoryAdapter();
+    await expect(adapter.write({ content: "graph fact", type: "graph" })).resolves.toBeUndefined();
+  });
+
+  it("GraphMemoryAdapter write throws when mem0 fallback fails", async () => {
+    delete process.env.NEO4J_PASSWORD;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/memory/add")) {
+          return new Response("nope", { status: 500 });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const adapter = new GraphMemoryAdapter();
+    let error: unknown;
+    try {
+      await adapter.write({ content: "graph fact" });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Graph memory write failed");
+  });
+
+  it("marks vector degraded on mem0 disk warning without path-critical failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          vector_store: "connected",
+          queue: { queued: 0 },
+          memory_runtime: { status: "available" },
+          disk: { critical: false, warning: true },
+        }),
+      ),
+    );
+
+    const health = await checkVectorHealth();
+    expect(health.status).toBe("up");
+    expect(String(health.detail)).toMatch(/disk warning/);
+  });
+
+  it("reports graph down when the Neo4j probe throws", async () => {
+    process.env.NEO4J_PASSWORD = "graph-pass";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+
+    const health = await checkGraphHealth();
+    expect(health.status).toBe("down");
+    expect(String(health.detail)).toMatch(/503|unavailable|failed/i);
+  });
+
+  it("delegates checkVectorHealth to a registered adapter", async () => {
+    const mockHealth = vi.fn().mockResolvedValue({
+      tier: "vector",
+      backend: "mock",
+      status: "up",
+    });
+    vi.spyOn(registry, "getAdapters").mockReturnValue([
+      {
+        tiers: ["vector"],
+        capabilities: [],
+        search: vi.fn(),
+        write: vi.fn(),
+        health: mockHealth,
+      },
+    ]);
+
+    const health = await checkVectorHealth();
+    expect(mockHealth).toHaveBeenCalled();
+    expect(health).toMatchObject({ tier: "vector", status: "up" });
+  });
+
+  it("EpisodicMemoryAdapter search maps recall rows and health reports down on db errors", async () => {
+    const { getDb } = await import("@/lib/db");
+    const { initSchema } = await import("@/lib/db-schema");
+    const database = getDb();
+    initSchema(database);
+    database
+      .prepare(
+        `INSERT INTO messages(session_id, project, agent_id, role, content, timestamp, visibility, policy)
+         VALUES (?, ?, ?, ?, ?, ?, 'internal', 'indexable')`
+      )
+      .run("sess-ep", "proj", "agent", "user", "episodic recall target", "2026-01-01T00:00:00Z");
+
+    const adapter = new EpisodicMemoryAdapter(() => database);
+    const results = await adapter.search("recall", 5);
+    expect(results.some((r) => r.content.includes("episodic"))).toBe(true);
+
+    const broken = new EpisodicMemoryAdapter(() => {
+      throw new Error("sqlite unavailable");
+    });
+    const health = await broken.health();
+    expect(health).toMatchObject({ tier: "episodic", status: "down" });
+    expect(String(health.detail)).toMatch(/sqlite unavailable/);
   });
 });

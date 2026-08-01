@@ -1172,4 +1172,61 @@ describe("pin lookup helpers and agent-scoped rollback", () => {
       SyncGovernanceError
     );
   });
+
+  it("detectSkillChange hashes raw body content and tolerates circular diff payloads", async () => {
+    const { detectSkillChange, computeGovernanceContentHash } = await importSyncModule();
+    const body = "## Skill body\nDo the thing.";
+    const hash = computeGovernanceContentHash(body);
+    const circular: Record<string, unknown> = { note: "change" };
+    circular.self = circular;
+
+    const result = detectSkillChange(db, {
+      source_harness: "claude",
+      skill_name: "body-hash-skill",
+      detected_content_body: body,
+      proposed_by: "scanner",
+      diff_payload: circular,
+    });
+
+    expect(result.proposal.detected_content_hash).toBe(hash);
+    expect(result.created).toBe(true);
+    expect(result.proposal.diff_payload).toBe("{}");
+  });
+
+  it("rejects non-string governance inputs with SyncGovernanceError", async () => {
+    const { detectSkillChange, createOrUpdateAgentVersionPin, SyncGovernanceError } =
+      await importSyncModule();
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: 42 as unknown as string,
+        skill_name: "x",
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    expect(() =>
+      detectSkillChange(db, {
+        source_harness: "claude",
+        skill_name: 99 as unknown as string,
+        detected_content_hash: "0".repeat(64),
+        proposed_by: "scanner",
+      })
+    ).toThrow(SyncGovernanceError);
+    insertAgent("bad-pin-agent", "Bad Pin Agent");
+    const skillId = insertSkillRow({
+      name: "bad-pin-skill",
+      dispatch_status: "enabled",
+      content_hash: "0".repeat(64),
+    });
+    expect(() =>
+      createOrUpdateAgentVersionPin(db, {
+        agent_id: "bad-pin-agent",
+        skill_name: "bad-pin-skill",
+        skill_id: skillId,
+        current_version: 1 as unknown as string,
+        current_content_hash: "0".repeat(64),
+        actor: "alice",
+      })
+    ).toThrow(SyncGovernanceError);
+  });
 });

@@ -309,6 +309,19 @@ describe("Erasure helpers and authorization", () => {
       })
     ).rejects.toBeInstanceOf(ErasureAuthorizationError);
   });
+
+  it("throws when scope tenant disagrees with canonical identity tenantId field", async () => {
+    const db = new Database(":memory:");
+    const identity = buildCanonicalIdentity("x", "t", "ingress", "vector", { tenantId: "tenant-a" });
+    (identity as typeof identity & { tenantId: string }).tenantId = "tenant-a";
+    await expect(
+      coordinateErasure(db, identity, {
+        tenantId: "tenant-a",
+        actorId: "a",
+        scope: { tenantId: "tenant-b" },
+      })
+    ).rejects.toMatchObject({ code: "wrong_tenant" });
+  });
 });
 
 describe("traverseIndirectDerivatives extended graph walks", () => {
