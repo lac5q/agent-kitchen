@@ -6,7 +6,7 @@ import {
   isCordantPublicUrl,
   resolveCoworkMcpUrl,
   resolvePreferredCoworkMcpUrl,
-} from "@/lib/cowork-connector";
+} from "@/lib/connectors/cowork-connector";
 
 describe("cowork-connector", () => {
   it("resolves Cordant /mcp URL without trailing slash duplication", () => {

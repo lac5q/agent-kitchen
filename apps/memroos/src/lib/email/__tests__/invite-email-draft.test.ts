@@ -3,7 +3,7 @@ import {
   INVITE_EMAIL_SUBJECT,
   buildInviteEmailDraft,
   buildInviteEmailHtml,
-} from "@/lib/invite-email-draft";
+} from "@/lib/email/invite-email-draft";
 
 describe("buildInviteEmailDraft", () => {
   it("includes invite URL and easy numbered steps without jargon", () => {

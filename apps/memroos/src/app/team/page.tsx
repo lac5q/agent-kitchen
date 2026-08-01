@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, Copy, Check } from "lucide-react";
 import { Btn, PageHeader, Pill } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
-import { buildInviteEmailDraft } from "@/lib/invite-email-draft";
+import { buildInviteEmailDraft } from "@/lib/email/invite-email-draft";
 
 interface UserRecord {
   id: string;
