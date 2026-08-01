@@ -3,13 +3,13 @@ import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
-import { resolvePublicMemroosUrl } from '@/lib/public-base-url';
+import { resolvePublicMemroosUrl } from '@/lib/http/public-base-url';
 import { isValidEmailAddress, sendEmail, type EmailSendResult } from '@/lib/email/send';
 import {
   INVITE_EMAIL_SUBJECT,
   buildInviteEmailDraft,
   buildInviteEmailHtml,
-} from '@/lib/invite-email-draft';
+} from '@/lib/email/invite-email-draft';
 import type { UserRole } from '@/lib/auth/types';
 
 interface InviteBody {

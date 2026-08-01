@@ -21,7 +21,7 @@ The proxy was also pointing at a dead port (`http://127.0.0.1:8317`) — VibePro
 Each of these files had a `>>> headroom persistent env <<<` block of `export` statements overriding `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `HEADROOM_LLMLINGUA_ENABLED`, etc. All replaced with `>>> VibeProxy direct <<<` blocks that:
 
 1. **Unset** all headroom-injected vars (defensive — in case the parent shell inherited them)
-2. **Export** `ANTHROPIC_BASE_URL=https://vibeproxy.epiloguecapital.com` and `OPENAI_BASE_URL=https://vibeproxy.epiloguecapital.com/v1`
+2. **Export** `ANTHROPIC_BASE_URL=https://vibeproxy.internal.example` and `OPENAI_BASE_URL=https://vibeproxy.internal.example/v1`
 3. **Export** the matching placeholder token
 
 Files touched: `~/.zshrc`, `~/.bashrc`, `~/.profile`, `~/.bash_profile`. The droid `claude-vibe` function in `~/.zshrc` (which had been pointing at `http://localhost:8317`) was also updated to use VibeProxy HTTPS.
@@ -59,8 +59,8 @@ active: inactive
 
 ─── 4. Shell env after clean login ───
   bash -l -c:
-    ANTHROPIC_BASE_URL=https://vibeproxy.epiloguecapital.com
-    OPENAI_BASE_URL=https://vibeproxy.epiloguecapital.com/v1
+    ANTHROPIC_BASE_URL=https://vibeproxy.internal.example
+    OPENAI_BASE_URL=https://vibeproxy.internal.example/v1
   zsh -l -c:
     (no headroom vars leaked)
 

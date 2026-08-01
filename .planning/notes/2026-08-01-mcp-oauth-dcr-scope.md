@@ -84,7 +84,7 @@ The Python MCP then only has to validate a token the Next app minted.
    Google sign-in so the human authenticates with Google and MemroOS mints the MCP token.
 5. **Resource-server validation in the Python MCP** — verify the Next app's token, map it to
    a principal, and **stop defaulting to `"shared"`** on the authenticated path.
-6. **Fix the 502 on `memroos-mcp.epiloguecapital.com`** (oracle-1) — separate hostname,
+6. **Fix the 502 on `memroos-mcp.internal.example`** (oracle-1) — separate hostname,
    currently dead. Decide whether it is still wanted.
 
 Items 1–2 are small and independently testable. Items 3–5 are the real work: they make

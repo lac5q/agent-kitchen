@@ -288,7 +288,7 @@ def collect_failures() -> list:
                         "1. LaunchAgent \`com.memroos.recall-ship\` on the Mac\n"
                         "2. SSH tunnel \`localhost:3838\` -> oracle-1:3000\n"
                         "3. \`/home/opc/inbox/{claude,hermes,qwen,codex}\` on oracle-1\n"
-                        "4. \`cat /Users/lcalderon/github/memroos/services/memory/logs/recall-ship.log\`\n\n"
+                        "4. \`cat /Users/<you>/github/memroos/services/memory/logs/recall-ship.log\`\n\n"
                         "Auto-opened by memroos-oracle-1-healthcheck.\n"
                     ),
                     "severity": "high",

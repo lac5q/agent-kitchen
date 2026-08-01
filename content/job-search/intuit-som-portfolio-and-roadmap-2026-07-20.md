@@ -3,15 +3,15 @@ title: Intuit SOM portfolio and roadmap
 date: 2026-07-20
 model: GPT-5 Codex
 sources:
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/TY22 Supercharge Front Doors EOS Learnings.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/TY23 SOM EOS Learning.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/NextGen TTL TY23 EOS Learnings.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/FY24 SOM Product Review Evergreen.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/SOM/FY24_TY23 Mid & EOS Learnings.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap (1).xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Performance Feedback.docx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/Christine_ Luis Focus Areas Feedback.docx
-derived_from: /Users/lcalderon/github/jobhunt/data/intuit-source-index.json
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/TY22 Supercharge Front Doors EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/TY23 SOM EOS Learning.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/NextGen TTL TY23 EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/FY24 SOM Product Review Evergreen.pptx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/SOM/FY24_TY23 Mid & EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap (1).xlsx
+  - /Users/<you>/Documents/Work/Intuit/Performance Feedback.docx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/Christine_ Luis Focus Areas Feedback.docx
+derived_from: /Users/<you>/github/jobhunt/data/intuit-source-index.json
 regen_prompt: Rebuild Luis Calderon's SOM portfolio chronology. Separate Luis-owned work, team or portfolio work, observed results, forecasts, and roadmap-only initiatives. Do not claim broad NextGen, DataX, Mobile, or GenAI results as Luis's personal outcomes without a Luis-owned source.
 ---
 
@@ -21,10 +21,10 @@ SOM stands for **Supercharge Onboarding & Monetization**. The strongest direct o
 
 ## Canonical artifacts
 
-- Written analysis: `/Users/lcalderon/github/jobhunt/docs/interview/INTUIT-SOM-PORTFOLIO-MAP.md`
-- Large visual roadmap: `/Users/lcalderon/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.svg`
-- PNG export: `/Users/lcalderon/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.png`
-- PDF export: `/Users/lcalderon/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.pdf`
+- Written analysis: `/Users/<you>/github/jobhunt/docs/interview/INTUIT-SOM-PORTFOLIO-MAP.md`
+- Large visual roadmap: `/Users/<you>/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.svg`
+- PNG export: `/Users/<you>/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.png`
+- PDF export: `/Users/<you>/github/jobhunt/docs/interview/intuit-som-roadmap-2022-2025.pdf`
 
 ## Evidence-backed chronology
 

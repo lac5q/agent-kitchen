@@ -21,7 +21,12 @@
  * how many nodes the column actually holds, so N agents never overlap.
  */
 
-import type Database from "better-sqlite3";
+
+import type { getDb } from "@/lib/db";
+import { countRows, tableExists } from "@/lib/store/schema-introspection";
+
+/** Opaque DB handle. Typed off `getDb` so this module needs no driver import. */
+type DbHandle = ReturnType<typeof getDb>;
 
 export type NodeType = "src" | "gate" | "core" | "store" | "agent" | "sink";
 export type EdgeKind = "flow" | "ctx" | "pack" | "fb" | "loop";
@@ -176,29 +181,6 @@ function layoutAgentGrid(
   return { slots, canvasWidth };
 }
 
-function tableExists(db: Database.Database, table: string): boolean {
-  try {
-    const row = db
-      .prepare(`SELECT name FROM sqlite_master WHERE type = ? AND name = ?`)
-      .get("table", table);
-    return Boolean(row);
-  } catch {
-    return false;
-  }
-}
-
-function countRows(db: Database.Database, table: string): number {
-  try {
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as
-      | { n: number }
-      | undefined;
-    return row?.n ?? 0;
-  } catch {
-    // Table absent on an older schema — report zero rather than failing the map.
-    return 0;
-  }
-}
-
 export interface TopologyInput {
   agents: Array<{ id: string; name: string; role: string; status?: string }>;
   /** Connected providers, from Nango. Empty is normal and rendered as such. */
@@ -208,7 +190,7 @@ export interface TopologyInput {
 }
 
 export function buildTopology(
-  db: Database.Database,
+  db: DbHandle,
   input: TopologyInput,
 ): Topology {
   const nodes: TopoNode[] = [];

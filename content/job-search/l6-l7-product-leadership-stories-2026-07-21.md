@@ -10,12 +10,12 @@ model: "gpt-5; reviewed by claude-opus-4-8"
 sources:
   - "https://docs.google.com/document/d/112O31jPbf2ooYj0rBnxLW0zsKPYnyhAmQZEybEaCfqE/edit"
   - "https://docs.google.com/document/d/1stCZQUo7RezQeviPOJyCPNKQbs3e93VGfr8VNqQ94O4/edit"
-  - "/Users/lcalderon/.codex/attachments/4cae15da-0cb0-4bd3-bbc5-2b192ba41617/pasted-text.txt"
+  - "/Users/<you>/.codex/attachments/4cae15da-0cb0-4bd3-bbc5-2b192ba41617/pasted-text.txt"
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"
   - "content/job-search/intuit-project-map-from-goals-roadmaps-and-reviews-2026-07-17.md"
 derived_from:
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"
-  - "/Users/lcalderon/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md"
+  - "/Users/<you>/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md"
 regen_prompt: "Use the STAR workbook, Story Builder template, and TMAY evidence inventory to produce one clean STAR document and one clean Story Builder document for three L6/L7 product leadership stories."
 ---
 

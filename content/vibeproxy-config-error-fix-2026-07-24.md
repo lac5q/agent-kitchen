@@ -8,7 +8,7 @@ VibeProxy menu bar app shows a red "Configuration Error" banner:
 
 > Failed to parse YAML at `/Applications/VibeProxy.app.disabled/Contents/Resources/config.yaml`. The file "config.yaml" couldn't be opened because there is no such file.
 
-Every API call to `https://vibeproxy.epiloguecapital.com/v1/...` returns HTTP 502.
+Every API call to `https://vibeproxy.internal.example/v1/...` returns HTTP 502.
 
 ## Root cause
 
@@ -47,10 +47,10 @@ launchctl load ~/Library/LaunchAgents/com.local.cli-proxy-api.plist
 lsof -i :8318 -sTCP:LISTEN
 
 # Check the model catalog
-curl -s https://vibeproxy.epiloguecapital.com/v1/models | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']))"
+curl -s https://vibeproxy.internal.example/v1/models | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']))"
 
 # Test a real chat call
-curl -s -X POST https://vibeproxy.epiloguecapital.com/v1/chat/completions \
+curl -s -X POST https://vibeproxy.internal.example/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"MiniMax-M3","max_tokens":16,"messages":[{"role":"user","content":"ping"}]}'
 ```

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { resolvePublicMemroosUrl } from "@/lib/public-base-url";
+import { resolvePublicMemroosUrl } from "@/lib/http/public-base-url";
 
 describe("resolvePublicMemroosUrl", () => {
   const prev = {

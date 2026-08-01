@@ -23,7 +23,7 @@ Tweaked variant of Luis's Agentic resume (`LuisCalderon_Resume_2026_Agentic.md`)
 
 # Source resume (canonical)
 
-Located at `~/github/jobhunt/docs/resume/LuisCalderon_Resume_2026_Agentic.md`. Also copied to `/Users/lcalderon/Desktop/LuisCalderon_Resume_2026_Agentic_v2.md` so Luis can grab it without dealing with the corrupted `Resume_Principal_Enterprise_Architect_P2M.md` on Desktop.
+Located at `~/github/jobhunt/docs/resume/LuisCalderon_Resume_2026_Agentic.md`. Also copied to `/Users/<you>/Desktop/LuisCalderon_Resume_2026_Agentic_v2.md` so Luis can grab it without dealing with the corrupted `Resume_Principal_Enterprise_Architect_P2M.md` on Desktop.
 
 # Luis Calderon
 ## AI Product Leader & Agentic Systems Architect

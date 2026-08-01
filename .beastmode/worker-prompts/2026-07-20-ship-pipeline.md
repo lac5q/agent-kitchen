@@ -39,7 +39,7 @@ End-to-end: a single run of the ship script on the Mac moves ≥1 new JSONL from
    - Opens SSH tunnel `localhost:3001 → oracle-1:3000` with `ssh -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 -L 3001:127.0.0.1:3000 oracle-1`, using `ControlMaster=auto` and a `ControlPath` under `~/.ssh/cm-%r@%h:%p` so re-uses are cheap. Cleanup on exit (trap).
    - rsync each of 4 source dirs to corresponding `/home/opc/inbox/*` on oracle-1 using `--update --max-size=200M --include='*.jsonl' --exclude='*'` (incremental, capped per file). Use `rsync -az -e ssh` so it's compressed.
    - POST to `http://127.0.0.1:3001/api/recall/ingest` with `Authorization: Bearer ${KEY}` header
-   - Parse JSON response and log `files/rows/skipped/timestamp` to `/Users/lcalderon/github/memroos/services/memory/logs/recall-ship.log`
+   - Parse JSON response and log `files/rows/skipped/timestamp` to `/Users/<you>/github/memroos/services/memory/logs/recall-ship.log`
    - On success: write `last_ingest_ts` (newest mtime of shipped files, or response timestamp) to Mac-side state file
    - On failure: log error, leave state file unchanged, exit 1 (auth) or 2 (5xx/transport)
    - Closes tunnel on exit (trap)
@@ -99,7 +99,7 @@ Return a JSON object with these keys (be strict, the director parses it):
   "oracle_env_appended": "exact 4 lines added to /etc/memroos/web.env",
   "state_file_created": true|false,
   "restart_command": "the exact ssh command the director must run",
-  "first_run_expected_log_tail": "what you expect /Users/lcalderon/.../recall-ship.log to show after one successful run",
+  "first_run_expected_log_tail": "what you expect /Users/<you>/.../recall-ship.log to show after one successful run",
   "risks_blockers": [],
   "verification_notes": "anything the director should know before running the restart command"
 }

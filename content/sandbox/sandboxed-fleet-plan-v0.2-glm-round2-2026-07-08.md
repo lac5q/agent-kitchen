@@ -4,9 +4,9 @@ date: 2026-07-08
 topic: sandbox
 model: Hermes (parent) + GLM-5.2 (round-1 validation, round-2 verdict)
 sources:
-  - /Users/lcalderon/plans/sandboxed-fleet-plan.md (v0.1 draft, pre-validation)
-  - /Users/lcalderon/plans/sandboxed-fleet-plan-verdict.md (GLM round 1, CHALLENGED, 7 blockers)
-  - /Users/lcalderon/.hermes/cache/delegation/subagent-summary-0-20260708_182351_265175.txt (GLM round 2, VALIDATED-WITH-FIXES)
+  - /Users/<you>/plans/sandboxed-fleet-plan.md (v0.1 draft, pre-validation)
+  - /Users/<you>/plans/sandboxed-fleet-plan-verdict.md (GLM round 1, CHALLENGED, 7 blockers)
+  - /Users/<you>/.hermes/cache/delegation/subagent-summary-0-20260708_182351_265175.txt (GLM round 2, VALIDATED-WITH-FIXES)
   - oracle-1 docker info validation (live, 2026-07-08): Docker 29.6.1, 0 containers, ARM64, cgroup v2, subuid/subgid set
   - maeve-u1 uname + paperclip systemd validation (live, 2026-07-08): kernel 6.18.33.2-WSL2, paperclip enabled+active, linger file present
   - CVE-2026-25725 (Claude Code sandbox-persistent-config LPE; --tmpfs HOME mitigation)
@@ -25,7 +25,7 @@ regen_prompt: "Produce a v0.2 implementation plan that addresses every GLM-5.2 r
 **Date:** 2026-07-08
 **Status:** v0.2 (parent-fixed, awaiting GLM round 2)
 **Topology:** oracle-1 (ARM64, OL9) + maeve-u1 (x86_64, Ubuntu 24.04 inside WSL2 kernel 6.18.33.2) + Mac (orchestrator)
-**Supersedes:** v0.1 (see `/Users/lcalderon/plans/sandboxed-fleet-plan-verdict.md` for round-1 verdict; all 7 blockers + 4 contradictions addressed here)
+**Supersedes:** v0.1 (see `/Users/<you>/plans/sandboxed-fleet-plan-verdict.md` for round-1 verdict; all 7 blockers + 4 contradictions addressed here)
 
 ---
 
@@ -223,7 +223,7 @@ WantedBy=default.target
 
 Linger is enabled (`/var/lib/systemd/linger/lac5q` exists), so the service auto-starts on next WSL2 boot — **fixes the B6 silent-kill problem**.
 
-**Cloudflare tunnel — already wired.** The `pc2.epiloguecapital.com` tunnel runs as `cloudflared --config /home/<user>/.cloudflared/pc2-config.yml tunnel run`. Same linger pattern recommended (not yet wired — see Out-of-scope).
+**Cloudflare tunnel — already wired.** The `pc2.internal.example` tunnel runs as `cloudflared --config /home/<user>/.cloudflared/pc2-config.yml tunnel run`. Same linger pattern recommended (not yet wired — see Out-of-scope).
 
 **WSL2-specific note on `runsc`:** the kernel is `6.18.33.2-microsoft-standard-WSL2` (rolling, June 18 2026 build). gVisor's docs list WSL2 as **supported-but-experimental** for the `runsc-systrap` runtime. Round-1 validation found `/dev/kvm` is present, so the kernel-mode fast path is available. If `runsc` ever fails to start a container in WSL2, fall back to standard `runc` (still a strong sandbox under seccomp+apparmor); see Section 5 verification step 4.
 
@@ -244,12 +244,12 @@ sudo tee /etc/hermes/codex-seatbelt.sb <<'SB'
 (allow signal)
 ;; File access: narrow to workspace + per-session tmp + read-only config mounts
 (allow file-read*)
-(allow file-read* (subpath "/Users/lcalderon/agent-workspace"))
+(allow file-read* (subpath "/Users/<you>/agent-workspace"))
 (allow file-read* (subpath "/tmp/hermes-sess-"))
-(allow file-read* (subpath "/Users/lcalderon/.codex"))
-(allow file-read* (subpath "/Users/lcalderon/.claude"))
-(allow file-read* (subpath "/Users/lcalderon/.paperclip"))
-(allow file-write* (subpath "/Users/lcalderon/agent-workspace"))
+(allow file-read* (subpath "/Users/<you>/.codex"))
+(allow file-read* (subpath "/Users/<you>/.claude"))
+(allow file-read* (subpath "/Users/<you>/.paperclip"))
+(allow file-write* (subpath "/Users/<you>/agent-workspace"))
 (allow file-write* (subpath "/tmp/hermes-sess-"))
 ;; Network: loopback only. Mac agent reaches LLM endpoints via Hermes-side
 ;; TCP→unix-socket forwarder (Hermes listens 127.0.0.1:7777, forwards to per-box socket).
@@ -291,8 +291,8 @@ PY
 chmod 0755 ~/bin/hermes-loopback-forwarder.py
 
 # Per-session workspace dirs (created on demand by session-runner)
-mkdir -p /Users/lcalderon/agent-workspace
-chmod 0700 /Users/lcalderon/agent-workspace
+mkdir -p /Users/<you>/agent-workspace
+chmod 0700 /Users/<you>/agent-workspace
 ```
 
 **MCP credentials** — encrypted at rest:
@@ -406,7 +406,7 @@ trap 'cleanup $CID' EXIT
 
 **Round-1 verdict caught:** the cited `smartcomputerlab/mcp-proxy-go` repo is wrong/fictional. Anthropic ships MCP servers and SDKs, not a generic proxy. **We write a minimal Python proxy** (~150 lines, fully tested) bound to a Unix socket. This is not Anthropic's, not third-party, fully auditable in our codebase.
 
-**File:** `/usr/local/bin/hermes-mcp-proxy.py` on each Linux box, runs as a long-lived service under a dedicated user `hermes-proxy`. Implemented in `/Users/lcalderon/github/knowledge/infrastructure/hermes-mcp-proxy.py` (canonical source) and rsynced to both boxes at deploy time.
+**File:** `/usr/local/bin/hermes-mcp-proxy.py` on each Linux box, runs as a long-lived service under a dedicated user `hermes-proxy`. Implemented in `/Users/<you>/github/knowledge/infrastructure/hermes-mcp-proxy.py` (canonical source) and rsynced to both boxes at deploy time.
 
 ### Egress policy file
 

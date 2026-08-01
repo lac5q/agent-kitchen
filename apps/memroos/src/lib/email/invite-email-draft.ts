@@ -3,7 +3,7 @@
  * the text part of the email MemRoOS sends directly (`@/lib/email/send`).
  * Long-lived MCP bearer tokens must never appear in this draft.
  */
-import { isCordantPublicUrl } from "@/lib/cowork-connector";
+import { isCordantPublicUrl } from "@/lib/connectors/cowork-connector";
 
 export type InviteEmailDraftOptions = {
   /** Force Cowork connector step; default auto-on for Cordant invite URLs. */

@@ -1,27 +1,27 @@
 You are the validator for a beastmode Phase 179 / v8.23 implementation run on the memroos project.
 
-TASK: Review the Phase 179 implementation in the worktree at /home/lac5q/github/memroos (branch: beastmode/v8.23-tool-auth-plane). The implementation is the third-party tool authentication plane that backs Phase 179 of `.planning/ROADMAP.md`.
+TASK: Review the Phase 179 implementation in the worktree at /home/<user>/github/memroos (branch: beastmode/v8.23-tool-auth-plane). The implementation is the third-party tool authentication plane that backs Phase 179 of `.planning/ROADMAP.md`.
 
 READ THESE FILES (read-only):
-- /home/lac5q/github/memroos/.beastmode/GOAL_STATE.gsd-implementation.md (the contract)
-- /home/lac5q/github/memroos/.planning/design/2026-07-23-connected-tools-ux-design.md (Kimi's UX design spec the implementation should match)
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/types.ts
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/nango-client.ts
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/credential-store.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/providers/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/connections/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/connect/oauth/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/connect/api-key/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/disconnect/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/activity/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/api/tools/usage/route.ts
-- /home/lac5q/github/memroos/apps/memroos/src/app/settings/tools/page.tsx
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/providers.test.ts
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/nango-client.test.ts
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/credential-store.test.ts
+- /home/<user>/github/memroos/.beastmode/GOAL_STATE.gsd-implementation.md (the contract)
+- /home/<user>/github/memroos/.planning/design/2026-07-23-connected-tools-ux-design.md (Kimi's UX design spec the implementation should match)
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/types.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/nango-client.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/credential-store.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/providers/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/connections/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/connect/oauth/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/connect/api-key/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/disconnect/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/activity/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/api/tools/usage/route.ts
+- /home/<user>/github/memroos/apps/memroos/src/app/settings/tools/page.tsx
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/providers.test.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/nango-client.test.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/__tests__/credential-store.test.ts
 
-WRITE ONLY TO: /home/lac5q/github/memroos/.beastmode/worker-runs/20260723T080718Z-phase179-providers/validator.md
+WRITE ONLY TO: /home/<user>/github/memroos/.beastmode/worker-runs/20260723T080718Z-phase179-providers/validator.md
 
 VERIFICATION COMMANDS ALREADY RUN BY ORCHESTRATOR (authoritative):
 - `npm run typecheck` — passes (0 errors)
@@ -87,7 +87,7 @@ Confirm the implementation does NOT:
 List any risks you see in the implementation that aren't covered by tests, the validator, or the spec. Be concrete (file:line + what's missing).
 
 CONSTRAINTS:
-- Read-only on all source files. Write only /home/lac5q/.pi/agent/npm/node_modules/@quintinshaw/pi-dynamic-workflows/skills/workflow-authoring/SKILL.md-equivalent... actually just write the validator output to: /home/lac5q/github/memroos/.beastmode/worker-runs/20260723T080718Z-phase179-providers/validator.md
+- Read-only on all source files. Write only /home/<user>/.pi/agent/npm/node_modules/@quintinshaw/pi-dynamic-workflows/skills/workflow-authoring/SKILL.md-equivalent... actually just write the validator output to: /home/<user>/github/memroos/.beastmode/worker-runs/20260723T080718Z-phase179-providers/validator.md
 - Do not run any package installs, network mutations, or destructive commands.
 - You are Claude Opus 4.8 via the Claude Pro lane — your model is independent of the orchestrator's MiniMax-M3.
 

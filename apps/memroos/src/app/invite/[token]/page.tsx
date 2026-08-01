@@ -7,7 +7,7 @@ import {
   buildCoworkDeepLinkHint,
   COWORK_PLATFORM_ID,
   resolvePreferredCoworkMcpUrl,
-} from "@/lib/cowork-connector";
+} from "@/lib/connectors/cowork-connector";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
 import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";

@@ -5,9 +5,10 @@ import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { initSchema } from "@/lib/db-schema";
+import type { GovernanceContext } from "@/lib/store/governance";
 import { createSpace, filterBySpace } from "@/lib/space";
 
-import { CONNECTOR_MANIFESTS, getManifest, connectorProject } from "../manifest";
+import { CONNECTOR_MANIFESTS, getManifest, connectorProject } from "@/lib/connectors/manifest";
 import {
   backfillConnectorSpaceReaders,
   connectorAgentId,
@@ -15,7 +16,7 @@ import {
   readSyncState,
   writeConnectorRecord,
   writeSyncState,
-} from "../store";
+} from "@/lib/store/connectors";
 
 const LINEAR = getManifest("linear")!;
 const ISSUES = LINEAR.tools.find((t) => t.tool === "list_issues")!;
@@ -32,12 +33,21 @@ beforeEach(() => {
   db = setup();
 });
 
-describe("connectors/store", () => {
+const GOV: GovernanceContext = {
+  actor: "system",
+  action: "connector.test.write",
+  asset: "test",
+  purpose: "unit test",
+  label: { visibility: "private", policy: "sealed" },
+  decision: "allow",
+};
+
+describe("store/connectors", () => {
   it("creates the connector space with indexable labels", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
 
     expect(spaceId).toBeTruthy();
     // The whole point: rows inherit these, and messages_fts only indexes
@@ -47,10 +57,10 @@ describe("connectors/store", () => {
   });
 
   it("is idempotent — a second cycle reuses the space rather than throwing", () => {
-    const a = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" });
+    const a = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" }, GOV);
     // createSpace throws on duplicate (tenant_id, name); the job runs every
     // 15 minutes, so a non-idempotent ensure would fail on run two.
-    const b = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" });
+    const b = ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "linear" }, GOV);
     expect(b.spaceId).toBe(a.spaceId);
   });
 
@@ -58,7 +68,7 @@ describe("connectors/store", () => {
     const { spaceId } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
     const row = db
       .prepare(
         `SELECT member_type FROM space_members WHERE space_id = ? AND member_id = ?`,
@@ -77,10 +87,11 @@ describe("connectors/store", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
 
     const outcome = writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "linear",
       connectionId: "conn-1",
       spaceId,
@@ -112,6 +123,7 @@ describe("connectors/store", () => {
 
     writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "linear",
       connectionId: "conn-1",
       spaceId: sealed.id,
@@ -135,11 +147,12 @@ describe("connectors/store", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
     const other = createSpace(db, { tenantId: "default-tenant", name: "engineering" });
 
     writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "linear",
       connectionId: "conn-1",
       spaceId,
@@ -171,13 +184,14 @@ describe("connectors/store", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
     const record = {
       id: "ENG-95",
       title: "Scoping API rework",
       updatedAt: "2026-07-27T00:00:00Z",
     };
     const args = {
+      gov: GOV,
       db,
       providerKey: "linear",
       connectionId: "conn-1",
@@ -198,10 +212,11 @@ describe("connectors/store", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
 
     const outcome = writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "linear",
       connectionId: "conn-1",
       spaceId,
@@ -225,8 +240,8 @@ describe("connectors/store", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
-    const base = { db, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
+    }, GOV);
+    const base = { db, gov: GOV, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
 
     expect(writeConnectorRecord({ ...base, record: { title: "no id" } }).status).toBe("empty");
     expect(writeConnectorRecord({ ...base, record: { id: "X-1" } }).status).toBe("empty");
@@ -248,7 +263,7 @@ describe("connectors/sync-state", () => {
       pageCursor: null,
       status: "ok",
       rowsWritten: 12,
-    });
+    }, GOV);
 
     expect(readSyncState(db, "conn-1", "list_issues")).toEqual({
       cursorValue: "2026-07-27T00:00:00Z",
@@ -265,8 +280,8 @@ describe("connectors/sync-state", () => {
       pageCursor: null,
       status: "ok",
     };
-    writeSyncState(db, { ...base, rowsWritten: 10 });
-    writeSyncState(db, { ...base, rowsWritten: 5 });
+    writeSyncState(db, { ...base, rowsWritten: 10 }, GOV);
+    writeSyncState(db, { ...base, rowsWritten: 5 }, GOV);
 
     const row = db
       .prepare(`SELECT rows_written FROM connector_sync_state WHERE connection_id = ?`)
@@ -279,7 +294,7 @@ describe("connectors/sync-state", () => {
  * Regression tests for defects an adversarial validation pass confirmed on
  * 2026-07-27. Each of these was a real, silent failure.
  */
-describe("connectors/store — validated regressions", () => {
+describe("store/connectors — validated regressions", () => {
   it("an EDITED record overwrites rather than being discarded", () => {
     // Was INSERT OR IGNORE: a rewritten issue body conflicted on
     // UNIQUE(session_id, request_id) and was silently thrown away, so memory
@@ -287,8 +302,9 @@ describe("connectors/store — validated regressions", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
+    }, GOV);
     const base = {
+      gov: GOV,
       db,
       providerKey: "linear",
       connectionId: "conn-1",
@@ -321,8 +337,8 @@ describe("connectors/store — validated regressions", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "linear",
-    });
-    const base = { db, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
+    }, GOV);
+    const base = { db, gov: GOV, providerKey: "linear", connectionId: "c", spaceId, labels, tool: ISSUES };
 
     writeConnectorRecord({
       ...base,
@@ -348,10 +364,11 @@ describe("connectors/store — validated regressions", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "circleback",
-    });
+    }, GOV);
 
     writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "circleback",
       connectionId: "cb-1",
       spaceId,
@@ -424,7 +441,7 @@ describe("connectors/manifest — provider coverage", () => {
 // from being a silent outage.
 // ---------------------------------------------------------------------------
 
-describe("connectors/store — notion enrichment reaches the FTS index", () => {
+describe("store/connectors — notion enrichment reaches the FTS index", () => {
   const NOTION = getManifest("notion")!;
   const SEARCH = NOTION.tools.find((t) => t.tool === "search")!;
 
@@ -436,10 +453,11 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
 
     const outcome = writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "notion",
       connectionId: "conn-1",
       spaceId,
@@ -484,7 +502,7 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
     const base = {
       id: "page-3",
       url: "https://notion.so/page-3",
@@ -494,14 +512,15 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     // First cycle: enrichment unavailable (throttled) -> URL-only.
     expect(
       writeConnectorRecord({
-        db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+        db, gov: GOV, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
         tool: SEARCH, record: { ...base },
       }).status
     ).toBe("written");
 
     // Second cycle: same last_edited_time, but now enriched.
     const second = writeConnectorRecord({
-      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      db,
+      gov: GOV, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
       tool: SEARCH,
       record: { ...base, _content: "Q3 Roadmap\n\nShip the connector recall lane." },
     });
@@ -517,7 +536,7 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
     const record = {
       id: "page-4",
       url: "https://notion.so/page-4",
@@ -525,11 +544,13 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
       _content: "Same body",
     };
     writeConnectorRecord({
-      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      db,
+      gov: GOV, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
       tool: SEARCH, record: { ...record },
     });
     const again = writeConnectorRecord({
-      db, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
+      db,
+      gov: GOV, providerKey: "notion", connectionId: "conn-1", spaceId, labels,
       tool: SEARCH, record: { ...record },
     });
     expect(again.status).toBe("duplicate");
@@ -541,10 +562,11 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
     const { spaceId, labels } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
 
     const outcome = writeConnectorRecord({
       db,
+      gov: GOV,
       providerKey: "notion",
       connectionId: "conn-1",
       spaceId,
@@ -565,7 +587,7 @@ describe("connectors/store — notion enrichment reaches the FTS index", () => {
   });
 });
 
-describe("connectors/store — reader enrolment", () => {
+describe("store/connectors — reader enrolment", () => {
   function seedPrincipals(target: Database.Database) {
     target
       .prepare(
@@ -586,7 +608,7 @@ describe("connectors/store — reader enrolment", () => {
     const { spaceId } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
 
     const members = db
       .prepare(`SELECT member_id FROM space_members WHERE space_id = ? ORDER BY member_id`)
@@ -604,9 +626,9 @@ describe("connectors/store — reader enrolment", () => {
     const { spaceId } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
-    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
-    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
+    }, GOV);
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" }, GOV);
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" }, GOV);
 
     const count = db
       .prepare(`SELECT COUNT(*) AS c FROM space_members WHERE space_id = ?`)
@@ -619,10 +641,10 @@ describe("connectors/store — reader enrolment", () => {
     const { spaceId } = ensureConnectorSpace(db, {
       tenantId: "default-tenant",
       providerKey: "notion",
-    });
+    }, GOV);
     seedPrincipals(db);
 
-    expect(backfillConnectorSpaceReaders(db)).toBe(1);
+    expect(backfillConnectorSpaceReaders(db, GOV)).toBe(1);
 
     const ids = (
       db
@@ -636,9 +658,9 @@ describe("connectors/store — reader enrolment", () => {
   it("backfill ignores non-connector spaces", () => {
     seedPrincipals(db);
     const other = createSpace(db, { tenantId: "default-tenant", name: "team/eng" });
-    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" });
+    ensureConnectorSpace(db, { tenantId: "default-tenant", providerKey: "notion" }, GOV);
 
-    backfillConnectorSpaceReaders(db);
+    backfillConnectorSpaceReaders(db, GOV);
 
     const count = db
       .prepare(`SELECT COUNT(*) AS c FROM space_members WHERE space_id = ?`)
