@@ -71,8 +71,8 @@ Refactor until you are happy with the architecture. After each significant step,
 - 🔄 **v8.32 Easy Human + Agent Onboarding** — Phases 201–202 (added 2026-07-31; INVBOOT-01..06 shipped in code; COWORK-01..05 planned — Claude Cowork remote MCP on Cordant Cloudflare)
 - 🔄 **v8.31 Operator Config Durability + Storage Consolidation** — Phases 196-198 (added 2026-07-26 from the oracle-1 hardening session; CFGDUR-01..06 + HOSTPAR-01..04 + STORECON-01..05; make host configuration survive upgrades by construction, bring cordant-hermes-01 to oracle-1 parity, and decide SQLite→Postgres/Supabase on measured evidence. This milestone exists because a silent config regression disconnected Neo4j Aura and was found by accident)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
-- 📋 **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (added 2026-07-24 from architecture review F1; CONNMEM-RT-01..05; give `services/connmem` a supervised entrypoint, CI coverage for its 141 tests, topology/compose registration, a kernel route seam, and a release gate that asserts runtime reachability; unblocks v8.20 live backfill)
-- 📋 **v8.28 Enforcement Surface Parity** — Phases 186-187 (added 2026-07-24 from architecture review F2/F3; TOPOPROD-01..04 production topology profile for oracle-1 + AUTHGATE-01..03 filesystem-driven route-auth gate; Phase 187 is hours of work and should land first if capacity is tight)
+- ✅ **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (closed 2026-07-31; CONNMEM-RT-01..05 evidenced; live provider backfill still credential-gated)
+- ✅ **v8.28 Enforcement Surface Parity** — Phases 186-187 (closed 2026-07-31; TOPOPROD-01..04 + AUTHGATE-01..03 evidenced)
 - 📋 **v8.29 Structural Debt Paydown** — Phases 188-190 (added 2026-07-24 from architecture review F4/F5/F6; STORE-01..04 governed data-access chokepoint with shrinking better-sqlite3 allowlist, LIBNORM-01..03 lib/ boundary normalization, CLIENTSPLIT-01..02 api-client barrel split; incremental, no big-bang rewrites)
 - 📋 **v8.30 Seamless Memory Adoption** — Phases 191-195 (added 2026-07-26 from operator session; PRIORWORK-01..05 agent-reachable prior-work probe wiring the orphaned Phase 118 kernel, SELFCAP-01..05 session hooks + agent self-capture + structured sidecar extraction, SAVEQ-01..05 save-quality gate + governed-tool parity + automatic silver→gold promotion, MEMHABIT-01..05 auto-load recall/save skills + skill-packs bootstrap fix, ADOPTTEL-01..05 NOC adoption panel + GSD memory-receipt closeout gate; design: `.planning/design/memory-adoption-v1.md`)
 
@@ -3253,7 +3253,7 @@ the routes are not yet in `check-route-auth-boundary` coverage as RT-04 requires
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 185. Connmem Runtime Integration | 0/1 | In progress — RT-01..03 largely landed; **RT-04 proxy allowlist + ledger + boundary coverage verified** (`bcbe692e`, gate green). Still open: RT-05 strict release-gate wiring + `/api/health` connmem probe; **not complete** | — |
+| 185. Connmem Runtime Integration | 1/1 | **Complete** — RT-01..05 evidenced (CI 144 tests, topology, proxy allowlist, oracle health/ledger/release-gate, `/api/health` connmem probe). Live Linear/Circleback backfill still credential-gated | 2026-07-31 |
 
 ## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
 
@@ -3297,8 +3297,8 @@ update both or fold the TS lib onto the script's parser.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 186. Production Topology Profile | 0/1 | Planned (architecture review 2026-07-24, F2) | — |
-| 187. Filesystem-Driven Auth Gate | 0/1 | Planned (architecture review 2026-07-24, F3) | — |
+| 186. Production Topology Profile | 1/1 | **Complete** — `check:runtime-topology -- production` ok (systemd units under deploy/oracle-1) | 2026-07-31 |
+| 187. Filesystem-Driven Auth Gate | 1/1 | **Complete** — AUTHGATE-01..03; route-auth-boundary 15/15 + 60 vitest | 2026-07-31 |
 
 ## v8.29 Structural Debt Paydown (Phases 188-190) — PLANNED (2026-07-24)
 

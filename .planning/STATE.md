@@ -3,17 +3,32 @@ gsd_state_version: 1.0
 milestone: v8.32
 milestone_name: Easy Human + Agent Onboarding (Phases 201–202)
 status: active
-stopped_at: Both hosts on a5db4f7f; awaiting confirm of all-GSD campaign wave order
-last_updated: "2026-08-01T00:00:00Z"
+stopped_at: Closed 185/186/187 with evidence; Phase 202 Cowork UX still open
+last_updated: "2026-08-01T00:50:00Z"
 progress:
   total_phases: 121
-  completed_phases: 86
+  completed_phases: 89
   total_plans: 163
-  completed_plans: 145
+  completed_plans: 148
   percent: 71
 ---
 
-## Latest Position (2026-07-31) — Full deploy + GSD campaign queued
+## Latest Position (2026-07-31) — Closed verified phases only
+
+**Closed with evidence (not checkbox theater):**
+- Phase **185** CONNMEM-RT-01..05 — SUMMARY + oracle probes + CI/topology/proxy gates
+- Phase **186** TOPOPROD-01..04 — `check:runtime-topology -- production` ok
+- Phase **187** AUTHGATE-01..03 — route-auth-boundary green
+- Phase **201** already shipped/deployed earlier
+
+**Still open (do not mark complete):**
+- Phase **202** Cowork — public `/mcp` + bearer live on Cordant; Invite/Team UX + COWORK-03..05 client smoke remaining
+- Waves 188–198, 175, 191–195, 126–127 — not closed
+- Voyage / Phase 166 — excluded
+
+**Lane:** director-inline.
+
+## Prior Position (2026-07-31) — Full deploy + GSD campaign queued
 
 **Deploy:** oracle-1 + cordant-hermes-01 both at **`a5db4f7f`**. Public health
 200 on `memroos.epiloguecapital.com` and `memroos-cordant.epiloguecapital.com`.

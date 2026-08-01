@@ -279,6 +279,32 @@ export async function GET() {
       const { stat } = await import("fs/promises");
       await stat(`${process.env.HOME}/.openclaw/skills/proposals`);
     }),
+    checkService("connmem", async () => {
+      const base =
+        process.env.CONNMEM_URL ??
+        process.env.MEMROOS_DOCKER_CONNMEM_URL ??
+        "http://127.0.0.1:3290";
+      try {
+        const response = await fetch(`${base.replace(/\/$/, "")}/health`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!response.ok) {
+          return {
+            status: "degraded",
+            detail: `connmem HTTP ${response.status} at ${base}`,
+          };
+        }
+        const body = (await response.json().catch(() => ({}))) as { status?: string };
+        if (body.status && body.status !== "ok") {
+          return { status: "degraded", detail: `connmem status=${body.status}` };
+        }
+      } catch (error) {
+        return {
+          status: "degraded",
+          detail: `optional when stack omits connmem — ${error instanceof Error ? error.message : "unreachable"}`,
+        };
+      }
+    }),
   ]);
 
   return Response.json({ services, timestamp: new Date().toISOString() });

@@ -53,6 +53,9 @@ services:
       MEMROOS_ADMIN_PASSWORD: ${MEMROOS_ADMIN_PASSWORD:-change-me-on-first-install}
       MEM0_URL: http://mem0:3201
       ORCHESTRATION_SERVICE_URL: http://orchestration:3210
+      # Connmem kernel upstream (Phase 185). Compose DNS name when service is up;
+      # health reports degraded when unreachable (Cordant hermes may omit connmem).
+      CONNMEM_URL: ${CONNMEM_URL:-http://connmem:3290}
       # Graph memory: point the app at the bundled local Neo4j.
       # Hardcoded (not ${...}) on purpose: the repo .env ships cloud (Neo4j Aura)
       # placeholders, and this stack must stay fully self-contained on one host.
