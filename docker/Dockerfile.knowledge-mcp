@@ -2,11 +2,12 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY services/knowledge-mcp/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-# The source dir is hyphenated (services/knowledge-mcp); the importable
-# package inside it is knowledge_system. Copy the service dir contents to
-# /app so `python -m knowledge_system.mcp_server` resolves.
-COPY services/knowledge-mcp /app
-ENV PYTHONPATH=/app
+# Preserve the repo layout: mcp_server.py resolves services/memory/provenance.py
+# as a sibling of services/knowledge-mcp (parents[2]/memory). The importable
+# package is knowledge_system, so PYTHONPATH points inside the hyphenated dir.
+COPY services/knowledge-mcp /app/services/knowledge-mcp
+COPY services/memory/provenance.py /app/services/memory/provenance.py
+ENV PYTHONPATH=/app/services/knowledge-mcp
 ENV MEMROOS_MCP_TRANSPORT=streamable-http
 ENV MEMROOS_MCP_HOST=0.0.0.0
 ENV MEMROOS_MCP_PORT=3291

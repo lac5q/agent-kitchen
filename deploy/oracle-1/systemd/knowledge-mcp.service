@@ -4,7 +4,9 @@ Wants=network-online.target docker.service
 After=network-online.target docker.service
 
 [Service]
-Type=notify
+# docker compose does not sd_notify; Type=notify made every start fail
+# with "did not take the steps required by its unit configuration".
+Type=simple
 User=opc
 Group=opc
 # TOPOPROD-02: the systemd unit must bring up the named
