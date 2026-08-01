@@ -1,80 +1,50 @@
-# Phase 203 — Cowork MCP Auth without Shared Bearer (draft)
+# Phase 203 — Easy account registration (Google) vs Cowork connector auth
 
-**Version:** 2026-07-31.1  
+**Version:** 2026-07-31.2  
 **Created:** 2026-07-31 18:24 PDT  
-**Updated:** 2026-07-31 18:24 PDT  
-**Sources:** Anthropic connector auth docs (2026); Phase 202 SUMMARY (bearer D-09a); invite UX screenshot on `memroos.epiloguecapital.com`; repo auth routes (password-only).
+**Updated:** 2026-07-31 18:31 PDT  
+**Sources:** Operator clarification 2026-07-31 (Google = account registration, not Cowork MCP); Anthropic connector auth; Phase 202 SUMMARY.
 
-## Why the design shows a bearer (and no Google button)
+## Locked split (operator clarification)
 
-Phase **202** deliberately shipped **D-09a: shared `MEMROOS_MCP_BEARER_TOKEN`** so public `/mcp` was not anonymous. Cloudflare Access / OAuth were **deferred** in SUMMARY.
+| Surface | Job | Auth |
+|---------|-----|------|
+| **MemRoOS invite / login / register** | Create a human account on Cordant/oracle console | **Google OAuth for registration/login** (goal) — easier than email+password for non-technical users |
+| **Claude Cowork → MemRoOS `/mcp`** | Remote MCP tools from Anthropic cloud | **Not Google on the Invite screen.** Admin adds connector once (`static_headers` bearer today); members only **Connect**. Per-user MCP OAuth is optional later, separate from console Google. |
 
-The “Google OAuth we created” is **not** wired to Claude Cowork:
+Do **not** put a “Sign in with Google” affordance on the Cowork connector panel as if it authenticates Claude → `/mcp`. That confused the Phase 202 screenshot review.
 
-| Thing that exists | What it is | Visible in Invite Cowork UI? |
-|-------------------|------------|------------------------------|
-| Research plan for `arctic` Google/GitHub login | Stack research for console SSO | No — not implemented in `apps/memroos` auth routes (login is email/password) |
-| Nango / GWS Google OAuth | Connector vault for Drive/Meet etc. | No — different product surface |
-| Claude Cowork connector auth | Remote MCP OAuth (`oauth_dcr` / CIMD) or Team admin `static_headers` | Bearer-only today |
+## What already shipped (202 / follow-up UX)
 
-**Important Anthropic rule:** if each person should use their own account, use **OAuth**, not a shared request-header bearer. Shared bearer is for org-admin `static_headers` (beta) — entered **once by an admin**, not by every invitee.
+- Members never paste MCP bearer tokens (Connect-only copy).
+- Cowork URL prefers Cordant `https://memroos-cordant.epiloguecapital.com/mcp`.
+- Shared bearer remains **admin-only** for Claude Team connector Request headers until/unless MCP OAuth is a later phase.
 
-## Target UX (non-technical)
+## Google for account registration (this phase’s real product work)
+
+**End state:** On `/invite/[token]` and `/login`, non-technical users can **Continue with Google**, land in an authenticated MemRoOS session bound to the invite (role + ownership), then proceed to Connect agents / Cowork steps without inventing a password if they prefer Google.
+
+**Current code:** `apps/memroos` auth is email/password (`/api/auth/register`, `/api/auth/login`). Research mentioned `arctic` for Google/GitHub — **not implemented**.
+
+**Suggested slice:**
+
+1. Google OIDC via `arctic` (or equivalent) with PKCE.
+2. Routes: `/api/auth/google` + `/api/auth/google/callback`.
+3. On success with valid invite token: create/link user, set role from invite, issue same session cookies as register.
+4. Buttons on invite register + login pages only.
+5. Env: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / redirect URI per host (Cordant + oracle).
+
+**Out of scope for this phase:** Cowork MCP OAuth, Cloudflare Access on `/mcp`, SendGrid.
+
+## Cowork remains (ops, not Google UI)
 
 ```
-Member (Eric/CEO coworker)
-  → Opens invite → Create account → Pick Claude Cowork
-  → Sees: deep link / “Enable MemRoOS in Claude” (no token)
-  → Claude → Connect → Sign in with Google (MemRoOS consent)
-  → Tools appear
-
-Admin (Luis / Cordant Team owner) — one-time
-  → Adds custom connector URL once (Team/Enterprise Owner)
-  → Until OAuth ships: admin pastes bearer in Claude Request headers (never email)
-  → After OAuth ships: no bearer; Google consent only
+Admin (once): Claude Admin → Add connector → Cordant /mcp + Request header bearer
+Member: Invite → (Google or password) account → Pick Claude Cowork → Connect in Claude
 ```
-
-## Auth architecture options (pick for plan)
-
-### A — Preferred end state: MCP OAuth + Google IdP (`oauth_dcr` or CIMD)
-
-1. Streamable HTTP `/mcp` returns **401** with `WWW-Authenticate: Bearer resource_metadata="…"`.
-2. Serve RFC 9728 protected-resource metadata + authorization-server discovery.
-3. Authorization server uses **Google** as IdP (or MemRoOS session that itself used Google later).
-4. Redirect URI for Cowork/web: `https://claude.ai/api/mcp/auth_callback`.
-5. Per-user access token → map to MemRoOS `owner_id` / space membership.
-
-**Effort:** new auth surface on hermes (or Next.js routes in front of MCP). Highest UX match to “Sign in with Google.”
-
-### B — Cloudflare Access Managed OAuth (Google) in front of `/mcp`
-
-Faster ops path: Access policy “allow @cordant… Google accounts” on `/mcp*`.  
-Claude’s connector must still complete Access’s challenge — verify Claude supports Access hop; may need MCP OAuth that sits behind Access, or Access service tokens (not Google UX).
-
-**Risk:** Claude cloud egress + Access interactive login may not equal “one tap Google” inside Cowork.
-
-### C — Interim (ship now): Team-admin static header; members never see bearer
-
-Matches Anthropic’s `static_headers` model:
-
-- **Invitee copy:** “Ask your admin if MemRoOS isn’t listed → then Connect.” No token field.
-- **Admin runbook:** paste bearer once in Claude Admin → Connectors → Request headers.
-- Cordant URL must be `https://memroos-cordant.epiloguecapital.com/mcp` (not oracle).
-
-## Screenshot defects to fix immediately
-
-1. Instructions told **every user** to paste a Team-admin bearer → wrong for non-technical members.
-2. URL showed **`memroos.epiloguecapital.com`** (oracle). Eric’s brain is **Cordant**. Invite on wrong host or origin-based URL without Cordant preference.
-
-## Honesty / sequencing
-
-- Do **not** mark Google OAuth “done” until live Cowork Connect → Google consent → tools list.
-- Phase 202 stays closed for bearer+reachability; this is **203** (or 202b) follow-up.
-- Console “Sign in with Google” (`arctic`) is related branding but **insufficient alone** — Claude never hits `/login`; it hits `/mcp` OAuth.
 
 ## Verification
 
-- Unauth `/mcp` remains 401.
-- Invite Cowork steps for members contain **no** `Bearer <token…>` wording.
-- Cordant invites resolve MCP URL hostname `memroos-cordant.epiloguecapital.com`.
-- Later: OAuth discovery endpoints + Cowork Connect smoke.
+- Cowork member copy has no bearer paste; Cordant `/mcp` URL.
+- Unauth `/mcp` stays 401.
+- When Google registration ships: invite → Google → session + Connect step works without password form.

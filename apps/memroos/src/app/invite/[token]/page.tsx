@@ -319,7 +319,8 @@ export default function InvitePage() {
               </ol>
               <p className="text-xs text-zinc-500">
                 You should not need a token. Your Team admin adds MemRoOS once in Claude; you only
-                tap Connect. Google sign-in for this connector is coming next.
+                tap Connect. (Google sign-in is for creating your MemRoOS account — not for this
+                connector step.)
               </p>
             </div>
           )}

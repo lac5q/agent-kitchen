@@ -1,9 +1,11 @@
 /**
  * Claude Cowork uses a remote custom connector (HTTPS MCP), not curl|bash.
  *
- * Auth model (Anthropic):
- * - Members should never paste shared bearers — Team admin configures
- *   request headers once (static_headers), or MCP OAuth (Google) when shipped.
+ * Auth model:
+ * - Members never paste shared bearers — Team admin configures Claude connector
+ *   request headers once (static_headers).
+ * - Google OAuth (when shipped) is for MemRoOS account registration/login only,
+ *   not for authenticating the Cowork → /mcp connector.
  * - See .planning/phases/203-cowork-mcp-oauth/203-CONTEXT.md
  */
 
@@ -77,7 +79,7 @@ export function buildCoworkConnectorSteps(
     `In Claude Cowork, open Connectors (or tap this setup link): ${deepLink}`,
     `If MemRoOS is already listed for your team, tap Connect — you should not need any password or token.`,
     `If it is not listed yet, ask your Cordant Team admin to add it once (they use the URL ${mcpUrl}).`,
-    `After Connect, confirm MemRoOS tools appear. Sign-in with Google for this connector ships next (Phase 203) — until then your admin handles auth behind the scenes.`,
+    `After Connect, confirm MemRoOS tools appear. (Google is only for your MemRoOS account login — your admin handles the connector.)`,
   ];
 }
 
