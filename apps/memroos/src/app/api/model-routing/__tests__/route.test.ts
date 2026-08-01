@@ -161,6 +161,8 @@ describe("model routing APIs", () => {
       rawContextTokens: 0,
       cachedTokens: 0,
       totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       modelId: "local/qwen-coder-local",
     });
   });

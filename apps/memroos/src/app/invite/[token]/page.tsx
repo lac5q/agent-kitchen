@@ -9,6 +9,15 @@ import {
   resolvePreferredCoworkMcpUrl,
 } from "@/lib/cowork-connector";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+
+const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
+  google_token_used: "This invitation was already used.",
+  google_token_expired: "This invitation has expired.",
+  google_invalid_token: "This invitation link is invalid.",
+  google_email_unverified: "Your Google email address is not verified.",
+  google_user_disabled: "This account has been disabled.",
+};
 
 interface InviteInfo {
   role: string;
@@ -62,6 +71,7 @@ export default function InvitePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
   const [selected, setSelected] = useState<string[]>(["claude"]);
   const [commands, setCommands] = useState<BootstrapCommand[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -81,9 +91,52 @@ export default function InvitePage() {
     [coworkMcpUrl]
   );
 
+  // Phase 203: Google registration round-trip. The OAuth callback consumed
+  // the invite and set session cookies, then redirected back here with
+  // ?google=connected — resume at the connect step with a fresh Bearer
+  // token from the refresh cookie instead of re-validating the (now used)
+  // invite. Errors from the callback surface on the register form.
+  const googleQuery = useMemo(() => {
+    if (typeof window === "undefined") return { connected: false, error: "" };
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("error") ?? "";
+    return {
+      connected: params.get("google") === "connected",
+      error: code.startsWith("google_")
+        ? GOOGLE_ERROR_MESSAGES[code] ?? "Google sign-in failed. Try again or use a password."
+        : "",
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/google/status")
+      .then((res) => (res.ok ? res.json() : { configured: false }))
+      .then((data: { configured?: boolean }) => setGoogleAvailable(data.configured === true))
+      .catch(() => setGoogleAvailable(false));
+  }, []);
+
+  useEffect(() => {
+    if (!googleQuery.connected) return;
+    // Microtask defers the state flip past hydration (avoids an SSR mismatch
+    // and the set-state-in-effect lint rule alike).
+    queueMicrotask(() => {
+      setLoading(false);
+      setStep("connect");
+    });
+    fetch("/api/auth/refresh", { method: "POST", credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { accessToken?: string } | null) => {
+        if (data?.accessToken) setAccessToken(data.accessToken);
+      })
+      .catch(() => {
+        /* connect step will prompt again if the session is missing */
+      });
+  }, [googleQuery]);
+
   // Pitfall 1: once past register, do not re-validate consumed invite.
   useEffect(() => {
     if (step !== "register") return;
+    if (googleQuery.connected) return;
     async function validateInvite() {
       try {
         const res = await fetch(`/api/auth/invite/${token}`);
@@ -101,7 +154,7 @@ export default function InvitePage() {
       }
     }
     void validateInvite();
-  }, [token, step]);
+  }, [token, step, googleQuery]);
 
   const selectedLabels = useMemo(
     () => selected.map((id) => PLATFORM_LABELS[id] ?? id).join(", "),
@@ -449,6 +502,19 @@ export default function InvitePage() {
             {submitting ? "Creating account…" : "Create account"}
           </button>
         </form>
+        {googleAvailable && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <span className="text-xs uppercase tracking-wide text-zinc-500">or</span>
+              <div className="h-px flex-1 bg-zinc-800" />
+            </div>
+            <GoogleSignInButton label="Continue with Google" inviteToken={token} />
+            <p className="text-xs text-zinc-500">
+              No password needed — your account is created with this invitation&apos;s role.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

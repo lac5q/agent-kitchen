@@ -3506,6 +3506,17 @@ function applyCurrentSchema(db: Database.Database): void {
       PRIMARY KEY (user_id, role)
     );
 
+    -- Phase 203: external OIDC identities (Google console registration/login).
+    -- One row per (provider, subject); a user may hold several providers.
+    CREATE TABLE IF NOT EXISTS user_identities (
+      provider   TEXT NOT NULL CHECK(provider IN ('google')),
+      subject    TEXT NOT NULL,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      PRIMARY KEY (provider, subject)
+    );
+    CREATE INDEX IF NOT EXISTS user_identities_user ON user_identities(user_id);
+
     CREATE TABLE IF NOT EXISTS user_api_keys (
       id           TEXT PRIMARY KEY,
       user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

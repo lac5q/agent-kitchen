@@ -1,13 +1,31 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  // Error code from a failed Google OAuth callback redirect (Phase 203).
+  const googleRedirectError = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const code = new URLSearchParams(window.location.search).get("error");
+    return code?.startsWith("google_")
+      ? "Google sign-in failed. Try again or use your password."
+      : "";
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/google/status")
+      .then((res) => (res.ok ? res.json() : { configured: false }))
+      .then((data: { configured?: boolean }) => setGoogleAvailable(data.configured === true))
+      .catch(() => setGoogleAvailable(false));
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -126,9 +144,9 @@ export default function LoginPage() {
               </label>
             </div>
 
-            {error && (
+            {(error || googleRedirectError) && (
               <p className="mt-4 border px-3 py-2 text-sm" style={{ background: NOC.warnBg, borderColor: NOC.peachWarm, color: NOC.terraDeep }}>
-                {error}
+                {error || googleRedirectError}
               </p>
             )}
 
@@ -140,6 +158,12 @@ export default function LoginPage() {
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
+
+            {googleAvailable && (
+              <div className="mt-4">
+                <GoogleSignInButton label="Continue with Google" />
+              </div>
+            )}
           </form>
 
           <div className="mt-4 flex items-center justify-between text-sm">

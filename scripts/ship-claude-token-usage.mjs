@@ -41,8 +41,8 @@ function parseArgs(argv) {
 async function loadEnvFile(filePath) {
   const raw = await readFile(filePath, "utf-8");
   for (const line of raw.split("\n")) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2];
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim();
   }
 }
 
