@@ -179,6 +179,17 @@ async function enforceAuth(req: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // 1c. /.well-known/* is discovery metadata and is public by definition —
+  // a client has to read it *before* it can authenticate, so requiring auth
+  // makes it unreachable. Falling through to rule 4 rewrote these as a 307 to
+  // /login, which is why Claude's connector reported "Couldn't register with
+  // Memroos's sign-in service": it asked for JSON and got an HTML redirect.
+  // The same silent breakage applied to the existing A2A agent-card routes.
+  // Everything served here must stay non-secret.
+  if (pathname.startsWith("/.well-known/")) {
+    return NextResponse.next();
+  }
+
   // 2. Pass through login/invite/register UI pages
   if (pathname === "/login" || pathname.startsWith("/invite/") || pathname === "/register") {
     return NextResponse.next();

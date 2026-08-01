@@ -82,7 +82,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 34;
+export const CURRENT_SCHEMA_VERSION = 35;
 
 type SchemaMigration = {
   version: number;
@@ -273,6 +273,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     name: 'user-identities-oidc',
     up: applyUserIdentitiesSchema,
   },
+  {
+    version: 35,
+    name: 'mcp-oauth-authorization-server',
+    up: applyMcpOauthSchema,
+  },
 ];
 
 function runSchemaMigrations(db: Database.Database): void {
@@ -356,6 +361,57 @@ function applyUserIdentitiesSchema(db: Database.Database): void {
       PRIMARY KEY (provider, subject)
     );
     CREATE INDEX IF NOT EXISTS user_identities_user ON user_identities(user_id);
+  `);
+}
+
+/**
+ * Migration 35 — MCP OAuth authorization-server storage.
+ *
+ * Claude's custom-connector flow self-registers via RFC 7591, so clients are
+ * created at runtime rather than configured ahead of time and need a home.
+ *
+ * Codes and tokens are stored **hashed**: this table is a credential store, and
+ * a database read should not yield usable credentials. Both carry explicit
+ * expiry plus a consumed/revoked stamp so a leaked code cannot be replayed and
+ * a session can be cut off without waiting for expiry.
+ */
+function applyMcpOauthSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mcp_oauth_clients (
+      client_id          TEXT PRIMARY KEY,
+      client_secret_hash TEXT,
+      client_name        TEXT NOT NULL DEFAULT '',
+      redirect_uris      TEXT NOT NULL DEFAULT '[]',
+      created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      last_used_at       TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS mcp_oauth_codes (
+      code_hash      TEXT PRIMARY KEY,
+      client_id      TEXT NOT NULL REFERENCES mcp_oauth_clients(client_id) ON DELETE CASCADE,
+      user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      redirect_uri   TEXT NOT NULL,
+      code_challenge TEXT NOT NULL,
+      scope          TEXT NOT NULL DEFAULT '',
+      expires_at     TEXT NOT NULL,
+      consumed_at    TEXT,
+      created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS mcp_oauth_codes_client ON mcp_oauth_codes(client_id);
+
+    CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
+      token_hash TEXT PRIMARY KEY,
+      client_id  TEXT NOT NULL REFERENCES mcp_oauth_clients(client_id) ON DELETE CASCADE,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL CHECK(kind IN ('access','refresh')),
+      scope      TEXT NOT NULL DEFAULT '',
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      last_used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS mcp_oauth_tokens_user ON mcp_oauth_tokens(user_id, revoked_at);
+    CREATE INDEX IF NOT EXISTS mcp_oauth_tokens_client ON mcp_oauth_tokens(client_id, revoked_at);
   `);
 }
 
