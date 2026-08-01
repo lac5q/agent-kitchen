@@ -71,7 +71,7 @@ export function buildCoworkConnectorSteps(
     return [
       `Open Claude → Admin settings → Connectors → Add custom connector.`,
       `URL: ${mcpUrl}`,
-      `Until Google/MCP OAuth ships: set Request header Authorization to Bearer <token from hermes ~/.memroos/memroos-mcp-http.env> (admin only — never email this).`,
+      `Set Request header Authorization to Bearer <token from hermes ~/.memroos/memroos-mcp-http.env> (admin only — never email this).`,
       `Save. Members then only need Connectors → MemRoOS → Connect (no token).`,
     ];
   }
