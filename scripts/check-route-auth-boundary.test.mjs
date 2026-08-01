@@ -35,6 +35,9 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   { pattern: /^\\/api\\/skillforge\\// },
   { method: "POST", pattern: /^\\/api\\/operations\\/telemetry$/ },
   { method: "POST", pattern: /^\\/api\\/tool-attention\\/record$/ },
+  { method: "POST", pattern: /^\\/api\\/audit\\/knowledge$/ },
+  { method: "GET", pattern: /^\\/api\\/internal\\/connector-search$/ },
+  { pattern: /^\\/api\\/connmem(?:\\/|$)/ },
 ];
 `;
 
@@ -86,6 +89,11 @@ function goodFiles() {
     ["apps/memroos/src/app/api/skillforge/proposals/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/operations/telemetry/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/tool-attention/record/route.ts", AUTH_MARKERS.agent],
+    ["apps/memroos/src/app/api/audit/knowledge/route.ts", "verifyAgentApiKey("],
+    ["apps/memroos/src/app/api/internal/connector-search/route.ts", AUTH_MARKERS.operator],
+    ["apps/memroos/src/app/api/connmem/status/route.ts", AUTH_MARKERS.agent],
+    ["apps/memroos/src/app/api/connmem/sync/[source]/route.ts", AUTH_MARKERS.agent],
+    ["apps/memroos/src/app/api/connmem/ledger/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/onboarding/invite/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/evals/config/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/evals/run/route.ts", AUTH_MARKERS.operator],
@@ -129,6 +137,9 @@ describe("route auth boundary checker", () => {
       "/^\\/api\\/skillforge\\//",
       "/^\\/api\\/operations\\/telemetry$/",
       "/^\\/api\\/tool-attention\\/record$/",
+      "/^\\/api\\/audit\\/knowledge$/",
+      "/^\\/api\\/internal\\/connector-search$/",
+      "/^\\/api\\/connmem(?:\\/|$)/",
     ]);
   });
 

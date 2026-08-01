@@ -114,6 +114,8 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   // see that route's docstring). Its caller has no user session, so it must
   // reach `authorizeRegistryWrite` rather than be blocked here first.
   { method: "GET", pattern: /^\/api\/internal\/connector-search$/ },
+  // CONNMEM-RT-04: agent/operator kernel seam — handlers use authenticateAgentHeaders.
+  { pattern: /^\/api\/connmem(?:\/|$)/ },
 ];
 
 function hasRouteLocalAuth(pathname: string, method: string): boolean {

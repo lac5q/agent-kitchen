@@ -166,6 +166,22 @@ const routeLocalAuthCoverage = [
     pattern: "/^\\/api\\/tool-attention\\/record$/",
     files: [["apps/memroos/src/app/api/tool-attention/record/route.ts", ["authenticateAgentHeaders("]]],
   },
+  {
+    pattern: "/^\\/api\\/audit\\/knowledge$/",
+    files: [["apps/memroos/src/app/api/audit/knowledge/route.ts", ["verifyAgentApiKey(", "authenticateAgentKey("]]],
+  },
+  {
+    pattern: "/^\\/api\\/internal\\/connector-search$/",
+    files: [["apps/memroos/src/app/api/internal/connector-search/route.ts", ["authorizeRegistryWrite("]]],
+  },
+  {
+    pattern: "/^\\/api\\/connmem(?:\\/|$)/",
+    files: [
+      ["apps/memroos/src/app/api/connmem/status/route.ts", ["authenticateAgentHeaders("]],
+      ["apps/memroos/src/app/api/connmem/sync/[source]/route.ts", ["authenticateAgentHeaders("]],
+      ["apps/memroos/src/app/api/connmem/ledger/route.ts", ["authenticateAgentHeaders("]],
+    ],
+  },
 ];
 
 const proxyOperatorCoverage = [
