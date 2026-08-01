@@ -62,6 +62,9 @@ export interface TokenLedgerPayload {
   cachedTokens: number;
   totalTokens: number;
   modelId: string;
+  /** Explicit input/output split (writers since 2026-07-31); older events omit them. */
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface OperatorQuestionPayload {
@@ -319,8 +322,12 @@ export function aggregateEfficiencyTokenLedger(
       requests: 0,
       totalTokens: 0,
     };
-    // Map ledger fields onto ModelUsageStat: raw→input, cached→cacheRead.
-    current.inputTokens += Math.max(0, raw);
+    // Map ledger fields onto ModelUsageStat. Newer events carry an explicit
+    // input/output split; legacy events only have raw→input, cached→cacheRead.
+    const explicitInput = Number(payload.inputTokens) || 0;
+    const explicitOutput = Number(payload.outputTokens) || 0;
+    current.inputTokens += Math.max(0, explicitInput > 0 ? explicitInput : raw);
+    current.outputTokens += Math.max(0, explicitOutput);
     current.cacheRead += Math.max(0, cached);
     current.totalTokens += Math.max(0, total);
     current.requests += 1;

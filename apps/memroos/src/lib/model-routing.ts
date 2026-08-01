@@ -216,6 +216,11 @@ function recordTokenLedgerEvent(db: Database.Database, input: ModelRoutingEventI
       rawContextTokens,
       cachedTokens,
       totalTokens,
+      // Explicit split so the Ledger can report output tokens (the costly
+      // ones) instead of losing them inside totalTokens. Older readers
+      // ignore unknown payload keys.
+      inputTokens: tokenCount(input.inputTokens),
+      outputTokens: tokenCount(input.outputTokens),
       modelId: `${input.provider}/${input.model}`,
     },
   });
