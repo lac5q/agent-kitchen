@@ -2,7 +2,13 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY services/knowledge-mcp/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY services/knowledge-mcp ./services/knowledge-mcp
+# The source dir is hyphenated (services/knowledge-mcp); the importable
+# package inside it is knowledge_system. Copy the service dir contents to
+# /app so `python -m knowledge_system.mcp_server` resolves.
+COPY services/knowledge-mcp /app
 ENV PYTHONPATH=/app
+ENV MEMROOS_MCP_TRANSPORT=streamable-http
+ENV MEMROOS_MCP_HOST=0.0.0.0
+ENV MEMROOS_MCP_PORT=3291
 EXPOSE 3291
-CMD ["python", "-m", "uvicorn", "services.knowledge_mcp.knowledge_system.app:app", "--host", "0.0.0.0", "--port", "3291"]
+CMD ["python", "-m", "knowledge_system.mcp_server"]

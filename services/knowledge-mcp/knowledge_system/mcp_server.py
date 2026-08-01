@@ -142,6 +142,26 @@ MCP_TOOL_CONTRACT_ID = "memroos-mcp-tools.v1"
 _MCP_TOOL_REGISTRY: list = []
 
 
+def _register_http_health_route() -> None:
+    """Expose GET /health on HTTP transports for supervisors (compose/systemd).
+
+    Older FastMCP builds without custom_route simply skip registration —
+    stdio-transport clients are unaffected either way.
+    """
+    custom_route = getattr(mcp, "custom_route", None)
+    if custom_route is None:  # pragma: no cover - older FastMCP compatibility
+        return
+
+    @custom_route("/health", methods=["GET"])
+    async def _health(_request):  # noqa: ANN001 - starlette Request
+        from starlette.responses import JSONResponse
+
+        return JSONResponse({"status": "ok", "service": "knowledge-mcp"})
+
+
+_register_http_health_route()
+
+
 def _mcp_tool(fn):
     mcp.tool()(fn)
     _MCP_TOOL_REGISTRY.append(fn)

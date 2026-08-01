@@ -135,6 +135,8 @@ services:
       - "${MEMROOS_BIND:-127.0.0.1}:${KNOWLEDGE_MCP_PORT:-3291}:3291"
     environment:
       KNOWLEDGE_BASE_PATH: /knowledge
+      # knowledge_system reads KNOWLEDGE_ROOT (KNOWPROV-04).
+      KNOWLEDGE_ROOT: /knowledge
     volumes:
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
     healthcheck:
