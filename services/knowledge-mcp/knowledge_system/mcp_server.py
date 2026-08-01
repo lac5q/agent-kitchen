@@ -117,16 +117,70 @@ def _server_options() -> dict:
     }
 
 
+def _introspect_token(candidate: str) -> bool:
+    """Ask the MemroOS app whether this bearer token is live (RFC 7662).
+
+    Claude connectors obtain per-user tokens from the app's OAuth authorization
+    server, so a static shared secret cannot validate them. Introspecting on
+    every call is deliberate: it is what makes revocation take effect
+    immediately rather than at token expiry.
+
+    Fails closed. A network error, a non-200, or a malformed body all mean "not
+    authenticated" — an unreachable authority must never grant access.
+    """
+    url = os.environ.get("MEMROOS_MCP_INTROSPECTION_URL", "").strip()
+    key = os.environ.get("MEMROOS_OPERATOR_API_KEY", "").strip()
+    if not url or not key or not candidate:
+        return False
+
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    payload = _json.dumps({"token": candidate}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            if response.status != 200:
+                return False
+            body = _json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+    return bool(body.get("active"))
+
+
 def _auth_provider():
+    """Accept OAuth tokens from the app, and/or a static shared token.
+
+    The static token remains for headless callers (cron, servers) that have no
+    human to complete a browser consent. When both are configured the static
+    token is checked first because it costs no network round trip.
+    """
     token = os.environ.get("MEMROOS_MCP_BEARER_TOKEN", "").strip()
-    if not token:
+    introspection_url = os.environ.get("MEMROOS_MCP_INTROSPECTION_URL", "").strip()
+
+    if not token and not introspection_url:
         return None
     if DebugTokenVerifier is None:
-        raise RuntimeError("MEMROOS_MCP_BEARER_TOKEN requires FastMCP auth support")
-    return DebugTokenVerifier(
-        validate=lambda candidate: secrets.compare_digest(candidate, token),
-        client_id="memroos-mcp-client",
-    )
+        raise RuntimeError("MCP bearer auth requires FastMCP auth support")
+
+    def validate(candidate: str) -> bool:
+        if token and secrets.compare_digest(candidate, token):
+            return True
+        if introspection_url:
+            return _introspect_token(candidate)
+        return False
+
+    return DebugTokenVerifier(validate=validate, client_id="memroos-mcp-client")
 
 
 def _build_mcp() -> FastMCP:
