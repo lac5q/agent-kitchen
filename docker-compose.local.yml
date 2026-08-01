@@ -113,9 +113,11 @@ services:
       retries: 5
 
   mem0:
-    # Same public DNS override as the app service: hosts whose resolv.conf
-    # points at Tailscale MagicDNS (100.100.100.100) can't resolve external
-    # names from inside containers, which breaks the Qdrant Cloud path.
+    # Same runtime + public DNS overrides as the app service: hosts that
+    # default Docker to gVisor (runsc) and/or resolve via Tailscale MagicDNS
+    # break external egress from inside containers, which kills the Qdrant
+    # Cloud path (observed on oracle-1: default runtime runsc + MagicDNS).
+    runtime: runc
     dns:
       - 1.1.1.1
       - 8.8.8.8
