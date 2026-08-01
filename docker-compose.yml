@@ -130,7 +130,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.knowledge-mcp
     ports:
-      - "${KNOWLEDGE_MCP_PORT:-3291}:3291"
+      # Loopback by default like every other service; override the host-IP
+      # portion via MEMROOS_BIND only when deliberate.
+      - "${MEMROOS_BIND:-127.0.0.1}:${KNOWLEDGE_MCP_PORT:-3291}:3291"
     environment:
       KNOWLEDGE_BASE_PATH: /knowledge
     volumes:
