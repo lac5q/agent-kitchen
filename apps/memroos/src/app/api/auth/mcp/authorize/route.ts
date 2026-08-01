@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/session";
-import { MCP_SCOPES_SUPPORTED } from "@/lib/auth/mcp-oauth";
+import { MCP_SCOPES_SUPPORTED, publicOriginFromRequest } from "@/lib/auth/mcp-oauth";
 import { createAuthorizationCode, getClient, isRegisteredRedirectUri } from "@/lib/auth/mcp-oauth-store";
 
 export const dynamic = "force-dynamic";
@@ -55,9 +55,11 @@ export async function GET(req: NextRequest) {
   const session = await authenticateUser(req);
   if (!session) {
     // Not signed in: send them to the console login and return here after.
-    const login = req.nextUrl.clone();
-    login.pathname = "/login";
-    login.search = "";
+    //
+    // Build this from the public origin, not req.nextUrl: behind the tunnel
+    // nextUrl carries the internal bind address, which produced a redirect to
+    // https://0.0.0.0:3000/login that no browser can follow.
+    const login = new URL("/login", publicOriginFromRequest(req));
     login.searchParams.set("next", `${req.nextUrl.pathname}${req.nextUrl.search}`);
     return Response.redirect(login.toString(), 302);
   }
