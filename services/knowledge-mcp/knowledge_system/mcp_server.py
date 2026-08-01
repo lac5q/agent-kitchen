@@ -144,6 +144,13 @@ def _introspect_token(candidate: str) -> bool:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key}",
+            # Cloudflare answers the default Python-urllib agent with a 403
+            # (error 1010, "banned based on browser signature"), which silently
+            # turned every token into "not authenticated". Prefer pointing this
+            # at localhost so the call never leaves the host, but keep an
+            # explicit agent so a public URL still works.
+            "User-Agent": "memroos-mcp/1.0 (+token-introspection)",
+            "Accept": "application/json",
         },
         method="POST",
     )
