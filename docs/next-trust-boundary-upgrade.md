@@ -7,9 +7,45 @@ the defense-in-depth layer for privileged APIs.
 ## Reviewed Baseline
 
 - Reviewed Next.js dependency: `^16.2.7`
-- Reviewed proxy sha256: `0df324c2bfe8c4a29faa12299eaa10f3d4b8199e3d3189dfd6f12a0f10113339`
+- Reviewed proxy sha256: `0de404823f575bf4b92593677d27e05b5d87ced6df016f84aadfd69bd4b6ff18`
 
-  Re-attested 2026-07-31. Change: added `POST /api/model-routing/telemetry` to
+  Re-attested 2026-08-01. Change (commit `813519b9`): added a rule 1c
+  bypass for `/.well-known/*`, ahead of the login-redirect fallback.
+  OAuth discovery is unauthenticated by construction — a client reads
+  authorization-server metadata to find out *how* to authenticate, so
+  gating it makes registration impossible. Previously these requests fell
+  through to rule 4 and were answered with a 307 to `/login`; a connector
+  asking for JSON received an HTML redirect, which is what surfaced as
+  "Couldn't register with Memroos's sign-in service". The pre-existing
+  A2A agent-card routes were silently broken the same way.
+
+  Reviewed exposure: four routes exist under the prefix —
+  `oauth-authorization-server` (RFC 8414), `oauth-protected-resource`
+  (RFC 9728), `agent.json` and `agent-card.json` (A2A discovery). All are
+  static path segments; there is no dynamic or catch-all segment under
+  `.well-known/`, so the bypass cannot be steered at other content. Each
+  returns only endpoint metadata, and none reads a credential, secret or
+  per-user record.
+
+  **Standing condition:** the rule is a `startsWith("/.well-known/")`
+  prefix match, so any route added under that prefix in future is public
+  the moment it is created, with no further review. Anything placed there
+  must be non-secret by construction.
+
+  Verified `proxy.ts` still exports a named `proxy` function (not
+  `middleware`) and configures no Edge runtime. Test evidence in the same
+  commit: `proxy.test.ts` gains "serves /.well-known discovery documents
+  without authentication" and "does not let a look-alike .well-known
+  prefix bypass authentication", the latter asserting `/.well-known-decoy/`
+  still redirects to `/login`.
+
+  Attestation prepared by an agent (Claude Opus 5) from the diff and route
+  inventory above; it records analysis, not human sign-off, and wants an
+  operator countersignature.
+
+  Prior attestation (2026-07-31,
+  `0df324c2bfe8c4a29faa12299eaa10f3d4b8199e3d3189dfd6f12a0f10113339`):
+  added `POST /api/model-routing/telemetry` to
   `ROUTE_LOCAL_AUTH_API_ROUTES`. Token-usage shippers
   (`scripts/ship-claude-token-usage.mjs`) post model token telemetry from host
   machines using the operator key — no user session, so no JWT. The handler

@@ -102,6 +102,42 @@ describe("proxy", () => {
     expect(await response.text()).toBe("");
   });
 
+  it("serves /.well-known discovery documents without authentication", async () => {
+    // OAuth clients must read authorization-server metadata *before* they can
+    // authenticate, so requiring a session here makes registration impossible.
+    // Everything under this prefix is public by design and must stay non-secret.
+    for (const pathname of [
+      "/.well-known/oauth-authorization-server",
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/agent.json",
+      "/.well-known/agent-card.json",
+    ]) {
+      const response = await proxy(
+        new NextRequest(`http://localhost:3002${pathname}`, {
+          method: "GET",
+          headers: { host: "localhost:3002" },
+        })
+      );
+
+      expect(response.status, pathname).toBe(200);
+      expect(await response.text()).toBe("");
+    }
+  });
+
+  it("does not let a look-alike .well-known prefix bypass authentication", async () => {
+    // The bypass is a prefix match on "/.well-known/". A sibling path that
+    // merely starts with the same characters must still hit the login gate.
+    const response = await proxy(
+      new NextRequest("http://localhost:3002/.well-known-decoy/admin", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/login");
+  });
+
   it("lets agent onboarding bootstrap routes handle their own signed-token authorization", async () => {
     const scriptResponse = await proxy(
       new NextRequest("http://localhost:3002/api/onboarding/script?token=signed-token", {
