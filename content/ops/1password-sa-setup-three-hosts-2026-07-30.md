@@ -69,7 +69,7 @@ suffix in the token email confirms it is a service account — no biometric prom
 - **OpenClaw** was already correctly configured via its own wrapper + env-file pattern at
   `~/.openclaw/service-env/`. No changes needed; verified the canonical pattern matches ours.
 
-### maeve-u1 (lac5q @ 100.109.19.110 — Tailscale, Ubuntu 24.04 WSL2)
+### maeve-u1 (lac5q @ <maeve-tailnet-ip> — Tailscale, Ubuntu 24.04 WSL2)
 
 - `op` CLI installed; token copied from main-mac (same SA, same email `peymwti2e234y@`, 852 B).
 - `~/.bashrc` had the auto-export block already, but the running Hermes + OpenClaw gateway
@@ -78,15 +78,15 @@ suffix in the token email confirms it is a service account — no biometric prom
   shell environment was live when the service started.
 - Created `~/.op/config` to map the `my` shorthand → `https://my.1password.com` so `op` CLI can
   resolve account shorthand in interactive sessions.
-- Hermes gateway systemd unit: `/home/lac5q/.config/systemd/user/hermes-gateway.service` got
-  `EnvironmentFile=/home/lac5q/.hermes/service-env/ai.hermes.gateway.env` added before `[Install]`.
-- OpenClaw gateway systemd unit: `/home/lac5q/.config/systemd/user/openclaw-gateway.service` got
-  `EnvironmentFile=/home/lac5q/.openclaw/service-env/ai.openclaw.gateway.env` added.
+- Hermes gateway systemd unit: `/home/<user>/.config/systemd/user/hermes-gateway.service` got
+  `EnvironmentFile=/home/<user>/.hermes/service-env/ai.hermes.gateway.env` added before `[Install]`.
+- OpenClaw gateway systemd unit: `/home/<user>/.config/systemd/user/openclaw-gateway.service` got
+  `EnvironmentFile=/home/<user>/.openclaw/service-env/ai.openclaw.gateway.env` added.
 - **Critical systemd detail**: `EnvironmentFile=` requires `KEY=VALUE` syntax WITHOUT `export` and
   WITHOUT shell substitutions like `$(...)`. systemd ignores those lines silently. We pre-expand
   the token from `~/.op/service_account_token` at file-write time.
 
-### oracle-1 (opc @ 100.90.196.33 — Tailscale, Oracle Linux 9 ARM)
+### oracle-1 (opc @ <oracle1-tailnet-ip> — Tailscale, Oracle Linux 9 ARM)
 
 - `op` CLI v2.31.0; had a different SA (`e4co45kfx64ty@`) embedded in its original
   `/home/opc/.config/op/service_account_token`. Two distinct SAs coexist on this host:
@@ -192,8 +192,8 @@ tokens do not. Mission accomplished.
 | `~/.hermes/service-env/ai.hermes.gateway.env` | 0600 | per-host | Env file with `OP_SERVICE_ACCOUNT_TOKEN` (literal value) |
 | `~/.openclaw/service-env/ai.openclaw.gateway-env-wrapper.sh` | 0755 | per-host | Same pattern, for OpenClaw gateway |
 | `~/.openclaw/service-env/ai.openclaw.gateway.env` | 0600 | per-host | OpenClaw's env file |
-| `/home/lac5q/.config/systemd/user/hermes-gateway.service` | 0644 | lac5q | systemd unit with `EnvironmentFile=` line |
-| `/home/lac5q/.config/systemd/user/openclaw-gateway.service` | 0644 | lac5q | systemd unit with `EnvironmentFile=` line |
+| `/home/<user>/.config/systemd/user/hermes-gateway.service` | 0644 | lac5q | systemd unit with `EnvironmentFile=` line |
+| `/home/<user>/.config/systemd/user/openclaw-gateway.service` | 0644 | lac5q | systemd unit with `EnvironmentFile=` line |
 | `/home/opc/.memroos/agent-env` | 0600 | opc | Sources `OP_SERVICE_ACCOUNT_TOKEN` from main-mac's SA |
 | `/home/opc/.op/service_account_token` | 0600 | opc | The `e4co45kfx64ty@` SA, original oracle-1 token |
 | `/home/opc/.op/service_account_token.deleted-20260730-195349.bak` | 0600 | opc | Audit trail of the deleted `lf3pr2` SA |

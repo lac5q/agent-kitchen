@@ -1,6 +1,6 @@
 You are the bounded MiniMax-M3 worker for a director-led Beastmode run on memroos.
 
-TASK: Produce a TypeScript provider-registry module at /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts. This is the single source of truth for third-party tool connection metadata that memroos will use with Nango (the OAuth + API-key auth plane chosen for v8.23 / Phase 179).
+TASK: Produce a TypeScript provider-registry module at /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts. This is the single source of truth for third-party tool connection metadata that memroos will use with Nango (the OAuth + API-key auth plane chosen for v8.23 / Phase 179).
 
 CONSTRAINTS:
 - Pure data + tiny helper functions. No side effects, no I/O, no env reads.
@@ -16,7 +16,7 @@ CONSTRAINTS:
 - Export: `PROVIDER_CATEGORIES` (ordered list of category ids), `PROVIDERS_BY_KEY` (Record<key, Provider>), `getProvidersByCategory()` (returns ordered array), `getProvider(key)` (returns one or undefined).
 
 ALLOWED FILES (write only the output file):
-- /home/lac5q/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts
+- /home/<user>/github/memroos/apps/memroos/src/lib/tool-auth/providers.ts
 - Do not modify any other file.
 
 ALLOWED COMMANDS:

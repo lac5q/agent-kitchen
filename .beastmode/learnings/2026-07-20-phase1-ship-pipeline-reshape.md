@@ -46,7 +46,7 @@ Decision: go with (a) — proper fix, env-var-only, no fragile filesystem surger
 - `filesProcessed > 0` (was 0)
 - `last_ingest_ts` written back to Mac-side state file
 - LaunchAgent installed and verified via `launchctl list | grep memroos.recall-ship`
-- One successful end-to-end run captured in `/Users/lcalderon/github/memroos/services/memory/logs/recall-ship.log`
+- One successful end-to-end run captured in `/Users/<you>/github/memroos/services/memory/logs/recall-ship.log`
 
 ## What still works
 

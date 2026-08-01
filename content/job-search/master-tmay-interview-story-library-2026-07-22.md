@@ -10,7 +10,7 @@ sources:
   - "https://docs.google.com/document/d/1k2K2dORMUQvmMyhsKs8Pqi7OpqDloZ7Ws4iWkmDpXCI/edit"
   - "content/job-search/l6-l7-product-leadership-stories-2026-07-21.md"
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"
-  - "/Users/lcalderon/github/jobhunt/docs/interview/MASTER-TMAY-AND-INTERVIEW-STORY-LIBRARY-2026-07-22.md"
+  - "/Users/<you>/github/jobhunt/docs/interview/MASTER-TMAY-AND-INTERVIEW-STORY-LIBRARY-2026-07-22.md"
 derived_from:
   - "content/job-search/l6-l7-product-leadership-stories-2026-07-21.md"
   - "content/job-search/tmay-ten-story-evidence-inventory-2026-07-20.md"

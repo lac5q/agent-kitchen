@@ -4,9 +4,9 @@ date: 2026-07-08
 topic: sandbox
 model: GLM-5.2 (validation)
 sources:
-  - /Users/lcalderon/.hermes/cache/delegation/subagent-summary-0-20260708_182351_265175.txt (raw GLM output)
-  - /Users/lcalderon/plans/sandboxed-fleet-plan.md (v0.2 plan under review)
-  - /Users/lcalderon/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md (persisted plan)
+  - /Users/<you>/.hermes/cache/delegation/subagent-summary-0-20260708_182351_265175.txt (raw GLM output)
+  - /Users/<you>/plans/sandboxed-fleet-plan.md (v0.2 plan under review)
+  - /Users/<you>/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md (persisted plan)
 derived_from:
   - GLM-5.2 round-1 verdict (2026-07-08, CHALLENGED with 7 blockers + 4 contradictions)
   - parent v0.2 plan claiming all round-1 issues fixed
@@ -18,7 +18,7 @@ regen_prompt: "Validate Hermes's v0.2 sandbox plan against the live box state. V
 **Verdict:** VALIDATED-WITH-FIXES
 **Issued:** 2026-07-08
 **Reviewer:** GLM-5.2 (independent validation pass)
-**Subject:** `/Users/lcalderon/plans/sandboxed-fleet-plan.md` (v0.2, ~31KB)
+**Subject:** `/Users/<you>/plans/sandboxed-fleet-plan.md` (v0.2, ~31KB)
 
 ---
 
@@ -63,7 +63,7 @@ regen_prompt: "Validate Hermes's v0.2 sandbox plan against the live box state. V
 
 - **§1a on oracle-1 TODAY: YES.** Docker 29.6.1 has 0 containers, restart in step 5 is safe, subuid/subgid already set, 4.3 GB free math closes. Caveat: `live-restore:false` means future container restart kills it — intended tradeoff.
 - **§1b on maeve-u1 TODAY: YES** after ~5 min apt install. Fresh dockerd, nothing to break. Kernel 6.18.33.2 confirmed. The mcp-proxy will be broken-as-written until sketch is replaced.
-- **Pre-flight gap:** `mkdir -p /Users/lcalderon/agent-workspace` and `/tmp/hermes-sess-<id>/` on Mac before lifecycle step 6.
+- **Pre-flight gap:** `mkdir -p /Users/<you>/agent-workspace` and `/tmp/hermes-sess-<id>/` on Mac before lifecycle step 6.
 
 ## GLM-5.2 recommendation (verbatim)
 
@@ -83,7 +83,7 @@ regen_prompt: "Validate Hermes's v0.2 sandbox plan against the live box state. V
 
 ## Status: ✅ persisted to MemroOS
 
-- Plan v0.2: `/Users/lcalderon/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md`
-- This verdict: `/Users/lcalderon/github/memroos/content/sandbox/sandbox-v0.2-glm-verdict-2026-07-08.md`
+- Plan v0.2: `/Users/<you>/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md`
+- This verdict: `/Users/<you>/github/memroos/content/sandbox/sandbox-v0.2-glm-verdict-2026-07-08.md`
 - Both files: full YAML frontmatter per MemroOS schema (title, date, topic, model, sources, derived_from, regen_prompt).
 - MemroOS MCP tools (`mcp_memroos_knowledge_write` etc.) NOT registered in current session — used **fallback path** (direct file write) per `.hermes/AGENTS.md` directive.

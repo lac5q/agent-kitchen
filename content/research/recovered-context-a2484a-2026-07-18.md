@@ -36,8 +36,8 @@ Ran `git-filter-repo` **twice** to scrub every commit in the `agent-kitchen` rep
 |---|---|
 | `100.101.88.44` | `100.x.x.x` |
 | `100.109.19.110` | `100.x.x.x` |
-| `kitchen.epiloguecapital.com` | `kitchen.example.com` |
-| `gwen.epiloguecapital.com` | `gwen.example.com` |
+| `kitchen.internal.example` | `kitchen.example.com` |
+| `gwen.internal.example` | `gwen.example.com` |
 | `/Users/lcalderon/...` | `/Users/yourname/...` |
 | `-Users-lcalderon-...` | `-Users-jdoe-...` |
 | `kitchen.epilogue...` (truncated) | `kitchen.example...` |

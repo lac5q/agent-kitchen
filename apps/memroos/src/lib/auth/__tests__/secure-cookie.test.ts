@@ -19,20 +19,23 @@ describe('isHttpsRequest', () => {
 
   it('returns false for a direct http:// request URL', () => {
     expect(isHttpsRequest(makeRequest({ url: 'http://example.com/x' }))).toBe(false);
-    // Tailscale / local-loopback case: this is the bug we're fixing.
-    expect(isHttpsRequest(makeRequest({ url: 'http://100.82.89.3:3000/x' }))).toBe(false);
+    // Tailscale / local-loopback case: this is the bug we're fixing. The
+    // address is from RFC 5737 TEST-NET-1 rather than a real tailnet IP —
+    // only the http:// scheme matters here, and Secret Guard rightly refuses
+    // real infrastructure addresses in the tree.
+    expect(isHttpsRequest(makeRequest({ url: 'http://192.0.2.10:3000/x' }))).toBe(false);
   });
 
   it('honors x-forwarded-proto: https (reverse proxy)', () => {
-    expect(isHttpsRequest(makeRequest({ url: 'http://10.0.0.1/x', forwardedProto: 'https' }))).toBe(true);
+    expect(isHttpsRequest(makeRequest({ url: 'http://192.0.2.20/x', forwardedProto: 'https' }))).toBe(true);
   });
 
   it('honors x-forwarded-proto: HTTPS (case-insensitive)', () => {
-    expect(isHttpsRequest(makeRequest({ url: 'http://10.0.0.1/x', forwardedProto: 'HTTPS' }))).toBe(true);
+    expect(isHttpsRequest(makeRequest({ url: 'http://192.0.2.20/x', forwardedProto: 'HTTPS' }))).toBe(true);
   });
 
   it('honors x-forwarded-ssl: on (legacy reverse proxy)', () => {
-    expect(isHttpsRequest(makeRequest({ url: 'http://10.0.0.1/x', forwardedSsl: 'on' }))).toBe(true);
+    expect(isHttpsRequest(makeRequest({ url: 'http://192.0.2.20/x', forwardedSsl: 'on' }))).toBe(true);
   });
 
   it('returns false when no https signal is present (default)', () => {

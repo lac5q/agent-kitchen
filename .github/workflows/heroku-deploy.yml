@@ -1,8 +1,12 @@
 name: Deploy MemRoOS to Heroku
 
+# Heroku is decommissioned as the operator deployment (`web=0`) — operator
+# production is oracle-1 behind the `memroos-oracle` Cloudflare Tunnel, per
+# docs/production-deployment.md. Leaving the `push:` trigger on meant every
+# commit to main fired a deploy that could not succeed, and every failure
+# mailed the repo owner. Manual-only until Heroku is either recommissioned or
+# this workflow is deleted outright.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:

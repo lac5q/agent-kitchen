@@ -3,8 +3,8 @@ title: QMD crash-loop on main-mac — better-sqlite3 NODE_MODULE_VERSION mismatc
 model: MiniMax-M3
 sources:
   - /tmp/qmd-mcp.err
-  - /Users/lcalderon/Library/LaunchAgents/com.lcalderon.qmd-mcp.plist
-  - /Users/lcalderon/github/memroos/services/memory/healthcheck.sh
+  - /Users/<you>/Library/LaunchAgents/com.lcalderon.qmd-mcp.plist
+  - /Users/<you>/github/memroos/services/memory/healthcheck.sh
 derived_from: 2026-07-30/2026-07-31 alert cluster "[main-mac] Memroos Memory Alert — QMD is DOWN ... Status: parse_error" + "Recent knowledge sources are NOT agent-searchable"
 regen_prompt: "Reproduce the QMD launchd crash-loop and better-sqlite3 ABI fix on main-mac"
 date: 2026-07-31

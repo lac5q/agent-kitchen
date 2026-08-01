@@ -4,13 +4,13 @@ date: 2026-07-20
 status: revised pending five fact confirmations
 model: GPT-5 Codex
 sources:
-  - /Users/lcalderon/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md
-  - /Users/lcalderon/github/jobhunt/docs/interview/INTUIT-SOM-PORTFOLIO-MAP.md
-  - /Users/lcalderon/Documents/Work/Intuit
-  - /Users/lcalderon/Downloads/LC+Resume_08172021_PM.docx
-  - /Users/lcalderon/github/jobhunt/docs/resume/CORRECTED-SKETCHPOP-STORY.md
-  - /Users/lcalderon/github/knowledge/content/job-hunt/epilogue-consolidated-story-2026-07-10.md
-  - /Users/lcalderon/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md
+  - /Users/<you>/github/jobhunt/docs/interview/INTUIT-PROJECT-MAP.md
+  - /Users/<you>/github/jobhunt/docs/interview/INTUIT-SOM-PORTFOLIO-MAP.md
+  - /Users/<you>/Documents/Work/Intuit
+  - /Users/<you>/Downloads/LC+Resume_08172021_PM.docx
+  - /Users/<you>/github/jobhunt/docs/resume/CORRECTED-SKETCHPOP-STORY.md
+  - /Users/<you>/github/knowledge/content/job-hunt/epilogue-consolidated-story-2026-07-10.md
+  - /Users/<you>/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md
   - Luis Calderon firsthand corrections supplied 2026-07-20
 derived_from: TMAY working copy 1fMj104dB3y2rhHkbXRk8KJ24Wx7O8WnLSwp15CWPQbA
 regen_prompt: Rebuild the ranked Google L6/L7-equivalent interview-story inventory from Luis Calderon's source documents and firsthand corrections. Lead with business mandate, ambiguity, diagnosis, strategy, cross-functional influence, durable operating mechanisms, execution, result, and level signal. Keep the stories suitable for either an individual contributor or people manager. Preserve all evidence guardrails.
@@ -88,5 +88,5 @@ A native Google Doc contains the full Google L6/L7-equivalent walkthrough for al
 
 Local source copies:
 
-- `/Users/lcalderon/github/jobhunt/docs/interview/TMAY-10-STORY-INVENTORY-2026-07-20.md`
-- `/Users/lcalderon/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md`
+- `/Users/<you>/github/jobhunt/docs/interview/TMAY-10-STORY-INVENTORY-2026-07-20.md`
+- `/Users/<you>/github/jobhunt/docs/interview/PRINCIPAL-DIRECTOR-EXPERIENCE-STORIES-2026-07-20.md`

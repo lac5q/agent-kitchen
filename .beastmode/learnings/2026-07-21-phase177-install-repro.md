@@ -3,7 +3,7 @@
 Date: 2026-07-21
 Task: GSD roadmap Phase 177 (v8.21) INSTALL-REPRO-01..06 — implement the local
 install hardening work surfaced by the cordant-hermes-01 clean reinstall
-(`/home/lac5q/maeve-u1-runs/cordant-hermes-01/REINSTALL-REPORT.md`).
+(`/home/<user>/maeve-u1-runs/cordant-hermes-01/REINSTALL-REPORT.md`).
 
 ## Role Routing
 

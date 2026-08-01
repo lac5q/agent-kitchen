@@ -10,10 +10,10 @@ tags:
 author: Codex
 model: GPT-5 Codex with MiniMax-M3 validation
 sources:
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/TY23 SOM EOS Learning.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/NextGen TTL TY23 EOS Learnings.pptx
-  - /Users/lcalderon/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap (1).xlsx
-  - /Users/lcalderon/Documents/Work/Intuit/Product Management/SOM/TY22 Supercharge Front Doors EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/TY23 SOM EOS Learning.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/NextGen TTL TY23 EOS Learnings.pptx
+  - /Users/<you>/Documents/Work/Intuit/Copy of downloads/FY25 SOM DNS Roadmap (1).xlsx
+  - /Users/<you>/Documents/Work/Intuit/Product Management/SOM/TY22 Supercharge Front Doors EOS Learnings.pptx
   - Luis Calderon firsthand clarification supplied 2026-07-22
 derived_from: Raw Intuit learning decks, roadmap workbooks, and firsthand context
 regen_prompt: Reconstruct SOM as an end-to-end portfolio led through two to three PMs across chat onboarding, simplification, data import, and pricing. Explain that Luis had to rehire critical roles, move engineering capacity, and reset cross-functional goals because the organization was not aligned to the shift. Treat Reductive GTKM and Divergent New Start as linked moves within the portfolio, with Divergent as the controversial capstone. Separate archive evidence from firsthand organization context. Preserve metric qualifiers and the open RPA gap.

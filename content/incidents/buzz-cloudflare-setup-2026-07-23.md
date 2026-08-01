@@ -1,25 +1,25 @@
 # Buzz (Block/Square Nostr relay) — Cloudflare setup on Maeve-u1
 **Date:** 2026-07-23
 **Author:** Alba (Hermes agent, taking over from Sophia Hermes)
-**Result:** ✅ `https://buzz.epiloguecapital.com` live, returns **HTTP 200** NIP-11 relay info JSON for Nostr clients AND **HTTP 200** `text/html` SPA shell for browsers. No second hostname needed.
+**Result:** ✅ `https://buzz.internal.example` live, returns **HTTP 200** NIP-11 relay info JSON for Nostr clients AND **HTTP 200** `text/html` SPA shell for browsers. No second hostname needed.
 
 ## What Sophia tried
 Installed `buzz-relay` on Maeve-u1 in Docker (`buzz-relay:latest` container, port 3000, plus `buzz-postgres` + `buzz-redis`).
-Then added a `buzz.epiloguecapital.com` ingress rule to **`/home/lac5q/.cloudflared/config-maria.yml`** (the `maria-hermes` tunnel, UUID `faa2bde0-…`) on the Maeve box.
+Then added a `buzz.internal.example` ingress rule to **`/home/<user>/.cloudflared/config-maria.yml`** (the `maria-hermes` tunnel, UUID `faa2bde0-…`) on the Maeve box.
 
 ## Root cause (2 layers)
 
 1. **Wrong tunnel.** `config-maria.yml` drives the `maria-hermes` tunnel, which connects from a different origin host (the Mac, `origin_ip: 24.165.86.146`). The relay runs on Maeve-u1. Even with DNS, traffic would have hit the Mac's localhost:3000 — which has `cclens`, not buzz. The correct Maeve-side tunnel was the **`pc2` tunnel** (`02308b1d-…`), already healthy, already running the same cloudflared process on Maeve that watches `pc2-config.yml`.
 
-2. **DNS record never created.** No CNAME for `buzz.epiloguecapital.com` existed in zone `5aea7fa6c749d5d91cba6aa330a446f4`. She only edited the local cloudflared config; she didn't run any DNS API call or `cloudflared tunnel route dns`.
+2. **DNS record never created.** No CNAME for `buzz.internal.example` existed in zone `5aea7fa6c749d5d91cba6aa330a446f4`. She only edited the local cloudflared config; she didn't run any DNS API call or `cloudflared tunnel route dns`.
 
 (Not her fault: the relay WAS already running and healthy in Docker — the symptom looked like a service problem, but the service was fine. So she kept tinkering with config when the problem was DNS + tunnel routing.)
 
 ## Fix applied
 1. **DNS:** POST `/zones/{zid}/dns_records` → `CNAME buzz → 02308b1d-….cfargotunnel.com` (proxied). Record id `eb06933aa529075b273f1346bb0c9faf`.
-2. **Ingress rule:** added `buzz.epiloguecapital.com → http://100.109.19.110:3000` to `/home/lac5q/.cloudflared/pc2-config.yml`, **before the catch-all 404**. Cloudflared watches the file and reloads automatically — no restart.
+2. **Ingress rule:** added `buzz.internal.example → http://<maeve-tailnet-ip>:3000` to `/home/<user>/.cloudflared/pc2-config.yml`, **before the catch-all 404**. Cloudflared watches the file and reloads automatically — no restart.
 3. **Cleanup:** removed the `buzz` rule from `config-maria.yml` so it doesn't haunt the next person.
-4. **Verify (first time):** `curl https://buzz.epiloguecapital.com/` → `HTTP 404` with **empty body**. I read this as "tunnel is working, relay answers with its own 404" — wrong. The relay's actual response body is 47 bytes of JSON. The empty-body 404 was Cloudflare's edge, not the relay. **Lesson: always check response body, not just status code.** See "Follow-up" below.
+4. **Verify (first time):** `curl https://buzz.internal.example/` → `HTTP 404` with **empty body**. I read this as "tunnel is working, relay answers with its own 404" — wrong. The relay's actual response body is 47 bytes of JSON. The empty-body 404 was Cloudflare's edge, not the relay. **Lesson: always check response body, not just status code.** See "Follow-up" below.
 
 ## Follow-up: restart required to push config to Cloudflare edge
 **Date:** 2026-07-23 22:23–23:26 (same day)
@@ -49,14 +49,14 @@ curl -s -H "Authorization: Bearer <token>" \
   | jq '.result.config.ingress[] | {hostname, service}'
 ```
 
-**Final verify (after restart):** `curl https://buzz.epiloguecapital.com/` → `HTTP 200` with NIP-11 relay info: `{"name":"Buzz Relay","description":"Buzz — private team communication relay","software":"https://github.com/block/buzz", ...}`.
+**Final verify (after restart):** `curl https://buzz.internal.example/` → `HTTP 200` with NIP-11 relay info: `{"name":"Buzz Relay","description":"Buzz — private team communication relay","software":"https://github.com/block/buzz", ...}`.
 
 ## Key pitfall — save this one
 **Editing `~/.cloudflared/*.yml` while `cloudflared tunnel run` is alive does NOT propagate to Cloudflare's edge.** You must restart the cloudflared process (it pushes config to the edge on startup). The local file is read for ingress routing live, but Cloudflare's edge uses its own `cfd_tunnel/{id}/configurations` table to decide which hostnames this tunnel serves; unknown hostnames get a Cloudflare-origin 404 even when DNS resolves correctly and the connector is healthy.
 
 ## Web UI on the same hostname (2026-07-23, same day)
 
-Initial setup only exposed the **relay API**. Browsers hitting `https://buzz.epiloguecapital.com/` got the NIP-11 JSON (because the relay hard-wires `/` to the Nostr/NIP-11 handler — `/` never reaches the SPA fallback, see `crates/buzz-relay/src/router.rs:63,256`).
+Initial setup only exposed the **relay API**. Browsers hitting `https://buzz.internal.example/` got the NIP-11 JSON (because the relay hard-wires `/` to the Nostr/NIP-11 handler — `/` never reaches the SPA fallback, see `crates/buzz-relay/src/router.rs:63,256`).
 
 **Fix:** set **`BUZZ_SERVE_GIT_WEB_GUI=true`** in the relay container. The `BUZZ_WEB_DIR` env var already points at `/srv/buzz/web` (a prebuilt `dist/` shipped in the image). With this flag, the relay serves `index.html` at `/` to browsers (`Accept: text/html`) and the SPA fallback serves all other paths. Nostr clients still get NIP-11 because they send `Accept: application/nostr+json`. Same port (3000), same hostname. No reverse proxy needed.
 
@@ -67,7 +67,7 @@ docker run -d --name buzz-relay --network buzz-net \
   -e DATABASE_URL=postgres://buzz_dev:buzz_dev@172.18.0.2:5432/buzz \
   -e REDIS_URL=redis://172.18.0.3:6379 \
   -e BUZZ_BIND_ADDR=0.0.0.0:3000 \
-  -e RELAY_URL=wss://buzz.epiloguecapital.com \
+  -e RELAY_URL=wss://buzz.internal.example \
   -e BUZZ_WEB_DIR=/srv/buzz/web \
   -e BUZZ_ADMIN_WEB_DIR=/srv/buzz/admin-web \
   -e BUZZ_SERVE_GIT_WEB_GUI=true \   # <-- the one new flag
@@ -81,10 +81,10 @@ docker run -d --name buzz-relay --network buzz-net \
 **If `BUZZ_WEB_DIR` weren't already populated in the image**, you'd need to build locally and either rebuild the image or mount the dist:
 ```bash
 ssh maeve-u1
-cd /home/lac5q/github/buzz
+cd /home/<user>/github/buzz
 . ./bin/activate-hermit
 (cd web && pnpm install --prefer-offline && pnpm build)
-# then mount web/dist into the container via -v /home/lac5q/github/buzz/web/dist:/srv/buzz/web
+# then mount web/dist into the container via -v /home/<user>/github/buzz/web/dist:/srv/buzz/web
 # OR rebuild the image with the dist baked in (Dockerfile COPY).
 ```
 
@@ -109,7 +109,7 @@ The flag's name suggests it's about serving a Git web GUI, but the code path at 
 # On the Mac, get token + zone id (no 1Password lookup):
 python3 -c "
 import json, base64
-print(open('/Users/lcalderon/.cloudflared/cert.pem').read().splitlines())
+print(open('/Users/<you>/.cloudflared/cert.pem').read().splitlines())
 " | head -1   # or use the documented decoder in cloudflare skill
 
 # 1. Add DNS CNAME — use the existing PC2 tunnel target (simplest path).
@@ -120,7 +120,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/<ZONE>/dns_records" \
 
 # 2. Add ingress rule to pc2-config.yml on Maeve-u1 (BEFORE the catch-all 404):
 #    - hostname: <sub>.epiloguecapital.com
-#      service: http://100.109.19.110:<port>
+#      service: http://<maeve-tailnet-ip>:<port>
 #      originRequest:
 #        noTLSVerify: true
 #    Cloudflared watches the file — no restart needed.
@@ -133,10 +133,10 @@ curl -sI https://<sub>.epiloguecapital.com/
 The Maeve box has TWO cloudflared processes:
 | Config | Tunnel name | Tunnel UUID | Origin IP | Use for |
 |--------|------------|-------------|-----------|---------|
-| `pc2-config.yml` | `pc2` | `02308b1d-…` | Maeve Tailscale `100.109.19.110` | Anything running **on Maeve** (most new services) |
+| `pc2-config.yml` | `pc2` | `02308b1d-…` | Maeve Tailscale `<maeve-tailnet-ip>` | Anything running **on Maeve** (most new services) |
 | `config-maria.yml` | `maria-hermes` | `faa2bde0-…` | `24.165.86.146` (Mac) | Services running on the **Mac** |
 
-If the service listens on `100.109.19.110:<port>` on Maeve → use `pc2-config.yml`.
+If the service listens on `<maeve-tailnet-ip>:<port>` on Maeve → use `pc2-config.yml`.
 If the service runs on the Mac and listens on `localhost:<port>` → use `config-maria.yml`.
 The Mac's main `ollama-mac` tunnel (`e75e37b5-…`) is also an option when the Mac has the service.
 

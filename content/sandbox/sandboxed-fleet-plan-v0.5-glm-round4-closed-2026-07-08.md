@@ -4,8 +4,8 @@ date: 2026-07-08
 topic: sandbox
 model: Hermes (parent) + GLM-5.2 (round-4 validation)
 sources:
-  - round-4 GLM verdict: /Users/lcalderon/.hermes/cache/delegation/subagent-summary-0-20260708_201926_729720.txt
-  - round-3 GLM verdict: /Users/lcalderon/.hermes/cache/delegation/subagent-summary-0-20260708_195022_724573.txt
+  - round-4 GLM verdict: /Users/<you>/.hermes/cache/delegation/subagent-summary-0-20260708_201926_729720.txt
+  - round-3 GLM verdict: /Users/<you>/.hermes/cache/delegation/subagent-summary-0-20260708_195022_724573.txt
 derived_from:
   - v0.4: sandboxed-fleet-plan-v0.4-glm-round3-closed-2026-07-08.md
   - v0.3: sandboxed-fleet-plan-v0.3-glm-round3-ready-2026-07-08.md
@@ -17,7 +17,7 @@ regen_prompt: Read the round-4 GLM verdict (VALIDATED-WITH-FIXES). Close the §1
 **Date:** 2026-07-08
 **Status:** v0.3 (round-2 issues addressed, ready for GLM round 3)
 **Topology:** oracle-1 (ARM64, OL9) + maeve-u1 (x86_64, Ubuntu 24.04 inside WSL2 kernel 6.18.33.2) + Mac (orchestrator)
-**Supersedes:** v0.2 (see `/Users/lcalderon/plans/sandboxed-fleet-plan.md` and `~/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md`)
+**Supersedes:** v0.2 (see `/Users/<you>/plans/sandboxed-fleet-plan.md` and `~/github/memroos/content/sandbox/sandboxed-fleet-plan-v0.2-glm-round2-2026-07-08.md`)
 **Round-2 verdict addressed:** VALIDATED-WITH-FIXES (round-1 blockers all real-fixed; 7 mcp-proxy bugs + 6 smaller issues addressed here)
 **Round-3 verdict addressed:** VALIDATED-WITH-FIXES (2 of 4 round-3 new issues closed in §1c / §1a; 2 closed in code; see v0.3 → v0.4 change log below)
 **Round-3 verified by:** GLM-5.2 (independent e2e test against api.github.com: GET 200, POST 401, 1MB POST 404, malformed-path 400, denied-host 403, audit log 7 entries)
@@ -42,9 +42,9 @@ Round-2 verdict addressed in v0.3: B5+ (#1 mcp-proxy 7 bugs → real implementat
 |---|---|---|
 | NEW1 mcp-proxy 7 bugs | `path[1:]` as URL, malformed f-string, undefined `headers`, GET-only, no SSL hostname, body dropped, no try/except | **Real implementation:** `~/github/knowledge/infrastructure/hermes-mcp-proxy.py` (~280 lines, async, tested). New wire protocol: `/proxy/<scheme>/<host>/<port>?path=<real>&method=<METHOD>`. End-to-end verified against mock upstream (GET + token injection, egress denial, malformed path all pass). Full source moved to §3. |
 | NEW2 Seatbelt-vs-§3 contradiction | Profile allows only loopback, but §3 says agent reaches api.anthropic.com | **Added Hermes-side TCP forwarder** `~/bin/hermes-loopback-forwarder.py` that listens 127.0.0.1:7777 and forwards to per-box socket. Mac agent goes through loopback → Hermes forwarder → box socket → LLM. |
-| NEW3 Seatbelt file-read unrestricted | Agent can read `~/.ssh`, `~/.aws` | Narrowed to specific subpaths: `/Users/lcalderon/agent-workspace`, `/tmp/hermes-sess-`, `~/.codex`, `~/.claude`, `~/.paperclip`. All other file-read denied. |
+| NEW3 Seatbelt file-read unrestricted | Agent can read `~/.ssh`, `~/.aws` | Narrowed to specific subpaths: `/Users/<you>/agent-workspace`, `/tmp/hermes-sess-`, `~/.codex`, `~/.claude`, `~/.paperclip`. All other file-read denied. |
 | NEW4 T5 verification text wrong | "Codex verbose log confirms `network=true` is honored" — but openai/codex#10390 says it's DROPPED | Corrected: verification expects to see `network_access` as **absent / overridden by profile** (verifying the dropped-flag path is now active) |
-| NEW5 mkdir pre-flight missing | `agent-workspace` and `/tmp/hermes-sess-<id>` referenced but never created | Added pre-flight block in §1c: `sudo mkdir -p /etc/hermes /Users/lcalderon/agent-workspace ~/paperclip/instances` + chmod |
+| NEW5 mkdir pre-flight missing | `agent-workspace` and `/tmp/hermes-sess-<id>` referenced but never created | Added pre-flight block in §1c: `sudo mkdir -p /etc/hermes /Users/<you>/agent-workspace ~/paperclip/instances` + chmod |
 | NEW6 asymmetric `--directfs=false` | §1b daemon.json dropped it (only §1a had it) | Now both have `--directfs=false` (consistent); rationale documented in §1a/§1b |
 | NEW7 KVM fast-path missed | maeve-u1 has `/dev/kvm` but plan uses systrap (slower) | Added KVM-enabled runsc flag in maeve-u1 §1b: `runtimeArgs` include `--platform=kvm` when `/dev/kvm` is present; document fallback if WSL2 gVisor/KVM misbehaves |
 | Round-1 round-up | All B1-B7 + 4 contradictions remained fixed | No regression; v0.2 fixes carried forward |
@@ -344,11 +344,11 @@ Linger enabled (`/var/lib/systemd/linger/lac5q` exists), service auto-starts on 
 ```bash
 # Directories referenced throughout the plan but never explicitly created
 sudo mkdir -p /etc/hermes
-sudo mkdir -p /Users/lcalderon/agent-workspace
-sudo mkdir -p /Users/lcalderon/.codex /Users/lcalderon/.claude /Users/lcalderon/.paperclip
+sudo mkdir -p /Users/<you>/agent-workspace
+sudo mkdir -p /Users/<you>/.codex /Users/<you>/.claude /Users/<you>/.paperclip
 mkdir -p ~/paperclip/instances
-chmod 0700 /Users/lcalderon/agent-workspace
-chmod 0500 /Users/lcalderon/.claude /Users/lcalderon/.paperclip
+chmod 0700 /Users/<you>/agent-workspace
+chmod 0500 /Users/<you>/.claude /Users/<you>/.paperclip
 ```
 
 **Hermes orchestrator**: long-lived Python process under `launchd` (already running).
@@ -364,15 +364,15 @@ chmod 0500 /Users/lcalderon/.claude /Users/lcalderon/.paperclip
 (allow sysctl-read)
 (allow signal)
 ;; File access: narrow to explicit subpaths. No ~/.ssh, ~/.aws, etc.
-(allow file-read* (subpath "/Users/lcalderon/agent-workspace"))
+(allow file-read* (subpath "/Users/<you>/agent-workspace"))
 (allow file-read* (subpath "/tmp/hermes-sess-"))
-(allow file-read* (subpath "/Users/lcalderon/.codex"))
-(allow file-read* (subpath "/Users/lcalderon/.claude"))
-(allow file-read* (subpath "/Users/lcalderon/.paperclip"))
+(allow file-read* (subpath "/Users/<you>/.codex"))
+(allow file-read* (subpath "/Users/<you>/.claude"))
+(allow file-read* (subpath "/Users/<you>/.paperclip"))
 (allow file-read* (subpath "/usr/lib"))
 (allow file-read* (subpath "/System/Library"))
 (allow file-read* (subpath "/Library"))
-(allow file-write* (subpath "/Users/lcalderon/agent-workspace"))
+(allow file-write* (subpath "/Users/<you>/agent-workspace"))
 (allow file-write* (subpath "/tmp/hermes-sess-"))
 ;; Network: loopback only. Mac agent reaches LLM endpoints via Hermes-side
 ;; TCP→tailnet TCP forwarder (Hermes listens 127.0.0.1:7777, forwards to per-box).
@@ -764,7 +764,7 @@ docker buildx build --platform linux/amd64 -t agent-base:amd64 \
 | `/etc/subuid`, `/etc/subgid` | oracle-1, maeve-u1 | root | userns-remap ranges |
 | `/etc/hermes/codex-seatbelt.sb` | Mac | 0644 root | hardened Seatbelt profile |
 | `~/bin/hermes-loopback-forwarder.py` | Mac | 0755 lac5q | TCP→tailnet forwarder (NEW2) |
-| `/Users/lcalderon/agent-workspace` | Mac | 0700 lac5q | agent workspace (NEW5) |
+| `/Users/<you>/agent-workspace` | Mac | 0700 lac5q | agent workspace (NEW5) |
 | `~/Library/LaunchAgents/com.hermes.orchestrator.plist` | Mac | lac5q | Hermes launchd unit |
 | `~/.hermes/skills/session-runner/SKILL.md` | Mac | lac5q | orchestrator skill |
 | `~/paperclip/instances/<session>/{run.log,artifacts/}` | Mac | lac5q | session archive |
