@@ -219,4 +219,24 @@ describe("VAL-MEM-011: embedding lifecycle is provenance-linked and removable", 
     const result = getEmbeddingProvenance(db, "tenant1", "missing", "vector", "model-1", "local");
     expect(result).toBeNull();
   });
+
+  it("removeEmbeddingForCanonical tombstones deferred rows without purging vectors", () => {
+    const row = registerEmbeddingProvenance(db, {
+      tenantId: "tenant1",
+      canonicalId: "canon-deferred",
+      storeId: "vector",
+      sourceHash: "h1",
+      modelId: "model-1",
+      provenance: "ingress/test",
+      removability: "deferred",
+    });
+    const result = removeEmbeddingForCanonical(db, {
+      tenantId: "tenant1",
+      row,
+      erasureId: "erasure_deferred",
+    });
+    expect(result.status).toBe("tombstoned");
+    expect(result.reason).toBe("deferred_tombstoned");
+    expect(result.row.lifecycleState).toBe("tombstoned");
+  });
 });

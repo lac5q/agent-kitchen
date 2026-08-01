@@ -173,6 +173,26 @@ describe("ontology candidate governance", () => {
     expect(() => aliases.registerOntologyAlias(db, { ontologyId: ontology.ontologyId, ontologyVersion: ontology.version, ontologyContentHash: ontology.contentHash, namespace: "finance", alias: "invoice", canonicalId: "finance.other", actor: "operator", reason: "collision" })).toThrow(/canonical target/);
     expect(aliases.transitionOntologyAlias(db, { aliasId: alias.id, action: "deprecate", actor: "operator", reason: "replace" }).status).toBe("deprecated");
     expect(db.prepare(`SELECT COUNT(*) AS count FROM ontology_alias_lifecycle_audit WHERE alias_id = ?`).get(alias.id)).toMatchObject({ count: 2 });
+    const again = aliases.registerOntologyAlias(db, {
+      ontologyId: ontology.ontologyId,
+      ontologyVersion: ontology.version,
+      ontologyContentHash: ontology.contentHash,
+      namespace: "finance",
+      alias: "bill",
+      canonicalId: "finance.invoice",
+      actor: "operator",
+      reason: "compat",
+    });
+    expect(aliases.registerOntologyAlias(db, {
+      ontologyId: ontology.ontologyId,
+      ontologyVersion: ontology.version,
+      ontologyContentHash: ontology.contentHash,
+      namespace: "finance",
+      alias: "bill",
+      canonicalId: "finance.invoice",
+      actor: "operator",
+      reason: "compat",
+    })).toEqual(again);
   });
 
   it("VAL-ONTO-019..025 plans approved additive migrations and fails closed for ambiguous mappings", async () => {

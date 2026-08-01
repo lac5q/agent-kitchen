@@ -82,4 +82,26 @@ describe("temporal retrieval", () => {
     expect(truncated.receipt.truncated).toBe(true);
     expect(truncated.caveats.some((c) => c.code === "direction_underspecified")).toBe(true);
   });
+
+  it("abstains for between direction without a validity window", () => {
+    const result = performTemporalRetrieval({
+      candidates: [...candidates],
+      metadata: {
+        reference_time_iso: "2026-01-02T00:00:00.000Z",
+        temporal_direction: "between",
+      },
+    });
+    expect(result.selected).toEqual([]);
+    expect(result.status).toBe("abstain");
+    expect(result.caveats.some((c) => c.code === "missing_validity_window")).toBe(true);
+  });
+
+  it("discloses no_reference_time when reference timestamps are unparseable", () => {
+    const result = performTemporalRetrieval({
+      candidates: [...candidates],
+      metadata: { reference_time_iso: "not-a-date", temporal_direction: "latest" },
+      options: { nowIso: "also-not-a-date" },
+    });
+    expect(result.caveats.some((c) => c.code === "no_reference_time")).toBe(true);
+  });
 });

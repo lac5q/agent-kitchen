@@ -59,6 +59,12 @@ describe("lane separation (VAL-RETR-008)", () => {
     expect(resolveLaneForDataset("memroos_public_synthetic").ok).toBe(true);
   });
 
+  it("rejects datasets that are not assigned to a lane", () => {
+    const unknown = resolveLaneForDataset("not-a-real-dataset" as NormalizedTask["dataset"]);
+    expect(unknown.ok).toBe(false);
+    expect(unknown.reason).toContain("dataset_not_assigned_to_lane");
+  });
+
   it("verifyLaneAssignments passes for the current config", () => {
     expect(verifyLaneAssignments().ok).toBe(true);
   });
@@ -105,6 +111,28 @@ describe("redaction (VAL-RETR-004)", () => {
     const p2 = canonicalOutputPath({ resultsDir: "/tmp/results/", dataset: "locomo", adapter: "lexical", lane: "external_retrieval" });
     expect(p1).toBe(p2);
     expect(p1).toBe("/tmp/results/locomo-lexical-external_retrieval-latest.json");
+  });
+
+  it("canonicalOutputPath supports markdown extension", () => {
+    const path = canonicalOutputPath({
+      resultsDir: "/tmp/results",
+      dataset: "locomo",
+      adapter: "lexical",
+      extension: "md",
+    });
+    expect(path).toBe("/tmp/results/locomo-lexical-external_retrieval-latest.md");
+  });
+
+  it("detects longmemeval raw sentinel markers", () => {
+    const r = scanForForbiddenContent({ marker: "[longmemeval-raw] licensed dump" });
+    expect(r.ok).toBe(false);
+    expect(r.violations.some((v) => v.reason === "longmemeval_raw_marker")).toBe(true);
+  });
+
+  it("redactReport replaces non-array corpus payloads", () => {
+    const r = redactReport({ raw_conversation: "secret transcript" });
+    expect(JSON.stringify(r)).not.toContain("secret transcript");
+    expect((r as { raw_conversation: string }).raw_conversation).toBe("[redacted]");
   });
 });
 
@@ -180,6 +208,48 @@ describe("failure handling (VAL-RETR-009, VAL-RETR-022)", () => {
     expect(out.status).toBe("provider_failed");
     expect(out.injected.length).toBe(0);
     expect(out.ignored.find((i) => i.id === "mem-1")).toBeDefined();
+  });
+
+  it("classifies null and non-error throws", () => {
+    expect(classifyFailure(null).reasonCode).toBe("unknown_error");
+    expect(classifyFailure("provider exploded").reasonCode).toBe("non_error_throw");
+    expect(classifyFailure(new Error("")).detail).toBe("unspecified_error");
+  });
+
+  it("checkProviderConfig rejects empty provider names", () => {
+    const c = checkProviderConfig({ provider: "", envValue: "key" });
+    expect(c.ok).toBe(false);
+    expect(c.status).toBe("configuration_error");
+  });
+
+  it("validateAdapterResult flags live scope mismatches", () => {
+    const r = fakeResult();
+    r.adapterName = "live";
+    r.receipt.adapterName = "live";
+    r.receipt.authorization.scopeHash = "sha256:" + "a".repeat(64);
+    r.injected = ["mem-1"];
+    r.retrieved = [{
+      id: "mem-1",
+      score: 1,
+      text: "x",
+      tier: "live",
+      source: "corpus",
+      authorizationResult: "denied",
+      whyEntered: "test",
+      rankPosition: 1,
+      scopeHash: "sha256:" + "b".repeat(64),
+    }];
+    const v = validateAdapterResult(r);
+    expect(v.ok).toBe(false);
+    expect(v.reasons).toContain("live_retrieval_scope_mismatch");
+  });
+
+  it("summarizeFailures groups statusDetail reasons", () => {
+    const failed = fakeResult();
+    failed.status = "provider_failed";
+    failed.statusDetail = "credential_missing_for_mem0";
+    const summary = summarizeFailures([failed]);
+    expect(summary.byReason["credential_missing_for_mem0"]).toBe(1);
   });
 });
 

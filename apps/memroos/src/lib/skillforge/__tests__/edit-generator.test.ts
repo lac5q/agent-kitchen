@@ -122,4 +122,18 @@ describe("SkillForge Edit Generator", () => {
     expect(proposal?.residualRisks.length).toBeGreaterThan(0);
     expect(proposal?.residualRisks.some((r) => r.includes("learning rate"))).toBe(true);
   });
+
+  it("skips proposals whose edit hash was recently rejected", () => {
+    const analysis = makeAnalysis("skill-1", [
+      { pattern: "deploy query", frequency: 3, suggestedFix: "Add deploy trigger" },
+    ]);
+    const first = generateEditProposal(analysis, config, []);
+    expect(first).not.toBeNull();
+    const rejectedEdits: RejectedEdit[] = [{
+      editHash: first!.editHash,
+      reason: "unsafe",
+      rejectedAt: new Date(),
+    }];
+    expect(generateEditProposal(analysis, config, rejectedEdits)).toBeNull();
+  });
 });

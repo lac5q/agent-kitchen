@@ -80,4 +80,28 @@ describe("SkillForge Intake Pipeline", () => {
     expect(result.deduplicated).toBe(0);
     expect(result.entries.length).toBe(1);
   });
+
+  it("collects failed eval_candidates traces when the table exists", () => {
+    const now = new Date().toISOString();
+    db.exec(`
+      CREATE TABLE eval_candidates (
+        id INTEGER PRIMARY KEY,
+        skill_id TEXT,
+        query TEXT NOT NULL,
+        expected TEXT,
+        actual TEXT,
+        passed INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO eval_candidates(skill_id, query, expected, actual, passed, created_at)
+      VALUES ('skill-fail', 'deploy query', 'ok', 'fail', 0, '${now}');
+    `);
+
+    const result = runIntakePipeline(db, { ...DEFAULT_SKILLFORGE_CONFIG, minTraceAgeHours: 0 });
+    expect(result.entries.some((entry) => entry.traceType === "failure")).toBe(true);
+    expect(result.entries.find((entry) => entry.traceType === "failure")?.payload).toMatchObject({
+      query: "deploy query",
+      passed: false,
+    });
+  });
 });

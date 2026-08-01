@@ -12,7 +12,9 @@ import {
   measured,
   normalizeForAnswerCheck,
   resolveLane,
+  round,
   scoreTask,
+  unavailable,
 } from "../metrics";
 import type { AdapterResult, NormalizedTask } from "../schema";
 
@@ -378,5 +380,38 @@ describe("retrieval-bench metrics (VAL-RETR-010)", () => {
   it("normalizeForAnswerCheck strips trailing punctuation", () => {
     expect(normalizeForAnswerCheck("Qdrant Cloud.")).toBe("qdrant cloud");
     expect(normalizeForAnswerCheck("  Qdrant   Cloud  !! ")).toBe("qdrant cloud");
+  });
+
+  it("round preserves non-finite values unchanged", () => {
+    expect(round(Number.NaN)).toBeNaN();
+    expect(round(Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("measured rejects non-finite values", () => {
+    expect(() => measured(Number.NaN)).toThrow(/finite number/);
+  });
+
+  it("unavailable rejects empty reasons", () => {
+    expect(() => unavailable("   ")).toThrow(/reason/);
+  });
+
+  it("aggregateTaskScores returns zeroed metrics when no tasks completed", () => {
+    const failed = scoreTask({
+      task: makeTask(),
+      result: makeResult({ status: "provider_failed" }),
+      k: 1,
+      lane: "external_retrieval",
+    });
+    const agg = aggregateTaskScores([failed]);
+    expect(agg.completedTaskCount).toBe(0);
+    expect(agg.tokenAccounting.retrieval.reason).toContain("no completed retrieval tasks");
+  });
+
+  it("aggregateByLane returns null for lanes with no scores", () => {
+    expect(aggregateByLane([])).toEqual({});
+  });
+
+  it("isAnswerSupported rejects empty retrieved text", () => {
+    expect(isAnswerSupported("answer", "")).toBe(false);
   });
 });

@@ -239,6 +239,16 @@ describe("VAL-MEM-027: DSAR export/delete is identity-verified and complete", ()
     expect(result.reason).toBe("unsupported_verification_method");
   });
 
+  it("computes deterministic verification hashes for equivalent inputs", () => {
+    const input = {
+      subject: { subjectId: "subject-hash" },
+      verificationMethod: "email_token" as const,
+      actorId: "operator",
+      tenantId: "default-tenant",
+    };
+    expect(computeDsarVerificationHash(input)).toBe(computeDsarVerificationHash(input));
+  });
+
   it("rejects malformed verification hash (not 64 hex chars)", () => {
     const database = freshDb();
     seedMessage(database, "subject-hash");

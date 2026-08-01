@@ -36,6 +36,7 @@ import {
   decideEntityMerge,
   decideMerge,
   dedupeRetrievalResults,
+  defaultContextBudget,
   describeProviderFlags,
   evaluatePublicationGate,
   extractEntities,
@@ -591,6 +592,10 @@ describe("context packing (VAL-RETR-019)", () => {
     });
     expect(r.omitted.length).toBeGreaterThan(0);
     expect(r.items.length).toBeLessThan(2);
+  });
+
+  it("exposes a conservative default byte and token budget", () => {
+    expect(defaultContextBudget()).toEqual({ maxBytes: 8 * 1024, maxTokens: 2 * 1024 });
   });
 });
 

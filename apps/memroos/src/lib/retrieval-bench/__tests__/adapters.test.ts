@@ -2,8 +2,9 @@
  * Adapter behavior tests (VAL-RETR-005, VAL-RETR-006, VAL-RETR-007).
  */
 import { describe, expect, it } from "vitest";
-import { lexicalAdapter, lexicalRank } from "../adapters/lexical";
-import { noMemoryAdapter } from "../adapters/no-memory";
+import { buildLexicalUnavailable, lexicalAdapter, lexicalRank } from "../adapters/lexical";
+import { buildNoMemoryUnavailable, noMemoryAdapter } from "../adapters/no-memory";
+import { buildUnavailableResult } from "../adapters";
 import { evaluateLivePolicy, liveAdapter } from "../adapters/live";
 import {
   mem0AdapterEntry,
@@ -81,6 +82,28 @@ describe("lexical adapter (VAL-RETR-006)", () => {
     expect(result.length).toBe(0);
   });
 
+  it("breaks score ties with canonical id ordering", () => {
+    const task = makeTask({
+      corpus: [
+        { id: "mem-b", text: "alpha beta gamma delta", scope: MATCHING_SCOPE },
+        { id: "mem-a", text: "alpha beta gamma delta", scope: MATCHING_SCOPE },
+      ],
+      question: "alpha beta gamma",
+    });
+    const ranked = lexicalRank(task, 2);
+    expect(ranked.map((item) => item.id)).toEqual(["mem-a", "mem-b"]);
+    expect(ranked[0].score).toBe(ranked[1].score);
+  });
+
+  it("buildLexicalUnavailable returns typed unavailable result", () => {
+    const task = makeTask();
+    const result = buildLexicalUnavailable(task, "v1", "cfg", "fix");
+    expect(result.status).toBe("unavailable");
+    expect(result.statusDetail).toBe("lexical_adapter_not_registered");
+    expect(result.injected).toEqual([]);
+    expect(result.receipt.authorization.denialReason).toBe("lexical_adapter_not_registered");
+  });
+
   it("populates the shared result contract fields (VAL-RETR-005)", async () => {
     const task = makeTask();
     const result = await lexicalAdapter.run({
@@ -93,6 +116,7 @@ describe("lexical adapter (VAL-RETR-006)", () => {
       configHash: "cfg",
       fixtureHash: "fix",
       retrievalPolicyVersion: "v1",
+      now: () => new Date(1_700_000_000_000),
     });
     expect(result.taskId).toBe(task.id);
     expect(result.adapterName).toBe("lexical");
@@ -128,6 +152,32 @@ describe("no-memory adapter (VAL-RETR-006)", () => {
     expect(result.retrieved.length).toBe(0);
     expect(result.ignored.length).toBe(task.corpus.length);
     expect(result.ignored.every((i) => i.reasonCode === "baseline_control_no_injection")).toBe(true);
+  });
+
+  it("uses injected now() for deterministic latency", async () => {
+    const task = makeTask();
+    let tick = 0;
+    const result = await noMemoryAdapter.run({
+      task,
+      scope: defaultScope(),
+      k: 3,
+      seed: 0,
+      rerankEnabled: false,
+      judgeEnabled: false,
+      configHash: "cfg",
+      fixtureHash: "fix",
+      retrievalPolicyVersion: "v1",
+      now: () => new Date((tick += 5)),
+    });
+    expect(result.latencyMs).toBe(5);
+  });
+
+  it("buildNoMemoryUnavailable returns typed unavailable result", () => {
+    const task = makeTask();
+    const result = buildNoMemoryUnavailable(task, "v1", "cfg", "fix");
+    expect(result.status).toBe("unavailable");
+    expect(result.statusDetail).toBe("no_memory_adapter_not_registered");
+    expect(result.ignored.every((item) => item.reasonCode === "unavailable")).toBe(true);
   });
 });
 
@@ -280,5 +330,24 @@ describe("adapter registry", () => {
   it("returns undefined for unknown adapters", () => {
     resetAdapterRegistry();
     expect(getAdapter("lexical")).toBeUndefined();
+  });
+
+  it("buildUnavailableResult preserves provider metadata on failure receipts", () => {
+    const task = makeTask();
+    const result = buildUnavailableResult({
+      task,
+      adapterName: "mem0",
+      status: "credential_missing",
+      statusDetail: "credential_missing",
+      retrievalPolicyVersion: "v1",
+      configHash: "cfg",
+      fixtureHash: "fix",
+      latencyMs: 0,
+      provider: "mem0",
+      providerVersion: "test-v1",
+    });
+    expect(result.receipt.provenance.provider).toBe("mem0");
+    expect(result.receipt.provenance.providerVersion).toBe("test-v1");
+    expect(result.ignored[0].whyMissed).toBe("adapter_unavailable");
   });
 });
