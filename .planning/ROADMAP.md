@@ -68,13 +68,14 @@ Refactor until you are happy with the architecture. After each significant step,
 - 📋 **v8.19 Runtime Bottleneck Evidence** — Phase 175 (planned 2026-07-20; PERF-EVID-01..04; measure representative operator and retrieval workloads before any runtime rewrite decision)
 - 🔄 **v8.20 Connected Work Memory** — Phase 176 (added 2026-07-21; **highest priority**; CONNMEM-01..10; **CONNMEM-02..10 library complete on main** via 2026-07-23 beastmode session — `services/connmem` (25 modules, 141 tests). **Not yet integrated:** no service entrypoint, no compose/topology entry, no kernel route, and the 141 tests do not run in CI (2026-07-24 architecture review, F1). Live backfill is blocked on runtime integration (v8.27 Phase 185), not only on the Linear + Circleback credentials tracked in `CONNMEM-LIVE-DEFER`)
 - ✅ **v8.21 Reproducible Local Install Hardening** — Phase 177 (closed 2026-07-21; INSTALL-REPRO-01..06 merged into main; /api/health truthful on cordant-hermes-01 for all five core services including Agents and APO; install-regression --fast 9/9; Fable closeout PASS pending re-validation)
-- 🔄 **v8.32 Easy Human + Agent Onboarding** — Phases 201–202 (added 2026-07-31; INVBOOT-01..06 shipped; **Phase 202 COWORK-01..05 closed 2026-07-31** — Cordant `/mcp` + Invite Cowork UX; Cowork UI tools-list operator confirmation remaining)
+- 🔄 **v8.32 Easy Human + Agent Onboarding** — Phases 201–203 (added 2026-07-31; INVBOOT-01..06 shipped; **Phase 202 COWORK-01..05 closed 2026-07-31** — Cordant `/mcp` + Invite Cowork UX; Cowork UI tools-list operator confirmation remaining; Phase 203 Google account registration planned 2026-07-31, context filed)
 - 🔄 **v8.31 Operator Config Durability + Storage Consolidation** — Phases 196-198 (added 2026-07-26 from the oracle-1 hardening session; CFGDUR-01..06 + HOSTPAR-01..04 + STORECON-01..05; make host configuration survive upgrades by construction, bring cordant-hermes-01 to oracle-1 parity, and decide SQLite→Postgres/Supabase on measured evidence. This milestone exists because a silent config regression disconnected Neo4j Aura and was found by accident)
 - ✅ **v8.22 Paperclip/MemroOS Two-Seam Memory Integration** — Phase 178 (implementation complete on main: `apps/memroos/src/app/api/paperclip/*` (67/67 tests), `components/flow/paperclip-fleet-panel.tsx`, `docs/integrations/paperclip.md` §4 Memory Path FLEET-2x clause added in commit `68879a1e`, `docs/integrations/paperclip-option-d-2026-07-21.md`; 67/67 paperclip+flow tests pass; MEMCLIP-01..05 implementation complete — final acceptance against a live Paperclip tenant remains the operator's gate)
 - ✅ **v8.27 Connected Work Memory Runtime Integration** — Phase 185 (closed 2026-07-31; CONNMEM-RT-01..05 evidenced; live provider backfill still credential-gated)
 - ✅ **v8.28 Enforcement Surface Parity** — Phases 186-187 (closed 2026-07-31; TOPOPROD-01..04 + AUTHGATE-01..03 evidenced)
 - 📋 **v8.29 Structural Debt Paydown** — Phases 188-190 (added 2026-07-24 from architecture review F4/F5/F6; STORE-01..04 governed data-access chokepoint with shrinking better-sqlite3 allowlist, LIBNORM-01..03 lib/ boundary normalization, CLIENTSPLIT-01..02 api-client barrel split; incremental, no big-bang rewrites)
 - 📋 **v8.30 Seamless Memory Adoption** — Phases 191-195 (added 2026-07-26 from operator session; PRIORWORK-01..05 agent-reachable prior-work probe wiring the orphaned Phase 118 kernel, SELFCAP-01..05 session hooks + agent self-capture + structured sidecar extraction, SAVEQ-01..05 save-quality gate + governed-tool parity + automatic silver→gold promotion, MEMHABIT-01..05 auto-load recall/save skills + skill-packs bootstrap fix, ADOPTTEL-01..05 NOC adoption panel + GSD memory-receipt closeout gate; design: `.planning/design/memory-adoption-v1.md`)
+- 🔄 **v8.33 Ledger + Dashboard Data Honesty** — Phases 204-205 (added 2026-07-31 from the operator dashboard-accuracy session; LEDGHON-01..05 Ledger RTK removal + model-usage double-count guard + workflow map render fix in progress on working tree; KNOWPROV-01..05 oracle knowledge/skills point-and-index provisioning planned, operator-gated)
 
 ## Phases
 
@@ -3216,7 +3217,7 @@ established in `apps/memroos/src/app/login/page.tsx` (Phase 183/v8.25 baseline).
 |-------|----------------|--------|-----------|
 | 184. Auth Surface Migration to NOC Theme | 0/1 | Planned (operator request 2026-07-23) | — |
 
-## v8.27 Connected Work Memory Runtime Integration (Phase 185) — PLANNED (2026-07-24)
+## v8.27 Connected Work Memory Runtime Integration (Phase 185) — COMPLETE (2026-07-31)
 
 **Goal:** Give `services/connmem` a runtime path so the v8.20 library becomes a running subsystem, and put its 141 tests behind CI. Source: `.planning/notes/2026-07-24-architecture-review.md` finding F1 — the library is complete but has no entrypoint, no CI, no compose/topology entry, and no kernel route; credentials are not the blocker.
 
@@ -3255,7 +3256,7 @@ the routes are not yet in `check-route-auth-boundary` coverage as RT-04 requires
 |-------|----------------|--------|-----------|
 | 185. Connmem Runtime Integration | 1/1 | **Complete** — RT-01..05 evidenced (CI 144 tests, topology, proxy allowlist, oracle health/ledger/release-gate, `/api/health` connmem probe). Live Linear/Circleback backfill still credential-gated | 2026-07-31 |
 
-## v8.28 Enforcement Surface Parity (Phases 186-187) — PLANNED (2026-07-24)
+## v8.28 Enforcement Surface Parity (Phases 186-187) — COMPLETE (2026-07-31)
 
 **Goal:** Make the drift gates cover the deployment and the routes that actually exist, rather than the ones enumerated when each gate was written. Source: `.planning/notes/2026-07-24-architecture-review.md` findings F2 (topology gate is local-dev only while production is oracle-1) and F3 (route-auth gate validates a hand-maintained file list and cannot see new files under exempted prefixes).
 
@@ -3607,9 +3608,87 @@ Streamable HTTP MCP is not yet publicly routed/authenticated for Anthropic.
 Plans:
 - [x] 202-01-PLAN.md — systemd + cloudflared `/mcp*` + Invite/Team Cowork UX + smoke checklist (COWORK-01..05)
 
+### Phase 203 — Google Account Registration (not Cowork MCP auth)
+
+**Goal:** Non-technical invitees can **Continue with Google** on `/invite/[token]`
+and `/login` and land in an authenticated session bound to the invite (role +
+ownership) without inventing a password. Operator clarification 2026-07-31:
+Google is for **console account registration/login only** — Claude Cowork →
+`/mcp` connector auth stays admin-managed bearer (per-user MCP OAuth is a
+possible later phase, explicitly out of scope here).
+
+**Context:** `.planning/phases/203-cowork-mcp-oauth/203-CONTEXT.md` (Version 2026-07-31.2)
+
+**Suggested slice (from context):** Google OIDC via `arctic` (or equivalent) with
+PKCE; `/api/auth/google` + `/api/auth/google/callback`; on success with valid
+invite token create/link user, set role from invite, issue the same session
+cookies as register; buttons on invite register + login pages only; env
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / redirect URI per host (Cordant + oracle).
+
+**Out of scope:** Cowork MCP OAuth, Cloudflare Access on `/mcp`, SendGrid.
+
 ### Progress Table (v8.32 Easy Human + Agent Onboarding)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Deployed oracle-1 + hermes (Eric invite smoke still manual) | 2026-07-31 |
 | 202. Claude Cowork Remote MCP (Cordant) | 1/1 | Live `/mcp` + bearer + Invite/Team UX; SUMMARY + checklist | 2026-07-31 |
+| 203. Google Account Registration | 0/1 | Planned — context filed 2026-07-31; copy fixes for the 202 Google-confusion already landed (`bc58d28a`) | — |
+
+## v8.33 Ledger + Dashboard Data Honesty (Phases 204-205) — IN PROGRESS (2026-07-31)
+
+*Added: 2026-07-31 · Version: 2026-07-31.1 · Sources: operator dashboard-accuracy session 2026-07-31 (Ledger/Workflow/Memory Inventory audit against oracle-1 live data)*
+
+**Why:** The 2026-07-31 operator audit found the dashboard misreporting on
+oracle-1: Ledger showed RTK KPIs as "unavailable"/"EMPTY" for an integration
+that is not installed, `token_ledger` + `model_routing_events` are empty because
+no writer runs in production, the Workflow Map rendered blank from a CSS
+grid/SVG sizing collapse (data was fine), mem0 reports `memory_count: null`
+so Vector Memories shows unavailable, and Knowledge Files / Skills show 0
+because oracle's `/knowledge` mount is a stub — no `agent-knowledge` clone,
+no `collections.config.json`, no `SKILLS_PATH`, empty `skill_registry`.
+Operator decision: adopt a **point-and-index** model — MemRoOS points at the
+superior knowledge center and indexes it, rather than copying files in.
+
+### Phase 204 — Ledger Honesty + RTK Removal + Workflow Render
+
+**Requirements:** LEDGHON-01..05
+
+| ID | Criterion |
+|----|-----------|
+| LEDGHON-01 | RTK fully removed from Ledger UI (KPIs, Savings Breakdown tab, cost-savings card, `useTokenStats`); no RTK-derived numbers rendered anywhere on `/ledger` |
+| LEDGHON-02 | `/api/model-usage` merges Claude JSONL + `token_ledger`; `model_routing_events` used **only** as fallback when the ledger is empty (no double-count — `recordModelRoutingEvent` mirrors into `token_ledger`); `sources` reports `modelRoutingUsedAsFallback` |
+| LEDGHON-03 | Empty Ledger states are diagnosable: UI names the token writers (`/api/model-routing/telemetry`, GSD `routeGsdModel`, operations telemetry tokenLedgers, Claude JSONL mounts) instead of rendering zeros |
+| LEDGHON-04 | Workflow Map renders at all viewport widths: responsive grid (stack below `xl`), SVG `minWidth` + `preserveAspectRatio` + horizontal scroll wrapper |
+| LEDGHON-05 | Tests updated: ledger-page suite green without RTK mocks; new `model-routing-token-usage` aggregation test proves no double-count |
+
+**Status 2026-07-31:** implementation complete on working tree (uncommitted);
+tests green locally. Remaining: commit + deploy to oracle-1, then re-verify
+`/ledger` and `/flow` on the live host.
+
+### Phase 205 — Knowledge Vault Point-and-Index Provisioning (operator-gated)
+
+**Requirements:** KNOWPROV-01..05
+
+| ID | Criterion |
+|----|-----------|
+| KNOWPROV-01 | oracle-1 `/knowledge` is a real clone/pull of the superior knowledge center (`lac5q/agent-knowledge` or operator-confirmed successor), kept fresh (pull cron or governed sync) |
+| KNOWPROV-02 | `collections.config.json` present (shipped or mounted) so Memory Inventory can count knowledge files |
+| KNOWPROV-03 | `SKILLS_PATH` set (e.g. `/knowledge/skills`) in compose/env; skill registry syncs from it via the governed sync path (v8.6 trust chain, not legacy `skill-sync.py`) |
+| KNOWPROV-04 | MCP `KNOWLEDGE_ROOT` points at the same vault; qmd/library indexing enabled over the collections so agents can search, not only list |
+| KNOWPROV-05 | Inventory honesty: missing config or empty mount reports **unavailable** with a reason, never a silent 0 |
+
+**Also open (diagnosed same session, tracked here):** mem0 `/health` returns
+`memory_count: null` on oracle-1 — determine whether Qdrant collection is empty
+or mem0 count reporting is broken, and surface the true state.
+
+**Status 2026-07-31:** diagnosed; awaiting operator confirmation of the superior
+knowledge center location and scope (oracle-1 only vs oracle-1 + cordant-hermes-01)
+before ops execution.
+
+### Progress Table (v8.33 Ledger + Dashboard Data Honesty)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 204. Ledger Honesty + RTK Removal + Workflow Render | 0/1 | Code complete on working tree; commit + oracle deploy + live re-verify remaining | — |
+| 205. Knowledge Vault Point-and-Index Provisioning | 0/1 | Diagnosed; operator-gated (confirm vault source + host scope) | — |

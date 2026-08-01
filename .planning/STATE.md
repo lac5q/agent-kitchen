@@ -1,19 +1,41 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.32
-milestone_name: Easy Human + Agent Onboarding (Phases 201–202)
+milestone: v8.33
+milestone_name: Ledger + Dashboard Data Honesty (Phases 204–205)
 status: active
-stopped_at: Closed Phase 202 Cowork with SUMMARY + live /mcp smoke; next waves 188+
-last_updated: "2026-08-01T01:05:00Z"
+stopped_at: Phase 204 code complete on working tree (uncommitted); Phase 205 operator-gated; Phase 203 Google registration planned
+last_updated: "2026-08-01T02:45:00Z"
 progress:
-  total_phases: 121
+  total_phases: 124
   completed_phases: 90
-  total_plans: 164
+  total_plans: 167
   completed_plans: 149
-  percent: 72
+  percent: 73
 ---
 
-## Latest Position (2026-07-31) — Phase 202 closed
+## Latest Position (2026-07-31) — v8.33 dashboard-accuracy session + roadmap reconciliation
+
+**Working tree (uncommitted, Phase 204):** Ledger RTK removal (KPIs, Savings
+Breakdown, `useTokenStats`), `/api/model-usage` double-count guard
+(`model_routing_events` fallback-only vs `token_ledger`, `modelRoutingUsedAsFallback`
+in sources), empty-state writer diagnostics, Workflow Map responsive-grid + SVG
+sizing render fix, ledger test suite updated + new `model-routing-token-usage`
+test. Next: commit (run `detect_changes()` first), deploy oracle-1, live re-verify
+`/ledger` + `/flow`.
+
+**Diagnosed, operator-gated (Phase 205):** oracle-1 `/knowledge` is a stub —
+no `agent-knowledge` clone, no `collections.config.json`, no `SKILLS_PATH`,
+empty `skill_registry`; mem0 `memory_count: null`. Point-and-index plan filed
+in ROADMAP §v8.33; awaiting operator confirmation of vault source + host scope.
+
+**Roadmap reconciliation this session:** v8.27/v8.28 section headers corrected
+PLANNED→COMPLETE (2026-07-31); Phase 203 (Google account registration — console
+auth only, not Cowork MCP) registered under v8.32 with progress row; v8.33
+milestone added (Phases 204-205, LEDGHON-01..05 + KNOWPROV-01..05).
+
+**Lane:** director-inline (dashboard-honesty + planning-doc work; no menial batch).
+
+## Prior Position (2026-07-31) — Phase 202 closed
 
 **Closed with evidence:**
 - Phase **202** COWORK-01..05 — SUMMARY + Cordant `/mcp` smoke (401 unauth; bearer→FastMCP) + Invite/Team Cowork UX + unit tests
