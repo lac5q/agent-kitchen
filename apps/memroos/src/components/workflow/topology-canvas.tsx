@@ -120,12 +120,30 @@ export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyC
         </span>
       </div>
 
-      {/* SVG topology */}
+      {/* SVG topology — explicit aspect-ratio avoids CSS-grid height collapse;
+          overflow-x lets phones scroll a wide agent grid instead of crushing it. */}
+      <div
+        data-topology-scroll
+        style={{
+          width: "100%",
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+          border: `1px solid ${NOC.rule}`,
+          background: "#fbfaf6",
+        }}
+      >
       <svg
         viewBox={`0 0 ${canvas.width} ${canvas.height}`}
         width="100%"
+        height="auto"
+        preserveAspectRatio="xMinYMid meet"
+        role="img"
+        aria-label={`Workflow topology with ${nodes.length} nodes and ${edges.length} edges`}
         style={{
           display: "block",
+          minWidth: 720,
+          minHeight: 280,
+          aspectRatio: `${canvas.width} / ${canvas.height}`,
           background: "#fbfaf6",
           backgroundImage: "radial-gradient(#e4e4dd 1px, transparent 1px)",
           backgroundSize: "16px 16px",
@@ -236,6 +254,7 @@ export function TopologyCanvas({ selectedId, onSelect, onSelectNode }: TopologyC
           );
         })}
       </svg>
+      </div>
 
       {/* Notices — an empty column must say why, not render blank */}
       {notices.length > 0 && (

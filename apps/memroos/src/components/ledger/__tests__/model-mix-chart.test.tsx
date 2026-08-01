@@ -84,6 +84,6 @@ describe("ModelMixChart", () => {
     );
     expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
     expect(screen.getByText("gpt-4")).toBeInTheDocument();
-    expect(screen.getByText(/1,200 calls \(60.0%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1,200 tokens \(60.0%\)/)).toBeInTheDocument();
   });
 });

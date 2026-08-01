@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTokenStats, useModelUsage } from "@/lib/api-client";
-import { SavingsChart } from "@/components/ledger/savings-chart";
+import { useModelUsage } from "@/lib/api-client";
 import { ModelMixChart } from "@/components/ledger/model-mix-chart";
 import { CostCalculator } from "@/components/ledger/cost-calculator";
 import { LedgerAnalyticsPanel } from "@/components/ledger/analytics-panel";
@@ -46,144 +45,31 @@ function envelopeLabel(env: NumberEnvelope, formatter: (n: number) => string = f
   return env.status;
 }
 
-function tokenStatsEnvelopes(
-  data: { available?: boolean; stats?: Record<string, unknown> | null; timestamp?: string } | undefined,
-  error: unknown,
-  isLoading: boolean
-): {
-  tokensSaved: NumberEnvelope;
-  totalCommands: NumberEnvelope;
-  avgExecutionTime: NumberEnvelope;
-  savingsPercent: NumberEnvelope;
-} {
-  const source = "/api/tokens";
-  const observedAt = data?.timestamp ?? null;
-  const cumulativeScope = { window: "cumulative" as const, workspace: "all" as const };
-  const rtkMissing =
-    isLoading === false &&
-    (Boolean(error) || data === undefined || data.available === false || data.stats == null);
-
-  if (error) {
-    const errMsg = error instanceof Error ? error.message : "unknown error";
-    const env = (reason: string): NumberEnvelope =>
-      metricEnvelope<number>({
-        value: null,
-        status: "unavailable",
-        source,
-        observedAt: null,
-        freshnessMs: null,
-        scope: cumulativeScope,
-        reason,
-      });
-    return {
-      tokensSaved: env(
-        `Optional RTK savings source failed (${errMsg}). Tokens Processed uses /api/model-usage across models.`
-      ),
-      totalCommands: env(`RTK command totals unavailable (${errMsg}).`),
-      avgExecutionTime: env(`RTK avg execution unavailable (${errMsg}).`),
-      savingsPercent: env(`RTK savings percent unavailable (${errMsg}).`),
-    };
-  }
-  if (isLoading || !data) {
-    const env = metricEnvelope<number>({
-      value: null,
-      status: "blocked",
-      source,
-      observedAt: null,
-      freshnessMs: null,
-      scope: cumulativeScope,
-      reason: `Loading optional RTK savings source (${source}).`,
-    });
-    return { tokensSaved: env, totalCommands: env, avgExecutionTime: env, savingsPercent: env };
-  }
-
-  const stats = data.stats;
-  if (rtkMissing || !stats) {
-    const reason =
-      "RTK CLI is optional and unavailable here. Tokens Processed comes from /api/model-usage (Claude JSONL + efficiency token_ledger across models). RTK savings/commands stay unavailable — not zero.";
-    const env = (extra = ""): NumberEnvelope =>
-      metricEnvelope<number>({
-        value: null,
-        status: "unavailable",
-        source,
-        observedAt: null,
-        freshnessMs: null,
-        scope: cumulativeScope,
-        reason: `${reason}${extra}`,
-      });
-    return {
-      tokensSaved: env(" Savings require a real retained-memory/RTK baseline."),
-      totalCommands: env(),
-      avgExecutionTime: env(),
-      savingsPercent: env(),
-    };
-  }
-
-  const tokensSaved = typeof stats.tokensSaved === "number" ? (stats.tokensSaved as number) : null;
-  const totalCommands = typeof stats.totalCommands === "number" ? (stats.totalCommands as number) : null;
-  const avgExecutionTime =
-    typeof stats.avgExecutionTime === "number" ? (stats.avgExecutionTime as number) : null;
-  const savingsPercent =
-    typeof stats.savingsPercent === "number" ? (stats.savingsPercent as number) : null;
-
-  const liveOrZero = (value: number | null, reason: string): NumberEnvelope => {
-    if (value === null) {
-      return metricEnvelope<number>({ value: null, status: "unavailable", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason });
-    }
-    if (value === 0) {
-      return metricEnvelope<number>({ value: 0, status: "zero", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason: `Successful ${source} measured exactly zero.` });
-    }
-    return metricEnvelope<number>({ value, status: "live", source, observedAt, freshnessMs: null, scope: cumulativeScope, reason });
+type ModelUsagePayload = {
+  usage?: {
+    total: { inputTokens: number; outputTokens: number; cacheRead: number; requests: number };
+    models: Array<{ name: string; totalTokens: number }>;
   };
-
-  return {
-    tokensSaved: metricEnvelope<number>({
-      value: tokensSaved,
-      status: tokensSaved === null ? "unavailable" : tokensSaved === 0 ? "zero" : "live",
-      source,
-      observedAt,
-      freshnessMs: null,
-      scope: cumulativeScope,
-      reason:
-        tokensSaved === null
-          ? "Savings baseline unavailable until a real retained-memory/RTK measurement exists."
-          : tokensSaved === 0
-            ? `Successful ${source} measured exactly zero cumulative savings.`
-            : `${formatNum(tokensSaved)} cumulative tokens saved by RTK (optional savings lane).`,
-    }),
-    totalCommands: liveOrZero(totalCommands, `${source} returned no command count`),
-    avgExecutionTime: liveOrZero(avgExecutionTime, `${source} returned no avg execution time`),
-    savingsPercent: metricEnvelope<number>({
-      value: savingsPercent,
-      status: savingsPercent === null ? "unavailable" : savingsPercent === 0 ? "zero" : "live",
-      source,
-      observedAt,
-      freshnessMs: null,
-      scope: cumulativeScope,
-      reason:
-        savingsPercent === null
-          ? "Savings percent unavailable until a real baseline exists."
-          : `${savingsPercent.toFixed(1)}% RTK savings rate.`,
-    }),
+  sources?: {
+    claudeJsonlModels?: number;
+    efficiencyLedgerModels?: number;
+    modelRoutingModels?: number;
+    modelRoutingUsedAsFallback?: number;
   };
-}
+  timestamp?: string;
+};
 
 function tokensProcessedEnvelope(
-  modelData:
-    | {
-        usage?: {
-          total: { inputTokens: number; outputTokens: number; cacheRead: number; requests: number };
-          models: unknown[];
-        };
-        timestamp?: string;
-      }
-    | undefined,
+  modelData: ModelUsagePayload | undefined,
   modelError: unknown,
   modelLoading: boolean,
   since: string
-): { envelope: NumberEnvelope; inputTokens: number; outputTokens: number } {
+): { envelope: NumberEnvelope; inputTokens: number; outputTokens: number; requests: number } {
   const source = "/api/model-usage";
   const scope = { window: `since=${since.slice(0, 10)}`, workspace: "all" as const };
+  const sourceDiag = modelData?.sources
+    ? ` sources={claudeJsonl:${modelData.sources.claudeJsonlModels ?? 0}, token_ledger:${modelData.sources.efficiencyLedgerModels ?? 0}, model_routing:${modelData.sources.modelRoutingModels ?? 0}}`
+    : "";
   if (modelError) {
     const errMsg = modelError instanceof Error ? modelError.message : "unknown error";
     return {
@@ -198,6 +84,7 @@ function tokensProcessedEnvelope(
       }),
       inputTokens: 0,
       outputTokens: 0,
+      requests: 0,
     };
   }
   if (modelLoading || !modelData) {
@@ -213,12 +100,14 @@ function tokensProcessedEnvelope(
       }),
       inputTokens: 0,
       outputTokens: 0,
+      requests: 0,
     };
   }
   const total = modelData.usage?.total;
   const inputTokens = total?.inputTokens ?? 0;
   const outputTokens = total?.outputTokens ?? 0;
   const cacheRead = total?.cacheRead ?? 0;
+  const requests = total?.requests ?? 0;
   const processed = inputTokens + outputTokens + cacheRead;
   const models = modelData.usage?.models?.length ?? 0;
   if (models === 0 && processed === 0) {
@@ -230,10 +119,11 @@ function tokensProcessedEnvelope(
         observedAt: modelData.timestamp ?? null,
         freshnessMs: null,
         scope,
-        reason: `No model token observations since ${since.slice(0, 10)} (Claude JSONL + efficiency token_ledger). Not a fabricated zero.`,
+        reason: `No model token observations since ${since.slice(0, 10)} (Claude JSONL + efficiency token_ledger + model_routing_events). Writers have not posted usage yet — not a fabricated zero.${sourceDiag}`,
       }),
       inputTokens: 0,
       outputTokens: 0,
+      requests: 0,
     };
   }
   return {
@@ -244,15 +134,100 @@ function tokensProcessedEnvelope(
       observedAt: modelData.timestamp ?? null,
       freshnessMs: null,
       scope,
-      reason: `${formatNum(processed)} tokens across ${models} model(s) since ${since.slice(0, 10)} (input+output+cacheRead).`,
+      reason: `${formatNum(processed)} tokens across ${models} model(s) since ${since.slice(0, 10)} (input+output+cacheRead).${sourceDiag}`,
     }),
     inputTokens,
     outputTokens,
+    requests,
   };
 }
 
+function requestsEnvelope(
+  processed: ReturnType<typeof tokensProcessedEnvelope>,
+  since: string
+): NumberEnvelope {
+  const source = "/api/model-usage";
+  const scope = { window: `since=${since.slice(0, 10)}`, workspace: "all" as const };
+  if (processed.envelope.status === "error" || processed.envelope.status === "blocked") {
+    return { ...processed.envelope, value: null };
+  }
+  if (processed.envelope.status === "empty") {
+    return metricEnvelope<number>({
+      value: null,
+      status: "empty",
+      source,
+      observedAt: processed.envelope.observedAt,
+      freshnessMs: null,
+      scope,
+      reason: `No recorded model requests since ${since.slice(0, 10)}.`,
+    });
+  }
+  return metricEnvelope<number>({
+    value: processed.requests,
+    status: processed.requests === 0 ? "zero" : "live",
+    source,
+    observedAt: processed.envelope.observedAt,
+    freshnessMs: null,
+    scope,
+    reason: `${formatNum(processed.requests)} recorded model requests since ${since.slice(0, 10)}.`,
+  });
+}
+
+function modelsObservedEnvelope(
+  modelData: ModelUsagePayload | undefined,
+  modelError: unknown,
+  modelLoading: boolean,
+  since: string
+): NumberEnvelope {
+  const source = "/api/model-usage";
+  const scope = { window: `since=${since.slice(0, 10)}`, workspace: "all" as const };
+  if (modelError) {
+    return metricEnvelope<number>({
+      value: null,
+      status: "error",
+      source,
+      observedAt: null,
+      freshnessMs: null,
+      scope,
+      reason: modelError instanceof Error ? modelError.message : "Failed to load model usage",
+    });
+  }
+  if (modelLoading || !modelData) {
+    return metricEnvelope<number>({
+      value: null,
+      status: "blocked",
+      source,
+      observedAt: null,
+      freshnessMs: null,
+      scope,
+      reason: `Loading ${source}`,
+    });
+  }
+  const count = modelData.usage?.models?.length ?? 0;
+  if (count === 0) {
+    return metricEnvelope<number>({
+      value: null,
+      status: "empty",
+      source,
+      observedAt: modelData.timestamp ?? null,
+      freshnessMs: null,
+      scope,
+      reason: `No models observed since ${since.slice(0, 10)}.`,
+    });
+  }
+  return metricEnvelope<number>({
+    value: count,
+    status: "live",
+    source,
+    observedAt: modelData.timestamp ?? null,
+    freshnessMs: null,
+    scope,
+    reason: `${count} model(s) with token observations since ${since.slice(0, 10)}.`,
+  });
+}
+
 function modelMixEnvelopes(
-  data: { usage?: { models?: Array<{ name: string; totalTokens: number }>; total?: unknown }; timestamp?: string } | undefined,
+  data: ModelUsagePayload | undefined,
   error: unknown,
   isLoading: boolean,
   since: string
@@ -323,37 +298,6 @@ function modelMixEnvelopes(
   };
 }
 
-function breakdownEnvelopes(
-  breakdown: Array<{ command: string; count: number; tokensSaved: number; savingsPercent: number }> | undefined
-): NumberEnvelope {
-  const source = "/api/tokens?section=commandBreakdown";
-  const cumulativeScope = { window: "cumulative", workspace: "all" as const };
-  if (!breakdown || breakdown.length === 0) {
-    return metricEnvelope<number>({
-      value: null,
-      status: "empty",
-      source,
-      observedAt: null,
-      freshnessMs: null,
-      scope: cumulativeScope,
-      reason: `${source} returned no per-command breakdown`,
-    });
-  }
-  const total = breakdown.reduce((sum, b) => sum + (Number.isFinite(b.tokensSaved) ? b.tokensSaved : 0), 0);
-  return metricEnvelope<number>({
-    value: total,
-    status: total === 0 ? "zero" : "live",
-    source,
-    observedAt: null,
-    freshnessMs: null,
-    scope: cumulativeScope,
-    reason:
-      total === 0
-        ? `Successful ${source} measured exactly zero savings across ${breakdown.length} commands`
-        : `${formatNum(total)} tokens saved across ${breakdown.length} commands from ${source}`,
-  });
-}
-
 function EnvelopeStatCard({
   label,
   tooltip,
@@ -407,14 +351,11 @@ function EnvelopeStatCard({
   );
 }
 
-const TABS = ["Savings Breakdown", "Model Mix"] as const;
-type Tab = (typeof TABS)[number];
 const LEDGER_RANGES = [
   { label: "Last 24 hours", value: "1", days: 1 },
   { label: "Last 7 days", value: "7", days: 7 },
   { label: "Last 30 days", value: "30", days: 30 },
 ] as const;
-
 
 export default function LedgerPage() {
   const search = useSearchParams();
@@ -425,38 +366,12 @@ export default function LedgerPage() {
   const [rangeAnchorIso] = useState(() => new Date().toISOString());
   const selectedRange = LEDGER_RANGES.find((range) => range.value === rangeDays) ?? LEDGER_RANGES[1];
   const since = new Date(new Date(rangeAnchorIso).getTime() - selectedRange.days * 24 * 60 * 60 * 1000).toISOString();
-  const { data, isLoading: tokenLoading, error: tokenError } = useTokenStats();
   const { data: modelData, isLoading: modelLoading, error: modelError } = useModelUsage(since);
-  const [activeTab, setActiveTab] = useState<Tab>("Savings Breakdown");
 
-  const stats = data?.stats ?? null;
-  const tokensSavedRaw =
-    stats && typeof stats.tokensSaved === "number" ? (stats.tokensSaved as number) : 0;
-  const savingsPercentRaw =
-    stats && typeof stats.savingsPercent === "number" ? (stats.savingsPercent as number) : 0;
-
-  const tokenEnvelopes = tokenStatsEnvelopes(data, tokenError, tokenLoading);
   const processed = tokensProcessedEnvelope(modelData, modelError, modelLoading, since);
-  const totalInput = processed.inputTokens;
-  const totalOutput = processed.outputTokens;
+  const requestEnv = requestsEnvelope(processed, since);
+  const modelsEnv = modelsObservedEnvelope(modelData, modelError, modelLoading, since);
   const mixEnvelopes = modelMixEnvelopes(modelData, modelError, modelLoading, since);
-
-  const breakdown = (stats?.commandBreakdown as Array<{
-    command: string;
-    count: number;
-    tokensSaved: number;
-    savingsPercent: number;
-  }> | undefined) || [];
-
-  const breakdownEnv = breakdownEnvelopes(breakdown);
-
-  const savingsData = breakdown.slice(0, 8).map((b) => ({
-    command: b.command.replace("rtk ", "").slice(0, 20),
-    tokensUsed: b.savingsPercent > 0
-      ? Math.max(0, Math.round((b.tokensSaved / (b.savingsPercent / 100)) - b.tokensSaved))
-      : 0,
-    tokensSaved: b.tokensSaved,
-  }));
 
   const modelMixData = mixEnvelopes.tableModels.map((m) => ({
     name: m.name,
@@ -470,7 +385,7 @@ export default function LedgerPage() {
       <PageHeader
         eyebrow="Operations"
         title="Ledger"
-        hint="Token savings, model mix, routing quality, and cost analytics across retained work."
+        hint="Model token usage, routing quality, and cost analytics from durable MemRoOS observations — not an external CLI proxy."
       />
 
       {fromWindow && (
@@ -504,122 +419,70 @@ export default function LedgerPage() {
           ))}
         </select>
         <span className="text-xs" style={{ color: NOC.soft }} data-ledger-filter-scope>
-          Tokens Processed + Model Mix window={rangeDays}d (since={since.slice(0, 10)}, workspace=all) from /api/model-usage. RTK savings/commands are optional and cumulative when available.
+          Tokens / Model Mix window={rangeDays}d (since={since.slice(0, 10)}, workspace=all) from /api/model-usage.
         </span>
       </Card>
 
-      {(tokenLoading || modelLoading || modelError || (tokenError && modelError)) && (
+      {(modelLoading || modelError || processed.envelope.status === "empty") && (
         <Card pad="sm" data-ledger-source-status>
           <div className="text-sm font-semibold" style={{ color: NOC.ink }}>Ledger source status</div>
-          <div className="mt-1 text-xs" style={{ color: tokenError || modelError ? NOC.terra : NOC.soft }}>
-            {tokenLoading || modelLoading ? "Loading RTK token stats and multi-model usage (Claude JSONL + efficiency token_ledger)..." : null}
-            {tokenError ? `Optional RTK source failed: ${tokenError instanceof Error ? tokenError.message : "unknown error"} (Tokens Processed still uses model-usage). ` : null}
+          <div className="mt-1 text-xs" style={{ color: modelError ? NOC.terra : NOC.soft }}>
+            {modelLoading ? "Loading multi-model usage..." : null}
+            {!modelLoading && modelData?.sources
+              ? `model-usage sources: claudeJsonl=${modelData.sources.claudeJsonlModels ?? 0}, token_ledger=${modelData.sources.efficiencyLedgerModels ?? 0}, model_routing=${modelData.sources.modelRoutingModels ?? 0}. `
+              : null}
             {modelError ? `Model usage failed: ${modelError instanceof Error ? modelError.message : "unknown error"}.` : null}
+            {!modelLoading && !modelError && processed.envelope.status === "empty"
+              ? "Token writers are idle: post to /api/model-routing/telemetry (or GSD routeGsdModel) / operations telemetry tokenLedgers, or mount Claude JSONL sessions."
+              : null}
           </div>
         </Card>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <EnvelopeStatCard
-            label={<>Tokens Processed <InfoTip text="Total tokens across all observed models — input + output + cacheRead from /api/model-usage (Claude JSONL and efficiency token_ledger). Respects the page date range. Independent of RTK." /></>}
+            label={<>Tokens Processed <InfoTip text="Total tokens across observed models — input + output + cacheRead from /api/model-usage (Claude JSONL + efficiency token_ledger; model_routing_events only when ledger is empty)." /></>}
             envelope={processed.envelope}
             subtitle={
               <span style={{ fontFamily: NOC_FONT_MONO }}>
-                {formatNum(totalInput)} in / {formatNum(totalOutput)} out
+                {formatNum(processed.inputTokens)} in / {formatNum(processed.outputTokens)} out
               </span>
             }
           />
         </Card>
         <Card>
           <EnvelopeStatCard
-            label={<>Tokens Saved <InfoTip text="Tokens that would have been sent without RTK's output filtering. Cumulative until a retained-memory baseline exists; never reported as a measured zero without one (VAL-LEDGER-001)." /></>}
-            envelope={tokenEnvelopes.tokensSaved}
-            subtitle={
-              savingsPercentRaw > 0 ? (
-                <span style={{ fontFamily: NOC_FONT_MONO }}>{savingsPercentRaw.toFixed(1)}% savings rate</span>
-              ) : tokenEnvelopes.savingsPercent.status === "unavailable" ? undefined : undefined
-            }
+            label={<>Requests <InfoTip text="Count of recorded model usage observations in the selected window (from /api/model-usage)." /></>}
+            envelope={requestEnv}
           />
         </Card>
         <Card>
           <EnvelopeStatCard
-            label={<>Total Commands <InfoTip text="Number of CLI commands executed through the RTK proxy. Cumulative (window=cumulative, workspace=all)." /></>}
-            envelope={tokenEnvelopes.totalCommands}
-          />
-        </Card>
-        <Card>
-          <EnvelopeStatCard
-            label={<>Avg Execution <InfoTip text="Average wall-clock time per RTK-proxied command, in seconds. Cumulative (window=cumulative, workspace=all)." /></>}
-            envelope={tokenEnvelopes.avgExecutionTime}
-            format={(n) => `${n.toFixed(1)}s`}
+            label={<>Models Observed <InfoTip text="Distinct models with token observations in the selected window." /></>}
+            envelope={modelsEnv}
           />
         </Card>
       </div>
 
-      {/* Chart Tabs */}
       <Card data-ledger-tab-card>
-        {/* Tab List */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="flex gap-1 w-fit p-1" style={{ background: NOC.fog, border: `1px solid ${NOC.rule}` }}>
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={[
-                    "px-4 py-1.5 text-sm font-semibold transition-colors",
-                    isActive
-                      ? "border"
-                      : "",
-                  ].join(" ")}
-                  style={{
-                    background: isActive ? NOC.peach : "transparent",
-                    borderColor: isActive ? NOC.terra : "transparent",
-                    color: isActive ? NOC.terraDeep : NOC.muted,
-                  }}
-                  data-ledger-tab={tab}
-                >
-                  {tab}
-                </button>
-              );
-            })}
-          </div>
-          {activeTab === "Savings Breakdown" && (
-            <InfoTip text="Per-command breakdown of token savings. Cumulative until a retained-memory baseline exists." />
-          )}
-          {activeTab === "Model Mix" && (
-            <InfoTip text={`Distribution of token usage across Claude model tiers. Windowed from /api/model-usage?since=${since.slice(0, 10)}.`} />
-          )}
+        <div className="mb-5 flex items-center gap-3">
+          <div className="text-sm font-semibold" style={{ color: NOC.ink }}>Model Mix</div>
+          <InfoTip text={`Distribution of token usage across models. Windowed from /api/model-usage?since=${since.slice(0, 10)}.`} />
         </div>
-
-        {/* Tab Content */}
-        {activeTab === "Savings Breakdown" && (
-          <SavingsChart data={savingsData} envelope={breakdownEnv} />
-        )}
-        {activeTab === "Model Mix" && (
-          <>
-            <ModelMixChart data={modelMixData} envelope={mixEnvelopes.modelMix} />
-            <p className="mt-3 text-xs" style={{ color: NOC.soft }}>
-              Aggregated from Claude Code session logs (Claude JSONL + efficiency token_ledger) for window={rangeDays}d (since={since.slice(0, 10)}). RTK is not required.
-            </p>
-          </>
-        )}
+        <ModelMixChart data={modelMixData} envelope={mixEnvelopes.modelMix} />
+        <p className="mt-3 text-xs" style={{ color: NOC.soft }}>
+          Aggregated from Claude JSONL + efficiency token_ledger + model_routing_events for window={rangeDays}d (since={since.slice(0, 10)}).
+        </p>
       </Card>
 
-      {/* Cost Calculator */}
       <CostCalculator
-        totalInput={totalInput}
-        totalOutput={totalOutput}
-        tokensSaved={tokensSavedRaw}
-        savingsEnvelope={tokenEnvelopes.tokensSaved}
+        totalInput={processed.inputTokens}
+        totalOutput={processed.outputTokens}
       />
 
       <ModelRoutingPanel />
 
-      {/* Usage Trends */}
       <LedgerAnalyticsPanel />
 
     </div>

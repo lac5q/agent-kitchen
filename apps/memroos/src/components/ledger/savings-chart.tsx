@@ -76,7 +76,7 @@ export function SavingsChart({ data, envelope }: SavingsChartProps) {
         >
           {status === "blocked"
             ? "Loading savings breakdown..."
-            : status === "error"
+            : status === "error" || status === "unavailable"
               ? "Savings breakdown unavailable (see status above)."
               : "No per-command savings available in the selected window."}
         </div>

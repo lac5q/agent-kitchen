@@ -104,7 +104,10 @@ export default function FlowPage() {
 
       {/* Primary view: topology (default) or ReactFlow (toggle) */}
       {!showFlow ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
+        <div
+          className="grid grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_320px]"
+          data-flow-layout="topology"
+        >
           <TopologyCanvas
             selectedId={topoSelectedId}
             onSelect={setTopoSelectedId}
@@ -113,7 +116,7 @@ export default function FlowPage() {
           <NodeDetailRail nodeId={topoSelectedId} node={topoSelectedNode} />
         </div>
       ) : (
-        <div className="relative">
+        <div className="relative min-h-[420px] h-[min(70vh,640px)]">
           <ReactFlowCanvas
             services={services}
             agentCount={agentCount}

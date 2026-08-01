@@ -69,6 +69,16 @@ describe("SavingsChart", () => {
     rerender(<SavingsChart data={[]} envelope={envelope("error")} />);
     expect(screen.getByText(/savings breakdown unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/error/i)).toBeInTheDocument();
+
+    rerender(
+      <SavingsChart
+        data={[]}
+        envelope={envelope("unavailable", "RTK CLI is optional and unavailable on this host")}
+      />
+    );
+    expect(screen.getByText(/savings breakdown unavailable/i)).toBeInTheDocument();
+    expect(document.querySelector('[data-savings-status="unavailable"]')).toBeTruthy();
+    expect(screen.queryByText(/no per-command savings available/i)).not.toBeInTheDocument();
   });
 
   it("renders non-live status banner with custom source", () => {

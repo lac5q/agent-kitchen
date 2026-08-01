@@ -33,7 +33,7 @@ function DarkTooltip({ active, payload }: {
     <div className="rounded-lg border px-3 py-2 text-xs shadow-xl" style={{ borderColor: NOC.ruleStrong, background: NOC.paper }}>
       <p className="font-medium" style={{ color: NOC.muted }}>{entry.name}</p>
       <p style={{ color: NOC.soft }}>
-        {entry.value.toLocaleString()} calls ({(entry.payload.percent * 100).toFixed(1)}%)
+        {entry.value.toLocaleString()} tokens ({(entry.payload.percent * 100).toFixed(1)}%)
       </p>
     </div>
   );

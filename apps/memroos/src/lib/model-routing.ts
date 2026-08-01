@@ -272,6 +272,93 @@ export function listModelRoutingEvents(db: Database.Database, limit = 50): Model
   return rows.map(rowToEvent);
 }
 
+/**
+ * Aggregate model_routing_events token columns into the model-usage shape so
+ * Ledger Tokens Processed / Model Mix reflect routed LLM calls when Claude
+ * JSONL and efficiency token_ledger are empty (common on oracle-1).
+ */
+export function aggregateModelRoutingTokenUsage(
+  db: Database.Database,
+  since?: Date
+): {
+  models: Array<{
+    id: string;
+    name: string;
+    inputTokens: number;
+    outputTokens: number;
+    cacheRead: number;
+    cacheCreation: number;
+    requests: number;
+    totalTokens: number;
+  }>;
+  total: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheRead: number;
+    cacheCreation: number;
+    requests: number;
+  };
+} {
+  ensureModelRoutingSchema(db);
+  const params: Record<string, unknown> = {};
+  let sinceClause = "";
+  if (since && Number.isFinite(since.getTime())) {
+    sinceClause = " AND created_at >= @since";
+    params.since = since.toISOString();
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT provider, model,
+              SUM(input_tokens) AS input_tokens,
+              SUM(output_tokens) AS output_tokens,
+              COUNT(*) AS requests
+       FROM model_routing_events
+       WHERE 1=1
+         ${sinceClause}
+       GROUP BY provider, model
+       HAVING SUM(input_tokens) + SUM(output_tokens) > 0
+       ORDER BY SUM(input_tokens) + SUM(output_tokens) DESC
+       LIMIT 100`
+    )
+    .all(params) as Array<{
+    provider: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    requests: number;
+  }>;
+
+  const models = rows.map((row) => {
+    const inputTokens = Math.max(0, Number(row.input_tokens) || 0);
+    const outputTokens = Math.max(0, Number(row.output_tokens) || 0);
+    const id = `${row.provider}/${row.model}`;
+    return {
+      id,
+      name: id,
+      inputTokens,
+      outputTokens,
+      cacheRead: 0,
+      cacheCreation: 0,
+      requests: Math.max(0, Number(row.requests) || 0),
+      totalTokens: inputTokens + outputTokens,
+    };
+  });
+
+  const total = models.reduce(
+    (t, m) => ({
+      inputTokens: t.inputTokens + m.inputTokens,
+      outputTokens: t.outputTokens + m.outputTokens,
+      cacheRead: t.cacheRead + m.cacheRead,
+      cacheCreation: t.cacheCreation + m.cacheCreation,
+      requests: t.requests + m.requests,
+    }),
+    { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 }
+  );
+
+  return { models, total };
+}
+
 export function summarizeModelRouting(db: Database.Database) {
   ensureModelRoutingSchema(db);
   const events = listModelRoutingEvents(db, 200);

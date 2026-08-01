@@ -1,10 +1,11 @@
-import { parseModelUsage, parseTokenStats } from "@/lib/parsers";
+import { parseModelUsage } from "@/lib/parsers";
 import { apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import {
   aggregateEfficiencyTokenLedger,
   mergeModelUsageSources,
 } from "@/lib/efficiency-telemetry";
+import { aggregateModelRoutingTokenUsage } from "@/lib/model-routing";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,12 @@ export const dynamic = "force-dynamic";
 type ModelUsageResult = Awaited<ReturnType<typeof parseModelUsage>>;
 
 let modelUsageCache:
-  | { key: string; checkedAt: number; usage: ModelUsageResult }
+  | {
+      key: string;
+      checkedAt: number;
+      usage: ModelUsageResult;
+      sources: Record<string, number>;
+    }
   | null = null;
 
 function positiveNumber(value: string | undefined, fallback: number): number {
@@ -20,37 +26,10 @@ function positiveNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function rtkUsageFromStats(): ModelUsageResult {
-  const empty = {
-    models: [] as ModelUsageResult["models"],
-    total: { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 },
-  };
-  const stats = parseTokenStats();
-  if (!stats) return empty;
-  const inputTokens = typeof stats.totalInput === "number" ? stats.totalInput : 0;
-  const outputTokens = typeof stats.totalOutput === "number" ? stats.totalOutput : 0;
-  const requests = typeof stats.totalCommands === "number" ? stats.totalCommands : 0;
-  if (inputTokens <= 0 && outputTokens <= 0 && requests <= 0) return empty;
+function emptyUsage(): ModelUsageResult {
   return {
-    models: [
-      {
-        id: "rtk",
-        name: "RTK (proxy savings)",
-        inputTokens,
-        outputTokens,
-        cacheRead: 0,
-        cacheCreation: 0,
-        requests,
-        totalTokens: inputTokens + outputTokens,
-      },
-    ],
-    total: {
-      inputTokens,
-      outputTokens,
-      cacheRead: 0,
-      cacheCreation: 0,
-      requests,
-    },
+    models: [],
+    total: { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheCreation: 0, requests: 0 },
   };
 }
 
@@ -60,27 +39,38 @@ async function buildModelUsageResponse(req: NextRequest) {
   const cacheKey = since?.toISOString() ?? "all";
   const ttlMs = positiveNumber(process.env.MODEL_USAGE_CACHE_TTL_MS, 30_000);
   if (modelUsageCache?.key === cacheKey && Date.now() - modelUsageCache.checkedAt < ttlMs) {
-    return Response.json({ usage: modelUsageCache.usage, timestamp: new Date().toISOString() });
+    return Response.json({
+      usage: modelUsageCache.usage,
+      sources: modelUsageCache.sources,
+      timestamp: new Date().toISOString(),
+    });
   }
 
-  // Claude JSONL (local) + durable token_ledger + RTK proxy stats (when present).
+  // Claude JSONL + efficiency token_ledger.
+  // model_routing_events are a fallback only: recordModelRoutingEvent also mirrors
+  // into token_ledger, so merging both would double-count when routing is active.
   const claudeUsage = await parseModelUsage(since);
-  let ledgerUsage = { models: [] as ModelUsageResult["models"], total: claudeUsage.total };
+  let ledgerUsage = emptyUsage();
+  let routingUsage = emptyUsage();
   try {
-    ledgerUsage = aggregateEfficiencyTokenLedger(getDb(), since);
+    const db = getDb();
+    ledgerUsage = aggregateEfficiencyTokenLedger(db, since);
+    routingUsage = aggregateModelRoutingTokenUsage(db, since);
   } catch {
-    // Keep Claude-only results if the efficiency table is unavailable.
+    // Keep Claude-only results if the efficiency/routing tables are unavailable.
   }
-  const rtkUsage = rtkUsageFromStats();
-  const usage = mergeModelUsageSources(claudeUsage, ledgerUsage, rtkUsage);
-  modelUsageCache = { key: cacheKey, checkedAt: Date.now(), usage };
+  const durableUsage = ledgerUsage.models.length > 0 ? ledgerUsage : routingUsage;
+  const usage = mergeModelUsageSources(claudeUsage, durableUsage);
+  const sources = {
+    claudeJsonlModels: claudeUsage.models.length,
+    efficiencyLedgerModels: ledgerUsage.models.length,
+    modelRoutingModels: routingUsage.models.length,
+    modelRoutingUsedAsFallback: ledgerUsage.models.length === 0 ? routingUsage.models.length : 0,
+  };
+  modelUsageCache = { key: cacheKey, checkedAt: Date.now(), usage, sources };
   return Response.json({
     usage,
-    sources: {
-      claudeJsonlModels: claudeUsage.models.length,
-      efficiencyLedgerModels: ledgerUsage.models.length,
-      rtkModels: rtkUsage.models.length,
-    },
+    sources,
     timestamp: new Date().toISOString(),
   });
 }

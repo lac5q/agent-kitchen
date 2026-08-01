@@ -215,55 +215,13 @@ describe("Ledger truthful metric rendering", () => {
   });
 
   describe("CostCalculator", () => {
-    it("renders RTK Savings as unavailable when envelope is not live/zero", () => {
-      render(
-        <CostCalculator
-          totalInput={100}
-          totalOutput={50}
-          tokensSaved={0}
-          savingsEnvelope={{
-            value: null,
-            status: "unavailable",
-            source: "/api/tokens",
-            observedAt: null,
-            freshnessMs: null,
-            scope: { window: "cumulative", workspace: "all" },
-            reason: "Savings baseline is explicitly unavailable until a retained-memory baseline exists",
-          }}
-        />
-      );
+    it("estimates spend from model-usage input/output without RTK savings", () => {
+      render(<CostCalculator totalInput={1_000_000} totalOutput={1_000_000} />);
 
-      const savingsCard = document.querySelector('[data-cost-savings-card]');
-      expect(savingsCard).toBeTruthy();
-      expect(savingsCard?.getAttribute("data-cost-savings-status")).toBe("unavailable");
-      // Should NOT render a measured-zero dollar value when envelope is unavailable.
-      expect(savingsCard?.querySelector('[data-cost-savings-value]')).toBeNull();
-    });
-
-    it("renders RTK Savings as $0.00 when envelope proves a measured zero", () => {
-      render(
-        <CostCalculator
-          totalInput={100}
-          totalOutput={50}
-          tokensSaved={0}
-          savingsEnvelope={{
-            value: 0,
-            status: "zero",
-            source: "/api/tokens",
-            observedAt: "2026-05-21T00:00:00.000Z",
-            freshnessMs: 1000,
-            scope: { window: "cumulative", workspace: "all" },
-            reason: "Successful /api/tokens measured exactly zero cumulative savings",
-          }}
-        />
-      );
-
-      const savingsCard = document.querySelector('[data-cost-savings-card]');
-      expect(savingsCard).toBeTruthy();
-      expect(savingsCard?.getAttribute("data-cost-savings-status")).toBe("zero");
-      const valueEl = savingsCard?.querySelector('[data-cost-savings-value]');
-      expect(valueEl).toBeTruthy();
-      expect(valueEl?.textContent).toContain("$0.00");
+      expect(document.querySelector("[data-cost-spend-card]")).toBeTruthy();
+      expect(screen.getByText("$18.00")).toBeInTheDocument();
+      expect(document.querySelector("[data-cost-savings-card]")).toBeNull();
+      expect(screen.queryByText(/RTK Savings/i)).not.toBeInTheDocument();
     });
   });
 });

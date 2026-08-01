@@ -843,9 +843,16 @@ export function useModelUsage(since?: string) {
   return useQuery({
     queryKey: ["model-usage", since ?? "all"],
     queryFn: () =>
-      fetchJSON<{ usage: import("@/lib/parsers").ModelUsage; timestamp: string }>(
-        `/api/model-usage${qs}`
-      ),
+      fetchJSON<{
+        usage: import("@/lib/parsers").ModelUsage;
+        sources?: {
+          claudeJsonlModels?: number;
+          efficiencyLedgerModels?: number;
+          modelRoutingModels?: number;
+          modelRoutingUsedAsFallback?: number;
+        };
+        timestamp: string;
+      }>(`/api/model-usage${qs}`),
     refetchInterval: POLL_INTERVALS.tokens,
   });
 }
