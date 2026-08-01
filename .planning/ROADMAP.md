@@ -3614,5 +3614,5 @@ Streamable HTTP MCP is not yet publicly routed/authenticated for Anthropic.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Complete (deploy/smoke Eric on hermes remaining) | 2026-07-31 |
-| 202. Claude Cowork Remote MCP (Cordant) | 0/TBD | Planned (Cloudflare UI live; public `/mcp` + Cowork UX open) | — |
+| 201. Invite + Multi-Harness Agent Bootstrap | 1/1 | Deployed oracle-1 + hermes @ `a5db4f7f` (Eric invite smoke still manual) | 2026-07-31 |
+| 202. Claude Cowork Remote MCP (Cordant) | 0/TBD | Planned (Cloudflare UI live; `:8765` / public `/mcp` not up) | — |

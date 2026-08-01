@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.32
 milestone_name: Easy Human + Agent Onboarding (Phases 201–202)
 status: active
-stopped_at: Phase 201 code complete; hermes deploy + Eric smoke open; Phase 202 Cowork planned
-last_updated: "2026-07-31T23:20:02Z"
+stopped_at: Both hosts on a5db4f7f; awaiting confirm of all-GSD campaign wave order
+last_updated: "2026-08-01T00:00:00Z"
 progress:
   total_phases: 121
   completed_phases: 86
@@ -13,32 +13,29 @@ progress:
   percent: 71
 ---
 
-## Latest Position (2026-07-31) — Cloudflare live; Cowork plan added
+## Latest Position (2026-07-31) — Full deploy + GSD campaign queued
 
-**Cloudflare for Cordant is live.** Tunnel `memroos-cordant` →
-`https://memroos-cordant.epiloguecapital.com` → `127.0.0.1:3000` on
-**cordant-hermes-01**. Invitees (Eric / Cordant) do **not** need Tailscale for
-the operator UI. Phase 201 CONTEXT D-11/D-12 and deferred list refreshed to
-match (stale Tailscale / “Cloudflare deferred” language removed).
+**Deploy:** oracle-1 + cordant-hermes-01 both at **`a5db4f7f`**. Public health
+200 on `memroos.epiloguecapital.com` and `memroos-cordant.epiloguecapital.com`.
+Phase 201 code is live on both brains. Cordant Team UI:
+`https://memroos-cordant.epiloguecapital.com/team`.
 
-**Phase 201 (INVBOOT-01..06) remains code-complete.** Still open: deploy
-memroos build to hermes, smoke invite/Connect against the Cordant URL, invite
-Eric from hermes Team UI.
+**Hermes MCP gap (Phase 202):** tunnel + UI live; **no process on `:8765`**;
+cloudflared still UI-only → COWORK-01 not done.
 
-**Phase 202 added (COWORK-01..05) — Claude Cowork Remote MCP.** CEO/workers
-primary client is Cowork, not Claude Code. Phase 201 curl|bash does not satisfy
-Cowork. Need public Streamable HTTP `/mcp` on the Cordant hostname (tunnel
-today is UI-only), auth for Anthropic-originated traffic, and Cowork
-connector/plugin onboarding UX. Context:
-`.planning/phases/202-claude-cowork-remote-mcp/202-CONTEXT.md`.
+**Operator asked:** implement **all** remaining GSD roadmap phases under remote
+control. Proposed wave order (needs confirm before burning through):
 
-**Revised enablement plan (no Tailscale):**
-1. Keep Phase 201 deploy/smoke for Claude Code / other local harnesses.
-2. Plan/execute Phase 202: route `/mcp` → knowledge-mcp, auth, Cowork custom
-   connector + optional plugin/deep-link.
-3. Workers: Connectors → MemRoOS (no laptop MCP install).
+1. **202** Cowork remote MCP (Cordant) — unblock Eric/CEO clients  
+2. **185** CONNMEM runtime + CI (unblocks v8.20 live)  
+3. **187** authgate (hours) → **186** topology prod  
+4. **188–190** structural debt → **196–198** config durability  
+5. **191–195** memory adoption → **175** PERF-EVID  
+6. **126–127** IdP/MDM — blocked on external infra  
 
-**Lane:** director-inline (planning). GitNexus MCP unavailable this session.
+**Exclusions:** Voyage / Phase 166. Ask before destructive DB/storage cutovers.
+
+**Lane:** director-inline.
 
 ## Prior Position (2026-07-31) — Phase 201 executed
 
