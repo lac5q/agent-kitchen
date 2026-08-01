@@ -76,6 +76,14 @@ services:
       SQLITE_DB_PATH: /data/conversations.db
       CLAUDE_MEMORY_PATH: /data/claude-memory
       KNOWLEDGE_BASE_PATH: /knowledge
+      # Skills root inside the container. Defaults into the mounted knowledge
+      # vault (skills/ subdir convention); harmless when the vault has none.
+      # Without this the in-container default is ~/.claude/skills, which
+      # never exists in the image — Skills always counted 0 in Docker.
+      SKILLS_PATH: ${MEMROOS_SKILLS_CONTAINER_PATH:-/knowledge/skills}
+      # Collections config: the repo-root collections.config.json is not
+      # baked into the image; it is bind-mounted below.
+      COLLECTIONS_CONFIG_PATH: /app/collections.config.json
       # Agents: AGENT_CONFIGS_PATH inside the container.
       #   Default: <knowledge>/agent-configs (subdir convention — no override needed).
       #   Independent layout: set MEMROOS_AGENT_CONFIGS_CONTAINER_PATH=/agent-configs
@@ -93,6 +101,7 @@ services:
     volumes:
       - memroos-data:/data
       - ${KNOWLEDGE_BASE_PATH:-./docs}:/knowledge:ro
+      - ./collections.config.json:/app/collections.config.json:ro
       # Independent Agents mount (only active when AGENT_CONFIGS_PATH is set
       # in .env to a path outside the knowledge repo). The mount path is
       # declared as a literal at /agent-configs so it does not collide with
