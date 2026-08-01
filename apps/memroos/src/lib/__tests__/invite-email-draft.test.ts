@@ -15,14 +15,14 @@ describe("buildInviteEmailDraft", () => {
     expect(draft).not.toMatch(/\bTTL\b/);
   });
 
-  it("adds Claude Cowork connector path for Cordant invites without embedding a bearer", () => {
+  it("adds Claude Cowork path for Cordant invites without asking members for a bearer", () => {
     const url = "https://memroos-cordant.epiloguecapital.com/invite/abc123";
     const draft = buildInviteEmailDraft(url);
     expect(draft).toMatch(/Claude Cowork/i);
     expect(draft).toContain("https://memroos-cordant.epiloguecapital.com/mcp");
-    expect(draft.toLowerCase()).toContain("not a terminal curl|bash");
-    expect(draft).not.toMatch(/Bearer\s+[A-Za-z0-9_-]{16,}/);
-    expect(draft).toContain("not in this email");
+    expect(draft.toLowerCase()).toContain("should not need a token");
+    expect(draft).not.toMatch(/Bearer\s+/i);
+    expect(draft).not.toMatch(/ask your team admin for the bearer/i);
   });
 
   it("omits Cordant Cowork block for non-Cordant URLs unless forced", () => {

@@ -6,7 +6,7 @@ import {
   buildCoworkConnectorSteps,
   buildCoworkDeepLinkHint,
   COWORK_PLATFORM_ID,
-  resolveCoworkMcpUrl,
+  resolvePreferredCoworkMcpUrl,
 } from "@/lib/cowork-connector";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
 
@@ -73,7 +73,7 @@ export default function InvitePage() {
     if (typeof window === "undefined") {
       return "https://memroos-cordant.epiloguecapital.com/mcp";
     }
-    return resolveCoworkMcpUrl(window.location.origin);
+    return resolvePreferredCoworkMcpUrl(window.location.origin);
   }, [step]);
 
   const coworkSteps = useMemo(
@@ -318,8 +318,8 @@ export default function InvitePage() {
                 ))}
               </ol>
               <p className="text-xs text-zinc-500">
-                Bearer token comes from your Cordant Team admin (not this page email). Do not put
-                long-lived tokens in chat or invite mail.
+                You should not need a token. Your Team admin adds MemRoOS once in Claude; you only
+                tap Connect. Google sign-in for this connector is coming next.
               </p>
             </div>
           )}
@@ -374,7 +374,7 @@ export default function InvitePage() {
           {showAdvanced && (
             <p className="text-xs text-zinc-500">
               After curl|bash finishes, restart Claude Code / Cursor so it reloads MemRoOS.
-              Cowork only needs the custom connector URL above — no Terminal install.
+              Cowork: open the setup link above — no Terminal install, no token paste for members.
             </p>
           )}
         </div>

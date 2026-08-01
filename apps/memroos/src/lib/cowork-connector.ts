@@ -1,13 +1,43 @@
 /**
  * Claude Cowork uses a remote custom connector (HTTPS MCP), not curl|bash.
- * Bearer stays with the operator (Team / rotate doc) — never in the invite email body.
+ *
+ * Auth model (Anthropic):
+ * - Members should never paste shared bearers — Team admin configures
+ *   request headers once (static_headers), or MCP OAuth (Google) when shipped.
+ * - See .planning/phases/203-cowork-mcp-oauth/203-CONTEXT.md
  */
 
 export const COWORK_PLATFORM_ID = "cowork" as const;
 
+/** Cordant brain — Eric / Cordant workers (not oracle). */
+export const CORDANT_PUBLIC_ORIGIN = "https://memroos-cordant.epiloguecapital.com";
+
+export type CoworkAudience = "member" | "admin";
+
 export function resolveCoworkMcpUrl(publicBaseUrl: string): string {
   const base = publicBaseUrl.replace(/\/+$/, "");
   return `${base}/mcp`;
+}
+
+/**
+ * Prefer Cordant for Cowork when the page origin is Cordant, or when the
+ * operator pinned NEXT_PUBLIC_COWORK_MCP_URL. Never invent tokens into the URL.
+ */
+export function resolvePreferredCoworkMcpUrl(pageOrigin: string): string {
+  const pinned =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_COWORK_MCP_URL?.trim()
+      : undefined;
+  if (pinned) {
+    return pinned.endsWith("/mcp") ? pinned.replace(/\/+$/, "") : resolveCoworkMcpUrl(pinned);
+  }
+  if (isCordantPublicUrl(pageOrigin)) {
+    return resolveCoworkMcpUrl(CORDANT_PUBLIC_ORIGIN);
+  }
+  // Oracle (or other) invite: still offer Cordant for Cowork by default so
+  // Eric-path screenshots never show memroos.epiloguecapital.com/mcp by accident.
+  // Operators testing oracle MCP can pin NEXT_PUBLIC_COWORK_MCP_URL.
+  return resolveCoworkMcpUrl(CORDANT_PUBLIC_ORIGIN);
 }
 
 export function isCordantPublicUrl(url: string): boolean {
@@ -18,17 +48,40 @@ export function isCordantPublicUrl(url: string): boolean {
   }
 }
 
-/** Numbered connector steps shown on Invite Connect (no long-lived bearer). */
-export function buildCoworkConnectorSteps(mcpUrl: string): string[] {
+export function buildCoworkDeepLink(mcpUrl: string): string {
+  const params = new URLSearchParams({
+    modal: "add-custom-connector",
+    connectorName: "MemRoOS",
+    connectorUrl: mcpUrl,
+  });
+  return `https://claude.ai/customize/connectors?${params.toString()}`;
+}
+
+/**
+ * Numbered connector steps. Default audience is **member** (no bearer paste).
+ */
+export function buildCoworkConnectorSteps(
+  mcpUrl: string,
+  audience: CoworkAudience = "member"
+): string[] {
+  const deepLink = buildCoworkDeepLink(mcpUrl);
+  if (audience === "admin") {
+    return [
+      `Open Claude → Admin settings → Connectors → Add custom connector.`,
+      `URL: ${mcpUrl}`,
+      `Until Google/MCP OAuth ships: set Request header Authorization to Bearer <token from hermes ~/.memroos/memroos-mcp-http.env> (admin only — never email this).`,
+      `Save. Members then only need Connectors → MemRoOS → Connect (no token).`,
+    ];
+  }
   return [
-    `Open Claude Cowork → Settings → Connectors (or Custom connectors).`,
-    `Add a custom connector with URL: ${mcpUrl}`,
-    `Set Authorization to Request header: Bearer <token from your Cordant Team admin — do not paste tokens into email>.`,
-    `Save, then confirm MemRoOS tools appear in the connector tools list.`,
+    `In Claude Cowork, open Connectors (or tap this setup link): ${deepLink}`,
+    `If MemRoOS is already listed for your team, tap Connect — you should not need any password or token.`,
+    `If it is not listed yet, ask your Cordant Team admin to add it once (they use the URL ${mcpUrl}).`,
+    `After Connect, confirm MemRoOS tools appear. Sign-in with Google for this connector ships next (Phase 203) — until then your admin handles auth behind the scenes.`,
   ];
 }
 
-/** Short deep-link style reference for docs / optional COWORK-04 path. */
+/** Short deep-link style reference for docs / COWORK-04. */
 export function buildCoworkDeepLinkHint(mcpUrl: string): string {
-  return `Claude Cowork custom connector → ${mcpUrl}`;
+  return `Claude Cowork → ${buildCoworkDeepLink(mcpUrl)}`;
 }

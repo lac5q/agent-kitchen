@@ -28,10 +28,9 @@ export function buildInviteEmailDraft(
   if (includeCowork) {
     lines.push(
       "If you use Claude Cowork (not Claude Code):",
-      "- On the Connect page, choose Claude Cowork for numbered connector steps.",
-      "- Primary path is a custom connector to https://memroos-cordant.epiloguecapital.com/mcp",
-      "  (not a Terminal curl|bash install).",
-      "- Ask your Team admin for the Bearer token separately — it is not in this email.",
+      "- On the Connect page, choose Claude Cowork.",
+      "- Tap Connect in Claude — you should not need a token or Terminal command.",
+      "- Connector URL (for your admin if not listed yet): https://memroos-cordant.epiloguecapital.com/mcp",
       ""
     );
   }
