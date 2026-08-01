@@ -4,11 +4,19 @@ import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
 import { resolvePublicMemroosUrl } from '@/lib/public-base-url';
+import { isValidEmailAddress, sendEmail, type EmailSendResult } from '@/lib/email/send';
+import {
+  INVITE_EMAIL_SUBJECT,
+  buildInviteEmailDraft,
+  buildInviteEmailHtml,
+} from '@/lib/invite-email-draft';
 import type { UserRole } from '@/lib/auth/types';
 
 interface InviteBody {
   role: UserRole;
   emailHint?: string;
+  /** Admin opted to have MemRoOS send the invite instead of copy/paste. */
+  sendEmail?: boolean;
 }
 
 const VALID_ROLES: UserRole[] = ['admin', 'operator', 'reviewer'];
@@ -27,9 +35,19 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'invalid request body' }, { status: 400 });
   }
 
-  const { role, emailHint } = body;
+  const { role, emailHint, sendEmail: wantsEmail } = body;
   if (!role || !VALID_ROLES.includes(role)) {
     return Response.json({ error: 'invalid role' }, { status: 400 });
+  }
+
+  // Sending needs a real address. Reject up front rather than minting an
+  // invite the admin believes was delivered.
+  const recipient = emailHint?.trim() ?? '';
+  if (wantsEmail && !isValidEmailAddress(recipient)) {
+    return Response.json(
+      { error: 'a valid email address is required to send the invitation' },
+      { status: 400 }
+    );
   }
 
   const db = getDb();
@@ -46,5 +64,18 @@ export async function POST(req: NextRequest) {
   const baseUrl = resolvePublicMemroosUrl(req);
   const inviteUrl = `${baseUrl}/invite/${rawToken}`;
 
-  return Response.json({ inviteUrl }, { status: 201 });
+  // The invite row is already committed, so a mail failure degrades to the
+  // copy/paste path rather than losing the invitation. The URL is returned
+  // either way and the client shows the draft when delivery did not happen.
+  let email: EmailSendResult | undefined;
+  if (wantsEmail) {
+    email = await sendEmail({
+      to: recipient,
+      subject: INVITE_EMAIL_SUBJECT,
+      text: buildInviteEmailDraft(inviteUrl),
+      html: buildInviteEmailHtml(inviteUrl),
+    });
+  }
+
+  return Response.json({ inviteUrl, email }, { status: 201 });
 }

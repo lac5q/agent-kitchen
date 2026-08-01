@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   buildCoworkConnectorSteps,
@@ -9,6 +9,7 @@ import {
   resolvePreferredCoworkMcpUrl,
 } from "@/lib/cowork-connector";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
+import { NOC, NOC_FONT_BODY, NOC_FONT_MONO } from "@/lib/noc-theme";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
@@ -54,6 +55,79 @@ const HARNESS_OPTIONS = Object.entries(PLATFORM_LABELS).filter(([id]) =>
   ].includes(id)
 );
 
+const inputStyle = {
+  background: NOC.fog,
+  borderColor: NOC.ruleStrong,
+  color: NOC.ink,
+} as const;
+
+/**
+ * Shared NOC chrome for every invite step. The invite pages are the first
+ * MemRoOS surface an invitee ever sees, so they use the same operator-console
+ * palette as /login rather than a separate dark treatment — a mid-flow shift
+ * from cream to near-black reads as "wrong site" right after a Google redirect.
+ */
+function InviteShell({ children, width = "420px" }: { children: ReactNode; width?: string }) {
+  return (
+    <main
+      className="min-h-screen px-5 py-6"
+      style={{ background: NOC.cream, color: NOC.ink, fontFamily: NOC_FONT_BODY }}
+    >
+      <div className="mx-auto flex min-h-[calc(100vh-48px)] max-w-6xl flex-col">
+        <header className="flex items-center gap-3 border-b pb-4" style={{ borderColor: NOC.rule }}>
+          <div
+            className="flex h-8 w-8 items-center justify-center text-sm font-bold"
+            style={{ background: NOC.ink, color: NOC.paper }}
+          >
+            m
+          </div>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: NOC.terra, fontFamily: NOC_FONT_MONO }}
+          >
+            Memroos / Join
+          </p>
+        </header>
+        <section className="flex flex-1 items-center justify-center py-12">
+          <div
+            className="w-full border p-6"
+            style={{
+              maxWidth: width,
+              background: NOC.paper,
+              borderColor: NOC.rule,
+              boxShadow: `0 18px 55px color-mix(in srgb, ${NOC.ink} 8%, transparent)`,
+            }}
+          >
+            {children}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className="text-[11px] font-bold uppercase tracking-[0.14em]"
+      style={{ color: NOC.terra, fontFamily: NOC_FONT_MONO }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function ErrorNote({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className="mt-4 border px-3 py-2 text-sm"
+      style={{ background: NOC.warnBg, borderColor: NOC.peachWarm, color: NOC.terraDeep }}
+    >
+      {children}
+    </p>
+  );
+}
+
 export default function InvitePage() {
   const router = useRouter();
   const params = useParams<{ token: string }>();
@@ -72,12 +146,20 @@ export default function InvitePage() {
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [selected, setSelected] = useState<string[]>(["claude"]);
   const [commands, setCommands] = useState<BootstrapCommand[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedCoworkUrl, setCopiedCoworkUrl] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [includeCowork, setIncludeCowork] = useState(false);
+
+  /**
+   * An invite carrying an email hint is bound to that person. Letting the
+   * password path register a different address would hand the invited role to
+   * whoever holds the link, so the field is fixed once the hint exists.
+   */
+  const emailLocked = Boolean(inviteInfo?.emailHint);
 
   const coworkMcpUrl = useMemo(() => {
     if (typeof window === "undefined") {
@@ -111,8 +193,17 @@ export default function InvitePage() {
   useEffect(() => {
     fetch("/api/auth/google/status")
       .then((res) => (res.ok ? res.json() : { configured: false }))
-      .then((data: { configured?: boolean }) => setGoogleAvailable(data.configured === true))
-      .catch(() => setGoogleAvailable(false));
+      .then((data: { configured?: boolean }) => {
+        const on = data.configured === true;
+        setGoogleAvailable(on);
+        // With no Google option there is nothing to collapse behind — show the
+        // password form immediately instead of hiding the only way in.
+        if (!on) setShowPasswordForm(true);
+      })
+      .catch(() => {
+        setGoogleAvailable(false);
+        setShowPasswordForm(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -254,268 +345,338 @@ export default function InvitePage() {
 
   if (loading && step === "register") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <p className="text-zinc-400">Validating invitation…</p>
-      </div>
+      <InviteShell>
+        <p className="text-sm" style={{ color: NOC.muted }}>
+          Validating invitation…
+        </p>
+      </InviteShell>
     );
   }
 
   if (step === "register" && (invalid || !inviteInfo)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-        <div className="w-full max-w-sm space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <h1 className="text-xl font-semibold text-zinc-100">Invitation Invalid</h1>
-          <p className="text-sm text-zinc-400">
-            This invitation link is invalid, expired, or has already been used.
-          </p>
-        </div>
-      </div>
+      <InviteShell>
+        <Eyebrow>Invitation</Eyebrow>
+        <h1 className="mt-2 text-2xl font-semibold tracking-normal">Invitation invalid</h1>
+        <p className="mt-2 text-sm" style={{ color: NOC.muted }}>
+          This invitation link is invalid, expired, or has already been used. Ask your MemRoOS
+          admin for a fresh one.
+        </p>
+      </InviteShell>
     );
   }
 
   if (step === "connect") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-10">
-        <div className="w-full max-w-lg space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-100">Connect your AI tools</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Account created. Pick the tools you use — Claude Cowork gets connector
-              steps; other tools get a one-line install command.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {HARNESS_OPTIONS.map(([id, label]) => {
-              const on = selected.includes(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => togglePlatform(id)}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                    on
-                      ? "border-amber-500 bg-amber-500/10 text-amber-200"
-                      : "border-zinc-700 bg-zinc-800 text-zinc-300"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              disabled={submitting || selected.length === 0}
-              onClick={() => void mintCommands()}
-              className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
-            >
-              {submitting ? "Preparing…" : `Continue with ${selectedLabels || "selection"}`}
-            </button>
-            <button
-              type="button"
-              onClick={() => finish("/")}
-              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300"
-            >
-              Skip for now
-            </button>
-          </div>
+      <InviteShell width="560px">
+        <Eyebrow>Step 2 of 2</Eyebrow>
+        <h1 className="mt-2 text-2xl font-semibold tracking-normal">Connect your AI tools</h1>
+        <p className="mt-2 text-sm" style={{ color: NOC.muted }}>
+          Account created. Pick the tools you use — Claude Cowork gets connector steps; other
+          tools get a one-line install command.
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {HARNESS_OPTIONS.map(([id, label]) => {
+            const on = selected.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => togglePlatform(id)}
+                className="border px-3 py-2 text-left text-sm transition"
+                style={
+                  on
+                    ? { background: NOC.peach, borderColor: NOC.terra, color: NOC.terraDeep }
+                    : { background: NOC.paper, borderColor: NOC.rule, color: NOC.muted }
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-      </div>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            disabled={submitting || selected.length === 0}
+            onClick={() => void mintCommands()}
+            className="flex-1 px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] transition disabled:opacity-60"
+            style={{ background: NOC.ink, color: NOC.paper }}
+          >
+            {submitting ? "Preparing…" : `Continue with ${selectedLabels || "selection"}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => finish("/")}
+            className="border px-4 py-3 text-sm"
+            style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+          >
+            Skip for now
+          </button>
+        </div>
+      </InviteShell>
     );
   }
 
   if (step === "commands") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-10">
-        <div className="w-full max-w-2xl space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-100">
-              {includeCowork && commands.length === 0
-                ? "Connect Claude Cowork"
-                : "Finish connecting"}
-            </h1>
-            {commands.length > 0 && (
-              <>
-                <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-400">
-                  <li>Open Terminal on your computer.</li>
-                  <li>Copy a command below and paste it, then press Enter.</li>
-                  <li>Restart that AI app so it picks up MemRoOS.</li>
-                </ol>
-                <p className="mt-3 text-sm text-zinc-500">
-                  These commands expire in about an hour — use Refresh if they stop working.
-                </p>
-              </>
-            )}
-          </div>
-          {includeCowork && (
-            <div className="space-y-3 rounded-lg border border-amber-500/40 bg-zinc-950 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-amber-100">Claude Cowork connector</p>
-                <button
-                  type="button"
-                  onClick={() => void copyCoworkUrl()}
-                  className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-300 hover:border-amber-500"
-                >
-                  {copiedCoworkUrl ? "Copied" : "Copy URL"}
-                </button>
-              </div>
-              <p className="text-xs text-zinc-500">{buildCoworkDeepLinkHint(coworkMcpUrl)}</p>
-              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-zinc-900 p-3 text-xs text-amber-100">
-                {coworkMcpUrl}
-              </pre>
-              <ol className="list-decimal space-y-1 pl-5 text-sm text-zinc-400">
-                {coworkSteps.map((stepText) => (
-                  <li key={stepText}>{stepText}</li>
-                ))}
-              </ol>
-              <p className="text-xs text-zinc-500">
-                You should not need a token. Your Team admin adds MemRoOS once in Claude; you only
-                tap Connect. (Google sign-in is for creating your MemRoOS account — not for this
-                connector step.)
+      <InviteShell width="680px">
+        <Eyebrow>Almost done</Eyebrow>
+        <h1 className="mt-2 text-2xl font-semibold tracking-normal">
+          {includeCowork && commands.length === 0 ? "Connect Claude Cowork" : "Finish connecting"}
+        </h1>
+        {commands.length > 0 && (
+          <>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm" style={{ color: NOC.muted }}>
+              <li>Open Terminal on your computer.</li>
+              <li>Copy a command below and paste it, then press Enter.</li>
+              <li>Restart that AI app so it picks up MemRoOS.</li>
+            </ol>
+            <p className="mt-3 text-sm" style={{ color: NOC.soft }}>
+              These commands expire in about an hour — use Refresh if they stop working.
+            </p>
+          </>
+        )}
+        {includeCowork && (
+          <div
+            className="mt-5 space-y-3 border p-4"
+            style={{ background: NOC.fog, borderColor: NOC.peachWarm }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold" style={{ color: NOC.terraDeep }}>
+                Claude Cowork connector
               </p>
-            </div>
-          )}
-          <div className="space-y-4">
-            {commands.map((cmd, index) => (
-              <div key={cmd.agentId} className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-zinc-100">
-                    {index + 1}. {cmd.label}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void copyCommand(cmd)}
-                    className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-300 hover:border-amber-500"
-                  >
-                    {copiedId === cmd.agentId ? "Copied" : "Copy"}
-                  </button>
-                </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-zinc-900 p-3 text-xs text-amber-100">
-                  {cmd.command}
-                </pre>
-              </div>
-            ))}
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <div className="flex flex-wrap gap-2">
-            {commands.length > 0 && (
               <button
                 type="button"
-                disabled={submitting}
-                onClick={() => void mintCommands()}
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300"
+                onClick={() => void copyCoworkUrl()}
+                className="border px-2 py-1 text-xs"
+                style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
               >
-                Refresh commands
+                {copiedCoworkUrl ? "Copied" : "Copy URL"}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-500"
-            >
-              {showAdvanced ? "Hide advanced" : "Advanced"}
-            </button>
-            <button
-              type="button"
-              onClick={() => finish("/")}
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950"
-            >
-              Done
-            </button>
-          </div>
-          {showAdvanced && (
-            <p className="text-xs text-zinc-500">
-              After curl|bash finishes, restart Claude Code / Cursor so it reloads MemRoOS.
-              Cowork: open the setup link above — no Terminal install, no token paste for members.
+            </div>
+            <p className="text-xs" style={{ color: NOC.soft }}>
+              {buildCoworkDeepLinkHint(coworkMcpUrl)}
             </p>
-          )}
+            <pre
+              className="overflow-x-auto whitespace-pre-wrap break-all border p-3 text-xs"
+              style={{
+                background: NOC.paper,
+                borderColor: NOC.rule,
+                color: NOC.ink,
+                fontFamily: NOC_FONT_MONO,
+              }}
+            >
+              {coworkMcpUrl}
+            </pre>
+            <ol className="list-decimal space-y-1 pl-5 text-sm" style={{ color: NOC.muted }}>
+              {coworkSteps.map((stepText) => (
+                <li key={stepText}>{stepText}</li>
+              ))}
+            </ol>
+            <p className="text-xs" style={{ color: NOC.soft }}>
+              You should not need a token. Your Team admin adds MemRoOS once in Claude; you only
+              tap Connect. (Google sign-in is for creating your MemRoOS account — not for this
+              connector step.)
+            </p>
+          </div>
+        )}
+        <div className="mt-4 space-y-4">
+          {commands.map((cmd, index) => (
+            <div
+              key={cmd.agentId}
+              className="space-y-2 border p-4"
+              style={{ background: NOC.fog, borderColor: NOC.rule }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold" style={{ color: NOC.ink }}>
+                  {index + 1}. {cmd.label}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void copyCommand(cmd)}
+                  className="border px-2 py-1 text-xs"
+                  style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+                >
+                  {copiedId === cmd.agentId ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <pre
+                className="overflow-x-auto whitespace-pre-wrap break-all border p-3 text-xs"
+                style={{
+                  background: NOC.paper,
+                  borderColor: NOC.rule,
+                  color: NOC.ink,
+                  fontFamily: NOC_FONT_MONO,
+                }}
+              >
+                {cmd.command}
+              </pre>
+            </div>
+          ))}
         </div>
-      </div>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => finish("/")}
+            className="px-4 py-3 text-sm font-bold uppercase tracking-[0.08em]"
+            style={{ background: NOC.ink, color: NOC.paper }}
+          >
+            Done
+          </button>
+          {commands.length > 0 && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void mintCommands()}
+              className="border px-4 py-3 text-sm disabled:opacity-60"
+              style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+            >
+              Refresh commands
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="border px-4 py-3 text-sm"
+            style={{ borderColor: NOC.rule, color: NOC.soft }}
+          >
+            {showAdvanced ? "Hide advanced" : "Advanced"}
+          </button>
+        </div>
+        {showAdvanced && (
+          <p className="mt-3 text-xs" style={{ color: NOC.soft }}>
+            After curl|bash finishes, restart Claude Code / Cursor so it reloads MemRoOS. Cowork:
+            open the setup link above — no Terminal install, no token paste for members.
+          </p>
+        )}
+      </InviteShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
-        <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Join MemRoOS</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            You&apos;ve been invited as{" "}
-            <span className="font-medium text-amber-400">{inviteInfo?.role}</span>. Set up your
-            account below.
+    <InviteShell>
+      <Eyebrow>Step 1 of 2</Eyebrow>
+      <h1 className="mt-2 text-2xl font-semibold tracking-normal">Join MemRoOS</h1>
+      <p className="mt-2 text-sm" style={{ color: NOC.muted }}>
+        You&apos;ve been invited as{" "}
+        <span className="font-semibold" style={{ color: NOC.terra }}>
+          {inviteInfo?.role}
+        </span>
+        .
+        {emailLocked ? ` This invitation is for ${inviteInfo?.emailHint}.` : ""}
+      </p>
+
+      {googleAvailable && (
+        <div className="mt-5">
+          <GoogleSignInButton label="Continue with Google" inviteToken={token} />
+          <p className="mt-2 text-xs" style={{ color: NOC.soft }}>
+            Fastest option — no password to choose or remember. Your account is created with this
+            invitation&apos;s role.
           </p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-zinc-300" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-300" htmlFor="displayName">
-              Display Name
-            </label>
-            <input
-              id="displayName"
-              type="text"
-              autoComplete="name"
-              required
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your name"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-300" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
-            />
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
-          >
-            {submitting ? "Creating account…" : "Create account"}
-          </button>
-        </form>
-        {googleAvailable && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-xs uppercase tracking-wide text-zinc-500">or</span>
-              <div className="h-px flex-1 bg-zinc-800" />
+      )}
+
+      {(error || googleQuery.error) && <ErrorNote>{error || googleQuery.error}</ErrorNote>}
+
+      {googleAvailable && !showPasswordForm && (
+        <button
+          type="button"
+          onClick={() => setShowPasswordForm(true)}
+          className="mt-4 w-full border px-4 py-3 text-sm"
+          style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+        >
+          Use a password instead
+        </button>
+      )}
+
+      {showPasswordForm && (
+        <>
+          {googleAvailable && (
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-px flex-1" style={{ background: NOC.rule }} />
+              <span
+                className="text-[11px] uppercase tracking-[0.14em]"
+                style={{ color: NOC.soft, fontFamily: NOC_FONT_MONO }}
+              >
+                or
+              </span>
+              <div className="h-px flex-1" style={{ background: NOC.rule }} />
             </div>
-            <GoogleSignInButton label="Continue with Google" inviteToken={token} />
-            <p className="text-xs text-zinc-500">
-              No password needed — your account is created with this invitation&apos;s role.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <label className="block text-sm font-semibold" htmlFor="email">
+              Email
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                readOnly={emailLocked}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-2 w-full border px-3 py-2.5 text-sm outline-none transition"
+                style={
+                  emailLocked
+                    ? { ...inputStyle, color: NOC.soft, cursor: "not-allowed" }
+                    : inputStyle
+                }
+              />
+            </label>
+            {emailLocked && (
+              <p className="-mt-2 text-xs" style={{ color: NOC.soft }}>
+                Set by your invitation. Ask your admin to reissue it for a different address.
+              </p>
+            )}
+
+            <label className="block text-sm font-semibold" htmlFor="displayName">
+              Display name
+              <input
+                id="displayName"
+                type="text"
+                autoComplete="name"
+                required
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                className="mt-2 w-full border px-3 py-2.5 text-sm outline-none transition"
+                style={inputStyle}
+              />
+            </label>
+
+            <label className="block text-sm font-semibold" htmlFor="password">
+              Password
+              <input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="mt-2 w-full border px-3 py-2.5 text-sm outline-none transition"
+                style={inputStyle}
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] transition disabled:opacity-60"
+              style={
+                googleAvailable
+                  ? { background: NOC.paper, color: NOC.ink, border: `1px solid ${NOC.ruleStrong}` }
+                  : { background: NOC.ink, color: NOC.paper }
+              }
+            >
+              {submitting ? "Creating account…" : "Create account"}
+            </button>
+          </form>
+        </>
+      )}
+    </InviteShell>
   );
 }

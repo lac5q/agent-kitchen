@@ -20,8 +20,17 @@ interface UsersResponse {
   users: UserRecord[];
 }
 
+type EmailSendStatus = "sent" | "not_configured" | "dry_run" | "error";
+
 interface InviteResponse {
   inviteUrl: string;
+  email?: { status: EmailSendStatus; reason?: string };
+}
+
+interface Capabilities {
+  google: boolean;
+  email: boolean;
+  emailDryRun: boolean;
 }
 
 type Role = "admin" | "operator" | "reviewer";
@@ -32,7 +41,17 @@ async function fetchUsers(): Promise<UsersResponse> {
   return res.json() as Promise<UsersResponse>;
 }
 
-async function createInvite(data: { role: Role; emailHint?: string }): Promise<InviteResponse> {
+async function fetchCapabilities(): Promise<Capabilities> {
+  const res = await fetch("/api/auth/capabilities", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch capabilities");
+  return res.json() as Promise<Capabilities>;
+}
+
+async function createInvite(data: {
+  role: Role;
+  emailHint?: string;
+  sendEmail?: boolean;
+}): Promise<InviteResponse> {
   const res = await fetch("/api/auth/invite", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -52,6 +71,14 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState<Role>("reviewer");
   const [emailHint, setEmailHint] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [emailResult, setEmailResult] = useState<InviteResponse["email"]>(undefined);
+  /**
+   * Independent of the address field. An invite bound to someone's email is
+   * also the thing that locks their signup form to it, so "who is this for"
+   * and "should we mail it" have to stay separate choices — otherwise the
+   * only way to hand a link over yourself is to discard the binding.
+   */
+  const [sendViaEmail, setSendViaEmail] = useState(true);
   const [copied, setCopied] = useState(false);
   const [draftCopied, setDraftCopied] = useState(false);
   const [inviteError, setInviteError] = useState("");
@@ -61,10 +88,20 @@ export default function TeamPage() {
     queryFn: fetchUsers,
   });
 
+  const { data: caps } = useQuery({
+    queryKey: ["auth-capabilities"],
+    queryFn: fetchCapabilities,
+    retry: false,
+  });
+
+  const canEmail = caps?.email === true;
+  const willSend = canEmail && sendViaEmail && emailHint.trim().length > 0;
+
   const inviteMutation = useMutation({
     mutationFn: createInvite,
     onSuccess: (result) => {
       setInviteUrl(result.inviteUrl);
+      setEmailResult(result.email);
       setInviteError("");
       void queryClient.invalidateQueries({ queryKey: ["team-users"] });
     },
@@ -79,6 +116,7 @@ export default function TeamPage() {
     inviteMutation.mutate({
       role: inviteRole,
       emailHint: emailHint.trim() || undefined,
+      sendEmail: willSend,
     });
   }
 
@@ -108,6 +146,8 @@ export default function TeamPage() {
           onClick={() => {
             setShowInviteForm(true);
             setInviteUrl(null);
+            setEmailResult(undefined);
+            setSendViaEmail(true);
             setEmailHint("");
             setInviteRole("reviewer");
           }}
@@ -124,11 +164,30 @@ export default function TeamPage() {
           <div className="w-full max-w-md space-y-4 border p-6" style={{ background: NOC.paper, borderColor: NOC.rule }}>
             {inviteUrl ? (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold" style={{ color: NOC.ink }}>Invite link generated</h2>
+                <h2 className="text-lg font-semibold" style={{ color: NOC.ink }}>
+                  {emailResult?.status === "sent" ? "Invitation sent" : "Invite link generated"}
+                </h2>
                 <p className="text-sm" style={{ color: NOC.muted }}>
-                  Share this link with the invitee. It expires in 72 hours and can only be used
-                  once.
+                  {emailResult?.status === "sent"
+                    ? `Emailed to ${emailHint.trim()}. It expires in 72 hours and can only be used once.`
+                    : "Share this link with the invitee. It expires in 72 hours and can only be used once."}
                 </p>
+                {emailResult && emailResult.status !== "sent" && (
+                  <p
+                    className="border px-3 py-2 text-sm"
+                    style={{
+                      background: NOC.warnBg,
+                      borderColor: NOC.peachWarm,
+                      color: NOC.terraDeep,
+                    }}
+                  >
+                    {emailResult.status === "dry_run"
+                      ? "Dry-run mode is on (MEMROOS_EMAIL_DRY_RUN) — nothing was sent. Use the draft below."
+                      : emailResult.status === "not_configured"
+                        ? "Email is not configured on this host — send the draft below yourself."
+                        : `Could not send the email (${emailResult.reason ?? "unknown error"}). The invite is still valid — send the draft below.`}
+                  </p>
+                )}
                 <div className="flex items-center gap-2 border px-3 py-2" style={{ background: NOC.fog, borderColor: NOC.rule }}>
                   <span className="flex-1 truncate text-xs" style={{ color: NOC.muted }}>{inviteUrl}</span>
                   <button
@@ -145,7 +204,9 @@ export default function TeamPage() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-medium" style={{ color: NOC.ink }}>
-                    Email draft (copy and send)
+                    {emailResult?.status === "sent"
+                      ? "What they received"
+                      : "Email draft (copy and send)"}
                   </p>
                   <textarea
                     readOnly
@@ -195,7 +256,7 @@ export default function TeamPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium" style={{ color: NOC.muted }} htmlFor="emailHint">
-                    Email hint (optional)
+                    Email address (optional)
                   </label>
                   <input
                     id="emailHint"
@@ -206,7 +267,45 @@ export default function TeamPage() {
                     className="mt-1 w-full border px-3 py-2 text-sm focus:outline-none"
                     style={{ background: NOC.paper, borderColor: NOC.ruleStrong, color: NOC.ink }}
                   />
+                  <p className="mt-1 text-xs" style={{ color: NOC.soft }}>
+                    Locks their signup form to this address so the link can&apos;t be used to
+                    register under a different one.
+                  </p>
+                  {canEmail && emailHint.trim().length > 0 && (
+                    <label className="mt-2 flex items-start gap-2 text-xs" style={{ color: NOC.muted }}>
+                      <input
+                        type="checkbox"
+                        checked={sendViaEmail}
+                        onChange={(e) => setSendViaEmail(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Email the invitation to them. Uncheck to get the link and send it
+                        yourself — the address stays bound either way.
+                      </span>
+                    </label>
+                  )}
+                  {!canEmail && (
+                    <p className="mt-1 text-xs" style={{ color: NOC.soft }}>
+                      Email sending is not configured on this host — you&apos;ll get a copyable
+                      draft.
+                    </p>
+                  )}
                 </div>
+                {caps && !caps.google && (
+                  <p
+                    className="border px-3 py-2 text-xs"
+                    style={{
+                      background: NOC.warnBg,
+                      borderColor: NOC.peachWarm,
+                      color: NOC.terraDeep,
+                    }}
+                  >
+                    Google sign-in is not configured on this host, so invitees will only see the
+                    email + password form. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and
+                    GOOGLE_REDIRECT_URI to enable it.
+                  </p>
+                )}
                 {inviteError && <p className="text-sm text-red-400">{inviteError}</p>}
                 <div className="flex gap-3">
                   <button
@@ -223,7 +322,13 @@ export default function TeamPage() {
                     className="flex-1 px-4 py-2 text-sm font-semibold disabled:opacity-50"
                     style={{ background: NOC.terra, color: NOC.cream }}
                   >
-                    {inviteMutation.isPending ? "Generating…" : "Generate invite link"}
+                    {inviteMutation.isPending
+                      ? willSend
+                        ? "Sending…"
+                        : "Generating…"
+                      : willSend
+                        ? "Send invitation"
+                        : "Generate invite link"}
                   </button>
                 </div>
               </form>
