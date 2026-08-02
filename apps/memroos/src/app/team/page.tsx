@@ -258,14 +258,15 @@ export default function TeamPage() {
   });
 
   /**
-   * Disable, not delete. `disabled_at` is enforced on every auth path, so this
-   * takes effect immediately and revokes their credentials — while keeping the
-   * approval history that a hard delete would cascade away. Permanent removal
-   * is deliberately not exposed here; it needs DELETE ?hard=true.
+   * Disable — the account is kept.
+   *
+   * `disabled_at` is enforced on every auth path, so access stops immediately
+   * and credentials are revoked, while the user row and their approval history
+   * survive. Reversible. Delete is the separate, irreversible action.
    */
   function handleToggleDisabled(user: UserRecord) {
     const disabling = !user.disabledAt;
-    if (disabling && !confirm(`Remove ${user.displayName} from the team?\n\nThey will be signed out immediately and their API keys revoked. You can re-enable them later.`)) {
+    if (disabling && !confirm(`Disable ${user.displayName}?\n\nThe account is KEPT — nothing is erased. They are signed out immediately and their API keys, sessions and MCP tokens are revoked, so they lose access right away.\n\nYou can enable them again at any time. To erase the account entirely, use Delete instead.`)) {
       return;
     }
     setMemberError("");
@@ -530,9 +531,9 @@ export default function TeamPage() {
               </li>
             </ul>
             <p className="mb-4 text-sm" style={{ color: NOC.muted }}>
-              If you only want to revoke access, use <strong>Remove</strong> instead — it signs
-              them out and revokes credentials immediately, keeps the audit history, and can be
-              undone.
+              If you only want to revoke access, use <strong>Disable</strong> instead — it keeps
+              the account, signs them out and revokes credentials immediately, preserves the audit
+              history, and can be undone.
             </p>
             <label className="mb-2 block text-sm" style={{ color: NOC.ink }}>
               Type <strong>{deleteTarget.email}</strong> to confirm:
@@ -669,6 +670,11 @@ export default function TeamPage() {
               {memberError}
             </p>
           )}
+          <p className="mb-3 text-xs" style={{ color: NOC.soft }}>
+            <strong>Disable</strong> keeps the account and revokes access immediately — reversible.{" "}
+            <strong>Delete</strong> erases the account and everything belonging to it, including the
+            approval records they signed — permanent.
+          </p>
           <div className="overflow-hidden border" style={{ borderColor: NOC.rule }}>
           <table className="w-full text-sm">
             <thead className="text-left" style={{ background: NOC.fog, color: NOC.muted }}>
@@ -709,8 +715,13 @@ export default function TeamPage() {
                         disabled={membershipMutation.isPending}
                         className="text-sm underline disabled:opacity-50"
                         style={{ color: user.disabledAt ? NOC.muted : NOC.terra }}
+                        title={
+                          user.disabledAt
+                            ? "Restore access. The account was never erased."
+                            : "Revoke access but keep the account. Reversible."
+                        }
                       >
-                        {user.disabledAt ? "Re-enable" : "Remove"}
+                        {user.disabledAt ? "Enable" : "Disable"}
                       </button>
                       <button
                         type="button"
@@ -721,7 +732,7 @@ export default function TeamPage() {
                         }}
                         className="text-sm underline"
                         style={{ color: NOC.terra }}
-                        title="Permanently delete this account and all of its data"
+                        title="Erase the account and all of its data. Cannot be undone."
                       >
                         Delete
                       </button>
