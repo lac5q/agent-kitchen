@@ -307,6 +307,10 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       ? input.ownerId
       : null;
 
+  const existedBefore = Boolean(
+    db.prepare("SELECT 1 FROM registered_agents WHERE id = ?").get(input.id)
+  );
+
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO registered_agents (
@@ -333,7 +337,12 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
          metadata = excluded.metadata,
          updated_at = excluded.updated_at,
          deregistered_at = NULL,
-         owner_id = COALESCE(excluded.owner_id, registered_agents.owner_id)`
+         -- The EXISTING owner always wins. Written the other way round, any
+        -- caller who could reach registerAgent could re-register someone else's
+        -- agent id and become its owner — and, with issueApiKey defaulting true,
+        -- walk away with a working credential for it. Ownership changes only
+        -- through transferAgentOwnership, which is authorization-checked.
+        owner_id = COALESCE(registered_agents.owner_id, excluded.owner_id)`
     ).run({
       id: input.id,
       name: input.name,
@@ -359,7 +368,10 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
   });
   tx();
 
-  const apiKey = input.issueApiKey ? createAgentApiKey(input.id) : undefined;
+  // Key issuance is deliberately suppressed when the agent already existed.
+  // Registration is how an agent is *created*; re-running it against an existing
+  // id must never be a way to obtain a fresh credential for it.
+  const apiKey = input.issueApiKey && !existedBefore ? createAgentApiKey(input.id) : undefined;
   const agent = getRegisteredAgent(input.id);
   if (!agent) {
     throw new Error(`Failed to register agent ${input.id}`);

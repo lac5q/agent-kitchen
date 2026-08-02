@@ -71,8 +71,18 @@ async function buildInviteResponse(request: Request) {
    * Without this the agent registers unowned, and unowned agents are visible
    * only to admins — so the person it was meant for cannot see their own agent.
    */
-  const ownerUserId =
-    (typeof input.ownerUserId === "string" && input.ownerUserId.trim()) || session?.userId;
+  const requestedOwner =
+    typeof input.ownerUserId === "string" && input.ownerUserId.trim()
+      ? input.ownerUserId.trim()
+      : undefined;
+
+  // Naming a different owner is an admin act. Otherwise an operator could mint a
+  // token that registers an agent owned by anyone — which is the transfer
+  // authorization on /ownership routed around rather than enforced.
+  if (requestedOwner && requestedOwner !== session?.userId && session?.role !== "admin") {
+    return apiError(403, "only an admin can create an invite owned by someone else");
+  }
+  const ownerUserId = requestedOwner || session?.userId;
 
   const { token, payload } = createAgentOnboardingToken({
     ownerUserId,

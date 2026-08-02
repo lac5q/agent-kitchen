@@ -1,6 +1,7 @@
 import { registerAgent } from "@/lib/agent-registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { authenticateUser } from "@/lib/auth/session";
+import { canManageAgent, getRegisteredAgent, type AgentViewer } from "@/lib/agent-registry";
 import type { AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,19 @@ export async function POST(request: Request) {
   const input = parseInput(body);
   if (!input) {
     return Response.json({ ok: false, error: "Invalid registration body" }, { status: 400 });
+  }
+
+  // Registration must not be a back door onto an agent that already exists.
+  // Without this, a signed-in reviewer could POST an id they do not own and —
+  // because the upsert path also touches name, host and metadata — quietly take
+  // over someone else's agent. 404 rather than 403, matching the detail route:
+  // the response must not confirm that the id exists.
+  if (session) {
+    const viewer: AgentViewer = { userId: session.userId, role: session.role };
+    const existing = getRegisteredAgent(input.id, { includeDeregistered: true });
+    if (existing && !canManageAgent(viewer, input.id)) {
+      return Response.json({ ok: false, error: `Agent not found: ${input.id}` }, { status: 404 });
+    }
   }
 
   // Never trust a client-supplied owner: it would let any caller attribute an

@@ -9,9 +9,19 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/agent-registry", () => ({
   listRegisteredAgents: () => state.agents,
   listAllAgentsUnscoped: () => state.agents,
+  // The route scopes by viewer; these tests assert envelope shape, so the
+  // admin view (everything) is the one under test here. Scoping itself is
+  // covered by agent-ownership-visibility.test.ts.
+  listAgentsVisibleTo: () => state.agents,
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  authenticateUser: async () => ({ userId: "admin-1", role: "admin" }),
 }));
 
 const { GET } = await import("../route");
+
+const req = () => new Request("http://localhost/api/security/capabilities");
 
 function agent(overrides: Partial<RegisteredAgent>): RegisteredAgent {
   return {
@@ -47,7 +57,7 @@ describe("GET /api/security/capabilities truthful envelopes", () => {
   });
 
   it("returns empty envelopes when no agents are registered", async () => {
-    const res = await GET();
+    const res = await GET(req());
     const data = await res.json();
     expect(data.summary.metrics.totalAgents).toMatchObject({
       value: null,
@@ -77,7 +87,7 @@ describe("GET /api/security/capabilities truthful envelopes", () => {
   });
 
   it("returns empty envelope for total agents when registry is empty", async () => {
-    const res = await GET();
+    const res = await GET(req());
     const data = await res.json();
     expect(data.summary.metrics.totalAgents).toMatchObject({
       value: null,
@@ -96,7 +106,7 @@ describe("GET /api/security/capabilities truthful envelopes", () => {
       }),
       agent({ id: "agent-b", status: "dormant" }),
     ];
-    const data = await (await GET()).json();
+    const data = await (await GET(req())).json();
     expect(data.summary.metrics.totalAgents).toMatchObject({
       value: 2,
       status: "live",
@@ -118,7 +128,7 @@ describe("GET /api/security/capabilities truthful envelopes", () => {
         lastHeartbeat: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
       }),
     ];
-    const data = await (await GET()).json();
+    const data = await (await GET(req())).json();
     const a = data.agents.find((ag: { id: string }) => ag.id === "agent-a");
     const b = data.agents.find((ag: { id: string }) => ag.id === "agent-b");
     expect(a.liveness).toMatchObject({ state: "never", observedAt: null });
@@ -132,7 +142,7 @@ describe("GET /api/security/capabilities truthful envelopes", () => {
         metadata: { securityMode: "strict" },
       }),
     ];
-    const data = await (await GET()).json();
+    const data = await (await GET(req())).json();
     expect(data.summary.totalAgents).toBe(1);
     expect(data.summary.strictAgents).toBe(1);
     expect(data.summary.standardAgents).toBe(0);

@@ -10,15 +10,33 @@
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
-import { listRegisteredAgents } from "@/lib/agent-registry";
+import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { authenticateUser } from "@/lib/auth/session";
+import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import { listNangoConnections } from "@/lib/tool-auth/nango-client";
 import { getProvider } from "@/lib/tool-auth/providers";
 import { buildTopology } from "@/lib/workflow/topology";
 
-export async function GET() {
+/**
+ * Which agents this caller may be told about.
+ *
+ * Signed-in humans see only their own and shared agents; a system caller
+ * holding the operator key (or on loopback) still sees everything, because the
+ * MCP server and local runtime depend on the full picture. An anonymous caller
+ * sees nothing rather than the whole registry.
+ */
+async function agentsForCaller(request: Request) {
+  const session = await authenticateUser(request);
+  if (session) {
+    return listAgentsVisibleTo({ userId: session.userId, role: session.role });
+  }
+  return authorizeRegistryWrite(request) ? listAllAgentsUnscoped() : [];
+}
+
+export async function GET(request: Request) {
   const db = getDb();
 
-  const agents = listRegisteredAgents().map((a) => ({
+  const agents = (await agentsForCaller(request)).map((a) => ({
     id: a.id,
     name: a.name,
     role: a.role,

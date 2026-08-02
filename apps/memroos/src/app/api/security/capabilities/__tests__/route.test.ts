@@ -9,9 +9,19 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/agent-registry", () => ({
   listRegisteredAgents: () => state.agents,
   listAllAgentsUnscoped: () => state.agents,
+  // The route scopes by viewer; these tests assert envelope shape, so the
+  // admin view (everything) is the one under test here. Scoping itself is
+  // covered by agent-ownership-visibility.test.ts.
+  listAgentsVisibleTo: () => state.agents,
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  authenticateUser: async () => ({ userId: "admin-1", role: "admin" }),
 }));
 
 const { GET } = await import("../route");
+
+const req = () => new Request("http://localhost/api/security/capabilities");
 
 function agent(overrides: Partial<RegisteredAgent>): RegisteredAgent {
   return {
@@ -58,7 +68,7 @@ describe("GET /api/security/capabilities", () => {
       agent({ id: "agent-b", status: "dormant" }),
     ];
 
-    const res = await GET();
+    const res = await GET(req());
     const data = await res.json();
 
     expect(data.summary.totalAgents).toBe(2);

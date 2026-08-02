@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import {
+  canManageAgent,
   canViewAgent,
   deregisterAgent,
   getRegisteredAgent,
@@ -87,6 +88,34 @@ export async function GET(
 }
 
 /**
+ * Gate a mutation on this agent.
+ *
+ * A signed-in human is held to ownership: seeing an agent (it may be shared)
+ * never implies being able to rename or deregister it. Returns 404 rather than
+ * 403 so the response cannot be used to probe which ids exist.
+ *
+ * With no session we fall back to the operator-key / loopback path, which is
+ * how the MCP server and local agents drive the registry.
+ */
+async function authorizeAgentMutation(
+  request: Request,
+  id: string
+): Promise<Response | null> {
+  const session = await authenticateUser(request);
+  if (session) {
+    const viewer: AgentViewer = { userId: session.userId, role: session.role };
+    if (!canManageAgent(viewer, id)) {
+      return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
+    }
+    return null;
+  }
+  if (!authorizeRegistryWrite(request)) {
+    return registryWriteUnauthorizedResponse();
+  }
+  return null;
+}
+
+/**
  * Rename / re-describe an agent.
  *
  * Only display fields are accepted — see updateAgentDetails. Anything
@@ -97,11 +126,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authorizeRegistryWrite(request)) {
-    return registryWriteUnauthorizedResponse();
-  }
-
   const { id } = await params;
+
+  const denied = await authorizeAgentMutation(request, id);
+  if (denied) return denied;
 
   let body: unknown;
   try {
@@ -145,11 +173,11 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authorizeRegistryWrite(request)) {
-    return registryWriteUnauthorizedResponse();
-  }
-
   const { id } = await params;
+
+  const denied = await authorizeAgentMutation(request, id);
+  if (denied) return denied;
+
   const agent = deregisterAgent(id);
   if (!agent) {
     return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
