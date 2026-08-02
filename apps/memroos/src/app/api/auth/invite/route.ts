@@ -17,10 +17,59 @@ interface InviteBody {
   emailHint?: string;
   /** Admin opted to have MemRoOS send the invite instead of copy/paste. */
   sendEmail?: boolean;
+  /**
+   * Resend: the invitation this one supersedes. Marked used in the same
+   * transaction, so one person never holds two live invite links.
+   */
+  replacesInvitationId?: string;
 }
 
 const VALID_ROLES: UserRole[] = ['admin', 'operator', 'reviewer'];
 const INVITE_TTL_HOURS = 72;
+
+/**
+ * Pending invitations.
+ *
+ * Only the hash of a token is stored, so an issued invite can never be shown
+ * or re-sent verbatim — "resend" necessarily means issuing a fresh one and
+ * revoking the old. This endpoint is what makes that possible: without it an
+ * admin cannot see that a pending invite exists at all.
+ */
+export async function GET(req: NextRequest) {
+  const session = await authenticateUser(req);
+  const roleError = requireRole(session?.role, 'admin');
+  if (roleError) return roleError;
+
+  const rows = getDb()
+    .prepare(
+      `SELECT i.id, i.role, i.email_hint, i.expires_at, i.created_at, u.email AS invited_by_email
+       FROM team_invitations i
+       LEFT JOIN users u ON u.id = i.invited_by
+       WHERE i.used_at IS NULL
+       ORDER BY i.created_at DESC`
+    )
+    .all() as Array<{
+      id: string;
+      role: string;
+      email_hint: string | null;
+      expires_at: string;
+      created_at: string;
+      invited_by_email: string | null;
+    }>;
+
+  const now = Date.now();
+  return Response.json({
+    invitations: rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      emailHint: r.email_hint,
+      expiresAt: r.expires_at,
+      createdAt: r.created_at,
+      invitedByEmail: r.invited_by_email,
+      expired: Date.parse(r.expires_at) <= now,
+    })),
+  });
+}
 
 export async function POST(req: NextRequest) {
   const session = await authenticateUser(req);
@@ -35,7 +84,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'invalid request body' }, { status: 400 });
   }
 
-  const { role, emailHint, sendEmail: wantsEmail } = body;
+  const { role, emailHint, sendEmail: wantsEmail, replacesInvitationId } = body;
   if (!role || !VALID_ROLES.includes(role)) {
     return Response.json({ error: 'invalid role' }, { status: 400 });
   }
@@ -56,10 +105,20 @@ export async function POST(req: NextRequest) {
   const inviteId = randomBytes(8).toString('hex');
   const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 3600_000).toISOString();
 
-  db.prepare(
-    `INSERT INTO team_invitations (id, token_hash, role, invited_by, email_hint, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(inviteId, tokenHash, role, session.userId, emailHint ?? null, expiresAt);
+  db.transaction(() => {
+    // Marking the superseded invite used in the same transaction means a
+    // resend never leaves two live links for one person — the old one stops
+    // working the instant the new one exists.
+    if (replacesInvitationId) {
+      db.prepare(
+        "UPDATE team_invitations SET used_at = ? WHERE id = ? AND used_at IS NULL"
+      ).run(new Date().toISOString(), replacesInvitationId);
+    }
+    db.prepare(
+      `INSERT INTO team_invitations (id, token_hash, role, invited_by, email_hint, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(inviteId, tokenHash, role, session.userId, emailHint ?? null, expiresAt);
+  })();
 
   const baseUrl = resolvePublicMemroosUrl(req);
   const inviteUrl = `${baseUrl}/invite/${rawToken}`;

@@ -36,15 +36,22 @@ interface Capabilities {
 
 type Role = "admin" | "operator" | "reviewer";
 
+/** Carries the HTTP status so the UI can tell "not allowed" from "broken". */
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 async function fetchUsers(): Promise<UsersResponse> {
   const res = await fetch("/api/users", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to fetch users");
+  if (!res.ok) throw new ApiError("Failed to fetch users", res.status);
   return res.json() as Promise<UsersResponse>;
 }
 
 async function fetchCapabilities(): Promise<Capabilities> {
   const res = await fetch("/api/auth/capabilities", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to fetch capabilities");
+  if (!res.ok) throw new ApiError("Failed to fetch capabilities", res.status);
   return res.json() as Promise<Capabilities>;
 }
 
@@ -59,6 +66,30 @@ async function setUserDisabled(data: { userId: string; disabled: boolean }): Pro
     const err = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
     throw new Error([err.error, err.detail].filter(Boolean).join(" — ") || "Failed to update member");
   }
+}
+
+interface Me { email: string; role: string }
+
+interface Invitation {
+  id: string;
+  role: string;
+  emailHint: string | null;
+  expiresAt: string;
+  createdAt: string;
+  invitedByEmail: string | null;
+  expired: boolean;
+}
+
+async function fetchInvitations(): Promise<{ invitations: Invitation[] }> {
+  const res = await fetch("/api/auth/invite", { credentials: "include" });
+  if (!res.ok) throw new ApiError("Failed to fetch invitations", res.status);
+  return res.json() as Promise<{ invitations: Invitation[] }>;
+}
+
+async function fetchMe(): Promise<Me> {
+  const res = await fetch("/api/auth/me", { credentials: "include" });
+  if (!res.ok) throw new ApiError("Failed to fetch session", res.status);
+  return res.json() as Promise<Me>;
 }
 
 async function createInvite(data: {
@@ -101,7 +132,14 @@ export default function TeamPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["team-users"],
     queryFn: fetchUsers,
+    // Do not retry an authorization failure. The default backoff kept the page
+    // on "Loading team members..." while retrying a 403 that was never going to
+    // succeed, so a permissions problem read as a hung request.
+    retry: (count, err) =>
+      err instanceof ApiError && (err.status === 401 || err.status === 403) ? false : count < 2,
   });
+
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, retry: false });
 
   const { data: caps } = useQuery({
     queryKey: ["auth-capabilities"],
@@ -119,10 +157,51 @@ export default function TeamPage() {
       setEmailResult(result.email);
       setInviteError("");
       void queryClient.invalidateQueries({ queryKey: ["team-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["team-invitations"] });
     },
     onError: (err: Error) => {
       setInviteError(err.message);
     },
+  });
+
+  const { data: invitesData } = useQuery({
+    queryKey: ["team-invitations"],
+    queryFn: fetchInvitations,
+    retry: (count, err) =>
+      err instanceof ApiError && (err.status === 401 || err.status === 403) ? false : count < 2,
+  });
+
+  /**
+   * Resend issues a NEW invite and supersedes the old one. Only the token hash
+   * is stored, so the original link is unrecoverable by construction — there is
+   * nothing to re-send verbatim.
+   */
+  const resendMutation = useMutation({
+    mutationFn: async (inv: Invitation) => {
+      const res = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          role: inv.role,
+          emailHint: inv.emailHint ?? undefined,
+          sendEmail: Boolean(inv.emailHint) && canEmail,
+          replacesInvitationId: inv.id,
+        }),
+      });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(e.error ?? "Failed to resend invitation");
+      }
+      return res.json() as Promise<InviteResponse>;
+    },
+    onSuccess: (result) => {
+      setInviteUrl(result.inviteUrl);
+      setEmailResult(result.email);
+      setInviteError("");
+      void queryClient.invalidateQueries({ queryKey: ["team-invitations"] });
+    },
+    onError: (err: Error) => setInviteError(err.message),
   });
 
   const membershipMutation = useMutation({
@@ -376,14 +455,74 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Pending invitations */}
+      {invitesData && invitesData.invitations.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-medium" style={{ color: NOC.ink }}>
+            Pending invitations
+          </h2>
+          <p className="mb-3 text-xs" style={{ color: NOC.soft }}>
+            Only a hash of each invite token is stored, so the original link cannot be shown
+            again. Resend issues a fresh link and immediately invalidates the old one.
+          </p>
+          <div className="overflow-hidden border" style={{ borderColor: NOC.rule }}>
+            <table className="w-full text-sm">
+              <thead className="text-left" style={{ background: NOC.fog, color: NOC.muted }}>
+                <tr>
+                  <th className="px-4 py-3 font-medium">Invitee</th>
+                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Expires</th>
+                  <th className="px-4 py-3 font-medium sr-only">Actions</th>
+                </tr>
+              </thead>
+              <tbody style={{ background: NOC.paper }}>
+                {invitesData.invitations.map((inv) => (
+                  <tr key={inv.id} style={{ borderTop: `1px solid ${NOC.rule}` }}>
+                    <td className="px-4 py-3" style={{ color: NOC.ink }}>
+                      {inv.emailHint ?? <span style={{ color: NOC.soft }}>no address (link only)</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tone={inv.role === "admin" ? "terra" : inv.role === "operator" ? "info" : "neutral"}>
+                        {inv.role}
+                      </Pill>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: inv.expired ? NOC.terra : NOC.soft }}>
+                      {inv.expired ? "Expired" : new Date(inv.expiresAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => resendMutation.mutate(inv)}
+                        disabled={resendMutation.isPending}
+                        className="text-sm underline disabled:opacity-50"
+                        style={{ color: NOC.terra }}
+                      >
+                        {resendMutation.isPending ? "Sending..." : "Resend"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Users table */}
       {isLoading ? (
         <div className="text-sm" style={{ color: NOC.soft }}>Loading team members...</div>
       ) : error ? (
-        <div className="text-sm text-red-400">
-          {error instanceof Error && error.message.includes("401")
-            ? "Admin access required to view team members."
-            : "Failed to load team members."}
+        <div className="text-sm" style={{ color: NOC.terra }}>
+          {error instanceof ApiError && (error.status === 403 || error.status === 401) ? (
+            <>
+              <strong>Admin access required.</strong> You are signed in as{" "}
+              {me?.email ?? "this account"}
+              {me?.role ? ` (${me.role})` : ""}. Team membership is admin-only — sign in with
+              an admin account to view or invite members.
+            </>
+          ) : (
+            "Failed to load team members."
+          )}
         </div>
       ) : (
         <>
