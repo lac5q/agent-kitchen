@@ -1,5 +1,6 @@
 import { registerAgent } from "@/lib/agent-registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
+import { authenticateUser } from "@/lib/auth/session";
 import type { AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +67,19 @@ function parseInput(body: unknown): RegisterAgentInput | null {
 }
 
 export async function POST(request: Request) {
-  if (!authorizeRegistryWrite(request)) {
+  /**
+   * Two callers, two ownership rules.
+   *
+   * A signed-in human registering from the console owns what they register —
+   * anything else means a person can create an agent they cannot then see,
+   * because unowned agents are admin-only.
+   *
+   * Machine callers (loopback, operator key) have no human behind them, so the
+   * agent stays unowned and surfaces as "needs an owner" rather than being
+   * attributed to whoever happened to hold the key.
+   */
+  const session = await authenticateUser(request);
+  if (!session && !authorizeRegistryWrite(request)) {
     return registryWriteUnauthorizedResponse();
   }
 
@@ -76,6 +89,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Invalid registration body" }, { status: 400 });
   }
 
-  const result = registerAgent(input);
+  // Never trust a client-supplied owner: it would let any caller attribute an
+  // agent to someone else, or to themselves to gain sight of it.
+  const result = registerAgent({ ...input, ownerId: session?.userId });
   return Response.json({ ok: true, ...result, timestamp: new Date().toISOString() });
 }

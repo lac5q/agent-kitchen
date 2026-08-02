@@ -128,6 +128,8 @@ export interface RegisteredAgentCapability {
 }
 
 export interface RegisteredAgent extends Agent {
+  /** Explicitly shared by its owner. Private is the default. */
+  isShared: boolean;
   protocol: AgentProtocol;
   capabilities: RegisteredAgentCapability[];
   metadata: Record<string, unknown>;

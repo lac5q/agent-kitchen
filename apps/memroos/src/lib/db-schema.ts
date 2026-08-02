@@ -82,7 +82,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 35;
+export const CURRENT_SCHEMA_VERSION = 36;
 
 type SchemaMigration = {
   version: number;
@@ -278,6 +278,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     name: 'mcp-oauth-authorization-server',
     up: applyMcpOauthSchema,
   },
+  {
+    version: 36,
+    name: 'agent-shared-flag',
+    up: applyAgentSharedFlagSchema,
+  },
 ];
 
 function runSchemaMigrations(db: Database.Database): void {
@@ -413,6 +418,47 @@ function applyMcpOauthSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS mcp_oauth_tokens_user ON mcp_oauth_tokens(user_id, revoked_at);
     CREATE INDEX IF NOT EXISTS mcp_oauth_tokens_client ON mcp_oauth_tokens(client_id, revoked_at);
   `);
+}
+
+/**
+ * Migration 36 — shared-agent flag.
+ *
+ * Ownership itself already exists: `registered_agents.owner_id` was added as an
+ * additive column (REFERENCES users(id) ON DELETE SET NULL) and is populated
+ * nowhere — every row is NULL, which is why every signed-in user could list the
+ * whole fleet. No new ownership column is needed; the gap was that nothing wrote
+ * to it and nothing filtered on it.
+ *
+ * SET NULL rather than CASCADE is the right existing behaviour and is kept:
+ * hard-deleting a person should orphan their agents into an admin-only "needs an
+ * owner" state that can be transferred, not silently destroy them.
+ *
+ * `is_shared` is the deliberate escape hatch from private-by-default. Sharing has
+ * to be an explicit act by the owner rather than a side effect of belonging to the
+ * same team — which is how "private" quietly stops being true.
+ */
+function applyAgentSharedFlagSchema(db: Database.Database): void {
+  // A migration must tolerate a database that predates the table it alters —
+  // partial fixtures and older installs both hit this, and throwing here would
+  // block every later migration behind it.
+  const tableExists = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'registered_agents'")
+    .get();
+  if (!tableExists) return;
+
+  const columns = db.prepare("PRAGMA table_info(registered_agents)").all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === "is_shared")) {
+    db.exec(
+      `ALTER TABLE registered_agents
+         ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0 CHECK(is_shared IN (0,1))`
+    );
+  }
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS registered_agents_owner
+       ON registered_agents(owner_id, deregistered_at);
+     CREATE INDEX IF NOT EXISTS registered_agents_shared
+       ON registered_agents(is_shared, deregistered_at);`
+  );
 }
 
 export function rebuildMessageFtsProjection(db: Database.Database): void {

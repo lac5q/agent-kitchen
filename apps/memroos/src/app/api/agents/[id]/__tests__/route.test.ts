@@ -12,6 +12,17 @@ async function loadRoutes(localRuntime?: { scannedAt: string }) {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
   if (localRuntime === undefined) {
+    // The detail route now authenticates and scopes; these tests assert
+    // liveness classification, so an admin viewer keeps that in scope.
+    vi.doMock("@/lib/auth/session", () => ({
+      authenticateUser: async () => ({
+        userId: "test-admin",
+        role: "admin",
+        email: "admin@test",
+        displayName: "admin",
+        tenantId: "default-tenant",
+      }),
+    }));
     vi.doMock("@/lib/local-agent-runtime", () => ({
       getLocalAgentRuntime: () => ({ activeCliCount: 0, byPlatform: {}, scannedAt: "2026-05-07T07:45:00.000Z" }),
     }));

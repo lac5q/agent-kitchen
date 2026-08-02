@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/lib/agent-registry", () => ({
   listRegisteredAgents: () => state.agents,
+  listAllAgentsUnscoped: () => state.agents,
 }));
 
 const { GET } = await import("../route");

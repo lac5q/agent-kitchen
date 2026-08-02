@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 
+/** /api/agents now authenticates, so it needs a request object. */
+function agentsRequest(): never {
+  return new Request("http://localhost/api/agents") as never;
+}
+
 const MOCK_AGENTS = [
   {
     id: "sophia",

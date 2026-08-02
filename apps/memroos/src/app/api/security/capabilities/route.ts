@@ -1,4 +1,4 @@
-import { listRegisteredAgents } from "@/lib/agent-registry";
+import { listAllAgentsUnscoped } from "@/lib/agent-registry";
 import {
   classifyLiveness,
   type LivenessObservation,
@@ -110,7 +110,7 @@ function countEnvelope(
 
 export function GET() {
   const fallbackMode = defaultSecurityMode();
-  const baseAgents = listRegisteredAgents();
+  const baseAgents = listAllAgentsUnscoped();
   const scope: MetricScope = { window: "lifetime", workspace: "all" };
   const observations: LivenessObservation[] = baseAgents.map((agent) =>
     classifyLiveness({ lastHeartbeat: agent.lastHeartbeat })

@@ -36,6 +36,7 @@ interface RegisteredAgentRow {
   created_at: string;
   updated_at: string;
   deregistered_at: string | null;
+  is_shared: number;
   owner_id?: string | null;
 }
 
@@ -222,6 +223,7 @@ function rowToRegisteredAgent(row: RegisteredAgentRow): RegisteredAgent {
     location: row.location,
     isRemote: row.location !== "local",
     latencyMs: row.latency_ms,
+    isShared: row.is_shared === 1,
     capabilities: capabilitiesForAgent(row.id),
     metadata: parseObject(row.metadata),
     host: row.host,
@@ -291,6 +293,20 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
   const location = input.location ?? "local";
   const healthEndpoint = input.healthEndpoint ?? (location === "local" ? null : DEFAULT_HEALTH_ENDPOINT);
 
+  /**
+   * Never write an owner that does not exist.
+   *
+   * owner_id has a foreign key, so a stale or unknown id fails the whole
+   * registration — an agent would fail to register because of an ownership edge
+   * case, which is the wrong thing to break. Registering unowned is safe: it is
+   * admin-only and surfaces as "needs an owner" to be claimed.
+   */
+  const ownerId =
+    input.ownerId &&
+    db.prepare("SELECT 1 FROM users WHERE id = ?").get(input.ownerId)
+      ? input.ownerId
+      : null;
+
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO registered_agents (
@@ -332,7 +348,7 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       tunnelUrl: input.tunnelUrl ?? null,
       metadata: stringifyJson(metadata),
       timestamp,
-      ownerId: input.ownerId ?? null,
+      ownerId,
     });
 
     // Only replace capabilities when the caller explicitly sends them.
@@ -351,7 +367,89 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
   return apiKey ? { agent, apiKey } : { agent };
 }
 
-export function listRegisteredAgents(options: ListAgentsOptions = {}): RegisteredAgent[] {
+/** Who is asking. */
+export interface AgentViewer {
+  userId: string;
+  role: "admin" | "operator" | "reviewer";
+}
+
+/**
+ * Agents this person may see.
+ *
+ *   their own  ∪  agents explicitly marked shared  ∪  (everything, if admin)
+ *
+ * Private by default, per operator decision 2026-08-02. Team membership
+ * deliberately does **not** grant visibility: agents and humans share one
+ * membership table, so letting a shared team imply a shared agent would mean
+ * "private" silently stops being true as soon as two people join the same team.
+ * Sharing is an act the owner takes, not a consequence of org structure.
+ *
+ * Visibility is scope, not rank — `operator` sees no more than `reviewer`. The
+ * role ladder governs what you may *do*; only `admin` is a visibility role, and
+ * only because administering a fleet you cannot see is impossible.
+ *
+ * Unowned agents are admin-only. They predate ownership and have no accountable
+ * human, so they surface as something to claim rather than defaulting to public.
+ */
+export function listAgentsVisibleTo(
+  viewer: AgentViewer,
+  options: ListAgentsOptions = {}
+): RegisteredAgent[] {
+  if (viewer.role === "admin") return listAllAgentsUnscoped(options);
+
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM registered_agents
+        WHERE (owner_id = @userId OR is_shared = 1)
+          ${options.includeDeregistered ? "" : "AND deregistered_at IS NULL"}
+        ORDER BY name COLLATE NOCASE`
+    )
+    .all({ userId: viewer.userId }) as RegisteredAgentRow[];
+
+  return rows.map(rowToRegisteredAgent);
+}
+
+/** True when this agent is within the viewer's scope. */
+export function canViewAgent(viewer: AgentViewer, agentId: string): boolean {
+  if (viewer.role === "admin") return true;
+  const row = getDb()
+    .prepare(
+      "SELECT owner_id, is_shared FROM registered_agents WHERE id = ?"
+    )
+    .get(agentId) as { owner_id: string | null; is_shared: number } | undefined;
+  if (!row) return false;
+  return row.owner_id === viewer.userId || row.is_shared === 1;
+}
+
+/**
+ * May this person change the agent — share it, transfer it, edit it?
+ *
+ * Owner or admin. Narrower than visibility on purpose: seeing a shared agent
+ * must not imply being able to reassign it.
+ */
+export function canManageAgent(viewer: AgentViewer, agentId: string): boolean {
+  if (viewer.role === "admin") return true;
+  const row = getDb()
+    .prepare("SELECT owner_id FROM registered_agents WHERE id = ?")
+    .get(agentId) as { owner_id: string | null } | undefined;
+  return Boolean(row && row.owner_id === viewer.userId);
+}
+
+/** Mark an agent shared, or make it private again. Owner or admin only. */
+export function setAgentShared(agentId: string, shared: boolean): void {
+  getDb()
+    .prepare("UPDATE registered_agents SET is_shared = ?, updated_at = ? WHERE id = ?")
+    .run(shared ? 1 : 0, nowIso(), agentId);
+}
+
+/** Hand an agent to another person. Owner or admin. */
+export function transferAgentOwnership(agentId: string, newOwnerUserId: string): void {
+  getDb()
+    .prepare("UPDATE registered_agents SET owner_id = ?, updated_at = ? WHERE id = ?")
+    .run(newOwnerUserId, nowIso(), agentId);
+}
+
+export function listAllAgentsUnscoped(options: ListAgentsOptions = {}): RegisteredAgent[] {
   const rows = getDb()
     .prepare(
       `SELECT *
@@ -371,6 +469,9 @@ export function getRegisteredAgent(
   const row = getAgentRow(agentId, options.includeDeregistered ?? false);
   return row ? rowToRegisteredAgent(row) : null;
 }
+
+/** @deprecated Ambiguous about scoping — use listAgentsVisibleTo or listAllAgentsUnscoped. */
+export const listRegisteredAgents = listAllAgentsUnscoped;
 
 /** Fields an operator may edit by hand from the Agents UI. */
 export interface AgentEditableFields {

@@ -5,6 +5,11 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+/** /api/agents now authenticates, so it needs a request object. */
+function agentsRequest(): never {
+  return new Request("http://localhost/api/agents") as never;
+}
+
 const TEST_DB_DIR = path.join(os.tmpdir(), `agents-truthful-${crypto.randomUUID()}`);
 const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes.db");
 
@@ -13,6 +18,17 @@ async function loadRoutes(
 ) {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
+    // These tests assert registry truthfulness, not authorization. An admin
+    // viewer keeps them seeing the whole fleet, which is what they measure.
+    vi.doMock("@/lib/auth/session", () => ({
+      authenticateUser: async () => ({
+        userId: "test-admin",
+        role: "admin",
+        email: "admin@test",
+        displayName: "admin",
+        tenantId: "default-tenant",
+      }),
+    }));
   vi.doMock("@/lib/local-agent-runtime", () => {
     if (options.localRuntimeOk === false) {
       return {
@@ -55,7 +71,7 @@ describe("GET /api/agents truthful summary envelopes", () => {
 
   it("returns empty liveness when no agents are registered", async () => {
     const { agentsRoute } = await loadRoutes();
-    const response = await agentsRoute.GET();
+    const response = await agentsRoute.GET(agentsRequest());
     const body = await response.json();
     expect(body.summary.total).toMatchObject({
       value: 0,
@@ -99,7 +115,7 @@ describe("GET /api/agents truthful summary envelopes", () => {
         }),
       })
     );
-    const body = await (await agentsRoute.GET()).json();
+    const body = await (await agentsRoute.GET(agentsRequest())).json();
     expect(body.liveness).toMatchObject({
       status: "degraded",
       value: 0,
@@ -145,7 +161,7 @@ describe("GET /api/agents truthful summary envelopes", () => {
     getDb()
       .prepare(`UPDATE registered_agents SET last_heartbeat_at = ? WHERE id = ?`)
       .run(staleTs, "stale-agent");
-    const body = await (await agentsRoute.GET()).json();
+    const body = await (await agentsRoute.GET(agentsRequest())).json();
     const staleAgent = body.agents.find((a: { id: string }) => a.id === "stale-agent");
     const neverAgent = body.agents.find((a: { id: string }) => a.id === "never-agent");
     expect(staleAgent.liveness).toMatchObject({
@@ -183,7 +199,7 @@ describe("GET /api/agents truthful summary envelopes", () => {
         }),
       })
     );
-    const body = await (await agentsRoute.GET()).json();
+    const body = await (await agentsRoute.GET(agentsRequest())).json();
     expect(body.localRuntime).toMatchObject({
       ok: false,
       metric: expect.objectContaining({
@@ -223,7 +239,7 @@ describe("GET /api/agents truthful summary envelopes", () => {
         }),
       })
     );
-    const body = await (await agentsRoute.GET()).json();
+    const body = await (await agentsRoute.GET(agentsRequest())).json();
     expect(body.protocols.rest).toMatchObject({ value: 1, status: "live" });
     expect(body.protocols.a2a).toMatchObject({ value: 1, status: "live" });
     expect(body.protocols.ui).toMatchObject({ value: 0, status: "zero" });

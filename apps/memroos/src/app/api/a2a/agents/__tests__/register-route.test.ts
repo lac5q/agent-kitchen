@@ -39,6 +39,17 @@ const ADK_CARD = {
 async function loadRoutes() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
+  // This asserts canonical registration, not authorization. The agents listing
+  // it verifies against now requires a viewer, so give it an admin one.
+  vi.doMock("@/lib/auth/session", () => ({
+    authenticateUser: async () => ({
+      userId: "test-admin",
+      role: "admin",
+      email: "admin@test",
+      displayName: "admin",
+      tenantId: "default-tenant",
+    }),
+  }));
   const registerRoute = await import("../register/route");
   const agentsRoute = await import("../../../agents/route");
   const dbModule = await import("@/lib/db");
@@ -127,7 +138,9 @@ describe("POST /api/a2a/agents/register", () => {
       metadata: { a2a: { source: "adk" } },
     });
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(
+      new Request("http://localhost/api/agents") as never
+    );
     const agents = (await listResponse.json()).agents;
     expect(agents).toEqual([
       expect.objectContaining({ id: body.agent.id, protocol: "a2a", platform: "gemini" }),

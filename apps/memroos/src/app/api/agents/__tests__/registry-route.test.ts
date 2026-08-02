@@ -5,12 +5,33 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+/** /api/agents now authenticates, so it needs a request object. */
+function agentsRequest(): never {
+  return new Request("http://localhost/api/agents") as never;
+}
+
+type TestSession = { userId: string; role: string; email: string; displayName: string; tenantId: string } | null;
+const ADMIN_SESSION: TestSession = {
+  userId: "test-admin",
+  role: "admin",
+  email: "admin@test",
+  displayName: "admin",
+  tenantId: "default-tenant",
+};
+let testSession: TestSession = ADMIN_SESSION;
+
 const TEST_DB_DIR = path.join(os.tmpdir(), `agents-route-${crypto.randomUUID()}`);
 const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes.db");
 
 async function loadRoutes(localRuntime = { activeCliCount: 0, byPlatform: {}, scannedAt: "2026-05-07T07:45:00.000Z" }) {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
+    // Most of these tests assert registry behaviour, not authorization, so the
+    // default viewer is an admin. The authorization test sets testSession to
+    // null so it still exercises the no-credential path it exists to check.
+    vi.doMock("@/lib/auth/session", () => ({
+      authenticateUser: async () => testSession,
+    }));
   vi.doMock("@/lib/local-agent-runtime", () => ({
     getLocalAgentRuntime: () => localRuntime,
   }));
@@ -23,6 +44,10 @@ async function loadRoutes(localRuntime = { activeCliCount: 0, byPlatform: {}, sc
 }
 
 describe("agent registry routes", () => {
+  afterEach(() => {
+    testSession = ADMIN_SESSION;
+  });
+
   beforeEach(() => {
     fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
     fs.mkdirSync(TEST_DB_DIR, { recursive: true });
@@ -59,7 +84,7 @@ describe("agent registry routes", () => {
     expect(registered.apiKey).toBeTruthy();
     expect(registered.agent.id).toBe("route-agent");
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     const listBody = await listResponse.json();
     expect(listBody.agents).toEqual([
       expect.objectContaining({ id: "route-agent", protocol: "rest" }),
@@ -72,7 +97,7 @@ describe("agent registry routes", () => {
     );
     expect(deleteResponse.status).toBe(200);
 
-    const afterDelete = await agentsRoute.GET();
+    const afterDelete = await agentsRoute.GET(agentsRequest());
     expect((await afterDelete.json()).agents).toHaveLength(0);
   });
 
@@ -103,7 +128,7 @@ describe("agent registry routes", () => {
     );
     expect(heartbeatResponse.status).toBe(200);
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     const agents = (await listResponse.json()).agents;
     expect(agents[0]).toMatchObject({
       id: "curl-agent",
@@ -137,7 +162,7 @@ describe("agent registry routes", () => {
       )
       .run(new Date().toISOString());
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     const agents = (await listResponse.json()).agents;
     expect(agents[0]).toMatchObject({
       id: "alba",
@@ -176,7 +201,7 @@ describe("agent registry routes", () => {
       );
     }
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     const agents = (await listResponse.json()).agents;
     expect(agents.find((agent: { id: string }) => agent.id === "alba")).toMatchObject({
       status: "active",
@@ -205,6 +230,10 @@ describe("agent registry routes", () => {
   });
 
   it("requires operator authorization for non-local registry writes", async () => {
+    // No signed-in human: this is the machine path, which must present the
+    // operator key. A session is now also a valid credential, so the test has to
+    // remove it to still be testing what it claims.
+    testSession = null;
     process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
     const { agentsRoute, registerRoute, agentRoute } = await loadRoutes();
 
@@ -241,7 +270,10 @@ describe("agent registry routes", () => {
       { params: Promise.resolve({ id: "remote-register-agent" }) }
     );
     expect(rejectedDelete.status).toBe(403);
-    expect((await (await agentsRoute.GET()).json()).agents).toHaveLength(1);
+    // Listing is not what this test asserts; it needs a viewer to read state.
+    testSession = ADMIN_SESSION;
+    expect((await (await agentsRoute.GET(agentsRequest())).json()).agents).toHaveLength(1);
+    testSession = null;
 
     const acceptedDelete = await agentRoute.DELETE(
       new Request("https://memroos.example.com/api/agents/remote-register-agent", {
@@ -251,7 +283,8 @@ describe("agent registry routes", () => {
       { params: Promise.resolve({ id: "remote-register-agent" }) }
     );
     expect(acceptedDelete.status).toBe(200);
-    expect((await (await agentsRoute.GET()).json()).agents).toHaveLength(0);
+    testSession = ADMIN_SESSION;
+    expect((await (await agentsRoute.GET(agentsRequest())).json()).agents).toHaveLength(0);
   });
 
   it("accepts ChatGPT as a first-class registered agent platform", async () => {
@@ -272,7 +305,7 @@ describe("agent registry routes", () => {
     );
 
     expect(registerResponse.status).toBe(200);
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     expect((await listResponse.json()).agents).toEqual([
       expect.objectContaining({ id: "chatgpt", platform: "chatgpt" }),
     ]);
@@ -296,7 +329,7 @@ describe("agent registry routes", () => {
     );
 
     expect(registerResponse.status).toBe(200);
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await agentsRoute.GET(agentsRequest());
     expect((await listResponse.json()).agents).toEqual([
       expect.objectContaining({ id: "cline", platform: "cline" }),
     ]);

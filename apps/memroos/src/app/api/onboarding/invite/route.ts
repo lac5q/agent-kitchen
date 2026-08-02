@@ -60,7 +60,22 @@ async function buildInviteResponse(request: Request) {
       ? (input.protocol as AgentProtocol)
       : "rest";
 
+  /**
+   * Whose agent this will be.
+   *
+   * Defaults to the person creating the invite — the self-service case, "set up
+   * my own laptop". An operator inviting on someone else's behalf passes
+   * `ownerUserId` explicitly, so the agent lands owned by them rather than by
+   * whoever happened to click the button.
+   *
+   * Without this the agent registers unowned, and unowned agents are visible
+   * only to admins — so the person it was meant for cannot see their own agent.
+   */
+  const ownerUserId =
+    (typeof input.ownerUserId === "string" && input.ownerUserId.trim()) || session?.userId;
+
   const { token, payload } = createAgentOnboardingToken({
+    ownerUserId,
     memroosUrl,
     mcpUrl: typeof input.mcpUrl === "string" ? input.mcpUrl : undefined,
     ttlSeconds: Math.max(1, ttlMinutes) * 60,

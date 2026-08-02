@@ -1,9 +1,12 @@
 import type { NextRequest } from "next/server";
 import {
+  canViewAgent,
   deregisterAgent,
   getRegisteredAgent,
   updateAgentDetails,
+  type AgentViewer,
 } from "@/lib/agent-registry";
+import { authenticateUser } from "@/lib/auth/session";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
 import {
@@ -20,12 +23,21 @@ interface AgentDetailLiveness extends LivenessObservation {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const session = await authenticateUser(request);
+  if (!session) {
+    return Response.json({ error: "authentication required" }, { status: 401 });
+  }
+  const viewer: AgentViewer = { userId: session.userId, role: session.role };
+
   const agent = getRegisteredAgent(id);
-  if (!agent) {
+  // 404 rather than 403 when out of scope: a 403 would confirm that an agent
+  // with this id exists, letting someone enumerate the fleet they cannot see.
+  if (!agent || !canViewAgent(viewer, id)) {
     return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
   }
 

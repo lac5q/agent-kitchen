@@ -1,4 +1,7 @@
-import { listRegisteredAgents } from "@/lib/agent-registry";
+import { NextRequest } from "next/server";
+
+import { listAgentsVisibleTo, type AgentViewer } from "@/lib/agent-registry";
+import { authenticateUser } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
 import {
@@ -142,7 +145,19 @@ function freshestFreshness(observations: LivenessObservation[]): number | null {
   return candidate;
 }
 
-export function GET() {
+/**
+ * The fleet as this person may see it.
+ *
+ * Previously took no request at all, so it could not authenticate even in
+ * principle — every signed-in user, including a reviewer, received all agents.
+ */
+export async function GET(req: NextRequest) {
+  const session = await authenticateUser(req);
+  if (!session) {
+    return Response.json({ error: "authentication required" }, { status: 401 });
+  }
+  const viewer: AgentViewer = { userId: session.userId, role: session.role };
+
   let localRuntime: ReturnType<typeof getLocalAgentRuntime>;
   let localRuntimeOk = true;
   let localRuntimeError: string | null = null;
@@ -158,7 +173,7 @@ export function GET() {
     localRuntimeError = error instanceof Error ? error.message : String(error);
   }
 
-  const baseAgents = listRegisteredAgents();
+  const baseAgents = listAgentsVisibleTo(viewer);
   const agents: AgentLivenessView[] = withDerivedActivity(baseAgents, localRuntime).map(
     (agent) => {
       // withDerivedActivity already merged local-runtime activity into the
