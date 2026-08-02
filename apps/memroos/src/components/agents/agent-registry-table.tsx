@@ -12,6 +12,13 @@ import type { LivenessObservation } from "@/lib/agent-liveness";
 
 export interface RegistryAgentRow extends RegisteredAgent {
   liveness?: LivenessObservation;
+  /**
+   * Resolved server-side by /api/agents so the row can name a person rather than
+   * an opaque user id — and so a non-admin viewer can see who owns a shared
+   * agent without the admin-only /api/users route.
+   */
+  owner?: { ownerId: string; email: string; displayName: string } | null;
+  isOwnedByViewer?: boolean;
 }
 
 interface AgentRegistryTableProps {
@@ -138,8 +145,9 @@ export function AgentRegistryTable({
 
   return (
     <div className="overflow-hidden border border-stone-200 bg-white/90">
-      <div className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] border-b border-stone-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+      <div className="grid grid-cols-[1.2fr_0.9fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] border-b border-stone-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
         <span>Agent</span>
+        <span>Owner</span>
         <span>Protocol</span>
         <span>Platform</span>
         <span>Status</span>
@@ -151,7 +159,7 @@ export function AgentRegistryTable({
       {agents.map((agent) => (
         <div
           key={agent.id}
-          className="grid grid-cols-[1.2fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] items-center border-b border-stone-200 px-3 py-3 text-sm last:border-b-0 hover:bg-stone-100"
+          className="grid grid-cols-[1.2fr_0.9fr_0.7fr_0.7fr_0.9fr_1fr_1fr_0.7fr_0.6fr] items-center border-b border-stone-200 px-3 py-3 text-sm last:border-b-0 hover:bg-stone-100"
           data-agent-id={agent.id}
           data-agent-protocol={agent.protocol}
           data-agent-status={agent.status}
@@ -172,6 +180,24 @@ export function AgentRegistryTable({
               <span className="block truncate text-xs text-stone-500">{agent.role}</span>
             </button>
           )}
+          {/* Ownership. Unowned is called out rather than shown blank: it means
+              nobody is accountable for the agent and only admins can see it. */}
+          <div className="min-w-0">
+            {agent.owner ? (
+              <>
+                <span className="block truncate text-stone-700" title={agent.owner.email}>
+                  {agent.isOwnedByViewer ? "You" : agent.owner.displayName}
+                </span>
+                {agent.isShared && (
+                  <span className="text-[11px] font-medium text-sky-700">Shared with everyone</span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs font-medium text-amber-700" title="No accountable human — admin-only until claimed">
+                Unowned
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1">
             {agent.protocol === "a2a" ? (
               <Badge variant="outline" className="border-sky-700 text-sky-300">A2A</Badge>

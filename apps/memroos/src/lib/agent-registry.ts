@@ -409,6 +409,42 @@ export function listAgentsVisibleTo(
   return rows.map(rowToRegisteredAgent);
 }
 
+/**
+ * Owner display details for a set of agents, in one query.
+ *
+ * The list returns owner ids, but a person cannot recognise
+ * `cb14b24ce3b9e3894c47`. Resolving server-side means a reviewer sees who owns a
+ * shared agent without needing the admin-only /api/users route.
+ */
+export function ownerDisplayFor(
+  agentIds: string[]
+): Record<string, { ownerId: string; email: string; displayName: string } | null> {
+  if (agentIds.length === 0) return {};
+  const placeholders = agentIds.map(() => "?").join(",");
+  const rows = getDb()
+    .prepare(
+      `SELECT a.id AS agent_id, u.id AS user_id, u.email, u.display_name
+         FROM registered_agents a
+         LEFT JOIN users u ON u.id = a.owner_id
+        WHERE a.id IN (${placeholders})`
+    )
+    .all(...agentIds) as Array<{
+      agent_id: string;
+      user_id: string | null;
+      email: string | null;
+      display_name: string | null;
+    }>;
+
+  const out: Record<string, { ownerId: string; email: string; displayName: string } | null> = {};
+  for (const r of rows) {
+    out[r.agent_id] =
+      r.user_id && r.email
+        ? { ownerId: r.user_id, email: r.email, displayName: r.display_name ?? r.email }
+        : null;
+  }
+  return out;
+}
+
 /** True when this agent is within the viewer's scope. */
 export function canViewAgent(viewer: AgentViewer, agentId: string): boolean {
   if (viewer.role === "admin") return true;

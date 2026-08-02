@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { listAgentsVisibleTo, type AgentViewer } from "@/lib/agent-registry";
+import { listAgentsVisibleTo, ownerDisplayFor, type AgentViewer } from "@/lib/agent-registry";
 import { authenticateUser } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
@@ -174,6 +174,9 @@ export async function GET(req: NextRequest) {
   }
 
   const baseAgents = listAgentsVisibleTo(viewer);
+  // Resolve owners here so the UI can show a person, not an opaque id, without
+  // every viewer needing the admin-only /api/users route.
+  const owners = ownerDisplayFor(baseAgents.map((a) => a.id));
   const agents: AgentLivenessView[] = withDerivedActivity(baseAgents, localRuntime).map(
     (agent) => {
       // withDerivedActivity already merged local-runtime activity into the
@@ -183,7 +186,13 @@ export async function GET(req: NextRequest) {
       const observation = classifyLiveness({
         lastHeartbeat: agent.lastHeartbeat,
       });
-      return { ...agent, liveness: observation };
+      const owner = owners[agent.id] ?? null;
+      return {
+        ...agent,
+        liveness: observation,
+        owner,
+        isOwnedByViewer: owner?.ownerId === viewer.userId,
+      };
     }
   );
 
