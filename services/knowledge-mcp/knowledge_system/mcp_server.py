@@ -21,6 +21,13 @@ try:
 except Exception:  # pragma: no cover - optional when FastMCP auth extras are unavailable
     DebugTokenVerifier = None  # type: ignore
 
+try:
+    # Emits RFC 9728 protected-resource metadata and, critically, the
+    # `resource_metadata` parameter on the 401 WWW-Authenticate challenge.
+    from fastmcp.server.auth import RemoteAuthProvider  # type: ignore
+except Exception:  # pragma: no cover - older FastMCP
+    RemoteAuthProvider = None  # type: ignore
+
 try:  # FastMCP is available as either fastmcp or mcp.server.fastmcp depending on install.
     from fastmcp import FastMCP  # type: ignore
 except Exception:  # pragma: no cover - environment compatibility
@@ -171,6 +178,13 @@ def _auth_provider():
     The static token remains for headless callers (cron, servers) that have no
     human to complete a browser consent. When both are configured the static
     token is checked first because it costs no network round trip.
+
+    The verifier is wrapped in RemoteAuthProvider when a public base URL is
+    known. That wrapper is what puts `resource_metadata="…"` into the 401's
+    WWW-Authenticate header (RFC 9728 §5.1) — the pointer a client follows to
+    find the authorization server. Without it a bare 401 is a dead end: Claude
+    posted to /mcp, got 401, and stopped, never touching discovery,
+    registration, or the token endpoint.
     """
     token = os.environ.get("MEMROOS_MCP_BEARER_TOKEN", "").strip()
     introspection_url = os.environ.get("MEMROOS_MCP_INTROSPECTION_URL", "").strip()
@@ -187,7 +201,25 @@ def _auth_provider():
             return _introspect_token(candidate)
         return False
 
-    return DebugTokenVerifier(validate=validate, client_id="memroos-mcp-client")
+    verifier = DebugTokenVerifier(validate=validate, client_id="memroos-mcp-client")
+
+    base_url = (
+        os.environ.get("MEMROOS_MCP_RESOURCE_URL", "").strip()
+        or os.environ.get("MEMROOS_PUBLIC_BASE_URL", "").strip()
+    ).rstrip("/")
+    if not base_url or RemoteAuthProvider is None:
+        # Still functional for a static-token client, which needs no discovery.
+        return verifier
+
+    try:
+        return RemoteAuthProvider(
+            token_verifier=verifier,
+            authorization_servers=[base_url],
+            base_url=base_url,
+            resource_name="MemroOS knowledge MCP",
+        )
+    except Exception:  # pragma: no cover - older FastMCP without RemoteAuthProvider
+        return verifier
 
 
 def _build_mcp() -> FastMCP:
