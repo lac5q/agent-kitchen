@@ -368,10 +368,11 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
   });
   tx();
 
-  // Key issuance is deliberately suppressed when the agent already existed.
-  // Registration is how an agent is *created*; re-running it against an existing
-  // id must never be a way to obtain a fresh credential for it.
-  const apiKey = input.issueApiKey && !existedBefore ? createAgentApiKey(input.id) : undefined;
+  // Registration is how an agent is *created*. Re-running it against an id that
+  // already exists must not mint a credential for it unless the caller has
+  // established the right to hold one — see allowRekeyExisting.
+  const mayIssue = input.issueApiKey && (!existedBefore || input.allowRekeyExisting === true);
+  const apiKey = mayIssue ? createAgentApiKey(input.id) : undefined;
   const agent = getRegisteredAgent(input.id);
   if (!agent) {
     throw new Error(`Failed to register agent ${input.id}`);

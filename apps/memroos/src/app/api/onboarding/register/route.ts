@@ -1,5 +1,5 @@
 import { buildMemroosMcpConfig, verifyAgentOnboardingToken } from "@/lib/agent-onboarding";
-import { registerAgent } from "@/lib/agent-registry";
+import { getRegisteredAgent, registerAgent } from "@/lib/agent-registry";
 import type { AgentLocation, AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -60,8 +60,16 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Onboarding token is not valid for this agent id" }, { status: 403 });
   }
 
+  // Re-onboarding the same agent (a reinstall) must still return a usable key,
+  // but a token must never re-key an agent that belongs to someone else.
+  const existing = getRegisteredAgent(parsed.input.id, { includeDeregistered: true });
+  if (existing && existing.ownerId && existing.ownerId !== verified.payload.ownerUserId) {
+    return Response.json({ ok: false, error: `Agent not found: ${parsed.input.id}` }, { status: 404 });
+  }
+
   const result = registerAgent({
     ...parsed.input,
+    allowRekeyExisting: true,
     platform: parsed.input.platform ?? verified.payload.defaultPlatform ?? "codex",
     protocol: parsed.input.protocol ?? verified.payload.defaultProtocol ?? "rest",
     capabilities: verified.payload.capabilities ?? parsed.input.capabilities ?? [],

@@ -1,7 +1,11 @@
-import { registerAgent } from "@/lib/agent-registry";
+import {
+  canManageAgent,
+  getRegisteredAgent,
+  registerAgent,
+  type AgentViewer,
+} from "@/lib/agent-registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { authenticateUser } from "@/lib/auth/session";
-import { canManageAgent, getRegisteredAgent, type AgentViewer } from "@/lib/agent-registry";
 import type { AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -105,6 +109,14 @@ export async function POST(request: Request) {
 
   // Never trust a client-supplied owner: it would let any caller attribute an
   // agent to someone else, or to themselves to gain sight of it.
-  const result = registerAgent({ ...input, ownerId: session?.userId });
+  // Getting here means the caller is entitled to this agent: either they own it
+  // (or are admin, checked above), or they hold the operator key. Re-registering
+  // is a legitimate way for those callers to rotate a key — a reinstall on the
+  // same machine is the ordinary case.
+  const result = registerAgent({
+    ...input,
+    ownerId: session?.userId,
+    allowRekeyExisting: true,
+  });
   return Response.json({ ok: true, ...result, timestamp: new Date().toISOString() });
 }

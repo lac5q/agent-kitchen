@@ -21,7 +21,27 @@ async function loadRoutes() {
   const bootstrapRoute = await import("../bootstrap/route");
   const agentsRoute = await import("../../agents/route");
   const dbModule = await import("@/lib/db");
+
+  // Listing agents is scoped to a viewer, so the suite needs a real signed-in
+  // admin rather than an anonymous call.
+  const { signAccessToken } = await import("@/lib/auth/jwt");
+  const db = dbModule.getDb();
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)"
+  ).run("test-admin", "admin@memroos.test", "Test Admin", "x");
+  db.prepare("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?,?)").run(
+    "test-admin",
+    "admin"
+  );
+  const adminToken = await signAccessToken("test-admin", "admin");
+  const listAgents = () =>
+    agentsRoute.GET(
+      new Request("https://memroos.example.test/api/agents", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }) as never
+    );
   return {
+    listAgents,
     inviteRoute,
     registerRoute,
     scriptRoute,
@@ -116,7 +136,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
   });
 
   it("registers an agent from an onboarding token and returns MCP config without storing the raw key in registry output", async () => {
-    const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();
+    const { inviteRoute, registerRoute, agentsRoute, listAgents } = await loadRoutes();
 
     const inviteResponse = await inviteRoute.POST(
       new Request("https://memroos.example.test/api/onboarding/invite", {
@@ -161,7 +181,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
       },
     });
 
-    const listResponse = await agentsRoute.GET();
+    const listResponse = await listAgents();
     const agents = (await listResponse.json()).agents;
     expect(agents).toEqual([
       expect.objectContaining({
@@ -342,7 +362,7 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
   it.each(["cursor", "cline", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
-      const { inviteRoute, registerRoute, agentsRoute } = await loadRoutes();
+      const { inviteRoute, registerRoute, agentsRoute, listAgents } = await loadRoutes();
       const agentId = `${platform}-agent`;
 
       const inviteResponse = await inviteRoute.POST(
@@ -383,7 +403,7 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
         agent: expect.objectContaining({ id: agentId, platform }),
       });
 
-      const agents = (await (await agentsRoute.GET()).json()).agents;
+      const agents = (await (await listAgents()).json()).agents;
       expect(agents).toContainEqual(expect.objectContaining({ id: agentId, platform }));
     }
   );

@@ -54,6 +54,21 @@ describe("re-registering an existing agent id", () => {
     expect(result.apiKey).toBeUndefined();
   });
 
+  it("re-keys only when the caller has established the right to", () => {
+    // The library default is safe; a route opts in after checking ownership.
+    const denied = registerAgent({ ...base, id: "eric-claude-code", name: "x", issueApiKey: true });
+    expect(denied.apiKey).toBeUndefined();
+
+    const allowed = registerAgent({
+      ...base,
+      id: "eric-claude-code",
+      name: "x",
+      issueApiKey: true,
+      allowRekeyExisting: true,
+    });
+    expect(allowed.apiKey).toBeTruthy();
+  });
+
   it("still issues a key on genuine first registration", () => {
     const result = registerAgent({ ...base, id: "brand-new", name: "new", ownerId: "juan", issueApiKey: true });
     expect(result.apiKey).toBeTruthy();

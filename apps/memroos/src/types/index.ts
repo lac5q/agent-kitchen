@@ -159,6 +159,15 @@ export interface RegisterAgentInput {
   capabilities?: RegisteredAgentCapability[];
   metadata?: Record<string, unknown>;
   issueApiKey?: boolean;
+  /**
+   * Allow a key to be issued for an agent that already exists.
+   *
+   * Off by default: re-registering a known id must not be a way to mint a
+   * credential for it. Callers set this only after establishing that this
+   * caller may hold this agent's credential — an owner or admin session, the
+   * operator key, or an onboarding token whose owner matches the agent's.
+   */
+  allowRekeyExisting?: boolean;
   /** Optional owning human user id; leave unset for legacy/A2A callers. */
   ownerId?: string;
 }
