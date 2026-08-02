@@ -11,6 +11,7 @@ type UserRow = {
   tenant_id: string;
   created_at: string;
   last_login_at: string | null;
+  disabled_at: string | null;
 };
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const users = db
     .prepare(
-      'SELECT id, email, display_name, tenant_id, created_at, last_login_at FROM users ORDER BY created_at ASC'
+      'SELECT id, email, display_name, tenant_id, created_at, last_login_at, disabled_at FROM users ORDER BY created_at ASC'
     )
     .all() as UserRow[];
 
@@ -42,6 +43,8 @@ export async function GET(req: NextRequest) {
       role: roleRow?.role ?? 'reviewer',
       createdAt: u.created_at,
       lastLoginAt: u.last_login_at,
+      // Surfaced so the Team page can show who is disabled and offer re-enable.
+      disabledAt: u.disabled_at,
     };
   });
 

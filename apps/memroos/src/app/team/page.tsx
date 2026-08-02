@@ -14,6 +14,7 @@ interface UserRecord {
   role: string;
   createdAt: string;
   lastLoginAt: string | null;
+  disabledAt: string | null;
 }
 
 interface UsersResponse {
@@ -47,6 +48,19 @@ async function fetchCapabilities(): Promise<Capabilities> {
   return res.json() as Promise<Capabilities>;
 }
 
+async function setUserDisabled(data: { userId: string; disabled: boolean }): Promise<void> {
+  const res = await fetch(`/api/users/${data.userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ disabled: data.disabled }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+    throw new Error([err.error, err.detail].filter(Boolean).join(" — ") || "Failed to update member");
+  }
+}
+
 async function createInvite(data: {
   role: Role;
   emailHint?: string;
@@ -69,6 +83,7 @@ export default function TeamPage() {
   const queryClient = useQueryClient();
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteRole, setInviteRole] = useState<Role>("reviewer");
+  const [memberError, setMemberError] = useState("");
   const [emailHint, setEmailHint] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<InviteResponse["email"]>(undefined);
@@ -109,6 +124,30 @@ export default function TeamPage() {
       setInviteError(err.message);
     },
   });
+
+  const membershipMutation = useMutation({
+    mutationFn: setUserDisabled,
+    onSuccess: () => {
+      setMemberError("");
+      void queryClient.invalidateQueries({ queryKey: ["team-users"] });
+    },
+    onError: (err: Error) => setMemberError(err.message),
+  });
+
+  /**
+   * Disable, not delete. `disabled_at` is enforced on every auth path, so this
+   * takes effect immediately and revokes their credentials — while keeping the
+   * approval history that a hard delete would cascade away. Permanent removal
+   * is deliberately not exposed here; it needs DELETE ?hard=true.
+   */
+  function handleToggleDisabled(user: UserRecord) {
+    const disabling = !user.disabledAt;
+    if (disabling && !confirm(`Remove ${user.displayName} from the team?\n\nThey will be signed out immediately and their API keys revoked. You can re-enable them later.`)) {
+      return;
+    }
+    setMemberError("");
+    membershipMutation.mutate({ userId: user.id, disabled: disabling });
+  }
 
   function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -347,7 +386,13 @@ export default function TeamPage() {
             : "Failed to load team members."}
         </div>
       ) : (
-        <div className="overflow-hidden border" style={{ borderColor: NOC.rule }}>
+        <>
+          {memberError && (
+            <p className="mb-3 text-sm" role="alert" style={{ color: NOC.terra }}>
+              {memberError}
+            </p>
+          )}
+          <div className="overflow-hidden border" style={{ borderColor: NOC.rule }}>
           <table className="w-full text-sm">
             <thead className="text-left" style={{ background: NOC.fog, color: NOC.muted }}>
               <tr>
@@ -355,6 +400,8 @@ export default function TeamPage() {
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Role</th>
                 <th className="px-4 py-3 font-medium">Last login</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium sr-only">Actions</th>
               </tr>
             </thead>
             <tbody style={{ background: NOC.paper }}>
@@ -370,18 +417,37 @@ export default function TeamPage() {
                       ? new Date(user.lastLoginAt).toLocaleDateString()
                       : "Never"}
                   </td>
+                  <td className="px-4 py-3">
+                    {user.disabledAt ? (
+                      <Pill tone="neutral">Disabled</Pill>
+                    ) : (
+                      <Pill tone="info">Active</Pill>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDisabled(user)}
+                      disabled={membershipMutation.isPending}
+                      className="text-sm underline disabled:opacity-50"
+                      style={{ color: user.disabledAt ? NOC.muted : NOC.terra }}
+                    >
+                      {user.disabledAt ? "Re-enable" : "Remove"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {data?.users.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center" style={{ color: NOC.soft }}>
+                  <td colSpan={6} className="px-4 py-8 text-center" style={{ color: NOC.soft }}>
                     No team members yet
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
