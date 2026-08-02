@@ -115,6 +115,9 @@ export default function TeamPage() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteRole, setInviteRole] = useState<Role>("reviewer");
   const [memberError, setMemberError] = useState("");
+  /** Target of the permanent-deletion dialog; null when closed. */
+  const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [emailHint, setEmailHint] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<InviteResponse["email"]>(undefined);
@@ -202,6 +205,47 @@ export default function TeamPage() {
       void queryClient.invalidateQueries({ queryKey: ["team-invitations"] });
     },
     onError: (err: Error) => setInviteError(err.message),
+  });
+
+  const cancelInviteMutation = useMutation({
+    mutationFn: async (inv: Invitation) => {
+      const res = await fetch("/api/auth/invite", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: inv.id }),
+      });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(e.error ?? "Failed to cancel invitation");
+      }
+    },
+    onSuccess: () => {
+      setInviteError("");
+      void queryClient.invalidateQueries({ queryKey: ["team-invitations"] });
+    },
+    onError: (err: Error) => setInviteError(err.message),
+  });
+
+  /** Permanent deletion. Separate from disable so the two can never be confused. */
+  const deleteMutation = useMutation({
+    mutationFn: async (user: UserRecord) => {
+      const res = await fetch(`/api/users/${user.id}?hard=true`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+        throw new Error([e.error, e.detail].filter(Boolean).join(" — ") || "Failed to delete user");
+      }
+    },
+    onSuccess: () => {
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
+      setMemberError("");
+      void queryClient.invalidateQueries({ queryKey: ["team-users"] });
+    },
+    onError: (err: Error) => setMemberError(err.message),
   });
 
   const membershipMutation = useMutation({
@@ -455,6 +499,85 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Permanent-deletion confirmation.
+          Deliberately heavier than the Remove flow: this cascades across nine
+          tables and cannot be undone, so it requires typing the address rather
+          than a single click that muscle memory can fire by accident. */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-user-title"
+        >
+          <div className="w-full max-w-lg border p-6" style={{ background: NOC.paper, borderColor: NOC.terra }}>
+            <h2 id="delete-user-title" className="mb-2 text-lg font-semibold" style={{ color: NOC.terra }}>
+              Permanently delete {deleteTarget.displayName}?
+            </h2>
+            <p className="mb-4 text-sm" style={{ color: NOC.ink }}>
+              This cannot be undone. <strong>{deleteTarget.email}</strong> and everything
+              belonging to the account will be erased:
+            </p>
+            <ul className="mb-4 list-disc pl-5 text-sm" style={{ color: NOC.muted }}>
+              <li>their role and any space memberships</li>
+              <li>API keys, sessions, and MCP OAuth tokens</li>
+              <li>linked sign-in identities (e.g. Google)</li>
+              <li>
+                <strong style={{ color: NOC.terra }}>
+                  approval records — escalations and owner-gate approvals they signed
+                </strong>
+              </li>
+            </ul>
+            <p className="mb-4 text-sm" style={{ color: NOC.muted }}>
+              If you only want to revoke access, use <strong>Remove</strong> instead — it signs
+              them out and revokes credentials immediately, keeps the audit history, and can be
+              undone.
+            </p>
+            <label className="mb-2 block text-sm" style={{ color: NOC.ink }}>
+              Type <strong>{deleteTarget.email}</strong> to confirm:
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              autoComplete="off"
+              className="mb-4 w-full border px-3 py-2 text-sm"
+              style={{ borderColor: NOC.rule, background: NOC.fog, color: NOC.ink }}
+              placeholder={deleteTarget.email}
+            />
+            {memberError && (
+              <p className="mb-3 text-sm" role="alert" style={{ color: NOC.terra }}>
+                {memberError}
+              </p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteConfirmText("");
+                  setMemberError("");
+                }}
+                className="px-4 py-2 text-sm"
+                style={{ color: NOC.muted }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(deleteTarget)}
+                disabled={deleteConfirmText.trim() !== deleteTarget.email || deleteMutation.isPending}
+                className="px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                style={{ background: NOC.terra, color: NOC.paper }}
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Permanently delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pending invitations */}
       {invitesData && invitesData.invitations.length > 0 && (
         <div className="mb-6">
@@ -490,15 +613,30 @@ export default function TeamPage() {
                       {inv.expired ? "Expired" : new Date(inv.expiresAt).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => resendMutation.mutate(inv)}
-                        disabled={resendMutation.isPending}
-                        className="text-sm underline disabled:opacity-50"
-                        style={{ color: NOC.terra }}
-                      >
-                        {resendMutation.isPending ? "Sending..." : "Resend"}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => resendMutation.mutate(inv)}
+                          disabled={resendMutation.isPending}
+                          className="text-sm underline disabled:opacity-50"
+                          style={{ color: NOC.terra }}
+                        >
+                          {resendMutation.isPending ? "Sending..." : "Resend"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Cancel the invitation for ${inv.emailHint ?? "this link"}?\n\nThe link stops working immediately.`)) {
+                              cancelInviteMutation.mutate(inv);
+                            }
+                          }}
+                          disabled={cancelInviteMutation.isPending}
+                          className="text-sm underline disabled:opacity-50"
+                          style={{ color: NOC.muted }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -564,15 +702,30 @@ export default function TeamPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDisabled(user)}
-                      disabled={membershipMutation.isPending}
-                      className="text-sm underline disabled:opacity-50"
-                      style={{ color: user.disabledAt ? NOC.muted : NOC.terra }}
-                    >
-                      {user.disabledAt ? "Re-enable" : "Remove"}
-                    </button>
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDisabled(user)}
+                        disabled={membershipMutation.isPending}
+                        className="text-sm underline disabled:opacity-50"
+                        style={{ color: user.disabledAt ? NOC.muted : NOC.terra }}
+                      >
+                        {user.disabledAt ? "Re-enable" : "Remove"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteConfirmText("");
+                          setMemberError("");
+                          setDeleteTarget(user);
+                        }}
+                        className="text-sm underline"
+                        style={{ color: NOC.terra }}
+                        title="Permanently delete this account and all of its data"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

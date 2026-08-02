@@ -138,3 +138,42 @@ export async function POST(req: NextRequest) {
 
   return Response.json({ inviteUrl, email }, { status: 201 });
 }
+
+
+/**
+ * Cancel a pending invitation.
+ *
+ * The id travels in the body rather than the path: `/api/auth/invite/[token]`
+ * already owns that segment for invite lookup, and an invitation id in a URL
+ * would be indistinguishable from a token to anyone reading logs.
+ *
+ * Marks it used rather than deleting the row, so the audit trail keeps who
+ * invited whom and when it was withdrawn. The link stops working either way.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await authenticateUser(req);
+  const roleError = requireRole(session?.role, 'admin');
+  if (roleError) return roleError;
+
+  let body: { id?: string };
+  try {
+    body = (await req.json()) as { id?: string };
+  } catch {
+    return Response.json({ error: 'invalid request body' }, { status: 400 });
+  }
+  const id = typeof body.id === 'string' ? body.id : '';
+  if (!id) return Response.json({ error: 'id is required' }, { status: 400 });
+
+  const db = getDb();
+  const row = db
+    .prepare('SELECT id, email_hint, used_at FROM team_invitations WHERE id = ?')
+    .get(id) as { id: string; email_hint: string | null; used_at: string | null } | undefined;
+  if (!row) return Response.json({ error: 'invitation not found' }, { status: 404 });
+  if (row.used_at) return Response.json({ ok: true, id, alreadyInactive: true });
+
+  db.prepare('UPDATE team_invitations SET used_at = ? WHERE id = ? AND used_at IS NULL').run(
+    new Date().toISOString(),
+    id
+  );
+  return Response.json({ ok: true, id, emailHint: row.email_hint, cancelled: true });
+}
