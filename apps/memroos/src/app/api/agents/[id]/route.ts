@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import {
+  agentOwnershipHistory,
   canManageAgent,
+  deleteAgent,
   canViewAgent,
   deregisterAgent,
   getRegisteredAgent,
@@ -178,9 +180,35 @@ export async function DELETE(
   const denied = await authorizeAgentMutation(request, id);
   if (denied) return denied;
 
+  /**
+   * Deregister keeps the row; ?hard=true removes it.
+   *
+   * Mirrors user removal: the reversible action is the default so a reflexive
+   * DELETE cannot destroy a registration outright. Either way the ownership
+   * trail is preserved in its own table.
+   */
+  const hard = new URL(request.url).searchParams.get("hard") === "true";
+  const session = await authenticateUser(request);
+
+  if (hard) {
+    const history = agentOwnershipHistory(id);
+    if (!deleteAgent(id, session?.userId ?? null)) {
+      return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
+    }
+    return Response.json({
+      ok: true,
+      mode: "deleted",
+      agentId: id,
+      // Returned so the caller can show who held it, now that the row is gone.
+      ownershipHistory: agentOwnershipHistory(id),
+      previousHistoryCount: history.length,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   const agent = deregisterAgent(id);
   if (!agent) {
     return Response.json({ error: `Agent not found: ${id}` }, { status: 404 });
   }
-  return Response.json({ ok: true, agent, timestamp: new Date().toISOString() });
+  return Response.json({ ok: true, mode: "deregistered", agent, timestamp: new Date().toISOString() });
 }

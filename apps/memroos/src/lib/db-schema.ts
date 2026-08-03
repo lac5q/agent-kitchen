@@ -82,7 +82,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 36;
+export const CURRENT_SCHEMA_VERSION = 37;
 
 type SchemaMigration = {
   version: number;
@@ -283,6 +283,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     name: 'agent-shared-flag',
     up: applyAgentSharedFlagSchema,
   },
+  {
+    version: 37,
+    name: 'agent-ownership-history',
+    up: applyAgentOwnershipHistorySchema,
+  },
 ];
 
 function runSchemaMigrations(db: Database.Database): void {
@@ -476,6 +481,35 @@ export function rebuildMessageFtsProjection(db: Database.Database): void {
  * Initializes the SQLite schema for the conversation store.
  * Schema changes are ordered and stamped through PRAGMA user_version.
  */
+/**
+ * Who used to own an agent.
+ *
+ * `registered_agents.owner_id` only ever holds the current owner, and deleting
+ * an agent takes even that away — so "who was responsible for this thing?"
+ * became unanswerable exactly when it mattered most. This table outlives the
+ * agent: no FK to registered_agents, so a hard delete leaves the trail intact.
+ *
+ * The FK to users is ON DELETE SET NULL for the same reason the agent's own
+ * owner_id is: losing the person must not erase the record that they held it.
+ */
+function applyAgentOwnershipHistorySchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_ownership_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id    TEXT NOT NULL,
+      agent_name  TEXT,
+      owner_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+      owner_email TEXT,
+      event       TEXT NOT NULL CHECK(event IN ('claimed','transferred','released','agent_deleted')),
+      actor_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+      note        TEXT,
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_ownership_history_agent
+      ON agent_ownership_history(agent_id, recorded_at);
+  `);
+}
+
 export function initSchema(db: Database.Database): void {
   runSchemaMigrations(db);
 }

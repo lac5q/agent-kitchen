@@ -25,6 +25,8 @@ interface AgentRegistryTableProps {
   agents: RegistryAgentRow[];
   onSelect: (agent: RegistryAgentRow) => void;
   onDeregister: (agentId: string) => void;
+  /** Permanent removal. Distinct from deregister, which keeps the row. */
+  onDelete?: (agentId: string) => void;
   /** Fired after a successful rename so the parent can refetch. */
   onAgentUpdated?: (agent: RegisteredAgent) => void;
   isDeregistering?: boolean;
@@ -152,6 +154,7 @@ export function AgentRegistryTable({
   agents,
   onSelect,
   onDeregister,
+  onDelete,
   onAgentUpdated,
   isDeregistering = false,
   emptyTitle = "No registered agents match this view.",
@@ -318,13 +321,23 @@ export function AgentRegistryTable({
                   Edit
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
                   disabled={isDeregistering}
                   onClick={() => onDeregister(agent.id)}
                 >
                   Deregister
                 </Button>
+                {onDelete && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={isDeregistering}
+                    onClick={() => onDelete(agent.id)}
+                  >
+                    Delete
+                  </Button>
+                )}
               </div>
             </>
           )}

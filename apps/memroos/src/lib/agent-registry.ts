@@ -307,9 +307,11 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       ? input.ownerId
       : null;
 
-  const existedBefore = Boolean(
-    db.prepare("SELECT 1 FROM registered_agents WHERE id = ?").get(input.id)
-  );
+  const priorRow = db
+    .prepare("SELECT owner_id FROM registered_agents WHERE id = ?")
+    .get(input.id) as { owner_id: string | null } | undefined;
+  const existedBefore = Boolean(priorRow);
+  const ownerBefore = priorRow?.owner_id ?? null;
 
   const tx = db.transaction(() => {
     db.prepare(
@@ -371,6 +373,12 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
   // Registration is how an agent is *created*. Re-running it against an id that
   // already exists must not mint a credential for it unless the caller has
   // established the right to hold one — see allowRekeyExisting.
+  // A previously unowned agent gaining an owner is a claim worth recording —
+  // it is the moment an anonymous row became someone's responsibility.
+  if (ownerId && !ownerBefore) {
+    recordOwnershipEvent({ agentId: input.id, ownerId, event: "claimed", actorId: ownerId });
+  }
+
   const mayIssue = input.issueApiKey && (!existedBefore || input.allowRekeyExisting === true);
   const apiKey = mayIssue ? createAgentApiKey(input.id) : undefined;
   const agent = getRegisteredAgent(input.id);
@@ -492,10 +500,111 @@ export function setAgentShared(agentId: string, shared: boolean): void {
 }
 
 /** Hand an agent to another person. Owner or admin. */
-export function transferAgentOwnership(agentId: string, newOwnerUserId: string): void {
+/**
+ * Record an ownership event so the trail outlives the agent.
+ *
+ * Written before the mutation where the *previous* owner matters, so the row
+ * captures who was responsible rather than who is about to be.
+ */
+export function recordOwnershipEvent(input: {
+  agentId: string;
+  ownerId: string | null;
+  event: "claimed" | "transferred" | "released" | "agent_deleted";
+  actorId?: string | null;
+  note?: string | null;
+}): void {
+  const db = getDb();
+  const agent = db
+    .prepare("SELECT name FROM registered_agents WHERE id = ?")
+    .get(input.agentId) as { name: string } | undefined;
+  const owner = input.ownerId
+    ? (db.prepare("SELECT email FROM users WHERE id = ?").get(input.ownerId) as
+        | { email: string }
+        | undefined)
+    : undefined;
+
+  db.prepare(
+    `INSERT INTO agent_ownership_history
+       (agent_id, agent_name, owner_id, owner_email, event, actor_id, note, recorded_at)
+     VALUES (@agentId, @agentName, @ownerId, @ownerEmail, @event, @actorId, @note, @recordedAt)`
+  ).run({
+    agentId: input.agentId,
+    agentName: agent?.name ?? null,
+    ownerId: input.ownerId,
+    // Denormalised: the point of this table is to survive the user row being
+    // deleted, at which point owner_id goes null and only the email is left.
+    ownerEmail: owner?.email ?? null,
+    event: input.event,
+    actorId: input.actorId ?? null,
+    note: input.note ?? null,
+    recordedAt: nowIso(),
+  });
+}
+
+export function agentOwnershipHistory(agentId: string): Array<{
+  ownerEmail: string | null;
+  event: string;
+  note: string | null;
+  recordedAt: string;
+}> {
+  return getDb()
+    .prepare(
+      `SELECT owner_email AS ownerEmail, event, note, recorded_at AS recordedAt
+         FROM agent_ownership_history WHERE agent_id = ? ORDER BY recorded_at DESC, id DESC`
+    )
+    .all(agentId) as Array<{
+    ownerEmail: string | null;
+    event: string;
+    note: string | null;
+    recordedAt: string;
+  }>;
+}
+
+export function transferAgentOwnership(
+  agentId: string,
+  newOwnerUserId: string,
+  actorId?: string | null
+): void {
+  const previous = (
+    getDb().prepare("SELECT owner_id FROM registered_agents WHERE id = ?").get(agentId) as
+      | { owner_id: string | null }
+      | undefined
+  )?.owner_id ?? null;
+
+  if (previous) {
+    recordOwnershipEvent({ agentId, ownerId: previous, event: "released", actorId, note: "transferred away" });
+  }
   getDb()
     .prepare("UPDATE registered_agents SET owner_id = ?, updated_at = ? WHERE id = ?")
     .run(newOwnerUserId, nowIso(), agentId);
+  recordOwnershipEvent({ agentId, ownerId: newOwnerUserId, event: "transferred", actorId });
+}
+
+/**
+ * Permanently remove an agent.
+ *
+ * Deregistering keeps the row so history and keys stay attached; this is the
+ * separate, irreversible action for a row that should not exist at all. The
+ * ownership trail is written first and lives in its own table, so "who used to
+ * own this?" survives the delete.
+ */
+export function deleteAgent(agentId: string, actorId?: string | null): boolean {
+  const db = getDb();
+  const existing = db
+    .prepare("SELECT owner_id FROM registered_agents WHERE id = ?")
+    .get(agentId) as { owner_id: string | null } | undefined;
+  if (!existing) return false;
+
+  recordOwnershipEvent({
+    agentId,
+    ownerId: existing.owner_id,
+    event: "agent_deleted",
+    actorId,
+    note: existing.owner_id ? null : "was unowned at deletion",
+  });
+  db.prepare("DELETE FROM agent_api_keys WHERE agent_id = ?").run(agentId);
+  db.prepare("DELETE FROM registered_agents WHERE id = ?").run(agentId);
+  return true;
 }
 
 export function listAllAgentsUnscoped(options: ListAgentsOptions = {}): RegisteredAgent[] {

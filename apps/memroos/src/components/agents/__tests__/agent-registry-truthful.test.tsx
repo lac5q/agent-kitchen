@@ -18,6 +18,7 @@ vi.mock("@/lib/api-client", () => ({
   useRegisterA2aAgentCardMutation: vi.fn(() => ({ mutate: mutateRegisterA2a, isPending: false })),
   useCreateAgentOnboardingInviteMutation: vi.fn(() => ({ mutate: mutateInvite, isPending: false })),
   useDeregisterAgentMutation: vi.fn(() => ({ mutate: mutateDeregister, isPending: false })),
+  useDeleteAgentMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 import AgentRegistryPage from "@/app/agents/page";

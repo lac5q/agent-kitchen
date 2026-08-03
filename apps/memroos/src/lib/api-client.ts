@@ -752,10 +752,25 @@ export function createAgentOnboardingInvite(input: CreateAgentOnboardingInviteIn
 }
 
 export function deregisterAgent(agentId: string) {
-  return mutateJSON<{ ok: boolean; agent: RegisteredAgent; timestamp: string }>(
+  return mutateJSON<{ ok: boolean; mode: string; agent: RegisteredAgent; timestamp: string }>(
     `/api/agents/${encodeURIComponent(agentId)}`,
     { method: "DELETE" }
   );
+}
+
+/**
+ * Permanently remove the registration. Deregister keeps the row; this does not.
+ * The ownership trail lives in its own table and is returned so the caller can
+ * still say who held the agent after it is gone.
+ */
+export function deleteAgentPermanently(agentId: string) {
+  return mutateJSON<{
+    ok: boolean;
+    mode: string;
+    agentId: string;
+    ownershipHistory: Array<{ ownerEmail: string | null; event: string; recordedAt: string }>;
+    timestamp: string;
+  }>(`/api/agents/${encodeURIComponent(agentId)}?hard=true`, { method: "DELETE" });
 }
 
 /**
@@ -817,6 +832,16 @@ export function useDeregisterAgentMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deregisterAgent,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+export function useDeleteAgentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAgentPermanently,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents"] });
     },

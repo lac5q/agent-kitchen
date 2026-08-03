@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   useCreateAgentOnboardingInviteMutation,
   useDeregisterAgentMutation,
+  useDeleteAgentMutation,
   useRegisterA2aAgentCardMutation,
   useRegisterAgentMutation,
   useRegisteredAgents,
@@ -96,6 +97,7 @@ export default function AgentRegistryPage() {
   const registerA2aMutation = useRegisterA2aAgentCardMutation();
   const inviteMutation = useCreateAgentOnboardingInviteMutation();
   const deregisterMutation = useDeregisterAgentMutation();
+  const deleteAgentMutation = useDeleteAgentMutation();
   const [protocol, setProtocol] = useState<ProtocolFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [liveness, setLiveness] = useState<LivenessFilter>("all");
@@ -382,6 +384,27 @@ export default function AgentRegistryPage() {
           agents={filtered}
           onSelect={setSelected}
           onDeregister={(agentId) => deregisterMutation.mutate(agentId)}
+          onDelete={(agentId) => {
+            const agent = filtered.find((a) => a.id === agentId) as
+              | (typeof filtered)[number] & {
+                  owner?: { displayName: string; email: string } | null;
+                }
+              | undefined;
+            const heldBy = agent?.owner
+              ? `Currently owned by ${agent.owner.displayName} (${agent.owner.email}).`
+              : "This agent is unowned.";
+            if (
+              !confirm(
+                `Permanently delete ${agent?.name ?? agentId}?\n\n${heldBy}\n\n` +
+                  "The registration and its API keys are erased. This cannot be undone — " +
+                  "Deregister is the reversible option.\n\n" +
+                  "The ownership record is KEPT, so you can still see who used to own it."
+              )
+            ) {
+              return;
+            }
+            deleteAgentMutation.mutate(agentId);
+          }}
           onAgentUpdated={(updated) =>
             setSelected((current) =>
               current && current.id === updated.id
