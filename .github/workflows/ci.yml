@@ -1,13 +1,23 @@
 name: Monorepo CI
 
+# No `schedule:` here, unlike the private repo.
+#
+# This repository is deliberately held at an earlier version than
+# lac5q/memroos-product; current work ships privately. A nightly cron over
+# frozen code cannot catch a regression — nothing lands here to regress — so it
+# only mailed the owner a failure every morning, which is how a real signal gets
+# tuned out. The daily failure was also partly by design: the Operator load SLO
+# gate runs on `schedule` and intentionally fails until a live load report
+# exists.
+#
+# Push and pull_request still run, so the gates are there if this repo is ever
+# touched again. Use workflow_dispatch for an on-demand check.
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-  schedule:
-    - cron: "17 11 * * *"
 
 jobs:
   memroos:
