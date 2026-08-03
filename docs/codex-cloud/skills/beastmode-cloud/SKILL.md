@@ -20,7 +20,7 @@ Choose the lane that is installed and authenticated on the host:
 | Lane | Default model | Command | Smoke gate |
 |------|---------------|---------|------------|
 | Qwen | `qwen3.7-plus` | `~/.local/bin/qwen-agent` | Must return `QWEN OK` |
-| MiniMax API | `MiniMax-M3` | `curl https://api.minimax.io/v1/chat/completions` | Must return `MINIMAX OK` |
+| **MiniMax (preferred)** | `MiniMax-M3` | `~/.local/bin/minimax-worker` | `minimax-worker --smoke` must return `MINIMAX OK` |
 | Droid MiniMax | `minimax-m3` | `~/.local/bin/droid exec --model minimax-m3` | `droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"` |
 | Droid custom | any `droid exec --list-tools` model id | `~/.local/bin/droid exec --model <id>` | Model-specific exact reply |
 
@@ -28,6 +28,39 @@ Prefer the direct MiniMax API lane when `MINIMAX_API_KEY` is present and the
 worker only needs to return a patch, plan, or analysis. Use Droid MiniMax when
 you specifically need Factory's agent runtime or tool access. Prefer an
 independent validator model when the authoring worker was MiniMax.
+
+### MiniMax lane: two things that will waste an afternoon
+
+**1. A present key is not a usable key.** `.zshrc` on the operator Mac exports
+`MINIMAX_API_KEY` from `~/.cache/shell/zsh_secrets`, a file that does not exist —
+leaving an 18-character placeholder in the environment. Any launcher guarding
+with `[[ -z "$MINIMAX_API_KEY" ]]` accepts that placeholder over the real
+125-character key in `~/.openclaw/openclaw.json`, and MiniMax answers:
+
+    401 "Please carry the API secret key in the 'X-Api-Key' field of the request header"
+
+That message blames the *header*, so the obvious fix (changing auth header style)
+is the wrong one — verified by curling the endpoint with both `x-api-key` and
+`Authorization: Bearer`, which **both return 200**. Always validate shape:
+`sk-` prefix and length >= 40.
+
+**2. Do not route the worker through `pi`.** Measured on this host, `pi` hangs
+intermittently on a command that succeeded seconds earlier — four consecutive
+45-second timeouts after a clean run, with and without `PI_OFFLINE`, with and
+without tools. The direct endpoint answered every time in ~1.3s. `minimax-worker`
+therefore calls `https://api.minimax.io/anthropic/v1/messages` directly.
+
+The cost is no tool use: pass context with `--file` or on stdin and take text
+back. That matches the standing guidance to prefer the direct API lane when the
+worker only needs to return a patch, plan, or analysis.
+
+    minimax-worker --smoke
+    minimax-worker --file src/a.ts --file src/b.ts "Write the migration for X"
+    git diff | minimax-worker "Review this diff for correctness"
+
+**Rollout note:** any installer that provisions this lane must carry the same
+shape validation. Checking only that the variable is non-empty reproduces the
+exact failure above on every new machine.
 
 ## Start Gate
 

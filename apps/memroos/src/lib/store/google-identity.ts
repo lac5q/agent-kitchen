@@ -127,8 +127,6 @@ export function resolveGoogleSignIn(
     // Bootstrapping stays with seedDefaultAdmin (lib/auth/seed.ts), which runs
     // from MEMROOS_ADMIN_EMAIL/PASSWORD at startup. A deployment with no users
     // is not yet ready to accept sign-ins.
-    let role: UserRole;
-    let inviteHash: string | null = null;
     if (!inviteToken) return { status: "invite_required" };
     const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
     const invite = db
@@ -139,8 +137,8 @@ export function resolveGoogleSignIn(
     if (!invite) return { status: "invalid_token" };
     if (invite.used_at) return { status: "token_used" };
     if (new Date(invite.expires_at) < new Date()) return { status: "token_expired" };
-    role = invite.role;
-    inviteHash = tokenHash;
+    // Single-assignment now that the empty-users-table bootstrap is gone.
+    const role: UserRole = invite.role;
     db.prepare("UPDATE team_invitations SET used_at = ? WHERE token_hash = ?").run(now, tokenHash);
 
     const userId = randomBytes(10).toString("hex");
@@ -157,9 +155,10 @@ export function resolveGoogleSignIn(
       asset: `users/${userId}`,
       // The invite is identified by its hash, never its token: the raw token is
       // bearer-equivalent and must not be durable in the audit log.
-      purpose:
-        `${gov.purpose} — role=${role}, ` +
-        (inviteHash ? `invite=${inviteHash.slice(0, 12)}…` : "first-user bootstrap"),
+      // The invite is always present on this branch now — reaching it without
+      // one returns invite_required above — so the old "first-user bootstrap"
+      // fallback described a state that can no longer occur.
+      purpose: `${gov.purpose} — role=${role}, invite=${tokenHash.slice(0, 12)}…`,
     });
     return { status: "ok", userId, role };
   });
