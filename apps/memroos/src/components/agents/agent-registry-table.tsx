@@ -175,7 +175,12 @@ export function AgentRegistryTable({
   }
 
   return (
-    <div className="overflow-hidden border border-stone-200 bg-white/90">
+    // overflow-x-auto, not overflow-hidden: the columns have minimum widths so
+    // they cannot squash into each other, which means at narrow widths the row
+    // is wider than its container. Hiding that overflow silently amputated the
+    // Action column — the buttons were rendered and unreachable. Scrolling is
+    // the honest outcome; the card layout below lg avoids needing it at all.
+    <div className="overflow-x-auto border border-stone-200 bg-white/90">
       {/* Column headers only exist in the table layout. Below lg each row is a
           card and carries its own inline labels, so a separate header would be
           meaningless there. */}

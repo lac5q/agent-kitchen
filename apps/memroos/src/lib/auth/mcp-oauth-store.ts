@@ -199,10 +199,36 @@ export function issueTokens(input: { clientId: string; userId: string; scope: st
  * OAuth round-trip. Owned by the human who authorised it, which is what makes
  * it visible to them under scoped visibility and accountable to them in audit.
  */
+/**
+ * Which platform a connected MCP client is.
+ *
+ * Cowork registers itself as plain `"Claude"` — it never says "Cowork" — so
+ * matching on the name labelled it "Claude Code", which is a different product
+ * that connects a different way. The dependable signal is the redirect URI:
+ * Claude Code authenticates with a static bearer header and never performs this
+ * OAuth round-trip at all, so a Dynamic Client Registration pointing back at
+ * claude.ai is the claude.ai surface, i.e. Cowork.
+ */
+function mcpClientPlatform(client: McpOauthClient | null): string {
+  const name = client?.clientName ?? "";
+  if (/cowork/i.test(name)) return "cowork";
+
+  const redirects = client?.redirectUris ?? [];
+  const fromClaudeAi = redirects.some((uri) => {
+    try {
+      return new URL(uri).hostname.endsWith("claude.ai");
+    } catch {
+      return false;
+    }
+  });
+  return fromClaudeAi ? "cowork" : "claude";
+}
+
 export function ensureMcpAgent(userId: string, clientId: string): string {
   const db = getDb();
   const client = getClient(clientId);
   const agentId = `mcp-${userId.slice(0, 8)}-${hash(clientId).slice(0, 8)}`;
+  const platform = mcpClientPlatform(client);
 
   const existing = db
     .prepare("SELECT id, owner_id FROM registered_agents WHERE id = ?")
@@ -211,13 +237,16 @@ export function ensureMcpAgent(userId: string, clientId: string): string {
   if (existing) {
     // Reconnecting revives an agent the user had deregistered, and re-asserts
     // ownership if it was somehow lost — but never moves it to someone else.
+    // Platform is re-derived so rows created before the detection was right
+    // heal on the next connect rather than staying mislabelled forever.
     db.prepare(
       `UPDATE registered_agents
           SET deregistered_at = NULL,
               owner_id = COALESCE(owner_id, @userId),
+              platform = @platform,
               updated_at = @now
         WHERE id = @agentId`
-    ).run({ agentId, userId, now: nowIso() });
+    ).run({ agentId, userId, platform, now: nowIso() });
     return agentId;
   }
 
@@ -230,9 +259,7 @@ export function ensureMcpAgent(userId: string, clientId: string): string {
     id: agentId,
     name: label,
     role: "Connected over MCP",
-    // Cowork is the connector this path exists for; anything else that
-    // completes the same OAuth flow is still a remote MCP client.
-    platform: /cowork/i.test(label) ? "cowork" : "claude",
+    platform,
     ownerId: userId,
     metadata: JSON.stringify({ mcp: { clientId, registeredVia: "oauth" } }),
     now: nowIso(),

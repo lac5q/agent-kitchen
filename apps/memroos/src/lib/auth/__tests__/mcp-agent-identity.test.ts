@@ -86,16 +86,49 @@ describe("an MCP connection registers an agent", () => {
     expect(row?.owner_id).toBe("eric");
   });
 
-  it("names a Cowork client as the cowork platform", () => {
+  /**
+   * Cowork registers itself as plain "Claude" — it never says "Cowork" — so
+   * name matching labelled it "Claude Code", a different product that connects
+   * a different way. The redirect URI is the dependable signal.
+   */
+  it("identifies Cowork from its redirect URI, not its name", () => {
     const cowork = registerClient({
-      clientName: "Claude Cowork",
-      redirectUris: ["https://claude.ai/cb"],
+      clientName: "Claude",
+      redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
     });
     const agentId = ensureMcpAgent("eric", cowork.clientId);
-    const row = db.prepare("SELECT platform FROM registered_agents WHERE id=?").get(agentId) as
-      | { platform: string }
-      | undefined;
-    expect(row?.platform).toBe("cowork");
+    expect(
+      db.prepare("SELECT platform FROM registered_agents WHERE id=?").get(agentId)
+    ).toMatchObject({ platform: "cowork" });
+  });
+
+  it("still honours an explicit Cowork name", () => {
+    const c = registerClient({ clientName: "Claude Cowork", redirectUris: ["https://elsewhere.test/cb"] });
+    expect(
+      db.prepare("SELECT platform FROM registered_agents WHERE id=?").get(ensureMcpAgent("eric", c.clientId))
+    ).toMatchObject({ platform: "cowork" });
+  });
+
+  it("leaves a non-claude.ai client as a generic MCP client", () => {
+    const c = registerClient({ clientName: "Some Tool", redirectUris: ["https://example.test/cb"] });
+    expect(
+      db.prepare("SELECT platform FROM registered_agents WHERE id=?").get(ensureMcpAgent("eric", c.clientId))
+    ).toMatchObject({ platform: "claude" });
+  });
+
+  /** Rows created before the detection was right must heal, not stay wrong. */
+  it("corrects the platform of an existing mislabelled agent on reconnect", () => {
+    const cowork = registerClient({
+      clientName: "Claude",
+      redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+    });
+    const agentId = ensureMcpAgent("eric", cowork.clientId);
+    db.prepare("UPDATE registered_agents SET platform='claude' WHERE id=?").run(agentId);
+
+    ensureMcpAgent("eric", cowork.clientId);
+    expect(
+      db.prepare("SELECT platform FROM registered_agents WHERE id=?").get(agentId)
+    ).toMatchObject({ platform: "cowork" });
   });
 });
 
