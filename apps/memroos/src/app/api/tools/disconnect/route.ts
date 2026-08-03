@@ -14,6 +14,8 @@ import {
 } from "@/lib/tool-auth/credential-store";
 import {
   deleteNangoConnection,
+  listNangoConnections,
+  ToolAuthConfigError,
   ToolAuthUpstreamError,
 } from "@/lib/tool-auth/nango-client";
 import type { RevokeRequest, RevokeResponse } from "@/lib/tool-auth/types";
@@ -55,14 +57,52 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "provider not found" }, { status: 404 });
   }
 
-  // Always clear the vault entry first — that holds the secret-bearing
-  // record. Nango deletion is best-effort (the 404 case is fine).
+  // Always clear the vault entry first — that holds the secret-bearing record.
   const removed = deleteVaultConnection(provider.key);
 
-  if (body.nangoConnectionId) {
+  /**
+   * Then delete the Nango connection, resolving it here rather than trusting
+   * the caller to supply an id.
+   *
+   * This previously ran only `if (body.nangoConnectionId)`, and the settings UI
+   * posts just `{ providerKey }` — so for every OAuth provider the branch was
+   * skipped, the vault row was cleared, and the response still said
+   * `revoked: true`. Because /api/tools/connections lets Nango override the
+   * vault when merging, the card reappeared as connected on the next refetch.
+   * With the UI's optimistic removal in front of it, revoke looked like it
+   * worked and then silently undid itself.
+   *
+   * An explicit id is still honoured, for a connection created by
+   * /api/tools/connect/oauth that has not been mirrored to the vault yet.
+   */
+  const targets = new Set<string>();
+  if (body.nangoConnectionId) targets.add(body.nangoConnectionId);
+  try {
+    for (const c of await listNangoConnections()) {
+      if (c.providerKey === provider.key) targets.add(c.connectionId);
+    }
+  } catch (err) {
+    // Nango being unreachable must not report success: the connection would
+    // still be live and the operator would believe it was gone.
+    if (!(err instanceof ToolAuthConfigError)) {
+      appendActivityEvent({
+        providerKey: provider.key,
+        type: "token_refresh_failed",
+        operatorId: session.userId,
+        message: `vault cleared (${removed}) but could not list Nango connections: ${err instanceof Error ? err.message : "unknown"}`,
+      });
+      return Response.json(
+        { error: "nango_revoke_failed", message: "could not reach Nango to revoke the connection" },
+        { status: 502 },
+      );
+    }
+  }
+
+  for (const connectionId of targets) {
     try {
-      await deleteNangoConnection(body.nangoConnectionId);
+      await deleteNangoConnection(connectionId);
     } catch (err) {
+      // A 404 means it is already gone, which is the desired end state.
       if (!(err instanceof ToolAuthUpstreamError) || err.status !== 404) {
         appendActivityEvent({
           providerKey: provider.key,
