@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createHash, randomBytes } from "crypto";
-import { Google, decodeIdToken } from "arctic";
+import { Google } from "arctic";
 import { getDb } from "@/lib/db";
 import { isHttpsRequest } from "@/lib/auth/secure-cookie";
 import { signAccessToken } from "@/lib/auth/jwt";
@@ -16,8 +16,10 @@ import {
   GOOGLE_INVITE_COOKIE,
   GOOGLE_STATE_COOKIE,
   GOOGLE_VERIFIER_COOKIE,
+  isHostedDomainAllowed,
   getGoogleOidcConfig,
   makeUnusablePasswordHash,
+  verifyGoogleIdToken,
   type GoogleIdentityClaims,
 } from "@/lib/auth/google-oidc";
 import { resolveGoogleSignIn } from "@/lib/store/google-identity";
@@ -77,18 +79,20 @@ export async function GET(req: NextRequest) {
   let claims: GoogleIdentityClaims;
   try {
     const tokens = await google.validateAuthorizationCode(code, codeVerifier);
-    const idClaims = decodeIdToken(tokens.idToken()) as Record<string, unknown>;
-    claims = {
-      sub: String(idClaims.sub ?? ""),
-      email: String(idClaims.email ?? "").toLowerCase(),
-      emailVerified: idClaims.email_verified === true,
-      name: typeof idClaims.name === "string" ? idClaims.name : "",
-    };
+    // Verified against Google's JWKS rather than decoded: this pins `aud` to
+    // our own client id and enforces issuer and expiry, so a token minted for
+    // another OAuth client cannot be replayed here.
+    claims = await verifyGoogleIdToken(tokens.idToken(), config.clientId);
   } catch {
     return redirect(errorRedirect(inviteToken, "google_exchange_failed"));
   }
   if (!claims.sub || !claims.email) {
     return redirect(errorRedirect(inviteToken, "google_claims_missing"));
+  }
+
+  // Workspace domain allowlist, when the operator has configured one.
+  if (!isHostedDomainAllowed(claims.hostedDomain)) {
+    return redirect(errorRedirect(inviteToken, "google_domain_not_allowed"));
   }
 
   const db = getDb();

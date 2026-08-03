@@ -95,13 +95,23 @@ describe("resolveGoogleSignIn", () => {
     expect(result.status).toBe("email_unverified");
   });
 
-  it("seeds the first user as admin without an invite (register parity)", () => {
+  /**
+   * Google sign-in used to mirror password register's first-user bootstrap and
+   * mint an admin when the users table was empty. On a public HTTPS host that
+   * is a race for the entire instance — anyone with a Google account could win
+   * it. Password register can afford that bootstrap because it also needs the
+   * seeded env credentials; Google sign-in needs nothing.
+   */
+  it("never bootstraps an admin from an empty users table", () => {
     const result = resolveGoogleSignIn(db, claims(), null, UNUSABLE_HASH, GOV);
-    expect(result).toMatchObject({ status: "ok", role: "admin" });
+    expect(result.status).toBe("invite_required");
+
     const identity = db
       .prepare("SELECT user_id FROM user_identities WHERE provider='google' AND subject=?")
       .get("google-sub-1");
-    expect(identity).toBeTruthy();
+    expect(identity).toBeFalsy();
+    const users = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
+    expect(users.n).toBe(0);
   });
 
   it("requires an invite for new users once users exist", () => {

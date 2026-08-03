@@ -115,28 +115,33 @@ export function resolveGoogleSignIn(
       return { status: "ok", userId: byEmail.id, role: roleForUser(db, byEmail.id) };
     }
 
-    // New account. First user bootstrap mirrors password register: an empty
-    // users table seeds the admin; everyone else needs a live invite.
-    const userCount = (db.prepare("SELECT COUNT(*) as cnt FROM users").get() as { cnt: number }).cnt;
-    let role: UserRole = "reviewer";
+    // New account: a live invite is required, with no exception.
+    //
+    // This used to mirror password register's first-user bootstrap — an empty
+    // users table minted an admin. On a public HTTPS host that is a race for
+    // the whole instance: whoever completes Google sign-in first becomes admin
+    // with no invite and no credential. Password register can afford the
+    // bootstrap because it needs seeded env credentials; Google sign-in needs
+    // only a Google account, which anyone has.
+    //
+    // Bootstrapping stays with seedDefaultAdmin (lib/auth/seed.ts), which runs
+    // from MEMROOS_ADMIN_EMAIL/PASSWORD at startup. A deployment with no users
+    // is not yet ready to accept sign-ins.
+    let role: UserRole;
     let inviteHash: string | null = null;
-    if (userCount === 0) {
-      role = "admin";
-    } else {
-      if (!inviteToken) return { status: "invite_required" };
-      const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
-      const invite = db
-        .prepare(
-          "SELECT role, email_hint, used_at, expires_at FROM team_invitations WHERE token_hash = ?",
-        )
-        .get(tokenHash) as InviteRow | undefined;
-      if (!invite) return { status: "invalid_token" };
-      if (invite.used_at) return { status: "token_used" };
-      if (new Date(invite.expires_at) < new Date()) return { status: "token_expired" };
-      role = invite.role;
-      inviteHash = tokenHash;
-      db.prepare("UPDATE team_invitations SET used_at = ? WHERE token_hash = ?").run(now, tokenHash);
-    }
+    if (!inviteToken) return { status: "invite_required" };
+    const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
+    const invite = db
+      .prepare(
+        "SELECT role, email_hint, used_at, expires_at FROM team_invitations WHERE token_hash = ?",
+      )
+      .get(tokenHash) as InviteRow | undefined;
+    if (!invite) return { status: "invalid_token" };
+    if (invite.used_at) return { status: "token_used" };
+    if (new Date(invite.expires_at) < new Date()) return { status: "token_expired" };
+    role = invite.role;
+    inviteHash = tokenHash;
+    db.prepare("UPDATE team_invitations SET used_at = ? WHERE token_hash = ?").run(now, tokenHash);
 
     const userId = randomBytes(10).toString("hex");
     db.prepare(

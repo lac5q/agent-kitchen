@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { hashPassword } from "@/lib/auth/password";
 import type { UserRole } from "@/lib/auth/types";
 
@@ -50,6 +51,78 @@ export interface GoogleIdentityClaims {
   email: string;
   emailVerified: boolean;
   name: string;
+  /** Google Workspace hosted domain, absent for consumer accounts. */
+  hostedDomain: string | null;
+}
+
+/**
+ * Google's signing keys, fetched once and cached by `jose` (it honours the
+ * endpoint's Cache-Control and re-fetches on unknown `kid`). Module scope so
+ * the cache survives between requests rather than refetching on every sign-in.
+ */
+const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+/** Google issues with either spelling; both are valid per its discovery doc. */
+const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
+
+/**
+ * Verify a Google ID token and return its claims.
+ *
+ * The token reaches us over a TLS-authenticated back-channel call to Google's
+ * token endpoint, which OIDC Core §3.1.3.7 accepts as sufficient on its own —
+ * so this is defence in depth rather than a patched hole. It is still worth
+ * doing: it is the difference between trusting the transport and checking the
+ * assertion, and it pins `aud` to our own client id, so a token minted for a
+ * different OAuth client can never be replayed into this console.
+ *
+ * Throws when verification fails; callers map that to a redirect.
+ */
+export async function verifyGoogleIdToken(
+  idToken: string,
+  clientId: string
+): Promise<GoogleIdentityClaims> {
+  const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
+    issuer: GOOGLE_ISSUERS,
+    audience: clientId,
+    // `jose` enforces exp and nbf by default; this bounds iat skew too.
+    clockTolerance: 60,
+  });
+
+  return {
+    sub: String(payload.sub ?? ""),
+    email: String(payload.email ?? "").toLowerCase(),
+    emailVerified: payload.email_verified === true,
+    name: typeof payload.name === "string" ? payload.name : "",
+    hostedDomain: typeof payload.hd === "string" ? payload.hd.toLowerCase() : null,
+  };
+}
+
+/**
+ * Workspace domains permitted to sign in, from GOOGLE_ALLOWED_HOSTED_DOMAINS
+ * (comma-separated). Empty means "no domain restriction" — the invite gate is
+ * then the only control, which is the posture both hosts run today.
+ */
+export function allowedHostedDomains(): string[] {
+  return (process.env.GOOGLE_ALLOWED_HOSTED_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Whether this account's Workspace domain may sign in.
+ *
+ * An empty allowlist permits everything — that is the posture both hosts run
+ * today, where the invite gate is the only control. Once an allowlist exists it
+ * is absolute: a consumer account carries no `hd` claim at all, so a missing
+ * domain fails closed rather than passing as "unrestricted".
+ */
+export function isHostedDomainAllowed(
+  hostedDomain: string | null,
+  allowed: string[] = allowedHostedDomains()
+): boolean {
+  if (allowed.length === 0) return true;
+  return hostedDomain !== null && allowed.includes(hostedDomain);
 }
 
 export type GoogleSignInResult =
