@@ -372,6 +372,29 @@ report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 print(f"MemroOS onboarded {agent_id}")
 print(f"Credentials written to {env_path}")
 print(f"Onboarding report written to {report_path}")
+
+# The two credentials this flow touches are different planes, and finishing
+# this script completes only one of them. Say so, or the invitee reasonably
+# concludes the whole thing is broken when /mcp still asks for auth.
+print()
+print("What just happened, and what is still yours to do:")
+print(f"  1. Agent-plane key (MEMROOS_AGENT_API_KEY in {env_path}):")
+print("     installed. It authenticates agent REST calls (heartbeat, capture,")
+print("     skills). It does NOT authenticate the MCP endpoint or operator APIs.")
+print("  2. MCP connection (per-user OAuth): registered but NOT yet authenticated.")
+print("     The MCP endpoint identifies the human, so each client signs in once:")
+if platform == "claude":
+    print("       - Claude Code: run 'claude', then '/mcp', select memroos and")
+    print("         authenticate — a browser opens; sign in with YOUR account.")
+elif platform in ("codex", "droid", "cursor", "cline", "gemini", "qwen", "opencode", "zcode", "openclaw", "hermes"):
+    print(f"       - {platform}: open your client's MCP server list, select memroos,")
+    print("         and complete the sign-in prompt with YOUR account.")
+else:
+    print("       - Your client: complete the MCP OAuth prompt with YOUR account.")
+print("       - Claude Cowork (if invited): claude.ai -> Settings -> Connectors ->")
+print("         add the memroos connector URL from your invite page, then approve")
+print("         the auth prompt. Cowork and the CLI authenticate separately by")
+print("         design — same identity, two clients, two one-time sign-ins.")
 PY
 `.replaceAll("\\${", "${");
 
