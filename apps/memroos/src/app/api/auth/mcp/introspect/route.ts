@@ -64,6 +64,10 @@ export async function POST(request: Request) {
       client_id: resolved.clientId,
       scope: resolved.scope,
       token_type: "Bearer",
+      // The agent this connection acts as. Without it the resource server knows
+      // who the human is but has no identity to record memory under, which is
+      // why authenticated MCP clients could read everything and write nothing.
+      agent_id: resolved.agentId,
     },
     { headers: { "cache-control": "no-store" } }
   );

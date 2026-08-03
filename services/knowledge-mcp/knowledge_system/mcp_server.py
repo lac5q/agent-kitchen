@@ -7,6 +7,7 @@ do not start every session with a giant tool menu.
 
 from __future__ import annotations
 
+import contextvars
 import os
 import inspect
 import secrets
@@ -124,6 +125,16 @@ def _server_options() -> dict:
     }
 
 
+# The agent the current request is acting as, resolved from token introspection.
+#
+# A ContextVar rather than a module global: the server handles concurrent
+# requests from different people, and a global would attribute one user's
+# memory writes to another user's agent. Reset per request by the auth path.
+_MCP_AGENT_ID: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "memroos_mcp_agent_id", default=None
+)
+
+
 def _introspect_token(candidate: str) -> bool:
     """Ask the MemroOS app whether this bearer token is live (RFC 7662).
 
@@ -169,7 +180,15 @@ def _introspect_token(candidate: str) -> bool:
     except (urllib.error.URLError, OSError, ValueError):
         return False
 
-    return bool(body.get("active"))
+    if not body.get("active"):
+        return False
+
+    # The app resolves the token to the agent this connection acts as. Without
+    # it we know who the human is but have no identity to record memory under —
+    # which is why authenticated clients could read everything and write nothing.
+    agent_id = body.get("agent_id")
+    _MCP_AGENT_ID.set(str(agent_id) if isinstance(agent_id, str) and agent_id else None)
+    return True
 
 
 def _auth_provider():
@@ -450,7 +469,20 @@ def _memroos_app_url() -> str:
 
 
 def _memroos_agent_id(agent_id: Optional[str] = None) -> str:
-    return (agent_id or os.environ.get("MEMROOS_AGENT_ID") or "shared").strip() or "shared"
+    """Resolve which agent to act as.
+
+    An explicit argument wins, then the agent the current OAuth token resolved
+    to, then the host's configured agent, and only then the "shared" fallback.
+    Preferring the token means a Cowork connection writes as the connecting
+    person's own agent rather than as a shared identity nobody is accountable
+    for.
+    """
+    return (
+        agent_id
+        or _MCP_AGENT_ID.get()
+        or os.environ.get("MEMROOS_AGENT_ID")
+        or "shared"
+    ).strip() or "shared"
 
 
 def _memroos_agent_role(agent_role: Optional[str] = None) -> str:

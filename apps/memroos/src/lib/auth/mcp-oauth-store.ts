@@ -180,13 +180,72 @@ export function issueTokens(input: { clientId: string; userId: string; scope: st
   );
   insert.run(hash(accessToken), input.clientId, input.userId, "access", input.scope, isoIn(ACCESS_TTL_SECONDS));
   insert.run(hash(refreshToken), input.clientId, input.userId, "refresh", input.scope, isoIn(REFRESH_TTL_SECONDS));
+  // Register the agent at issuance so it appears on /agents as soon as the
+  // person connects, rather than only after their first tool call.
+  ensureMcpAgent(input.userId, input.clientId);
   return { accessToken, refreshToken, expiresIn: ACCESS_TTL_SECONDS };
+}
+
+/**
+ * The agent a connected MCP client acts as.
+ *
+ * An OAuth token names a *human*, but MemroOS records memory as an *agent* —
+ * so a connector that only ever resolved to a user had no identity to write
+ * with. That is why Claude Cowork could read everything and write nothing, and
+ * why a connected client never appeared on /agents: nothing had registered it.
+ *
+ * One agent per (user, client), derived deterministically so reconnecting
+ * reuses the same row instead of littering the registry with a new agent per
+ * OAuth round-trip. Owned by the human who authorised it, which is what makes
+ * it visible to them under scoped visibility and accountable to them in audit.
+ */
+export function ensureMcpAgent(userId: string, clientId: string): string {
+  const db = getDb();
+  const client = getClient(clientId);
+  const agentId = `mcp-${userId.slice(0, 8)}-${hash(clientId).slice(0, 8)}`;
+
+  const existing = db
+    .prepare("SELECT id, owner_id FROM registered_agents WHERE id = ?")
+    .get(agentId) as { id: string; owner_id: string | null } | undefined;
+
+  if (existing) {
+    // Reconnecting revives an agent the user had deregistered, and re-asserts
+    // ownership if it was somehow lost — but never moves it to someone else.
+    db.prepare(
+      `UPDATE registered_agents
+          SET deregistered_at = NULL,
+              owner_id = COALESCE(owner_id, @userId),
+              updated_at = @now
+        WHERE id = @agentId`
+    ).run({ agentId, userId, now: nowIso() });
+    return agentId;
+  }
+
+  const label = client?.clientName?.trim() || "MCP client";
+  db.prepare(
+    `INSERT INTO registered_agents
+       (id, name, role, platform, protocol, status, location, owner_id, metadata, created_at, updated_at)
+     VALUES (@id, @name, @role, @platform, 'rest', 'active', 'cloudflare', @ownerId, @metadata, @now, @now)`
+  ).run({
+    id: agentId,
+    name: label,
+    role: "Connected over MCP",
+    // Cowork is the connector this path exists for; anything else that
+    // completes the same OAuth flow is still a remote MCP client.
+    platform: /cowork/i.test(label) ? "cowork" : "claude",
+    ownerId: userId,
+    metadata: JSON.stringify({ mcp: { clientId, registeredVia: "oauth" } }),
+    now: nowIso(),
+  });
+  return agentId;
 }
 
 export interface ResolvedToken {
   userId: string;
   clientId: string;
   scope: string;
+  /** The agent this token acts as — what makes an audited write possible. */
+  agentId: string;
 }
 
 /** Resolve a bearer token to its principal. Returns null when unusable. */
@@ -205,7 +264,10 @@ export function resolveAccessToken(token: string): ResolvedToken | null {
   if (!row || row.revoked_at || isExpired(row.expires_at)) return null;
 
   db.prepare("UPDATE mcp_oauth_tokens SET last_used_at = ? WHERE token_hash = ?").run(nowIso(), h);
-  return { userId: row.user_id, clientId: row.client_id, scope: row.scope };
+  // Resolved on use rather than only at issuance, so a token minted before this
+  // existed still yields an agent instead of failing every write.
+  const agentId = ensureMcpAgent(row.user_id, row.client_id);
+  return { userId: row.user_id, clientId: row.client_id, scope: row.scope, agentId };
 }
 
 /** Rotate on refresh: the presented refresh token is revoked as it is used. */
@@ -228,7 +290,12 @@ export function consumeRefreshToken(token: string): ResolvedToken | null {
     .run(nowIso(), h);
   if (revoked.changes !== 1) return null;
 
-  return { userId: row.user_id, clientId: row.client_id, scope: row.scope };
+  return {
+    userId: row.user_id,
+    clientId: row.client_id,
+    scope: row.scope,
+    agentId: ensureMcpAgent(row.user_id, row.client_id),
+  };
 }
 
 /** PKCE S256 verification. Plain is deliberately unsupported. */
