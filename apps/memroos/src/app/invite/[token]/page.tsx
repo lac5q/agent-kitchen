@@ -529,6 +529,21 @@ export default function InvitePage() {
           >
             Done
           </button>
+          {/* Onboarding was one-way: once you reached this step there was no
+              route back to the picker, so choosing one tool and then wanting to
+              add Claude Cowork meant restarting the invite. The selection is
+              still in state, so returning to it is just a step change. */}
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setStep("connect");
+            }}
+            className="border px-4 py-3 text-sm"
+            style={{ borderColor: NOC.ruleStrong, color: NOC.muted }}
+          >
+            Add more tools
+          </button>
           {commands.length > 0 && (
             <button
               type="button"

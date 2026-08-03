@@ -2,6 +2,8 @@ export type AgentStatus = "active" | "idle" | "dormant" | "error";
 export type AgentPlatform =
   | "cursor"
   | "claude"
+  /** Claude Cowork — a remote MCP connector rather than a local CLI. */
+  | "cowork"
   | "cline"
   | "codex"
   | "qwen"

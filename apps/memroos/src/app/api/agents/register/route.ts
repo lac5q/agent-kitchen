@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 const PLATFORMS = new Set([
   "cursor",
   "claude",
+  "cowork",
   "cline",
   "codex",
   "qwen",
