@@ -75,11 +75,20 @@ export async function POST(req: NextRequest) {
    * An explicit id is still honoured, for a connection created by
    * /api/tools/connect/oauth that has not been mirrored to the vault yet.
    */
-  const targets = new Set<string>();
-  if (body.nangoConnectionId) targets.add(body.nangoConnectionId);
+  const targets = new Map<string, string>(); // connectionId -> providerConfigKey
   try {
     for (const c of await listNangoConnections()) {
-      if (c.providerKey === provider.key) targets.add(c.connectionId);
+      // Only OAuth rows carry a Nango config key; vault-only rows have none and
+      // are already handled by deleteVaultConnection above.
+      if (c.providerKey === provider.key && c.providerConfigKey) {
+        targets.set(c.connectionId, c.providerConfigKey);
+      }
+    }
+    // An id supplied by the caller is only actionable if we can name its config
+    // key, which Nango requires on delete.
+    if (body.nangoConnectionId && !targets.has(body.nangoConnectionId)) {
+      const known = [...targets.values()][0];
+      if (known) targets.set(body.nangoConnectionId, known);
     }
   } catch (err) {
     // Nango being unreachable must not report success: the connection would
@@ -98,9 +107,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  for (const connectionId of targets) {
+  for (const [connectionId, providerConfigKey] of targets) {
     try {
-      await deleteNangoConnection(connectionId);
+      await deleteNangoConnection(connectionId, providerConfigKey);
     } catch (err) {
       // A 404 means it is already gone, which is the desired end state.
       if (!(err instanceof ToolAuthUpstreamError) || err.status !== 404) {

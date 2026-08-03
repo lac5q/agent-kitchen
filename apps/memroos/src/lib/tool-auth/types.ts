@@ -23,6 +23,12 @@ export interface ToolConnection {
   providerKey: string;
   /** Opaque per-installation id used by Nango (OAuth) or memroos (API key). */
   connectionId: string;
+  /**
+   * Nango's own key for the integration ("circleback-mcp"), distinct from
+   * providerKey ("circleback"). Nango requires it to delete a connection, so it
+   * is surfaced rather than re-derived at the call site.
+   */
+  providerConfigKey?: string;
   status: ConnectionStatus;
   /** Present for OAuth connections only; for API keys this is null. */
   accountEmail?: string | null;

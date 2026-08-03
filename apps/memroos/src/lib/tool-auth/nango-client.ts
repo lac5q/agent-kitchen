@@ -108,7 +108,7 @@ interface NangoUsageResponse {
  */
 export async function listNangoConnections(): Promise<ToolConnection[]> {
   const res = await nangoFetch<{ connections: NangoConnection[] }>(
-    "/connections",
+    "/connection",
   );
   const list = res.connections ?? [];
   return list.map((c) => ({
@@ -116,6 +116,7 @@ export async function listNangoConnections(): Promise<ToolConnection[]> {
     // by the memroos provider key ("circleback"). Translate or the card never
     // matches its own connection.
     providerKey: providerKeyFromConfigKey(c.provider_config_key),
+    providerConfigKey: c.provider_config_key,
     // Nango's `id` is an internal numeric row id; every Nango API path that
     // takes a connection (notably GET /connection/:id for credentials) expects
     // the `connection_id` UUID. Sending `id` 404s, which fetchNangoCredentials
@@ -188,13 +189,32 @@ export async function createNangoConnectSession(opts: {
  * Deletes a Nango connection. Idempotent — Nango returns 404 if the id is
  * unknown, which we treat as success.
  */
-export async function deleteNangoConnection(connectionId: string): Promise<void> {
+/**
+ * Delete a Nango connection.
+ *
+ * `provider_config_key` is REQUIRED by Nango on this endpoint. Omitting it does
+ * not 404 — it returns 400 `unknown_connection`, which reads like "that id does
+ * not exist" rather than "you forgot a parameter". Because only 404 was treated
+ * as already-gone, every revoke threw, the caller turned it into a 502, and the
+ * settings UI discarded that silently: the connection looked revoked, then came
+ * back on the next refetch.
+ */
+export async function deleteNangoConnection(
+  connectionId: string,
+  providerConfigKey: string,
+): Promise<void> {
+  const query = `?provider_config_key=${encodeURIComponent(providerConfigKey)}`;
   try {
-    await nangoFetch<void>(`/connections/${encodeURIComponent(connectionId)}`, {
-      method: "DELETE",
-    });
+    await nangoFetch<void>(
+      `/connection/${encodeURIComponent(connectionId)}${query}`,
+      { method: "DELETE" },
+    );
   } catch (err) {
-    if (err instanceof ToolAuthUpstreamError && err.status === 404) return;
+    if (!(err instanceof ToolAuthUpstreamError)) throw err;
+    // 404, or Nango's 400 `unknown_connection`: either way it is not there, and
+    // absence is the outcome we wanted.
+    if (err.status === 404) return;
+    if (err.status === 400 && /unknown_connection/.test(String(err.message) + JSON.stringify(err))) return;
     throw err;
   }
 }
