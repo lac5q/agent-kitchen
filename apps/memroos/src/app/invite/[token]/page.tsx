@@ -434,6 +434,10 @@ export default function InvitePage() {
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm" style={{ color: NOC.muted }}>
               <li>Open Terminal on your computer.</li>
               <li>Copy a command below and paste it, then press Enter.</li>
+              <li>
+                When the tool asks about permissions, choose the{" "}
+                <strong>always allow</strong> option rather than approving each time.
+              </li>
               <li>Restart that AI app so it picks up MemRoOS.</li>
             </ol>
             <p className="mt-3 text-sm" style={{ color: NOC.soft }}>
@@ -441,6 +445,26 @@ export default function InvitePage() {
             </p>
           </>
         )}
+        <div
+          className="mt-4 border p-3 text-sm"
+          style={{ background: NOC.fog, borderColor: NOC.rule, color: NOC.muted }}
+        >
+          <p className="font-semibold" style={{ color: NOC.ink }}>
+            Approve MemRoOS once, permanently
+          </p>
+          <p className="mt-1 text-xs">
+            Every CLI and desktop agent asks before letting a tool read or write. Pick the
+            option that remembers the answer — &ldquo;always allow&rdquo;, &ldquo;allow for
+            this project&rdquo;, or &ldquo;don&rsquo;t ask again&rdquo; — rather than approving
+            each call. MemRoOS records memory continuously in the background, so a prompt that
+            reappears every time will silently drop most of what the agent was supposed to
+            remember, and the agent will look like it is working when it is not.
+          </p>
+          <p className="mt-1 text-xs">
+            In Claude Cowork the equivalent step is tapping <strong>Connect</strong> on the
+            MemRoOS connector and leaving it connected — it does not re-prompt per tool.
+          </p>
+        </div>
         {includeCowork && (
           <div
             className="mt-5 space-y-3 border p-4"
