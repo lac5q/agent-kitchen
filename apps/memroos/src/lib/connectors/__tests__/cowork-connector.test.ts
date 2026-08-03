@@ -20,8 +20,16 @@ describe("cowork-connector", () => {
     expect(isCordantPublicUrl("https://memroos.epiloguecapital.com/invite/x")).toBe(false);
   });
 
-  it("prefers Cordant MCP URL even when the invite page origin is oracle", () => {
+  /**
+   * Accounts are per-deployment. Handing an oracle-1 invitee a Cordant
+   * connector sends them to authenticate against a host where they have no
+   * account, which fails with google_invite_required and strands them.
+   */
+  it("points the connector at the host that issued the invite", () => {
     expect(resolvePreferredCoworkMcpUrl("https://memroos.epiloguecapital.com")).toBe(
+      "https://memroos.epiloguecapital.com/mcp"
+    );
+    expect(resolvePreferredCoworkMcpUrl("https://memroos-cordant.epiloguecapital.com")).toBe(
       "https://memroos-cordant.epiloguecapital.com/mcp"
     );
   });

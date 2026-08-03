@@ -161,10 +161,13 @@ export default function InvitePage() {
    */
   const emailLocked = Boolean(inviteInfo?.emailHint);
 
+  // Resolved from the page's own origin so the connector always points at the
+  // deployment that issued this invite — the account the user just created
+  // only exists here. There is no server-side default: guessing a host is what
+  // sent an oracle-1 invitee to Cordant and stranded them at a login they could
+  // not pass. Empty until hydration, and the step that renders it is client-only.
   const coworkMcpUrl = useMemo(() => {
-    if (typeof window === "undefined") {
-      return "https://memroos-cordant.epiloguecapital.com/mcp";
-    }
+    if (typeof window === "undefined") return "";
     return resolvePreferredCoworkMcpUrl(window.location.origin);
   }, [step]);
 

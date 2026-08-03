@@ -22,8 +22,20 @@ export function resolveCoworkMcpUrl(publicBaseUrl: string): string {
 }
 
 /**
- * Prefer Cordant for Cowork when the page origin is Cordant, or when the
- * operator pinned NEXT_PUBLIC_COWORK_MCP_URL. Never invent tokens into the URL.
+ * The connector must point at the deployment that issued the invite.
+ *
+ * This previously always returned Cordant, so that an oracle-1 invite would
+ * still show Cordant's `/mcp` in Eric-path screenshots. That is wrong, and it
+ * locked a real user out: accounts are per-deployment, so someone who accepted
+ * an invite on `memroos.epiloguecapital.com` has no account on
+ * `memroos-cordant.epiloguecapital.com`. Claude Cowork then ran the OAuth
+ * round-trip against Cordant, which correctly refused an unknown identity with
+ * `google_invite_required` — leaving the user with a connector they could not
+ * complete and a login they could not pass.
+ *
+ * Same-origin is the only default that cannot produce that state. An operator
+ * who genuinely wants to cross hosts still can, explicitly, via
+ * NEXT_PUBLIC_COWORK_MCP_URL. Never invent tokens into the URL.
  */
 export function resolvePreferredCoworkMcpUrl(pageOrigin: string): string {
   const pinned =
@@ -33,13 +45,7 @@ export function resolvePreferredCoworkMcpUrl(pageOrigin: string): string {
   if (pinned) {
     return pinned.endsWith("/mcp") ? pinned.replace(/\/+$/, "") : resolveCoworkMcpUrl(pinned);
   }
-  if (isCordantPublicUrl(pageOrigin)) {
-    return resolveCoworkMcpUrl(CORDANT_PUBLIC_ORIGIN);
-  }
-  // Oracle (or other) invite: still offer Cordant for Cowork by default so
-  // Eric-path screenshots never show memroos.epiloguecapital.com/mcp by accident.
-  // Operators testing oracle MCP can pin NEXT_PUBLIC_COWORK_MCP_URL.
-  return resolveCoworkMcpUrl(CORDANT_PUBLIC_ORIGIN);
+  return resolveCoworkMcpUrl(pageOrigin);
 }
 
 export function isCordantPublicUrl(url: string): boolean {
