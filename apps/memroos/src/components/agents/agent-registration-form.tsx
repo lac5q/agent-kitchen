@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CreateAgentOnboardingInviteInput, RegisterA2aAgentCardInput } from "@/lib/api-client";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
+import {
+  COWORK_PLATFORM_ID,
+  resolvePreferredCoworkMcpUrl,
+} from "@/lib/connectors/cowork-connector";
 import type { AgentPlatform, RegisterAgentInput } from "@/types";
 
 const ONBOARDING_PLATFORMS: AgentPlatform[] = [
@@ -43,6 +47,8 @@ export function AgentRegistrationForm({
 }: AgentRegistrationFormProps) {
   const [mode, setMode] = useState<"manual" | "a2a">("manual");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const coworkMcpUrl =
+    typeof window === "undefined" ? "" : resolvePreferredCoworkMcpUrl(window.location.origin);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [capabilities, setCapabilities] = useState("");
@@ -120,9 +126,24 @@ export function AgentRegistrationForm({
             Advanced
           </Button>
         </div>
-        <p className="text-xs text-stone-500">
-          The invite lets the agent choose its own name and writes its MemroOS credentials during bootstrap.
-        </p>
+        {/* Cowork is a remote MCP connector, not a CLI install, so the bootstrap
+            invite below has nothing to install on a machine. Say so here rather
+            than handing over a shell command that cannot apply. */}
+        {platform === COWORK_PLATFORM_ID ? (
+          <p className="text-xs text-stone-500">
+            Claude Cowork connects as a remote connector, so there is no install command.
+            Add{" "}
+            <code className="border border-stone-200 bg-stone-50 px-1">
+              {coworkMcpUrl}
+            </code>{" "}
+            in Claude → Connectors → Add custom connector, then tap Connect. The agent
+            registers itself on first use.
+          </p>
+        ) : (
+          <p className="text-xs text-stone-500">
+            The invite lets the agent choose its own name and writes its MemroOS credentials during bootstrap.
+          </p>
+        )}
       </div>
 
       {showAdvanced && (

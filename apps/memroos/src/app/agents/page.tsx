@@ -28,6 +28,9 @@ function inviteErrorMessage(error: unknown) {
   if (message.includes("Registry write authorization required")) {
     return "Operator key required. Paste the operator key, then click Copy Invite again.";
   }
+  if (/insufficient permissions/i.test(message)) {
+    return "Creating an agent invite needs the Operator or Admin role — this account is a Reviewer. Ask an admin to raise your role, or to create the invite for you.";
+  }
   return message;
 }
 
@@ -272,7 +275,7 @@ export default function AgentRegistryPage() {
       {(inviteCommand || inviteStatus) && (
         <div className={`border p-4 ${inviteCommand ? "border-sky-300 bg-white" : "border-rose-500/30 bg-rose-500/10"}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className={`text-xs font-semibold uppercase tracking-wide ${inviteCommand ? "text-sky-700" : "text-rose-300"}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${inviteCommand ? "text-sky-700" : "text-rose-700"}`}>
               {inviteCommand ? "Agent onboarding prompt" : "Invite not created"}
             </p>
             {inviteCommand && (
@@ -292,7 +295,14 @@ export default function AgentRegistryPage() {
               </Button>
             )}
           </div>
-          {inviteStatus && <p className={`mt-1 text-xs ${inviteCommand ? "text-stone-600" : "text-rose-100"}`}>{inviteStatus}</p>}
+          {/* rose-100 on a rose-500/10 surface rendered the reason invisible:
+              the panel said "Invite not created" and the explanation underneath
+              was white text on near-white. */}
+          {inviteStatus && (
+            <p className={`mt-1 text-xs ${inviteCommand ? "text-stone-600" : "text-rose-800"}`}>
+              {inviteStatus}
+            </p>
+          )}
           {inviteCommand && (
             <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap border p-3 font-mono text-sm leading-6" style={{ background: NOC.fog, borderColor: NOC.rule, color: NOC.ink }}>
               {inviteCommand}
