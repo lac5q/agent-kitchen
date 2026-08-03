@@ -152,7 +152,7 @@ describe("POST /api/heartbeat", () => {
   });
 
   it("records a valid authenticated heartbeat", async () => {
-    const { POST, listRegisteredAgents, registerAgent } = await loadPostRoute();
+    const { POST, listAllAgentsUnscoped, registerAgent } = await loadPostRoute();
     const { apiKey } = registerAgent({
       id: "heartbeat-agent",
       name: "Heartbeat Agent",
@@ -171,7 +171,7 @@ describe("POST /api/heartbeat", () => {
     );
 
     expect(res.status).toBe(200);
-    const agent = listRegisteredAgents().find((a) => a.id === "heartbeat-agent");
+    const agent = listAllAgentsUnscoped().find((a) => a.id === "heartbeat-agent");
     expect(agent).toMatchObject({
       id: "heartbeat-agent",
       status: "active",

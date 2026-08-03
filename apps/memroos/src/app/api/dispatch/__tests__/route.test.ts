@@ -5,7 +5,7 @@ vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
 vi.mock("@/lib/agent-registry", () => ({
   authenticateAgentHeaders: vi.fn(),
   getRemoteAgents: vi.fn(),
-  listRegisteredAgents: vi.fn(),
+  listAllAgentsUnscoped: vi.fn(),
 }));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
 vi.mock("@/lib/content-scanner", () => ({ scanContent: vi.fn() }));
@@ -24,7 +24,7 @@ vi.mock("@/lib/skills/skill-sync-governance", () => ({
 
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
-const { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } = await import("@/lib/agent-registry");
+const { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } = await import("@/lib/agent-registry");
 const { writeAuditLog } = await import("@/lib/audit");
 const { scanContent } = await import("@/lib/content-scanner");
 const { scanIrisPreflight } = await import("@/lib/iris-scanner");
@@ -36,7 +36,7 @@ const { getAgentVersionPin } = await import("@/lib/skills/skill-sync-governance"
 const mockGetDb = vi.mocked(getDb);
 const mockAuthenticateAgentHeaders = vi.mocked(authenticateAgentHeaders);
 const mockGetRemoteAgents = vi.mocked(getRemoteAgents);
-const mockListRegisteredAgents = vi.mocked(listRegisteredAgents);
+const mockListRegisteredAgents = vi.mocked(listAllAgentsUnscoped);
 const mockWriteAuditLog = vi.mocked(writeAuditLog);
 const mockScanContent = vi.mocked(scanContent);
 const mockScanIrisPreflight = vi.mocked(scanIrisPreflight);

@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/auth/middleware-roles";
+import { ROLE_RANK, requireRole } from "@/lib/auth/middleware-roles";
+import type { UserRole } from "@/lib/auth/types";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,12 @@ export const dynamic = "force-dynamic";
  * on every authentication path (password login, session refresh, Google OIDC),
  * so setting it takes effect immediately.
  */
+
+const ASSIGNABLE_ROLES: UserRole[] = ["reviewer", "operator", "admin"];
+
+function isAssignableRole(value: unknown): value is UserRole {
+  return typeof value === "string" && (ASSIGNABLE_ROLES as string[]).includes(value);
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -79,13 +86,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ userId: s
   const auth = await authorize(req, userId);
   if (auth.error) return auth.error;
 
-  let body: { disabled?: unknown };
+  let body: { disabled?: unknown; role?: unknown };
   try {
-    body = (await req.json()) as { disabled?: unknown };
+    body = (await req.json()) as { disabled?: unknown; role?: unknown };
   } catch {
     return Response.json({ error: "body must be JSON" }, { status: 400 });
   }
-  if (typeof body.disabled !== "boolean") {
+  const wantsRole = body.role !== undefined;
+  if (!wantsRole && typeof body.disabled !== "boolean") {
     return Response.json({ error: "disabled must be a boolean" }, { status: 400 });
   }
 
@@ -94,6 +102,63 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ userId: s
     | { id: string; email: string; disabled_at: string | null }
     | undefined;
   if (!target) return Response.json({ error: "user not found" }, { status: 404 });
+
+  /**
+   * Role change.
+   *
+   * `user_roles` is keyed on (user_id, role), so it can hold several rows per
+   * person — but the console shows one role and `requireRole` compares one rank.
+   * A change therefore replaces rather than adds, or the UI and the check could
+   * disagree about who someone is.
+   */
+  if (wantsRole) {
+    if (!isAssignableRole(body.role)) {
+      return Response.json(
+        { error: "role must be one of: reviewer, operator, admin" },
+        { status: 400 }
+      );
+    }
+    const nextRole = body.role;
+    const currentRole = (
+      db.prepare("SELECT role FROM user_roles WHERE user_id = ? ORDER BY role").get(userId) as
+        | { role: UserRole }
+        | undefined
+    )?.role;
+
+    if (currentRole === nextRole) {
+      return Response.json({ ok: true, userId, email: target.email, role: nextRole, changed: false });
+    }
+    // Demoting the last admin leaves nobody able to promote anyone back.
+    if (nextRole !== "admin" && wouldOrphanAdmins(db, userId)) {
+      return Response.json(
+        { error: "cannot demote the last admin", detail: "promote another admin first" },
+        { status: 409 }
+      );
+    }
+
+    db.transaction(() => {
+      db.prepare("DELETE FROM user_roles WHERE user_id = ?").run(userId);
+      db.prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run(userId, nextRole);
+    })();
+
+    // The role is baked into the access token, so a demotion would otherwise
+    // keep its old powers until that token expired. Dropping refresh tokens
+    // forces re-authentication at the new level.
+    const demoted = ROLE_RANK[nextRole] < ROLE_RANK[(currentRole ?? "reviewer") as UserRole];
+    if (demoted) {
+      db.prepare("DELETE FROM user_refresh_tokens WHERE user_id = ?").run(userId);
+    }
+
+    return Response.json({
+      ok: true,
+      userId,
+      email: target.email,
+      role: nextRole,
+      previousRole: currentRole ?? null,
+      changed: true,
+      sessionsRevoked: demoted,
+    });
+  }
 
   if (body.disabled) {
     if (wouldOrphanAdmins(db, userId)) {

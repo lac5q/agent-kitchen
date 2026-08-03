@@ -62,7 +62,7 @@ describe("agent registry service", () => {
   });
 
   it("lists public registered agents without plaintext API keys", async () => {
-    const { listRegisteredAgents, registerAgent } = await loadRegistry();
+    const { listAllAgentsUnscoped, registerAgent } = await loadRegistry();
 
     registerAgent({
       id: "public-agent",
@@ -73,7 +73,7 @@ describe("agent registry service", () => {
       issueApiKey: true,
     });
 
-    const agents = listRegisteredAgents();
+    const agents = listAllAgentsUnscoped();
     expect(agents).toHaveLength(1);
     expect(agents[0].id).toBe("public-agent");
     expect(JSON.stringify(agents)).not.toContain("apiKey");
@@ -99,7 +99,7 @@ describe("agent registry service", () => {
   });
 
   it("records heartbeats against an existing agent", async () => {
-    const { listRegisteredAgents, recordHeartbeat, registerAgent } = await loadRegistry();
+    const { listAllAgentsUnscoped, recordHeartbeat, registerAgent } = await loadRegistry();
 
     registerAgent({
       id: "heartbeat-agent",
@@ -115,7 +115,7 @@ describe("agent registry service", () => {
       metadata: { pid: 1234 },
     });
 
-    const [agent] = listRegisteredAgents();
+    const [agent] = listAllAgentsUnscoped();
     expect(agent.status).toBe("active");
     expect(agent.lastHeartbeat).toBeTruthy();
     expect(agent.currentTask).toBe("checking in");
@@ -261,7 +261,7 @@ describe("agent registry service", () => {
   });
 
   it("deregisters agents by soft delete and revokes keys", async () => {
-    const { authenticateAgentKey, deregisterAgent, listRegisteredAgents, registerAgent } =
+    const { authenticateAgentKey, deregisterAgent, listAllAgentsUnscoped, registerAgent } =
       await loadRegistry();
 
     const { apiKey } = registerAgent({
@@ -275,8 +275,8 @@ describe("agent registry service", () => {
 
     deregisterAgent("retiring-agent");
 
-    expect(listRegisteredAgents()).toHaveLength(0);
-    expect(listRegisteredAgents({ includeDeregistered: true })[0].deregisteredAt).toBeTruthy();
+    expect(listAllAgentsUnscoped()).toHaveLength(0);
+    expect(listAllAgentsUnscoped({ includeDeregistered: true })[0].deregisteredAt).toBeTruthy();
     expect(authenticateAgentKey(apiKey!, "retiring-agent")).toBeNull();
   });
 

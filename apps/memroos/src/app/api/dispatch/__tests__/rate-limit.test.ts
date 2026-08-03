@@ -10,7 +10,7 @@ vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
 vi.mock("@/lib/agent-registry", () => ({
   authenticateAgentHeaders: vi.fn(() => null),
   getRemoteAgents: vi.fn(() => []),
-  listRegisteredAgents: vi.fn(() => []),
+  listAllAgentsUnscoped: vi.fn(() => []),
   authenticateUser: vi.fn(() => null),
 }));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));

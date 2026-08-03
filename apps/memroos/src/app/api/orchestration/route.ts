@@ -1,4 +1,4 @@
-import { listRegisteredAgents } from "@/lib/agent-registry";
+import { listAllAgentsUnscoped } from "@/lib/agent-registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import {
   postOrchestrationTask,
@@ -22,7 +22,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const agents = listRegisteredAgents().map(registeredAgentToOrchestrationAgent);
+    // Unscoped: operator-key gated, and the orchestrator plans across the fleet.
+    const agents = listAllAgentsUnscoped().map(registeredAgentToOrchestrationAgent);
     const result = await postOrchestrationTask({
       taskSummary: body.taskSummary.trim(),
       requiredCapability: typeof body.requiredCapability === "string" ? body.requiredCapability : undefined,

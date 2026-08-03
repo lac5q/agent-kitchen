@@ -55,6 +55,19 @@ async function fetchCapabilities(): Promise<Capabilities> {
   return res.json() as Promise<Capabilities>;
 }
 
+async function setUserRole(data: { userId: string; role: string }): Promise<void> {
+  const res = await fetch(`/api/users/${data.userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ role: data.role }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+    throw new Error([err.error, err.detail].filter(Boolean).join(" — ") || "Failed to change role");
+  }
+}
+
 async function setUserDisabled(data: { userId: string; disabled: boolean }): Promise<void> {
   const res = await fetch(`/api/users/${data.userId}`, {
     method: "PATCH",
@@ -242,6 +255,15 @@ export default function TeamPage() {
     onSuccess: () => {
       setDeleteTarget(null);
       setDeleteConfirmText("");
+      setMemberError("");
+      void queryClient.invalidateQueries({ queryKey: ["team-users"] });
+    },
+    onError: (err: Error) => setMemberError(err.message),
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: setUserRole,
+    onSuccess: () => {
       setMemberError("");
       void queryClient.invalidateQueries({ queryKey: ["team-users"] });
     },
@@ -693,7 +715,41 @@ export default function TeamPage() {
                   <td className="px-4 py-3" style={{ color: NOC.ink }}>{user.displayName}</td>
                   <td className="px-4 py-3" style={{ color: NOC.muted }}>{user.email}</td>
                   <td className="px-4 py-3">
-                    <Pill tone={user.role === "admin" ? "terra" : user.role === "operator" ? "info" : "neutral"}>{user.role}</Pill>
+                    {/* Editable in place. Changing your own role is refused
+                        server-side — an admin who demotes themselves mid-session
+                        cannot undo it. */}
+                    {me?.email === user.email ? (
+                      <Pill tone={user.role === "admin" ? "terra" : user.role === "operator" ? "info" : "neutral"}>
+                        {user.role}
+                      </Pill>
+                    ) : (
+                      <select
+                        aria-label={`Role for ${user.displayName}`}
+                        value={user.role}
+                        disabled={roleMutation.isPending}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (next === user.role) return;
+                          if (
+                            next !== "admin" &&
+                            user.role === "admin" &&
+                            !confirm(
+                              `Demote ${user.displayName} from admin to ${next}?\n\nThey are signed out immediately so the change takes effect now, rather than whenever their current session happens to expire.`
+                            )
+                          ) {
+                            event.target.value = user.role;
+                            return;
+                          }
+                          roleMutation.mutate({ userId: user.id, role: next });
+                        }}
+                        className="h-8 rounded-lg border px-2 text-sm disabled:opacity-60"
+                        style={{ borderColor: NOC.rule, color: NOC.ink, background: NOC.paper }}
+                      >
+                        <option value="reviewer">reviewer</option>
+                        <option value="operator">operator</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    )}
                   </td>
                   <td className="px-4 py-3" style={{ color: NOC.soft }}>
                     {user.lastLoginAt

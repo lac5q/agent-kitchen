@@ -166,3 +166,84 @@ describe("user removal — delete", () => {
     expect(keys.n).toBe(0); // cascade
   });
 });
+
+describe("role change", () => {
+  const patchRole = (id: string, role: unknown) =>
+    PATCH(
+      req(`http://x/api/users/${id}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+      ctx(id)
+    );
+  const roleOf = (id: string) =>
+    (db.prepare("SELECT role FROM user_roles WHERE user_id=?").get(id) as { role: string } | undefined)?.role;
+
+  it("promotes a reviewer to operator", async () => {
+    addUser("eric", "reviewer");
+    const res = await patchRole("eric", "operator");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ role: "operator", previousRole: "reviewer", changed: true });
+    expect(roleOf("eric")).toBe("operator");
+  });
+
+  /**
+   * user_roles is keyed on (user_id, role), so an INSERT alone would leave the
+   * person holding both roles — and requireRole compares a single rank.
+   */
+  it("replaces the old role rather than adding one", async () => {
+    addUser("eric", "reviewer");
+    await patchRole("eric", "admin");
+    const rows = db.prepare("SELECT role FROM user_roles WHERE user_id='eric'").all();
+    expect(rows).toHaveLength(1);
+    expect(roleOf("eric")).toBe("admin");
+  });
+
+  it("cuts existing sessions on demotion, so old powers cannot outlive the change", async () => {
+    addUser("eric", "admin");
+    addUser("keeper", "admin"); // so eric is not the last admin
+    db.prepare("INSERT INTO user_refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?,?,?,?)").run(
+      "rt1", "eric", "h", "2099-01-01T00:00:00Z"
+    );
+
+    const res = await patchRole("eric", "reviewer");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ sessionsRevoked: true });
+    const left = db.prepare("SELECT COUNT(*) AS n FROM user_refresh_tokens WHERE user_id='eric'").get() as { n: number };
+    expect(left.n).toBe(0);
+  });
+
+  it("does not cut sessions on promotion", async () => {
+    addUser("eric", "reviewer");
+    db.prepare("INSERT INTO user_refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?,?,?,?)").run(
+      "rt1", "eric", "h", "2099-01-01T00:00:00Z"
+    );
+    await patchRole("eric", "operator");
+    const left = db.prepare("SELECT COUNT(*) AS n FROM user_refresh_tokens WHERE user_id='eric'").get() as { n: number };
+    expect(left.n).toBe(1);
+  });
+
+  it("refuses to demote the last admin", async () => {
+    addUser("only", "admin");
+    db.prepare("UPDATE users SET disabled_at = ? WHERE id='admin-1'").run(new Date().toISOString());
+    const res = await patchRole("only", "reviewer");
+    expect(res.status).toBe(409);
+    expect(roleOf("only")).toBe("admin");
+  });
+
+  it("rejects an unknown role", async () => {
+    addUser("eric", "reviewer");
+    const res = await patchRole("eric", "superuser");
+    expect(res.status).toBe(400);
+    expect(roleOf("eric")).toBe("reviewer");
+  });
+
+  it("requires admin", async () => {
+    addUser("eric", "reviewer");
+    session = { userId: "someone", role: "operator" };
+    expect((await patchRole("eric", "admin")).status).toBe(403);
+  });
+
+  it("refuses changing your own role", async () => {
+    const res = await patchRole("admin-1", "reviewer");
+    expect(res.status).toBe(400);
+    expect(roleOf("admin-1")).toBe("admin");
+  });
+});

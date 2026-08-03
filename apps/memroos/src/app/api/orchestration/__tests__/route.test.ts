@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/agent-registry", () => ({
-  listRegisteredAgents: vi.fn(() => [
+  listAllAgentsUnscoped: vi.fn(() => [
     {
       id: "research-agent",
       name: "Research Agent",

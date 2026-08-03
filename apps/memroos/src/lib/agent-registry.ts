@@ -519,8 +519,11 @@ export function getRegisteredAgent(
   return row ? rowToRegisteredAgent(row) : null;
 }
 
-/** @deprecated Ambiguous about scoping — use listAgentsVisibleTo or listAllAgentsUnscoped. */
-export const listRegisteredAgents = listAllAgentsUnscoped;
+// `listRegisteredAgents` deliberately no longer exists. It was ambiguous about
+// scoping, and that ambiguity is exactly how a reviewer came to see the whole
+// fleet: a call site that did not think about the viewer got the unscoped list
+// by default. Every caller now has to say which it means —
+// `listAgentsVisibleTo(viewer)` or `listAllAgentsUnscoped()`.
 
 /** Fields an operator may edit by hand from the Agents UI. */
 export interface AgentEditableFields {
@@ -818,8 +821,13 @@ function toRemoteAgentConfig(agent: RegisteredAgent): RemoteAgentConfig | null {
   };
 }
 
+/**
+ * Remote agents for polling. Unscoped on purpose: liveness is a property of the
+ * fleet, not of any viewer, and this feeds machine health checks rather than a
+ * user-facing list.
+ */
 export function getRemoteAgents(): RemoteAgentConfig[] {
-  return listRegisteredAgents()
+  return listAllAgentsUnscoped()
     .map(toRemoteAgentConfig)
     .filter((agent): agent is RemoteAgentConfig => Boolean(agent));
 }

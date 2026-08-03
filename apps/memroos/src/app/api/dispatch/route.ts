@@ -8,7 +8,7 @@ import { scanIrisPreflight } from "@/lib/iris-scanner";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import { checkDispatchPolicy } from "@/lib/security-policy";
 import { writeAuditLog } from "@/lib/audit";
-import { authenticateAgentHeaders, getRemoteAgents, listRegisteredAgents } from "@/lib/agent-registry";
+import { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } from "@/lib/agent-registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
 import {
   lookupSkillContract,
@@ -177,7 +177,10 @@ export async function POST(req: NextRequest | Request) {
     );
   }
 
-  const registeredAgent = listRegisteredAgents().find((a) => a.id === parsed.data.to_agent);
+  // Unscoped: dispatch routes between agents on an agent-authenticated call.
+  // There is no human viewer here, and a scoped lookup would silently drop
+  // deliveries to agents the sender does not own.
+  const registeredAgent = listAllAgentsUnscoped().find((a) => a.id === parsed.data.to_agent);
   if (!registeredAgent) {
     return Response.json(
       { ok: false, error: `Unknown agent: ${parsed.data.to_agent}`, code: "UNKNOWN_AGENT" },
