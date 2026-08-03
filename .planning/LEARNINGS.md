@@ -263,3 +263,16 @@
 - Routing rule to change: for GSD closeouts, always run full test/build after the planning validator, and treat mixed constants modules as client-boundary risks until imports are proven client-safe
 - Skill/config update needed: no
 - Promoted to: `.planning/LEARNINGS.md`
+
+## BM-20260803 phase-227 per-user-tool-connections
+- Director/Lead: claude-fable-5 (this session)
+- Watcher/Reviewer: claude-fable-5 (diff + report review; no second frontier available)
+- Executor: openai-codex/gpt-5.6-luna (xhigh), explicit operator lane choice
+- Harness: claude-code + codex exec (workspace-write sandbox), single worktree
+- Acceptance checks: scoped vitest (53/53), full fast suite 3711 pass/0 fail (baseline 3702/2 — both baseline flakes cleared), typecheck 0 errors, lint 0 errors, detect_changes (critical = migration-runner fan-out, mitigated by idempotent migration + green suite)
+- Result: pass
+- Token/cost note: ~30k smoke + one long xhigh run (codex CLI does not report per-run tokens in exec tail; unavailable)
+- What worked: full design package with pre-made decisions -> zero escalations, zero re-litigating; executor test names mapped 1:1 to contract scenarios
+- What failed / drifted: running a baseline test suite concurrently with an active executor in the same tree produced phantom failures (raced half-edited db-schema.ts). Rule: baseline before launch, or in a separate worktree. Executor's sandboxed full-suite run showed 10 env-artifact failures (blocked $HOME writes) — director re-run outside sandbox was the authoritative gate, as designed.
+- Routing rule to change: none
+- Skill/config update needed: no

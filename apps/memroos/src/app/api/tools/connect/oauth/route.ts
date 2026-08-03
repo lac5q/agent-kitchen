@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const nangoSession = await createNangoConnectSession({
+      endUserId: session.userId,
       endUserEmail: session.email ?? null,
       allowedIntegrationIds: [provider.providerConfigKey],
     });

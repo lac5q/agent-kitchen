@@ -16,6 +16,7 @@ import {
   Plug,
   RotateCw,
   Search,
+  Share2,
   Trash2,
 } from "lucide-react";
 
@@ -103,9 +104,13 @@ export default function ConnectedToolsPage() {
   const usage = useUsage();
   const [query, setQuery] = useState("");
 
-  const connectionByKey = useMemo(() => {
-    const map = new Map<string, ToolConnection>();
-    for (const c of connections.data?.connections ?? []) map.set(c.providerKey, c);
+  const connectionsByKey = useMemo(() => {
+    const map = new Map<string, ToolConnection[]>();
+    for (const c of connections.data?.connections ?? []) {
+      const current = map.get(c.providerKey) ?? [];
+      current.push(c);
+      map.set(c.providerKey, current);
+    }
     return map;
   }, [connections.data]);
 
@@ -186,13 +191,24 @@ export default function ConnectedToolsPage() {
                 gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
               }}
             >
-              {list.map((p) => (
-                <ProviderCard
-                  key={p.key}
-                  providerKey={p.key}
-                  connection={connectionByKey.get(p.key) ?? null}
-                />
-              ))}
+              {list.map((p) => {
+                const providerConnections = connectionsByKey.get(p.key) ?? [];
+                return providerConnections.length > 0
+                  ? providerConnections.map((connection) => (
+                      <ProviderCard
+                        key={`${p.key}-${connection.connectionId}`}
+                        providerKey={p.key}
+                        connection={connection}
+                      />
+                    ))
+                  : [
+                      <ProviderCard
+                        key={p.key}
+                        providerKey={p.key}
+                        connection={null}
+                      />,
+                    ];
+              })}
             </div>
           </section>
         ))
@@ -348,6 +364,25 @@ function ProviderCard({
         </div>
       )}
 
+      {connection && (
+        <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 5 }}>
+          <span style={{ color: NOC.muted, fontSize: 11 }}>
+            Owner: <span style={{ color: NOC.ink }}>{connection.ownerName ?? "Unassigned"}</span>
+            {connection.isOwnedByViewer ? " (you)" : ""}
+          </span>
+          {connection.isShared && (
+            <Badge variant="outline" style={{ background: NOC.infoBg, color: NOC.info, borderColor: "transparent" }}>
+              Shared
+            </Badge>
+          )}
+          {connection.needsOwner && (
+            <Badge variant="outline" style={{ background: NOC.warnBg, color: NOC.warn, borderColor: "transparent" }}>
+              Needs owner
+            </Badge>
+          )}
+        </div>
+      )}
+
       {unavailableReason && status === "not_connected" && (
         <div
           style={{
@@ -386,7 +421,8 @@ function ProviderCard({
           <ConnectButton providerKey={providerKey} authMode={authMode} variant={status === "expired" ? "terra" : "ink"} />
         ) : (
           <>
-            <RevokeButton providerKey={providerKey} />
+            {connection && connection.canManage && <ShareButton connection={connection} />}
+            {connection && connection.canManage && <RevokeButton connection={connection} />}
           </>
         )}
       </div>
@@ -429,6 +465,37 @@ function ConnectButton({
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (authMode !== "oauth") return;
+    const onMessage = (event: MessageEvent<unknown>) => {
+      if (event.origin !== "https://connect.nango.dev" && event.origin !== window.location.origin) return;
+      if (!event.data || typeof event.data !== "object") return;
+      const data = event.data as Record<string, unknown>;
+      const payload = (data.payload && typeof data.payload === "object" ? data.payload : data) as Record<string, unknown>;
+      const connection = payload.connection && typeof payload.connection === "object"
+        ? payload.connection as Record<string, unknown>
+        : payload;
+      const nangoConnectionId = connection.connectionId ?? connection.connection_id;
+      if (typeof nangoConnectionId !== "string" || !nangoConnectionId) return;
+      void fetch("/api/tools/connect/oauth/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          providerKey,
+          nangoConnectionId,
+          accountEmail: typeof connection.accountEmail === "string" ? connection.accountEmail : null,
+          scopes: Array.isArray(connection.scopes) ? connection.scopes : null,
+        }),
+      }).then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["tools", "connections"] });
+        void queryClient.invalidateQueries({ queryKey: ["tools", "activity"] });
+      }).catch(() => undefined);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [authMode, providerKey, queryClient]);
 
   if (authMode === "oauth") {
     return (
@@ -659,7 +726,38 @@ function ApiKeySheet({
 // Revoke button + sheet
 // ---------------------------------------------------------------------------
 
-function RevokeButton({ providerKey }: { providerKey: string }) {
+function ShareButton({ connection }: { connection: ToolConnection }) {
+  const queryClient = useQueryClient();
+  const share = useMutation({
+    mutationFn: async (shared: boolean) => {
+      const res = await fetch("/api/tools/connections/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ connectionId: connection.connectionId, shared }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tools", "connections"] });
+    },
+  });
+
+  return (
+    <Btn
+      variant="ghost"
+      onClick={() => share.mutate(!connection.isShared)}
+      disabled={share.isPending}
+      title={connection.isShared ? "Make private" : "Share connection"}
+    >
+      {share.isPending ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
+      {connection.isShared ? "Unshare" : "Share"}
+    </Btn>
+  );
+}
+
+function RevokeButton({ connection }: { connection: ToolConnection }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const revoke = useMutation({
@@ -668,7 +766,7 @@ function RevokeButton({ providerKey }: { providerKey: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ providerKey }),
+        body: JSON.stringify({ connectionId: connection.connectionId }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -679,7 +777,7 @@ function RevokeButton({ providerKey }: { providerKey: string }) {
       const previous = queryClient.getQueryData<ListConnectionsResponse>(["tools", "connections"]);
       if (previous) {
         queryClient.setQueryData<ListConnectionsResponse>(["tools", "connections"], {
-          connections: previous.connections.filter((c) => c.providerKey !== providerKey),
+          connections: previous.connections.filter((c) => c.connectionId !== connection.connectionId),
         });
       }
       return { previous };
@@ -705,10 +803,10 @@ function RevokeButton({ providerKey }: { providerKey: string }) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" style={{ width: 400 }}>
           <SheetHeader>
-            <SheetTitle>Revoke {PROVIDERS_BY_KEY[providerKey]?.label ?? providerKey} connection?</SheetTitle>
+            <SheetTitle>Revoke {PROVIDERS_BY_KEY[connection.providerKey]?.label ?? connection.providerKey} connection?</SheetTitle>
             <SheetDescription>
               This removes memroos&rsquo;s access token from the vault. Any agents using{" "}
-              {PROVIDERS_BY_KEY[providerKey]?.label ?? providerKey} will stop immediately. This action is
+              {PROVIDERS_BY_KEY[connection.providerKey]?.label ?? connection.providerKey} will stop immediately. This action is
               logged in the audit log.
             </SheetDescription>
           </SheetHeader>

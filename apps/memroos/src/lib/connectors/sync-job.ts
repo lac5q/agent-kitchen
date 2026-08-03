@@ -20,8 +20,12 @@ import { getDb } from "@/lib/db";
 type DbHandle = ReturnType<typeof getDb>;
 import {
   fetchNangoCredentials,
-  listNangoConnections,
 } from "@/lib/tool-auth/nango-client";
+import {
+  canUseToolConnection,
+  listToolConnectionsVisibleTo,
+  SYSTEM_TOOL_CONNECTION_PRINCIPAL,
+} from "@/lib/tool-auth/tool-connections";
 
 import { callRest, callTool, initialize } from "./mcp-client";
 import { getManifest, type ConnectorManifest, type SyncTool } from "./manifest";
@@ -251,19 +255,28 @@ export async function runConnectorCycle(
   const degradedProviders: string[] = [];
 
   try {
-    const connections = await listNangoConnections();
+    // The scheduler is a system caller. It may use only explicitly shared
+    // connections; private credentials remain usable by their owner through
+    // owner-scoped request paths.
+    const connections = await listToolConnectionsVisibleTo({
+      userId: "system",
+      role: "reviewer",
+    });
 
     for (const conn of connections) {
       const manifest = getManifest(conn.providerKey);
       if (!manifest) continue; // no sync manifest — credential brokerage only
       if (written >= CONNECTOR_CYCLE_LIMIT) break;
+      if (!canUseToolConnection(SYSTEM_TOOL_CONNECTION_PRINCIPAL, conn.connectionId)) continue;
+      const nangoConnectionId = conn.nangoConnectionId;
+      if (!nangoConnectionId) continue;
 
       // Per-connection boundary. Providers are iterated in a stable order, so
       // without this one provider that throws every cycle would starve every
       // provider after it — permanently, and reported only as `degraded`.
       try {
         const creds = await fetchNangoCredentials(
-          conn.connectionId,
+          nangoConnectionId,
           manifest.providerConfigKey,
         );
         if (!creds?.accessToken) {
@@ -296,7 +309,7 @@ export async function runConnectorCycle(
             const res = await syncTool(db, {
               manifest,
               tool,
-              connectionId: conn.connectionId,
+              connectionId: nangoConnectionId,
               accessToken: creds.accessToken,
               spaceId,
               labels,

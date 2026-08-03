@@ -21,7 +21,7 @@ export type ConnectionAuthMode = "oauth" | "api-key";
 export interface ToolConnection {
   /** The provider key from the registry (e.g. "slack"). */
   providerKey: string;
-  /** Opaque per-installation id used by Nango (OAuth) or memroos (API key). */
+  /** Local tool_connections.id used by the UI and revoke/share routes. */
   connectionId: string;
   /**
    * Nango's own key for the integration ("circleback-mcp"), distinct from
@@ -29,6 +29,10 @@ export interface ToolConnection {
    * is surfaced rather than re-derived at the call site.
    */
   providerConfigKey?: string;
+  /** Nango's connection_id for OAuth records. */
+  nangoConnectionId?: string | null;
+  /** raw_artifacts.id for vault-backed records. */
+  vaultArtifactId?: string | null;
   status: ConnectionStatus;
   /** Present for OAuth connections only; for API keys this is null. */
   accountEmail?: string | null;
@@ -44,6 +48,13 @@ export interface ToolConnection {
   errorMessage?: string | null;
   /** Which auth mode this connection uses. */
   authMode: ConnectionAuthMode;
+  /** Ownership and sharing metadata populated by the scoped list chokepoint. */
+  ownerId?: string | null;
+  ownerName?: string | null;
+  isShared?: boolean;
+  needsOwner?: boolean;
+  canManage?: boolean;
+  isOwnedByViewer?: boolean;
 }
 
 export interface ConnectionUsage {
@@ -101,7 +112,9 @@ export interface ConnectApiKeyResponse {
 }
 
 export interface RevokeRequest {
-  providerKey: string;
+  connectionId?: string;
+  providerKey?: string;
+  nangoConnectionId?: string;
 }
 
 export interface RevokeResponse {
