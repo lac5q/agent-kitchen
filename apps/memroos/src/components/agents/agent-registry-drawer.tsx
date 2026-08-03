@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   Sheet,
@@ -38,13 +38,20 @@ function AgentDetailsEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Re-seed the form when the drawer switches to a different agent.
-  useEffect(() => {
+  // Re-seed the form when the drawer switches to a different agent, or when a
+  // sync brings in a new name/role. Done during render via a previous-value
+  // tracker rather than in an effect: an effect re-seeds *after* painting the
+  // stale values, which is both a visible flash and a cascading re-render.
+  // This is React's documented "adjusting state when a prop changes" pattern.
+  const seedKey = `${agent.id} ${agent.name} ${agent.role}`;
+  const [seededFrom, setSeededFrom] = useState(seedKey);
+  if (seededFrom !== seedKey) {
+    setSeededFrom(seedKey);
     setName(agent.name);
     setRole(agent.role);
     setEditing(false);
     setError(null);
-  }, [agent.id, agent.name, agent.role]);
+  }
 
   async function save() {
     setSaving(true);
@@ -207,8 +214,16 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
 }
 
 export function AgentRegistryDrawer({ agent, liveness, open, onOpenChange, onAgentUpdated }: AgentRegistryDrawerProps) {
+  // `local` exists so an in-drawer save shows immediately without waiting for
+  // the parent to refetch. Synced from the prop during render rather than in an
+  // effect, so switching agents never paints the previous one's details for a
+  // frame before correcting itself.
   const [local, setLocal] = useState<RegisteredAgent | null>(agent);
-  useEffect(() => setLocal(agent), [agent]);
+  const [syncedFrom, setSyncedFrom] = useState(agent);
+  if (syncedFrom !== agent) {
+    setSyncedFrom(agent);
+    setLocal(agent);
+  }
 
   const shown = local ?? agent;
   if (!shown) return null;
