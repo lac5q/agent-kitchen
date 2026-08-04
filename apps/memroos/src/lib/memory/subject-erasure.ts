@@ -662,6 +662,17 @@ function erasePayloadForTarget(db: Database.Database, tenantId: string, target: 
        SET content = '[erased]', status = 'rejected', metadata_json = ?
        WHERE tenant_id = ? AND id = ?`
     ).run(stableJson({ erased: true, plan_id: planId, erased_at: erasedAt }), tenantId, target.recordId);
+    if (tableExists(db, "memory_salience")) {
+      db.prepare(
+        "DELETE FROM memory_salience WHERE record_type = 'agent_memory_candidate' AND record_id = ?"
+      ).run(target.recordId);
+    }
+  }
+
+  if (target.recordType === "agent_memory_write" && tableExists(db, "memory_salience")) {
+    db.prepare(
+      "DELETE FROM memory_salience WHERE record_type = 'agent_memory_write' AND record_id = ?"
+    ).run(target.recordId);
   }
 
   db.prepare(

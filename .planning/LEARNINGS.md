@@ -363,3 +363,20 @@
   Rule: always write the contract to a FILE and launch with `< /dev/null`; and confirm the
   executor is producing real output before describing it as running. Absence of a report is not
   evidence of work.
+
+## BM-20260804 phase-193 save-quality + async write path (v8.30 SAVEQ-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3760/0 (director, unsandboxed — matched executor). Slow split 33/33. typecheck 0.
+- **The live incident is fixed: mem0 writes went 104,000ms -> under 1,000ms.** The architectural
+  reframing was the whole unlock — the 104s was not a slow dependency to tune around, it was
+  bronze->silver conversion running inside the request, when the system's own belief model
+  already says those are separate stages. Extraction moved to an async worker; nothing was
+  deleted.
+- The receipt-cannot-lie requirement held: vault artifact written + durability ledger complete +
+  chained audit receipt BEFORE responding, proven by reading back from disk and verifying SHA-256.
+  Crash safety proven by closing/reloading the DB mid-flight and confirming the candidate still
+  reaches silver.
+- Naming the failure mode in the contract ("a receipt that says saved when the queue dropped it is
+  strictly worse than today's timeout, because a timeout is honest") produced exactly the right
+  implementation. Contracts that name the failure to design against beat contracts that only name
+  the feature.

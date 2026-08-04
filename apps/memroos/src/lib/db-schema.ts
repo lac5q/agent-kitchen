@@ -83,7 +83,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 39;
+export const CURRENT_SCHEMA_VERSION = 40;
 
 type SchemaMigration = {
   version: number;
@@ -298,6 +298,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 39,
     name: 'onboarding-token-nonces',
     up: applyOnboardingTokenNonceSchema,
+  },
+  {
+    version: 40,
+    name: 'polymorphic-memory-salience',
+    up: applyPolymorphicMemorySalienceSchema,
   },
 ];
 
@@ -653,6 +658,68 @@ function applyOnboardingTokenNonceSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS onboarding_token_nonces_expiry
       ON onboarding_token_nonces(expires_at);
+  `);
+}
+
+/**
+ * SAVEQ-05: salience covers messages, governed agent writes, and silver
+ * candidates.  The legacy message_id column remains nullable for backwards
+ * compatibility with the recall/erasure paths; new records use the
+ * (record_type, record_id) identity.  A table rebuild is needed because the
+ * old table made message_id the sole primary key, which could not represent a
+ * candidate or an agent write.  The migration is idempotent so a fresh
+ * database created by applyCurrentSchema can safely pass through it too.
+ */
+function applyPolymorphicMemorySalienceSchema(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(memory_salience)").all() as Array<{ name: string }>;
+  const alreadyMigrated = columns.some((column) => column.name === "record_type");
+  if (!alreadyMigrated) {
+    db.exec(`
+      CREATE TABLE memory_salience_new (
+        id             INTEGER PRIMARY KEY,
+        message_id     INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+        record_type    TEXT NOT NULL DEFAULT 'message'
+                       CHECK(record_type IN ('message','agent_memory_write','agent_memory_candidate')),
+        record_id      TEXT,
+        tier           TEXT NOT NULL DEFAULT 'mid'
+                       CHECK(tier IN ('pinned','high','mid','low')),
+        salience_score REAL NOT NULL DEFAULT 1.0
+                       CHECK(salience_score >= 0.0 AND salience_score <= 1.0),
+        access_count   INTEGER NOT NULL DEFAULT 0,
+        last_accessed  TEXT,
+        last_decay_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        CHECK(
+          (record_type = 'message' AND message_id IS NOT NULL)
+          OR (record_type <> 'message' AND message_id IS NULL AND record_id IS NOT NULL)
+        )
+      );
+    `);
+    if (columns.length > 0) {
+      db.exec(`
+        INSERT INTO memory_salience_new
+          (id, message_id, record_type, record_id, tier, salience_score, access_count,
+           last_accessed, last_decay_at, created_at)
+        SELECT rowid, message_id, 'message', CAST(message_id AS TEXT), tier, salience_score,
+               access_count, last_accessed, last_decay_at, created_at
+          FROM memory_salience;
+        DROP TABLE memory_salience;
+      `);
+    }
+    db.exec("ALTER TABLE memory_salience_new RENAME TO memory_salience");
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_salience_message_id
+      ON memory_salience(message_id)
+      WHERE message_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_salience_record
+      ON memory_salience(record_type, record_id)
+      WHERE record_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS memory_salience_tier
+      ON memory_salience(tier, last_decay_at);
+    CREATE INDEX IF NOT EXISTS memory_salience_record_type
+      ON memory_salience(record_type, last_decay_at);
   `);
 }
 
@@ -2960,10 +3027,14 @@ function applyCurrentSchema(db: Database.Database): void {
       ON hive_delegations(to_agent, status);
   `);
 
-  // memory_salience: tracks tier, decay score, and access resistance per message (MEM-02)
+  // memory_salience: tracks salience for messages and governed agent records (MEM-02, SAVEQ-05)
   db.exec(`
     CREATE TABLE IF NOT EXISTS memory_salience (
-      message_id     INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      id             INTEGER PRIMARY KEY,
+      message_id     INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      record_type    TEXT NOT NULL DEFAULT 'message'
+                     CHECK(record_type IN ('message','agent_memory_write','agent_memory_candidate')),
+      record_id      TEXT,
       tier           TEXT    NOT NULL DEFAULT 'mid'
                      CHECK(tier IN ('pinned','high','mid','low')),
       salience_score REAL    NOT NULL DEFAULT 1.0
@@ -2971,10 +3042,22 @@ function applyCurrentSchema(db: Database.Database): void {
       access_count   INTEGER NOT NULL DEFAULT 0,
       last_accessed  TEXT,
       last_decay_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-      created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+      created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      CHECK(
+        (record_type = 'message' AND message_id IS NOT NULL)
+        OR (record_type <> 'message' AND message_id IS NULL AND record_id IS NOT NULL)
+      )
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_salience_message_id
+      ON memory_salience(message_id)
+      WHERE message_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_salience_record
+      ON memory_salience(record_type, record_id)
+      WHERE record_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS memory_salience_tier
       ON memory_salience(tier, last_decay_at);
+    CREATE INDEX IF NOT EXISTS memory_salience_record_type
+      ON memory_salience(record_type, last_decay_at);
   `);
 
   // memory_consolidation_runs: audit log of consolidation runs (MEM-01)

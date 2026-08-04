@@ -95,6 +95,12 @@ export interface MemoryWritePayload {
   firstSeenAt: string;
   dedupHash: string;
   isRediscovery: boolean;
+  /** SAVEQ async capture/enrichment measurements for NOC consumers. */
+  phase?: "capture" | "enrichment";
+  enrichmentStatus?: "pending" | "running" | "completed" | "retrying";
+  queueDepth?: number;
+  extractionLagMs?: number | null;
+  qualityScore?: number;
 }
 
 export type EfficiencyPayloadByType = {

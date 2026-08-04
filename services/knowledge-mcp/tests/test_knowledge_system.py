@@ -200,6 +200,60 @@ def test_agent_memory_save_requires_agent_key(monkeypatch):
     assert "MEMROOS_AGENT_API_KEY" in payload["error"]
 
 
+def test_memory_save_routes_through_governed_memroos_app(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "result": {"status": "bronze_captured"}}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_ID", "governed-agent")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    payload = mcp_server.memory_save("The deploy outcome was green.", agent_id="governed-agent")
+
+    assert payload == {"status": "ok", "response": {"ok": True, "result": {"status": "bronze_captured"}}}
+    assert calls[0][0] == "http://memroos.test/api/memory/add"
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer agent-key"
+    assert calls[0][1]["json"]["agentId"] == "governed-agent"
+
+
+def test_memory_search_routes_through_governed_prior_work_trace(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "items": [{"id": "agent_memory_candidates:one"}]}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_ID", "governed-agent")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    payload = mcp_server.memory_search("green deploy", agent_id="governed-agent", limit=3)
+
+    assert payload["status"] == "ok"
+    assert payload["results"] == [{"id": "agent_memory_candidates:one"}]
+    assert calls[0][0] == "http://memroos.test/api/memory/prior-work"
+    assert calls[0][1]["json"]["task"] == "green deploy"
+
+
 def test_memory_prior_work_posts_bounded_probe_payload_and_exposes_trigger_contract(monkeypatch):
     calls = []
 
@@ -408,6 +462,7 @@ def test_core_tools_stay_small_for_progressive_disclosure():
         "memory_prior_work",
         "memory_search",
         "memory_save",
+        "agent_memory_save",
         "agent_context_packet",
     ]
 

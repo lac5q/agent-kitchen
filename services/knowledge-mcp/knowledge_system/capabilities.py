@@ -19,6 +19,7 @@ CORE_TOOLS = [
     "memory_prior_work",
     "memory_search",
     "memory_save",
+    "agent_memory_save",
     "agent_context_packet",
 ]
 
@@ -45,7 +46,7 @@ WORKSPACES = {
     },
     "agent-memory": {
         "description": "Durable agent memory workspace for preferences, lessons, and cross-session facts.",
-        "tools": ["memory_recall", "memory_prior_work", "memory_search", "memory_save", "memory_get_all", "memory_health"],
+        "tools": ["memory_recall", "memory_prior_work", "memory_search", "memory_save", "agent_memory_save", "memory_get_all", "memory_health"],
         "resources": [],
         "use_when": [
             "Need to find a meeting across Circleback/Fathom/Zoom/Google without knowing collection names",

@@ -18,9 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import httpx
 from mcp.server.fastmcp import FastMCP
-from mem0_queue import Mem0Queue, is_retryable_response
-from pii_guard import protect_memory_payload
-from provenance import format_memory_result, normalize_metadata
+from mem0_queue import Mem0Queue
+from provenance import normalize_metadata
 
 MEM0_URL = "http://localhost:3201"
 
@@ -53,6 +52,17 @@ failure_logger.addHandler(failure_handler)
 mcp = FastMCP("mem0-memory")
 
 _queue = Mem0Queue(db_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs/queue.db"))
+
+
+def _governed_app_url() -> str:
+    return os.environ.get("MEMROOS_APP_URL", os.environ.get("MEMROOS_BASE_URL", "http://localhost:3002")).rstrip("/")
+
+
+def _governed_headers() -> dict[str, str] | None:
+    key = os.environ.get("MEMROOS_AGENT_API_KEY", "").strip()
+    if not key:
+        return None
+    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
 
 def log_failure(error_type: str, details: dict, exc: Exception = None):
@@ -97,80 +107,39 @@ def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict[str
     source_type (email, meeting, deliverable, repo, chat), source_title,
     source_url or source_path, source_id, and captured_at.
     """
+    headers = _governed_headers()
+    if headers is None:
+        return "Error saving memory: MEMROOS_AGENT_API_KEY is required for the governed MemroOS write path."
+
     save_metadata = normalize_metadata(
         metadata,
         agent_id=agent_id,
         default_source="mcp-mem0",
     )
-    payload = protect_memory_payload({"text": text, "agent_id": agent_id, "metadata": save_metadata})
-
-    # Pre-check server health
-    health = check_server_health()
-
-    if not health["up"]:
-        # Server is down - queue the request
-        _queue._add_to_queue("/memory/add", "POST", payload)
-        qs = _queue.get_queue_status()
-        log_failure("server_down", {"agent_id": agent_id, "text_preview": text[:50]})
-        return f"Queued (mem0 offline). {qs['queued']} pending saves — will auto-replay when server recovers."
-
-    # Check for degraded conditions
-    warnings = []
-    if health.get("disk", {}).get("critical"):
-        warnings.append("⚠️ Disk critical - save may fail")
-    if health.get("sqlite", {}).get("status") == "readonly":
-        warnings.append("⚠️ SQLite readonly - save will fail")
-
     try:
         r = httpx.post(
-            f"{MEM0_URL}/memory/add",
-            json=payload,
+            f"{_governed_app_url()}/api/memory/add",
+            json={
+                "agentId": agent_id,
+                "content": text,
+                "text": text,
+                "type": "episodic",
+                "metadata": save_metadata,
+            },
+            headers=headers,
             timeout=30,
         )
         r.raise_for_status()
         data = r.json()
-        logger.info(f"Saved memory for {agent_id}: {text[:50]}...")
-
-        result = f"Saved. Status: {data.get('status', 'ok')}"
-        if warnings:
-            result += "\n" + "\n".join(warnings)
-        return result
+        logger.info(f"Captured governed memory for {agent_id}: {text[:50]}...")
+        return f"Saved. Status: {data.get('result', {}).get('status', 'bronze_captured')}"
 
     except httpx.HTTPStatusError as e:
-        if is_retryable_response(e.response):
-            _queue._add_to_queue("/memory/add", "POST", payload)
-            qs = _queue.get_queue_status()
-            log_failure("save_queued_retryable_http", {
-                "agent_id": agent_id,
-                "text_preview": text[:50],
-                "status_code": e.response.status_code,
-            }, e)
-            return (
-                f"Queued (retryable backend error HTTP {e.response.status_code}). "
-                f"{qs['queued']} pending saves - will auto-replay when service recovers."
-            )
-
-        # Server returned an error
-        try:
-            error_detail = e.response.json()
-        except Exception:
-            error_detail = {"detail": str(e)}
-
-        log_failure("save_failed", {
-            "agent_id": agent_id,
-            "text_preview": text[:50],
-            "status_code": e.response.status_code,
-            "error": error_detail
-        }, e)
-
-        return f"Error saving memory (HTTP {e.response.status_code}): {error_detail.get('detail', str(e))}"
-
+        log_failure("governed_save_failed", {"agent_id": agent_id, "text_preview": text[:50], "status_code": e.response.status_code}, e)
+        return f"Error saving governed memory (HTTP {e.response.status_code})."
     except (httpx.ConnectError, httpx.TimeoutException) as e:
-        # Server became unavailable
-        _queue._add_to_queue("/memory/add", "POST", payload)
-        qs = _queue.get_queue_status()
-        log_failure("connection_lost", {"agent_id": agent_id, "text_preview": text[:50]}, e)
-        return f"Queued (connection lost). {qs['queued']} pending saves — will auto-replay when server recovers."
+        log_failure("governed_save_unavailable", {"agent_id": agent_id, "text_preview": text[:50]}, e)
+        return "Error saving governed memory: MemroOS app unavailable; no queue-acceptance receipt was issued."
 
     except Exception as e:
         log_failure("unexpected_error", {"agent_id": agent_id, "text_preview": text[:50]}, e)
@@ -185,18 +154,26 @@ def memory_search(query: str, agent_id: str = "", limit: int = 5) -> str:
     user preferences, or prior work. Returns semantically similar memories.
     Leave agent_id empty to search across all agents.
     """
+    headers = _governed_headers()
+    if headers is None:
+        return "Error searching memory: MEMROOS_AGENT_API_KEY is required for the governed MemroOS search path."
     try:
-        params: dict = {"q": query, "limit": limit}
-        if agent_id:
-            params["agent_id"] = agent_id
-        r = httpx.get(f"{MEM0_URL}/memory/search", params=params, timeout=30)
+        r = httpx.post(
+            f"{_governed_app_url()}/api/memory/prior-work",
+            json={"agentId": agent_id or os.environ.get("MEMROOS_AGENT_ID", ""), "task": query, "timing": "before_plan"},
+            headers=headers,
+            timeout=30,
+        )
         r.raise_for_status()
-        results = r.json().get("results", [])
+        response = r.json()
+        results = response.get("items", [])
+        if not isinstance(results, list):
+            results = []
         if not results:
             return "No relevant memories found."
         lines = []
         for i, m in enumerate(results, 1):
-            lines.append(format_memory_result(i, m))
+            lines.append(f"{i}. {json.dumps(m, sort_keys=True)}")
         return "\n".join(lines)
 
     except httpx.HTTPStatusError as e:
@@ -204,12 +181,12 @@ def memory_search(query: str, agent_id: str = "", limit: int = 5) -> str:
             error_detail = e.response.json()
         except Exception:
             error_detail = {"detail": str(e)}
-        log_failure("search_failed", {"query": query[:50], "agent_id": agent_id, "status_code": e.response.status_code}, e)
-        return f"Error searching memory (HTTP {e.response.status_code}): {error_detail.get('detail', str(e))}"
+        log_failure("governed_search_failed", {"query": query[:50], "agent_id": agent_id, "status_code": e.response.status_code}, e)
+        return f"Error searching governed memory (HTTP {e.response.status_code})."
 
     except (httpx.ConnectError, httpx.TimeoutException) as e:
-        log_failure("search_server_down", {"query": query[:50], "agent_id": agent_id}, e)
-        return "Error searching memory: Server unavailable. Check with memory_health."
+        log_failure("governed_search_unavailable", {"query": query[:50], "agent_id": agent_id}, e)
+        return "Error searching governed memory: MemroOS app unavailable."
 
     except Exception as e:
         log_failure("search_unexpected", {"query": query[:50], "agent_id": agent_id}, e)
@@ -222,17 +199,23 @@ def memory_get_all(agent_id: str = "shared") -> str:
     Retrieve all memories stored for a given agent.
     Useful for getting full context at session start.
     """
+    headers = _governed_headers()
+    if headers is None:
+        return "Error retrieving memories: MEMROOS_AGENT_API_KEY is required for the governed MemroOS read path."
     try:
-        r = httpx.get(
-            f"{MEM0_URL}/memory/all", params={"agent_id": agent_id}, timeout=30
+        r = httpx.post(
+            f"{_governed_app_url()}/api/memory/prior-work",
+            json={"agentId": agent_id, "task": f"List prior durable memory for agent {agent_id}", "timing": "before_plan"},
+            headers=headers,
+            timeout=30,
         )
         r.raise_for_status()
-        memories = r.json().get("memories", [])
+        memories = r.json().get("items", [])
         if not memories:
             return f"No memories found for agent '{agent_id}'."
         lines = [f"Memories for '{agent_id}' ({len(memories)} total):"]
         for i, m in enumerate(memories, 1):
-            lines.append(format_memory_result(i, m))
+            lines.append(f"{i}. {json.dumps(m, sort_keys=True)}")
         return "\n".join(lines)
 
     except httpx.HTTPStatusError as e:

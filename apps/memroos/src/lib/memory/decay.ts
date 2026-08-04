@@ -76,15 +76,15 @@ function tableExists(db: ReturnType<typeof getDb>, table: string): boolean {
   return Boolean(row);
 }
 
-function retentionRecordForMessage(db: ReturnType<typeof getDb>, tenantId: string, messageId: number): RetentionRecordRow | null {
+function retentionRecordForMemory(db: ReturnType<typeof getDb>, tenantId: string, recordType: string, recordId: string): RetentionRecordRow | null {
   if (!tableExists(db, 'memory_retention_records')) return null;
   const row = db
     .prepare(
       `SELECT * FROM memory_retention_records
-       WHERE tenant_id = ? AND record_type = 'message' AND record_id = ?
+       WHERE tenant_id = ? AND record_type = ? AND record_id = ?
        ORDER BY updated_at DESC, id DESC LIMIT 1`
     )
-    .get(tenantId, String(messageId)) as RetentionRecordRow | undefined;
+    .get(tenantId, recordType, recordId) as RetentionRecordRow | undefined;
   return row ?? null;
 }
 
@@ -97,18 +97,18 @@ function isProtectedByScope(scope: Record<string, unknown>): 'protected' | 'exem
 function matchesDecayScope(
   requestedScope: RetentionScope,
   recordScope: Record<string, unknown>,
-  row: { message_id: number; project: string; agent_id: string; session_id: string }
+  row: { record_id: string; record_type: string; project: string | null; agent_id: string | null; session_id: string | null }
 ): boolean {
   for (const [key, expected] of Object.entries(requestedScope)) {
     if (expected === undefined || expected === null || expected === '' || expected === '*') continue;
     if (key === 'tenantId' || key === 'purpose') continue;
     const actual =
       key === 'recordId'
-        ? String(row.message_id)
-        : key === 'recordType'
-          ? 'message'
-          : key === 'project'
-            ? row.project
+        ? row.record_id
+      : key === 'recordType'
+          ? row.record_type
+            : key === 'project'
+              ? row.project
             : key === 'agentId'
               ? row.agent_id
               : key === 'sessionId'
@@ -129,6 +129,7 @@ function emitDecayReceipt(
     tenantId: string;
     runKey: string;
     cycleId: string;
+    recordType: string;
     recordId: string;
     decision: 'decayed' | 'skipped';
     reason: string;
@@ -146,12 +147,13 @@ function emitDecayReceipt(
       `INSERT OR IGNORE INTO memory_decay_receipts
         (id, tenant_id, run_key, cycle_id, record_type, record_id, decision, reason,
          before_score, after_score, scope_hash, metadata_json, created_at)
-       VALUES (?, ?, ?, ?, 'message', ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.tenantId,
       input.runKey,
       input.cycleId,
+      input.recordType,
       input.recordId,
       input.decision,
       input.reason,
@@ -204,24 +206,44 @@ export function runDecay(options: { tenantId?: string; runKey?: string; actorId?
 
   const rows = db
     .prepare(
-      `SELECT s.message_id, s.tier, s.salience_score, s.access_count, s.last_decay_at,
-              m.project, m.agent_id, m.session_id, m.policy, m.visibility
+      `SELECT s.id, s.message_id, s.record_type,
+              COALESCE(s.record_id, CAST(s.message_id AS TEXT)) AS record_id,
+              s.tier, s.salience_score, s.access_count, s.last_decay_at,
+              m.project AS message_project, m.agent_id AS message_agent_id,
+              m.session_id AS message_session_id, m.policy AS message_policy,
+              m.visibility AS message_visibility,
+              w.agent_id AS write_agent_id, w.metadata AS write_metadata,
+              c.agent_id AS candidate_agent_id, c.metadata_json AS candidate_metadata,
+              cap.session_id AS candidate_session_id
        FROM memory_salience s
-       JOIN messages m ON m.id = s.message_id
+       LEFT JOIN messages m ON s.record_type = 'message' AND m.id = s.message_id
+       LEFT JOIN agent_memory_writes w
+         ON s.record_type = 'agent_memory_write' AND CAST(s.record_id AS INTEGER) = w.id
+       LEFT JOIN agent_memory_candidates c
+         ON s.record_type = 'agent_memory_candidate' AND c.id = s.record_id
+       LEFT JOIN agent_session_captures cap ON c.capture_id = cap.id
        WHERE date(s.last_decay_at) < date(?)
-       ORDER BY s.message_id ASC`
+       ORDER BY s.record_type ASC, record_id ASC`
     )
     .all(nowIso) as Array<{
-    message_id: number;
+    id: number;
+    message_id: number | null;
+    record_type: string;
+    record_id: string;
     tier: string;
     salience_score: number;
     access_count: number;
     last_decay_at: string;
-    project: string;
-    agent_id: string;
-    session_id: string;
-    policy: string;
-    visibility: string;
+    message_project: string | null;
+    message_agent_id: string | null;
+    message_session_id: string | null;
+    message_policy: string | null;
+    message_visibility: string | null;
+    write_agent_id: string | null;
+    write_metadata: string | null;
+    candidate_agent_id: string | null;
+    candidate_metadata: string | null;
+    candidate_session_id: string | null;
   }>;
 
   const summary: DecayRunSummary = {
@@ -241,12 +263,21 @@ export function runDecay(options: { tenantId?: string; runKey?: string; actorId?
 
   try {
     for (const row of rows) {
-      const recordId = String(row.message_id);
-      const retention = retentionRecordForMessage(db, tenantId, row.message_id);
-      const recordScope = retention ? parseJsonObject(retention.scope_json) : { tenantId, project: row.project, agentId: row.agent_id, sessionId: row.session_id };
-      if (!matchesDecayScope(scope, recordScope, row)) continue;
+      const recordId = row.record_id;
+      const metadata = parseJsonObject(row.write_metadata ?? row.candidate_metadata ?? null);
+      const project = row.message_project ?? (typeof metadata.project === 'string' ? metadata.project : null);
+      const agentId = row.message_agent_id ?? row.write_agent_id ?? row.candidate_agent_id;
+      const sessionId = row.message_session_id ?? row.candidate_session_id;
+      const policy = row.message_policy ?? (typeof metadata.policy === 'string' ? metadata.policy : null);
+      const visibility = row.message_visibility ?? (typeof metadata.visibility === 'string' ? metadata.visibility : null);
+      const scopeRow = { record_id: recordId, record_type: row.record_type, project, agent_id: agentId, session_id: sessionId };
+      const retention = retentionRecordForMemory(db, tenantId, row.record_type, recordId);
+      const recordScope = retention
+        ? parseJsonObject(retention.scope_json)
+        : { tenantId, recordType: row.record_type, recordId, project, agentId, sessionId, policy, visibility };
+      if (!matchesDecayScope(scope, recordScope, scopeRow)) continue;
       summary.considered += 1;
-      const receiptBase = { tenantId, runKey, cycleId, recordId, beforeScore: row.salience_score, scope: recordScope, createdAt: nowIso };
+      const receiptBase = { tenantId, runKey, cycleId, recordType: row.record_type, recordId, beforeScore: row.salience_score, scope: recordScope, createdAt: nowIso };
 
       if (row.tier === 'pinned') {
         summary.skippedPinned += 1;
@@ -284,7 +315,7 @@ export function runDecay(options: { tenantId?: string; runKey?: string; actorId?
       }
 
       const afterScore = computeDecayedScore({ salience_score: row.salience_score, access_count: asNumber(row.access_count) }, row.tier, useLog);
-      db.prepare('UPDATE memory_salience SET salience_score = ?, last_decay_at = ? WHERE message_id = ?').run(afterScore, nowIso, row.message_id);
+      db.prepare('UPDATE memory_salience SET salience_score = ?, last_decay_at = ? WHERE id = ?').run(afterScore, nowIso, row.id);
       summary.decayed += 1;
       summary.receipts.push(emitDecayReceipt(db, { ...receiptBase, decision: 'decayed', reason: `tier_${row.tier}`, afterScore }));
     }

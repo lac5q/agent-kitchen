@@ -60,7 +60,7 @@ MEMORY_SERVICE_DIR = Path(__file__).resolve().parents[2] / "memory"
 if str(MEMORY_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(MEMORY_SERVICE_DIR))
 
-from provenance import extract_metadata, normalize_metadata, provenance_label  # noqa: E402
+from provenance import normalize_metadata  # noqa: E402
 
 try:
     from .capabilities import get_capabilities, open_workspace
@@ -998,53 +998,46 @@ def fetch(id: str) -> dict:
 
 @_mcp_tool
 def memory_search(query: str, agent_id: str = "", limit: int = 5) -> dict:
-    """Search durable agent memory through the configured memory adapter."""
-    if httpx is None:
-        return {"status": "unavailable", "error": "httpx is not installed", "results": []}
-    try:
-        params: dict = {"q": query, "limit": limit}
-        if agent_id:
-            params["agent_id"] = agent_id
-        response = httpx.get(f"{_mem0_url()}/memory/search", params=params, timeout=10)
-        response.raise_for_status()
-        results = response.json().get("results", [])
-        enriched = []
-        for item in results:
-            if isinstance(item, dict):
-                result = dict(item)
-                result.setdefault("metadata", extract_metadata(item))
-                result["provenance"] = provenance_label(item)
-                enriched.append(result)
-            else:
-                enriched.append({"memory": str(item), "metadata": {}, "provenance": "source: unknown"})
-        return {"status": "ok", "results": enriched}
-    except Exception as exc:
-        return {"status": "unavailable", "error": str(exc), "results": []}
+    """Search through the governed prior-work path so the trace is durable."""
+    result = _post_memroos_agent_api(
+        "/api/memory/prior-work",
+        {
+            "agentId": _memroos_agent_id(agent_id or None),
+            "task": query,
+            "timing": "before_plan",
+        },
+    )
+    if result.get("status") != "ok":
+        return {**result, "results": []}
+    response = result.get("response")
+    response_record = response if isinstance(response, dict) else {}
+    items = response_record.get("items", [])
+    return {
+        "status": "ok",
+        "results": items[: max(1, min(50, limit))] if isinstance(items, list) else [],
+        "response": response_record,
+    }
 
 
 @_mcp_tool
 def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict] = None) -> dict:
-    """Save a durable memory through the configured memory adapter."""
-    if httpx is None:
-        return {"status": "unavailable", "error": "httpx is not installed"}
-    try:
-        response = httpx.post(
-            f"{_mem0_url()}/memory/add",
-            json={
-                "text": text,
-                "agent_id": agent_id,
-                "metadata": normalize_metadata(
-                    metadata,
-                    agent_id=agent_id,
-                    default_source="knowledge-mcp",
-                ),
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        return {"status": "ok", "response": response.json()}
-    except Exception as exc:
-        return {"status": "unavailable", "error": str(exc)}
+    """Save through POST /api/memory/add so policy, bronze durability, audit,
+    dedupe, quality coaching, and async enrichment all apply."""
+    resolved_agent_id = _memroos_agent_id(agent_id)
+    return _post_memroos_agent_api(
+        "/api/memory/add",
+        {
+            "agentId": resolved_agent_id,
+            "content": text,
+            "text": text,
+            "type": "episodic",
+            "metadata": normalize_metadata(
+                metadata,
+                agent_id=resolved_agent_id,
+                default_source="knowledge-mcp",
+            ),
+        },
+    )
 
 
 @_mcp_tool

@@ -17,6 +17,8 @@ export async function register() {
     }
     const { startConsolidationScheduler } = await import('./lib/memory/consolidation-scheduler');
     const { startDecayScheduler } = await import('./lib/memory/decay');
+    const { startMemoryEnrichmentScheduler } = await import('./lib/memory/save-enrichment');
+    const { startBeliefPromotionScheduler } = await import('./lib/memory/belief-promotion-scheduler');
     const { startRetentionExpiryScheduler } = await import('./lib/memory/retention-expiry-scheduler');
     const { startGraphCatchupScheduler } = await import('./lib/memory/graph-catchup-scheduler');
     const { startWikiDigestScheduler } = await import('./lib/wiki-digest-scheduler');
@@ -31,6 +33,8 @@ export async function register() {
     const { startConnectorJob } = await import('./lib/connectors/sync-job');
     startConsolidationScheduler();
     startDecayScheduler();
+    startMemoryEnrichmentScheduler();
+    startBeliefPromotionScheduler();
     startRetentionExpiryScheduler();
     startGraphCatchupScheduler();
     startWikiDigestScheduler();
