@@ -1,16 +1,16 @@
 /**
  * Phase 122: belief promotion pipeline (BELIEF-PROMO-01..08).
  *
- * Re-exports BeliefStage from recollection-policy so the rest of the
+ * Re-exports BeliefStage from the recollection module so the rest of the
  * codebase has a single source of truth, then defines the deterministic
  * check primitives used by the promotion pipeline.
  *
  * Hard rule: NO LLM in this phase. All checks must be deterministic and
  * reproducible from the candidate row + raw_artifacts alone.
  */
-export type { BeliefStage } from "../memory/recollection-policy";
+export type { BeliefStage } from "../memory/recollection";
 
-import type { BeliefStage } from "../memory/recollection-policy";
+import type { BeliefStage } from "../memory/recollection";
 
 /**
  * Category of a claim. High-stakes categories (configured in config.ts)

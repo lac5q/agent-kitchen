@@ -99,4 +99,32 @@ describe("GET /api/agent-context", () => {
     );
     expect(invalidLane.status).toBe(400);
   });
+
+  it("builds a pointer-only context packet from a topic without a goal id", async () => {
+    const { route, registerAgent } = await loadRoute();
+    const agent = registerAgent({
+      id: "agent-topic",
+      name: "Topic Agent",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const response = await route.GET(
+      new Request("http://localhost/api/agent-context?topic=prior%20onboarding%20work&agent=agent-topic", {
+        headers: { authorization: `Bearer ${agent.apiKey}` },
+      }) as any,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.packet.goal.id).toMatch(/^topic:/);
+    expect(payload.packet.goal.title).toBe("prior onboarding work");
+    expect(Array.isArray(payload.packet.memories)).toBe(true);
+    expect(payload.packet.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "prior_work_topic" }),
+    ]));
+    expect(JSON.stringify(payload)).not.toContain("snippet");
+  });
 });

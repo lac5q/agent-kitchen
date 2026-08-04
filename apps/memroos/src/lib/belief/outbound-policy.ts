@@ -18,12 +18,12 @@
  *   - No LLM calls; caveat is a static, env-overridable string.
  *   - No raw content in any receipt field.
  *   - Deterministic: identical inputs -> identical outputs.
- *   - The BeliefStage type is reused from recollection-policy; do NOT
+ *   - The BeliefStage type is reused from the recollection module; do NOT
  *     redefine the stage enum here.
  */
 import crypto from "crypto";
 
-import type { BeliefStage } from "../memory/recollection-policy";
+import type { BeliefStage } from "../memory/recollection";
 
 // ---------------------------------------------------------------------------
 // Public types

@@ -8,7 +8,7 @@ import type {
   RecollectionDecisionKind,
   RecollectionReason,
   RecollectionReliance,
-} from "@/lib/memory/recollection-policy";
+} from "@/lib/memory/recollection";
 import {
   memoryTraceGovernance,
   readMemoryTrace,
@@ -47,6 +47,14 @@ export interface RecollectionTraceReceipt {
     reason: IgnoredRecollectionCandidate["reason"];
     score: number;
   }>;
+  /** Pointer-only probe receipts; never include candidate text or payloads. */
+  tiersSearched?: string[];
+  tierStatuses?: Record<string, {
+    status: "ok" | "empty" | "degraded" | "unavailable" | "blocked";
+    count?: number;
+  }>;
+  truncated?: boolean;
+  reasonCode?: string;
   ontology?: {
     ontologyId: string;
     ontologyVersion: string;
@@ -144,6 +152,22 @@ function recollectionPayload(receipt: RecollectionTraceReceipt | undefined): Par
     })),
     beliefStageCounts: beliefStageCounts(receipt),
     recollectionTiming: receipt.timing,
+    recollectionTiersSearched: receipt.tiersSearched,
+    recollectionTierStatuses: receipt.tierStatuses,
+    recollectionTruncated: receipt.truncated,
+    recollectionReasonCode: receipt.reasonCode,
+    recollectionReceipt: {
+      decision: receipt.decision,
+      timing: receipt.timing,
+      reasons: receipt.reasons,
+      skipReason: receipt.skipReason,
+      injected: receipt.injected,
+      ignored: receipt.ignored,
+      tiersSearched: receipt.tiersSearched,
+      tierStatuses: receipt.tierStatuses,
+      truncated: receipt.truncated,
+      reasonCode: receipt.reasonCode,
+    },
     ontology: receipt.ontology,
   };
 }

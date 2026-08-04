@@ -775,6 +775,34 @@ def memory_recall(
 
 
 @_mcp_tool
+def memory_prior_work(
+    task: str,
+    repo: str = "",
+    project: str = "",
+    entities: Optional[list] = None,
+    timing: str = "before_plan",
+    recency_days: Optional[int] = None,
+    run_id: str = "",
+    task_id: str = "",
+) -> dict:
+    """Call at the start of any task, when the topic shifts, when you hit an unexpected error, or before answering "have we done this before?" Returns a short digest of prior work — titles and fetch refs, not content. Cheap: call it rather than guessing."""
+    payload = {
+        "task": task,
+        "repo": repo,
+        "project": project,
+        "entities": entities or [],
+        "timing": timing,
+    }
+    if recency_days is not None:
+        payload["recency_days"] = recency_days
+    if run_id:
+        payload["runId"] = run_id
+    if task_id:
+        payload["taskId"] = task_id
+    return _post_memroos_agent_api("/api/memory/prior-work", payload)
+
+
+@_mcp_tool
 def knowledge_read(
     path: str,
     max_chars: int = 20000,
@@ -1042,6 +1070,35 @@ def agent_memory_save(
             ),
         },
     )
+
+
+@_mcp_tool
+def agent_context_packet(
+    topic: str = "",
+    goal_id: str = "",
+    lane: str = "",
+    project: str = "",
+    repo: str = "",
+    title: str = "",
+    acceptance: Optional[list] = None,
+) -> dict:
+    """Return a pointer-only MemroOS agent context packet, using a goal id or topic for memory recall."""
+    params: dict = {}
+    if topic:
+        params["topic"] = topic
+    if goal_id:
+        params["goal_id"] = goal_id
+    if lane:
+        params["lane"] = lane
+    if project:
+        params["project"] = project
+    if repo:
+        params["repo"] = repo
+    if title:
+        params["title"] = title
+    if acceptance:
+        params["acceptance"] = ",".join(str(item) for item in acceptance if str(item).strip())
+    return _get_memroos_agent_api("/api/agent-context", params=params)
 
 
 @_mcp_tool

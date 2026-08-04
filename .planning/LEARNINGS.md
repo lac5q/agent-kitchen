@@ -336,3 +336,15 @@
   A smaller honest reduction beats a broken large one — that instruction earned its place.
 - GitNexus `rename` was unavailable in-session; executor said so and used actual-import-graph
   updates instead of find-and-replace. Correct fallback, correctly disclosed.
+
+## BM-20260803 phase-191 prior-work-probe (v8.30 PRIORWORK-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3739/0 (director). Python knowledge-mcp 110/110. lib-boundary + route-auth gates green.
+- The Phase 118 kernel finally has a live caller: both duplicate modules deleted, one canonical
+  lib/memory/recollection/ (types/policy/queries/ranking/context-pack), BeliefStage path preserved.
+- Director review lesson: my first grep for `retrieval_trace` in the route found nothing and looked
+  like a missing requirement. It was delegation — the route calls recordMemoryTrace, which emits the
+  efficiency event internally. Verify through the call graph before calling a requirement unmet;
+  GitNexus `context` on the symbol answered it faster than grepping.
+- Executor lane honesty (4th time): reported MiniMax-M3 unavailable and named the fallback lane it
+  actually used, per the beastmode MODEL DRIFT rule, rather than implying the cheap lane ran.
