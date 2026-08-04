@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import type Database from "better-sqlite3";
 
 import { MEM0_URL } from "@/lib/constants";
 import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
@@ -7,6 +6,19 @@ import { getDb } from "@/lib/db";
 import { readVaultArtifactForTenant, writeVaultArtifactWithDurability } from "@/lib/memory/vault-durability";
 import { ensureMemorySalience } from "@/lib/memory/salience";
 import type { SaveQualityReport } from "@/lib/memory/save-quality";
+import { systemGovernance, type GovernanceContext } from "@/lib/store/governance";
+import {
+  createMemoryCandidate,
+  createMemoryEnrichmentCapture,
+  findMemoryCandidateByCaptureHash,
+  getMemoryEnrichmentCapture,
+  getMemoryWriteResult,
+  listMemoryEnrichmentCaptures,
+  updateMemoryEnrichmentCapture,
+  updateMemoryWriteResult,
+  withMemoryEnrichmentTransaction,
+  type MemoryDatabase,
+} from "@/lib/store/memory";
 
 const DEFAULT_BATCH_SIZE = 8;
 const DEFAULT_LEASE_MS = 5 * 60 * 1000;
@@ -100,20 +112,11 @@ function safeProject(metadata: Record<string, unknown>, fallback?: string | null
   return fallback?.trim() || null;
 }
 
-function captureRows(db: Database.Database): CaptureRow[] {
-  return db
-    .prepare(
-      `SELECT id, tenant_id, source_agent_id, raw_artifact_id, captured_at, metadata_json, updated_at
-       FROM agent_session_captures
-       WHERE status = 'captured'
-         AND raw_artifact_id IS NOT NULL
-         AND metadata_json LIKE '%"enrichmentKind":"governed-memory"%'
-       ORDER BY captured_at ASC, id ASC`
-    )
-    .all() as CaptureRow[];
+function captureRows(db: MemoryDatabase): CaptureRow[] {
+  return listMemoryEnrichmentCaptures(db);
 }
 
-export function governedMemoryQueueDepth(db: Database.Database): number {
+export function governedMemoryQueueDepth(db: MemoryDatabase): number {
   return captureRows(db).filter((row) => {
     const metadata = parseJsonRecord(row.metadata_json) as CaptureMetadata;
     return metadata.enrichmentStatus === "pending" || metadata.enrichmentStatus === "running" || metadata.enrichmentStatus === "retrying";
@@ -121,17 +124,18 @@ export function governedMemoryQueueDepth(db: Database.Database): number {
 }
 
 function updateCaptureMetadata(
-  db: Database.Database,
+  db: MemoryDatabase,
   captureId: string,
   metadata: CaptureMetadata,
+  governance: GovernanceContext,
   status: "captured" | "handoff_ready" = "captured",
   updatedAt = nowIso()
 ): void {
-  db.prepare(
-    `UPDATE agent_session_captures
-     SET status = ?, metadata_json = ?, updated_at = ?
-     WHERE id = ?`
-  ).run(status, JSON.stringify(metadata), updatedAt, captureId);
+  updateMemoryEnrichmentCapture(
+    db,
+    { captureId, metadataJson: JSON.stringify(metadata), status, updatedAt },
+    governance,
+  );
 }
 
 /**
@@ -139,7 +143,7 @@ function updateCaptureMetadata(
  * durable session-capture queue item. No downstream memory service is called.
  */
 export function captureMemoryBronze(
-  db: Database.Database,
+  db: MemoryDatabase,
   input: CaptureMemoryBronzeInput
 ): CapturedMemoryBronze {
   const tenantId = input.tenantId ?? "default-tenant";
@@ -195,24 +199,26 @@ export function captureMemoryBronze(
     qualityReport: input.qualityReport,
     storagePayload: input.storagePayload,
   };
-  db.prepare(
-    `INSERT INTO agent_session_captures (
-       id, tenant_id, source_agent_id, runtime, project, session_id, status,
-       capture_health, summary, metadata_json, raw_artifact_id, capture_hash,
-       captured_at, updated_at
-     ) VALUES (?, ?, ?, 'governed-memory', ?, ?, 'captured', 'ok', ?, ?, ?, ?, ?, ?)`
-  ).run(
-    captureId,
-    tenantId,
-    input.agentId,
-    safeProject(input.metadata, input.project),
-    `memory-save:${captureId}`,
-    "Governed memory bronze capture",
-    JSON.stringify(metadata),
-    rawArtifact.id,
-    rawArtifact.contentHash,
-    capturedAt,
-    capturedAt
+  createMemoryEnrichmentCapture(
+    db,
+    {
+      id: captureId,
+      tenantId,
+      sourceAgentId: input.agentId,
+      project: safeProject(input.metadata, input.project),
+      sessionId: `memory-save:${captureId}`,
+      summary: "Governed memory bronze capture",
+      metadataJson: JSON.stringify(metadata),
+      rawArtifactId: rawArtifact.id,
+      captureHash: rawArtifact.contentHash,
+      capturedAt,
+      updatedAt: capturedAt,
+    },
+    systemGovernance(
+      "memory.enrichment.capture",
+      `agent_session_captures/${captureId}`,
+      "persist governed memory bronze capture",
+    ),
   );
 
   return {
@@ -228,17 +234,26 @@ export function captureMemoryBronze(
 }
 
 export function attachMemoryWriteId(
-  db: Database.Database,
+  db: MemoryDatabase,
   captureId: string,
   writeId: number,
   queueDepth: number
 ): void {
-  const row = db.prepare("SELECT metadata_json FROM agent_session_captures WHERE id = ?").get(captureId) as { metadata_json: string } | undefined;
+  const row = getMemoryEnrichmentCapture(db, captureId);
   if (!row) return;
   const metadata = parseJsonRecord(row.metadata_json) as CaptureMetadata;
   metadata.memoryWriteId = writeId;
   metadata.queueDepthAtCapture = queueDepth;
-  updateCaptureMetadata(db, captureId, metadata, "captured");
+  updateCaptureMetadata(
+    db,
+    captureId,
+    metadata,
+    systemGovernance(
+      "memory.enrichment.attach_write",
+      `agent_session_captures/${captureId}`,
+      "attach the persisted memory write to its bronze capture",
+    ),
+  );
 }
 
 function memoryEnrichmentTimeoutMs(): number {
@@ -266,9 +281,14 @@ function isClaimAvailable(metadata: CaptureMetadata, now: Date): boolean {
   return false;
 }
 
-function claimCapture(db: Database.Database, row: CaptureRow, now: Date): { row: CaptureRow; metadata: CaptureMetadata } | null {
-  return db.transaction(() => {
-    const fresh = db.prepare("SELECT * FROM agent_session_captures WHERE id = ?").get(row.id) as CaptureRow | undefined;
+function claimCapture(db: MemoryDatabase, row: CaptureRow, now: Date): { row: CaptureRow; metadata: CaptureMetadata } | null {
+  const governance = systemGovernance(
+    "memory.enrichment.claim",
+    `agent_session_captures/${row.id}`,
+    "claim a governed-memory enrichment capture",
+  );
+  return withMemoryEnrichmentTransaction(db, governance, () => {
+    const fresh = getMemoryEnrichmentCapture(db, row.id) as CaptureRow | undefined;
     if (!fresh) return null;
     const metadata = parseJsonRecord(fresh.metadata_json) as CaptureMetadata;
     if (!isClaimAvailable(metadata, now)) return null;
@@ -279,9 +299,9 @@ function claimCapture(db: Database.Database, row: CaptureRow, now: Date): { row:
       attemptCount: Math.max(0, Number(metadata.attemptCount ?? 0)) + 1,
       lastAttemptAt: nowIso(now),
     };
-    updateCaptureMetadata(db, fresh.id, claimed, "captured", nowIso(now));
+    updateCaptureMetadata(db, fresh.id, claimed, governance, "captured", nowIso(now));
     return { row: fresh, metadata: claimed };
-  })();
+  });
 }
 
 class RetryableEnrichmentError extends Error {}
@@ -336,17 +356,22 @@ function candidateType(content: string, metadata: CaptureMetadata): "decision_in
   return "task_state";
 }
 
-function updateWriteResult(db: Database.Database, writeId: number | undefined, enrichment: Record<string, unknown>): void {
+function updateWriteResult(
+  db: MemoryDatabase,
+  writeId: number | undefined,
+  enrichment: Record<string, unknown>,
+  governance: GovernanceContext,
+): void {
   if (!writeId) return;
-  const row = db.prepare("SELECT result FROM agent_memory_writes WHERE id = ?").get(writeId) as { result: string } | undefined;
+  const row = getMemoryWriteResult(db, writeId);
   if (!row) return;
   const result = parseJsonRecord(row.result);
   result.enrichment = { ...(result.enrichment && typeof result.enrichment === "object" ? result.enrichment as Record<string, unknown> : {}), ...enrichment };
-  db.prepare("UPDATE agent_memory_writes SET result = ? WHERE id = ?").run(JSON.stringify(result), writeId);
+  updateMemoryWriteResult(db, writeId, JSON.stringify(result), governance);
 }
 
 async function enrichCapture(
-  db: Database.Database,
+  db: MemoryDatabase,
   capture: { row: CaptureRow; metadata: CaptureMetadata },
   now: Date
 ): Promise<{ candidateIds: string[]; lagMs: number }> {
@@ -360,12 +385,12 @@ async function enrichCapture(
   const result = await callMem0(storagePayload);
   const texts = extractedTexts(result, content);
   const candidateIds: string[] = [];
-  const insertCandidate = db.prepare(
-    `INSERT OR IGNORE INTO agent_memory_candidates
-      (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  const governance = systemGovernance(
+    "memory.enrichment.complete",
+    `agent_session_captures/${capture.row.id}`,
+    "persist extracted memory candidates and complete enrichment",
   );
-  db.transaction(() => {
+  withMemoryEnrichmentTransaction(db, governance, () => {
     for (const candidateContent of texts) {
       if (!candidateContent) continue;
       const contentHash = sha256(candidateContent);
@@ -378,23 +403,25 @@ async function enrichCapture(
         extractionResultHash: sha256(JSON.stringify(result)),
         qualityReport: capture.metadata.qualityReport ?? null,
       };
-      const inserted = insertCandidate.run(
-        candidateId,
-        capture.row.tenant_id,
-        capture.row.id,
-        capture.row.source_agent_id,
-        candidateType(candidateContent, capture.metadata),
-        candidateContent,
-        contentHash,
-        JSON.stringify(metadata)
+      const insertedChanges = createMemoryCandidate(
+        db,
+        {
+          id: candidateId,
+          tenantId: capture.row.tenant_id,
+          captureId: capture.row.id,
+          agentId: capture.row.source_agent_id,
+          memoryType: candidateType(candidateContent, capture.metadata),
+          content: candidateContent,
+          contentHash,
+          metadataJson: JSON.stringify(metadata),
+        },
+        governance,
       );
-      if (Number(inserted.changes ?? 0) > 0) {
+      if (insertedChanges > 0) {
         candidateIds.push(candidateId);
         ensureMemorySalience(db, "agent_memory_candidate", candidateId, capture.metadata.qualityReport?.score ?? 1);
       } else {
-        const existing = db.prepare(
-          "SELECT id FROM agent_memory_candidates WHERE capture_id = ? AND content_hash = ?"
-        ).get(capture.row.id, contentHash) as { id: string } | undefined;
+        const existing = findMemoryCandidateByCaptureHash(db, capture.row.id, contentHash);
         if (existing) candidateIds.push(existing.id);
       }
     }
@@ -406,36 +433,41 @@ async function enrichCapture(
       completedAt: nowIso(now),
       lastError: undefined,
     };
-    updateCaptureMetadata(db, capture.row.id, completed, "handoff_ready", nowIso(now));
+    updateCaptureMetadata(db, capture.row.id, completed, governance, "handoff_ready", nowIso(now));
     updateWriteResult(db, capture.metadata.memoryWriteId, {
       status: "completed",
       completedAt: nowIso(now),
       candidateIds,
-    });
-  })();
+    }, governance);
+  });
   return { candidateIds, lagMs: Math.max(0, now.getTime() - Date.parse(capture.row.captured_at)) };
 }
 
-function retryCapture(db: Database.Database, capture: { row: CaptureRow; metadata: CaptureMetadata }, error: unknown, now: Date): void {
+function retryCapture(db: MemoryDatabase, capture: { row: CaptureRow; metadata: CaptureMetadata }, error: unknown, now: Date): void {
   const attempt = Math.max(1, Number(capture.metadata.attemptCount ?? 1));
   const backoffMs = Math.min(5 * 60 * 1000, 1000 * 2 ** Math.min(attempt - 1, 8));
   const message = error instanceof Error ? error.message : String(error);
+  const governance = systemGovernance(
+    "memory.enrichment.retry",
+    `agent_session_captures/${capture.row.id}`,
+    "record a retry for governed-memory enrichment",
+  );
   updateCaptureMetadata(db, capture.row.id, {
     ...capture.metadata,
     enrichmentStatus: "retrying",
     lockedAt: null,
     availableAt: new Date(now.getTime() + backoffMs).toISOString(),
     lastError: message.slice(0, 500),
-  }, "captured", nowIso(now));
+  }, governance, "captured", nowIso(now));
   updateWriteResult(db, capture.metadata.memoryWriteId, {
     status: "retrying",
     attempt,
     lastError: message.slice(0, 200),
-  });
+  }, governance);
 }
 
 export async function runMemoryEnrichmentWorker(options: {
-  db?: Database.Database;
+  db?: MemoryDatabase;
   now?: Date;
   maxBatch?: number;
 } = {}): Promise<EnrichmentRunSummary> {

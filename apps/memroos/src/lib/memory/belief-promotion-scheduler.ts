@@ -1,11 +1,14 @@
-import type Database from "better-sqlite3";
-
 import { getDb } from "@/lib/db";
 import {
   enqueueForReview,
   evaluatePromotionChecks,
   promoteCandidate,
 } from "@/lib/belief/promotion";
+import {
+  listBeliefPromotionCandidates,
+  type BeliefPromotionCandidateRow,
+  type MemoryDatabase,
+} from "@/lib/store/memory";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_BATCH_SIZE = 25;
@@ -21,12 +24,7 @@ export interface BeliefPromotionRunSummary {
   errors: string[];
 }
 
-interface CandidateQueueRow {
-  id: string;
-  tenant_id: string;
-  metadata_json: string;
-  created_at: string;
-}
+type CandidateQueueRow = BeliefPromotionCandidateRow;
 
 function parseRecord(raw: string): Record<string, unknown> {
   try {
@@ -43,7 +41,7 @@ function numericEnv(name: string, fallback: number): number {
 }
 
 export function runBeliefPromotion(options: {
-  db?: Database.Database;
+  db?: MemoryDatabase;
   now?: Date;
   maxBatch?: number;
   minAgeMs?: number;
@@ -53,15 +51,11 @@ export function runBeliefPromotion(options: {
   const minAgeMs = options.minAgeMs ?? numericEnv("MEMROOS_BELIEF_PROMOTION_MIN_AGE_MS", DEFAULT_MIN_AGE_MS);
   const batchSize = options.maxBatch ?? numericEnv("MEMROOS_BELIEF_PROMOTION_BATCH_SIZE", DEFAULT_BATCH_SIZE);
   const cutoff = new Date(now.getTime() - minAgeMs).toISOString();
-  const rows = db.prepare(
-    `SELECT id, tenant_id, metadata_json, created_at
-       FROM agent_memory_candidates
-      WHERE belief_stage = 'silver_candidate_claim'
-        AND status = 'candidate'
-        AND created_at <= ?
-      ORDER BY created_at ASC, id ASC
-      LIMIT ?`
-  ).all(cutoff, Math.max(1, Math.min(100, batchSize))) as CandidateQueueRow[];
+  const rows: CandidateQueueRow[] = listBeliefPromotionCandidates(
+    db,
+    cutoff,
+    Math.max(1, Math.min(100, batchSize)),
+  );
 
   const summary: BeliefPromotionRunSummary = {
     status: "completed",
@@ -152,4 +146,3 @@ export function stopBeliefPromotionSchedulerForTest(): void {
   if (promotionInterval) clearInterval(promotionInterval);
   promotionInterval = null;
 }
-

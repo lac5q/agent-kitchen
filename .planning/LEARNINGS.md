@@ -392,3 +392,17 @@
   silently dropped otherwise. Symmetric to the earlier lesson that a sandboxed executor's test
   FAILURES also need re-running unsandboxed; both directions need director verification.
 - Full suite 3760/0; knowledge-mcp 56/56.
+
+## BM-20260804 store-03-regression (caught by CI, fixed without widening the gate)
+- Phase 193 introduced 3 new files doing raw SQL outside lib/store/** (13 .prepare() calls).
+  CI's check:sqlite-allowlist rejected the PR. The v8.29 chokepoint caught a regression from a
+  later phase — the gate working exactly as designed, one milestone after it was built.
+- **Director gap that let it through:** I ran the full test suite after each phase but stopped
+  running the check:* gates after v8.29. Tests pass on a boundary violation; that is the point
+  of having a separate gate. Rule: run ALL check:* gates per phase, not just the suite.
+- The tempting fix (add 3 entries to the allowlist) was refused — it is precisely the
+  "never widen a security allowlist to pass a gate" constraint, and the gate's own message says
+  the list is a shrinking baseline for pre-existing debt. Fixed by moving the access into
+  lib/store/memory.ts behind GovernanceContext. Baseline stayed 113, unchanged.
+- Verified by diff that neither the gate script nor its baseline was edited — that check is the
+  one that distinguishes "fixed" from "silenced".

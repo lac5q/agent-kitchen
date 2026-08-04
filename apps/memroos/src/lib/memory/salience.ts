@@ -1,15 +1,14 @@
-import type Database from "better-sqlite3";
+import { systemGovernance } from "@/lib/store/governance";
+import {
+  initializeMemorySalience,
+  memorySalienceTableExists,
+  reinforceMemorySalience as reinforceMemorySalienceRows,
+  type MemoryDatabase,
+} from "@/lib/store/memory";
 
 export type SalienceRecordType = "message" | "agent_memory_write" | "agent_memory_candidate";
 
 export type SalienceTier = "pinned" | "high" | "mid" | "low";
-
-function tableExists(db: Database.Database): boolean {
-  const row = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_salience'")
-    .get() as { name: string } | undefined;
-  return Boolean(row);
-}
 
 function tierForScore(score: number): SalienceTier {
   if (score >= 0.8) return "high";
@@ -18,17 +17,22 @@ function tierForScore(score: number): SalienceTier {
 }
 
 export function ensureMemorySalience(
-  db: Database.Database,
+  db: MemoryDatabase,
   recordType: Exclude<SalienceRecordType, "message">,
   recordId: string,
   initialScore = 1
 ): void {
-  if (!tableExists(db) || !recordId.trim()) return;
+  if (!memorySalienceTableExists(db) || !recordId.trim()) return;
   const score = Math.max(0, Math.min(1, initialScore));
-  db.prepare(
-    `INSERT OR IGNORE INTO memory_salience (message_id, record_type, record_id, tier, salience_score)
-     VALUES (NULL, ?, ?, ?, ?)`
-  ).run(recordType, recordId, tierForScore(score), score);
+  initializeMemorySalience(
+    db,
+    { recordType, recordId, tier: tierForScore(score), score },
+    systemGovernance(
+      "memory.salience.initialize",
+      `memory_salience/${recordType}/${recordId}`,
+      "initialize memory salience",
+    ),
+  );
 }
 
 function targetFromPointer(value: string): { recordType: SalienceRecordType; recordId: string } | null {
@@ -80,32 +84,25 @@ export function salienceTargetsFromMetadata(metadata: Record<string, unknown>): 
 }
 
 export function reinforceMemorySalience(
-  db: Database.Database,
+  db: MemoryDatabase,
   targets: Array<{ recordType: SalienceRecordType; recordId: string }>,
   outcome: string
 ): number {
-  if (!tableExists(db) || targets.length === 0) return 0;
+  if (!memorySalienceTableExists(db) || targets.length === 0) return 0;
   const normalized = outcome.trim().toLowerCase();
   const delta = /\b(?:helped|useful|success|succeeded|worked|resolved|yes)\b/.test(normalized)
     ? 0.1
     : /\b(?:failed|failure|unhelpful|wrong|stale|no)\b/.test(normalized)
       ? -0.05
       : 0.02;
-  let changed = 0;
-  for (const target of targets) {
-    const result = db.prepare(
-      `UPDATE memory_salience
-       SET salience_score = MIN(1.0, MAX(0.0, salience_score + ?)),
-           tier = CASE
-             WHEN MIN(1.0, MAX(0.0, salience_score + ?)) >= 0.8 THEN 'high'
-             WHEN MIN(1.0, MAX(0.0, salience_score + ?)) >= 0.5 THEN 'mid'
-             ELSE 'low'
-           END,
-           access_count = access_count + 1,
-           last_accessed = strftime('%Y-%m-%dT%H:%M:%SZ','now')
-       WHERE record_type = ? AND record_id = ?`
-    ).run(delta, delta, delta, target.recordType, target.recordId);
-    changed += Number(result.changes ?? 0);
-  }
-  return changed;
+  return reinforceMemorySalienceRows(
+    db,
+    targets,
+    delta,
+    systemGovernance(
+      "memory.salience.reinforce",
+      "memory_salience/*",
+      "reinforce memory salience from tool outcome",
+    ),
+  );
 }
