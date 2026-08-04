@@ -14,7 +14,7 @@ vi.mock("@/lib/db", () => ({ getDb: () => db }));
 
 const { initSchema } = await import("@/lib/db-schema");
 const { registerAgent, getRegisteredAgent, updateAgentDetails } = await import(
-  "@/lib/agent-registry"
+  "@/lib/agent/registry"
 );
 
 beforeEach(() => {

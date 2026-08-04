@@ -200,6 +200,77 @@ def test_agent_memory_save_requires_agent_key(monkeypatch):
     assert "MEMROOS_AGENT_API_KEY" in payload["error"]
 
 
+def test_memory_prior_work_posts_bounded_probe_payload_and_exposes_trigger_contract(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "decision": "search_skipped", "items": []}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    payload = mcp_server.memory_prior_work(
+        task="Have we done this before?",
+        repo="lac5q/memroos",
+        project="memroos",
+        entities=["prior-work"],
+        timing="before_plan",
+    )
+
+    assert payload == {"status": "ok", "response": {"ok": True, "decision": "search_skipped", "items": []}}
+    assert calls[0][0] == "http://memroos.test/api/memory/prior-work"
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer agent-key"
+    assert calls[0][1]["json"] == {
+        "task": "Have we done this before?",
+        "repo": "lac5q/memroos",
+        "project": "memroos",
+        "entities": ["prior-work"],
+        "timing": "before_plan",
+    }
+
+    contract = mcp_server.build_mcp_tool_contract()
+    entry = next(tool for tool in contract["tools"] if tool["name"] == "memory_prior_work")
+    assert "start of any task" in entry["description"]
+    assert "topic shifts" in entry["description"]
+    assert "have we done this before?" in entry["description"]
+    assert "not content" in entry["description"]
+
+
+def test_agent_context_packet_uses_topic_without_goal_id(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "packet": {"memories": []}}
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setattr(mcp_server.httpx, "get", fake_get)
+
+    payload = mcp_server.agent_context_packet(topic="prior work on onboarding")
+
+    assert payload == {"status": "ok", "response": {"ok": True, "packet": {"memories": []}}}
+    assert calls[0][0] == "http://memroos.test/api/agent-context"
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer agent-key"
+    assert calls[0][1]["params"] == {"topic": "prior work on onboarding"}
+
+
 def test_agent_context_send_posts_to_memroos_and_waits_for_reply(monkeypatch):
     calls = []
 
@@ -334,8 +405,10 @@ def test_core_tools_stay_small_for_progressive_disclosure():
         "knowledge_search",
         "knowledge_read",
         "memory_recall",
+        "memory_prior_work",
         "memory_search",
         "memory_save",
+        "agent_context_packet",
     ]
 
 

@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
 
-import { buildAgentContextPacket } from "@/lib/agent-context-packet";
-import type { AgentContextLane } from "@/lib/agent-context-packet";
-import { createAgentCheckpoint } from "@/lib/agent-checkpoints";
+import { buildAgentContextPacket } from "@/lib/agent/context-packet";
+import type { AgentContextLane } from "@/lib/agent/context-packet";
+import { createAgentCheckpoint } from "@/lib/agent/checkpoints";
 
 export type DiscussRole = "chair" | "researcher" | "implementer" | "reviewer" | "validator";
 

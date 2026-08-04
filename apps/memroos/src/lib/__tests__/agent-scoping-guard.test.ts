@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { execSync } from "child_process";
 
-import * as registry from "@/lib/agent-registry";
+import * as registry from "@/lib/agent/registry";
 
 /**
  * Phase 221 criterion 6 — the guard that keeps scoping from silently regressing.

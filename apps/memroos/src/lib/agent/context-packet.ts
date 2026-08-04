@@ -1,8 +1,19 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
+import { recallByKeyword } from "@/lib/db-ingest";
 import { writeAuditEntry } from "@/lib/audit/write";
 import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from "@/lib/audit/event-types";
+import { filterAuthorizedMessageRows, type MemoryUseActor } from "@/lib/memory/policy-gate";
+import {
+  assembleRecollectionContextPack,
+  decideRecollection,
+  type RecollectionCandidate,
+} from "@/lib/memory/recollection";
 import { resolveOntologyValidity } from "@/lib/ontology/validity";
+import {
+  listMemoryCandidatesForContext,
+  listMemoryTracesForContext,
+} from "@/lib/store/memory";
 
 export type AgentContextLane =
   | "research"
@@ -134,7 +145,9 @@ export interface AgentRunLedger {
 }
 
 export interface BuildAgentContextPacketInput {
-  goalId: string;
+  goalId?: string;
+  /** Topic-based recall is allowed when no durable goal/run id exists yet. */
+  topic?: string;
   actorAgentId: string;
   tenantId?: string;
   userId?: string;
@@ -346,6 +359,83 @@ function efficiencyReceipts(rows: Row[]): AgentContextPacket["receipts"] {
   });
 }
 
+function topicMemoryRows(
+  db: Database.Database,
+  input: BuildAgentContextPacketInput,
+  topic: string,
+): { rows: Row[]; includedIds: string[]; skippedReason: string | null } {
+  const decision = decideRecollection({
+    taskText: topic,
+    timing: "before_plan",
+    project: input.scope?.project,
+    entities: [topic],
+    requestedLimit: 8,
+    now: input.now?.(),
+  });
+  if (decision.decision === "search_skipped") {
+    return { rows: [], includedIds: [], skippedReason: decision.skipReason ?? "low_memory_need" };
+  }
+
+  let recalled;
+  try {
+    recalled = recallByKeyword(db, decision.queries[0]?.text ?? topic, 8);
+  } catch {
+    return { rows: [], includedIds: [], skippedReason: "episodic_tier_unavailable" };
+  }
+  const actor: MemoryUseActor = {
+    id: input.actorAgentId,
+    role: "agent",
+    capability: "agent_context_topic_recall",
+    project: input.scope?.project ?? null,
+  };
+  let authorized;
+  try {
+    authorized = filterAuthorizedMessageRows(db, recalled, actor, "context-pack");
+  } catch {
+    return { rows: [], includedIds: [], skippedReason: "episodic_policy_gate_unavailable" };
+  }
+  const candidates: RecollectionCandidate[] = authorized.map((row) => ({
+    id: `topic:episodic:${row.id}`,
+    tier: "episodic",
+    content: row.snippet,
+    text: row.snippet,
+    beliefStage: "silver_candidate_claim",
+    capturedAt: row.timestamp,
+    importance: 0.5,
+    authorization: "allowed",
+    provenance: `messages:${row.id}`,
+    projectId: row.project || undefined,
+  }));
+  const pack = assembleRecollectionContextPack(candidates, {
+    taskText: topic,
+    now: input.now?.(),
+    threshold: 0.62,
+    maxItems: 5,
+  });
+  const includedIds = pack.injected.map((item) => item.id);
+  const rows: Row[] = pack.injected.map((item) => {
+    const sourceId = item.id.replace(/^topic:episodic:/, "");
+    return {
+      id: item.id,
+      memory_type: "episodic_prior_work",
+      belief_stage: item.beliefStage,
+      status: item.beliefStage === "gold_operational_truth" ? "promoted" : "candidate",
+      content_hash: `sha256:${crypto.createHash("sha256").update(item.id).digest("hex")}`,
+      metadata_json: JSON.stringify({
+        title: "Prior episodic work",
+        provenance: [`messages:${sourceId}`],
+        whyIncluded: "topic-based recollection matched the current context request",
+        caveat: item.caveatReason,
+      }),
+    };
+  });
+  return {
+    rows,
+    includedIds,
+    skippedReason: rows.length === 0 ? "below_threshold" : null,
+  };
+}
+
 export function readAgentRunLedger(
   db: Database.Database,
   input: { goalId: string; tenantId?: string; lane?: AgentContextLane; now?: () => Date }
@@ -510,12 +600,15 @@ export function buildAgentContextPacket(
   db: Database.Database,
   input: BuildAgentContextPacketInput
 ): { packet: AgentContextPacket; ledger: AgentRunLedger } {
-  if (!input.goalId.trim()) throw new Error("goalId is required");
+  const topic = input.topic?.trim() || undefined;
+  const requestedGoalId = input.goalId?.trim() || undefined;
+  if (!requestedGoalId && !topic) throw new Error("goalId or topic is required");
   if (!input.actorAgentId.trim()) throw new Error("actorAgentId is required");
 
+  const goalId = requestedGoalId ?? `topic:${crypto.createHash("sha256").update(topic ?? "").digest("hex").slice(0, 24)}`;
   const tenantId = input.tenantId ?? "default-tenant";
   const generatedAt = (input.now ?? (() => new Date()))().toISOString();
-  const params = { goalId: input.goalId, tenantId };
+  const params = { goalId, tenantId };
   const latestCheckpoint = maybeGet(
     db,
     `SELECT * FROM agent_checkpoints
@@ -532,33 +625,16 @@ export function buildAgentContextPacket(
      LIMIT 1`,
     params
   );
-  const candidateRows = maybeAll(
-    db,
-    `SELECT id, memory_type, content_hash, status, metadata_json, belief_stage, created_at
-     FROM agent_memory_candidates
-     WHERE tenant_id = @tenantId
-       AND (
-         json_extract(metadata_json, '$.goalId') = @goalId
-         OR json_extract(metadata_json, '$.goal_id') = @goalId
-         OR json_extract(metadata_json, '$.taskId') = @goalId
-         OR json_extract(metadata_json, '$.task_id') = @goalId
-       )
-     ORDER BY created_at DESC
-     LIMIT 25`,
-    params
-  );
-  const traceRows = maybeAll(
-    db,
-    `SELECT * FROM agent_memory_traces
-     WHERE tenant_id = @tenantId AND (run_id = @goalId OR task_id = @goalId)
-     ORDER BY created_at DESC
-     LIMIT 25`,
-    params
-  );
+  const topicRecall = topic ? topicMemoryRows(db, input, topic) : { rows: [], includedIds: [], skippedReason: null };
+  const candidateRows = [
+    ...listMemoryCandidatesForContext(db, tenantId, goalId),
+    ...topicRecall.rows,
+  ];
+  const traceRows = listMemoryTracesForContext(db, tenantId, goalId);
   const efficiencyRows = maybeAll(
     db,
     `SELECT * FROM efficiency_events
-     WHERE tenant_id = @tenantId AND task_id = @goalId
+    WHERE tenant_id = @tenantId AND task_id = @goalId
      ORDER BY created_at DESC, id DESC
      LIMIT 50`,
     params
@@ -575,7 +651,7 @@ export function buildAgentContextPacket(
     params
   );
 
-  const ledger = readAgentRunLedger(db, { goalId: input.goalId, tenantId, lane: input.lane, now: input.now });
+  const ledger = readAgentRunLedger(db, { goalId, tenantId, lane: input.lane, now: input.now });
   const explicitRequiredVerification = input.constraints?.requiredVerification ?? [];
   const requiredVerification = requiredVerificationFrom(latestCheckpoint, explicitRequiredVerification);
   const latestEvents = ledger.events.slice(0, 8).map((event) => `${event.actionType}: ${event.summary}`);
@@ -617,7 +693,7 @@ export function buildAgentContextPacket(
   }
 
   const packetWithoutHash: Omit<AgentContextPacket, "packetHash"> = {
-    packetId: `acp_${crypto.createHash("sha256").update(`${input.goalId}:${input.actorAgentId}:${generatedAt}`).digest("hex").slice(0, 24)}`,
+    packetId: `acp_${crypto.createHash("sha256").update(`${goalId}:${input.actorAgentId}:${generatedAt}`).digest("hex").slice(0, 24)}`,
     generatedAt,
     actor: {
       agentId: input.actorAgentId,
@@ -625,12 +701,12 @@ export function buildAgentContextPacket(
       ...(input.delegatedChain?.length ? { delegatedChain: input.delegatedChain } : {}),
     },
     goal: {
-      id: input.goalId,
+      id: goalId,
       title:
         input.goalTitle ??
         asString(latestDelegation?.task_summary) ??
         asString(latestCheckpoint?.objective) ??
-        input.goalId,
+        input.topic ?? goalId,
       status: statusFor(latestDelegation, latestCheckpoint),
       acceptanceCriteria: input.acceptanceCriteria ?? requiredVerification,
       lane: input.lane ?? "ops",
@@ -680,6 +756,14 @@ export function buildAgentContextPacket(
     receipts: [
       ...traceReceipts(traceRows),
       ...efficiencyReceipts(efficiencyRows),
+      ...(topic ? [{
+        source: "prior_work_topic",
+        status: topicRecall.includedIds.length > 0 ? "included" as const : "skipped" as const,
+        reason: topicRecall.includedIds.length > 0
+          ? `topic recall returned ${topicRecall.includedIds.length} pointer(s); bodies omitted`
+          : topicRecall.skippedReason ?? "no topic memories crossed the threshold",
+        ...(topicRecall.includedIds[0] ? { pointer: topicRecall.includedIds[0] } : {}),
+      }] : []),
       ...messageRows.map((row) => ({
         source: "agent_context_messages",
         status: "included" as const,

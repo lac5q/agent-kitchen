@@ -4,10 +4,13 @@
 // `lib/<domain>/`. The `lib/` root is reserved for cross-cutting primitives
 // that genuinely have no domain.
 //
-// These 75 files predate the rule. The list is a BASELINE captured
-// 2026-07-26 and may only shrink. `scripts/check-lib-boundary.mjs` fails CI
-// when a NEW root-level file appears that is neither a reserved primitive nor
-// on this list. When you move a file into `lib/<domain>/`, delete its line.
+// The original baseline was 75 files, captured 2026-07-26. LIBNORM-02
+// relocated 22 of them (all `memory-*` plus `meeting-qmd-recall` /
+// `recollection-policy` into `lib/memory/`, and all `agent-*` into the
+// singular `lib/agent/`), leaving 53. This list may only shrink.
+// `scripts/check-lib-boundary.mjs` fails CI when a NEW root-level file appears
+// that is neither a reserved primitive nor on this list. When you move a file
+// into `lib/<domain>/`, delete its line.
 //
 // Do not add to this list. A new root-level file is the thing the gate exists
 // to prevent — put it in `lib/<domain>/` instead.
@@ -23,17 +26,6 @@ export const LIB_ROOT_RESERVED = [
 
 /** Pre-existing root-level files awaiting relocation. Shrink only. */
 export const LIB_ROOT_EXCEPTIONS = [
-  "agent-checkpoints.ts",
-  "agent-cicd-gates.ts",
-  "agent-context-bus.ts",
-  "agent-context-packet.ts",
-  "agent-context-policy.ts",
-  "agent-gsd-control.ts",
-  "agent-liveness.ts",
-  "agent-memory-continuity.ts",
-  "agent-onboarding.ts",
-  "agent-registry-seed.ts",
-  "agent-registry.ts",
   "api-client.ts",
   "artifact-gate.ts",
   "audit.ts",
@@ -52,17 +44,7 @@ export const LIB_ROOT_EXCEPTIONS = [
   "iris-scanner.ts",
   "knowledge-collections.ts",
   "local-agent-runtime.ts",
-  "meeting-qmd-recall.ts",
   "meeting-source-status.ts",
-  "memory-consolidation.ts",
-  "memory-decay.ts",
-  "memory-doctor.ts",
-  "memory-graph-catchup-scheduler.ts",
-  "memory-inventory.ts",
-  "memory-policy-lab.ts",
-  "memory-recall-evals.ts",
-  "memory-retention-expiry-scheduler.ts",
-  "memory-trace-observability.ts",
   "metadata.ts",
   "metric-status.ts",
   "model-routing.ts",
@@ -75,7 +57,6 @@ export const LIB_ROOT_EXCEPTIONS = [
   "okf.ts",
   "operator-auth.ts",
   "parsers.ts",
-  "recollection-policy.ts",
   "response-cache.ts",
   "runtime-topology.ts",
   "scheduler-singleton.ts",

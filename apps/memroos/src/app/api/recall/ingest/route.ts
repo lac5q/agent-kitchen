@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { ingestAllSessions } from '@/lib/db-ingest';
-import { writeAuditLog } from '@/lib/audit';
+import { writeAuditLogFromEntry as writeAuditLog } from '@/lib/store/audit';
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';

@@ -6,7 +6,7 @@ const state = vi.hoisted(() => ({
   agents: [] as RegisteredAgent[],
 }));
 
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   listRegisteredAgents: () => state.agents,
   listAllAgentsUnscoped: () => state.agents,
   // The route scopes by viewer; these tests assert envelope shape, so the

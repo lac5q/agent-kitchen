@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { searchMeetingCollections, type SearchMeetingCollectionsResult } from "@/lib/meeting-qmd-recall";
+import { searchMeetingCollections, type SearchMeetingCollectionsResult } from "@/lib/memory/meeting-qmd-recall";
 import {
   SOURCE_STATUS,
   isTerminalSourceStatus,

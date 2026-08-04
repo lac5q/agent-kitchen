@@ -6,8 +6,8 @@ import {
   type AgentContextLane,
   type AgentContextPacket,
   type AgentRunLedger,
-} from "@/lib/agent-context-packet";
-import { createAgentCheckpoint } from "@/lib/agent-checkpoints";
+} from "@/lib/agent/context-packet";
+import { createAgentCheckpoint } from "@/lib/agent/checkpoints";
 
 export const GSD_LANES: AgentContextLane[] = [
   "research",

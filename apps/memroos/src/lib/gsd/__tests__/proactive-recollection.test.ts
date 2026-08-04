@@ -6,7 +6,7 @@ import {
   planRecollectionQueries,
   rankRecollectionCandidates,
   type RecollectionCandidate,
-} from "../proactive-recollection";
+} from "../../memory/recollection";
 
 describe("Phase 118 proactive recollection", () => {
   it("requires recollection for auditable task signals before planning", () => {

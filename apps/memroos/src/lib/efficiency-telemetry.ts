@@ -1,12 +1,12 @@
 import type Database from "better-sqlite3";
-import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory-recall-evals";
+import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory/recall-evals";
 import type {
   BeliefStage,
   IgnoredRecollectionCandidate,
   RecollectionDecisionKind,
   RecollectionReason,
   RecollectionReliance,
-} from "@/lib/recollection-policy";
+} from "@/lib/memory/recollection";
 
 export const EFFICIENCY_EVENT_TYPES = [
   "retrieval_trace",
@@ -41,6 +41,23 @@ export interface RetrievalTracePayload {
   }>;
   beliefStageCounts?: Record<BeliefStage, number>;
   recollectionTiming?: MemoryRecallTiming;
+  /** Full pointer-only prior-work receipt metadata, carried without content. */
+  recollectionReceipt?: {
+    decision: RecollectionDecisionKind;
+    timing: MemoryRecallTiming;
+    reasons: RecollectionReason[];
+    skipReason: string | null;
+    injected: Array<{ id: string; tier: MemoryRecallTier; beliefStage: BeliefStage; reliance: RecollectionReliance; score: number }>;
+    ignored: Array<{ id: string; reason: string; score: number }>;
+    tiersSearched?: string[];
+    tierStatuses?: Record<string, unknown>;
+    truncated?: boolean;
+    reasonCode?: string;
+  };
+  recollectionTiersSearched?: string[];
+  recollectionTierStatuses?: Record<string, unknown>;
+  recollectionTruncated?: boolean;
+  recollectionReasonCode?: string;
   ontology?: {
     ontologyId: string;
     ontologyVersion: string;

@@ -9,12 +9,12 @@ vi.mock("@/lib/db-ingest", () => ({
   ingestAllSessions: vi.fn(),
 }));
 
-vi.mock("@/lib/audit", () => ({
-  writeAuditLog: vi.fn(),
+vi.mock("@/lib/store/audit", () => ({
+  writeAuditLogFromEntry: vi.fn(),
 }));
 
 import { ingestAllSessions } from "@/lib/db-ingest";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 
 const mockIngestAllSessions = vi.mocked(ingestAllSessions);
 const mockWriteAuditLog = vi.mocked(writeAuditLog);

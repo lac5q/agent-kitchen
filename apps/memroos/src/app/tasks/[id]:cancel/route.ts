@@ -1,4 +1,4 @@
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { a2aErrorResponse, A2aError } from "@/lib/a2a/errors";
 import { cancelA2aTask } from "@/lib/a2a/task-service";
 

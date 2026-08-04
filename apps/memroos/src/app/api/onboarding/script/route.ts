@@ -1,4 +1,4 @@
-import { verifyAgentOnboardingToken } from "@/lib/agent-onboarding";
+import { verifyAgentOnboardingToken } from "@/lib/agent/onboarding";
 
 export const dynamic = "force-dynamic";
 

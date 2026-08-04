@@ -6,7 +6,7 @@ import { initSchema } from "../db-schema";
 import {
   loadMemoryRecallEvalCases,
   runMemoryRecallEvalSuite,
-} from "../memory-recall-evals";
+} from "../memory/recall-evals";
 
 describe("memory recall CI canary", () => {
   let db: Database.Database | undefined;

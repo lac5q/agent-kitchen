@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 
-vi.mock("@/lib/agent-registry", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/agent-registry")>();
+vi.mock("@/lib/agent/registry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agent/registry")>();
   return { ...actual, authenticateAgentHeaders: vi.fn(() => null) };
 });
 

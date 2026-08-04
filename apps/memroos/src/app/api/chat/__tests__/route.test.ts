@@ -279,7 +279,7 @@ async function registerTestAgent(input: {
   platform: "claude" | "codex" | "qwen" | "gemini" | "opencode" | "hermes" | "openclaw" | "chatgpt";
 }) {
   vi.stubEnv("SQLITE_DB_PATH", testDbPath);
-  const { registerAgent } = await import("@/lib/agent-registry");
+  const { registerAgent } = await import("@/lib/agent/registry");
   registerAgent({
     ...input,
     protocol: "rest",

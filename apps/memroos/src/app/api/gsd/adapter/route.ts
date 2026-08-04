@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { runGsdAdapterSafetyCheck } from "@/lib/gsd/adapter-safety";
 import {
   executeGsdAdapterAction,
@@ -11,7 +11,7 @@ import {
   isGsdAdapterPolicyAllowed,
   runGsdAdapterPolicyGate,
 } from "@/lib/gsd/adapter-policy-gate";
-import { gsdInputFromJson } from "@/lib/agent-gsd-control";
+import { gsdInputFromJson } from "@/lib/agent/gsd-control";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

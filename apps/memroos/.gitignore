@@ -1,2 +1,6 @@
 .vercel
 e2e/.auth/
+
+# Playwright run artifacts — never committed
+test-results/
+playwright-report/

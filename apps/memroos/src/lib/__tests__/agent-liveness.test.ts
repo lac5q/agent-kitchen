@@ -7,7 +7,7 @@ import {
   LIVENESS_STATES,
   summarizeLivenessStates,
   summarizeReadiness,
-} from "@/lib/agent-liveness";
+} from "@/lib/agent/liveness";
 
 describe("classifyLiveness", () => {
   it("returns never when no observation is recorded anywhere", () => {

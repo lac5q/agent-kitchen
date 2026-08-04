@@ -12,7 +12,7 @@ import {
   toNextHeaders,
   UNDERSTAND_NOINDEX_HEADERS,
 } from "@/lib/understand-policy";
-import { findSelfDeclaredAccessClaims } from "@/lib/agent-context-policy";
+import { findSelfDeclaredAccessClaims } from "@/lib/agent/context-policy";
 
 describe("noc-filters", () => {
   it("normalizes window/workspace and maps labels", () => {

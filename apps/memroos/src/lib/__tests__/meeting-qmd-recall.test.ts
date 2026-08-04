@@ -7,7 +7,7 @@ import {
   aggregateSourceStatus,
   loadEnabledMeetingCollections,
   searchMeetingCollections,
-} from "../meeting-qmd-recall";
+} from "../memory/meeting-qmd-recall";
 import { SOURCE_STATUS } from "../meeting-source-status";
 
 describe("meeting-qmd-recall", () => {

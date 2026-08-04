@@ -9,7 +9,7 @@ import {
   listAgentContextMessages,
   postAgentContextMessage,
   replyToAgentContextMessage,
-} from "@/lib/agent-context-bus";
+} from "@/lib/agent/context-bus";
 
 function seedDb(): Database.Database {
   const db = new Database(":memory:");

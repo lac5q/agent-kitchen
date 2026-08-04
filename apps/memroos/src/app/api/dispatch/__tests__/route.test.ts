@@ -2,12 +2,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   authenticateAgentHeaders: vi.fn(),
   getRemoteAgents: vi.fn(),
   listAllAgentsUnscoped: vi.fn(),
 }));
-vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
+vi.mock("@/lib/store/audit", () => ({ writeAuditLogFromEntry: vi.fn() }));
 vi.mock("@/lib/content-scanner", () => ({ scanContent: vi.fn() }));
 vi.mock("@/lib/iris-scanner", () => ({ scanIrisPreflight: vi.fn() }));
 vi.mock("@/lib/security-policy", () => ({
@@ -24,8 +24,8 @@ vi.mock("@/lib/skills/skill-sync-governance", () => ({
 
 const { POST } = await import("../route");
 const { getDb } = await import("@/lib/db");
-const { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } = await import("@/lib/agent-registry");
-const { writeAuditLog } = await import("@/lib/audit");
+const { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } = await import("@/lib/agent/registry");
+const { writeAuditLogFromEntry: writeAuditLog } = await import("@/lib/store/audit");
 const { scanContent } = await import("@/lib/content-scanner");
 const { scanIrisPreflight } = await import("@/lib/iris-scanner");
 const { checkDispatchPolicy } = await import("@/lib/security-policy");

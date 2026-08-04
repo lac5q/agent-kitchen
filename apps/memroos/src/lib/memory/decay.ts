@@ -2,9 +2,9 @@ import crypto from 'crypto';
 
 import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from '@/lib/audit/event-types';
 import { writeAuditEntry } from '@/lib/audit/write';
-import { getDb } from './db';
-import { activeLegalHoldsForRecord } from './memory/retention-expiry';
-import { parseJsonObject, scopeHash, sha256Hex, stableJson, type RetentionRecordRow, type RetentionScope } from './memory/retention-policy';
+import { getDb } from '../db';
+import { activeLegalHoldsForRecord } from './retention-expiry';
+import { parseJsonObject, scopeHash, sha256Hex, stableJson, type RetentionRecordRow, type RetentionScope } from './retention-policy';
 
 let _started = false;
 let _hasLogFn: boolean | null = null;

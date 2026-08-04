@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
-import { buildAgentContextPacket, type AgentContextLane } from "@/lib/agent-context-packet";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
+import { buildAgentContextPacket, type AgentContextLane } from "@/lib/agent/context-packet";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
   }
 
   const goalId = url.searchParams.get("goal_id") ?? url.searchParams.get("goalId");
-  if (!goalId?.trim()) {
-    return Response.json({ ok: false, error: "goal_id parameter is required" }, { status: 400 });
+  const topic = url.searchParams.get("topic") ?? url.searchParams.get("task");
+  if (!goalId?.trim() && !topic?.trim()) {
+    return Response.json({ ok: false, error: "goal_id or topic parameter is required" }, { status: 400 });
   }
 
   const lane = asLane(url.searchParams.get("lane"));
@@ -47,7 +48,8 @@ export async function GET(req: NextRequest) {
   }
 
   const result = buildAgentContextPacket(getDb(), {
-    goalId,
+    goalId: goalId?.trim() || undefined,
+    topic: topic?.trim() || undefined,
     actorAgentId: agent.id,
     lane,
     goalTitle: url.searchParams.get("title") ?? undefined,

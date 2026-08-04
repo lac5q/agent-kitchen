@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
 
-import { runConsolidation } from '@/lib/memory-consolidation';
+import { runConsolidation } from '@/lib/memory/consolidation-scheduler';
 import { getDb } from '@/lib/db';
-import { writeAuditLog } from '@/lib/audit';
+import { writeAuditLogFromEntry as writeAuditLog } from '@/lib/store/audit';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
 

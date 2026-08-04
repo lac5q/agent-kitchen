@@ -2,13 +2,20 @@ import crypto from "crypto";
 import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import type Database from "better-sqlite3";
 
 import { MEM0_URL } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { recallByKeyword } from "@/lib/db-ingest";
 import { rebuildMessageFtsProjection } from "@/lib/db-schema";
 import { queryGraphMemory } from "@/lib/memory/backends";
+import {
+  ensureMemoryEvalTables as ensureStoredMemoryEvalTables,
+  memoryEvalGovernance,
+  readLatestMemoryEvalRun,
+  writeMemoryEvalRun,
+} from "@/lib/store/memory";
+
+type SqliteDatabase = ReturnType<typeof getDb>;
 
 export type MemoryRecallTier = "vector" | "graph" | "episodic" | "qmd";
 export type MemoryRecallTiming = "before_plan" | "before_tool_use" | "before_final";
@@ -277,110 +284,29 @@ export function loadMemoryRecallEvalCases(): MemoryRecallEvalCase[] {
   return JSON.parse(raw) as MemoryRecallEvalCase[];
 }
 
-export function ensureMemoryEvalTables(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_eval_runs (
-      id           TEXT PRIMARY KEY,
-      mode         TEXT NOT NULL,
-      status       TEXT NOT NULL CHECK(status IN ('passed','failed')),
-      summary      TEXT NOT NULL,
-      started_at   TEXT NOT NULL,
-      completed_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS memory_eval_cases (
-      id          TEXT PRIMARY KEY,
-      layer       TEXT NOT NULL,
-      scenario    TEXT NOT NULL,
-      agent_id    TEXT NOT NULL,
-      task_prompt TEXT NOT NULL,
-      updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-    );
-    CREATE TABLE IF NOT EXISTS memory_eval_results (
-      id         INTEGER PRIMARY KEY,
-      run_id     TEXT NOT NULL REFERENCES memory_eval_runs(id) ON DELETE CASCADE,
-      case_id    TEXT NOT NULL,
-      passed     INTEGER NOT NULL,
-      failures   TEXT NOT NULL,
-      metrics    TEXT NOT NULL,
-      tiers      TEXT NOT NULL,
-      retrieved  TEXT NOT NULL,
-      trace      TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-    );
-    CREATE INDEX IF NOT EXISTS memory_eval_runs_completed
-      ON memory_eval_runs(completed_at DESC);
-    CREATE INDEX IF NOT EXISTS memory_eval_results_run
-      ON memory_eval_results(run_id);
-  `);
+export function ensureMemoryEvalTables(db: SqliteDatabase): void {
+  ensureStoredMemoryEvalTables(
+    db,
+    memoryEvalGovernance({ id: "schema" }),
+  );
 }
 
-function recordMemoryEvalRun(db: Database.Database, run: MemoryEvalRun): void {
-  ensureMemoryEvalTables(db);
-  const insertCase = db.prepare(`
-    INSERT INTO memory_eval_cases (id, layer, scenario, agent_id, task_prompt, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      layer=excluded.layer,
-      scenario=excluded.scenario,
-      agent_id=excluded.agent_id,
-      task_prompt=excluded.task_prompt,
-      updated_at=excluded.updated_at
-  `);
-  const insertResult = db.prepare(`
-    INSERT INTO memory_eval_results (run_id, case_id, passed, failures, metrics, tiers, retrieved, trace)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  db.transaction(() => {
-    db.prepare(`
-      INSERT INTO memory_eval_runs (id, mode, status, summary, started_at, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(run.id, run.mode, run.status, JSON.stringify(run.summary), run.startedAt, run.completedAt);
-
-    for (const result of run.results) {
-      insertCase.run(result.caseId, result.layer, result.scenario, result.agentId, result.taskPrompt, run.completedAt);
-      insertResult.run(
-        run.id,
-        result.caseId,
-        result.passed ? 1 : 0,
-        JSON.stringify(result.failures),
-        JSON.stringify(result.metrics),
-        JSON.stringify(result.tiers),
-        JSON.stringify(result.retrieved),
-        JSON.stringify(result.trace)
-      );
-    }
-  })();
+function recordMemoryEvalRun(db: SqliteDatabase, run: MemoryEvalRun): void {
+  writeMemoryEvalRun(db, run, memoryEvalGovernance(run));
 }
 
-export function getLatestMemoryEvalRun(db = getDb()): LatestMemoryEvalResponse {
+export function getLatestMemoryEvalRun(db: SqliteDatabase = getDb()): LatestMemoryEvalResponse {
   ensureMemoryEvalTables(db);
-  const runRow = db
-    .prepare("SELECT id, mode, status, summary, started_at, completed_at FROM memory_eval_runs ORDER BY completed_at DESC LIMIT 1")
-    .get() as
-    | { id: string; mode: MemoryEvalMode; status: MemoryEvalStatus; summary: string; started_at: string; completed_at: string }
-    | undefined;
-
-  if (!runRow) return { ok: true, run: null, timestamp: new Date().toISOString() };
-
-  const rows = db
-    .prepare("SELECT case_id, passed, failures, metrics, tiers, retrieved, trace FROM memory_eval_results WHERE run_id = ? ORDER BY id ASC")
-    .all(runRow.id) as Array<{
-    case_id: string;
-    passed: number;
-    failures: string;
-    metrics: string;
-    tiers: string;
-    retrieved: string;
-    trace: string;
-  }>;
+  const persistence = readLatestMemoryEvalRun(db);
+  if (!persistence) return { ok: true, run: null, timestamp: new Date().toISOString() };
+  const { run: runRow, results: rows } = persistence;
 
   return {
     ok: true,
     run: {
       id: runRow.id,
-      mode: runRow.mode,
-      status: runRow.status,
+      mode: runRow.mode as MemoryEvalMode,
+      status: runRow.status as MemoryEvalStatus,
       startedAt: runRow.started_at,
       completedAt: runRow.completed_at,
       summary: JSON.parse(runRow.summary) as MemoryEvalSummary,
@@ -480,7 +406,7 @@ async function waitForVectorFixture(fixture: MemoryRecallFixture, agentId: strin
   throw new Error("Vector fixture did not settle after write timeout");
 }
 
-async function seedFixture(db: Database.Database, fixture: MemoryRecallFixture, agentId: string): Promise<MemoryRecallTraceEvent> {
+async function seedFixture(db: SqliteDatabase, fixture: MemoryRecallFixture, agentId: string): Promise<MemoryRecallTraceEvent> {
   const timestamp = new Date().toISOString();
   if (fixture.tier === "episodic") {
     db.prepare(
@@ -545,7 +471,7 @@ async function searchVector(query: string, agentId: string, limit: number): Prom
   }));
 }
 
-function searchEpisodic(db: Database.Database, query: string, limit: number): NormalizedRecallResult[] {
+function searchEpisodic(db: SqliteDatabase, query: string, limit: number): NormalizedRecallResult[] {
   const start = Date.now();
   const rows = recallByKeyword(db, query, limit);
   const latencyMs = Date.now() - start;
@@ -593,7 +519,7 @@ function checkQmd(query: string): NormalizedRecallResult[] {
   return [{ id: "qmd-available", tier: "qmd", content: `qmd available for ${query}`, latencyMs: Date.now() - start }];
 }
 
-async function runCase(db: Database.Database, testCase: MemoryRecallEvalCase): Promise<MemoryRecallEvalResult> {
+async function runCase(db: SqliteDatabase, testCase: MemoryRecallEvalCase): Promise<MemoryRecallEvalResult> {
   const trace: MemoryRecallTraceEvent[] = [];
   const tiers: MemoryRecallEvalResult["tiers"] = [];
   const retrieved: NormalizedRecallResult[] = [];
@@ -650,7 +576,7 @@ async function runCase(db: Database.Database, testCase: MemoryRecallEvalCase): P
   };
 }
 
-export async function runMemoryRecallEvalSuite(options: { mode?: MemoryEvalMode; db?: Database.Database } = {}): Promise<MemoryEvalRun> {
+export async function runMemoryRecallEvalSuite(options: { mode?: MemoryEvalMode; db?: SqliteDatabase } = {}): Promise<MemoryEvalRun> {
   const db = options.db ?? getDb();
   const mode = options.mode ?? "gold";
   const startedAt = new Date().toISOString();

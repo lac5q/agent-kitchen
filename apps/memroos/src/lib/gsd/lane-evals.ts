@@ -3,7 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import type Database from "better-sqlite3";
 
-import type { AgentContextLane } from "@/lib/agent-context-packet";
+import type { AgentContextLane } from "@/lib/agent/context-packet";
 
 export type GsdLaneEvalMetric =
   | "source_coverage"

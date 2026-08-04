@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { updateDocumentDirectoryEntry, deleteDocumentDirectoryEntry } from "@/lib/write-rules";
 import { getDb } from "@/lib/db";
 

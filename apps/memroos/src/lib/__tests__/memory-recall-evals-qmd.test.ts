@@ -10,7 +10,7 @@ vi.mock("child_process", () => ({
 }));
 
 import { initSchema } from "@/lib/db-schema";
-import { ensureMemoryEvalTables, runMemoryRecallEvalSuite } from "@/lib/memory-recall-evals";
+import { ensureMemoryEvalTables, runMemoryRecallEvalSuite } from "@/lib/memory/recall-evals";
 
 describe("memory recall eval qmd tier", () => {
   let db: Database.Database;

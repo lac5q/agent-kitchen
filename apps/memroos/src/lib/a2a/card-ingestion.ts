@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { registerAgent } from "@/lib/agent-registry";
+import { registerAgent } from "@/lib/agent/registry";
 import type {
   AgentLocation,
   AgentPlatform,

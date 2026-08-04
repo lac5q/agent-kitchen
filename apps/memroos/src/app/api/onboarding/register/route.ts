@@ -3,8 +3,8 @@ import {
   consumeAgentOnboardingToken,
   OnboardingTokenReplayError,
   verifyAgentOnboardingToken,
-} from "@/lib/agent-onboarding";
-import { AgentRegistrationError, getRegisteredAgent, registerAgent } from "@/lib/agent-registry";
+} from "@/lib/agent/onboarding";
+import { AgentRegistrationError, getRegisteredAgent, registerAgent } from "@/lib/agent/registry";
 import { getDb } from "@/lib/db";
 import type { AgentLocation, AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 

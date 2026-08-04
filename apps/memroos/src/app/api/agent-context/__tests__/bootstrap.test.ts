@@ -27,8 +27,8 @@ async function loadModules() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
   const dbModule = await import("@/lib/db");
-  const registryModule = await import("@/lib/agent-registry");
-  const busModule = await import("@/lib/agent-context-bus");
+  const registryModule = await import("@/lib/agent/registry");
+  const busModule = await import("@/lib/agent/context-bus");
   const auditModule = await import("@/lib/audit");
   return {
     getDb: dbModule.getDb,

@@ -22,7 +22,7 @@
 // `PolicyObject` / `PolicySubject` fields — dimension rules are JSON-loaded
 // and the matcher is string-based. Stronger typing at the request layer
 // is the caller's responsibility (see `@/lib/vault/types` and
-// `@/lib/recollection-policy`).
+// `@/lib/memory/recollection`).
 
 /**
  * Subject of a policy request — who is asking.

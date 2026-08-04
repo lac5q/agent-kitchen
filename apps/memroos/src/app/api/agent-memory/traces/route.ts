@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory-trace-observability";
+import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory/trace-observability";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function POST(req: Request) {

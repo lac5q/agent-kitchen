@@ -15,10 +15,10 @@ export async function register() {
       // Another memroos process owns the schedulers; serve HTTP only.
       return;
     }
-    const { startConsolidationScheduler } = await import('./lib/memory-consolidation');
-    const { startDecayScheduler } = await import('./lib/memory-decay');
-    const { startRetentionExpiryScheduler } = await import('./lib/memory-retention-expiry-scheduler');
-    const { startGraphCatchupScheduler } = await import('./lib/memory-graph-catchup-scheduler');
+    const { startConsolidationScheduler } = await import('./lib/memory/consolidation-scheduler');
+    const { startDecayScheduler } = await import('./lib/memory/decay');
+    const { startRetentionExpiryScheduler } = await import('./lib/memory/retention-expiry-scheduler');
+    const { startGraphCatchupScheduler } = await import('./lib/memory/graph-catchup-scheduler');
     const { startWikiDigestScheduler } = await import('./lib/wiki-digest-scheduler');
     const { prewarmResponseCaches } = await import('./lib/response-cache');
     const { startSlaScheduler } = await import('./lib/hil/sla-scheduler');

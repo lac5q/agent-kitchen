@@ -6,6 +6,7 @@ import {
   type MetricEnvelope,
   type MetricScope,
 } from "@/lib/metric-status";
+import { getAuditLogVersion, listAuditLog } from "@/lib/store/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -75,24 +76,7 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl ?? new URL(req.url);
   const limit = clampLimit(url.searchParams.get("limit"));
   const db = getDb();
-  const version = db
-    .prepare(
-      `SELECT
-         COUNT(*) as count,
-         MAX(id) as maxId,
-         MAX(timestamp) as lastTimestamp,
-         (
-           SELECT group_concat(id || ':' || timestamp || ':' || action || ':' || target || ':' || severity, '|')
-           FROM (
-             SELECT id, timestamp, action, target, severity
-             FROM audit_log
-             ORDER BY id DESC
-             LIMIT 20
-           )
-         ) as fingerprint
-       FROM audit_log`
-    )
-    .get() as { count: number; maxId: number | null; lastTimestamp: string | null; fingerprint: string | null };
+  const version = getAuditLogVersion(db);
   return Response.json(
     await responseCache.getOrSet(
       "security-report",
@@ -107,14 +91,7 @@ export async function GET(req: NextRequest) {
 function buildSecurityReport(limit: number) {
   const db = getDb();
 
-  const rows = db
-    .prepare(
-      `SELECT id, actor, action, target, detail, severity, timestamp
-       FROM audit_log
-       ORDER BY timestamp DESC
-       LIMIT 250`
-    )
-    .all() as AuditRow[];
+  const rows = listAuditLog(db, 250) as AuditRow[];
 
   const securityRows = rows.filter(isSecurityEvent);
   const timeline = securityRows.slice(0, limit).map((row) => ({

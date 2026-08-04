@@ -32,7 +32,7 @@ import {
   type OutboundPolicy,
   type OutboundReceipt,
 } from "../belief/outbound-policy";
-import type { BeliefStage } from "../recollection-policy";
+import type { BeliefStage } from "../memory/recollection";
 
 // ---------------------------------------------------------------------------
 // Case schema

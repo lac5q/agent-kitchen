@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/memory-recall-evals", () => ({
+vi.mock("@/lib/memory/recall-evals", () => ({
   getLatestMemoryEvalRun: vi.fn(),
   runMemoryRecallEvalSuite: vi.fn(),
 }));
@@ -10,7 +10,7 @@ async function loadRoutes() {
   vi.resetModules();
   const latestRoute = await import("../latest/route");
   const runRoute = await import("../run/route");
-  const evals = await import("@/lib/memory-recall-evals");
+  const evals = await import("@/lib/memory/recall-evals");
   return { latestRoute, runRoute, evals };
 }
 

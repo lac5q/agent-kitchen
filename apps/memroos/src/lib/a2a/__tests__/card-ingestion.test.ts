@@ -42,7 +42,7 @@ async function loadIngestion() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
   const ingestion = await import("../card-ingestion");
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const dbModule = await import("@/lib/db");
   return { ...ingestion, ...registry, closeDb: dbModule.closeDb };
 }

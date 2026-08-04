@@ -1,10 +1,10 @@
-import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent/registry";
 import { resolveViewer } from "@/lib/auth/viewer";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import {
   classifyLiveness,
   type LivenessObservation,
-} from "@/lib/agent-liveness";
+} from "@/lib/agent/liveness";
 import { metricEnvelope, type MetricEnvelope, type MetricScope } from "@/lib/metric-status";
 import type { RegisteredAgent } from "@/types";
 

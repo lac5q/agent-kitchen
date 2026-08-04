@@ -1,14 +1,21 @@
 import crypto from "crypto";
-import type Database from "better-sqlite3";
 import { recordEfficiencyEvent, type RetrievalTracePayload } from "@/lib/efficiency-telemetry";
-import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory-recall-evals";
+import type { getDb } from "@/lib/db";
+import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory/recall-evals";
 import type {
   BeliefStage,
   IgnoredRecollectionCandidate,
   RecollectionDecisionKind,
   RecollectionReason,
   RecollectionReliance,
-} from "@/lib/recollection-policy";
+} from "@/lib/memory/recollection";
+import {
+  memoryTraceGovernance,
+  readMemoryTrace,
+  writeMemoryTrace,
+} from "@/lib/store/memory";
+
+type SqliteDatabase = ReturnType<typeof getDb>;
 
 export type FailureClassification =
   | "retrieval_miss"
@@ -40,6 +47,14 @@ export interface RecollectionTraceReceipt {
     reason: IgnoredRecollectionCandidate["reason"];
     score: number;
   }>;
+  /** Pointer-only probe receipts; never include candidate text or payloads. */
+  tiersSearched?: string[];
+  tierStatuses?: Record<string, {
+    status: "ok" | "empty" | "degraded" | "unavailable" | "blocked";
+    count?: number;
+  }>;
+  truncated?: boolean;
+  reasonCode?: string;
   ontology?: {
     ontologyId: string;
     ontologyVersion: string;
@@ -137,12 +152,28 @@ function recollectionPayload(receipt: RecollectionTraceReceipt | undefined): Par
     })),
     beliefStageCounts: beliefStageCounts(receipt),
     recollectionTiming: receipt.timing,
+    recollectionTiersSearched: receipt.tiersSearched,
+    recollectionTierStatuses: receipt.tierStatuses,
+    recollectionTruncated: receipt.truncated,
+    recollectionReasonCode: receipt.reasonCode,
+    recollectionReceipt: {
+      decision: receipt.decision,
+      timing: receipt.timing,
+      reasons: receipt.reasons,
+      skipReason: receipt.skipReason,
+      injected: receipt.injected,
+      ignored: receipt.ignored,
+      tiersSearched: receipt.tiersSearched,
+      tierStatuses: receipt.tierStatuses,
+      truncated: receipt.truncated,
+      reasonCode: receipt.reasonCode,
+    },
     ontology: receipt.ontology,
   };
 }
 
 export function recordMemoryTrace(
-  db: Database.Database,
+  db: SqliteDatabase,
   input: MemoryTraceInput
 ): MemoryTrace {
   if (!input.runId?.trim()) throw new Error("runId is required");
@@ -159,26 +190,22 @@ export function recordMemoryTrace(
   const proposedRepair = input.proposedRepair ?? null;
   const createdAt = nowIso();
 
-  db.prepare(
-    `INSERT INTO agent_memory_traces (
-       id, tenant_id, task_id, agent_id, run_id, causal_path_json,
-       failure_classification, root_cause, replay_handle, proposed_repair, created_at
-     ) VALUES (
-       ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?
-     )`
-  ).run(
-    id,
-    tenantId,
-    taskId,
-    agentId,
-    input.runId,
-    causalPathJson,
-    failureClassification,
-    rootCause,
-    replayHandle,
-    proposedRepair,
-    createdAt
+  writeMemoryTrace(
+    db,
+    {
+      id,
+      tenantId,
+      taskId,
+      agentId,
+      runId: input.runId,
+      causalPathJson,
+      failureClassification,
+      rootCause,
+      replayHandle,
+      proposedRepair,
+      createdAt,
+    },
+    memoryTraceGovernance({ runId: input.runId, agentId }),
   );
 
   const retrievalTracePayload: RetrievalTracePayload = {
@@ -215,17 +242,11 @@ export function recordMemoryTrace(
 }
 
 export function getMemoryTrace(
-  db: Database.Database,
+  db: SqliteDatabase,
   tenantId: string,
   runId: string
 ): MemoryTrace | null {
-  const row = db
-    .prepare(
-      `SELECT * FROM agent_memory_traces
-       WHERE tenant_id = ? AND run_id = ?
-       ORDER BY created_at DESC LIMIT 1`
-    )
-    .get(tenantId, runId) as Record<string, unknown> | undefined;
+  const row = readMemoryTrace(db, tenantId, runId);
 
   if (!row) return null;
 
@@ -258,7 +279,7 @@ export function getMemoryTraceTimeline(trace: MemoryTrace): string[] {
   }
   timeline.push(`[Retrieval Query] "${path.retrievalQuery}"`);
   timeline.push(`[Retrieved Candidates] Fetched ${path.retrievedCandidates.length} potential memories.`);
-  
+
   for (const filter of path.policyFilters) {
     timeline.push(`[Policy Decision] Memory ${filter.id}: ${filter.decision.toUpperCase()} (${filter.reason})`);
   }

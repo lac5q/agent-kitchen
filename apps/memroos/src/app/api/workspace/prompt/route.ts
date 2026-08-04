@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { promptWorkspaceSelection } from "@/lib/workspace";
 import { getDb } from "@/lib/db";
 

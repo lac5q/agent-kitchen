@@ -2,7 +2,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory-trace-observability";
+import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory/trace-observability";
 import { initSchema } from "@/lib/db-schema";
 import { listEfficiencyEvents } from "@/lib/efficiency-telemetry";
 
@@ -263,5 +263,75 @@ describe("memory-trace observability", () => {
     });
     expect(JSON.stringify(payload)).not.toContain("Gold operational memory");
     expect(JSON.stringify(payload)).not.toContain("Silver candidate memory");
+  });
+
+  it("emits exactly one retrieval_trace for each served and skipped probe", () => {
+    recordMemoryTrace(db, {
+      runId: "run-probe-served",
+      taskId: "task-probe-served",
+      agentId: "agent-prior-work",
+      causalPath: {
+        contextAssembly: "prior_work_probe",
+        retrievalQuery: "onboarding rate limit",
+        retrievedCandidates: [{ id: "vector:memory-1", content: "", score: 0.91 }],
+        policyFilters: [{ id: "vector:memory-1", decision: "allow", reason: "threshold_and_policy_allowed" }],
+        timingGate: "before_plan",
+        promptInclusion: false,
+        recollection: {
+          decision: "search_required",
+          timing: "before_plan",
+          reasons: ["task_has_project_ref"],
+          skipReason: null,
+          injected: [{
+            id: "vector:memory-1",
+            tier: "vector",
+            beliefStage: "gold_operational_truth",
+            reliance: "direct_truth",
+            score: 0.91,
+          }],
+          ignored: [],
+          tiersSearched: ["episodic", "vector", "graph"],
+          tierStatuses: { vector: { status: "ok", count: 1 } },
+          truncated: false,
+        },
+      },
+    });
+    recordMemoryTrace(db, {
+      runId: "run-probe-skipped",
+      taskId: "task-probe-skipped",
+      agentId: "agent-prior-work",
+      causalPath: {
+        contextAssembly: "prior_work_probe",
+        retrievalQuery: "format this JSON",
+        retrievedCandidates: [],
+        policyFilters: [],
+        timingGate: "before_tool",
+        promptInclusion: false,
+        recollection: {
+          decision: "search_skipped",
+          timing: "before_tool_use",
+          reasons: ["low_memory_need", "no_stable_entities"],
+          skipReason: "low_signal",
+          injected: [],
+          ignored: [],
+          tiersSearched: [],
+          tierStatuses: {},
+          reasonCode: "low_signal",
+        },
+      },
+    });
+
+    expect(listEfficiencyEvents(db, { eventType: "retrieval_trace", taskId: "task-probe-served" })).toHaveLength(1);
+    expect(listEfficiencyEvents(db, { eventType: "retrieval_trace", taskId: "task-probe-skipped" })).toHaveLength(1);
+    expect(listEfficiencyEvents(db, { eventType: "retrieval_trace", taskId: "task-probe-served" })[0].payload).toMatchObject({
+      recollectionDecision: "search_required",
+      recollectionTiersSearched: ["episodic", "vector", "graph"],
+      recollectionReceipt: { decision: "search_required" },
+    });
+    expect(listEfficiencyEvents(db, { eventType: "retrieval_trace", taskId: "task-probe-skipped" })[0].payload).toMatchObject({
+      recollectionDecision: "search_skipped",
+      recollectionReasonCode: "low_signal",
+      recollectionReceipt: { decision: "search_skipped" },
+    });
   });
 });

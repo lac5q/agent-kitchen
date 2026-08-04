@@ -7,13 +7,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { clearAuthRateLimit } from "@/lib/auth/rate-limit";
 
 vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   authenticateAgentHeaders: vi.fn(() => null),
   getRemoteAgents: vi.fn(() => []),
   listAllAgentsUnscoped: vi.fn(() => []),
   authenticateUser: vi.fn(() => null),
 }));
-vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
+vi.mock("@/lib/store/audit", () => ({ writeAuditLogFromEntry: vi.fn() }));
 vi.mock("@/lib/content-scanner", () => ({ scanContent: vi.fn() }));
 vi.mock("@/lib/iris-scanner", () => ({ scanIrisPreflight: vi.fn() }));
 vi.mock("@/lib/security-policy", () => ({

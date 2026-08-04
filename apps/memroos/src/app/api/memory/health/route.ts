@@ -1,5 +1,5 @@
 import { apiError } from "@/lib/api-error";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { getDb } from "@/lib/db";
 import { checkGraphHealth, checkVectorHealth, type MemoryTierHealth } from "@/lib/memory/backends";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";

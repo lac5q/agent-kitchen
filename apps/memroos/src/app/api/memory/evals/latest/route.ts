@@ -1,4 +1,4 @@
-import { getLatestMemoryEvalRun } from "@/lib/memory-recall-evals";
+import { getLatestMemoryEvalRun } from "@/lib/memory/recall-evals";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export const dynamic = "force-dynamic";

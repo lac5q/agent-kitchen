@@ -2,7 +2,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createAgentVersion, evaluateReleaseGates, promoteAgentVersion, rollbackAgentVersion, listAgentVersions } from "@/lib/agent-cicd-gates";
+import { createAgentVersion, evaluateReleaseGates, promoteAgentVersion, rollbackAgentVersion, listAgentVersions } from "@/lib/agent/cicd-gates";
 import { initSchema } from "@/lib/db-schema";
 
 let db: Database.Database;

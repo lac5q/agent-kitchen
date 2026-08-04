@@ -14,7 +14,7 @@
  * the single chokepoint the rest of the codebase should funnel through when
  * a bundle/list is about to leave the trust boundary.
  */
-import type { BeliefStage } from "../recollection-policy";
+import type { BeliefStage } from "../memory/recollection";
 
 import {
   type FilteredClaim,

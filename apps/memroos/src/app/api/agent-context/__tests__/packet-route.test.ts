@@ -11,7 +11,7 @@ const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes.db");
 async function loadRoute() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const route = await import("../route");
   const dbModule = await import("@/lib/db");
   return {
@@ -98,5 +98,33 @@ describe("GET /api/agent-context", () => {
       }) as any
     );
     expect(invalidLane.status).toBe(400);
+  });
+
+  it("builds a pointer-only context packet from a topic without a goal id", async () => {
+    const { route, registerAgent } = await loadRoute();
+    const agent = registerAgent({
+      id: "agent-topic",
+      name: "Topic Agent",
+      role: "Worker",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+
+    const response = await route.GET(
+      new Request("http://localhost/api/agent-context?topic=prior%20onboarding%20work&agent=agent-topic", {
+        headers: { authorization: `Bearer ${agent.apiKey}` },
+      }) as any,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.packet.goal.id).toMatch(/^topic:/);
+    expect(payload.packet.goal.title).toBe("prior onboarding work");
+    expect(Array.isArray(payload.packet.memories)).toBe(true);
+    expect(payload.packet.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "prior_work_topic" }),
+    ]));
+    expect(JSON.stringify(payload)).not.toContain("snippet");
   });
 });

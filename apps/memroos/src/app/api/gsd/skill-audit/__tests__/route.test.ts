@@ -11,7 +11,7 @@ const TEST_DB_PATH = path.join(TEST_DB_DIR, "skill-audit.db");
 async function loadRoute() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const route = await import("../route");
   const dbModule = await import("@/lib/db");
   return {

@@ -5,7 +5,7 @@
 
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 
 export const dynamic = "force-dynamic";
 

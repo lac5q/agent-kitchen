@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { ingestPlatformMessageMemory } from "@/lib/message-memory";

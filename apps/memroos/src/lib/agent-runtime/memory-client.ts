@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import type { MemoryRecallTier, MemoryRecallTiming } from "../memory-recall-evals";
+import type { MemoryRecallTier, MemoryRecallTiming } from "../memory/recall-evals";
 import {
   assembleRecollectionContextPack,
   decideRecollection,
@@ -13,7 +13,7 @@ import {
   type RecollectionPolicyRisk,
   type RecollectionSourceHealth,
   type RecollectionTriggerInput,
-} from "../recollection-policy";
+} from "../memory/recollection";
 
 export interface RuntimeMemoryInput {
   content: string;
@@ -245,7 +245,31 @@ export function buildContextInjection(root: string, topic: string, options: Cont
       text: "",
       memories: [],
       recollection,
-      contextPack: { injected: [], ignored: [] },
+      contextPack: {
+        injected: [],
+        ignored: [],
+        entries: [],
+        context: "",
+        receipt: {
+          action: "skip",
+          timing: recollection.timing,
+          triggerScore: 0,
+          triggers: [],
+          authorization: "allowed",
+          reason: recollection.skipReason ?? "recollection skipped",
+          retrievedCount: 0,
+          injectedCount: 0,
+          ignoredCount: 0,
+          queryIds: [],
+          injectedIds: [],
+          ignored: [],
+          telemetry: {
+            efftel01RetrievalBeforeWork: false,
+            efftel04RediscoveredFactGuard: false,
+            efftel05OperatorReaskGuard: false,
+          },
+        },
+      },
     };
   }
 

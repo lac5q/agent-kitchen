@@ -1,11 +1,11 @@
 // @vitest-environment node
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { buildAgentContextPacket, readAgentRunLedger } from "@/lib/agent-context-packet";
-import { createAgentCheckpoint } from "@/lib/agent-checkpoints";
-import { ensureAgentContextBusSchema, postAgentContextMessage } from "@/lib/agent-context-bus";
+import { buildAgentContextPacket, readAgentRunLedger } from "@/lib/agent/context-packet";
+import { createAgentCheckpoint } from "@/lib/agent/checkpoints";
+import { ensureAgentContextBusSchema, postAgentContextMessage } from "@/lib/agent/context-bus";
 import { initSchema } from "@/lib/db-schema";
-import { recordMemoryTrace } from "@/lib/memory-trace-observability";
+import { recordMemoryTrace } from "@/lib/memory/trace-observability";
 
 const GOAL_ID = "phase-132-fixture";
 const FIXED_NOW = new Date("2026-07-06T12:00:00.000Z");

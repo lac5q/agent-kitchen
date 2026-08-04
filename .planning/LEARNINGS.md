@@ -323,3 +323,28 @@
   unsandboxed run: 0 failures. Correct call, correctly evidenced.
 - Design note that made review cheap: the contract enumerated each defect with file:line and a
   pre-made decision, so the executor never had to invent a security policy. Zero escalations.
+
+## BM-20260803 phase-188/189 structural-debt (v8.29 STORE-04 + LIBNORM-02)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (MAX effort, per operator directive) | Result: pass
+- Both ratchet gates moved DOWN, which was the acceptance criterion: sqlite importers 116 -> 113,
+  lib/ root files 75 -> 53 (22 modules into lib/memory/ and lib/agent/).
+- Full suite 3733/0 (director, unsandboxed). Typecheck 0, lint 0 errors.
+- `@ts-expect-error` proof landed: an audit write without GovernanceContext does not typecheck —
+  the property STORE-01 was actually buying, not just a directory move.
+- Executor honesty, third time: reported callers it deliberately left behind (messages table is
+  shared core storage; db-schema DDL is STORE-02 scope) rather than forcing the number lower.
+  A smaller honest reduction beats a broken large one — that instruction earned its place.
+- GitNexus `rename` was unavailable in-session; executor said so and used actual-import-graph
+  updates instead of find-and-replace. Correct fallback, correctly disclosed.
+
+## BM-20260803 phase-191 prior-work-probe (v8.30 PRIORWORK-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3739/0 (director). Python knowledge-mcp 110/110. lib-boundary + route-auth gates green.
+- The Phase 118 kernel finally has a live caller: both duplicate modules deleted, one canonical
+  lib/memory/recollection/ (types/policy/queries/ranking/context-pack), BeliefStage path preserved.
+- Director review lesson: my first grep for `retrieval_trace` in the route found nothing and looked
+  like a missing requirement. It was delegation — the route calls recordMemoryTrace, which emits the
+  efficiency event internally. Verify through the call graph before calling a requirement unmet;
+  GitNexus `context` on the symbol answered it faster than grepping.
+- Executor lane honesty (4th time): reported MiniMax-M3 unavailable and named the fallback lane it
+  actually used, per the beastmode MODEL DRIFT rule, rather than implying the cheap lane ran.

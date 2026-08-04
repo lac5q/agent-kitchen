@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { authenticateAgentHeaders, recordToolOutcome } from "@/lib/agent-registry";
+import { authenticateAgentHeaders, recordToolOutcome } from "@/lib/agent/registry";
 import { appendToolAttentionOutcome } from "@/lib/tool-attention";
 
 export const dynamic = "force-dynamic";

@@ -6,7 +6,7 @@ import path from "path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { captureCodingAgentSession, buildCodingAgentHandoffPack } from "@/lib/agent-memory-continuity";
+import { captureCodingAgentSession, buildCodingAgentHandoffPack } from "@/lib/agent/memory-continuity";
 import { initSchema } from "@/lib/db-schema";
 
 let db: Database.Database;

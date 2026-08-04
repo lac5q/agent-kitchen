@@ -7,7 +7,7 @@ import path from "path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { captureCodingAgentSession } from "@/lib/agent-memory-continuity";
+import { captureCodingAgentSession } from "@/lib/agent/memory-continuity";
 import { initSchema } from "@/lib/db-schema";
 import {
   looksLikeTranscriptDump,

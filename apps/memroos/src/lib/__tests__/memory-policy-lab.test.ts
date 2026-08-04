@@ -5,7 +5,7 @@ import {
   rankMemoryPolicies,
   type MemoryPolicyVariant,
   type PolicyEvaluator,
-} from "../memory-policy-lab";
+} from "../memory/policy-lab";
 import type { EvalRunResult } from "../evals/types";
 
 // ---------------------------------------------------------------------------

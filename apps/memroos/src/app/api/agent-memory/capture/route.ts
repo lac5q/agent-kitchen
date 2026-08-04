@@ -1,4 +1,4 @@
-import { captureCodingAgentSession, type CodingAgentCaptureInput } from "@/lib/agent-memory-continuity";
+import { captureCodingAgentSession, type CodingAgentCaptureInput } from "@/lib/agent/memory-continuity";
 import { getDb } from "@/lib/db";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 

@@ -23,7 +23,7 @@
 import {
   authenticateAgentHeaders,
   recordSkillReport,
-} from "@/lib/agent-registry";
+} from "@/lib/agent/registry";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

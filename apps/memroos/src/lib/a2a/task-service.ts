@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { getDb } from "@/lib/db";
 import { scanIrisPreflight } from "@/lib/iris-scanner";
 import { checkA2aSendPolicy } from "@/lib/security-policy";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import type { RegisteredAgent } from "@/types";
 import { A2aError } from "./errors";
 import type { A2aMessage, A2aTask } from "./types";

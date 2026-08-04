@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import type { VaultDomain, VaultPolicy, VaultSensitivity, VaultVisibility } from "@/lib/vault/types";
 
 type MemoryUseDecision = "allow" | "deny" | "redact" | "review-required";

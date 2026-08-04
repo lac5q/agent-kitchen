@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AgentLivenessBadge } from "@/components/agents/agent-liveness-badge";
 import { PLATFORM_LABELS, STATUS_COLORS } from "@/lib/ui-constants";
 import type { RegisteredAgent } from "@/types";
-import type { LivenessObservation } from "@/lib/agent-liveness";
+import type { LivenessObservation } from "@/lib/agent/liveness";
 
 export interface RegistryAgentRow extends RegisteredAgent {
   liveness?: LivenessObservation;
