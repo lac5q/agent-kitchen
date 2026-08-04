@@ -223,25 +223,35 @@ def merge_codex_toml(path):
     path.write_text(text, encoding="utf-8")
     remember("write-codex-toml", "ok", str(path))
 
+# CLIs whose 'mcp login' can run the per-user OAuth grant from the terminal.
+# This is the standard for onboarding (operator directive 2026-08-03): if the
+# client's CLI can start the sign-in, the script starts it — the invitee should
+# never be left hunting for a hidden authentication step.
+LOGIN_CLIS = ("claude", "codex")
+
+def finish_mcp_login(binary):
+    # The one step 'mcp add' cannot do: the per-user OAuth grant. Run it now,
+    # while the invitee is still at the keyboard — this is the step Eric's
+    # onboarding silently parked on (2026-08-03). Inherit stdio so the sign-in
+    # URL stays visible when no browser can open (SSH).
+    if not shutil.which(binary):
+        return
+    print()
+    print(f"Opening the memroos sign-in ({binary} mcp login memroos)...")
+    print("A browser window should open — sign in as YOURSELF.")
+    print("On a remote shell, visit the printed URL instead.")
+    print(f"(Ctrl-C skips this; rerun later with: {binary} mcp login memroos)")
+    try:
+        login = subprocess.run([binary, "mcp", "login", "memroos"])
+        remember(f"{binary}-mcp-login", "ok" if login.returncode == 0 else "incomplete", f"exit {login.returncode}")
+    except KeyboardInterrupt:
+        remember(f"{binary}-mcp-login", "skipped", "interrupted by user")
+        print(f"Skipped. Finish later with: {binary} mcp login memroos")
+
 def install_claude():
     ok = run_if_available("claude", ["mcp", "add", "--transport", "http", "memroos", "--scope", "user", mcp_url])
-    if ok and shutil.which("claude"):
-        # 'mcp add' registers the server but cannot complete the one step that
-        # needs a human: the per-user OAuth grant. 'claude mcp login' starts it
-        # right now, while the invitee is still at the keyboard — this is the
-        # step Eric's onboarding silently parked on (2026-08-03). Inherit stdio
-        # so the sign-in URL stays visible when no browser can open (SSH).
-        print()
-        print("Opening the memroos sign-in for Claude Code (claude mcp login memroos)...")
-        print("A browser window should open — sign in as YOURSELF.")
-        print("On a remote shell, visit the printed URL instead.")
-        print("(Ctrl-C skips this; you can rerun later with: claude mcp login memroos)")
-        try:
-            login = subprocess.run(["claude", "mcp", "login", "memroos"])
-            remember("claude-mcp-login", "ok" if login.returncode == 0 else "incomplete", f"exit {login.returncode}")
-        except KeyboardInterrupt:
-            remember("claude-mcp-login", "skipped", "interrupted by user")
-            print("Skipped. Finish later with: claude mcp login memroos")
+    if ok:
+        finish_mcp_login("claude")
     return ok
 
 def install_cline():
@@ -316,6 +326,7 @@ def install_droid():
 
 def install_codex():
     if run_if_available("codex", ["mcp", "add", "memroos", "--url", mcp_url]):
+        finish_mcp_login("codex")
         return True
     merge_codex_toml(home / ".codex" / "config.toml")
     return True
@@ -397,11 +408,11 @@ print()
 print("== MemroOS setup ==")
 print("  [done] Account + agent key installed")
 print("  [done] memroos registered in your client")
-if platform == "claude":
+if platform in LOGIN_CLIS and shutil.which(platform):
     print("  [ 1 ]  If a browser sign-in just completed above: nothing left, you are DONE.")
     print("         If it did not, run this and sign in when the browser opens:")
     print()
-    print("           claude mcp login memroos")
+    print(f"           {platform} mcp login memroos")
 else:
     print("  [ 1 ]  One step left: open your client's MCP server list, choose")
     print("         memroos, and sign in when the browser opens.")

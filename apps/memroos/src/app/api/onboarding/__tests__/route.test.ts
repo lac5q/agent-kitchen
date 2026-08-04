@@ -359,6 +359,75 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
     }
   });
 
+  it.each(["claude", "codex"] as const)(
+    "runs the per-user MCP sign-in during %s bootstrap",
+    async (binary) => {
+      const { inviteRoute, scriptRoute } = await loadRoutes();
+      const agentId = `${binary}-login-agent`;
+      const inviteResponse = await inviteRoute.POST(
+        new Request("https://memroos.example.test/api/onboarding/invite", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-memroos-operator-key": "operator-secret",
+          },
+          body: JSON.stringify({ agentId, platform: binary }),
+        })
+      );
+      const invite = await inviteResponse.json();
+      const scriptResponse = await scriptRoute.GET(
+        new Request(`https://memroos.example.test/api/onboarding/script?token=${encodeURIComponent(invite.token)}`)
+      );
+      const script = await scriptResponse.text();
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${binary}-login-onboarding-`));
+
+      try {
+        const scriptPath = path.join(tempRoot, "onboard");
+        const binDir = path.join(tempRoot, "bin");
+        const home = path.join(tempRoot, "home");
+        const callsFile = path.join(tempRoot, "calls.log");
+        fs.mkdirSync(binDir, { recursive: true });
+        fs.mkdirSync(home, { recursive: true });
+        fs.writeFileSync(scriptPath, script, { mode: 0o700 });
+        fs.writeFileSync(
+          path.join(binDir, "curl"),
+          `#!/usr/bin/env bash
+printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"${agentId}"},"apiKey":"ak_${binary}_login_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
+`,
+          { mode: 0o700 }
+        );
+        // Stub the client CLI: record every invocation, succeed at everything.
+        fs.writeFileSync(
+          path.join(binDir, binary),
+          `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${callsFile}"
+exit 0
+`,
+          { mode: 0o700 }
+        );
+
+        const stdout = execFileSync(
+          "bash",
+          [scriptPath, "--id", agentId, "--name", `${binary} Login Agent`, "--platform", binary],
+          { env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}` }, stdio: "pipe" }
+        ).toString();
+
+        const calls = fs.readFileSync(callsFile, "utf8").trim().split("\n");
+        const addIndex = calls.findIndex((line) => line.includes("mcp add") && line.includes("memroos"));
+        const loginIndex = calls.findIndex((line) => line === "mcp login memroos");
+        // The standard: registration first, then the sign-in is STARTED for the
+        // invitee — never left as an unstated later step.
+        expect(addIndex).toBeGreaterThanOrEqual(0);
+        expect(loginIndex).toBeGreaterThan(addIndex);
+        expect(stdout).toContain("== MemroOS setup ==");
+        expect(stdout).toContain("you are DONE");
+        expect(stdout).toContain(`${binary} mcp login memroos`);
+      } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
   it.each(["cursor", "cline", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
