@@ -13,6 +13,20 @@ The current agent stays the director, reviewer, and merge gate. External models
 are bounded workers only. Never let a worker commit, push, access secrets, or
 claim final verification.
 
+## Goal memory checkpoints
+
+At the start of every Beastmode goal, call the named `memory_prior_work` probe
+with the goal statement, repo/project scope, and `timing: "before_plan"`.
+Record its returned `receipt` (or receipt id when supplied), including a typed
+`search_skipped` result, before dispatching any worker. Re-probe after a topic
+shift, unexpected error, repeated question, or before guessing at a convention.
+
+At goal close, make a governed `agent_memory_save` for durable decisions,
+outcomes, project facts, or handoff state with outcome, scope, entities, and
+provenance. If no learning is justified or the service is unavailable, record
+a typed skip/error receipt instead. The director owns both checkpoints and
+must verify the receipt; workers do not claim them.
+
 ## Worker Lanes
 
 Choose the lane that is installed and authenticated on the host:

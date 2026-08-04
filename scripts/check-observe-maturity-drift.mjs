@@ -48,6 +48,10 @@ export const DEFAULT_MATRIX_FILE = path.join(
   repoRoot,
   "docs/runtime-adapter-maturity.md"
 );
+export const DEFAULT_HERMES_PLUGIN_FILE = path.join(
+  repoRoot,
+  "integrations/hermes/plugins/memory/memroos/plugin.yaml"
+);
 
 /**
  * Parse the canonical catalog harness set. The catalog is a TypeScript module
@@ -169,20 +173,21 @@ export function extractInstallerTargetNames(sourceText) {
  * signal: row format is `| <Name> | <wave> | ... |`. Names like
  * "Factory/Droid" are normalized to the catalog key `factory`.
  */
-export function extractMatrixHarnessNames(markdownText) {
+export function extractMatrixHarnessRecords(markdownText) {
   if (typeof markdownText !== "string") {
-    throw new TypeError("extractMatrixHarnessNames: markdownText must be a string");
+    throw new TypeError("extractMatrixHarnessRecords: markdownText must be a string");
   }
   const sectionMatch = markdownText.match(
     /##\s+Observe capture matrix \(v8\.16\)[\s\S]*?(?=\n##\s|$)/
   );
   if (!sectionMatch) {
     throw new Error(
-      "extractMatrixHarnessNames: could not locate `## Observe capture matrix` section"
+      "extractMatrixHarnessRecords: could not locate `## Observe capture matrix` section"
     );
   }
   const section = sectionMatch[0];
   const rows = [];
+  let header = [];
   for (const line of section.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("|")) continue;
@@ -192,25 +197,33 @@ export function extractMatrixHarnessNames(markdownText) {
       .filter((cell) => cell.length > 0);
     if (cells.length < 2) continue;
     if (/^[-:]+$/.test(cells[0])) continue;
-    if (cells[0].toLowerCase() === "harness") continue;
+    if (cells[0].toLowerCase() === "harness") {
+      header = cells.map((cell) => cell.toLowerCase());
+      continue;
+    }
     rows.push(cells);
   }
   if (rows.length === 0) {
     throw new Error(
-      "extractMatrixHarnessNames: matrix section found but no harness rows detected"
+      "extractMatrixHarnessRecords: matrix section found but no harness rows detected"
     );
   }
-  const names = new Set();
-  for (const [harnessCell, , platformCell] of rows) {
+  const stripTics = (value) =>
+    String(value ?? "")
+      .replace(/`/g, "")
+      .trim()
+      .toLowerCase();
+  const platformIndex = Math.max(header.findIndex((cell) => cell.includes("platform")), 2);
+  const hookSupportIndex = header.findIndex((cell) => cell.includes("hook support"));
+  const installedHooksIndex = header.findIndex((cell) => cell.includes("installed hooks"));
+  const fallbackIndex = header.findIndex((cell) => cell.includes("fallback"));
+  return rows.map((cells) => {
+    const [harnessCell] = cells;
+    const platformCell = cells[platformIndex];
     // Prefer the lower-case platform key (column 3, `Platform key`) so
     // multi-platform rows like "Factory/Droid" collapse to "factory".
     // The cells in this doc are wrapped in backticks (e.g. `claude`); strip
     // them so they line up with the catalog's harness identifiers.
-    const stripTics = (value) =>
-      String(value ?? "")
-        .replace(/`/g, "")
-        .trim()
-        .toLowerCase();
     const platform = stripTics(platformCell) || stripTics(harnessCell);
     const candidates = platform
       .split(/[/,\s]+/)
@@ -219,17 +232,69 @@ export function extractMatrixHarnessNames(markdownText) {
     const canonical =
       candidates.find((value) => value && value !== "n/a") ||
       stripTics(harnessCell);
-    if (!canonical) continue;
-    names.add(canonical);
-  }
-  return [...names].sort();
+    return {
+      harness: canonical,
+      platform,
+      hookSupport: hookSupportIndex >= 0 ? stripTics(cells[hookSupportIndex]) : undefined,
+      installedHooks: installedHooksIndex >= 0 ? stripTics(cells[installedHooksIndex]) : undefined,
+      fallback: fallbackIndex >= 0 ? stripTics(cells[fallbackIndex]) : undefined,
+      cells,
+    };
+  }).filter((record) => Boolean(record.harness));
+}
+
+export function extractMatrixHarnessNames(markdownText) {
+  return [...new Set(extractMatrixHarnessRecords(markdownText).map((record) => record.harness))].sort();
 }
 
 /**
  * Compare three name sets. Returns a structured result so callers (tests and
  * the CLI entry point) can render consistent error output.
  */
-export function evaluateObserveMaturityDrift({ catalog, installer, matrix }) {
+export function evaluateHookCapabilityDrift({ matrixRecords = [], sidecarText = "", installerText = "", hermesPluginText = "" } = {}) {
+  const diagnostics = [];
+  const allowed = new Set(["native", "portable", "plugin", "none"]);
+  const records = Array.isArray(matrixRecords) ? matrixRecords.filter((record) => record && record.hookSupport) : [];
+  const catalogSupport = new Map();
+  if (sidecarText) {
+    for (const match of sidecarText.matchAll(/harness:\s*["']([a-z][a-z0-9-]*)["']([\s\S]*?)(?=\n\s*\},)/g)) {
+      const support = match[2].match(/hookSupport:\s*["'](native|portable|plugin|none)["']/);
+      if (support) catalogSupport.set(match[1], support[1]);
+    }
+  }
+  for (const record of records) {
+    const support = String(record.hookSupport).replace(/`/g, "").trim().toLowerCase();
+    const installed = String(record.installedHooks ?? "").toLowerCase();
+    const fallback = String(record.fallback ?? "").toLowerCase();
+    if (!allowed.has(support)) {
+      diagnostics.push(`${record.harness}: unsupported hook support claim ${support}`);
+      continue;
+    }
+    if (catalogSupport.has(record.harness) && catalogSupport.get(record.harness) !== support) {
+      diagnostics.push(`${record.harness}: matrix hookSupport=${support} disagrees with catalog hookSupport=${catalogSupport.get(record.harness)}`);
+    }
+    if (support === "none") {
+      if (installed && !/^(none|—|-)$/.test(installed)) diagnostics.push(`${record.harness}: hookSupport=none but installed hooks claim is ${installed}`);
+      if (fallback !== "skill+sidecar") diagnostics.push(`${record.harness}: hookSupport=none must retain skill+sidecar fallback`);
+      continue;
+    }
+    if (!installed.includes("memory-brief") || !installed.includes("capture-gate")) {
+      diagnostics.push(`${record.harness}: ${support} hook claim does not list memory-brief and capture-gate`);
+    }
+    if (support === "native" && (!/claude\)/.test(installerText) || !/upsert_session_hooks_json/.test(installerText) || !/SessionStart/.test(installerText))) {
+      diagnostics.push(`${record.harness}: native hook claim has no Claude installer backing`);
+    }
+    if (support === "portable" && (!/codex\)/.test(installerText) || !/\.codex\/hooks\.json/.test(installerText) || !/upsert_session_hooks_json/.test(installerText))) {
+      diagnostics.push(`${record.harness}: portable hook claim has no Codex hooks.json installer backing`);
+    }
+    if (support === "plugin" && (!/on_session_start/.test(hermesPluginText) || !/on_session_end/.test(hermesPluginText) || !/on_pre_compact/.test(hermesPluginText))) {
+      diagnostics.push(`${record.harness}: plugin hook claim has no Hermes lifecycle backing`);
+    }
+  }
+  return { ok: diagnostics.length === 0, diagnostics };
+}
+
+export function evaluateObserveMaturityDrift({ catalog, installer, matrix, matrixRecords = [], sidecarText = "", installerText = "", hermesPluginText = "" }) {
   const catalogSet = new Set(catalog);
   const installerSet = new Set(installer);
   const matrixSet = new Set(matrix);
@@ -281,6 +346,14 @@ export function evaluateObserveMaturityDrift({ catalog, installer, matrix }) {
   ];
   const diagnostics = [];
 
+  const hookCapability = evaluateHookCapabilityDrift({
+    matrixRecords,
+    sidecarText,
+    installerText,
+    hermesPluginText,
+  });
+  diagnostics.push(...hookCapability.diagnostics);
+
   if (missingFromMatrix.length)
     diagnostics.push(
       `Catalog has harness(es) missing from matrix: ${missingFromMatrix.join(", ")}`
@@ -316,7 +389,8 @@ export function evaluateObserveMaturityDrift({ catalog, installer, matrix }) {
   const hasHardDrift =
     missingFromMatrix.length > 0 ||
     missingFromCatalog.length > 0 ||
-    missingFromInstaller.length > 0;
+    missingFromInstaller.length > 0 ||
+    !hookCapability.ok;
 
   return {
     ok: !hasHardDrift,
@@ -327,6 +401,7 @@ export function evaluateObserveMaturityDrift({ catalog, installer, matrix }) {
     missingFromCatalog,
     missingFromInstaller,
     unexpectedInInstaller,
+    hookCapability,
     diagnostics,
   };
 }
@@ -396,12 +471,23 @@ export function runObserveMaturityDriftCheck(options = {}) {
   const sidecarText = fs.readFileSync(sources.sidecarPath, "utf8");
   const installerText = fs.readFileSync(sources.installerPath, "utf8");
   const matrixText = fs.readFileSync(sources.matrixPath, "utf8");
+  const hermesPluginPath = process.env.HERMES_PLUGIN_FILE || DEFAULT_HERMES_PLUGIN_FILE;
+  const hermesPluginText = fs.existsSync(hermesPluginPath) ? fs.readFileSync(hermesPluginPath, "utf8") : "";
 
   const catalog = extractObserveHarnessNames(sidecarText);
   const installer = extractInstallerTargetNames(installerText);
   const matrix = extractMatrixHarnessNames(matrixText);
+  const matrixRecords = extractMatrixHarnessRecords(matrixText);
 
-  const result = evaluateObserveMaturityDrift({ catalog, installer, matrix });
+  const result = evaluateObserveMaturityDrift({
+    catalog,
+    installer,
+    matrix,
+    matrixRecords,
+    sidecarText,
+    installerText,
+    hermesPluginText,
+  });
   result.sources = sources;
   return result;
 }

@@ -19,6 +19,7 @@ import type { ClaimCategory } from "../belief/types";
 import { DEFAULT_BELIEF_PROMOTION_CONFIG } from "../belief/config";
 import { ensureCanonicalUpperOntology } from "../ontology/registry";
 import { revokeOntologySource } from "../ontology/validity";
+import { runBeliefPromotion } from "../memory/belief-promotion-scheduler";
 
 const TENANT = "default-tenant";
 
@@ -1263,6 +1264,30 @@ describe("belief promotion pipeline", () => {
       },
     });
     expect(decision.kind).toBe("admitted");
+  });
+
+  it("promotes an eligible silver candidate on a scheduler cadence", () => {
+    const f = insertFixture(db, {
+      content: "SAVEQ project outcome: deployment passed for SKU-100.",
+      capturedAt: "2026-08-03T00:00:00.000Z",
+      category: "operational",
+    });
+    const summary = runBeliefPromotion({
+      db,
+      now: new Date("2026-08-04T00:00:00.000Z"),
+      minAgeMs: 0,
+      maxBatch: 10,
+    });
+
+    expect(summary.promoted).toBe(1);
+    expect(db.prepare("SELECT belief_stage FROM agent_memory_candidates WHERE id = ?").get(f.candidateId)).toEqual({
+      belief_stage: "gold_operational_truth",
+    });
+    const receipt = db.prepare(
+      "SELECT entry_hash, previous_entry_hash FROM belief_promotion_decisions WHERE candidate_id = ? AND decision_type = 'promoted'"
+    ).get(f.candidateId) as { entry_hash: string; previous_entry_hash: string | null };
+    expect(receipt.entry_hash).toMatch(/^sha256:/);
+    expect(receipt.previous_entry_hash).toBeNull();
   });
 
   it("policy_check_denies_restricted labels for promotion", () => {

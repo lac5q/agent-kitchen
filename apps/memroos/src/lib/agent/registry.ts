@@ -15,6 +15,7 @@ import type {
 import { getDb } from "@/lib/db";
 import { recordEfficiencyEvent, type MemoryWritePayload } from "@/lib/efficiency-telemetry";
 import { getAdapters } from "@/lib/memory/registry";
+import { ensureMemorySalience, reinforceMemorySalience, salienceTargetsFromMetadata } from "@/lib/memory/salience";
 
 export class AgentRegistrationError extends Error {
   constructor(readonly code: "agent_revoked", message: string) {
@@ -833,14 +834,14 @@ export function recordMemoryWrite(
   agentId: string,
   payload: MemoryWriteInput,
   result: Record<string, unknown> = {}
-): void {
+): number {
   const db = getDb();
   const metadata = payload.metadata ?? {};
   const dedupHash = memoryWriteDedupHash(payload);
   const priorWrite = priorMemoryWritePayload(dedupHash);
   const createdAt = normalizeIsoSeconds(nowIso());
 
-  db
+  const insertResult = db
     .prepare(
       `INSERT INTO agent_memory_writes (agent_id, memory_type, content_hash, metadata, result)
        VALUES (?, ?, ?, ?, ?)`
@@ -853,6 +854,16 @@ export function recordMemoryWrite(
       stringifyJson(result)
     );
 
+  const qualityReport = result.saveQuality;
+  const enrichment = result.enrichment;
+  const enrichmentRecord = enrichment && typeof enrichment === "object" && !Array.isArray(enrichment)
+    ? enrichment as Record<string, unknown>
+    : {};
+  const qualityScore = qualityReport && typeof qualityReport === "object" && !Array.isArray(qualityReport)
+    && typeof (qualityReport as Record<string, unknown>).score === "number"
+    ? (qualityReport as Record<string, number>).score
+    : undefined;
+
   recordEfficiencyEvent(db, {
     eventType: "memory_write",
     taskId: metadataString(metadata, ["taskId", "task_id"]) ?? null,
@@ -863,13 +874,24 @@ export function recordMemoryWrite(
       firstSeenAt: priorWrite?.payload.firstSeenAt ?? priorWrite?.createdAt ?? createdAt,
       dedupHash,
       isRediscovery: priorWrite !== null,
+      phase: "capture",
+      enrichmentStatus:
+        enrichmentRecord.status === "pending" || enrichmentRecord.status === "running" || enrichmentRecord.status === "completed" || enrichmentRecord.status === "retrying"
+          ? enrichmentRecord.status
+          : undefined,
+      queueDepth: typeof enrichmentRecord.queueDepth === "number" ? enrichmentRecord.queueDepth : undefined,
+      extractionLagMs: typeof enrichmentRecord.extractionLagMs === "number" ? enrichmentRecord.extractionLagMs : null,
+      qualityScore,
     },
   });
+
+  const writeId = Number(insertResult.lastInsertRowid);
+  ensureMemorySalience(db, "agent_memory_write", String(writeId), qualityScore ?? 1);
 
   // MEMX-3: route the write to the matching tier adapter so vector/graph tiers
   // actually persist, not just the audit row. Fire-and-forget; mem0 queue
   // buffers failures. Opt-in via env so existing tests stay green.
-  if (process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER === "1" && payload.type) {
+  if (process.env.MEMROOS_MEMORY_WRITE_PUSH_ADAPTER === "1" && result.deferAdapterPush !== true && payload.type) {
     const tier = payload.type as Parameters<typeof getAdapters>[0];
     const adapter = getAdapters(tier)[0];
     if (adapter && typeof payload.content === "string" && payload.content.length > 0) {
@@ -877,9 +899,10 @@ export function recordMemoryWrite(
         .write({ agent_id: agentId, content: payload.content, metadata })
         .catch((err: unknown) => {
           console.warn("[recordMemoryWrite] adapter push failed", tier, err);
-        });
+      });
     }
   }
+  return writeId;
 }
 
 export function recordToolOutcome(agentId: string, payload: ToolOutcomeInput): void {
@@ -892,6 +915,8 @@ export function recordToolOutcome(agentId: string, payload: ToolOutcomeInput): v
        VALUES (?, ?, ?, ?)`
     )
     .run(agentId, payload.toolId, payload.outcome, stringifyJson(metadata));
+
+  reinforceMemorySalience(db, salienceTargetsFromMetadata(metadata), payload.outcome);
 
   const sourceId = metadataString(metadata, ["sourceId", "source_id"]);
   const sourceHash = sourceReadHash(metadata);

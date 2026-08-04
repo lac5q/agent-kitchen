@@ -60,7 +60,7 @@ MEMORY_SERVICE_DIR = Path(__file__).resolve().parents[2] / "memory"
 if str(MEMORY_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(MEMORY_SERVICE_DIR))
 
-from provenance import extract_metadata, normalize_metadata, provenance_label  # noqa: E402
+from provenance import normalize_metadata  # noqa: E402
 
 try:
     from .capabilities import get_capabilities, open_workspace
@@ -378,8 +378,38 @@ def _recipes_catalog_path() -> Path:
 
 
 def _skills_root_public() -> Path:
-    """Public skills directory inside the knowledge repo."""
-    return _root() / "skills"
+    """Resolve the public skills directory with a MemroOS checkout fallback.
+
+    The knowledge corpus and the MemroOS application are commonly separate
+    checkouts.  Keep the corpus location first, then use the checkout's
+    canonical agent skills so the bootstrap still works when no external
+    ``$KNOWLEDGE_ROOT/skills`` directory is mounted.
+    """
+    configured_root = os.environ.get("KNOWLEDGE_ROOT", "").strip()
+    candidates = [
+        (_root() if not configured_root else Path(configured_root).expanduser().resolve()) / "skills",
+    ]
+
+    memroos_root = os.environ.get("MEMROOS_ROOT", "").strip()
+    if memroos_root:
+        candidates.append(Path(memroos_root).expanduser().resolve() / ".agents" / "skills")
+
+    # This is the repo-relative fallback when the launcher did not export
+    # MEMROOS_ROOT (for example, direct test/module execution).
+    candidates.append(Path(__file__).resolve().parents[3] / ".agents" / "skills")
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.is_dir():
+            return resolved
+
+    # Preserve the configured location in an empty/misconfigured catalog so
+    # the reported root makes the failed primary lookup visible.
+    return candidates[0].resolve()
 
 
 def _skills_root_private() -> Path:
@@ -442,12 +472,13 @@ def _parse_skill_frontmatter(content: str, fallback_name: str = "") -> dict:
         elif not isinstance(tags_raw, list):
             tags_raw = []
 
+        auto_load = data.get("auto_load", data.get("auto-load", False))
         return {
             "name": str(data.get("name", fallback_name) or fallback_name),
             "description": str(data.get("description", "") or ""),
             "category": str(data.get("category", "") or ""),
             "tags": tags_raw,
-            "auto_load": bool(data.get("auto-load", False)),
+            "auto_load": bool(auto_load),
         }
     except Exception:  # noqa: BLE001 — parse errors return safe defaults
         return defaults
@@ -741,7 +772,7 @@ def memory_recall(
     user_id: str = "",
     agent_role: str = "",
 ) -> dict:
-    """Unified recall across QMD meeting collections + knowledge + connectors + mem0.
+    """Unified recall across QMD meeting collections + knowledge + connectors + mem0. Contract: call memory_prior_work at task start; at task end use a governed agent_memory_save or record a typed skip receipt.
 
     Prefer this over collection-aware `qmd -c` or naive `knowledge_search` when
     the task is “find the meeting” (Circleback / Fathom / Zoom / Google Meet)
@@ -785,7 +816,7 @@ def memory_prior_work(
     run_id: str = "",
     task_id: str = "",
 ) -> dict:
-    """Call at the start of any task, when the topic shifts, when you hit an unexpected error, or before answering "have we done this before?" Returns a short digest of prior work — titles and fetch refs, not content. Cheap: call it rather than guessing."""
+    """Call memory_prior_work at the start of any task (task start), on topic shifts, unexpected errors, repeated questions, or before answering "have we done this before?"; at task end use a governed save or typed skip receipt. Returns a short digest of prior work — titles and fetch refs, not content. Cheap: call it rather than guessing."""
     payload = {
         "task": task,
         "repo": repo,
@@ -998,53 +1029,46 @@ def fetch(id: str) -> dict:
 
 @_mcp_tool
 def memory_search(query: str, agent_id: str = "", limit: int = 5) -> dict:
-    """Search durable agent memory through the configured memory adapter."""
-    if httpx is None:
-        return {"status": "unavailable", "error": "httpx is not installed", "results": []}
-    try:
-        params: dict = {"q": query, "limit": limit}
-        if agent_id:
-            params["agent_id"] = agent_id
-        response = httpx.get(f"{_mem0_url()}/memory/search", params=params, timeout=10)
-        response.raise_for_status()
-        results = response.json().get("results", [])
-        enriched = []
-        for item in results:
-            if isinstance(item, dict):
-                result = dict(item)
-                result.setdefault("metadata", extract_metadata(item))
-                result["provenance"] = provenance_label(item)
-                enriched.append(result)
-            else:
-                enriched.append({"memory": str(item), "metadata": {}, "provenance": "source: unknown"})
-        return {"status": "ok", "results": enriched}
-    except Exception as exc:
-        return {"status": "unavailable", "error": str(exc), "results": []}
+    """Search through the governed prior-work path so the trace is durable; pair it with a memory_prior_work probe at task start and a governed save or typed skip receipt at task end."""
+    result = _post_memroos_agent_api(
+        "/api/memory/prior-work",
+        {
+            "agentId": _memroos_agent_id(agent_id or None),
+            "task": query,
+            "timing": "before_plan",
+        },
+    )
+    if result.get("status") != "ok":
+        return {**result, "results": []}
+    response = result.get("response")
+    response_record = response if isinstance(response, dict) else {}
+    items = response_record.get("items", [])
+    return {
+        "status": "ok",
+        "results": items[: max(1, min(50, limit))] if isinstance(items, list) else [],
+        "response": response_record,
+    }
 
 
 @_mcp_tool
 def memory_save(text: str, agent_id: str = "shared", metadata: Optional[dict] = None) -> dict:
-    """Save a durable memory through the configured memory adapter."""
-    if httpx is None:
-        return {"status": "unavailable", "error": "httpx is not installed"}
-    try:
-        response = httpx.post(
-            f"{_mem0_url()}/memory/add",
-            json={
-                "text": text,
-                "agent_id": agent_id,
-                "metadata": normalize_metadata(
-                    metadata,
-                    agent_id=agent_id,
-                    default_source="knowledge-mcp",
-                ),
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        return {"status": "ok", "response": response.json()}
-    except Exception as exc:
-        return {"status": "unavailable", "error": str(exc)}
+    """Use a governed save through POST /api/memory/add; call memory_prior_work at task start and save or record a typed skip receipt at task end so policy, bronze durability, audit,
+    dedupe, quality coaching, and async enrichment all apply."""
+    resolved_agent_id = _memroos_agent_id(agent_id)
+    return _post_memroos_agent_api(
+        "/api/memory/add",
+        {
+            "agentId": resolved_agent_id,
+            "content": text,
+            "text": text,
+            "type": "episodic",
+            "metadata": normalize_metadata(
+                metadata,
+                agent_id=resolved_agent_id,
+                default_source="knowledge-mcp",
+            ),
+        },
+    )
 
 
 @_mcp_tool
@@ -1054,7 +1078,7 @@ def agent_memory_save(
     metadata: Optional[dict] = None,
     agent_id: Optional[str] = None,
 ) -> dict:
-    """Save memory through the MemroOS app so agent registry policy and audit rows are applied."""
+    """Use a governed memory save through the MemroOS app; call memory_prior_work at task start for decisions, outcomes, facts, or handoffs, or record a typed skip receipt when no write is justified."""
     resolved_agent_id = _memroos_agent_id(agent_id)
     return _post_memroos_agent_api(
         "/api/memory/add",
@@ -1471,7 +1495,12 @@ def knowledge_workspace_call(workspace: str, action: str, arguments: Optional[di
             if args.get("filter") == "auto-load":
                 skills = [s for s in skills if s.get("auto_load") is True]
 
-            return {"status": "ok", "skills": skills, "count": len(skills)}
+            return {
+                "status": "ok",
+                "skills": skills,
+                "count": len(skills),
+                "public_root": str(public_root),
+            }
 
         elif action == "read":
             name = args.get("name", "")
@@ -1607,7 +1636,8 @@ def knowledge_system_orientation() -> str:
     """Prompt that tells an agent how to use the knowledge system safely."""
     return (
         "Use the memroos MCP server as one progressive facade with progressive disclosure. "
-        "Start with core tools: health, manifest, search, read, memory_recall, memory_search, memory_save. "
+        "Start with core tools: health, manifest, search, read, memory_prior_work, memory_recall, memory_search, memory_save, agent_memory_save. "
+        "Memory contract: probe with memory_prior_work at task start; at task end make a governed memory save for durable decisions, outcomes, project facts, or handoff state, or record a typed skip receipt. Procedures and class lessons belong in Skills > Memory (skills first), not as memory prose. "
         "For “find the meeting” / meeting memory, prefer memory_recall — it federates enabled "
         "meeting QMD collections (Circleback, Fathom, Zoom, Google Meet) plus knowledge literal "
         "and mem0. Do not guess collection names or rely on qmd -c / naive knowledge_search alone. "

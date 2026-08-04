@@ -10,6 +10,7 @@
 # Source of truth:
 #   agents/AGENTS_TEMPLATE.md     → AGENTS.md on every agent CLI
 #   .agents/skills/memroos-save/  → memroos-save skill on every agent CLI
+#   .agents/skills/memroos-recall/ → memroos-recall skill on every agent CLI
 #   scripts/memroos-mcp.sh        → MemroOS MCP server launcher
 #
 # MCP wiring: each TARGETS row declares the REAL config file the agent
@@ -53,8 +54,13 @@ fi
 
 TEMPLATE="$MEMROOS_ROOT/agents/AGENTS_TEMPLATE.md"
 SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
+RECALL_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-recall/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
 OPERATOR_STUB="$MEMROOS_ROOT/scripts/memroos-operator-stub.sh"
+HOOK_SRC_DIR="$MEMROOS_ROOT/scripts/hooks"
+EXTRACTION_SRC="$MEMROOS_ROOT/scripts/observe-session-extraction.mjs"
+SCHEDULE_INSTALLER="$MEMROOS_ROOT/scripts/install-observe-sidecar-schedule.sh"
+HERMES_PLUGIN_SRC="$MEMROOS_ROOT/integrations/hermes/plugins/memory/memroos"
 
 # ENTOPS-13 (2026-07-22): extra skills to fan out alongside memroos-save.
 # Format: "name|source-dir" (space-separated pairs). Source-dir must contain
@@ -74,12 +80,36 @@ if [[ ! -f "$SKILL_SRC" ]]; then
   echo "❌ Canonical memroos-save skill not found: $SKILL_SRC" >&2
   exit 1
 fi
+if [[ ! -f "$RECALL_SKILL_SRC" ]]; then
+  echo "❌ Canonical memroos-recall skill not found: $RECALL_SKILL_SRC" >&2
+  exit 1
+fi
 if [[ ! -x "$MCP_SCRIPT" ]]; then
   echo "❌ MemroOS MCP launcher not found or not executable: $MCP_SCRIPT" >&2
   exit 1
 fi
 
+for hook_file in \
+  "$HOOK_SRC_DIR/memroos-hook-common.sh" \
+  "$HOOK_SRC_DIR/memroos-hook-utils.mjs" \
+  "$HOOK_SRC_DIR/memroos-memory-brief.sh" \
+  "$HOOK_SRC_DIR/memroos-capture-gate.sh"; do
+  if [[ ! -f "$hook_file" ]]; then
+    echo "❌ MemroOS session hook not found: $hook_file" >&2
+    exit 1
+  fi
+done
+if [[ ! -f "$EXTRACTION_SRC" ]]; then
+  echo "❌ Observe extraction module not found: $EXTRACTION_SRC" >&2
+  exit 1
+fi
+if [[ ! -x "$SCHEDULE_INSTALLER" ]]; then
+  echo "❌ Observe sidecar scheduler installer not executable: $SCHEDULE_INSTALLER" >&2
+  exit 1
+fi
+
 HOME_DIR="${HOME:-$(eval echo "~$(whoami)")}"
+HOOK_INSTALL_DIR="$HOME_DIR/.memroos/hooks"
 
 MODE="install"
 FORCE_LOCAL=0
@@ -133,7 +163,7 @@ fi
 #
 # Each target is: <name>|<config-file>|<skills-dir>|<mcp-config-section>
 # AGENTS.md template is always installed at <config-file>.
-# memroos-save skill is installed at <skills-dir>/memroos-save/SKILL.md.
+# MemroOS skills are installed at <skills-dir>/<skill-name>/SKILL.md.
 # MemroOS MCP server is registered at <mcp-config-section>.
 #
 # TOML targets (Claude/Codex/Qwen/Cursor) need a TOML-aware registration.
@@ -526,6 +556,111 @@ with open(path, "w") as f:
 PY
 }
 
+upsert_session_hooks_json() {
+  local target_file="$1"
+  mkdir -p "$(dirname "$target_file")"
+  if [[ ! -f "$target_file" ]]; then
+    echo '{}' > "$target_file"
+  fi
+
+  python3 - "$target_file" "$HOOK_INSTALL_DIR" <<'PY'
+import json
+import shlex
+import sys
+
+path, hook_dir = sys.argv[1:]
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except (FileNotFoundError, json.JSONDecodeError) as exc:
+    print(f"WARN: could not parse {path}: {exc}; refusing hook upsert", file=sys.stderr)
+    raise SystemExit(1)
+if not isinstance(data, dict):
+    raise SystemExit("hook config must be a JSON object")
+
+hooks = data.setdefault("hooks", {})
+if not isinstance(hooks, dict):
+    raise SystemExit("hook config has non-object hooks field")
+
+def is_memroos(entry):
+    try:
+        raw = json.dumps(entry, sort_keys=True)
+    except TypeError:
+        return False
+    return "memroos-memory-brief.sh" in raw or "memroos-capture-gate.sh" in raw
+
+for event in ("SessionStart", "Stop", "PreCompact"):
+    existing = hooks.get(event, [])
+    if not isinstance(existing, list):
+        existing = []
+    hooks[event] = [entry for entry in existing if not is_memroos(entry)]
+
+brief = shlex.join(["/bin/bash", f"{hook_dir}/memroos-memory-brief.sh"])
+capture = shlex.join(["/bin/bash", f"{hook_dir}/memroos-capture-gate.sh"])
+hooks["SessionStart"].append({
+    "matcher": "startup|resume|clear",
+    "hooks": [{"type": "command", "command": brief, "timeout": 2}],
+})
+for event in ("Stop", "PreCompact"):
+    hooks[event].append({
+        "matcher": "",
+        "hooks": [{"type": "command", "command": capture, "timeout": 5}],
+    })
+
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+PY
+}
+
+session_hooks_file_has_memroos() {
+  local target_file="$1"
+  [[ -f "$target_file" ]] || return 1
+  python3 - "$target_file" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except (FileNotFoundError, json.JSONDecodeError):
+    raise SystemExit(1)
+raw = json.dumps(data, sort_keys=True)
+raise SystemExit(0 if "memroos-memory-brief.sh" in raw and "memroos-capture-gate.sh" in raw else 1)
+PY
+}
+
+uninstall_session_hooks_json() {
+  local target_file="$1"
+  [[ -f "$target_file" ]] || return 0
+  python3 - "$target_file" <<'PY'
+import json
+import sys
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except (FileNotFoundError, json.JSONDecodeError):
+    raise SystemExit(0)
+hooks = data.get("hooks")
+if isinstance(hooks, dict):
+    for event, entries in list(hooks.items()):
+        if not isinstance(entries, list):
+            continue
+        hooks[event] = [
+            entry for entry in entries
+            if "memroos-memory-brief.sh" not in json.dumps(entry)
+            and "memroos-capture-gate.sh" not in json.dumps(entry)
+        ]
+        if not hooks[event]:
+            hooks.pop(event, None)
+    if not hooks:
+        data.pop("hooks", None)
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+PY
+}
+
 upsert_zcode_mcp_block() {
   local target_file="$1"
   mkdir -p "$(dirname "$target_file")"
@@ -557,6 +692,73 @@ with open(path, "w") as f:
 PY
 }
 
+install_hook_files() {
+  mkdir -p "$HOOK_INSTALL_DIR"
+  cp "$EXTRACTION_SRC" "$HOME_DIR/.memroos/observe-session-extraction.mjs"
+  cp "$HOOK_SRC_DIR/memroos-hook-common.sh" "$HOOK_INSTALL_DIR/memroos-hook-common.sh"
+  cp "$HOOK_SRC_DIR/memroos-hook-utils.mjs" "$HOOK_INSTALL_DIR/memroos-hook-utils.mjs"
+  cp "$HOOK_SRC_DIR/memroos-memory-brief.sh" "$HOOK_INSTALL_DIR/memroos-memory-brief.sh"
+  cp "$HOOK_SRC_DIR/memroos-capture-gate.sh" "$HOOK_INSTALL_DIR/memroos-capture-gate.sh"
+  chmod +x "$HOOK_INSTALL_DIR/memroos-hook-common.sh" "$HOOK_INSTALL_DIR/memroos-hook-utils.mjs" "$HOOK_INSTALL_DIR/memroos-memory-brief.sh" "$HOOK_INSTALL_DIR/memroos-capture-gate.sh"
+}
+
+uninstall_hook_files() {
+  rm -f \
+    "$HOOK_INSTALL_DIR/memroos-hook-common.sh" \
+    "$HOOK_INSTALL_DIR/memroos-hook-utils.mjs" \
+    "$HOOK_INSTALL_DIR/memroos-memory-brief.sh" \
+    "$HOOK_INSTALL_DIR/memroos-capture-gate.sh"
+  rm -f "$HOME_DIR/.memroos/observe-session-extraction.mjs"
+}
+
+install_hermes_hook_plugin() {
+  local target="$HOME_DIR/.hermes/plugins/memory/memroos"
+  [[ -d "$HERMES_PLUGIN_SRC" ]] || return 0
+  mkdir -p "$target"
+  cp "$HERMES_PLUGIN_SRC/plugin.yaml" "$target/plugin.yaml"
+  cp "$HERMES_PLUGIN_SRC/__init__.py" "$target/__init__.py"
+  [[ -f "$HERMES_PLUGIN_SRC/README.md" ]] && cp "$HERMES_PLUGIN_SRC/README.md" "$target/README.md"
+}
+
+hermes_hook_plugin_present() {
+  local target="$HOME_DIR/.hermes/plugins/memory/memroos/plugin.yaml"
+  [[ -f "$target" ]] || return 1
+  grep -q "on_session_start" "$target" && grep -q "on_session_end" "$target" && grep -q "on_pre_compact" "$target"
+}
+
+uninstall_hermes_hook_plugin() {
+  local target="$HOME_DIR/.hermes/plugins/memory/memroos"
+  rm -f "$target/plugin.yaml" "$target/__init__.py" "$target/README.md"
+}
+
+install_session_hooks_for_target() {
+  local name="$1"
+  case "$name" in
+    claude) upsert_session_hooks_json "$HOME_DIR/.claude/settings.json" ;;
+    codex) upsert_session_hooks_json "$HOME_DIR/.codex/hooks.json" ;;
+    hermes) install_hermes_hook_plugin ;;
+  esac
+}
+
+session_hooks_for_target_present() {
+  local name="$1"
+  case "$name" in
+    claude) session_hooks_file_has_memroos "$HOME_DIR/.claude/settings.json" ;;
+    codex) session_hooks_file_has_memroos "$HOME_DIR/.codex/hooks.json" ;;
+    hermes) hermes_hook_plugin_present ;;
+    *) return 0 ;;
+  esac
+}
+
+uninstall_session_hooks_for_target() {
+  local name="$1"
+  case "$name" in
+    claude) uninstall_session_hooks_json "$HOME_DIR/.claude/settings.json" ;;
+    codex) uninstall_session_hooks_json "$HOME_DIR/.codex/hooks.json" ;;
+    hermes) uninstall_hermes_hook_plugin ;;
+  esac
+}
+
 install_agents_md() {
   local target_file="$1"
   mkdir -p "$(dirname "$target_file")"
@@ -567,6 +769,8 @@ install_skill() {
   local skills_dir="$1"
   mkdir -p "$skills_dir/memroos-save"
   cp "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md"
+  mkdir -p "$skills_dir/memroos-recall"
+  cp "$RECALL_SKILL_SRC" "$skills_dir/memroos-recall/SKILL.md"
   # ENTOPS-13: also install any EXTRA_SKILLS (name|source-dir pairs).
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name src
@@ -592,6 +796,7 @@ uninstall_agents_md() {
 uninstall_skill() {
   local skills_dir="$1"
   rm -rf "$skills_dir/memroos-save"
+  rm -rf "$skills_dir/memroos-recall"
   # ENTOPS-13: also remove any EXTRA_SKILLS that were installed.
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name
@@ -720,6 +925,7 @@ echo "====================================="
 echo "Repo:        $MEMROOS_ROOT"
 echo "Template:    $TEMPLATE"
 echo "Skill:       $SKILL_SRC"
+echo "Recall skill: $RECALL_SKILL_SRC"
 echo "Mode:        $MODE"
 echo "MCP mode:    $MCP_MODE_LABEL"
 echo ""
@@ -728,10 +934,17 @@ case "$MODE" in
   install)
     echo "Installing MemroOS directives on every detected agent CLI..."
     echo ""
+    install_hook_files
+    if ! bash "$SCHEDULE_INSTALLER" --install; then
+      warn "observe sidecar schedule installation failed; hooks remain fail-open"
+    fi
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
       install_agents_md "$agents_file"
       install_skill "$skills_dir"
+      if ! install_session_hooks_for_target "$name"; then
+        warn "$name: failed to install lifecycle hooks"
+      fi
       mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
       if [[ -n "$mcp_file_resolved" ]]; then
         if ! upsert_mcp_for_target "$mcp_file_resolved" "$mcp_format"; then
@@ -745,7 +958,7 @@ case "$MODE" in
       log "$name → $agents_file"
     done
     echo ""
-    log "All targets converged on canonical AGENTS_TEMPLATE.md + memroos-save skill."
+    log "All targets converged on canonical AGENTS_TEMPLATE.md + memroos-save + memroos-recall skills."
     log "Re-run this script anytime to re-converge. Pass --check to audit, --uninstall to remove."
 
     # Clean up legacy AGENTS.mcp.* sibling files that earlier versions of
@@ -779,6 +992,23 @@ case "$MODE" in
     echo "Auditing MemroOS directives on every detected agent CLI..."
     echo ""
     missing=0
+    for hook_file in \
+      "$HOME_DIR/.memroos/observe-session-extraction.mjs" \
+      "$HOOK_INSTALL_DIR/memroos-hook-common.sh" \
+      "$HOOK_INSTALL_DIR/memroos-hook-utils.mjs" \
+      "$HOOK_INSTALL_DIR/memroos-memory-brief.sh" \
+      "$HOOK_INSTALL_DIR/memroos-capture-gate.sh"; do
+      source_file="$EXTRACTION_SRC"
+      [[ "$hook_file" == "$HOOK_INSTALL_DIR"/* ]] && source_file="${hook_file/$HOOK_INSTALL_DIR/$HOOK_SRC_DIR}"
+      if [[ ! -f "$hook_file" ]] || ! diff -q "$source_file" "$hook_file" >/dev/null 2>&1; then
+        warn "session hook missing or drifted ($hook_file)"
+        missing=$((missing+1))
+      fi
+    done
+    if ! bash "$SCHEDULE_INSTALLER" --check; then
+      warn "observe sidecar schedule missing or drifted"
+      missing=$((missing+1))
+    fi
     for target in "${TARGETS[@]}"; do
       IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
       mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
@@ -800,8 +1030,14 @@ case "$MODE" in
       elif [[ ! -f "$skills_dir/memroos-save/SKILL.md" ]] || ! diff -q "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md" >/dev/null 2>&1; then
         warn "$name: memroos-save skill missing or drifted ($skills_dir/memroos-save/SKILL.md)"
         missing=$((missing+1))
+      elif [[ ! -f "$skills_dir/memroos-recall/SKILL.md" ]] || ! diff -q "$RECALL_SKILL_SRC" "$skills_dir/memroos-recall/SKILL.md" >/dev/null 2>&1; then
+        warn "$name: memroos-recall skill missing or drifted ($skills_dir/memroos-recall/SKILL.md)"
+        missing=$((missing+1))
       elif [[ $mcp_ok -eq 0 ]]; then
         warn "$name: MemroOS MCP entry missing or unparseable in $mcp_file_resolved"
+        missing=$((missing+1))
+      elif ! session_hooks_for_target_present "$name"; then
+        warn "$name: lifecycle hook claim is missing or drifted"
         missing=$((missing+1))
       else
         log "$name: ok"
@@ -822,6 +1058,7 @@ case "$MODE" in
       IFS='|' read -r name agents_file skills_dir mcp_file mcp_format <<< "$target"
       uninstall_agents_md "$agents_file"
       uninstall_skill "$skills_dir"
+      uninstall_session_hooks_for_target "$name"
       mcp_file_resolved="$(resolve_mcp_file "$mcp_file")"
       if [[ -n "$mcp_file_resolved" ]]; then
         case "$mcp_format" in
@@ -834,6 +1071,8 @@ case "$MODE" in
       fi
       log "$name: removed"
     done
+    uninstall_hook_files
+    bash "$SCHEDULE_INSTALLER" --uninstall || true
     echo ""
     log "Uninstall complete."
     ;;

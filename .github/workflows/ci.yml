@@ -45,6 +45,9 @@ jobs:
       - name: Check lib/ root boundary (LIBNORM-03)
         run: npm run check:lib-boundary
 
+      - name: Check role-rank callsites (PHASE-210B-1)
+        run: npm run check:role-rank-callsites
+
       - name: Health-check branch tests (CFGDUR-03)
         run: npm run check:health-check
 

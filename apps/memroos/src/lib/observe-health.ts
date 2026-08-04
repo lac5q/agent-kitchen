@@ -18,6 +18,7 @@
  */
 import type Database from "better-sqlite3";
 
+import { listCronHealthJobs, type CronHealthState } from "@/lib/cron-health";
 import {
   OBSERVE_HARNESS_PATHS,
   type ObserveHarness,
@@ -35,6 +36,10 @@ export interface ObserveHarnessHealth {
   errorRate: number | null;
   /** Count of onboarded agents registered against this harness's `platform`. */
   agentsByHarness: number;
+  /** Scheduler heartbeat surfaced here so NOC does not infer liveness from a PID. */
+  sidecarHeartbeatAt: string | null;
+  sidecarHealth: CronHealthState;
+  sidecarWarning: string | null;
   depthSetting: string;
   notes: string;
 }
@@ -95,6 +100,25 @@ export function listObserveHarnessHealth(
      WHERE LOWER(platform) = LOWER(?)`
   );
 
+  let sidecarHeartbeat: {
+    lastRunAt: string | null;
+    health: CronHealthState;
+    warning: string | null;
+  } = { lastRunAt: null, health: "unknown", warning: null };
+  try {
+    const job = listCronHealthJobs(db).find((entry) => entry.id === "observe-sidecar");
+    if (job) {
+      sidecarHeartbeat = {
+        lastRunAt: job.lastRunAt,
+        health: job.health,
+        warning: job.warning,
+      };
+    }
+  } catch {
+    // Health visibility is additive; an older database must not hide the
+    // harness capture counts when cron-health is unavailable.
+  }
+
   return OBSERVE_HARNESS_PATHS.map((entry) => {
     const hit = byHarness.get(entry.harness);
     const platformKey = platformKeyForHarness(entry.harness);
@@ -143,8 +167,11 @@ export function listObserveHarnessHealth(
       errorCount: Number(hit?.errorCount ?? 0),
       errorRate: null,
       agentsByHarness: agentCount,
+      sidecarHeartbeatAt: sidecarHeartbeat.lastRunAt,
+      sidecarHealth: sidecarHeartbeat.health,
+      sidecarWarning: sidecarHeartbeat.warning,
       depthSetting,
-      notes,
+      notes: `${notes}${sidecarHeartbeat.health === "warning" ? " Observe sidecar heartbeat needs attention." : ""}`,
     };
   });
 }

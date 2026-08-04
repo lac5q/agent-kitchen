@@ -55,22 +55,22 @@ A CI note can be added to the Phase 143 verification step: after any installer e
 ## Observe capture matrix (v8.16)
 
 
-*Updated: 2026-07-18 (Phase 171: OBSERVE-13/14 matrix + per-onboarded-agent visibility).*
+*Updated: 2026-08-04 (Phase 192: SELFCAP-03 hook capability matrix + drift gate).*
 
 *Mirrors `apps/memroos/src/lib/observe-sidecar.ts` `OBSERVE_HARNESS_PATHS` exactly.
 The drift-check script `scripts/check-observe-maturity-drift.mjs` keeps this table,
 the catalog, and the installer `TARGETS` rows in sync (exit code `1` on drift).*
 
-| Harness | Wave | Platform key | Capture method | Status |
-|---------|------|--------------|----------------|--------|
-| Claude | 1 | `claude` | jsonl `~/.claude/projects` | supported (`jsonl`) |
-| Codex | 1 | `codex` | jsonl `~/.codex/sessions` | supported (`jsonl`) |
-| Hermes | 1 | `hermes` | plugin + jsonl at `~/.hermes/sessions` | supported (`plugin`) |
-| OpenClaw | 1 | `openclaw` | jsonl under `~/.openclaw/sessions` (also inherits Hermes-family `~/.hermes/sessions`) | supported (`jsonl`) |
-| Pi | 1 | `pi` | jsonl `~/.pi/agent/sessions` | supported (`jsonl`, first-class) |
-| Cursor | 2 | `cursor` | MCP `mcp.json` only; vendor transcripts at `~/.cursor/projects/<id>/agent-transcripts/<session>/<session>.jsonl` exist but use a non-standard `<timestamp>/<user_query>` schema — stay on MCP | partial (`mcp-partial`) |
-| Factory/Droid | 2 | `factory` / `droid` | MCP `~/.factory/mcp.json` + JSONL fallback at `~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl` (maps `platform=droid`) | partial (`hooks+jsonl`, smoke-tested in Phase 170) |
-| Antigravity | 3 | `antigravity` | no CLI/JSONL/MCP surface verified; catalog keeps the row so the health endpoint can honestly report `no path` instead of faking coverage | limited |
+| Harness | Wave | Platform key | Hook support | Installed hooks | Capture method | Fallback | Status |
+|---------|------|--------------|--------------|-----------------|----------------|----------|--------|
+| Claude | 1 | `claude` | `native` | `memory-brief` + `capture-gate` | jsonl `~/.claude/projects` | `skill+sidecar` | supported (`jsonl` + native hooks) |
+| Codex | 1 | `codex` | `portable` | `memory-brief` + `capture-gate` | jsonl `~/.codex/sessions` | `skill+sidecar` | supported (`jsonl` + portable hooks) |
+| Hermes | 1 | `hermes` | `plugin` | `memory-brief` + `capture-gate` | plugin + jsonl at `~/.hermes/sessions` | `skill+sidecar` | supported (`plugin`) |
+| OpenClaw | 1 | `openclaw` | `none` | `none` | jsonl under `~/.openclaw/sessions` (also inherits Hermes-family `~/.hermes/sessions`) | `skill+sidecar` | supported (`jsonl`), no lifecycle hook claim |
+| Pi | 1 | `pi` | `none` | `none` | jsonl `~/.pi/agent/sessions` | `skill+sidecar` | supported (`jsonl`, first-class), no lifecycle hook claim |
+| Cursor | 2 | `cursor` | `none` | `none` | MCP `mcp.json` only; vendor transcripts at `~/.cursor/projects/<id>/agent-transcripts/<session>/<session>.jsonl` exist but use a non-standard `<timestamp>/<user_query>` schema — stay on MCP | `skill+sidecar` | partial (`mcp-partial`), no lifecycle hook claim |
+| Factory/Droid | 2 | `factory` / `droid` | `none` | `none` | MCP `~/.factory/mcp.json` + JSONL fallback at `~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl` (maps `platform=droid`) | `skill+sidecar` | partial (`hooks+jsonl` capture maturity), no lifecycle hook claim |
+| Antigravity | 3 | `antigravity` | `none` | `none` | no CLI/JSONL/MCP surface verified; catalog keeps the row so the health endpoint can honestly report `no path` instead of faking coverage | `skill+sidecar` | limited, no lifecycle hook claim |
 
 ### Installer `TARGETS` sync targets (Phases 169–171)
 
@@ -90,9 +90,10 @@ which is covered by the `droid` install target) in `TARGETS`:
   alongside `claude` / `codex` / `hermes` / `openclaw`.
 - Wave 2 Cursor keeps `mcp-partial` until the vendor transcript schema stabilizes;
   the catalog `notes` documents the vendor export path so it is not lost.
-- Wave 2 Factory/Droid is `hooks+jsonl`. Both surfaces verified on the dev box.
-  The catalog row's `notes` string contains the literal `droid` so it ties back to
-  `CodingAgentRuntime.droid`.
+- Wave 2 Factory/Droid retains `hooks+jsonl` as a capture maturity label, but its
+  lifecycle `hookSupport` is `none` until a reproducible official hook surface is
+  found. The catalog row's `notes` string contains the literal `droid` so it ties
+  back to `CodingAgentRuntime.droid`.
 - Wave 3 Antigravity has empty `sessionRoots` and an explicit
   `no capture path; verify-by-design` notes string. No false full-capture claim.
 - `install-agent-integrations.sh` lists Antigravity in `TARGETS` with a `none`
@@ -122,11 +123,16 @@ and the response stay in lock-step. Per-harness rows expose:
   `platform=droid`; everything else maps to `platform=<harness>`. This is the
   operator visibility "who is onboarded" count that the Wave-1 smoke proves
   end-to-end.
+- `sidecarHeartbeatAt`, `sidecarHealth`, and `sidecarWarning` — the
+  `observe-sidecar` cron-health heartbeat. A stale or failed heartbeat is also
+  eligible for the existing NOC Attention feed; liveness is not inferred from
+  a launchd/systemd process alone.
 
 ### Drift-check automation (OBSERVE-13)
 
 Run `scripts/check-observe-maturity-drift.mjs` (or `npm run check:observe-maturity-drift`
 from `apps/memroos`) to verify the catalog, matrix, and installer `TARGETS`
-agree on harness names. The check is also wired into CI alongside
+agree on harness names and that every lifecycle-hook claim has backing in the
+installer and Hermes plugin. The check is also wired into CI alongside
 `check:future-spikes`. Exit code `1` on drift — fix the catalog row, the matrix
 row, or the installer `TARGETS` row before merging.

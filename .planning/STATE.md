@@ -1,17 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.33
-milestone_name: Ledger + Dashboard Data Honesty (Phases 204–205)
+milestone: v8.37 / v8.35 / v8.29 / v8.30
+milestone_name: Ownership + Security + Structural Debt + Memory Adoption (beastmode run 2026-08-03/04)
 status: active
-stopped_at: Phases 203/204/205 code committed + pushed (through 33aff816); oracle-1 deploy of Google-auth commit + Google OAuth client creds + live dashboard re-verify remaining
-last_updated: "2026-08-01T04:25:00Z"
+stopped_at: "Phases 227/226/225/223/219/208 deployed live to oracle-1 + cordant-hermes-01 (merge a33191dd). v8.29 188-189, v8.30 191, and the MCP OAuth error page are on PR #4 awaiting merge+deploy. 210b-1 in progress. Remaining: v8.30 192-195, 210b-2/3/4, Phase 190, Phase 209 crit-3, and the credential-gated 175/176."
+last_updated: "2026-08-04T06:20:00Z"
 progress:
   total_phases: 124
-  completed_phases: 90
+  completed_phases: 97
   total_plans: 167
-  completed_plans: 149
-  percent: 73
+  completed_plans: 157
+  percent: 78
 ---
+
+## Beastmode run 2026-08-03/04 — what shipped
+
+Director: Claude Fable 5. Executor: `gpt-5.6-luna` (codex, xhigh→max), operator-selected.
+Every phase gated on the full fast suite by the director, unsandboxed, before commit.
+
+**Live in production** (both hosts, merge `a33191dd`, schema v39):
+
+| Phase | Delivered |
+|---|---|
+| 227 | Per-user tool connections — `owner_id`/`is_shared`, viewer-mandatory chokepoint, owner-or-admin revoke |
+| 226 | View-as — 15-min token, read-only enforced at the proxy, intersection roles, dual-name audit |
+| 225 + 223 | Owner filter, one-click claim, Team→agents link, 14-file grid audit, viewport spec |
+| 219 | CI asserts repo visibility (fails on *unknown* too); public-repo rule in AGENTS.md |
+| 208 | Seven onboarding/registry security defects, 13 attack-shaped tests |
+
+**On PR #4** (no migrations): v8.29 188-189 (governed store chokepoint; gates 116→113 and 75→53),
+v8.30 191 (prior-work probe — the Phase 118 kernel finally has a live caller), MCP OAuth error page.
+
+**Operational fixes outside the roadmap:** local mem0 lane decommissioned on main-mac; cordant
+agent keys re-expiried (Phase 199 was failing them closed); memroos MCP made user-scoped on
+cordant so it loads from any directory; onboarding now *runs* the per-user OAuth sign-in.
+
+**Known live issue, decided not patched:** mem0 writes take **104s** because LLM fact-extraction
+runs inline in the request. Operator decision 2026-08-04 — fix it inside Phase 193 as synchronous
+durable bronze capture + async bronze→silver extraction, matching the belief model the system
+already has, rather than a separate patch.
+
 
 ## Latest Position (2026-07-31 late session, paused by operator) — 203/204/205 shipped to main; oracle deploy of 203 pending
 

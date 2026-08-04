@@ -491,9 +491,12 @@ function episodicWriteRows(filters: InventoryFilters): MemoryInventoryRow[] {
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT id, agent_id, memory_type, content_hash, metadata, result, written_at,
-              visibility, domain, sensitivity, policy
-       FROM agent_memory_writes
+      `SELECT w.id, w.agent_id, w.memory_type, w.content_hash, w.metadata, w.result, w.written_at,
+              w.visibility, w.domain, w.sensitivity, w.policy,
+              ms.salience_score, ms.access_count
+       FROM agent_memory_writes w
+       LEFT JOIN memory_salience ms
+         ON ms.record_type = 'agent_memory_write' AND ms.record_id = CAST(w.id AS TEXT)
        ORDER BY written_at DESC
        LIMIT 30`
     )
@@ -509,6 +512,8 @@ function episodicWriteRows(filters: InventoryFilters): MemoryInventoryRow[] {
       domain: string | null;
       sensitivity: string | null;
       policy: string | null;
+      salience_score: number | null;
+      access_count: number | null;
     }>;
 
   return rows
@@ -532,8 +537,8 @@ function episodicWriteRows(filters: InventoryFilters): MemoryInventoryRow[] {
           policy: row.policy,
         },
         consolidationState: "not_applicable" as const,
-        salienceScore: null,
-        accessCount: null,
+        salienceScore: row.salience_score,
+        accessCount: row.access_count,
         evidencePointer: `agent_memory_writes:${row.id}`,
         degradedReason: null,
         provenance: { sourceTable: "agent_memory_writes", sourceId: row.id, sourceTimestamp: row.written_at },

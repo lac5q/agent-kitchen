@@ -554,6 +554,8 @@ function computeEfficiencyMetrics(events: EfficiencyEventForMetrics[]) {
   let totalTokens = 0;
   let operatorReasks = 0;
   let rediscoveredWrites = 0;
+  let extractionQueueDepth = 0;
+  let extractionLagMs: number | null = null;
   const sourceReadGroups = new Map<string, number>();
   let lastUpdated: string | null = null;
 
@@ -635,6 +637,15 @@ function computeEfficiencyMetrics(events: EfficiencyEventForMetrics[]) {
     if (event.eventType === "memory_write" && booleanPayloadValue(event.payload, "isRediscovery")) {
       rediscoveredWrites += 1;
     }
+    if (event.eventType === "memory_write") {
+      if (Object.prototype.hasOwnProperty.call(event.payload, "queueDepth")) {
+        extractionQueueDepth = Math.max(extractionQueueDepth, numericPayloadValue(event.payload, "queueDepth"));
+      }
+      if (Object.prototype.hasOwnProperty.call(event.payload, "extractionLagMs") && event.payload.extractionLagMs !== null) {
+        const lag = numericPayloadValue(event.payload, "extractionLagMs");
+        extractionLagMs = extractionLagMs === null ? lag : Math.max(extractionLagMs, lag);
+      }
+    }
   }
 
   const repeatedSourceReads = Array.from(sourceReadGroups.values()).reduce(
@@ -660,6 +671,8 @@ function computeEfficiencyMetrics(events: EfficiencyEventForMetrics[]) {
     memoryWrites: streams.memory_write,
     rediscoveredWrites,
     rediscoveredFactRate: ratio(rediscoveredWrites, streams.memory_write),
+    extractionQueueDepth,
+    extractionLagMs,
     recollection,
     streams,
     lastUpdated,

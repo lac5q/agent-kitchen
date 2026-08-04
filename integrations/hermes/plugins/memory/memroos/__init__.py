@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -313,6 +314,60 @@ class MemroosMemoryProvider(MemoryProvider):
             error=error,
             mode=mode,
         )
+
+    def _run_lifecycle_hook(
+        self,
+        hook_name: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout_s: float = 5.0,
+    ) -> str:
+        """Run the shared fail-open hook and return only its injection text."""
+        hook_root = Path(os.environ.get("MEMROOS_HOOK_ROOT") or (Path.home() / ".memroos"))
+        script = hook_root / "hooks" / hook_name
+        if not script.is_file():
+            # The plugin can load before the central installer has converged;
+            # Hermes must continue with its native lifecycle in that state.
+            return ""
+        body = {
+            "sourceAgentId": str(self._config.get("agent_id") or "hermes"),
+            "runtime": "hermes",
+            "sessionId": self._session_id,
+            **(payload or {}),
+        }
+        try:
+            completed = subprocess.run(
+                ["/bin/bash", str(script)],
+                input=json.dumps(body),
+                text=True,
+                capture_output=True,
+                timeout=timeout_s,
+                check=False,
+            )
+            if completed.returncode != 0:
+                logger.warning("memroos lifecycle hook %s returned %s (fail-open)", hook_name, completed.returncode)
+                return ""
+            return completed.stdout.strip() if hook_name.endswith("brief.sh") else ""
+        except subprocess.TimeoutExpired:
+            logger.warning("memroos lifecycle hook %s timed out (fail-open)", hook_name)
+            return ""
+        except Exception as exc:
+            logger.warning("memroos lifecycle hook %s failed (fail-open): %s", hook_name, exc)
+            return ""
+
+    def on_session_start(self, payload: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
+        """Portable Hermes session-start equivalent; empty output is a miss."""
+        merged = {**(payload or {}), **kwargs}
+        return self._run_lifecycle_hook("memroos-memory-brief.sh", merged, timeout_s=2.0)
+
+    def on_session_end(self, payload: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
+        """Portable Hermes stop equivalent. Never blocks the native session."""
+        merged = {"phase": "stop", **(payload or {}), **kwargs}
+        self._run_lifecycle_hook("memroos-capture-gate.sh", merged, timeout_s=5.0)
+
+    def on_pre_compact(self, payload: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
+        """Portable Hermes pre-compaction equivalent. Never blocks compaction."""
+        merged = {"phase": "pre_compact", **(payload or {}), **kwargs}
+        self._run_lifecycle_hook("memroos-capture-gate.sh", merged, timeout_s=5.0)
 
     def _record(
         self,

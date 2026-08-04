@@ -348,3 +348,61 @@
   GitNexus `context` on the symbol answered it faster than grepping.
 - Executor lane honesty (4th time): reported MiniMax-M3 unavailable and named the fallback lane it
   actually used, per the beastmode MODEL DRIFT rule, rather than implying the cheap lane ran.
+
+## BM-20260804 phase-210b-1 capability-model-foundation (v8.35)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3753/0 (director, unsandboxed — matched executor exactly). New ratchet gate
+  check:role-rank-callsites live at 65 (from 74); route-auth + next-trust boundary gates green.
+- The design resolution held: requireRole computes through hasCapability over ROLE_CAPABILITIES,
+  verified in code by the director. ROLE_RANK stays exported for compat consumers but is no
+  longer consulted inside the facade — one model with a view, not two that can disagree.
+  25 equivalence pairs (15 typed + 10 null/undefined) prove they agree everywhere.
+- **Director error worth keeping:** the first 210b-1 launch hung for HOURS on
+  "Reading additional input from stdin" — the prompt was passed in a way that made codex read
+  stdin instead of taking it as an argument. Zero work happened and I reported it as progress.
+  Rule: always write the contract to a FILE and launch with `< /dev/null`; and confirm the
+  executor is producing real output before describing it as running. Absence of a report is not
+  evidence of work.
+
+## BM-20260804 phase-193 save-quality + async write path (v8.30 SAVEQ-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3760/0 (director, unsandboxed — matched executor). Slow split 33/33. typecheck 0.
+- **The live incident is fixed: mem0 writes went 104,000ms -> under 1,000ms.** The architectural
+  reframing was the whole unlock — the 104s was not a slow dependency to tune around, it was
+  bronze->silver conversion running inside the request, when the system's own belief model
+  already says those are separate stages. Extraction moved to an async worker; nothing was
+  deleted.
+- The receipt-cannot-lie requirement held: vault artifact written + durability ledger complete +
+  chained audit receipt BEFORE responding, proven by reading back from disk and verifying SHA-256.
+  Crash safety proven by closing/reloading the DB mid-flight and confirming the candidate still
+  reaches silver.
+- Naming the failure mode in the contract ("a receipt that says saved when the queue dropped it is
+  strictly worse than today's timeout, because a timeout is honest") produced exactly the right
+  implementation. Contracts that name the failure to design against beat contracts that only name
+  the feature.
+
+## BM-20260804 phase-194 habit-layer (v8.30 MEMHABIT-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass, with a director completion
+- Executor correctly reported MEMHABIT-02 blocked: it could not create
+  .agents/skills/memroos-recall/SKILL.md. **The director verified the claim and it was a SANDBOX
+  limit, not a repo constraint — .agents/skills is writable.** Director wrote the skill and added
+  the missing auto_load flag to memroos-save; Python suite went 55/1-failing to 56/56.
+- Lesson: "blocked" from a sandboxed executor is a hypothesis, not a fact. Verify the constraint
+  in the real environment before accepting a partial phase — half this phase would have been
+  silently dropped otherwise. Symmetric to the earlier lesson that a sandboxed executor's test
+  FAILURES also need re-running unsandboxed; both directions need director verification.
+- Full suite 3760/0; knowledge-mcp 56/56.
+
+## BM-20260804 store-03-regression (caught by CI, fixed without widening the gate)
+- Phase 193 introduced 3 new files doing raw SQL outside lib/store/** (13 .prepare() calls).
+  CI's check:sqlite-allowlist rejected the PR. The v8.29 chokepoint caught a regression from a
+  later phase — the gate working exactly as designed, one milestone after it was built.
+- **Director gap that let it through:** I ran the full test suite after each phase but stopped
+  running the check:* gates after v8.29. Tests pass on a boundary violation; that is the point
+  of having a separate gate. Rule: run ALL check:* gates per phase, not just the suite.
+- The tempting fix (add 3 entries to the allowlist) was refused — it is precisely the
+  "never widen a security allowlist to pass a gate" constraint, and the gate's own message says
+  the list is a shrinking baseline for pre-existing debt. Fixed by moving the access into
+  lib/store/memory.ts behind GovernanceContext. Baseline stayed 113, unchanged.
+- Verified by diff that neither the gate script nor its baseline was edited — that check is the
+  one that distinguishes "fixed" from "silenced".

@@ -1,0 +1,8 @@
+[Unit]
+Description=MemroOS observe session sidecar
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__ROOT__
+ExecStart=/bin/bash __RUNNER__

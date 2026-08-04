@@ -11,6 +11,20 @@ bounded research, mechanical edits, test writing, docs, or parallel exploration.
 Qwen is an external executor in Codex Cloud. Codex remains responsible for
 planning, secrets hygiene, review, verification, and any final file changes.
 
+## Goal memory checkpoints
+
+Before planning or dispatching a bounded task, call the named
+`memory_prior_work` probe with the task statement, repo/project scope, and
+`timing: "before_plan"`; record the returned `receipt` (or receipt id when
+supplied), including a typed `search_skipped` result. Re-probe after a topic
+shift, unexpected error, repeated question, or before guessing at a convention.
+
+At the end of the goal, make a governed `agent_memory_save` for durable
+decisions, outcomes, project facts, or handoff state with outcome, scope,
+entities, and provenance. If there is no durable learning or the service is
+unavailable, record a typed skip/error receipt instead. Codex owns and verifies
+both checkpoints; Qwen does not claim them.
+
 ## Requirements
 
 - `~/.local/bin/qwen-agent` exists.

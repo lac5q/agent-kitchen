@@ -14,6 +14,8 @@ import {
   type GovernanceContext,
 } from "@/lib/store/governance";
 
+export type MemoryDatabase = Database.Database;
+
 export interface MemoryEvalResultRecord {
   caseId: string;
   layer: string;
@@ -309,4 +311,260 @@ export function listMemoryCandidatesForContext(
        LIMIT ?`,
     )
     .all(tenantId, goalId, goalId, goalId, goalId, limit) as Array<Record<string, unknown>>;
+}
+
+export interface BeliefPromotionCandidateRow {
+  id: string;
+  tenant_id: string;
+  metadata_json: string;
+  created_at: string;
+}
+
+/** Read the silver candidates eligible for the belief-promotion scheduler. */
+export function listBeliefPromotionCandidates(
+  db: MemoryDatabase,
+  cutoff: string,
+  limit: number,
+): BeliefPromotionCandidateRow[] {
+  return db
+    .prepare(
+      `SELECT id, tenant_id, metadata_json, created_at
+         FROM agent_memory_candidates
+        WHERE belief_stage = 'silver_candidate_claim'
+          AND status = 'candidate'
+          AND created_at <= ?
+        ORDER BY created_at ASC, id ASC
+        LIMIT ?`,
+    )
+    .all(cutoff, limit) as BeliefPromotionCandidateRow[];
+}
+
+/** Read whether the polymorphic salience table is available. */
+export function memorySalienceTableExists(db: MemoryDatabase): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_salience'")
+    .get() as { name: string } | undefined;
+  return Boolean(row);
+}
+
+export interface MemorySalienceTarget {
+  recordType: string;
+  recordId: string;
+}
+
+/** Initialize salience for one memory-owned record. */
+export function initializeMemorySalience(
+  db: MemoryDatabase,
+  input: {
+    recordType: string;
+    recordId: string;
+    tier: string;
+    score: number;
+  },
+  governance: GovernanceContext,
+): void {
+  assertGovernance(governance);
+  db.prepare(
+    `INSERT OR IGNORE INTO memory_salience (message_id, record_type, record_id, tier, salience_score)
+     VALUES (NULL, ?, ?, ?, ?)`,
+  ).run(input.recordType, input.recordId, input.tier, input.score);
+}
+
+/** Apply one usefulness delta to each named memory salience target. */
+export function reinforceMemorySalience(
+  db: MemoryDatabase,
+  targets: MemorySalienceTarget[],
+  delta: number,
+  governance: GovernanceContext,
+): number {
+  assertGovernance(governance);
+  let changed = 0;
+  for (const target of targets) {
+    const result = db.prepare(
+      `UPDATE memory_salience
+       SET salience_score = MIN(1.0, MAX(0.0, salience_score + ?)),
+           tier = CASE
+             WHEN MIN(1.0, MAX(0.0, salience_score + ?)) >= 0.8 THEN 'high'
+             WHEN MIN(1.0, MAX(0.0, salience_score + ?)) >= 0.5 THEN 'mid'
+             ELSE 'low'
+           END,
+           access_count = access_count + 1,
+           last_accessed = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+       WHERE record_type = ? AND record_id = ?`,
+    ).run(delta, delta, delta, target.recordType, target.recordId);
+    changed += Number(result.changes ?? 0);
+  }
+  return changed;
+}
+
+export interface MemoryEnrichmentCaptureRow {
+  id: string;
+  tenant_id: string;
+  source_agent_id: string;
+  raw_artifact_id: string | null;
+  captured_at: string;
+  metadata_json: string;
+  updated_at: string;
+}
+
+/** Read governed-memory captures in queue order. */
+export function listMemoryEnrichmentCaptures(
+  db: MemoryDatabase,
+): MemoryEnrichmentCaptureRow[] {
+  return db
+    .prepare(
+      `SELECT id, tenant_id, source_agent_id, raw_artifact_id, captured_at, metadata_json, updated_at
+       FROM agent_session_captures
+       WHERE status = 'captured'
+         AND raw_artifact_id IS NOT NULL
+         AND metadata_json LIKE '%"enrichmentKind":"governed-memory"%'
+       ORDER BY captured_at ASC, id ASC`,
+    )
+    .all() as MemoryEnrichmentCaptureRow[];
+}
+
+/** Read one governed-memory capture, including the full capture row. */
+export function getMemoryEnrichmentCapture(
+  db: MemoryDatabase,
+  captureId: string,
+): MemoryEnrichmentCaptureRow | undefined {
+  return db
+    .prepare("SELECT * FROM agent_session_captures WHERE id = ?")
+    .get(captureId) as MemoryEnrichmentCaptureRow | undefined;
+}
+
+/** Insert one governed-memory bronze capture queue item. */
+export function createMemoryEnrichmentCapture(
+  db: MemoryDatabase,
+  input: {
+    id: string;
+    tenantId: string;
+    sourceAgentId: string;
+    project: string | null;
+    sessionId: string;
+    summary: string;
+    metadataJson: string;
+    rawArtifactId: string;
+    captureHash: string;
+    capturedAt: string;
+    updatedAt: string;
+  },
+  governance: GovernanceContext,
+): void {
+  assertGovernance(governance);
+  db.prepare(
+    `INSERT INTO agent_session_captures (
+       id, tenant_id, source_agent_id, runtime, project, session_id, status,
+       capture_health, summary, metadata_json, raw_artifact_id, capture_hash,
+       captured_at, updated_at
+     ) VALUES (?, ?, ?, 'governed-memory', ?, ?, 'captured', 'ok', ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.id,
+    input.tenantId,
+    input.sourceAgentId,
+    input.project,
+    input.sessionId,
+    input.summary,
+    input.metadataJson,
+    input.rawArtifactId,
+    input.captureHash,
+    input.capturedAt,
+    input.updatedAt,
+  );
+}
+
+/** Update queue metadata and status for one governed-memory capture. */
+export function updateMemoryEnrichmentCapture(
+  db: MemoryDatabase,
+  input: {
+    captureId: string;
+    metadataJson: string;
+    status: "captured" | "handoff_ready";
+    updatedAt: string;
+  },
+  governance: GovernanceContext,
+): void {
+  assertGovernance(governance);
+  db.prepare(
+    `UPDATE agent_session_captures
+     SET status = ?, metadata_json = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(input.status, input.metadataJson, input.updatedAt, input.captureId);
+}
+
+/** Read the result payload for one memory write. */
+export function getMemoryWriteResult(
+  db: MemoryDatabase,
+  writeId: number,
+): { result: string } | undefined {
+  return db
+    .prepare("SELECT result FROM agent_memory_writes WHERE id = ?")
+    .get(writeId) as { result: string } | undefined;
+}
+
+/** Persist the updated result payload for one memory write. */
+export function updateMemoryWriteResult(
+  db: MemoryDatabase,
+  writeId: number,
+  resultJson: string,
+  governance: GovernanceContext,
+): void {
+  assertGovernance(governance);
+  db.prepare("UPDATE agent_memory_writes SET result = ? WHERE id = ?").run(resultJson, writeId);
+}
+
+/** Insert one extracted silver memory candidate and return its change count. */
+export function createMemoryCandidate(
+  db: MemoryDatabase,
+  input: {
+    id: string;
+    tenantId: string;
+    captureId: string;
+    agentId: string;
+    memoryType: string;
+    content: string;
+    contentHash: string;
+    metadataJson: string;
+  },
+  governance: GovernanceContext,
+): number {
+  assertGovernance(governance);
+  const result = db.prepare(
+    `INSERT OR IGNORE INTO agent_memory_candidates
+      (id, tenant_id, capture_id, agent_id, memory_type, content, content_hash, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.id,
+    input.tenantId,
+    input.captureId,
+    input.agentId,
+    input.memoryType,
+    input.content,
+    input.contentHash,
+    input.metadataJson,
+  );
+  return Number(result.changes ?? 0);
+}
+
+/** Find an existing candidate for an idempotent enrichment retry. */
+export function findMemoryCandidateByCaptureHash(
+  db: MemoryDatabase,
+  captureId: string,
+  contentHash: string,
+): { id: string } | undefined {
+  return db
+    .prepare(
+      "SELECT id FROM agent_memory_candidates WHERE capture_id = ? AND content_hash = ?",
+    )
+    .get(captureId, contentHash) as { id: string } | undefined;
+}
+
+/** Run the governed-memory claim/enrichment mutations in one SQLite transaction. */
+export function withMemoryEnrichmentTransaction<T>(
+  db: MemoryDatabase,
+  governance: GovernanceContext,
+  operation: () => T,
+): T {
+  assertGovernance(governance);
+  return db.transaction(operation)();
 }

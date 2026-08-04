@@ -19,7 +19,12 @@ the current objective durable before planning or coding continues.
 2. Capture acceptance criteria and verification requirements.
 3. Identify the lane: code, research, memory, deployment, email/doc, GTM,
    safety, or ops.
-4. Load relevant context from the repo, GSD state, and memory if available.
+4. Before planning or coding, make the named mandatory `memory_prior_work`
+   probe with the goal statement plus repo/project scope and
+   `timing: "before_plan"`. Record the returned `receipt` (or receipt id when
+   the provider supplies one) in the goal state, including a typed
+   `search_skipped` receipt. A failed/unavailable probe is fail-open for the
+   work, but the skip/error receipt must remain visible.
 5. If `MEMROOS_APP_URL` and `MEMROOS_AGENT_API_KEY` are available, create or
    resume the goal through the MemRoOS `/api/gsd/goal` endpoint.
 6. If the API is unavailable, continue with repo-local GSD artifacts and state

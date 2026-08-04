@@ -30,6 +30,20 @@ export interface CronHealthJob extends Required<Omit<CronHealthJobInput, "metada
 
 const DEFAULT_JOBS: CronHealthJobInput[] = [
   {
+    id: "observe-sidecar",
+    name: "Observe session sidecar",
+    sourceFamily: "observe",
+    schedule: "every 5 minutes",
+    expectedIntervalMinutes: 5,
+  },
+  {
+    id: "observe-capture-gate",
+    name: "Session capture gate",
+    sourceFamily: "observe",
+    schedule: "on session stop",
+    expectedIntervalMinutes: 5,
+  },
+  {
     id: "memory-consolidation",
     name: "Memory consolidation",
     sourceFamily: "memory",

@@ -91,6 +91,40 @@ describe("POST /api/tool-attention/record", () => {
     expect(efficiencyRows).toEqual({ count: 0 });
   });
 
+  it("reinforces salience for an agent-written memory named in usefulness feedback", async () => {
+    const { POST, getDb, registerAgent } = await loadRoute();
+    const { apiKey } = registerAgent({
+      id: "tool-agent",
+      name: "Tool Agent",
+      role: "Records tools",
+      platform: "codex",
+      protocol: "rest",
+      issueApiKey: true,
+    });
+    getDb()
+      .prepare(
+        `INSERT INTO memory_salience (record_type, record_id, tier, salience_score)
+         VALUES ('agent_memory_candidate', 'candidate-1', 'low', 0.4)`
+      )
+      .run();
+
+    const res = await POST(
+      new Request("http://localhost/api/tool-attention/record", {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          toolId: "memory_search",
+          outcome: "helped",
+          metadata: { recordType: "agent_memory_candidate", recordId: "candidate-1" },
+        }),
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(getDb().prepare("SELECT salience_score, tier, access_count FROM memory_salience WHERE record_id = ?").get("candidate-1"))
+      .toEqual({ salience_score: 0.5, tier: "mid", access_count: 1 });
+  });
+
   it("emits source_read telemetry for authenticated read outcomes with source metadata", async () => {
     const { POST, getDb, registerAgent } = await loadRoute();
     const { listEfficiencyEvents } = await import("@/lib/efficiency-telemetry");

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/auth/middleware-roles";
+import { CAPABILITY, requireCapability } from "@/lib/auth/capabilities";
 import { listClassificationReviews } from "@/lib/classification/cascade";
 import { getDb } from "@/lib/db";
 
@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const session = await authenticateUser(req);
   if (!session) return Response.json({ error: "authentication required" }, { status: 401 });
 
-  const roleError = requireRole(session.role, "reviewer");
-  if (roleError) return roleError;
+  const capabilityError = requireCapability(session, CAPABILITY.CLASSIFICATION_REVIEW);
+  if (capabilityError) return capabilityError;
 
   const url = new URL(req.url);
   const status = url.searchParams.get("status") === "all" ? "all" : "open";
