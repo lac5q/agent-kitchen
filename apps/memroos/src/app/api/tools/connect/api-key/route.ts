@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
     const connection = await storeApiKeyConnection({
       providerKey: provider.key,
       apiKey,
+      ownerId: session.userId,
     });
     appendActivityEvent({
       providerKey: provider.key,

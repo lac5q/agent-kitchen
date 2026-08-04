@@ -49,7 +49,7 @@ describe("A2A task service", () => {
 
   it("ignores body-provided caller identity unless it matches the authenticated agent", async () => {
     const { getA2aTask, registerAgent, sendA2aMessage } = await loadService();
-    const { agent } = registerAgent({ id: "caller", name: "Caller", role: "Caller", platform: "codex", protocol: "a2a" });
+    const { agent } = registerAgent({ id: "caller", name: "Caller", role: "Caller", platform: "codex", protocol: "a2a", capabilities: [{ id: "a2a:send", name: "A2A Send", description: "", tags: [] }] });
 
     const task = await sendA2aMessage(agent, {
       message: message(),
@@ -64,7 +64,7 @@ describe("A2A task service", () => {
 
   it("creates a task and appends task.created", async () => {
     const { getA2aTask, registerAgent, sendA2aMessage } = await loadService();
-    const { agent } = registerAgent({ id: "creator", name: "Creator", role: "Creator", platform: "codex", protocol: "a2a" });
+    const { agent } = registerAgent({ id: "creator", name: "Creator", role: "Creator", platform: "codex", protocol: "a2a", capabilities: [{ id: "a2a:send", name: "A2A Send", description: "", tags: [] }] });
 
     const task = await sendA2aMessage(agent, { message: message("create this") });
     const record = getA2aTask(task.id);
@@ -75,7 +75,7 @@ describe("A2A task service", () => {
 
   it("cancels non-terminal tasks and appends task.canceled", async () => {
     const { cancelA2aTask, getA2aTask, registerAgent, sendA2aMessage, transitionA2aTask } = await loadService();
-    const { agent } = registerAgent({ id: "cancel-agent", name: "Cancel Agent", role: "Cancel", platform: "codex", protocol: "a2a" });
+    const { agent } = registerAgent({ id: "cancel-agent", name: "Cancel Agent", role: "Cancel", platform: "codex", protocol: "a2a", capabilities: [{ id: "a2a:send", name: "A2A Send", description: "", tags: [] }] });
     const task = await sendA2aMessage(agent, { message: message() });
     transitionA2aTask(task.id, "working");
 
@@ -88,7 +88,7 @@ describe("A2A task service", () => {
 
   it("rejects cancellation of completed, failed, or canceled tasks", async () => {
     const { cancelA2aTask, registerAgent, sendA2aMessage, transitionA2aTask } = await loadService();
-    const { agent } = registerAgent({ id: "terminal-agent", name: "Terminal Agent", role: "Terminal", platform: "codex", protocol: "a2a" });
+    const { agent } = registerAgent({ id: "terminal-agent", name: "Terminal Agent", role: "Terminal", platform: "codex", protocol: "a2a", capabilities: [{ id: "a2a:send", name: "A2A Send", description: "", tags: [] }] });
 
     for (const state of ["completed", "failed", "canceled"] as const) {
       const task = await sendA2aMessage(agent, { message: message(state) });

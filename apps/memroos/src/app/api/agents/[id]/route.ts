@@ -10,6 +10,7 @@ import {
   type AgentViewer,
 } from "@/lib/agent-registry";
 import { authenticateUser } from "@/lib/auth/session";
+import { resolveViewer } from "@/lib/auth/viewer";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
 import {
@@ -31,11 +32,14 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const session = await authenticateUser(request);
-  if (!session) {
+  const resolvedViewer = await resolveViewer(request);
+  if (!resolvedViewer) {
     return Response.json({ error: "authentication required" }, { status: 401 });
   }
-  const viewer: AgentViewer = { userId: session.userId, role: session.role };
+  const viewer: AgentViewer = {
+    userId: resolvedViewer.userId,
+    role: resolvedViewer.role,
+  };
 
   const agent = getRegisteredAgent(id);
   // 404 rather than 403 when out of scope: a 403 would confirm that an agent

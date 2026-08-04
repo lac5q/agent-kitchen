@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useCreateAgentOnboardingInviteMutation,
   useDeregisterAgentMutation,
@@ -12,6 +12,7 @@ import {
 import { AgentRegistryDrawer } from "@/components/agents/agent-registry-drawer";
 import { AgentRegistrationForm } from "@/components/agents/agent-registration-form";
 import { AgentRegistryTable } from "@/components/agents/agent-registry-table";
+import type { RegistryAgentRow } from "@/components/agents/agent-registry-table";
 import { AgentSecurityModesPanel } from "@/components/agents/agent-security-modes-panel";
 import { Button } from "@/components/ui/button";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
@@ -23,6 +24,14 @@ import type { AgentProtocol, AgentStatus, RegisteredAgent } from "@/types";
 type ProtocolFilter = "all" | AgentProtocol;
 type StatusFilter = "all" | AgentStatus;
 type LivenessFilter = "all" | LivenessObservation["state"];
+type OwnerFilter = "all" | "unowned" | string;
+
+interface CurrentUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
 
 function inviteErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Invite creation failed.";
@@ -92,7 +101,7 @@ function envelopeStatLabel(env: MetricEnvelope<number | null>): string {
 }
 
 export default function AgentRegistryPage() {
-  const { data, isLoading, isError, error } = useRegisteredAgents();
+  const { data, isLoading, isError, error, refetch } = useRegisteredAgents();
   const registerMutation = useRegisterAgentMutation();
   const registerA2aMutation = useRegisterA2aAgentCardMutation();
   const inviteMutation = useCreateAgentOnboardingInviteMutation();
@@ -101,14 +110,32 @@ export default function AgentRegistryPage() {
   const [protocol, setProtocol] = useState<ProtocolFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [liveness, setLiveness] = useState<LivenessFilter>("all");
+  const [owner, setOwner] = useState<OwnerFilter>("all");
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [optimisticOwners, setOptimisticOwners] = useState<
+    Record<string, NonNullable<RegistryAgentRow["owner"]>>
+  >({});
+  const [claimingAgentId, setClaimingAgentId] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimErrorAgentId, setClaimErrorAgentId] = useState<string | null>(null);
   const [selected, setSelected] = useState<RegisteredAgent | null>(null);
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
   const [inviteCommand, setInviteCommand] = useState<string | null>(null);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
   const agents = useMemo(
-    () => (data?.agents ?? []) as (RegisteredAgent & { liveness?: LivenessObservation })[],
+    () => (data?.agents ?? []) as RegistryAgentRow[],
     [data?.agents]
+  );
+  const displayedAgents = useMemo(
+    () =>
+      agents.map((agent) => {
+        const optimisticOwner = optimisticOwners[agent.id];
+        return optimisticOwner
+          ? { ...agent, owner: optimisticOwner, ownerId: optimisticOwner.ownerId, isOwnedByViewer: true }
+          : agent;
+      }),
+    [agents, optimisticOwners]
   );
   const summary = data?.summary;
   const livenessEnvelope = data?.liveness;
@@ -118,13 +145,120 @@ export default function AgentRegistryPage() {
 
   const filtered = useMemo(
     () =>
-      agents.filter((agent) =>
+      displayedAgents.filter((agent) =>
         (protocol === "all" || agent.protocol === protocol) &&
         (status === "all" || agent.status === status) &&
-        (liveness === "all" || agent.liveness?.state === liveness)
+        (liveness === "all" || agent.liveness?.state === liveness) &&
+        (owner === "all" ||
+          (owner === "unowned" ? !agent.owner : agent.owner?.ownerId === owner))
       ),
-    [agents, protocol, status, liveness]
+    [displayedAgents, protocol, status, liveness, owner]
   );
+
+  const ownerFilters = useMemo(() => {
+    const owners = new Map<string, { label: string; count: number }>();
+    let unownedCount = 0;
+    for (const agent of displayedAgents) {
+      if (!agent.owner) {
+        unownedCount += 1;
+        continue;
+      }
+      const current = owners.get(agent.owner.ownerId);
+      owners.set(agent.owner.ownerId, {
+        label: current?.label ?? agent.owner.displayName,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+    return [
+      { value: "all", label: "All", count: displayedAgents.length },
+      ...Array.from(owners.entries())
+        .sort(([, left], [, right]) => left.label.localeCompare(right.label))
+        .map(([value, details]) => ({ value, ...details })),
+      ...(currentUser?.role === "admin"
+        ? [{ value: "unowned", label: "Unowned", count: unownedCount }]
+        : []),
+    ];
+  }, [currentUser?.role, displayedAgents]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/auth/me", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as CurrentUser;
+      })
+      .then((user) => {
+        if (active && user) setCurrentUser(user);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const ownerFromUrl = new URLSearchParams(window.location.search).get("owner");
+    if (!ownerFromUrl) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setOwner(ownerFromUrl);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function claimAgent(agentId: string) {
+    if (currentUser?.role !== "admin") return;
+    const optimisticOwner = {
+      ownerId: currentUser.id,
+      email: currentUser.email,
+      displayName: currentUser.displayName,
+    };
+    setClaimError(null);
+    setClaimErrorAgentId(null);
+    setClaimingAgentId(agentId);
+    setOptimisticOwners((previous) => ({ ...previous, [agentId]: optimisticOwner }));
+
+    try {
+      const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/ownership`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ transferToUserId: currentUser.id }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Claim failed. Try again.");
+      }
+      await refetch?.();
+      setOptimisticOwners((previous) => {
+        const next = { ...previous };
+        delete next[agentId];
+        return next;
+      });
+    } catch (claimFailure) {
+      setOptimisticOwners((previous) => {
+        const next = { ...previous };
+        delete next[agentId];
+        return next;
+      });
+      setClaimError(claimFailure instanceof Error ? claimFailure.message : "Claim failed. Try again.");
+      setClaimErrorAgentId(agentId);
+    } finally {
+      setClaimingAgentId(null);
+    }
+  }
+
+  function setOwnerFilter(next: OwnerFilter) {
+    setOwner(next);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (next === "all") params.delete("owner");
+    else params.set("owner", next);
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }
 
   const activeCount = agents.filter((agent) => agent.status === "active").length;
   const protocolCount = new Set(agents.map((agent) => agent.protocol)).size;
@@ -139,7 +273,7 @@ export default function AgentRegistryPage() {
   const emptyReason =
     agents.length === 0
       ? "Register an agent above to populate the registry."
-      : "Adjust the protocol, status, or liveness filters above to widen the result set.";
+      : "Adjust the protocol, status, or liveness filters above to widen the result set. You can also filter by owner.";
 
   return (
     <div className="space-y-6">
@@ -368,6 +502,24 @@ export default function AgentRegistryPage() {
             </button>
           ))}
         </div>
+        <div className="flex flex-wrap gap-2" data-agents-filter-row="owner">
+          <span className="self-center text-xs uppercase tracking-wide text-stone-500">Owner:</span>
+          {ownerFilters.map((item) => (
+            <button
+              key={item.value}
+              className="border px-3 py-1 text-sm font-semibold"
+              style={{
+                borderColor: owner === item.value ? NOC.terra : NOC.rule,
+                color: owner === item.value ? NOC.terraDeep : NOC.muted,
+                background: owner === item.value ? NOC.peach : NOC.paper,
+              }}
+              onClick={() => setOwnerFilter(item.value)}
+              data-filter-value={item.value}
+            >
+              {item.label} ({item.count})
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
@@ -384,6 +536,10 @@ export default function AgentRegistryPage() {
           agents={filtered}
           onSelect={setSelected}
           onDeregister={(agentId) => deregisterMutation.mutate(agentId)}
+          onClaim={currentUser?.role === "admin" ? claimAgent : undefined}
+          claimingAgentId={claimingAgentId}
+          claimError={claimError}
+          claimErrorAgentId={claimErrorAgentId}
           onDelete={(agentId) => {
             const agent = filtered.find((a) => a.id === agentId) as
               | (typeof filtered)[number] & {

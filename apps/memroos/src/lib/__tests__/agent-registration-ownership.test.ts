@@ -7,7 +7,7 @@ import { initSchema } from "@/lib/db-schema";
 let db: Database.Database;
 vi.mock("@/lib/db", () => ({ getDb: () => db }));
 
-const { registerAgent, getRegisteredAgent } = await import("@/lib/agent-registry");
+const { listUnownedAgents, registerAgent, getRegisteredAgent } = await import("@/lib/agent-registry");
 
 const base = { role: "agent", platform: "claude", protocol: "rest" } as const;
 
@@ -81,5 +81,12 @@ describe("re-registering an existing agent id", () => {
     db.prepare("INSERT INTO registered_agents (id,name,role,platform,protocol) VALUES ('legacy','legacy','agent','claude','rest')").run();
     registerAgent({ ...base, id: "legacy", name: "legacy", ownerId: "juan" });
     expect(getRegisteredAgent("legacy")?.ownerId).toBe("juan");
+  });
+
+  it("makes unowned registrations queryable for accountable-owner repair", () => {
+    registerAgent({ ...base, id: "unowned", name: "unowned" });
+    registerAgent({ ...base, id: "owned", name: "owned", ownerId: "juan" });
+
+    expect(listUnownedAgents().map((agent) => agent.id)).toEqual(["unowned"]);
   });
 });

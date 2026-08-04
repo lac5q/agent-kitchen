@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { UserPlus, Copy, Check } from "lucide-react";
+import { UserPlus, Copy, Check, Eye } from "lucide-react";
+import Link from "next/link";
 import { Btn, PageHeader, Pill } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
 import { buildInviteEmailDraft } from "@/lib/email/invite-email-draft";
@@ -82,6 +83,19 @@ async function setUserDisabled(data: { userId: string; disabled: boolean }): Pro
 }
 
 interface Me { email: string; role: string }
+
+async function startViewAs(userId: string): Promise<void> {
+  const res = await fetch("/api/admin/view-as", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ targetUserId: userId }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to start view-as");
+  }
+}
 
 interface Invitation {
   id: string;
@@ -275,6 +289,15 @@ export default function TeamPage() {
     onSuccess: () => {
       setMemberError("");
       void queryClient.invalidateQueries({ queryKey: ["team-users"] });
+    },
+    onError: (err: Error) => setMemberError(err.message),
+  });
+
+  const viewAsMutation = useMutation({
+    mutationFn: startViewAs,
+    onSuccess: () => {
+      setMemberError("");
+      window.location.reload();
     },
     onError: (err: Error) => setMemberError(err.message),
   });
@@ -712,7 +735,15 @@ export default function TeamPage() {
             <tbody style={{ background: NOC.paper }}>
               {data?.users.map((user) => (
                 <tr key={user.id} style={{ borderTop: `1px solid ${NOC.rule}` }}>
-                  <td className="px-4 py-3" style={{ color: NOC.ink }}>{user.displayName}</td>
+                  <td className="px-4 py-3" style={{ color: NOC.ink }}>
+                    <Link
+                      href={`/agents?owner=${encodeURIComponent(user.id)}`}
+                      className="underline decoration-dotted underline-offset-2"
+                      data-testid={`user-agents-${user.id}`}
+                    >
+                      {user.displayName}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3" style={{ color: NOC.muted }}>{user.email}</td>
                   <td className="px-4 py-3">
                     {/* Editable in place. Changing your own role is refused
@@ -765,6 +796,19 @@ export default function TeamPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      {me?.role === "admin" && (
+                        <button
+                          type="button"
+                          onClick={() => viewAsMutation.mutate(user.id)}
+                          disabled={viewAsMutation.isPending || Boolean(user.disabledAt)}
+                          className="inline-flex items-center gap-1 text-sm underline disabled:opacity-50"
+                          style={{ color: NOC.info }}
+                          title="Open a read-only view of this user's console"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View as
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleToggleDisabled(user)}

@@ -170,7 +170,7 @@ function LandingPage() {
         </header>
 
         <section className="border-b border-[#cccccc]">
-          <div className="mx-auto grid max-w-[1180px] gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end lg:py-20">
+          <div className="mx-auto grid max-w-[1180px] gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-end lg:py-20">
             <div className="mk-reveal">
               <h1 className="max-w-[11ch] text-[clamp(58px,9vw,118px)] font-semibold leading-none tracking-normal text-[#0f0f0e]">
                 MemroOS
@@ -242,7 +242,7 @@ function LandingPage() {
 
         <section id="features" className="border-b border-[#cccccc] bg-white">
           <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-20">
-            <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-end">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8392c]">
                   The control layer MemroOS gives back to your team
@@ -258,7 +258,7 @@ function LandingPage() {
 
             <div className="mt-10 divide-y divide-[#cccccc] border-y border-[#cccccc]">
               {topFeatures.map((feature) => (
-                <article key={feature.title} className="grid gap-6 py-8 lg:grid-cols-[90px_270px_1fr]">
+                <article key={feature.title} className="grid gap-6 py-8 lg:grid-cols-[minmax(5.625rem,90px)_minmax(14rem,270px)_minmax(0,1fr)]">
                   <div className="flex items-center justify-between gap-4 lg:block">
                     <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#a8392c]">{feature.number}</p>
                     <span className="mt-4 flex h-12 w-12 items-center justify-center border border-[#cccccc] bg-[#fafafa] text-[#a8392c]">
@@ -285,7 +285,7 @@ function LandingPage() {
 
         <section id="proof" className="border-b border-[#0f0f0e] bg-[#0f0f0e] text-white">
           <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-20">
-            <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:items-end">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#e7b6a8]">Proof without the wall of text</p>
                 <h2 className="mt-3 text-[clamp(38px,5vw,64px)] font-semibold leading-tight tracking-normal text-white">
@@ -329,7 +329,7 @@ function LandingPage() {
               ))}
             </div>
 
-            <div className="mt-10 grid gap-5 border border-[#4a4a45] bg-[#171715] p-5 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="mt-10 grid gap-5 border border-[#4a4a45] bg-[#171715] p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#e7b6a8]">Research paper</p>
                 <h3 className="mt-3 text-[26px] font-semibold leading-tight text-white">
@@ -354,7 +354,7 @@ function LandingPage() {
 
         <section className="border-b border-[#cccccc] bg-[#fafafa]">
           <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-20">
-            <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8392c]">Operating loop</p>
                 <h2 className="mt-3 text-[clamp(38px,5vw,64px)] font-semibold leading-tight tracking-normal text-[#0f0f0e]">
@@ -377,7 +377,7 @@ function LandingPage() {
         </section>
 
         <section id="schedule" className="bg-white">
-          <div className="mx-auto grid max-w-[1180px] gap-8 px-5 py-16 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-start lg:py-20">
+          <div className="mx-auto grid max-w-[1180px] gap-8 px-5 py-16 sm:px-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:items-start lg:py-20">
             <div>
               <div className="flex items-center gap-4">
                 <KangarooMark className="h-12 w-12" />

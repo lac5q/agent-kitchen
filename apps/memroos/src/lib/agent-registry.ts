@@ -16,6 +16,13 @@ import { getDb } from "@/lib/db";
 import { recordEfficiencyEvent, type MemoryWritePayload } from "@/lib/efficiency-telemetry";
 import { getAdapters } from "@/lib/memory/registry";
 
+export class AgentRegistrationError extends Error {
+  constructor(readonly code: "agent_revoked", message: string) {
+    super(message);
+    this.name = "AgentRegistrationError";
+  }
+}
+
 interface RegisteredAgentRow {
   id: string;
   name: string;
@@ -281,7 +288,10 @@ function replaceCapabilities(agentId: string, capabilities: RegisteredAgentCapab
   }
 }
 
-export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
+export function registerAgent(
+  input: RegisterAgentInput,
+  options: { beforePersist?: () => void } = {}
+): RegisterAgentResult {
   // VAL-SKILL-021: registerAgent NEVER inserts into skill_registry, never
   // updates skill_registry.dispatch_status, never touches skill_quarantine
   // or skill_version_pins. An agent or capability named like a skill cannot
@@ -308,12 +318,17 @@ export function registerAgent(input: RegisterAgentInput): RegisterAgentResult {
       : null;
 
   const priorRow = db
-    .prepare("SELECT owner_id FROM registered_agents WHERE id = ?")
-    .get(input.id) as { owner_id: string | null } | undefined;
+    .prepare("SELECT owner_id, deregistered_at FROM registered_agents WHERE id = ?")
+    .get(input.id) as { owner_id: string | null; deregistered_at: string | null } | undefined;
   const existedBefore = Boolean(priorRow);
   const ownerBefore = priorRow?.owner_id ?? null;
 
+  if (priorRow?.deregistered_at) {
+    throw new AgentRegistrationError("agent_revoked", `Agent ${input.id} is revoked`);
+  }
+
   const tx = db.transaction(() => {
+    options.beforePersist?.();
     db.prepare(
       `INSERT INTO registered_agents (
          id, name, role, company, platform, protocol, status, current_task,
@@ -613,6 +628,21 @@ export function listAllAgentsUnscoped(options: ListAgentsOptions = {}): Register
       `SELECT *
        FROM registered_agents
        ${options.includeDeregistered ? "" : "WHERE deregistered_at IS NULL"}
+       ORDER BY name COLLATE NOCASE`
+    )
+    .all() as RegisteredAgentRow[];
+
+  return rows.map(rowToRegisteredAgent);
+}
+
+/** Queryable defect state for agents that have no accountable human owner. */
+export function listUnownedAgents(options: ListAgentsOptions = {}): RegisteredAgent[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT *
+       FROM registered_agents
+       WHERE owner_id IS NULL
+         ${options.includeDeregistered ? "" : "AND deregistered_at IS NULL"}
        ORDER BY name COLLATE NOCASE`
     )
     .all() as RegisteredAgentRow[];

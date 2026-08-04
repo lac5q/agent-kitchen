@@ -84,6 +84,10 @@ export const AUDIT_EVENT_TYPES = {
   AUDIT_ANNOTATION: "audit.annotation",
   /** Admin changed compliance posture controls. */
   ADMIN_COMPLIANCE_UPDATED: "admin.compliance_updated",
+  /** An admin entered a read-only view-as session. */
+  VIEW_AS_START: "view_as.start",
+  /** A view-as session was exited. */
+  VIEW_AS_EXIT: "view_as.exit",
 
   // Knowledge vault access (Phase 125, ENTOPS-03)
   /** Knowledge MCP op (read/write/delete) was centrally audited. Per-tenant hash-chained. */
@@ -273,6 +277,8 @@ export const ENTITY_TYPES = {
   ORCHESTRATION_RUN: "orchestration_run",
   /** A retrieval benchmark run, stage receipt, publication gate, replay, or contamination event. */
   RETRIEVAL_BENCH: "retrieval_bench",
+  /** A human user referenced by an administrative audit event. */
+  USER: "user",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

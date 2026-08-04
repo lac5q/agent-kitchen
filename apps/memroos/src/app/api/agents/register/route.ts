@@ -4,8 +4,9 @@ import {
   registerAgent,
   type AgentViewer,
 } from "@/lib/agent-registry";
-import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
+import { authorizeRegistryWriteStrict, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { authenticateUser } from "@/lib/auth/session";
+import { getDb } from "@/lib/db";
 import type { AgentPlatform, AgentProtocol, RegisterAgentInput } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -56,19 +57,8 @@ function parseInput(body: unknown): RegisterAgentInput | null {
     port: typeof body.port === "number" ? body.port : undefined,
     healthEndpoint: typeof body.healthEndpoint === "string" ? body.healthEndpoint : undefined,
     tunnelUrl: typeof body.tunnelUrl === "string" ? body.tunnelUrl : undefined,
-    capabilities: Array.isArray(body.capabilities)
-      ? body.capabilities
-          .filter(isRecord)
-          .map((capability) => ({
-            id: String(capability.id ?? ""),
-            name: String(capability.name ?? capability.id ?? ""),
-            description: String(capability.description ?? ""),
-            tags: Array.isArray(capability.tags) ? capability.tags.map(String) : [],
-          }))
-          .filter((capability) => capability.id && capability.name)
-      : [],
     metadata: isRecord(body.metadata) ? body.metadata : undefined,
-    issueApiKey: body.issueApiKey !== false,
+    issueApiKey: body.issueApiKey === true,
   };
 }
 
@@ -80,19 +70,35 @@ export async function POST(request: Request) {
    * anything else means a person can create an agent they cannot then see,
    * because unowned agents are admin-only.
    *
-   * Machine callers (loopback, operator key) have no human behind them, so the
-   * agent stays unowned and surfaces as "needs an owner" rather than being
-   * attributed to whoever happened to hold the key.
+   * Machine callers must assert the human owner explicitly in the request body;
+   * the operator key authorizes the write but is not itself an owner identity.
    */
   const session = await authenticateUser(request);
-  if (!session && !authorizeRegistryWrite(request)) {
+  const operatorAuthorized = !session && authorizeRegistryWriteStrict(request);
+  if (!session && !operatorAuthorized) {
     return registryWriteUnauthorizedResponse();
   }
 
   const body = (await request.json().catch(() => null)) as unknown;
+  if (isRecord(body) && Object.prototype.hasOwnProperty.call(body, "capabilities")) {
+    return Response.json({ ok: false, error: "capabilities must not be supplied by the caller" }, { status: 400 });
+  }
   const input = parseInput(body);
   if (!input) {
     return Response.json({ ok: false, error: "Invalid registration body" }, { status: 400 });
+  }
+
+  const assertedOwnerUserId =
+    isRecord(body) && typeof body.ownerUserId === "string" && body.ownerUserId.trim()
+      ? body.ownerUserId.trim()
+      : undefined;
+  const ownerUserId = session?.userId ?? assertedOwnerUserId;
+  if (!ownerUserId) {
+    return Response.json({ ok: false, error: "ownerUserId is required" }, { status: 400 });
+  }
+  const db = getDb();
+  if (!db.prepare("SELECT 1 FROM users WHERE id = ?").get(ownerUserId)) {
+    return Response.json({ ok: false, error: "ownerUserId must reference an existing user" }, { status: 400 });
   }
 
   // Registration must not be a back door onto an agent that already exists.
@@ -108,6 +114,11 @@ export async function POST(request: Request) {
     }
   }
 
+  const existing = getRegisteredAgent(input.id, { includeDeregistered: true });
+  if (existing?.deregisteredAt) {
+    return Response.json({ ok: false, error: "agent_revoked", code: "agent_revoked" }, { status: 409 });
+  }
+
   // Never trust a client-supplied owner: it would let any caller attribute an
   // agent to someone else, or to themselves to gain sight of it.
   // Getting here means the caller is entitled to this agent: either they own it
@@ -116,7 +127,7 @@ export async function POST(request: Request) {
   // same machine is the ordinary case.
   const result = registerAgent({
     ...input,
-    ownerId: session?.userId,
+    ownerId: ownerUserId,
     allowRekeyExisting: true,
   });
   return Response.json({ ok: true, ...result, timestamp: new Date().toISOString() });

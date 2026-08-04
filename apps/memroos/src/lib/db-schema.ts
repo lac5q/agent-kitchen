@@ -1,9 +1,10 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
 
 import { initBehavioralJobSchema } from './seal/behavioral-schema';
 import { assertNotDefaultInternalApiKey } from './internal-api-key';
 import { scrubLegacyPackProvenance } from './ontology/pack-contract';
+import { readVaultArtifact } from './vault/writer';
 
 /**
  * Run a table rebuild with foreign_keys OFF, then restore prior state.
@@ -82,7 +83,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 37;
+export const CURRENT_SCHEMA_VERSION = 39;
 
 type SchemaMigration = {
   version: number;
@@ -287,6 +288,16 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 37,
     name: 'agent-ownership-history',
     up: applyAgentOwnershipHistorySchema,
+  },
+  {
+    version: 38,
+    name: 'per-user-tool-connections',
+    up: applyToolConnectionsSchema,
+  },
+  {
+    version: 39,
+    name: 'onboarding-token-nonces',
+    up: applyOnboardingTokenNonceSchema,
   },
 ];
 
@@ -507,6 +518,141 @@ function applyAgentOwnershipHistorySchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_agent_ownership_history_agent
       ON agent_ownership_history(agent_id, recorded_at);
+  `);
+}
+
+/**
+ * Phase 227: give each vault/Nango tool connection a local identity and an
+ * accountable owner. Existing installations are deliberately shared and
+ * marked for repair so the migration preserves their current behaviour while
+ * making the missing ownership visible to the console.
+ */
+function applyToolConnectionsSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tool_connections (
+      id                   TEXT PRIMARY KEY,
+      provider_key         TEXT NOT NULL,
+      auth_mode            TEXT NOT NULL CHECK(auth_mode IN ('oauth','api-key')),
+      owner_id             TEXT REFERENCES users(id) ON DELETE SET NULL,
+      is_shared            INTEGER NOT NULL DEFAULT 0 CHECK(is_shared IN (0,1)),
+      needs_owner          INTEGER NOT NULL DEFAULT 0 CHECK(needs_owner IN (0,1)),
+      nango_connection_id  TEXT,
+      vault_artifact_id    TEXT,
+      account_email        TEXT,
+      created_at           TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS tool_connections_provider
+      ON tool_connections(provider_key);
+    CREATE INDEX IF NOT EXISTS tool_connections_owner
+      ON tool_connections(owner_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS tool_connections_nango_connection
+      ON tool_connections(nango_connection_id)
+      WHERE nango_connection_id IS NOT NULL;
+    CREATE TRIGGER IF NOT EXISTS tool_connections_owner_orphaned
+      AFTER UPDATE OF owner_id ON tool_connections
+      WHEN NEW.owner_id IS NULL AND OLD.owner_id IS NOT NULL
+      BEGIN
+        UPDATE tool_connections SET needs_owner = 1 WHERE id = NEW.id;
+      END;
+  `);
+
+  const tableExists = (name: string): boolean => Boolean(
+    db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(name),
+  );
+  const hasUsers = tableExists('users');
+  const hasUserRoles = tableExists('user_roles');
+  const hasRawArtifacts = tableExists('raw_artifacts');
+
+  const admin = hasUsers && hasUserRoles
+    ? db
+        .prepare(
+          `SELECT u.id
+           FROM users u
+           JOIN user_roles ur ON ur.user_id = u.id
+           WHERE ur.role = 'admin' AND u.disabled_at IS NULL
+           ORDER BY u.created_at ASC, u.id ASC
+           LIMIT 1`,
+        )
+        .get() as { id: string } | undefined
+    : undefined;
+
+  // Partial historical fixtures can be stamped at an old version without
+  // the baseline vault tables. The migration still creates its own table and
+  // simply has nothing to backfill in that shape.
+  if (!hasRawArtifacts) return;
+
+  const legacyRows = db
+    .prepare(
+      `SELECT id, source_id, artifact_path, created_at
+       FROM raw_artifacts
+       WHERE source_type = 'tool_connection'
+       ORDER BY created_at ASC, id ASC`,
+    )
+    .all() as Array<{
+      id: string;
+      source_id: string | null;
+      artifact_path: string;
+      created_at: string;
+    }>;
+
+  const hasArtifact = db.prepare(
+    `SELECT 1 FROM tool_connections WHERE vault_artifact_id = ? LIMIT 1`,
+  );
+  const hasNango = db.prepare(
+    `SELECT 1 FROM tool_connections WHERE nango_connection_id = ? LIMIT 1`,
+  );
+  const insert = db.prepare(`
+    INSERT INTO tool_connections
+      (id, provider_key, auth_mode, owner_id, is_shared, needs_owner,
+       nango_connection_id, vault_artifact_id, account_email, created_at)
+    VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, ?)
+  `);
+
+  for (const row of legacyRows) {
+    if (hasArtifact.get(row.id)) continue;
+
+    let record: { providerKey?: unknown; authMode?: unknown; nangoConnectionId?: unknown; accountEmail?: unknown } = {};
+    try {
+      record = JSON.parse(readVaultArtifact(db, row.id).body) as typeof record;
+    } catch {
+      // Keep malformed or unavailable legacy metadata adoptable below.
+    }
+
+    const providerKey = typeof record.providerKey === 'string' && record.providerKey
+      ? record.providerKey
+      : row.source_id ?? 'unknown';
+    const authMode = record.authMode === 'api-key' ? 'api-key' : 'oauth';
+    const nangoConnectionId = typeof record.nangoConnectionId === 'string' && record.nangoConnectionId
+      ? record.nangoConnectionId
+      : null;
+    if (nangoConnectionId && hasNango.get(nangoConnectionId)) continue;
+
+    insert.run(
+      randomUUID(),
+      providerKey,
+      authMode,
+      admin?.id ?? null,
+      nangoConnectionId,
+      row.id,
+      typeof record.accountEmail === 'string' ? record.accountEmail : null,
+      row.created_at,
+    );
+  }
+}
+
+/** Migration 39 — single-use onboarding token nonce storage. */
+function applyOnboardingTokenNonceSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS onboarding_token_nonces (
+      nonce       TEXT PRIMARY KEY,
+      agent_id    TEXT,
+      consumed_at TEXT NOT NULL,
+      expires_at  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS onboarding_token_nonces_expiry
+      ON onboarding_token_nonces(expires_at);
   `);
 }
 

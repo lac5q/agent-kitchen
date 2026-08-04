@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
+import { resolveViewer } from '@/lib/auth/viewer';
 import type { UserRole } from '@/lib/auth/types';
 
 type UserRow = { id: string; email: string; display_name: string; tenant_id: string };
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
   if (!session) {
     return Response.json({ error: 'authentication required' }, { status: 401 });
   }
+  const resolvedViewer = await resolveViewer(req);
 
   const db = getDb();
   const user = db
@@ -31,5 +33,6 @@ export async function GET(req: NextRequest) {
     displayName: user.display_name,
     tenantId: user.tenant_id,
     role: roleRow?.role ?? 'reviewer',
+    ...(resolvedViewer?.viewingAs ? { viewingAs: resolvedViewer.viewingAs } : {}),
   });
 }

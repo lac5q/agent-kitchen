@@ -30,7 +30,7 @@ export default function Loading() {
           />
         ))}
       </div>
-      <div className="grid flex-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(12rem,1.5fr)_minmax(10rem,1fr)]">
         <div
           className="min-h-[320px] animate-pulse border"
           style={{ borderColor: NOC.rule, background: NOC.paper }}

@@ -401,7 +401,7 @@ export function ModelRoutingPanel() {
         />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <div className="border border-stone-200 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-stone-500">

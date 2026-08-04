@@ -56,7 +56,7 @@ export function AgentSecurityModesPanel() {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[0.7fr_1.3fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(14rem,0.7fr)_minmax(18rem,1.3fr)]">
           <div className="grid grid-cols-2 gap-3">
             <div
               className="border border-stone-200 bg-white p-3"
@@ -120,7 +120,7 @@ export function AgentSecurityModesPanel() {
           </div>
 
           <div className="overflow-hidden border border-stone-200 bg-white">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-stone-200 px-3 py-2 text-xs font-medium uppercase tracking-wide text-stone-500">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-b border-stone-200 px-3 py-2 text-xs font-medium uppercase tracking-wide text-stone-500">
               <span>Agent</span>
               <span>Mode</span>
               <span>Ready</span>
@@ -134,7 +134,7 @@ export function AgentSecurityModesPanel() {
                 agents.map((agent) => (
                   <div
                     key={agent.id}
-                    className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-stone-200 px-3 py-2 last:border-0"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-b border-stone-200 px-3 py-2 last:border-0"
                     data-agent-id={agent.id}
                     data-agent-liveness={agent.liveness?.state ?? "unknown"}
                   >

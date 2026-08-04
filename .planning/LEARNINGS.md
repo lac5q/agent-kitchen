@@ -263,3 +263,63 @@
 - Routing rule to change: for GSD closeouts, always run full test/build after the planning validator, and treat mixed constants modules as client-boundary risks until imports are proven client-safe
 - Skill/config update needed: no
 - Promoted to: `.planning/LEARNINGS.md`
+
+## BM-20260803 phase-227 per-user-tool-connections
+- Director/Lead: claude-fable-5 (this session)
+- Watcher/Reviewer: claude-fable-5 (diff + report review; no second frontier available)
+- Executor: openai-codex/gpt-5.6-luna (xhigh), explicit operator lane choice
+- Harness: claude-code + codex exec (workspace-write sandbox), single worktree
+- Acceptance checks: scoped vitest (53/53), full fast suite 3711 pass/0 fail (baseline 3702/2 — both baseline flakes cleared), typecheck 0 errors, lint 0 errors, detect_changes (critical = migration-runner fan-out, mitigated by idempotent migration + green suite)
+- Result: pass
+- Token/cost note: ~30k smoke + one long xhigh run (codex CLI does not report per-run tokens in exec tail; unavailable)
+- What worked: full design package with pre-made decisions -> zero escalations, zero re-litigating; executor test names mapped 1:1 to contract scenarios
+- What failed / drifted: running a baseline test suite concurrently with an active executor in the same tree produced phantom failures (raced half-edited db-schema.ts). Rule: baseline before launch, or in a separate worktree. Executor's sandboxed full-suite run showed 10 env-artifact failures (blocked $HOME writes) — director re-run outside sandbox was the authoritative gate, as designed.
+- Routing rule to change: none
+- Skill/config update needed: no
+
+## BM-20260803 phase-226 view-as
+- Director/Lead: claude-fable-5 | Executor: openai-codex/gpt-5.6-luna (xhigh) | Harness: codex exec, single worktree
+- Acceptance: focused 61/61, trust-boundary 98/98, typecheck/lint pass, full fast suite 3722/0 (director-run)
+- Result: pass. Zero escalations; proxy read-only gate implemented with correct fail-direction (forged cookie restricts, never grants).
+- Routing note: executor runs detect_changes as part of mechanical validation; director reads the reported blast radius instead of re-running the 10k-token call. Same-checker rule as acn-report.
+- Ops interleave lesson: mid-run operator escalations (Eric onboarding, main-mac mem0) were handled by the director inline while the executor kept building — worktree isolation made the interleave safe; scoped git adds kept the commits clean.
+
+## BM-20260803 phase-225 agents-surface-ux (+223 residual)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (xhigh) | Result: pass
+- Acceptance: scoped 75/75, full suite 3725/0 (director), typecheck/lint pass, detect_changes LOW (0 affected processes)
+- 14-file grid audit landed with per-file disposition table; 223 crit-2 (claim) + crit-4 (team->agents link) closed
+- Honest-gap handling worked: executor reported playwright "not runnable here" instead of faking; director installed chromium and established the spec is an operator-run asset per existing e2e convention (no seeded env in CI)
+
+## BM-20260803 e2e-harness (operator directive: always implement AND e2e test)
+- Director: claude-fable-5. Standing rule received 2026-08-03: implementation is not done until e2e runs.
+- Three defects found only by actually running the browser, all invisible to unit tests:
+  1. **Wrong-checkout hazard**: playwright baseURL was hardcoded to :3002, which on this Mac is the
+     operator's launchd dev server on the MAIN checkout. A worktree e2e run would have silently
+     tested unmodified code and passed. Fixed with E2E_BASE_URL; verified server cwd before trusting.
+  2. **No auth**: every operator route 307s to /login, so specs failed as "element not found" and the
+     real cause was invisible. Fixed with a global-setup that logs in + saves storageState, and that
+     throws a naming error rather than running unauthenticated.
+  3. **Vacuous assertion**: the Phase 225 viewport spec asserted bounding-box overlap. CSS grid items
+     occupy tracks and essentially never overlap — proven by reintroducing the bare-`fr` defect, which
+     the spec happily passed. The real signature is CLIPPED content (scrollWidth > clientWidth).
+     Measured: defect => 3 clipped cells; fixed => 0. Assertion rewritten to that discriminator.
+- **Rule promoted:** every regression test must be proven two-way — pass in the fixed state AND fail
+  when the defect is reintroduced. A green that cannot go red is not evidence.
+- Also noted: e2e specs must seed their own fixtures. voice-chat.spec.ts depends on a "Memroos Floor"
+  agent present only in the operator's DB, so it is green on main and red on any fresh checkout.
+  Not a regression; recorded as pre-existing fixture debt.
+
+## BM-20260803 phase-208 onboarding-token-hardening (v8.35 HAIA-10..14 + 210a-1/4)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (xhigh) | Result: pass
+- Seven confirmed-open defects closed, each with an attack-shaped test (13 total). Director verified
+  all seven in the CODE, not from the report: strict registry auth ignores loopback; nonce INSERT is
+  a PK single-use guard run via a `beforePersist` hook INSIDE the registration transaction (rollback
+  leaves it reusable — the subtle requirement, met); TTL clamped at 60; allowedAgentIds mandatory;
+  revoked ids rejected without minting keys; caller capabilities 400 rather than silently ignored;
+  allow-on-empty closed for agent-authenticated principals.
+- Gates: full suite 3731/0, check:route-auth-boundary OK, check:next-trust-boundary 98/98, typecheck 0.
+- Executor honesty held again: reported 10 db-ingest failures as environment (sandbox $HOME/.memroos
+  not writable) and PROVED it by re-running with MEMROOS_VAULT_ROOT=$(mktemp -d) -> 22/22. Director's
+  unsandboxed run: 0 failures. Correct call, correctly evidenced.
+- Design note that made review cheap: the contract enumerated each defect with file:line and a
+  pre-made decision, so the executor never had to invent a security policy. Zero escalations.

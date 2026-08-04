@@ -7,7 +7,7 @@ the defense-in-depth layer for privileged APIs.
 ## Reviewed Baseline
 
 - Reviewed Next.js dependency: `^16.2.7`
-- Reviewed proxy sha256: `0de404823f575bf4b92593677d27e05b5d87ced6df016f84aadfd69bd4b6ff18`
+- Reviewed proxy sha256: `1b17e771abc0c90aaf17b63885d10b3ec3cfba88802cfb374a28cfd2077a73c8`
 
   Re-attested 2026-08-01. Change (commit `813519b9`): added a rule 1c
   bypass for `/.well-known/*`, ahead of the login-redirect fallback.

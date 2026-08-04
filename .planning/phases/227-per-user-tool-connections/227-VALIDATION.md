@@ -1,0 +1,21 @@
+## Validation Report phase-227
+- Commands run:
+  - `cd apps/memroos && npx vitest run src/lib/tool-auth src/app/api/tools --reporter=basic 2>&1 | tail -20` — exit 1; installed Vitest 4.1.5 cannot resolve the `basic` reporter (`ERR_LOAD_URL`).
+  - `cd apps/memroos && npx vitest run src/lib/tool-auth src/app/api/tools` — exit 0; 7 files, 53 tests passed.
+  - `npm run typecheck` — exit 0.
+  - `cd apps/memroos && npx eslint src/lib/tool-auth src/app/api/tools src/app/settings/tools/page.tsx src/lib/connectors/sync-job.ts src/lib/db-schema.ts` — exit 0.
+  - `npm run test:fast` — exit 1; 434 files passed, 1 failed, 1 skipped. The 10 failures are existing `db-ingest` tests: no-user expectations and permission-denied writes to `/Users/lcalderon/.memroos/vault/`.
+  - `git diff --check` — exit 0.
+  - GitNexus `detect_changes` — critical schema fan-out reported; 31 changed symbols, 64 affected symbols, 10 tracked changed files.
+- Tests: 53/53 scoped tests passed. Full fast suite: 3701/3735 passed, 10 failed, 24 skipped; failures are unrelated `db-ingest` environment/expectation failures noted above.
+- Lint/typecheck: pass (0 type errors, 0 lint errors, 3 pre-existing warnings).
+- Diff stats: 16 files changed including this report, +1231/-173 lines; unrelated files touched: no.
+- Contract checklist:
+  - TOOLOWN-01: met — migration creates `tool_connections`, indexes it, backfills legacy vault rows as shared/needs-owner, and is idempotent; orphaning is covered.
+  - TOOLOWN-02: met — the required viewer-scoped chokepoint implements visibility, management, and use authorization.
+  - TOOLOWN-03: met — listing preserves duplicate provider connections, merges by connection identity, and lazily adopts Nango-only connections.
+  - TOOLOWN-04: met — disconnect authorizes with 404/403 semantics and deletes only the targeted vault, Nango, and local records while preserving 502 behavior.
+  - TOOLOWN-05: met — OAuth sessions carry the MemroOS user ID and OAuth/API-key connection records retain their owner.
+  - TOOLOWN-06: met — owner/admin sharing route and minimal settings UI ownership, shared, needs-owner, and management controls are implemented.
+  - TOOLOWN-07: met — sync-job uses the system principal for shared connections; concurrency, visibility, migration, duplicate-listing, orphaning, and route authorization tests pass.
+- Escalations: none

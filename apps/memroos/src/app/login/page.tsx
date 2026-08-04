@@ -78,7 +78,7 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_420px]">
+        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,420px)]">
           <div className="max-w-2xl">
             <p
               className="mb-4 text-[11px] font-bold uppercase tracking-[0.16em]"

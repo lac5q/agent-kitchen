@@ -43,6 +43,16 @@ export function authorizeRegistryWrite(request: Request): boolean {
   return false;
 }
 
+/**
+ * Strict registry authorization for routes where loopback reachability is not
+ * itself proof of operator intent. Keep authorizeRegistryWrite unchanged for
+ * legacy internal callers that still rely on its local-runtime behavior.
+ */
+export function authorizeRegistryWriteStrict(request: Request): boolean {
+  const operatorKey = process.env.MEMROOS_OPERATOR_API_KEY;
+  return Boolean(operatorKey && hasOperatorKey(request, operatorKey));
+}
+
 export function registryWriteUnauthorizedResponse(): Response {
   return Response.json(
     { ok: false, error: "Registry write authorization required" },

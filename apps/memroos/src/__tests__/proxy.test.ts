@@ -194,6 +194,45 @@ describe("proxy", () => {
     expect(await response.json()).toEqual({ error: "insufficient permissions" });
   });
 
+  it("refuses every API write verb while a syntactically valid view-as cookie is present", async () => {
+    for (const method of ["POST", "PATCH", "DELETE"]) {
+      const response = await proxy(
+        new NextRequest("http://localhost:3002/api/agents/example", {
+          method,
+          headers: {
+            host: "localhost:3002",
+            cookie: "view_as_token=forged.header.signature",
+          },
+        })
+      );
+
+      expect(response.status, method).toBe(403);
+      expect(await response.json()).toEqual({ error: "view_as_read_only" });
+    }
+  });
+
+  it("keeps view-as exit and logout available while read-only mode is active", async () => {
+    setJwtSecret();
+    const accessToken = await signAccessToken("admin-user", "admin");
+    const cookie = `view_as_token=forged.header.signature; access_token=${accessToken}`;
+
+    const exitResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/admin/view-as", {
+        method: "DELETE",
+        headers: { host: "localhost:3002", cookie },
+      })
+    );
+    expect(exitResponse.status).toBe(200);
+
+    const logoutResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/auth/logout", {
+        method: "POST",
+        headers: { host: "localhost:3002", cookie },
+      })
+    );
+    expect(logoutResponse.status).toBe(200);
+  });
+
   it("does not let route-local auth path traversal bypass protected API auth", async () => {
     const response = await proxy(
       new NextRequest("http://localhost:3002/api/memory/add/%2e%2e/%2e%2e/onboarding/invite", {

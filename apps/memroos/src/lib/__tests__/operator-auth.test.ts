@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
-import { authorizeRegistryWrite } from "@/lib/operator-auth";
+import { authorizeRegistryWrite, authorizeRegistryWriteStrict } from "@/lib/operator-auth";
 
 describe("authorizeRegistryWrite", () => {
   afterEach(() => {
@@ -17,6 +17,11 @@ describe("authorizeRegistryWrite", () => {
 
     expect(authorizeRegistryWrite(new Request("http://localhost/api/memory/health"))).toBe(true);
     expect(authorizeRegistryWrite(new Request("http://127.0.0.1/api/orchestration/hil"))).toBe(true);
+  });
+
+  it("does not treat loopback reachability as a credential for strict registry writes", () => {
+    expect(authorizeRegistryWriteStrict(new Request("http://localhost/api/agents/register"))).toBe(false);
+    expect(authorizeRegistryWriteStrict(new Request("http://127.0.0.1/api/agents/register"))).toBe(false);
   });
 
   it("does not treat a public forwarded host as local loopback", () => {

@@ -51,6 +51,7 @@ async function createAgentAndKey() {
     role: "A2A caller",
     platform: "codex",
     protocol: "a2a",
+    capabilities: [{ id: "a2a:send", name: "A2A Send", description: "", tags: [] }],
     issueApiKey: true,
   });
   return { routes, agent, apiKey: apiKey! };

@@ -74,8 +74,10 @@ export async function storeOAuthConnection(input: {
   nangoConnectionId: string;
   accountEmail: string | null;
   scopes: string[] | null;
+  ownerId?: string | null;
 }): Promise<ToolConnection> {
   const db = getDb();
+  const connectionId = newConnectionId();
   const record: OAuthRecord = {
     providerKey: input.providerKey,
     authMode: "oauth",
@@ -95,9 +97,25 @@ export async function storeOAuthConnection(input: {
       policy: "sealed",
     },
   });
+  db.prepare(
+    `INSERT INTO tool_connections
+       (id, provider_key, auth_mode, owner_id, is_shared, needs_owner,
+        nango_connection_id, vault_artifact_id, account_email, created_at)
+     VALUES (?, ?, 'oauth', ?, 0, 0, ?, ?, ?, ?)`,
+  ).run(
+    connectionId,
+    input.providerKey,
+    input.ownerId ?? null,
+    input.nangoConnectionId,
+    result.id,
+    record.accountEmail,
+    record.connectedAt,
+  );
   return {
     providerKey: input.providerKey,
-    connectionId: result.id,
+    connectionId,
+    nangoConnectionId: input.nangoConnectionId,
+    vaultArtifactId: result.id,
     status: "connected",
     accountEmail: record.accountEmail,
     scopes: record.scopes,
@@ -115,6 +133,7 @@ export async function storeOAuthConnection(input: {
 export async function storeApiKeyConnection(input: {
   providerKey: string;
   apiKey: string;
+  ownerId?: string | null;
 }): Promise<ToolConnection> {
   const db = getDb();
   const record: ApiKeyRecord = {
@@ -137,9 +156,16 @@ export async function storeApiKeyConnection(input: {
       policy: "sealed",
     },
   });
+  db.prepare(
+    `INSERT INTO tool_connections
+       (id, provider_key, auth_mode, owner_id, is_shared, needs_owner,
+        vault_artifact_id, created_at)
+     VALUES (?, ?, 'api-key', ?, 0, 0, ?, ?)`,
+  ).run(record.connectionId, input.providerKey, input.ownerId ?? null, result.id, record.connectedAt);
   return {
     providerKey: input.providerKey,
-    connectionId: result.id,
+    connectionId: record.connectionId,
+    vaultArtifactId: result.id,
     status: "connected",
     accountEmail: null,
     scopes: null,
@@ -155,16 +181,27 @@ export async function storeApiKeyConnection(input: {
  * Read back the plaintext API key for `providerKey`. Returns undefined when
  * no key is stored or the artifact can't be read.
  */
-export async function readApiKey(providerKey: string): Promise<string | undefined> {
+export async function readApiKey(
+  providerKey: string,
+  connectionId?: string,
+): Promise<string | undefined> {
   const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT id FROM raw_artifacts
-       WHERE source_type = ? AND source_id = ?
-       ORDER BY created_at DESC LIMIT 1`,
-    )
-    .get(SOURCE_TYPE, providerKey) as { id: string } | undefined;
-  if (!row) return undefined;
+  const row = connectionId
+    ? db
+        .prepare(
+          `SELECT vault_artifact_id AS id
+           FROM tool_connections
+           WHERE id = ? AND provider_key = ? AND auth_mode = 'api-key'`,
+        )
+        .get(connectionId, providerKey) as { id: string | null } | undefined
+    : db
+        .prepare(
+          `SELECT id FROM raw_artifacts
+           WHERE source_type = ? AND source_id = ?
+           ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get(SOURCE_TYPE, providerKey) as { id: string } | undefined;
+  if (!row?.id) return undefined;
   const artifact = readVaultArtifact(db, row.id);
   const record = JSON.parse(artifact.body) as ToolAuthRecord;
   if (record.authMode !== "api-key") return undefined;
@@ -194,6 +231,8 @@ export function listVaultConnections(): ToolConnection[] {
         out.push({
           providerKey: record.providerKey,
           connectionId: r.id,
+          nangoConnectionId: record.nangoConnectionId,
+          vaultArtifactId: r.id,
           status: "connected",
           accountEmail: record.accountEmail,
           scopes: record.scopes,
@@ -207,6 +246,7 @@ export function listVaultConnections(): ToolConnection[] {
         out.push({
           providerKey: record.providerKey,
           connectionId: r.id,
+          vaultArtifactId: r.id,
           status: "connected",
           accountEmail: null,
           scopes: null,
@@ -236,26 +276,36 @@ export function deleteVaultConnection(providerKey: string): number {
        WHERE source_type = ? AND source_id = ?`,
     )
     .all(SOURCE_TYPE, providerKey) as Array<{ id: string; artifact_path: string }>;
-  if (rows.length === 0) return 0;
+  return rows.reduce((count, row) => count + deleteVaultConnectionById(row.id), 0);
+}
+
+/** Delete exactly one vault artifact, identified by raw_artifacts.id. */
+export function deleteVaultConnectionById(artifactId: string): number {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT id, artifact_path FROM raw_artifacts
+       WHERE id = ? AND source_type = ?`,
+    )
+    .get(artifactId, SOURCE_TYPE) as { id: string; artifact_path: string } | undefined;
+  if (!row) return 0;
+
   db.transaction(() => {
-    for (const r of rows) {
-      db.prepare(`DELETE FROM artifact_labels WHERE artifact_id = ?`).run(r.id);
-      db.prepare(`DELETE FROM raw_artifacts WHERE id = ?`).run(r.id);
-    }
+    db.prepare(`DELETE FROM artifact_labels WHERE artifact_id = ?`).run(row.id);
+    db.prepare(`DELETE FROM raw_artifacts WHERE id = ?`).run(row.id);
   })();
+
   // Best-effort file cleanup — vault writes are atomic; missing files are
   // tolerable as long as the DB row is gone.
-  for (const r of rows) {
-    try {
-      const vaultRoot =
-        process.env.MEMROOS_VAULT_ROOT ||
-        path.join(os.homedir(), ".memroos", "vault");
-      fs.unlinkSync(path.join(vaultRoot, "default-tenant", r.artifact_path));
-    } catch {
-      // ignore — DB row removal is the source of truth
-    }
+  try {
+    const vaultRoot =
+      process.env.MEMROOS_VAULT_ROOT ||
+      path.join(os.homedir(), ".memroos", "vault");
+    fs.unlinkSync(path.join(vaultRoot, "default-tenant", row.artifact_path));
+  } catch {
+    // ignore — DB row removal is the source of truth
   }
-  return rows.length;
+  return 1;
 }
 
 /**

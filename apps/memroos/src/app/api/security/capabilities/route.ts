@@ -1,5 +1,5 @@
 import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent-registry";
-import { authenticateUser } from "@/lib/auth/session";
+import { resolveViewer } from "@/lib/auth/viewer";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import {
   classifyLiveness,
@@ -119,9 +119,9 @@ function countEnvelope(
  * sees nothing rather than the whole registry.
  */
 async function agentsForCaller(request: Request) {
-  const session = await authenticateUser(request);
-  if (session) {
-    return listAgentsVisibleTo({ userId: session.userId, role: session.role });
+  const viewer = await resolveViewer(request);
+  if (viewer) {
+    return listAgentsVisibleTo({ userId: viewer.userId, role: viewer.role });
   }
   return authorizeRegistryWrite(request) ? listAllAgentsUnscoped() : [];
 }

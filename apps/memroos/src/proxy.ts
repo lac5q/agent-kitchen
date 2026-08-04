@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 import { ROLE_RANK } from "@/lib/auth/middleware-roles";
+import { isSyntacticallyValidViewAsToken } from "@/lib/auth/viewer";
+import { VIEW_AS_TOKEN_COOKIE_NAME } from "@/lib/auth/session-limits";
 import type { UserRole } from "@/lib/auth/types";
 import { isUnderstandRoutePath, UNDERSTAND_NOINDEX_HEADERS } from "@/lib/understand-policy";
 
@@ -74,6 +76,7 @@ const OPERATOR_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
 /** Routes that require admin role */
 const ADMIN_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
   { method: "POST", pattern: /^\/api\/auth\/invite$/ },
+  { method: "POST", pattern: /^\/api\/admin\/view-as$/ },
 ];
 
 const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> = [
@@ -166,6 +169,19 @@ function getTokenFromRequest(req: NextRequest): string | null {
 
 async function enforceAuth(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
+
+  // A syntactically valid view-as cookie is enough to enforce read-only mode.
+  // Do not verify it here: a forged cookie must be able to restrict writes,
+  // but must never be able to grant the effective viewer any privilege.
+  if (
+    pathname.startsWith("/api/") &&
+    isSyntacticallyValidViewAsToken(req.cookies.get(VIEW_AS_TOKEN_COOKIE_NAME)?.value ?? null) &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    !(pathname === "/api/admin/view-as" && req.method === "DELETE") &&
+    !(pathname === "/api/auth/logout" && req.method === "POST")
+  ) {
+    return NextResponse.json({ error: "view_as_read_only" }, { status: 403 });
+  }
 
   // 1. Always pass through auth endpoints, public API, and operational health.
   if (pathname.startsWith("/api/auth/") || pathname.startsWith("/api/public/") || pathname === "/api/health") {

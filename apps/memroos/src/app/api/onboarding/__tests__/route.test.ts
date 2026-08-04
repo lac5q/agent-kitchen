@@ -99,7 +99,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           "content-type": "application/json",
           "x-memroos-operator-key": "operator-secret",
         },
-        body: JSON.stringify({ platform: "openclaw", ttlMinutes: 60 }),
+        body: JSON.stringify({ platform: "openclaw", ttlMinutes: 60, ownerUserId: "test-admin" }),
       })
     );
 
@@ -107,8 +107,8 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     const body = await response.json();
     expect(body.command).toContain("--platform 'openclaw'");
     expect(body.command).toContain("--mcp-target 'auto'");
-    expect(body.command).not.toContain("<agent-id>");
-    expect(body.command).not.toContain("--id ");
+    expect(body.agentId).toMatch(/^onboarding-/);
+    expect(body.command).toContain("--id ");
     expect(body.command).not.toContain("--name ");
     expect(body.command).not.toContain("--role ");
   });
@@ -125,7 +125,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           "x-forwarded-proto": "https",
           "x-memroos-operator-key": "operator-secret",
         },
-        body: JSON.stringify({ platform: "hermes", ttlMinutes: 60 }),
+        body: JSON.stringify({ platform: "hermes", ttlMinutes: 60, ownerUserId: "test-admin" }),
       })
     );
 
@@ -151,6 +151,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           role: "Interactive planning and research agent",
           platform: "chatgpt",
           protocol: "rest",
+          ownerUserId: "test-admin",
         }),
       })
     );
@@ -203,7 +204,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           "content-type": "application/json",
           "x-memroos-operator-key": "operator-secret",
         },
-        body: JSON.stringify({ agentId: "sophia", platform: "codex" }),
+        body: JSON.stringify({ agentId: "sophia", platform: "codex", ownerUserId: "test-admin" }),
       })
     );
     const invite = await inviteResponse.json();
@@ -238,7 +239,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           "content-type": "application/json",
           "x-memroos-operator-key": "operator-secret",
         },
-        body: JSON.stringify({ agentId: "maria", platform: "openclaw" }),
+        body: JSON.stringify({ agentId: "maria", platform: "openclaw", ownerUserId: "test-admin" }),
       })
     );
     const invite = await inviteResponse.json();
@@ -298,7 +299,7 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
           "content-type": "application/json",
           "x-memroos-operator-key": "operator-secret",
         },
-        body: JSON.stringify({ agentId: "cline-agent", platform: "cline" }),
+        body: JSON.stringify({ agentId: "cline-agent", platform: "cline", ownerUserId: "test-admin" }),
       })
     );
     const invite = await inviteResponse.json();
@@ -359,6 +360,75 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
     }
   });
 
+  it.each(["claude", "codex"] as const)(
+    "runs the per-user MCP sign-in during %s bootstrap",
+    async (binary) => {
+      const { inviteRoute, scriptRoute } = await loadRoutes();
+      const agentId = `${binary}-login-agent`;
+      const inviteResponse = await inviteRoute.POST(
+        new Request("https://memroos.example.test/api/onboarding/invite", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-memroos-operator-key": "operator-secret",
+          },
+          body: JSON.stringify({ agentId, platform: binary, ownerUserId: "test-admin" }),
+        })
+      );
+      const invite = await inviteResponse.json();
+      const scriptResponse = await scriptRoute.GET(
+        new Request(`https://memroos.example.test/api/onboarding/script?token=${encodeURIComponent(invite.token)}`)
+      );
+      const script = await scriptResponse.text();
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${binary}-login-onboarding-`));
+
+      try {
+        const scriptPath = path.join(tempRoot, "onboard");
+        const binDir = path.join(tempRoot, "bin");
+        const home = path.join(tempRoot, "home");
+        const callsFile = path.join(tempRoot, "calls.log");
+        fs.mkdirSync(binDir, { recursive: true });
+        fs.mkdirSync(home, { recursive: true });
+        fs.writeFileSync(scriptPath, script, { mode: 0o700 });
+        fs.writeFileSync(
+          path.join(binDir, "curl"),
+          `#!/usr/bin/env bash
+printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"${agentId}"},"apiKey":"ak_${binary}_login_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
+`,
+          { mode: 0o700 }
+        );
+        // Stub the client CLI: record every invocation, succeed at everything.
+        fs.writeFileSync(
+          path.join(binDir, binary),
+          `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${callsFile}"
+exit 0
+`,
+          { mode: 0o700 }
+        );
+
+        const stdout = execFileSync(
+          "bash",
+          [scriptPath, "--id", agentId, "--name", `${binary} Login Agent`, "--platform", binary],
+          { env: { ...process.env, HOME: home, PATH: `${binDir}:${process.env.PATH}` }, stdio: "pipe" }
+        ).toString();
+
+        const calls = fs.readFileSync(callsFile, "utf8").trim().split("\n");
+        const addIndex = calls.findIndex((line) => line.includes("mcp add") && line.includes("memroos"));
+        const loginIndex = calls.findIndex((line) => line === "mcp login memroos");
+        // The standard: registration first, then the sign-in is STARTED for the
+        // invitee — never left as an unstated later step.
+        expect(addIndex).toBeGreaterThanOrEqual(0);
+        expect(loginIndex).toBeGreaterThan(addIndex);
+        expect(stdout).toContain("== MemroOS setup ==");
+        expect(stdout).toContain("you are DONE");
+        expect(stdout).toContain(`${binary} mcp login memroos`);
+      } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
   it.each(["cursor", "cline", "hermes", "openclaw", "opencode", "zcode", "claude", "gemini", "qwen", "codex", "pi", "droid"] as const)(
     "onboards %s agents with the shared bootstrap contract",
     async (platform) => {
@@ -377,6 +447,7 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
             name: `${platform} Agent`,
             role: "Memroos worker",
             platform,
+            ownerUserId: "test-admin",
           }),
         })
       );
@@ -505,5 +576,237 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
       })
     );
     expect(response.status).toBe(400);
+  });
+
+  it("rejects replaying the same onboarding token", async () => {
+    const { inviteRoute, registerRoute } = await loadRoutes();
+    const inviteResponse = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ agentId: "replay-agent", platform: "codex", ownerUserId: "test-admin" }),
+      })
+    );
+    const invite = await inviteResponse.json();
+    const registration = {
+      token: invite.token,
+      id: "replay-agent",
+      name: "Replay Agent",
+      role: "Replay attack target",
+      platform: "codex",
+    };
+
+    expect(
+      (await registerRoute.POST(new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify(registration),
+      }))).status
+    ).toBe(200);
+
+    const replay = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify(registration),
+      })
+    );
+    expect(replay.status).toBe(403);
+    expect(await replay.json()).toMatchObject({
+      ok: false,
+      error: "onboarding_token_replayed",
+      code: "onboarding_token_replayed",
+    });
+  });
+
+  it("clamps an attacker-supplied year-long TTL and reports the effective hour", async () => {
+    const { inviteRoute } = await loadRoutes();
+    const response = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({
+          agentId: "ttl-attack-agent",
+          platform: "codex",
+          ttlMinutes: 525600,
+          ownerUserId: "test-admin",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.ttlMinutes).toBe(60);
+    expect(new Date(body.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(60 * 60 * 1000 + 5000);
+  });
+
+  it.each([
+    ["empty", []],
+    ["missing", undefined],
+  ] as const)("rejects a %s allowedAgentIds scope", async (_label, allowedAgentIds) => {
+    const { registerRoute } = await loadRoutes();
+    const { createAgentOnboardingToken } = await import("@/lib/agent-onboarding");
+    const { token } = createAgentOnboardingToken({
+      memroosUrl: "https://memroos.example.test",
+      ownerUserId: "test-admin",
+      ...(allowedAgentIds === undefined ? {} : { allowedAgentIds }),
+    });
+
+    const response = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify({
+          token,
+          id: "unscoped-attack-agent",
+          name: "Unscoped Attack Agent",
+          role: "Scope bypass attempt",
+          platform: "codex",
+        }),
+      })
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ ok: false, error: "Invalid onboarding token scope" });
+  });
+
+  it("rejects tampered and expired onboarding tokens", async () => {
+    const { inviteRoute, registerRoute } = await loadRoutes();
+    const inviteResponse = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ agentId: "tamper-agent", platform: "codex", ownerUserId: "test-admin" }),
+      })
+    );
+    const invite = await inviteResponse.json();
+    const tamperedToken = `${invite.token.slice(0, -1)}${invite.token.endsWith("A") ? "B" : "A"}`;
+    const tampered = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify({
+          token: tamperedToken,
+          id: "tamper-agent",
+          name: "Tampered Agent",
+          role: "Signature attack",
+          platform: "codex",
+        }),
+      })
+    );
+    expect(tampered.status).toBe(403);
+    expect((await tampered.json()).error).toBe("Invalid onboarding token signature");
+
+    const { createAgentOnboardingToken } = await import("@/lib/agent-onboarding");
+    const { token: expiredToken } = createAgentOnboardingToken({
+      memroosUrl: "https://memroos.example.test",
+      ownerUserId: "test-admin",
+      allowedAgentIds: ["expired-agent"],
+      ttlSeconds: -1,
+    });
+    const expired = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify({
+          token: expiredToken,
+          id: "expired-agent",
+          name: "Expired Agent",
+          role: "Expiry attack",
+          platform: "codex",
+        }),
+      })
+    );
+    expect(expired.status).toBe(403);
+    expect((await expired.json()).error).toBe("Onboarding token expired");
+  });
+
+  it("rejects caller capabilities and stores only the signed token capabilities", async () => {
+    const { inviteRoute, registerRoute, getDb } = await loadRoutes();
+    const inviteResponse = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({
+          agentId: "capability-source-agent",
+          platform: "codex",
+          ownerUserId: "test-admin",
+          capabilities: [{ id: "signed-cap", name: "Signed Capability", description: "", tags: [] }],
+        }),
+      })
+    );
+    const invite = await inviteResponse.json();
+    const baseRegistration = {
+      token: invite.token,
+      id: "capability-source-agent",
+      name: "Capability Source Agent",
+      role: "Capability source attack target",
+      platform: "codex",
+    };
+
+    const rejected = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify({ ...baseRegistration, capabilities: [{ id: "attacker-cap" }] }),
+      })
+    );
+    expect(rejected.status).toBe(400);
+    expect((await rejected.json()).error).toContain("capabilities");
+
+    const accepted = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify(baseRegistration),
+      })
+    );
+    expect(accepted.status).toBe(200);
+    const row = getDb()
+      .prepare("SELECT capability_id FROM agent_capabilities WHERE agent_id = ?")
+      .get("capability-source-agent") as { capability_id: string };
+    expect(row.capability_id).toBe("signed-cap");
+  });
+
+  it("rejects onboarding a revoked id without minting a new key or clearing revocation", async () => {
+    const { inviteRoute, registerRoute, getDb } = await loadRoutes();
+    const db = getDb();
+    const revokedAt = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO registered_agents (id, name, role, platform, protocol, owner_id, deregistered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run("revoked-onboarding-agent", "Revoked Agent", "Revocation target", "codex", "rest", "test-admin", revokedAt);
+
+    const inviteResponse = await inviteRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ agentId: "revoked-onboarding-agent", platform: "codex", ownerUserId: "test-admin" }),
+      })
+    );
+    const invite = await inviteResponse.json();
+    const response = await registerRoute.POST(
+      new Request("https://memroos.example.test/api/onboarding/register", {
+        method: "POST",
+        body: JSON.stringify({
+          token: invite.token,
+          id: "revoked-onboarding-agent",
+          name: "Revoked Agent Re-onboard Attempt",
+          role: "Revocation bypass attempt",
+          platform: "codex",
+        }),
+      })
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "agent_revoked", code: "agent_revoked" });
+    expect((db.prepare("SELECT deregistered_at FROM registered_agents WHERE id = ?").get("revoked-onboarding-agent") as { deregistered_at: string }).deregistered_at).toBe(revokedAt);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM agent_api_keys WHERE agent_id = ?").get("revoked-onboarding-agent")).toEqual({ count: 0 });
   });
 });

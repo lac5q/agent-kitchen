@@ -56,10 +56,18 @@ describe("security policy guards", () => {
     delete process.env.MEMROOS_ALLOW_LEGACY_UNDECLARED_CAPABILITIES;
   });
 
-  it("allows legacy agents with no declared capabilities", () => {
+  it("denies authenticated agents with no declared capabilities even in local-dev", () => {
     process.env.MEMROOS_A2A_PROFILE = "local-dev";
+    process.env.MEMROOS_ALLOW_LEGACY_UNDECLARED_CAPABILITIES = "true";
     expect(checkDispatchPolicy("memroos", remoteAgent())).toEqual({ allowed: true });
-    expect(checkA2aSendPolicy(registeredAgent())).toEqual({ allowed: true });
+    expect(checkDispatchPolicy("agent:attacker", remoteAgent())).toMatchObject({
+      allowed: false,
+      code: "MISSING_CAPABILITY",
+    });
+    expect(checkA2aSendPolicy(registeredAgent())).toMatchObject({
+      allowed: false,
+      code: "MISSING_CAPABILITY",
+    });
     expect(checkMemoryWritePolicy(registeredAgent(), "graph")).toEqual({ allowed: true });
   });
 

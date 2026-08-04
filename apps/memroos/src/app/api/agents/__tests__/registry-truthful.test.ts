@@ -48,6 +48,11 @@ async function loadRoutes(
   const agentsRoute = await import("../route");
   const registerRoute = await import("../register/route");
   const dbModule = await import("@/lib/db");
+  const db = dbModule.getDb();
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)"
+  ).run("test-admin", "admin@agents-truthful.test", "Test Admin", "x");
+  db.prepare("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?,?)").run("test-admin", "admin");
   return {
     agentsRoute,
     registerRoute,

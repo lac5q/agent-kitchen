@@ -6,6 +6,7 @@ import { Sidebar } from "./sidebar";
 import { SectionTabs, type SectionTab } from "./section-tabs";
 import { TopBar } from "./top-bar";
 import { StoragePanicBanner } from "./storage-panic-banner";
+import { ViewAsBanner } from "./view-as-banner";
 import { useHealth } from "@/lib/api-client";
 import { NOC } from "@/lib/noc-theme";
 
@@ -110,6 +111,7 @@ function ShellFrame({
         className="ak-workspace mt-14 box-border min-h-screen max-w-full overflow-x-hidden p-4 lg:ml-[232px] lg:p-6"
         style={{ background: NOC.cream }}
       >
+        <ViewAsBanner />
         <StoragePanicBanner services={services} />
         {routeTabs && <SectionTabs tabs={routeTabs} />}
         {children}

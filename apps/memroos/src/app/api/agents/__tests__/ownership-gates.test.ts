@@ -12,11 +12,13 @@ vi.mock("@/lib/auth/session", () => ({ authenticateUser: async () => session }))
 // No operator key and a non-loopback host, so the session is the only gate.
 vi.mock("@/lib/operator-auth", () => ({
   authorizeRegistryWrite: () => false,
+  authorizeRegistryWriteStrict: () => false,
   registryWriteUnauthorizedResponse: () => Response.json({ error: "unauthorized" }, { status: 401 }),
 }));
 
 const { POST } = await import("@/app/api/agents/register/route");
 const { PATCH, DELETE } = await import("@/app/api/agents/[id]/route");
+const { PATCH: PATCHOwnership } = await import("@/app/api/agents/[id]/ownership/route");
 
 function addUser(id: string, role: string) {
   db.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)").run(
@@ -31,13 +33,22 @@ function addAgent(id: string, ownerId: string | null, deregistered = false) {
   ).run(id, id, "agent", "claude", "rest", ownerId, deregistered ? new Date().toISOString() : null);
 }
 function registerBody(id: string, name = id) {
-  return { id, name, role: "agent", platform: "claude", protocol: "rest" };
+  return { id, name, role: "agent", platform: "claude", protocol: "rest", issueApiKey: true };
 }
 const post = (body: unknown) =>
   POST(new Request("https://memroos.example/api/agents/register", {
     method: "POST", body: JSON.stringify(body),
   }));
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+const ownershipPatch = (id: string, body: unknown) =>
+  PATCHOwnership(
+    new Request(`https://memroos.example/api/agents/${id}/ownership`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    ctx(id)
+  );
 const ownerOf = (id: string) =>
   (db.prepare("SELECT owner_id FROM registered_agents WHERE id=?").get(id) as { owner_id: string | null }).owner_id;
 
@@ -72,10 +83,16 @@ describe("POST /api/agents/register — the takeover gate", () => {
     expect((await res.json()).apiKey).toBeTruthy();
   });
 
-  it("lets the owner re-register an agent they had deregistered", async () => {
+  it("rejects re-registering a revoked agent without changing its revocation", async () => {
     addAgent("retired", "juan", true);
     session = { userId: "juan", role: "reviewer" };
-    expect((await post(registerBody("retired"))).status).toBe(200);
+    const res = await post(registerBody("retired"));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "agent_revoked", code: "agent_revoked" });
+    expect(
+      (db.prepare("SELECT deregistered_at FROM registered_agents WHERE id='retired'").get() as { deregistered_at: string }).deregistered_at
+    ).toBeTruthy();
+    expect(db.prepare("SELECT COUNT(*) AS count FROM agent_api_keys WHERE agent_id='retired'").get()).toEqual({ count: 0 });
   });
 
   it("does not let a non-admin adopt an unowned agent", async () => {
@@ -104,6 +121,13 @@ describe("POST /api/agents/register — the takeover gate", () => {
 
   it("401s with no session and no operator key", async () => {
     expect((await post(registerBody("anything"))).status).toBe(401);
+  });
+
+  it("does not mint a key when issueApiKey is omitted", async () => {
+    session = { userId: "juan", role: "reviewer" };
+    const res = await post({ id: "no-default-key", name: "No Default Key", role: "agent", platform: "claude", protocol: "rest" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty("apiKey");
   });
 });
 
@@ -155,5 +179,38 @@ describe("PATCH / DELETE /api/agents/[id] — the management gate", () => {
       ctx("eric-agent")
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("PATCH /api/agents/[id]/ownership — the claim gate", () => {
+  it("lets an admin claim an unowned agent for themselves", async () => {
+    addAgent("orphan", null);
+    session = { userId: "luis", role: "admin" };
+
+    const res = await ownershipPatch("orphan", { transferToUserId: "luis" });
+
+    expect(res.status).toBe(200);
+    expect(ownerOf("orphan")).toBe("luis");
+  });
+
+  it("does not let a non-admin claim an unowned agent", async () => {
+    addAgent("orphan", null);
+    session = { userId: "juan", role: "reviewer" };
+
+    const res = await ownershipPatch("orphan", { transferToUserId: "juan" });
+
+    expect(res.status).toBe(404);
+    expect(ownerOf("orphan")).toBeNull();
+  });
+
+  it("does not let a non-admin claim a shared unowned agent", async () => {
+    addAgent("shared-orphan", null);
+    db.prepare("UPDATE registered_agents SET is_shared=1 WHERE id='shared-orphan'").run();
+    session = { userId: "juan", role: "reviewer" };
+
+    const res = await ownershipPatch("shared-orphan", { transferToUserId: "juan" });
+
+    expect(res.status).toBe(403);
+    expect(ownerOf("shared-orphan")).toBeNull();
   });
 });

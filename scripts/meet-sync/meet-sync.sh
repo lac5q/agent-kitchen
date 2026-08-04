@@ -383,7 +383,8 @@ run_source() {
   local detail
   local cols_joined qmd_joined
   cols_joined="${COLLECTIONS[*]}"
-  qmd_joined="${qmd_lines[*]}"
+  # ${arr[*]-} — bash 3.2 under `set -u` errors on expanding an empty array
+  qmd_joined="${qmd_lines[*]-}"
   detail="$(python3 - "$id" "$provider" "$started" "$ingest_rc" "$output_dir" "$cols_joined" "$qmd_joined" "$preflight_blocked" "$preflight_detail" <<'PY'
 import json, sys, os
 from pathlib import Path

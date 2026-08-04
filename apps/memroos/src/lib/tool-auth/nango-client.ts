@@ -77,7 +77,7 @@ interface NangoConnection {
   connection_id: string;
   created_at: string;
   updated_at: string;
-  end_user?: { email?: string; display_name?: string } | null;
+  end_user?: { id?: string; email?: string; display_name?: string } | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -123,6 +123,7 @@ export async function listNangoConnections(): Promise<ToolConnection[]> {
     // maps to null — surfacing as "no access token; skipping" and silently
     // disabling Linear/Notion/Circleback sync despite live OAuth connections.
     connectionId: c.connection_id,
+    nangoConnectionId: c.connection_id,
     status: "connected",
     accountEmail: c.end_user?.email ?? null,
     scopes: null,
@@ -153,6 +154,7 @@ function normalizeEndUser(value: string | null | undefined): string | undefined 
 }
 
 export async function createNangoConnectSession(opts: {
+  endUserId?: string;
   endUserEmail: string | null;
   allowedIntegrationIds: string[];
 }): Promise<{ sessionToken: string; connectLink?: string; expiresAt: string }> {
@@ -171,7 +173,7 @@ export async function createNangoConnectSession(opts: {
         // is not enough — an empty string is falsy-but-present and slips
         // through. Normalize empties to undefined before deciding.
         end_user: {
-          id: normalizeEndUser(opts.endUserEmail) ?? "memroos-operator",
+          id: opts.endUserId || normalizeEndUser(opts.endUserEmail) || "memroos-operator",
           email: normalizeEndUser(opts.endUserEmail),
         },
         allowed_integrations: opts.allowedIntegrationIds,
