@@ -73,7 +73,7 @@ export function SecurityOperationsPanel() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <div className="border border-stone-200 bg-white p-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-500">Controls</p>
           <div className="space-y-2">

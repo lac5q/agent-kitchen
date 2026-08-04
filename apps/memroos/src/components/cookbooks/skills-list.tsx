@@ -107,7 +107,7 @@ export function SkillsList({
 
   return (
     <div className="space-y-4">
-      <Card className="grid gap-3 md:grid-cols-[1.2fr_2fr]">
+      <Card className="grid gap-3 md:grid-cols-[minmax(12rem,1.2fr)_minmax(16rem,2fr)]">
         <div>
           <p className="text-xs font-bold uppercase" style={{ color: NOC.terra, fontFamily: NOC_FONT_MONO }}>
             Review pipeline
@@ -150,7 +150,7 @@ export function SkillsList({
         <Pill tone="success">{items.filter((skill) => skill.reviewStatus === "enterprise-ready").length} enterprise ready</Pill>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_360px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(16rem,360px)_minmax(0,1fr)_minmax(16rem,360px)]">
         <Card className="space-y-3" pad="sm">
           <label className="flex items-center gap-2 border px-3 py-2" style={{ borderColor: NOC.rule, background: NOC.paper }}>
             <Search size={15} color={NOC.soft} />

@@ -31,7 +31,7 @@ function StatCard({ icon: Icon, label, value }: {
 function CapabilityRow({ capability }: { capability: ToolAttentionCapability }) {
   const outcomeSummary = capability.outcomeSummary;
   return (
-    <div className="grid gap-3 border-b border-stone-200 py-3 last:border-0 md:grid-cols-[1fr_120px_120px_80px]">
+    <div className="grid gap-3 border-b border-stone-200 py-3 last:border-0 md:grid-cols-[minmax(0,1fr)_minmax(7.5rem,120px)_minmax(7.5rem,120px)_minmax(5rem,80px)]">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="truncate text-sm font-semibold text-stone-700">{capability.name}</p>
@@ -96,7 +96,7 @@ export function ToolAttentionPanel() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,320px)]">
         <div className="rounded-xl border border-stone-200 bg-white/90 p-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Capability Catalog</h3>

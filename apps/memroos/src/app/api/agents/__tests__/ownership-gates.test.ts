@@ -17,6 +17,7 @@ vi.mock("@/lib/operator-auth", () => ({
 
 const { POST } = await import("@/app/api/agents/register/route");
 const { PATCH, DELETE } = await import("@/app/api/agents/[id]/route");
+const { PATCH: PATCHOwnership } = await import("@/app/api/agents/[id]/ownership/route");
 
 function addUser(id: string, role: string) {
   db.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)").run(
@@ -38,6 +39,15 @@ const post = (body: unknown) =>
     method: "POST", body: JSON.stringify(body),
   }));
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+const ownershipPatch = (id: string, body: unknown) =>
+  PATCHOwnership(
+    new Request(`https://memroos.example/api/agents/${id}/ownership`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    ctx(id)
+  );
 const ownerOf = (id: string) =>
   (db.prepare("SELECT owner_id FROM registered_agents WHERE id=?").get(id) as { owner_id: string | null }).owner_id;
 
@@ -155,5 +165,38 @@ describe("PATCH / DELETE /api/agents/[id] — the management gate", () => {
       ctx("eric-agent")
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("PATCH /api/agents/[id]/ownership — the claim gate", () => {
+  it("lets an admin claim an unowned agent for themselves", async () => {
+    addAgent("orphan", null);
+    session = { userId: "luis", role: "admin" };
+
+    const res = await ownershipPatch("orphan", { transferToUserId: "luis" });
+
+    expect(res.status).toBe(200);
+    expect(ownerOf("orphan")).toBe("luis");
+  });
+
+  it("does not let a non-admin claim an unowned agent", async () => {
+    addAgent("orphan", null);
+    session = { userId: "juan", role: "reviewer" };
+
+    const res = await ownershipPatch("orphan", { transferToUserId: "juan" });
+
+    expect(res.status).toBe(404);
+    expect(ownerOf("orphan")).toBeNull();
+  });
+
+  it("does not let a non-admin claim a shared unowned agent", async () => {
+    addAgent("shared-orphan", null);
+    db.prepare("UPDATE registered_agents SET is_shared=1 WHERE id='shared-orphan'").run();
+    session = { userId: "juan", role: "reviewer" };
+
+    const res = await ownershipPatch("shared-orphan", { transferToUserId: "juan" });
+
+    expect(res.status).toBe(403);
+    expect(ownerOf("shared-orphan")).toBeNull();
   });
 });

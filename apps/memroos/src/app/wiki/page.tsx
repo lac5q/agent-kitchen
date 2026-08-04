@@ -175,7 +175,7 @@ export default function WikiPageView() {
         <div className="rounded border border-red-500/30 p-3 text-sm text-red-300">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)_220px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(12rem,240px)_minmax(0,1fr)_minmax(12rem,220px)]">
         <aside className="rounded border border-white/10 p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: NOC.soft }}>
             Pages

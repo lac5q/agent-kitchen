@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, Copy, Check, Eye } from "lucide-react";
+import Link from "next/link";
 import { Btn, PageHeader, Pill } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
 import { buildInviteEmailDraft } from "@/lib/email/invite-email-draft";
@@ -734,7 +735,15 @@ export default function TeamPage() {
             <tbody style={{ background: NOC.paper }}>
               {data?.users.map((user) => (
                 <tr key={user.id} style={{ borderTop: `1px solid ${NOC.rule}` }}>
-                  <td className="px-4 py-3" style={{ color: NOC.ink }}>{user.displayName}</td>
+                  <td className="px-4 py-3" style={{ color: NOC.ink }}>
+                    <Link
+                      href={`/agents?owner=${encodeURIComponent(user.id)}`}
+                      className="underline decoration-dotted underline-offset-2"
+                      data-testid={`user-agents-${user.id}`}
+                    >
+                      {user.displayName}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3" style={{ color: NOC.muted }}>{user.email}</td>
                   <td className="px-4 py-3">
                     {/* Editable in place. Changing your own role is refused

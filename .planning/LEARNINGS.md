@@ -283,3 +283,9 @@
 - Result: pass. Zero escalations; proxy read-only gate implemented with correct fail-direction (forged cookie restricts, never grants).
 - Routing note: executor runs detect_changes as part of mechanical validation; director reads the reported blast radius instead of re-running the 10k-token call. Same-checker rule as acn-report.
 - Ops interleave lesson: mid-run operator escalations (Eric onboarding, main-mac mem0) were handled by the director inline while the executor kept building — worktree isolation made the interleave safe; scoped git adds kept the commits clean.
+
+## BM-20260803 phase-225 agents-surface-ux (+223 residual)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (xhigh) | Result: pass
+- Acceptance: scoped 75/75, full suite 3725/0 (director), typecheck/lint pass, detect_changes LOW (0 affected processes)
+- 14-file grid audit landed with per-file disposition table; 223 crit-2 (claim) + crit-4 (team->agents link) closed
+- Honest-gap handling worked: executor reported playwright "not runnable here" instead of faking; director installed chromium and established the spec is an operator-run asset per existing e2e convention (no seeded env in CI)

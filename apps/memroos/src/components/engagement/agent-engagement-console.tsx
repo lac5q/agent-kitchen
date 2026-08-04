@@ -626,7 +626,7 @@ export function AgentEngagementConsole() {
         ) : null}
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(18rem,320px)_minmax(0,1fr)]">
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_16px_48px_rgba(15,23,42,0.05)]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center text-sm font-semibold text-slate-950">
@@ -647,7 +647,7 @@ export function AgentEngagementConsole() {
                 aria-label="Filter agents"
               />
             </label>
-            <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as RegisteredAgent["status"] | "all")}
@@ -729,7 +729,7 @@ export function AgentEngagementConsole() {
             </div>
           </div>
 
-          <div className="grid gap-0 2xl:grid-cols-[1fr_280px]">
+          <div className="grid gap-0 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,280px)]">
             <div className="space-y-4 p-4">
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="flex items-center text-sm font-semibold text-slate-950">

@@ -97,7 +97,7 @@ export function AgentRegistrationForm({
   return (
     <form onSubmit={handleSubmit} className="border border-stone-200 bg-white/90 p-4">
       <div className="flex flex-col gap-3">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
           <select
             aria-label="Agent platform"
             className="h-9 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-stone-700"
@@ -181,7 +181,7 @@ export function AgentRegistrationForm({
                 agent served with adk api_server --a2a. Private network or Tailscale URLs are recommended
                 for startup multi-machine deployments.
               </p>
-              <div className="grid gap-3 md:grid-cols-[1fr_11rem_auto]">
+              <div className="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_minmax(11rem,11rem)_auto]">
                 <Input
                   aria-label="A2A agent-card URL"
                   placeholder="http://localhost:8001/a2a/check_prime_agent/.well-known/agent-card.json"
@@ -204,7 +204,7 @@ export function AgentRegistrationForm({
               </div>
             </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto]">
               <Input
                 aria-label="Agent name"
                 placeholder="Agent name"

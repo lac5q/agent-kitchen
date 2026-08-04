@@ -25,6 +25,10 @@ interface AgentRegistryTableProps {
   agents: RegistryAgentRow[];
   onSelect: (agent: RegistryAgentRow) => void;
   onDeregister: (agentId: string) => void;
+  onClaim?: (agentId: string) => void;
+  claimingAgentId?: string | null;
+  claimError?: string | null;
+  claimErrorAgentId?: string | null;
   /** Permanent removal. Distinct from deregister, which keeps the row. */
   onDelete?: (agentId: string) => void;
   /** Fired after a successful rename so the parent can refetch. */
@@ -141,7 +145,10 @@ const COLUMNS =
  */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 items-baseline gap-2 lg:block">
+    <div
+      className="flex min-w-0 items-baseline gap-2 lg:block"
+      data-agent-cell={label.toLowerCase().replace(/\s+/g, "-")}
+    >
       <span className="w-28 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-500 lg:hidden">
         {label}
       </span>
@@ -154,6 +161,10 @@ export function AgentRegistryTable({
   agents,
   onSelect,
   onDeregister,
+  onClaim,
+  claimingAgentId = null,
+  claimError = null,
+  claimErrorAgentId = null,
   onDelete,
   onAgentUpdated,
   isDeregistering = false,
@@ -218,7 +229,11 @@ export function AgentRegistryTable({
             </div>
           ) : (
             <>
-              <button className="min-w-0 text-left" onClick={() => onSelect(agent)}>
+              <button
+                className="min-w-0 text-left"
+                onClick={() => onSelect(agent)}
+                data-agent-cell="agent"
+              >
                 <span className="block truncate font-medium text-stone-950">{agent.name}</span>
                 <span className="block truncate text-xs text-stone-500">{agent.role}</span>
               </button>
@@ -243,12 +258,31 @@ export function AgentRegistryTable({
                     )}
                   </span>
                 ) : (
-                  <span
-                    className="text-xs font-medium text-amber-700"
-                    title="No accountable human — admin-only until claimed"
-                  >
-                    Unowned
-                  </span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span
+                      className="text-xs font-medium text-amber-700"
+                      title="No accountable human — admin-only until claimed"
+                    >
+                      Unowned
+                    </span>
+                    {onClaim ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={claimingAgentId === agent.id}
+                        onClick={() => onClaim(agent.id)}
+                        data-testid={`claim-agent-${agent.id}`}
+                      >
+                        {claimingAgentId === agent.id ? "Claiming…" : "Claim"}
+                      </Button>
+                    ) : null}
+                    {claimError && claimErrorAgentId === agent.id ? (
+                      <span className="text-xs text-rose-700" role="alert">
+                        {claimError}
+                      </span>
+                    ) : null}
+                  </div>
                 )}
               </Field>
 
@@ -315,7 +349,7 @@ export function AgentRegistryTable({
                 </span>
               </Field>
 
-              <div className="flex flex-wrap gap-1 lg:justify-end">
+              <div className="flex flex-wrap gap-1 lg:justify-end" data-agent-cell="action">
                 <Button
                   variant="outline"
                   size="sm"
