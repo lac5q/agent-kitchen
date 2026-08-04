@@ -247,3 +247,56 @@ describe("role change", () => {
     expect(roleOf("admin-1")).toBe("admin");
   });
 });
+
+/**
+ * Removing a person was the one action this API took without leaving a trace.
+ * oracle-1 lost two users (4->3 on 2026-08-02, 3->2 on 2026-08-04) and all
+ * 13,776 audit rows on that host contained no user lifecycle event, so the
+ * question "who removed them" had no answer. These assert that it now does.
+ */
+describe("user removal — audit trail", () => {
+  const auditRows = () =>
+    db
+      .prepare("SELECT actor, action, target, detail FROM audit_log ORDER BY id DESC")
+      .all() as Array<{ actor: string; action: string; target: string; detail: string | null }>;
+
+  it("records actor and subject when a user is disabled", async () => {
+    addUser("eric", "reviewer");
+    const res = await DELETE(req("http://x/api/users/eric", { method: "DELETE" }), ctx("eric"));
+    expect(res.status).toBe(200);
+
+    const row = auditRows().find((r) => r.action === "user.disabled");
+    expect(row, "a disable must be audited").toBeTruthy();
+    expect(row!.actor).toBe("admin-1");
+    expect(row!.target).toBe("user/eric");
+    const detail = JSON.parse(row!.detail ?? "{}");
+    expect(detail.subjectUserId).toBe("eric");
+    expect(detail.actorUserId).toBe("admin-1");
+  });
+
+  // The hard path is the one that mattered on oracle: once the row is gone the
+  // email is unrecoverable, so the audit has to be written first.
+  it("records the subject's email on a hard delete, before the row disappears", async () => {
+    addUser("eric", "reviewer");
+    const res = await DELETE(
+      req("http://x/api/users/eric?hard=true", { method: "DELETE" }),
+      ctx("eric"),
+    );
+    expect(res.status).toBe(200);
+    expect(db.prepare("SELECT id FROM users WHERE id = ?").get("eric")).toBeUndefined();
+
+    const row = auditRows().find((r) => r.action === "user.deleted");
+    expect(row, "a hard delete must be audited").toBeTruthy();
+    const detail = JSON.parse(row!.detail ?? "{}");
+    expect(detail.subjectEmail).toBe("eric@cordant.ai");
+    expect(detail.actorUserId).toBe("admin-1");
+  });
+
+  it("writes nothing when the removal was refused", async () => {
+    addUser("eric", "reviewer");
+    session = { userId: "someone", role: "operator" };
+    const res = await DELETE(req("http://x/api/users/eric", { method: "DELETE" }), ctx("eric"));
+    expect(res.status).toBe(403);
+    expect(auditRows().filter((r) => r.action.startsWith("user."))).toHaveLength(0);
+  });
+});

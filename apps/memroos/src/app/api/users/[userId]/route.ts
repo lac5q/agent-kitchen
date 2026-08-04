@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
 import { ROLE_RANK, requireRole } from "@/lib/auth/middleware-roles";
 import type { UserRole } from "@/lib/auth/types";
+import { writeAuditLogFromEntry } from "@/lib/store/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -200,10 +201,32 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ userId: 
     );
   }
 
+  // Removing a person is the most consequential thing this API does, and it
+  // was the one action leaving no trace. Oracle-1 lost two users (4->3 on
+  // 2026-08-02, 3->2 on 2026-08-04); the nightly check caught the counts, but
+  // 13,776 audit rows contained no user lifecycle event, so *who* removed them
+  // and *when* is unanswerable. Record the actor and the subject on both paths
+  // — the v8.32 dual-trail shape — before the row is gone.
+  const auditRemoval = (mode: "disabled" | "deleted") => {
+    writeAuditLogFromEntry(db, {
+      actor: auth.session.userId,
+      action: mode === "deleted" ? "user.deleted" : "user.disabled",
+      target: `user/${userId}`,
+      detail: JSON.stringify({
+        subjectUserId: userId,
+        subjectEmail: target.email,
+        actorUserId: auth.session.userId,
+        mode,
+      }),
+      severity: "high",
+    });
+  };
+
   const hard = req.nextUrl.searchParams.get("hard") === "true";
   if (!hard) {
     db.prepare("UPDATE users SET disabled_at = ? WHERE id = ?").run(nowIso(), userId);
     revokeCredentials(db, userId);
+    auditRemoval("disabled");
     return Response.json({
       ok: true,
       userId,
@@ -214,6 +237,9 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ userId: 
   }
 
   revokeCredentials(db, userId);
+  // Audit before the DELETE: once the row is gone the email is unrecoverable,
+  // and an audit trail that cannot name the subject is not a trail.
+  auditRemoval("deleted");
   db.prepare("DELETE FROM users WHERE id = ?").run(userId);
   return Response.json({ ok: true, userId, email: target.email, mode: "deleted" });
 }
