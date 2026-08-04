@@ -80,6 +80,28 @@ send authorization. Push/merge to the default branch needs explicit "ship it"
 `agents/AGENTS_TEMPLATE.md` § Outbound Actions (rolled to agent CLIs by
 `scripts/install-agent-integrations.sh`).
 
+## What never goes in a public repository (REPOSPLIT-22, 2026-08-03)
+
+**Security analysis, vulnerability inventories, host topology, and customer
+configuration never go to a public repo.** That includes exploit inventories,
+"here is the bypass and here is where it lives" notes, internal hostnames and
+IPs, fleet layout, per-customer settings, and the planning documents that
+contain them.
+
+**Check the remote before you write, not after.** `origin` here is the private
+`lac5q/memroos-product`; `lac5q/memroos` is public. The two look identical from
+inside a checkout — same files, same paths — so the only reliable signal is
+`git remote -v`.
+
+This rule exists because it already happened: an agent wrote a precise exploit
+inventory into a tracked planning directory without noticing the repo was
+public. Nothing failed, because nothing was checking. CI now asserts repo
+visibility on every push (`.github/workflows/secret-guard.yml`), but that gate
+catches the flip, not your paste — the judgment stays with you.
+
+If analysis of this kind belongs somewhere, it belongs in the private repo's
+`.planning/`, or in MemroOS knowledge. When in doubt, ask before committing.
+
 ## Automatic downshift: menial work goes to a MiniMax-M3 coworker (permanent operator rule, 2026-07-26)
 
 **This is automatic and dynamic — the operator never has to ask.** There is no
