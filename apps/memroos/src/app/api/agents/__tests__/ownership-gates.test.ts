@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/session", () => ({ authenticateUser: async () => session }))
 // No operator key and a non-loopback host, so the session is the only gate.
 vi.mock("@/lib/operator-auth", () => ({
   authorizeRegistryWrite: () => false,
+  authorizeRegistryWriteStrict: () => false,
   registryWriteUnauthorizedResponse: () => Response.json({ error: "unauthorized" }, { status: 401 }),
 }));
 
@@ -32,7 +33,7 @@ function addAgent(id: string, ownerId: string | null, deregistered = false) {
   ).run(id, id, "agent", "claude", "rest", ownerId, deregistered ? new Date().toISOString() : null);
 }
 function registerBody(id: string, name = id) {
-  return { id, name, role: "agent", platform: "claude", protocol: "rest" };
+  return { id, name, role: "agent", platform: "claude", protocol: "rest", issueApiKey: true };
 }
 const post = (body: unknown) =>
   POST(new Request("https://memroos.example/api/agents/register", {
@@ -82,10 +83,16 @@ describe("POST /api/agents/register — the takeover gate", () => {
     expect((await res.json()).apiKey).toBeTruthy();
   });
 
-  it("lets the owner re-register an agent they had deregistered", async () => {
+  it("rejects re-registering a revoked agent without changing its revocation", async () => {
     addAgent("retired", "juan", true);
     session = { userId: "juan", role: "reviewer" };
-    expect((await post(registerBody("retired"))).status).toBe(200);
+    const res = await post(registerBody("retired"));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "agent_revoked", code: "agent_revoked" });
+    expect(
+      (db.prepare("SELECT deregistered_at FROM registered_agents WHERE id='retired'").get() as { deregistered_at: string }).deregistered_at
+    ).toBeTruthy();
+    expect(db.prepare("SELECT COUNT(*) AS count FROM agent_api_keys WHERE agent_id='retired'").get()).toEqual({ count: 0 });
   });
 
   it("does not let a non-admin adopt an unowned agent", async () => {
@@ -114,6 +121,13 @@ describe("POST /api/agents/register — the takeover gate", () => {
 
   it("401s with no session and no operator key", async () => {
     expect((await post(registerBody("anything"))).status).toBe(401);
+  });
+
+  it("does not mint a key when issueApiKey is omitted", async () => {
+    session = { userId: "juan", role: "reviewer" };
+    const res = await post({ id: "no-default-key", name: "No Default Key", role: "agent", platform: "claude", protocol: "rest" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty("apiKey");
   });
 });
 

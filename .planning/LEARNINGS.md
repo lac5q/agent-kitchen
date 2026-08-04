@@ -289,3 +289,22 @@
 - Acceptance: scoped 75/75, full suite 3725/0 (director), typecheck/lint pass, detect_changes LOW (0 affected processes)
 - 14-file grid audit landed with per-file disposition table; 223 crit-2 (claim) + crit-4 (team->agents link) closed
 - Honest-gap handling worked: executor reported playwright "not runnable here" instead of faking; director installed chromium and established the spec is an operator-run asset per existing e2e convention (no seeded env in CI)
+
+## BM-20260803 e2e-harness (operator directive: always implement AND e2e test)
+- Director: claude-fable-5. Standing rule received 2026-08-03: implementation is not done until e2e runs.
+- Three defects found only by actually running the browser, all invisible to unit tests:
+  1. **Wrong-checkout hazard**: playwright baseURL was hardcoded to :3002, which on this Mac is the
+     operator's launchd dev server on the MAIN checkout. A worktree e2e run would have silently
+     tested unmodified code and passed. Fixed with E2E_BASE_URL; verified server cwd before trusting.
+  2. **No auth**: every operator route 307s to /login, so specs failed as "element not found" and the
+     real cause was invisible. Fixed with a global-setup that logs in + saves storageState, and that
+     throws a naming error rather than running unauthenticated.
+  3. **Vacuous assertion**: the Phase 225 viewport spec asserted bounding-box overlap. CSS grid items
+     occupy tracks and essentially never overlap — proven by reintroducing the bare-`fr` defect, which
+     the spec happily passed. The real signature is CLIPPED content (scrollWidth > clientWidth).
+     Measured: defect => 3 clipped cells; fixed => 0. Assertion rewritten to that discriminator.
+- **Rule promoted:** every regression test must be proven two-way — pass in the fixed state AND fail
+  when the defect is reintroduced. A green that cannot go red is not evidence.
+- Also noted: e2e specs must seed their own fixtures. voice-chat.spec.ts depends on a "Memroos Floor"
+  agent present only in the operator's DB, so it is green on main and red on any fresh checkout.
+  Not a regression; recorded as pre-existing fixture debt.

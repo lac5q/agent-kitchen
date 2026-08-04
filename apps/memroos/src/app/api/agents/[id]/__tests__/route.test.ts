@@ -42,6 +42,11 @@ async function loadRoutes(localRuntime?: { scannedAt: string }) {
   const agentRoute = await import("../route");
   const heartbeatRoute = await import("../../../heartbeat/route");
   const dbModule = await import("@/lib/db");
+  const db = dbModule.getDb();
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)"
+  ).run("test-admin", "admin@agents-id.test", "Test Admin", "x");
+  db.prepare("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?,?)").run("test-admin", "admin");
   return { registerRoute, agentRoute, heartbeatRoute, getDb: dbModule.getDb, closeDb: dbModule.closeDb };
 }
 
@@ -55,6 +60,7 @@ async function registerAgent(registerRoute: { POST: (req: Request) => Promise<Re
         role: "Test agent",
         platform: "codex",
         protocol: "rest",
+        ownerUserId: "test-admin",
         issueApiKey,
       }),
     })

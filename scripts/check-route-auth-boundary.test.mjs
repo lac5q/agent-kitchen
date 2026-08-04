@@ -73,7 +73,7 @@ function goodFiles() {
     ["apps/memroos/src/app/api/gsd/adapter/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/agent-memory/capture/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/agent-memory/handoff/route.ts", AUTH_MARKERS.operator],
-    ["apps/memroos/src/app/api/agents/register/route.ts", AUTH_MARKERS.operator],
+    ["apps/memroos/src/app/api/agents/register/route.ts", "authorizeRegistryWriteStrict("],
     ["apps/memroos/src/app/api/dispatch/route.ts", AUTH_MARKERS.operator],
     ["apps/memroos/src/app/api/heartbeat/route.ts", AUTH_MARKERS.agent],
     ["apps/memroos/src/app/api/memory/add/route.ts", AUTH_MARKERS.agent],

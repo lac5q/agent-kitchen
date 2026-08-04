@@ -33,8 +33,8 @@ function skillIds(skills: RemoteAgentConfig["skills"] | undefined): string[] {
   return (skills ?? []).map((skill) => skill.id.toLowerCase());
 }
 
-function allowLegacyWhenUndeclared(ids: string[]): boolean {
-  if (ids.length !== 0) return false;
+function allowLegacyWhenUndeclared(ids: string[], authenticatedAsAgent = false): boolean {
+  if (ids.length !== 0 || authenticatedAsAgent) return false;
   const profile = process.env.MEMROOS_A2A_PROFILE ?? "local-dev";
   const explicit = process.env.MEMROOS_ALLOW_LEGACY_UNDECLARED_CAPABILITIES;
   if (explicit !== undefined) return ["1", "true", "yes", "on"].includes(explicit.toLowerCase());
@@ -91,7 +91,7 @@ export function checkDispatchPolicy(fromAgentId: string, targetAgent: RemoteAgen
   }
 
   const ids = skillIds(targetAgent.skills);
-  if (allowLegacyWhenUndeclared(ids) || hasAny(ids, DISPATCH_CAPABILITIES)) {
+  if (allowLegacyWhenUndeclared(ids, fromAgentId.startsWith("agent:")) || hasAny(ids, DISPATCH_CAPABILITIES)) {
     return { allowed: true };
   }
 
@@ -110,7 +110,7 @@ export function checkDispatchPolicy(fromAgentId: string, targetAgent: RemoteAgen
 
 export function checkA2aSendPolicy(agent: RegisteredAgent): PolicyDecision {
   const ids = capabilityIds(agent.capabilities);
-  if (allowLegacyWhenUndeclared(ids) || hasAny(ids, A2A_SEND_CAPABILITIES)) {
+  if (allowLegacyWhenUndeclared(ids, true) || hasAny(ids, A2A_SEND_CAPABILITIES)) {
     return { allowed: true };
   }
 

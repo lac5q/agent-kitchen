@@ -83,7 +83,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 38;
+export const CURRENT_SCHEMA_VERSION = 39;
 
 type SchemaMigration = {
   version: number;
@@ -293,6 +293,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 38,
     name: 'per-user-tool-connections',
     up: applyToolConnectionsSchema,
+  },
+  {
+    version: 39,
+    name: 'onboarding-token-nonces',
+    up: applyOnboardingTokenNonceSchema,
   },
 ];
 
@@ -635,6 +640,20 @@ function applyToolConnectionsSchema(db: Database.Database): void {
       row.created_at,
     );
   }
+}
+
+/** Migration 39 — single-use onboarding token nonce storage. */
+function applyOnboardingTokenNonceSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS onboarding_token_nonces (
+      nonce       TEXT PRIMARY KEY,
+      agent_id    TEXT,
+      consumed_at TEXT NOT NULL,
+      expires_at  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS onboarding_token_nonces_expiry
+      ON onboarding_token_nonces(expires_at);
+  `);
 }
 
 export function initSchema(db: Database.Database): void {

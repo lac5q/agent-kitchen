@@ -108,7 +108,7 @@ const routeLocalAuthCoverage = [
   },
   {
     pattern: "/^\\/api\\/agents\\/register$/",
-    files: [["apps/memroos/src/app/api/agents/register/route.ts", ["authorizeRegistryWrite("]]],
+    files: [["apps/memroos/src/app/api/agents/register/route.ts", ["authorizeRegistryWriteStrict("]]],
   },
   {
     pattern: "/^\\/api\\/dispatch$/",

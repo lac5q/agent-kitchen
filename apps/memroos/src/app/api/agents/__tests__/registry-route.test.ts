@@ -41,6 +41,11 @@ async function loadRoutes(localRuntime = { activeCliCount: 0, byPlatform: {}, sc
   const agentRoute = await import("../[id]/route");
   const heartbeatRoute = await import("../../heartbeat/route");
   const dbModule = await import("@/lib/db");
+  const db = dbModule.getDb();
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)"
+  ).run("test-admin", "admin@agents.test", "Test Admin", "x");
+  db.prepare("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?,?)").run("test-admin", "admin");
   return { agentsRoute, registerRoute, agentRoute, heartbeatRoute, getDb: dbModule.getDb, closeDb: dbModule.closeDb };
 }
 
@@ -74,7 +79,6 @@ describe("agent registry routes", () => {
           role: "REST reporter",
           platform: "codex",
           protocol: "rest",
-          capabilities: [{ id: "heartbeat", name: "Heartbeat", description: "", tags: [] }],
           issueApiKey: true,
         }),
       })
@@ -245,6 +249,7 @@ describe("agent registry routes", () => {
       platform: "codex",
       protocol: "rest",
       issueApiKey: true,
+      ownerUserId: "test-admin",
     });
 
     const rejectedRegister = await registerRoute.POST(
@@ -286,6 +291,77 @@ describe("agent registry routes", () => {
     expect(acceptedDelete.status).toBe(200);
     testSession = ADMIN_SESSION;
     expect((await (await agentsRoute.GET(agentsRequest())).json()).agents).toHaveLength(0);
+  });
+
+  it("rejects a loopback registration with no session or operator key", async () => {
+    testSession = null;
+    delete process.env.MEMROOS_OPERATOR_API_KEY;
+    const { registerRoute } = await loadRoutes();
+
+    const response = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "loopback-credential-bypass",
+          name: "Loopback Credential Bypass",
+          role: "Authentication attack",
+          platform: "codex",
+          protocol: "rest",
+          ownerUserId: "test-admin",
+          issueApiKey: true,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("requires ownerUserId for an operator-key registration", async () => {
+    testSession = null;
+    process.env.MEMROOS_OPERATOR_API_KEY = "operator-secret";
+    const { registerRoute, getDb } = await loadRoutes();
+
+    const response = await registerRoute.POST(
+      new Request("https://memroos.example.com/api/agents/register", {
+        method: "POST",
+        headers: { "x-memroos-operator-key": "operator-secret" },
+        body: JSON.stringify({
+          id: "operator-owner-bypass",
+          name: "Operator Owner Bypass",
+          role: "Ownership attack",
+          platform: "codex",
+          protocol: "rest",
+          issueApiKey: true,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("ownerUserId is required");
+    expect(getDb().prepare("SELECT 1 FROM registered_agents WHERE id = ?").get("operator-owner-bypass")).toBeUndefined();
+  });
+
+  it("rejects caller-supplied capabilities instead of pretending to store them", async () => {
+    const { registerRoute, getDb } = await loadRoutes();
+
+    const response = await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "capability-body-bypass",
+          name: "Capability Body Bypass",
+          role: "Capability authority attack",
+          platform: "codex",
+          protocol: "rest",
+          capabilities: [{ id: "attacker-capability", name: "Attacker Capability" }],
+          issueApiKey: true,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("capabilities");
+    expect(getDb().prepare("SELECT 1 FROM registered_agents WHERE id = ?").get("capability-body-bypass")).toBeUndefined();
   });
 
   it("accepts ChatGPT as a first-class registered agent platform", async () => {
@@ -343,7 +419,7 @@ describe("agent registry routes", () => {
     const now = new Date().toISOString();
     getDb()
       .prepare(
-        `INSERT INTO users (id, email, display_name, password_hash, tenant_id, created_at)
+        `INSERT OR IGNORE INTO users (id, email, display_name, password_hash, tenant_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run("test-admin", "admin@view-as.test", "Admin One", "unused", "default-tenant", now);
@@ -353,7 +429,7 @@ describe("agent registry routes", () => {
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run("target-user", "target@view-as.test", "Target User", "unused", "default-tenant", now);
-    getDb().prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run("test-admin", "admin");
+    getDb().prepare("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, ?)").run("test-admin", "admin");
     getDb().prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run("target-user", "reviewer");
 
     testSession = {

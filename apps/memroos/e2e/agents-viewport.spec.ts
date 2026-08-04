@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const BASE = "http://localhost:3002";
+const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3002";
 const VIEWPORTS = [375, 768, 1280] as const;
 
 test.describe("Agents surface viewport regression", () => {
@@ -46,6 +46,31 @@ test.describe("Agents surface viewport regression", () => {
           }
         }
       }
+
+      // The assertion that actually catches the Phase 225 defect.
+      //
+      // Bounding-box overlap alone does NOT: grid items are placed into tracks
+      // and essentially never overlap, so that check passes even with bare `fr`
+      // tracks restored — verified by reintroducing the defect, which the
+      // overlap assertion happily accepted. What a too-narrow track really
+      // produces is *clipped content*: scrollWidth exceeding clientWidth.
+      //
+      // Measured on this page: with bare `fr` tracks, 3 cells clip (e.g.
+      // platform, 86px of content in a 70px track). With the `minmax()` floors,
+      // zero. That is the discriminator, so it is what this asserts.
+      const clipped = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>("[data-agent-cell]"))
+          .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+          .map((cell) => ({
+            cell: cell.getAttribute("data-agent-cell"),
+            content: cell.scrollWidth,
+            track: cell.clientWidth,
+          })),
+      );
+      expect(
+        clipped,
+        `cells clipped by their grid track at ${width}px — a track is narrower than its content: ${JSON.stringify(clipped)}`,
+      ).toEqual([]);
     });
   }
 });
