@@ -380,3 +380,15 @@
   strictly worse than today's timeout, because a timeout is honest") produced exactly the right
   implementation. Contracts that name the failure to design against beat contracts that only name
   the feature.
+
+## BM-20260804 phase-194 habit-layer (v8.30 MEMHABIT-01..05)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass, with a director completion
+- Executor correctly reported MEMHABIT-02 blocked: it could not create
+  .agents/skills/memroos-recall/SKILL.md. **The director verified the claim and it was a SANDBOX
+  limit, not a repo constraint — .agents/skills is writable.** Director wrote the skill and added
+  the missing auto_load flag to memroos-save; Python suite went 55/1-failing to 56/56.
+- Lesson: "blocked" from a sandboxed executor is a hypothesis, not a fact. Verify the constraint
+  in the real environment before accepting a partial phase — half this phase would have been
+  silently dropped otherwise. Symmetric to the earlier lesson that a sandboxed executor's test
+  FAILURES also need re-running unsandboxed; both directions need director verification.
+- Full suite 3760/0; knowledge-mcp 56/56.

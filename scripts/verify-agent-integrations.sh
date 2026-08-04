@@ -25,6 +25,7 @@ fi
 
 TEMPLATE="$MEMROOS_ROOT/agents/AGENTS_TEMPLATE.md"
 SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
+RECALL_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-recall/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
 
 HOME_DIR="${HOME:-$(eval echo "~$(whoami)")}"
@@ -65,6 +66,12 @@ if [[ -f "$SKILL_SRC" ]]; then
   ok "memroos-save skill present"
 else
   err "memroos-save skill missing"
+  exit 1
+fi
+if [[ -f "$RECALL_SKILL_SRC" ]]; then
+  ok "memroos-recall skill present"
+else
+  err "memroos-recall skill missing"
   exit 1
 fi
 echo ""

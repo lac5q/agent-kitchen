@@ -299,6 +299,35 @@ def test_memory_prior_work_posts_bounded_probe_payload_and_exposes_trigger_contr
     assert "not content" in entry["description"]
 
 
+def test_memory_tool_descriptions_and_orientation_carry_habit_contract():
+    contract = mcp_server.build_mcp_tool_contract()
+    descriptions = {
+        tool["name"]: tool["description"]
+        for tool in contract["tools"]
+        if tool["name"] in {"memory_prior_work", "memory_recall", "memory_search", "memory_save", "agent_memory_save"}
+    }
+
+    assert set(descriptions) == {
+        "memory_prior_work",
+        "memory_recall",
+        "memory_search",
+        "memory_save",
+        "agent_memory_save",
+    }
+    for description in descriptions.values():
+        assert "memory_prior_work" in description
+        assert "task start" in description
+        assert "governed" in description
+        assert "typed skip receipt" in description
+
+    orientation = mcp_server.knowledge_system_orientation()
+    assert "memory_prior_work" in orientation
+    assert "task start" in orientation
+    assert "governed memory save" in orientation
+    assert "typed skip receipt" in orientation
+    assert "Skills > Memory" in orientation
+
+
 def test_agent_context_packet_uses_topic_without_goal_id(monkeypatch):
     calls = []
 
@@ -990,6 +1019,26 @@ def test_skill_catalog_private_overrides_public_same_name(monkeypatch, tmp_path)
     assert result["skills"][0]["description"] == "Private version"
 
 
+def test_skill_catalog_private_precedence_is_preserved_with_fallback_metadata(monkeypatch, tmp_path):
+    """Private skills still override checkout skills when names collide."""
+    repo_root = Path(__file__).resolve().parents[3]
+    private_root = tmp_path / "private" / "skills"
+    _make_skill(
+        private_root,
+        "memroos-recall",
+        "---\nname: memroos-recall\ndescription: Private recall override\nauto_load: true\n---\n",
+    )
+
+    monkeypatch.setenv("KNOWLEDGE_ROOT", str(tmp_path / "missing-knowledge"))
+    monkeypatch.setenv("MEMROOS_ROOT", str(repo_root))
+    monkeypatch.setenv("MEMROOS_PRIVATE_SKILLS_DIR", str(private_root))
+
+    result = mcp_server.knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})
+
+    recall = next(skill for skill in result["skills"] if skill["name"] == "memroos-recall")
+    assert recall["description"] == "Private recall override"
+
+
 def test_skill_catalog_filter_auto_load(monkeypatch, tmp_path):
     """filter=auto-load returns only skills with auto-load: true."""
     pub_skills = tmp_path / "skills"
@@ -1004,6 +1053,30 @@ def test_skill_catalog_filter_auto_load(monkeypatch, tmp_path):
     assert result["status"] == "ok"
     assert result["count"] == 1
     assert result["skills"][0]["name"] == "my-skill"
+
+
+def test_skill_catalog_falls_back_to_checkout_skills_when_knowledge_skills_are_absent(monkeypatch, tmp_path):
+    """A clean MemroOS-shaped checkout exposes skills without a corpus skills dir."""
+    repo_root = tmp_path / "memroos-checkout"
+    checkout_skills = repo_root / ".agents" / "skills"
+    _make_skill(
+        checkout_skills,
+        "memroos-recall",
+        "---\nname: memroos-recall\ndescription: Checkout recall\nauto_load: true\n---\n",
+    )
+    missing_knowledge_root = tmp_path / "knowledge-root-without-skills"
+    private_root = tmp_path / "private-skills"
+
+    monkeypatch.setenv("KNOWLEDGE_ROOT", str(missing_knowledge_root))
+    monkeypatch.setenv("MEMROOS_ROOT", str(repo_root))
+    monkeypatch.setenv("MEMROOS_PRIVATE_SKILLS_DIR", str(private_root))
+
+    result = mcp_server.knowledge_workspace_call("skill-packs", "catalog", {"filter": "auto-load"})
+
+    assert result["status"] == "ok"
+    assert result["count"] > 0
+    assert "memroos-recall" in {skill["name"] for skill in result["skills"]}
+    assert Path(result["public_root"]) == repo_root / ".agents" / "skills"
 
 
 def test_skill_catalog_defaults_auto_load_false(monkeypatch, tmp_path):
@@ -1120,6 +1193,25 @@ def test_skill_parse_malformed_frontmatter_returns_defaults(tmp_path):
     assert result["auto_load"] is False
     assert result["tags"] == []
     assert result["description"] == ""
+
+
+def test_skill_parse_accepts_underscore_auto_load_frontmatter():
+    result = mcp_server._parse_skill_frontmatter(
+        "---\nname: underscore-skill\nauto_load: true\n---\n# Skill\n",
+        fallback_name="underscore-skill",
+    )
+
+    assert result["auto_load"] is True
+
+
+def test_shipped_memory_skills_have_parseable_auto_load_frontmatter():
+    skills_root = Path(__file__).resolve().parents[3] / ".agents" / "skills"
+
+    for skill_name in ("memroos-recall", "memroos-save"):
+        content = (skills_root / skill_name / "SKILL.md").read_text()
+        parsed = mcp_server._parse_skill_frontmatter(content, fallback_name=skill_name)
+        assert parsed["name"] == skill_name
+        assert parsed["auto_load"] is True
 
 
 def test_skill_read_empty_name_returns_error(monkeypatch, tmp_path):

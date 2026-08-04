@@ -10,6 +10,7 @@
 # Source of truth:
 #   agents/AGENTS_TEMPLATE.md     → AGENTS.md on every agent CLI
 #   .agents/skills/memroos-save/  → memroos-save skill on every agent CLI
+#   .agents/skills/memroos-recall/ → memroos-recall skill on every agent CLI
 #   scripts/memroos-mcp.sh        → MemroOS MCP server launcher
 #
 # MCP wiring: each TARGETS row declares the REAL config file the agent
@@ -53,6 +54,7 @@ fi
 
 TEMPLATE="$MEMROOS_ROOT/agents/AGENTS_TEMPLATE.md"
 SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
+RECALL_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-recall/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
 OPERATOR_STUB="$MEMROOS_ROOT/scripts/memroos-operator-stub.sh"
 
@@ -72,6 +74,10 @@ if [[ ! -f "$TEMPLATE" ]]; then
 fi
 if [[ ! -f "$SKILL_SRC" ]]; then
   echo "❌ Canonical memroos-save skill not found: $SKILL_SRC" >&2
+  exit 1
+fi
+if [[ ! -f "$RECALL_SKILL_SRC" ]]; then
+  echo "❌ Canonical memroos-recall skill not found: $RECALL_SKILL_SRC" >&2
   exit 1
 fi
 if [[ ! -x "$MCP_SCRIPT" ]]; then
@@ -133,7 +139,7 @@ fi
 #
 # Each target is: <name>|<config-file>|<skills-dir>|<mcp-config-section>
 # AGENTS.md template is always installed at <config-file>.
-# memroos-save skill is installed at <skills-dir>/memroos-save/SKILL.md.
+# MemroOS skills are installed at <skills-dir>/<skill-name>/SKILL.md.
 # MemroOS MCP server is registered at <mcp-config-section>.
 #
 # TOML targets (Claude/Codex/Qwen/Cursor) need a TOML-aware registration.
@@ -567,6 +573,8 @@ install_skill() {
   local skills_dir="$1"
   mkdir -p "$skills_dir/memroos-save"
   cp "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md"
+  mkdir -p "$skills_dir/memroos-recall"
+  cp "$RECALL_SKILL_SRC" "$skills_dir/memroos-recall/SKILL.md"
   # ENTOPS-13: also install any EXTRA_SKILLS (name|source-dir pairs).
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name src
@@ -592,6 +600,7 @@ uninstall_agents_md() {
 uninstall_skill() {
   local skills_dir="$1"
   rm -rf "$skills_dir/memroos-save"
+  rm -rf "$skills_dir/memroos-recall"
   # ENTOPS-13: also remove any EXTRA_SKILLS that were installed.
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name
@@ -720,6 +729,7 @@ echo "====================================="
 echo "Repo:        $MEMROOS_ROOT"
 echo "Template:    $TEMPLATE"
 echo "Skill:       $SKILL_SRC"
+echo "Recall skill: $RECALL_SKILL_SRC"
 echo "Mode:        $MODE"
 echo "MCP mode:    $MCP_MODE_LABEL"
 echo ""
@@ -745,7 +755,7 @@ case "$MODE" in
       log "$name → $agents_file"
     done
     echo ""
-    log "All targets converged on canonical AGENTS_TEMPLATE.md + memroos-save skill."
+    log "All targets converged on canonical AGENTS_TEMPLATE.md + memroos-save + memroos-recall skills."
     log "Re-run this script anytime to re-converge. Pass --check to audit, --uninstall to remove."
 
     # Clean up legacy AGENTS.mcp.* sibling files that earlier versions of
@@ -799,6 +809,9 @@ case "$MODE" in
         missing=$((missing+1))
       elif [[ ! -f "$skills_dir/memroos-save/SKILL.md" ]] || ! diff -q "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md" >/dev/null 2>&1; then
         warn "$name: memroos-save skill missing or drifted ($skills_dir/memroos-save/SKILL.md)"
+        missing=$((missing+1))
+      elif [[ ! -f "$skills_dir/memroos-recall/SKILL.md" ]] || ! diff -q "$RECALL_SKILL_SRC" "$skills_dir/memroos-recall/SKILL.md" >/dev/null 2>&1; then
+        warn "$name: memroos-recall skill missing or drifted ($skills_dir/memroos-recall/SKILL.md)"
         missing=$((missing+1))
       elif [[ $mcp_ok -eq 0 ]]; then
         warn "$name: MemroOS MCP entry missing or unparseable in $mcp_file_resolved"
