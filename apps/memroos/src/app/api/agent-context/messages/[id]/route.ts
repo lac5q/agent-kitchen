@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
-import { findReplyForAgentContextMessage, getAgentContextMessage } from "@/lib/agent-context-bus";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
+import { findReplyForAgentContextMessage, getAgentContextMessage } from "@/lib/agent/context-bus";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

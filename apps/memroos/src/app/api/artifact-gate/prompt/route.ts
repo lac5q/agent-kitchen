@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { promptSaveArtifact } from "@/lib/artifact-gate";
 import { getDb } from "@/lib/db";
 

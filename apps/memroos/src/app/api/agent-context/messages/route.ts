@@ -1,15 +1,15 @@
 import type { NextRequest } from "next/server";
-import { authenticateAgentHeaders, recordMemoryWrite } from "@/lib/agent-registry";
-import { writeAuditLog } from "@/lib/audit";
+import { authenticateAgentHeaders, recordMemoryWrite } from "@/lib/agent/registry";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { scanContent } from "@/lib/content-scanner";
 import { getDb } from "@/lib/db";
-import { findSelfDeclaredAccessClaims } from "@/lib/agent-context-policy";
+import { findSelfDeclaredAccessClaims } from "@/lib/agent/context-policy";
 import {
   isAgentContextMessageType,
   isAgentContextStatus,
   listAgentContextMessages,
   postAgentContextMessage,
-} from "@/lib/agent-context-bus";
+} from "@/lib/agent/context-bus";
 
 export const dynamic = "force-dynamic";
 

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { getGsdModelRoutingPolicy, routeGsdModel } from "@/lib/gsd/model-routing-policy";
-import { gsdInputFromJson } from "@/lib/agent-gsd-control";
+import { gsdInputFromJson } from "@/lib/agent/gsd-control";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

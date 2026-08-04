@@ -20,7 +20,7 @@ import {
 import {
   runScheduledGraphCatchup,
   stopGraphCatchupScheduler,
-} from "@/lib/memory-graph-catchup-scheduler";
+} from "@/lib/memory/graph-catchup-scheduler";
 
 const testDb = new Database(":memory:");
 

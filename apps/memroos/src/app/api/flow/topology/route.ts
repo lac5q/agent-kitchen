@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
-import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { listAgentsVisibleTo, listAllAgentsUnscoped } from "@/lib/agent/registry";
 import { authenticateUser } from "@/lib/auth/session";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import { listNangoConnections } from "@/lib/tool-auth/nango-client";

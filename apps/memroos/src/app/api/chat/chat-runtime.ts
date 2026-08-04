@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import { getRegisteredAgent } from "@/lib/agent-registry";
+import { getRegisteredAgent } from "@/lib/agent/registry";
 import type { AgentPlatform } from "@/types";
 
 export type AgentContext = {

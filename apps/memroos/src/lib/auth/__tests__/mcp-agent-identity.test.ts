@@ -10,7 +10,7 @@ vi.mock("@/lib/db", () => ({ getDb: () => db }));
 const { ensureMcpAgent, issueTokens, resolveAccessToken, registerClient } = await import(
   "@/lib/auth/mcp-oauth-store"
 );
-const { listAgentsVisibleTo, listAllAgentsUnscoped } = await import("@/lib/agent-registry");
+const { listAgentsVisibleTo, listAllAgentsUnscoped } = await import("@/lib/agent/registry");
 
 function addUser(id: string) {
   db.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES (?,?,?,?)").run(

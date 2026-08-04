@@ -2,7 +2,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory-trace-observability";
+import { recordMemoryTrace, getMemoryTrace, getMemoryTraceTimeline } from "@/lib/memory/trace-observability";
 import { initSchema } from "@/lib/db-schema";
 import { listEfficiencyEvents } from "@/lib/efficiency-telemetry";
 

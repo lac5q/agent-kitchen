@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   getRemoteAgents: vi.fn(),
   listAllAgentsUnscoped: vi.fn(),
 }));
@@ -45,7 +45,7 @@ vi.mock("@/app/api/chat/chat-runtime", () => ({
 }));
 
 const { POST } = await import("../route");
-const { getRemoteAgents, listAllAgentsUnscoped } = await import("@/lib/agent-registry");
+const { getRemoteAgents, listAllAgentsUnscoped } = await import("@/lib/agent/registry");
 const { selectAdapter } = await import("@/lib/dispatch/adapter-factory");
 
 const mockGetRemoteAgents = vi.mocked(getRemoteAgents);

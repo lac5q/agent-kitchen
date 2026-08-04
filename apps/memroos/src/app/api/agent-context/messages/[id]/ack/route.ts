@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
-import { acknowledgeAgentContextMessage } from "@/lib/agent-context-bus";
-import { writeAuditLog } from "@/lib/audit";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
+import { acknowledgeAgentContextMessage } from "@/lib/agent/context-bus";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

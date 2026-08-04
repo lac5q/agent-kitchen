@@ -1,4 +1,4 @@
-import { listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { listAllAgentsUnscoped } from "@/lib/agent/registry";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import {
   postOrchestrationTask,

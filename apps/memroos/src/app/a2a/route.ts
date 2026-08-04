@@ -1,4 +1,4 @@
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { dispatchA2aJsonRpc } from "@/lib/a2a/bindings";
 import { a2aErrorResponse, A2aError } from "@/lib/a2a/errors";
 

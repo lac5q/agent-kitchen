@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { createAgentVersion, listAgentVersions } from "@/lib/agent-cicd-gates";
+import { createAgentVersion, listAgentVersions } from "@/lib/agent/cicd-gates";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function POST(req: Request) {

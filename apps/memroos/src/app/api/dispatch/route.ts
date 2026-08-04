@@ -7,8 +7,8 @@ import { scanContent } from "@/lib/content-scanner";
 import { scanIrisPreflight } from "@/lib/iris-scanner";
 import { authorizeRegistryWrite } from "@/lib/operator-auth";
 import { checkDispatchPolicy } from "@/lib/security-policy";
-import { writeAuditLog } from "@/lib/audit";
-import { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
+import { authenticateAgentHeaders, getRemoteAgents, listAllAgentsUnscoped } from "@/lib/agent/registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
 import {
   lookupSkillContract,

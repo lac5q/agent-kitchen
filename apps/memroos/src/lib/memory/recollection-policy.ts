@@ -1,4 +1,4 @@
-import type { MemoryRecallTier, MemoryRecallTiming } from "./memory-recall-evals";
+import type { MemoryRecallTier, MemoryRecallTiming } from "./recall-evals";
 
 export type BeliefStage =
   | "bronze_raw_source"

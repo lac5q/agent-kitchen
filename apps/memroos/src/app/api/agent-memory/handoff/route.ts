@@ -1,4 +1,4 @@
-import { buildCodingAgentHandoffPack, type HandoffPackInput } from "@/lib/agent-memory-continuity";
+import { buildCodingAgentHandoffPack, type HandoffPackInput } from "@/lib/agent/memory-continuity";
 import { getDb } from "@/lib/db";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 

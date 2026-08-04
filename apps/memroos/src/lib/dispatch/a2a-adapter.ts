@@ -1,4 +1,4 @@
-import { getRemoteAgents } from "@/lib/agent-registry";
+import { getRemoteAgents } from "@/lib/agent/registry";
 import { sendMessageToA2aAgent } from "@/lib/a2a/client";
 import { A2A_TASK_STATES, type A2aTask } from "@/lib/a2a/types";
 import { appendA2aTaskEvent, getA2aTask, transitionA2aTask } from "@/lib/a2a/task-store";

@@ -1,6 +1,6 @@
 "use client";
 
-import type { LivenessObservation } from "@/lib/agent-liveness";
+import type { LivenessObservation } from "@/lib/agent/liveness";
 
 const STATE_TONE: Record<
   LivenessObservation["state"],

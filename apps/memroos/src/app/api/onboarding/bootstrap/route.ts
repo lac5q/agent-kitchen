@@ -1,4 +1,4 @@
-import { createAgentOnboardingToken, shellQuote } from "@/lib/agent-onboarding";
+import { createAgentOnboardingToken, shellQuote } from "@/lib/agent/onboarding";
 import { resolvePublicMemroosUrl } from "@/lib/http/public-base-url";
 import { authenticateUser } from "@/lib/auth/session";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";

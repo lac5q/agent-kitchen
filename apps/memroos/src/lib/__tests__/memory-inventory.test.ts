@@ -77,7 +77,7 @@ describe("buildMemoryInventory", () => {
   it("returns category counts and ingested message rows", async () => {
     seedMessage("inventory alpha");
     seedMessage("inventory beta", 1);
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL("http://localhost/api/memory-inventory?category=ingested_message")
     );
@@ -113,7 +113,7 @@ describe("buildMemoryInventory", () => {
       )
       .run("agent-1", "lesson", "hash-1", '{"project":"p1"}', "ok", "2026-05-24T11:30:00Z");
 
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     expect(response.rows.some((r) => r.category === "consolidated_insight")).toBe(true);
     expect(response.rows.some((r) => r.category === "episodic_write")).toBe(true);
@@ -121,7 +121,7 @@ describe("buildMemoryInventory", () => {
 
   it("loads knowledge file rows when category=knowledge_file", async () => {
     writeFileSync(path.join(knowledgeDir, "note.md"), "# Inventory note\n", "utf8");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL("http://localhost/api/memory-inventory?category=knowledge_file")
     );
@@ -135,7 +135,7 @@ describe("buildMemoryInventory", () => {
       "fetch",
       vi.fn().mockRejectedValue(new Error("mem0 down"))
     );
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const vector = response.categories.find((c) => c.id === "vector_memory");
     expect(vector?.status).toBe("degraded");
@@ -144,7 +144,7 @@ describe("buildMemoryInventory", () => {
 
   it("filters rows by project and consolidation state", async () => {
     seedMessage("project filter target");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL(
         "http://localhost/api/memory-inventory?category=ingested_message&project=memroos&consolidationState=pending"
@@ -157,7 +157,7 @@ describe("buildMemoryInventory", () => {
   it("marks graph category unavailable when Neo4j password is missing", async () => {
     const prev = process.env.NEO4J_PASSWORD;
     delete process.env.NEO4J_PASSWORD;
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const graph = response.categories.find((c) => c.id === "graph_fact");
     expect(graph?.status).toBe("degraded");
@@ -176,7 +176,7 @@ describe("buildMemoryInventory", () => {
         }),
       })
     );
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const vector = response.categories.find((c) => c.id === "vector_memory");
     expect(vector?.count).toBe(12);
@@ -188,7 +188,7 @@ describe("buildMemoryInventory", () => {
     testDb
       .prepare(`UPDATE messages SET sensitivity = ? WHERE content = ?`)
       .run("payment", "label filter alpha");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL(
         "http://localhost/api/memory-inventory?category=ingested_message&label=payment&degraded=live"
@@ -199,7 +199,7 @@ describe("buildMemoryInventory", () => {
 
   it("reuses cached category counts within MEMORY_INVENTORY_CATEGORY_TTL_MS", async () => {
     process.env.MEMORY_INVENTORY_CATEGORY_TTL_MS = "60000";
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const firstCount = (
       await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"))
     ).categories.find((c) => c.id === "ingested_message")?.count;
@@ -211,7 +211,7 @@ describe("buildMemoryInventory", () => {
   });
 
   it("returns empty metric envelope for empty sqlite categories without observations", async () => {
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const writes = response.categories.find((c) => c.id === "episodic_write");
     expect(writes?.count).toBe(0);
@@ -221,7 +221,7 @@ describe("buildMemoryInventory", () => {
 
   it("filters by backend, source, date range, and degraded category status", async () => {
     seedMessage("backend filter row");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL(
         "http://localhost/api/memory-inventory?category=ingested_message&backend=sqlite&source=codex&dateFrom=2026-05-24T00:00:00Z&dateTo=2026-05-25T00:00:00Z&degraded=live"
@@ -233,7 +233,7 @@ describe("buildMemoryInventory", () => {
 
   it("ignores knowledge_file rows when another category filter is active", async () => {
     writeFileSync(path.join(knowledgeDir, "filtered.md"), "# filtered\n", "utf8");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(
       new URL("http://localhost/api/memory-inventory?category=ingested_message")
     );
@@ -254,7 +254,7 @@ describe("buildMemoryInventory", () => {
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run("agent-bad-meta", "lesson", "hash-bad", "not-json", "ok", "2026-05-24T12:00:00Z");
-    const { buildMemoryInventory } = await import("../memory-inventory");
+    const { buildMemoryInventory } = await import("../memory/inventory");
     const response = await buildMemoryInventory(new URL("http://localhost/api/memory-inventory"));
     const row = response.rows.find((r) => r.category === "episodic_write" && r.source === "agent-bad-meta");
     expect(row).toBeTruthy();

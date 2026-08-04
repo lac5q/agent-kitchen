@@ -14,8 +14,8 @@ import { parseClaudeMemory } from "@/lib/parsers";
 import { protectMemoryPayloadForStorage } from "@/lib/privacy/pii-storage";
 import { responseCache } from "@/lib/response-cache";
 import { checkMemoryWritePolicy } from "@/lib/security-policy";
-import { recordMemoryWrite, registerAgent } from "@/lib/agent-registry";
-import { writeAuditLog } from "@/lib/audit";
+import { recordMemoryWrite, registerAgent } from "@/lib/agent/registry";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import type { MemoryEntry, RegisteredAgent } from "@/types";
 
 export const CHATGPT_ACTIONS_AGENT_ID = "chatgpt-mobile";

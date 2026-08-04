@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api-error";
-import { getRemoteAgents, pollAllRemoteAgents } from "@/lib/agent-registry";
+import { getRemoteAgents, pollAllRemoteAgents } from "@/lib/agent/registry";
 
 export const dynamic = "force-dynamic";
 

@@ -7,7 +7,7 @@ import {
   getCheckpointMetrics,
   resumeFromCheckpoint,
   verifyCheckpointAuditChain,
-} from "@/lib/agent-checkpoints";
+} from "@/lib/agent/checkpoints";
 import { initSchema } from "@/lib/db-schema";
 import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
 

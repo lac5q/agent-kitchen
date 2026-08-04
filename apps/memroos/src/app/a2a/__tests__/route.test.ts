@@ -18,7 +18,7 @@ async function loadRoutes() {
   const cancelRoute = await import("../../tasks/[id]:cancel/route");
   const subscribeRoute = await import("../../tasks/[id]:subscribe/route");
   const a2aRoute = await import("../route");
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const store = await import("@/lib/a2a/task-store");
   const dbModule = await import("@/lib/db");
   return {

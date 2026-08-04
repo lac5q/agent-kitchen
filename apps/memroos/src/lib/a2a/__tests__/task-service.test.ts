@@ -13,7 +13,7 @@ async function loadService() {
   vi.resetModules();
   const service = await import("../task-service");
   const store = await import("../task-store");
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const dbModule = await import("@/lib/db");
   return { ...service, ...store, ...registry, getDb: dbModule.getDb, closeDb: dbModule.closeDb };
 }

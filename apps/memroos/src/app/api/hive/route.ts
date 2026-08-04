@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { scanContent } from '@/lib/content-scanner';
-import { writeAuditLog } from '@/lib/audit';
+import { writeAuditLogFromEntry as writeAuditLog } from '@/lib/store/audit';
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';

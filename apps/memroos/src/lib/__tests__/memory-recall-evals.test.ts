@@ -19,7 +19,7 @@ import {
   type MemoryRecallEvalCase,
   type MemoryRecallTraceEvent,
   type NormalizedRecallResult,
-} from "../memory-recall-evals";
+} from "../memory/recall-evals";
 
 const baseCase: MemoryRecallEvalCase = {
   id: "marketing-strategy-gold",
@@ -684,7 +684,7 @@ describe("memory eval persistence", () => {
     const backends = await import("@/lib/memory/backends");
     vi.spyOn(backends, "queryGraphMemory").mockRejectedValue(new Error("graph offline"));
 
-    const { runMemoryRecallEvalSuite: runSuite } = await import("../memory-recall-evals");
+    const { runMemoryRecallEvalSuite: runSuite } = await import("../memory/recall-evals");
     const run = await runSuite({ mode: "gold", db });
     expect(run.status).toBe("failed");
 

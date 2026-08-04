@@ -3,7 +3,7 @@ import {
   getRegisteredAgent,
   registerAgent,
   type AgentViewer,
-} from "@/lib/agent-registry";
+} from "@/lib/agent/registry";
 import { authorizeRegistryWriteStrict, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import { authenticateUser } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";

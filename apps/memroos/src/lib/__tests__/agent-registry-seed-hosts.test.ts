@@ -7,7 +7,7 @@
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { initSchema } from "@/lib/db-schema";
-import { seedRegisteredAgents } from "@/lib/agent-registry-seed";
+import { seedRegisteredAgents } from "@/lib/agent/registry-seed";
 
 const orig = { ...process.env };
 afterEach(() => { process.env = { ...orig }; vi.restoreAllMocks(); });

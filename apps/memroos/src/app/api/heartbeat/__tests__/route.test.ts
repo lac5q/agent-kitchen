@@ -106,7 +106,7 @@ describe("GET /api/heartbeat", () => {
 async function loadPostRoute() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const route = await import("../route");
   const dbModule = await import("@/lib/db");
   return { ...registry, POST: route.POST, closeDb: dbModule.closeDb };

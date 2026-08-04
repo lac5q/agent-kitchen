@@ -6,7 +6,7 @@ import {
   planRecollectionQueries,
   scoreRecollectionCandidate,
   type RecollectionCandidate,
-} from "../recollection-policy";
+} from "../memory/recollection-policy";
 
 const NOW = new Date("2026-06-27T12:00:00Z");
 

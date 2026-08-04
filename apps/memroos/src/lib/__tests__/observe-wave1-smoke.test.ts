@@ -25,7 +25,7 @@ import {
   vi,
 } from "vitest";
 
-import { captureCodingAgentSession } from "@/lib/agent-memory-continuity";
+import { captureCodingAgentSession } from "@/lib/agent/memory-continuity";
 import { initSchema } from "@/lib/db-schema";
 import { listObserveHarnessHealth } from "@/lib/observe-health";
 import { readVaultArtifact } from "@/lib/vault/writer";

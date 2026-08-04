@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
-import { buildMemoryInventory } from "@/lib/memory-inventory";
+import { buildMemoryInventory } from "@/lib/memory/inventory";
 
 export const dynamic = "force-dynamic";
 

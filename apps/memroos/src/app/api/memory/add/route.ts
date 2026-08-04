@@ -1,9 +1,9 @@
-import { authenticateAgentHeaders, recordMemoryWrite } from "@/lib/agent-registry";
+import { authenticateAgentHeaders, recordMemoryWrite } from "@/lib/agent/registry";
 import { MEM0_URL } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { buildTieredMemoryPayload, resolveMemoryTier } from "@/lib/memory/tiers";
 import { checkMemoryWritePolicy } from "@/lib/security-policy";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { responseCache } from "@/lib/response-cache";
 import { checkAuthRateLimit } from "@/lib/auth/rate-limit";
 import { protectMemoryPayloadForStorage } from "@/lib/privacy/pii-storage";

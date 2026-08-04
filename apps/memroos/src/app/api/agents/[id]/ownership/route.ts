@@ -7,7 +7,7 @@ import {
   setAgentShared,
   transferAgentOwnership,
   type AgentViewer,
-} from "@/lib/agent-registry";
+} from "@/lib/agent/registry";
 import { authenticateUser } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 

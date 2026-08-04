@@ -17,7 +17,7 @@ import {
   runScheduledRetentionExpiry,
   startRetentionExpiryScheduler,
   stopRetentionExpiryScheduler,
-} from "@/lib/memory-retention-expiry-scheduler";
+} from "@/lib/memory/retention-expiry-scheduler";
 
 const testDb = new Database(":memory:");
 

@@ -6,7 +6,7 @@ import {
   type ChatRuntimeCandidate,
 } from "@/app/api/chat/chat-runtime";
 import { apiError } from "@/lib/api-error";
-import { getRemoteAgents, listAllAgentsUnscoped } from "@/lib/agent-registry";
+import { getRemoteAgents, listAllAgentsUnscoped } from "@/lib/agent/registry";
 import { selectAdapter } from "@/lib/dispatch/adapter-factory";
 import type { RegisteredAgent, RemoteAgentConfig } from "@/types";
 

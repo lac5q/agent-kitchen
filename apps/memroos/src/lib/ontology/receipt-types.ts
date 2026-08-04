@@ -6,7 +6,7 @@
  * never sole authorization evidence by themselves.
  */
 
-import type { BeliefStage } from "@/lib/recollection-policy";
+import type { BeliefStage } from "@/lib/memory/recollection-policy";
 
 export interface OntologyTypeReceiptRef {
   /** Ontology type of the record (e.g. "claim"). */

@@ -14,7 +14,7 @@ const {
   registerAgent,
   getRegisteredAgent,
   listAllAgentsUnscoped,
-} = await import("@/lib/agent-registry");
+} = await import("@/lib/agent/registry");
 
 const base = { role: "agent", platform: "claude", protocol: "rest" } as const;
 

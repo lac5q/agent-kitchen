@@ -7,7 +7,7 @@ import { initSchema } from "@/lib/db-schema";
 let db: Database.Database;
 vi.mock("@/lib/db", () => ({ getDb: () => db }));
 
-const { listUnownedAgents, registerAgent, getRegisteredAgent } = await import("@/lib/agent-registry");
+const { listUnownedAgents, registerAgent, getRegisteredAgent } = await import("@/lib/agent/registry");
 
 const base = { role: "agent", platform: "claude", protocol: "rest" } as const;
 

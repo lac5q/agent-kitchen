@@ -14,7 +14,7 @@ const {
   canManageAgent,
   setAgentShared,
   transferAgentOwnership,
-} = await import("@/lib/agent-registry");
+} = await import("@/lib/agent/registry");
 
 type Role = "admin" | "operator" | "reviewer";
 

@@ -12,14 +12,14 @@ import {
   type ChatRuntime,
   type AgentContext,
 } from "./chat-runtime";
-import { getRegisteredAgent } from "@/lib/agent-registry";
+import { getRegisteredAgent } from "@/lib/agent/registry";
 import { getDb } from "@/lib/db";
 import { recordEfficiencyEvent } from "@/lib/efficiency-telemetry";
 import {
   buildMemoryDoctorDiagnostic,
   formatMemoryDoctorReport,
   isMemoryDoctorCommand,
-} from "@/lib/memory-doctor";
+} from "@/lib/memory/doctor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

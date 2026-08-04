@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import type { MemoryRecallTier, MemoryRecallTiming } from "../memory-recall-evals";
+import type { MemoryRecallTier, MemoryRecallTiming } from "../memory/recall-evals";
 import {
   assembleRecollectionContextPack,
   decideRecollection,
@@ -13,7 +13,7 @@ import {
   type RecollectionPolicyRisk,
   type RecollectionSourceHealth,
   type RecollectionTriggerInput,
-} from "../recollection-policy";
+} from "../memory/recollection-policy";
 
 export interface RuntimeMemoryInput {
   content: string;

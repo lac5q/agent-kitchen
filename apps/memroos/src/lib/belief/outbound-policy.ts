@@ -23,7 +23,7 @@
  */
 import crypto from "crypto";
 
-import type { BeliefStage } from "../recollection-policy";
+import type { BeliefStage } from "../memory/recollection-policy";
 
 // ---------------------------------------------------------------------------
 // Public types

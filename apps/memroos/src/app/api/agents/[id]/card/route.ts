@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getRemoteAgents } from "@/lib/agent-registry";
+import { getRemoteAgents } from "@/lib/agent/registry";
 import { buildAgentCard } from "@/lib/dispatch/build-agent-card";
 
 export const dynamic = "force-dynamic";

@@ -1,12 +1,12 @@
 import type Database from "better-sqlite3";
-import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory-recall-evals";
+import type { MemoryRecallTier, MemoryRecallTiming } from "@/lib/memory/recall-evals";
 import type {
   BeliefStage,
   IgnoredRecollectionCandidate,
   RecollectionDecisionKind,
   RecollectionReason,
   RecollectionReliance,
-} from "@/lib/recollection-policy";
+} from "@/lib/memory/recollection-policy";
 
 export const EFFICIENCY_EVENT_TYPES = [
   "retrieval_trace",

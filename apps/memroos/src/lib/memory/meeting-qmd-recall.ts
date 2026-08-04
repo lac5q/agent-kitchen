@@ -19,7 +19,7 @@ import {
   isTerminalSourceStatus,
   type MeetingSourceStatus,
   type SourceStatus,
-} from "./meeting-source-status";
+} from "../meeting-source-status";
 
 const defaultExecFileAsync = promisify(defaultExecFile);
 

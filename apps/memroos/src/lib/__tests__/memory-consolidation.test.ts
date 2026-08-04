@@ -53,7 +53,7 @@ describe('runConsolidation', () => {
 
   it('marks messages as consolidated=1 after successful run', async () => {
     seedMessage('c1');
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     const row = testDb
@@ -65,7 +65,7 @@ describe('runConsolidation', () => {
 
   it('creates a row in memory_consolidation_runs with status=completed', async () => {
     seedMessage('c2');
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     const run = testDb
@@ -78,7 +78,7 @@ describe('runConsolidation', () => {
   it('writes parsed meta-insights to memory_meta_insights', async () => {
     seedMessage('c3');
     testDb.exec('UPDATE messages SET consolidated = 0');
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     const insight = testDb
@@ -92,7 +92,7 @@ describe('runConsolidation', () => {
   it('skips already-consolidated messages (WHERE consolidated=0)', async () => {
     testDb.exec('UPDATE messages SET consolidated = 1');
     process.env.ANTHROPIC_API_KEY = 'test-key';
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     const run = testDb
@@ -107,7 +107,7 @@ describe('runConsolidation', () => {
     mockFetch.mockResolvedValueOnce(mockOllamaResponse('not valid json at all'));
     seedMessage('c4');
     testDb.exec('UPDATE messages SET consolidated = 0');
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     const run = testDb
@@ -123,7 +123,7 @@ describe('runConsolidation', () => {
     process.env.CONSOLIDATION_MODEL = 'qwen-local:test';
     seedMessage('ollama1');
 
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     expect(result).toMatchObject({ status: 'completed' });
@@ -144,7 +144,7 @@ describe('runConsolidation', () => {
       "INSERT INTO memory_consolidation_runs(started_at, status, error_message) VALUES(strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'failed', ?)"
     ).run('429 usage limit exceeded');
 
-    const { runConsolidation } = await import('@/lib/memory-consolidation');
+    const { runConsolidation } = await import('@/lib/memory/consolidation-scheduler');
     const result = await runConsolidation();
 
     expect(result.status).toBe('skipped');
@@ -155,7 +155,7 @@ describe('runConsolidation', () => {
 
 describe('startConsolidationScheduler', () => {
   it('double-start guard prevents duplicate intervals', async () => {
-    const { startConsolidationScheduler } = await import('@/lib/memory-consolidation');
+    const { startConsolidationScheduler } = await import('@/lib/memory/consolidation-scheduler');
     expect(() => {
       startConsolidationScheduler();
       startConsolidationScheduler();

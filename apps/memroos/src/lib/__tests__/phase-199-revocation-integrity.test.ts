@@ -12,7 +12,7 @@ async function loadModules() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
   const dbModule = await import("../db");
-  const registryModule = await import("../agent-registry");
+  const registryModule = await import("../agent/registry");
   const schemaModule = await import("../db-schema");
   return {
     ...registryModule,

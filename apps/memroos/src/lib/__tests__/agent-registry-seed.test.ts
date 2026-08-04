@@ -5,7 +5,7 @@ import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db-schema";
-import { seedRegisteredAgents } from "@/lib/agent-registry-seed";
+import { seedRegisteredAgents } from "@/lib/agent/registry-seed";
 
 const TMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "agent-registry-seed-"));
 const ORIGINAL_ROOT = process.env.MEMROOS_ROOT;

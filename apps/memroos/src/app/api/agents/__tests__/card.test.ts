@@ -31,7 +31,7 @@ const MOCK_AGENTS = [
   },
 ];
 
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   getRemoteAgents: () => MOCK_AGENTS,
 }));
 

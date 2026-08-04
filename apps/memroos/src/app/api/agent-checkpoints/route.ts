@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { createAgentCheckpoint, resumeFromCheckpoint } from "@/lib/agent-checkpoints";
+import { createAgentCheckpoint, resumeFromCheckpoint } from "@/lib/agent/checkpoints";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export async function POST(req: Request) {

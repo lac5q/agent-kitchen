@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RegisteredAgent } from "@/types";
-import type { LivenessObservation } from "@/lib/agent-liveness";
+import type { LivenessObservation } from "@/lib/agent/liveness";
 
 const mutateRegister = vi.fn();
 const mutateRegisterA2a = vi.fn();

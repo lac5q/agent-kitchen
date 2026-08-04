@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
-import { buildAgentContextPacket, type AgentContextLane } from "@/lib/agent-context-packet";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
+import { buildAgentContextPacket, type AgentContextLane } from "@/lib/agent/context-packet";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

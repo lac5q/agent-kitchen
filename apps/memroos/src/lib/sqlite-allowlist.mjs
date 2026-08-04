@@ -3,7 +3,7 @@
 // The goal of the data-access chokepoint is that every SQLite write goes
 // through `lib/store/**`, where governance fields (actor, action, asset,
 // purpose, label, decision) are required arguments. Until the migration is
-// done, these 116 files still import `better-sqlite3` directly.
+// done, these 113 files still import `better-sqlite3` directly.
 //
 // This list is a BASELINE, captured 2026-07-26. It may only shrink.
 // `scripts/check-sqlite-allowlist.mjs` fails CI if a file not on this list
@@ -19,15 +19,14 @@
 export const SQLITE_DIRECT_IMPORT_ALLOWLIST = [
   "src/app/api/skills/sign/route.ts",
   "src/app/api/skills/verify/route.ts",
-  "src/lib/agent-checkpoints.ts",
-  "src/lib/agent-cicd-gates.ts",
-  "src/lib/agent-context-bus.ts",
-  "src/lib/agent-context-packet.ts",
-  "src/lib/agent-gsd-control.ts",
-  "src/lib/agent-memory-continuity.ts",
-  "src/lib/agent-registry-seed.ts",
+  "src/lib/agent/checkpoints.ts",
+  "src/lib/agent/cicd-gates.ts",
+  "src/lib/agent/context-bus.ts",
+  "src/lib/agent/context-packet.ts",
+  "src/lib/agent/gsd-control.ts",
+  "src/lib/agent/memory-continuity.ts",
+  "src/lib/agent/registry-seed.ts",
   "src/lib/artifact-gate.ts",
-  "src/lib/audit.ts",
   "src/lib/audit/knowledge-chain.ts",
   "src/lib/audit/memory-chain.ts",
   "src/lib/audit/query.ts",
@@ -72,8 +71,6 @@ export const SQLITE_DIRECT_IMPORT_ALLOWLIST = [
   "src/lib/identity/noc-views.ts",
   "src/lib/identity/owner-gate.ts",
   "src/lib/l3/poller.ts",
-  "src/lib/memory-recall-evals.ts",
-  "src/lib/memory-trace-observability.ts",
   "src/lib/memory/consolidation.ts",
   "src/lib/memory/dsar.ts",
   "src/lib/memory/embedding-lifecycle.ts",
@@ -136,4 +133,4 @@ export const SQLITE_DIRECT_IMPORT_ALLOWLIST = [
 ];
 
 /** The baseline count. CI fails if the real count exceeds this. */
-export const SQLITE_ALLOWLIST_BASELINE = 116;
+export const SQLITE_ALLOWLIST_BASELINE = 113;

@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, PageHeader, Stat } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
 import { describeMetricEnvelope, type MetricEnvelope } from "@/lib/metric-status";
-import type { LivenessObservation } from "@/lib/agent-liveness";
+import type { LivenessObservation } from "@/lib/agent/liveness";
 import type { AgentProtocol, AgentStatus, RegisteredAgent } from "@/types";
 
 type ProtocolFilter = "all" | AgentProtocol;

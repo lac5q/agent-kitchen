@@ -8,7 +8,7 @@ import {
   getRegisteredAgent,
   updateAgentDetails,
   type AgentViewer,
-} from "@/lib/agent-registry";
+} from "@/lib/agent/registry";
 import { authenticateUser } from "@/lib/auth/session";
 import { resolveViewer } from "@/lib/auth/viewer";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
@@ -16,7 +16,7 @@ import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
 import {
   classifyLiveness,
   type LivenessObservation,
-} from "@/lib/agent-liveness";
+} from "@/lib/agent/liveness";
 import { metricEnvelope, type MetricEnvelope, type MetricScope } from "@/lib/metric-status";
 
 export const dynamic = "force-dynamic";

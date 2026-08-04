@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { createAgentOnboardingToken, shellQuote } from "@/lib/agent-onboarding";
+import { createAgentOnboardingToken, shellQuote } from "@/lib/agent/onboarding";
 import { apiError } from "@/lib/api-error";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";

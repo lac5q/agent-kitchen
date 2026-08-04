@@ -1,7 +1,8 @@
 import { apiError } from "@/lib/api-error";
 import { collectLocalFootprintInventory } from "@/lib/cloud-offload/footprint";
 import { getDb } from "@/lib/db";
-import { buildMemoryIterationSnapshot } from "@/lib/memory-doctor";
+import { buildMemoryIterationSnapshot } from "@/lib/memory/doctor";
+import { listSecurityAttentionAuditLog } from "@/lib/store/audit";
 import {
   classifyScalar,
   metricEnvelope,
@@ -377,17 +378,7 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionResult {
     sourceState = "stale_or_error";
   }
   try {
-    const securityRows = db.prepare(
-      `SELECT id, action, target, severity, timestamp
-       FROM audit_log
-       WHERE severity IN ('high', 'medium')
-         AND (lower(action || ' ' || target) LIKE '%security%'
-              OR lower(action || ' ' || target) LIKE '%policy%'
-              OR lower(action || ' ' || target) LIKE '%blocked%'
-              OR lower(action || ' ' || target) LIKE '%denied%')
-       ORDER BY timestamp DESC
-       LIMIT 25`
-    ).all() as Array<{ id: number; action: string; target: string; severity: "high" | "medium"; timestamp: string }>;
+    const securityRows = listSecurityAttentionAuditLog(db);
     items.push(...securityRows.map((row) => ({
       id: `security:${row.id}`,
       severity: row.severity === "high" ? "critical" as const : "warning" as const,

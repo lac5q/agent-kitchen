@@ -1,4 +1,4 @@
-import { runMemoryRecallEvalSuite, type MemoryEvalMode } from "@/lib/memory-recall-evals";
+import { runMemoryRecallEvalSuite, type MemoryEvalMode } from "@/lib/memory/recall-evals";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 
 export const dynamic = "force-dynamic";

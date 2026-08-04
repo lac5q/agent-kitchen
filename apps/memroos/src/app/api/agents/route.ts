@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { listAgentsVisibleTo, ownerDisplayFor, type AgentViewer } from "@/lib/agent-registry";
+import { listAgentsVisibleTo, ownerDisplayFor, type AgentViewer } from "@/lib/agent/registry";
 import { resolveViewer } from "@/lib/auth/viewer";
 import { getDb } from "@/lib/db";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
@@ -10,7 +10,7 @@ import {
   summarizeLivenessStates,
   summarizeReadiness,
   type LivenessObservation,
-} from "@/lib/agent-liveness";
+} from "@/lib/agent/liveness";
 import { metricEnvelope, type MetricEnvelope, type MetricScope } from "@/lib/metric-status";
 import type { AgentPlatform, AgentProtocol, RegisteredAgent } from "@/types";
 

@@ -1,4 +1,4 @@
-import { runDecay } from "@/lib/memory-decay";
+import { runDecay } from "@/lib/memory/decay";
 import type { RetentionScope } from "@/lib/memory/retention-policy";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 

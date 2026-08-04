@@ -5,7 +5,7 @@ import { loadMemroosEnv } from './env';
 import { initSchema } from './db-schema';
 import { resolveFromRepoRoot } from './paths';
 import { seedDefaultAdmin } from './auth/seed';
-import { seedRegisteredAgents } from './agent-registry-seed';
+import { seedRegisteredAgents } from './agent/registry-seed';
 import { backfillConnectorSpaceReaders } from './store/connectors';
 // `systemGovernance` only builds a plain object — it must not pull anything
 // that reaches back for `getDb()`, or this import becomes a cycle through the

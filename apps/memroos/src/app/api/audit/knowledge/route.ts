@@ -28,7 +28,7 @@ import { buildKnowledgeAuditEntry } from "@/lib/audit/knowledge-chain";
 import { writeAuditEntry } from "@/lib/audit/write";
 import type { NewAuditEntry } from "@/lib/audit/schema";
 import { getDb } from "@/lib/db";
-import { authenticateAgentKey } from "@/lib/agent-registry";
+import { authenticateAgentKey } from "@/lib/agent/registry";
 
 export const dynamic = "force-dynamic";
 

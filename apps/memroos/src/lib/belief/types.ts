@@ -8,9 +8,9 @@
  * Hard rule: NO LLM in this phase. All checks must be deterministic and
  * reproducible from the candidate row + raw_artifacts alone.
  */
-export type { BeliefStage } from "../recollection-policy";
+export type { BeliefStage } from "../memory/recollection-policy";
 
-import type { BeliefStage } from "../recollection-policy";
+import type { BeliefStage } from "../memory/recollection-policy";
 
 /**
  * Category of a claim. High-stakes categories (configured in config.ts)

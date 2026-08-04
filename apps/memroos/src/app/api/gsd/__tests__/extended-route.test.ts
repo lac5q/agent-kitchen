@@ -11,7 +11,7 @@ const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes-ext.db");
 async function loadRoutes() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const discuss = await import("../discuss/route");
   const skillAudit = await import("../skill-audit/route");
   const skillBoundary = await import("../skill-boundary/route");

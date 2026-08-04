@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import { AGENT_CONFIGS_PATH } from "@/lib/constants";
-import { authenticateAgentHeaders, recordHeartbeat } from "@/lib/agent-registry";
+import { authenticateAgentHeaders, recordHeartbeat } from "@/lib/agent/registry";
 
 export const dynamic = "force-dynamic";
 

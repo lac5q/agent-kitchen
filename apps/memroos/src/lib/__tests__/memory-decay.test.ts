@@ -46,7 +46,7 @@ describe('runDecay', () => {
     const midId = seedSalience('mid', 1.0);
     const lowId = seedSalience('low', 1.0);
 
-    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    const { runDecay, _resetForTest } = await import('@/lib/memory/decay');
     _resetForTest();
     await runDecay();
 
@@ -63,7 +63,7 @@ describe('runDecay', () => {
   it('pinned tier salience_score never changes', async () => {
     const pinnedId = seedSalience('pinned', 1.0);
 
-    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    const { runDecay, _resetForTest } = await import('@/lib/memory/decay');
     _resetForTest();
     await runDecay();
 
@@ -74,7 +74,7 @@ describe('runDecay', () => {
   it('salience_score never goes below 0 after multiple decay cycles', async () => {
     const lowId = seedSalience('low', 0.001, '2020-01-01');
 
-    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    const { runDecay, _resetForTest } = await import('@/lib/memory/decay');
     _resetForTest();
     // Run multiple times
     for (let i = 0; i < 5; i++) {
@@ -90,7 +90,7 @@ describe('runDecay', () => {
   it('last_decay_at updated; second same-day run does NOT decay again', async () => {
     const midId = seedSalience('mid', 1.0);
 
-    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    const { runDecay, _resetForTest } = await import('@/lib/memory/decay');
     _resetForTest();
     await runDecay();
 
@@ -148,7 +148,7 @@ describe('runDecay', () => {
       actorId: 'legal',
     });
 
-    const { runDecay, _resetForTest } = await import('@/lib/memory-decay');
+    const { runDecay, _resetForTest } = await import('@/lib/memory/decay');
     _resetForTest();
     const summary = runDecay({ runKey: 'decay-protections', now: new Date('2026-01-02T00:00:00.000Z') });
 
@@ -168,7 +168,7 @@ describe('runDecay', () => {
   });
 
   it('LOG() probe stored module-level and determines SQL variant', async () => {
-    const { _resetForTest, hasLogFunction } = await import('@/lib/memory-decay');
+    const { _resetForTest, hasLogFunction } = await import('@/lib/memory/decay');
     _resetForTest();
     // After reset, probe should be null and re-probe on next call
     // The result (true or false) should be consistent on second call

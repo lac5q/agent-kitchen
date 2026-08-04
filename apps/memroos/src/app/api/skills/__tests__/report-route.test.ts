@@ -23,7 +23,7 @@ const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes.db");
 async function loadRoute() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
   vi.resetModules();
-  const registry = await import("@/lib/agent-registry");
+  const registry = await import("@/lib/agent/registry");
   const route = await import("../report/route");
   const dbModule = await import("@/lib/db");
   return { ...registry, ...route, closeDb: dbModule.closeDb, getDb: dbModule.getDb };

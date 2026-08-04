@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import type Database from "better-sqlite3";
 
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { openEscalation, writeAuditEntry } from "@/lib/audit/write";
 import { PATTERNS, scanContent } from "@/lib/content-scanner";
 import { readVaultArtifact } from "@/lib/vault/writer";

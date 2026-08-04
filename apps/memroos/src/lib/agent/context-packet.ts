@@ -3,6 +3,10 @@ import type Database from "better-sqlite3";
 import { writeAuditEntry } from "@/lib/audit/write";
 import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from "@/lib/audit/event-types";
 import { resolveOntologyValidity } from "@/lib/ontology/validity";
+import {
+  listMemoryCandidatesForContext,
+  listMemoryTracesForContext,
+} from "@/lib/store/memory";
 
 export type AgentContextLane =
   | "research"
@@ -532,29 +536,8 @@ export function buildAgentContextPacket(
      LIMIT 1`,
     params
   );
-  const candidateRows = maybeAll(
-    db,
-    `SELECT id, memory_type, content_hash, status, metadata_json, belief_stage, created_at
-     FROM agent_memory_candidates
-     WHERE tenant_id = @tenantId
-       AND (
-         json_extract(metadata_json, '$.goalId') = @goalId
-         OR json_extract(metadata_json, '$.goal_id') = @goalId
-         OR json_extract(metadata_json, '$.taskId') = @goalId
-         OR json_extract(metadata_json, '$.task_id') = @goalId
-       )
-     ORDER BY created_at DESC
-     LIMIT 25`,
-    params
-  );
-  const traceRows = maybeAll(
-    db,
-    `SELECT * FROM agent_memory_traces
-     WHERE tenant_id = @tenantId AND (run_id = @goalId OR task_id = @goalId)
-     ORDER BY created_at DESC
-     LIMIT 25`,
-    params
-  );
+  const candidateRows = listMemoryCandidatesForContext(db, tenantId, input.goalId);
+  const traceRows = listMemoryTracesForContext(db, tenantId, input.goalId);
   const efficiencyRows = maybeAll(
     db,
     `SELECT * FROM efficiency_events

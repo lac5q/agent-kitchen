@@ -19,13 +19,13 @@ vi.mock("@/lib/db", () => ({
   getDb: vi.fn(),
 }));
 
-vi.mock("@/lib/agent-registry", () => ({
+vi.mock("@/lib/agent/registry", () => ({
   recordMemoryWrite: vi.fn(),
   registerAgent: vi.fn(),
 }));
 
-vi.mock("@/lib/audit", () => ({
-  writeAuditLog: vi.fn(),
+vi.mock("@/lib/store/audit", () => ({
+  writeAuditLogFromEntry: vi.fn(),
 }));
 
 vi.mock("@/lib/response-cache", () => ({
@@ -223,7 +223,7 @@ describe("ChatGPT Actions bridge", () => {
 
   it("saves explicit memories through the mem0 backend with action API key auth", async () => {
     process.env.MEMROOS_CHATGPT_ACTIONS_API_KEY = "test-action-key";
-    const registry = await import("@/lib/agent-registry");
+    const registry = await import("@/lib/agent/registry");
     const policy = await import("@/lib/security-policy");
     vi.mocked(registry.registerAgent).mockReturnValue({
       agent: { id: "chatgpt-mobile", capabilities: [] },
@@ -305,7 +305,7 @@ describe("ChatGPT Actions bridge", () => {
     process.env.MEMROOS_CHATGPT_ACTIONS_API_KEY = "secret-key";
     const backends = await import("@/lib/memory/backends");
     const policy = await import("@/lib/security-policy");
-    const audit = await import("@/lib/audit");
+    const audit = await import("@/lib/store/audit");
 
     vi.mocked(backends.searchVectorMemory).mockRejectedValue(new Error("vector down"));
     vi.mocked(backends.queryGraphMemory).mockResolvedValue([
@@ -320,7 +320,7 @@ describe("ChatGPT Actions bridge", () => {
       code: "DENIED",
       message: "blocked by policy",
     });
-    vi.mocked((await import("@/lib/agent-registry")).registerAgent).mockReturnValue({
+    vi.mocked((await import("@/lib/agent/registry")).registerAgent).mockReturnValue({
       agent: { id: "chatgpt-mobile", capabilities: [] },
     } as never);
 
@@ -346,6 +346,6 @@ describe("ChatGPT Actions bridge", () => {
       }),
     );
     expect(saveResponse.status).toBe(502);
-    expect(audit.writeAuditLog).toHaveBeenCalled();
+    expect(audit.writeAuditLogFromEntry).toHaveBeenCalled();
   });
 });

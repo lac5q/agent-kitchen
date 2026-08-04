@@ -649,7 +649,7 @@ exit 0
     ["missing", undefined],
   ] as const)("rejects a %s allowedAgentIds scope", async (_label, allowedAgentIds) => {
     const { registerRoute } = await loadRoutes();
-    const { createAgentOnboardingToken } = await import("@/lib/agent-onboarding");
+    const { createAgentOnboardingToken } = await import("@/lib/agent/onboarding");
     const { token } = createAgentOnboardingToken({
       memroosUrl: "https://memroos.example.test",
       ownerUserId: "test-admin",
@@ -701,7 +701,7 @@ exit 0
     expect(tampered.status).toBe(403);
     expect((await tampered.json()).error).toBe("Invalid onboarding token signature");
 
-    const { createAgentOnboardingToken } = await import("@/lib/agent-onboarding");
+    const { createAgentOnboardingToken } = await import("@/lib/agent/onboarding");
     const { token: expiredToken } = createAgentOnboardingToken({
       memroosUrl: "https://memroos.example.test",
       ownerUserId: "test-admin",

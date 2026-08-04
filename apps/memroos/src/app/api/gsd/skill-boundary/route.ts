@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { authenticateAgentHeaders } from "@/lib/agent-registry";
+import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { loadSkillBoundaryManifest } from "@/lib/gsd/skill-boundary";
 
 export const dynamic = "force-dynamic";

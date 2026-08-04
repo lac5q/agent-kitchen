@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import { createOrResumeGsdGoal, runGsdShipcheck, buildGsdResume, buildGsdStandup } from "@/lib/agent-gsd-control";
-import { buildAgentContextPacket } from "@/lib/agent-context-packet";
+import { createOrResumeGsdGoal, runGsdShipcheck, buildGsdResume, buildGsdStandup } from "@/lib/agent/gsd-control";
+import { buildAgentContextPacket } from "@/lib/agent/context-packet";
 import { runBoundedDiscussCouncil } from "@/lib/gsd/discuss";
 import { auditRegisteredSkills } from "@/lib/gsd/skill-boundary";
 import { runGsdLaneEvalSuite } from "@/lib/gsd/lane-evals";

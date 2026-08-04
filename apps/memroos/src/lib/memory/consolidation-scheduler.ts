@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { getDb } from '../db';
 
 // Use globalThis to survive Next.js hot-reload module re-evaluation.
 // _consolidationInterval holds the NodeJS.Timeout so we can clear it if needed.

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
-import { rankMemoryPolicies, type MemoryPolicyVariant } from "@/lib/memory-policy-lab";
+import { rankMemoryPolicies, type MemoryPolicyVariant } from "@/lib/memory/policy-lab";
 
 export const dynamic = "force-dynamic";
 

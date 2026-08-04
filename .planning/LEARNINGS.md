@@ -323,3 +323,16 @@
   unsandboxed run: 0 failures. Correct call, correctly evidenced.
 - Design note that made review cheap: the contract enumerated each defect with file:line and a
   pre-made decision, so the executor never had to invent a security policy. Zero escalations.
+
+## BM-20260803 phase-188/189 structural-debt (v8.29 STORE-04 + LIBNORM-02)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (MAX effort, per operator directive) | Result: pass
+- Both ratchet gates moved DOWN, which was the acceptance criterion: sqlite importers 116 -> 113,
+  lib/ root files 75 -> 53 (22 modules into lib/memory/ and lib/agent/).
+- Full suite 3733/0 (director, unsandboxed). Typecheck 0, lint 0 errors.
+- `@ts-expect-error` proof landed: an audit write without GovernanceContext does not typecheck —
+  the property STORE-01 was actually buying, not just a directory move.
+- Executor honesty, third time: reported callers it deliberately left behind (messages table is
+  shared core storage; db-schema DDL is STORE-02 scope) rather than forcing the number lower.
+  A smaller honest reduction beats a broken large one — that instruction earned its place.
+- GitNexus `rename` was unavailable in-session; executor said so and used actual-import-graph
+  updates instead of find-and-replace. Correct fallback, correctly disclosed.

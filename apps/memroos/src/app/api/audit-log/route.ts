@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
+import { listAuditLog } from '@/lib/store/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,14 +22,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(100, Math.max(1, isNaN(parsedLimit) ? 20 : parsedLimit));
   const db = getDb();
 
-  const rows = db
-    .prepare(
-      `SELECT id, actor, action, target, detail, severity, timestamp
-       FROM audit_log
-       ORDER BY timestamp DESC
-       LIMIT ?`
-    )
-    .all(limit);
+  const rows = listAuditLog(db, limit);
 
   return Response.json({ entries: rows, timestamp: new Date().toISOString() });
 }

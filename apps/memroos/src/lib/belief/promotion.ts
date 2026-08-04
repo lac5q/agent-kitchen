@@ -31,7 +31,7 @@ import {
   type MemoryUseActor,
   type MemoryLabelSnapshot,
 } from "../memory/policy-gate";
-import { writeAuditLog } from "../audit";
+import { writeAuditLogFromEntry as writeAuditLog } from "@/lib/store/audit";
 import { getDb } from "../db";
 
 import {

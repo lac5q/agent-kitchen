@@ -7,7 +7,7 @@ import {
   buildGsdStandup,
   createOrResumeGsdGoal,
   runGsdShipcheck,
-} from "@/lib/agent-gsd-control";
+} from "@/lib/agent/gsd-control";
 import { initSchema } from "@/lib/db-schema";
 
 function seedDb(): Database.Database {
