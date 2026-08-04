@@ -225,6 +225,23 @@ def merge_codex_toml(path):
 
 def install_claude():
     ok = run_if_available("claude", ["mcp", "add", "--transport", "http", "memroos", "--scope", "user", mcp_url])
+    if ok and shutil.which("claude"):
+        # 'mcp add' registers the server but cannot complete the one step that
+        # needs a human: the per-user OAuth grant. 'claude mcp login' starts it
+        # right now, while the invitee is still at the keyboard — this is the
+        # step Eric's onboarding silently parked on (2026-08-03). Inherit stdio
+        # so the sign-in URL stays visible when no browser can open (SSH).
+        print()
+        print("Opening the memroos sign-in for Claude Code (claude mcp login memroos)...")
+        print("A browser window should open — sign in as YOURSELF.")
+        print("On a remote shell, visit the printed URL instead.")
+        print("(Ctrl-C skips this; you can rerun later with: claude mcp login memroos)")
+        try:
+            login = subprocess.run(["claude", "mcp", "login", "memroos"])
+            remember("claude-mcp-login", "ok" if login.returncode == 0 else "incomplete", f"exit {login.returncode}")
+        except KeyboardInterrupt:
+            remember("claude-mcp-login", "skipped", "interrupted by user")
+            print("Skipped. Finish later with: claude mcp login memroos")
     return ok
 
 def install_cline():
@@ -373,28 +390,24 @@ print(f"MemroOS onboarded {agent_id}")
 print(f"Credentials written to {env_path}")
 print(f"Onboarding report written to {report_path}")
 
-# The two credentials this flow touches are different planes, and finishing
-# this script completes only one of them. Say so, or the invitee reasonably
-# concludes the whole thing is broken when /mcp still asks for auth.
+# Keep the closing message tiny: state what is already done, then at most ONE
+# command. The failure mode this prevents (Eric, 2026-08-03): a wall of text
+# that reads as done while a sign-in silently waits.
 print()
-print("What just happened, and what is still yours to do:")
-print(f"  1. Agent-plane key (MEMROOS_AGENT_API_KEY in {env_path}):")
-print("     installed. It authenticates agent REST calls (heartbeat, capture,")
-print("     skills). It does NOT authenticate the MCP endpoint or operator APIs.")
-print("  2. MCP connection (per-user OAuth): registered but NOT yet authenticated.")
-print("     The MCP endpoint identifies the human, so each client signs in once:")
+print("== MemroOS setup ==")
+print("  [done] Account + agent key installed")
+print("  [done] memroos registered in your client")
 if platform == "claude":
-    print("       - Claude Code: run 'claude', then '/mcp', select memroos and")
-    print("         authenticate — a browser opens; sign in with YOUR account.")
-elif platform in ("codex", "droid", "cursor", "cline", "gemini", "qwen", "opencode", "zcode", "openclaw", "hermes"):
-    print(f"       - {platform}: open your client's MCP server list, select memroos,")
-    print("         and complete the sign-in prompt with YOUR account.")
+    print("  [ 1 ]  If a browser sign-in just completed above: nothing left, you are DONE.")
+    print("         If it did not, run this and sign in when the browser opens:")
+    print()
+    print("           claude mcp login memroos")
 else:
-    print("       - Your client: complete the MCP OAuth prompt with YOUR account.")
-print("       - Claude Cowork (if invited): claude.ai -> Settings -> Connectors ->")
-print("         add the memroos connector URL from your invite page, then approve")
-print("         the auth prompt. Cowork and the CLI authenticate separately by")
-print("         design — same identity, two clients, two one-time sign-ins.")
+    print("  [ 1 ]  One step left: open your client's MCP server list, choose")
+    print("         memroos, and sign in when the browser opens.")
+print()
+print("Using Claude Cowork too? One-time, in the browser:")
+print(f"  claude.ai -> Settings -> Connectors -> Add -> {mcp_url} -> Approve")
 PY
 `.replaceAll("\\${", "${");
 
