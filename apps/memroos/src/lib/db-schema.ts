@@ -566,7 +566,7 @@ function applyToolConnectionsSchema(db: Database.Database): void {
           `SELECT u.id
            FROM users u
            JOIN user_roles ur ON ur.user_id = u.id
-           WHERE ur.role = 'admin'
+           WHERE ur.role = 'admin' AND u.disabled_at IS NULL
            ORDER BY u.created_at ASC, u.id ASC
            LIMIT 1`,
         )
