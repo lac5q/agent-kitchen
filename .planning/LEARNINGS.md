@@ -308,3 +308,18 @@
 - Also noted: e2e specs must seed their own fixtures. voice-chat.spec.ts depends on a "Memroos Floor"
   agent present only in the operator's DB, so it is green on main and red on any fresh checkout.
   Not a regression; recorded as pre-existing fixture debt.
+
+## BM-20260803 phase-208 onboarding-token-hardening (v8.35 HAIA-10..14 + 210a-1/4)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (xhigh) | Result: pass
+- Seven confirmed-open defects closed, each with an attack-shaped test (13 total). Director verified
+  all seven in the CODE, not from the report: strict registry auth ignores loopback; nonce INSERT is
+  a PK single-use guard run via a `beforePersist` hook INSIDE the registration transaction (rollback
+  leaves it reusable — the subtle requirement, met); TTL clamped at 60; allowedAgentIds mandatory;
+  revoked ids rejected without minting keys; caller capabilities 400 rather than silently ignored;
+  allow-on-empty closed for agent-authenticated principals.
+- Gates: full suite 3731/0, check:route-auth-boundary OK, check:next-trust-boundary 98/98, typecheck 0.
+- Executor honesty held again: reported 10 db-ingest failures as environment (sandbox $HOME/.memroos
+  not writable) and PROVED it by re-running with MEMROOS_VAULT_ROOT=$(mktemp -d) -> 22/22. Director's
+  unsandboxed run: 0 failures. Correct call, correctly evidenced.
+- Design note that made review cheap: the contract enumerated each defect with file:line and a
+  pre-made decision, so the executor never had to invent a security policy. Zero escalations.
