@@ -3,7 +3,7 @@
 
 import { NextRequest } from "next/server";
 
-import { authenticateUser } from "@/lib/auth/session";
+import { resolveViewer } from "@/lib/auth/viewer";
 import {
   listToolConnectionsVisibleTo,
   type ToolConnectionViewer,
@@ -14,7 +14,7 @@ import type { ListConnectionsResponse } from "@/lib/tool-auth/types";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const session = await authenticateUser(req);
+  const session = await resolveViewer(req);
   if (!session) {
     return Response.json({ error: "authentication required" }, { status: 401 });
   }

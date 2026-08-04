@@ -276,3 +276,10 @@
 - What failed / drifted: running a baseline test suite concurrently with an active executor in the same tree produced phantom failures (raced half-edited db-schema.ts). Rule: baseline before launch, or in a separate worktree. Executor's sandboxed full-suite run showed 10 env-artifact failures (blocked $HOME writes) — director re-run outside sandbox was the authoritative gate, as designed.
 - Routing rule to change: none
 - Skill/config update needed: no
+
+## BM-20260803 phase-226 view-as
+- Director/Lead: claude-fable-5 | Executor: openai-codex/gpt-5.6-luna (xhigh) | Harness: codex exec, single worktree
+- Acceptance: focused 61/61, trust-boundary 98/98, typecheck/lint pass, full fast suite 3722/0 (director-run)
+- Result: pass. Zero escalations; proxy read-only gate implemented with correct fail-direction (forged cookie restricts, never grants).
+- Routing note: executor runs detect_changes as part of mechanical validation; director reads the reported blast radius instead of re-running the 10k-token call. Same-checker rule as acn-report.
+- Ops interleave lesson: mid-run operator escalations (Eric onboarding, main-mac mem0) were handled by the director inline while the executor kept building — worktree isolation made the interleave safe; scoped git adds kept the commits clean.

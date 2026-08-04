@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { signAccessToken, signViewAsToken } from "@/lib/auth/jwt";
 
 /** /api/agents now authenticates, so it needs a request object. */
 function agentsRequest(): never {
@@ -332,6 +333,79 @@ describe("agent registry routes", () => {
     const listResponse = await agentsRoute.GET(agentsRequest());
     expect((await listResponse.json()).agents).toEqual([
       expect.objectContaining({ id: "cline", platform: "cline" }),
+    ]);
+  });
+
+  it("view-as lists exactly the target user's visible agents", async () => {
+    process.env.MEMROOS_JWT_SECRET = "test-secret-that-is-long-enough-32ch";
+    const { agentsRoute, registerRoute, getDb } = await loadRoutes();
+
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO users (id, email, display_name, password_hash, tenant_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run("test-admin", "admin@view-as.test", "Admin One", "unused", "default-tenant", now);
+    getDb()
+      .prepare(
+        `INSERT INTO users (id, email, display_name, password_hash, tenant_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run("target-user", "target@view-as.test", "Target User", "unused", "default-tenant", now);
+    getDb().prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run("test-admin", "admin");
+    getDb().prepare("INSERT INTO user_roles (user_id, role) VALUES (?, ?)").run("target-user", "reviewer");
+
+    testSession = {
+      userId: "target-user",
+      role: "reviewer",
+      email: "target@view-as.test",
+      displayName: "Target User",
+      tenantId: "default-tenant",
+    };
+    await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "target-agent",
+          name: "Target Agent",
+          role: "Target-owned",
+          platform: "codex",
+          protocol: "rest",
+          issueApiKey: false,
+        }),
+      })
+    );
+
+    testSession = ADMIN_SESSION;
+    await registerRoute.POST(
+      new Request("http://localhost/api/agents/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "admin-agent",
+          name: "Admin Agent",
+          role: "Admin-owned",
+          platform: "codex",
+          protocol: "rest",
+          issueApiKey: false,
+        }),
+      })
+    );
+
+    const accessToken = await signAccessToken("test-admin", "admin");
+    const viewAsToken = await signViewAsToken("test-admin", "target-user");
+    const listResponse = await agentsRoute.GET(
+      new Request("http://localhost/api/agents", {
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          cookie: `view_as_token=${viewAsToken}`,
+        },
+      })
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect((await listResponse.json()).agents).toEqual([
+      expect.objectContaining({ id: "target-agent" }),
     ]);
   });
 });

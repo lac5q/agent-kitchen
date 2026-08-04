@@ -1,0 +1,24 @@
+## Validation Report phase-226
+- Commands run:
+  - `sed -n '/Phase 226/,/Phase 227/p' .planning/milestones/v8.37-agent-ownership-scoped-visibility-ROADMAP.md` — exit 0.
+  - `npm run test --workspace apps/memroos -- --run src/lib/auth src/app/api/admin src/__tests__/proxy.test.ts src/app/api/agents/__tests__/registry-route.test.ts 'src/app/api/agents/[id]/__tests__/route.test.ts' src/app/api/security/capabilities/__tests__ src/app/api/tools/__tests__` — exit 0; 21 files, 155 passed, 2 skipped.
+  - `npm run test --workspace apps/memroos -- --run src/components/layout/__tests__/shell.test.tsx src/lib/auth src/app/api/admin src/__tests__/proxy.test.ts 'src/app/api/agents/[id]/__tests__/route.test.ts' src/app/api/security/capabilities/__tests__ src/app/api/tools/__tests__` — exit 0; 21 files, 151 passed, 2 skipped after the shell-provider regression fix.
+  - `npm run test --workspace apps/memroos -- --run src/lib/auth/__tests__/viewer.test.ts src/app/api/admin/view-as/__tests__/route.test.ts src/app/api/agents/__tests__/registry-route.test.ts src/__tests__/proxy.test.ts` — exit 0; 4 files, 61 passed.
+  - `npm run check:next-trust-boundary` — exit 0; `Next trust boundary OK`, 7 files, 98 passed.
+  - `npm run typecheck` — exit 0.
+  - `npm exec -- eslint src/app/api/admin/view-as/__tests__/route.test.ts src/lib/auth/viewer.ts src/lib/auth/__tests__/viewer.test.ts src/components/layout/view-as-banner.tsx` from `apps/memroos` — exit 0.
+  - `git diff --check` — exit 0.
+  - `npm run test:fast` — exit 1 during broad diagnostics: the new shell banner/provider regression was fixed; the remaining failures were unrelated db-ingest/vault filesystem tests attempting writes under `~/.memroos`, outside this worktree.
+  - `gitnexus.detect_changes({scope: "all", worktree: "...google-oauth-invitation-flow-fada52"})` — completed; reported critical shared-auth/proxy blast radius reviewed before handoff. No commit or push performed.
+- Tests: focused suite 61/61 passed; expanded changed-scope suites 306/310 passed (4 skipped); trust-boundary suite 98/98 passed.
+- Lint/typecheck: pass.
+- Diff stats + unrelated files touched: 15 tracked files modified (+261/-16) plus 5 new Phase 226 files (+707); unrelated files touched: no.
+- Contract checklist: VIEWAS-01..07 item-by-item:
+  - VIEWAS-01 — met: dedicated 15-minute `view_as_token`; admin-only start, disabled/cross-tenant target checks, exit, and real access token unchanged.
+  - VIEWAS-02 — met: `resolveViewer` applies real-session-first target resolution, tenant/disabled checks, role capping, expiry handling, and API-key bypass on the scoped read routes plus `/api/auth/me` metadata.
+  - VIEWAS-03 — met: proxy rejects non-GET/HEAD/OPTIONS API requests with `{ error: "view_as_read_only" }`, while allowing view-as DELETE exit and auth logout POST; forged syntactic cookies only restrict writes.
+  - VIEWAS-04 — met: start and exit write append-only audit rows containing actor and target IDs and human names in metadata.
+  - VIEWAS-05 — met: route/resolver/proxy tests cover target visibility, expiry, higher-role capping, non-admin denial, active-session rejection, API-key ignore, and write-verb refusal.
+  - VIEWAS-06 — met: persistent read-only banner with one-click exit and admin-only Team-row View as action are wired.
+  - VIEWAS-07 — met: focused Vitest coverage, trust-boundary gate, typecheck, scoped lint, and diff checks pass.
+- Escalations: none.

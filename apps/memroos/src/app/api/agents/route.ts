@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { listAgentsVisibleTo, ownerDisplayFor, type AgentViewer } from "@/lib/agent-registry";
-import { authenticateUser } from "@/lib/auth/session";
+import { resolveViewer } from "@/lib/auth/viewer";
 import { getDb } from "@/lib/db";
 import { getLocalAgentRuntime } from "@/lib/local-agent-runtime";
 import {
@@ -152,11 +152,14 @@ function freshestFreshness(observations: LivenessObservation[]): number | null {
  * principle — every signed-in user, including a reviewer, received all agents.
  */
 export async function GET(req: NextRequest) {
-  const session = await authenticateUser(req);
-  if (!session) {
+  const resolvedViewer = await resolveViewer(req);
+  if (!resolvedViewer) {
     return Response.json({ error: "authentication required" }, { status: 401 });
   }
-  const viewer: AgentViewer = { userId: session.userId, role: session.role };
+  const viewer: AgentViewer = {
+    userId: resolvedViewer.userId,
+    role: resolvedViewer.role,
+  };
 
   let localRuntime: ReturnType<typeof getLocalAgentRuntime>;
   let localRuntimeOk = true;

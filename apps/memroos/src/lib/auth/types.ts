@@ -18,3 +18,14 @@ export interface SessionUser {
   displayName: string;
   tenantId: string;
 }
+
+export interface ViewingAsMetadata {
+  targetUserId: string;
+  targetName: string;
+  actorUserId: string;
+  expiresAt: string;
+}
+
+export type ResolvedViewer = SessionUser & {
+  viewingAs?: ViewingAsMetadata;
+};
