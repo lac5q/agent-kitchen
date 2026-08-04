@@ -118,8 +118,38 @@ case "$EXPECT_VECTOR" in
 esac
 
 # ── scheduler activity ───────────────────────────────────────────────────────
-if [ -z "$(docker logs "$CONTAINER" --since 20m 2>&1 | grep -i 'graph-catchup' | tail -5)" ]; then
-  fail "graph-catchup: no scheduler activity in 20 min. Expected every 30m, but total silence is suspicious."
+#
+# The window MUST exceed the interval it watches, or the check fails by
+# construction. It previously looked back 20m at a scheduler that runs every
+# 30m: for 10 minutes of every cycle there is legitimately nothing to find, and
+# this check runs every 15m, so roughly a third of all runs alarmed. Measured on
+# oracle-1 2026-08-04: 34 of the last 35 failures were this one line, ~32 emails
+# a day. That volume buried a real "Data loss: users 3 -> 2" alarm, which is the
+# actual cost of a noisy check — not the noise, the signal it hides.
+#
+# Window = interval + 50% margin. Raise GRAPH_CATCHUP_INTERVAL_MIN with the
+# scheduler if it ever changes; the margin follows automatically.
+GRAPH_CATCHUP_INTERVAL_MIN="${GRAPH_CATCHUP_INTERVAL_MIN:-30}"
+GRAPH_CATCHUP_WINDOW_MIN=$(( GRAPH_CATCHUP_INTERVAL_MIN * 3 / 2 ))
+
+# A restart resets the scheduler's clock, so the first interval after a deploy
+# is legitimately silent. Alarming then trains the operator to ignore the alarm
+# on exactly the days it might matter most.
+container_uptime_min() {
+  local started
+  started="$(docker inspect "$CONTAINER" --format '{{.State.StartedAt}}' 2>/dev/null)" || return 1
+  [ -n "$started" ] || return 1
+  local start_epoch now_epoch
+  start_epoch="$(date -d "$started" +%s 2>/dev/null)" || return 1
+  now_epoch="$(date +%s)"
+  echo $(( (now_epoch - start_epoch) / 60 ))
+}
+
+_uptime_min="$(container_uptime_min || echo "")"
+if [ -n "$_uptime_min" ] && [ "$_uptime_min" -lt "$GRAPH_CATCHUP_WINDOW_MIN" ]; then
+  ok "graph-catchup: within first ${GRAPH_CATCHUP_WINDOW_MIN}m after restart (up ${_uptime_min}m) — not yet due"
+elif [ -z "$(docker logs "$CONTAINER" --since "${GRAPH_CATCHUP_WINDOW_MIN}m" 2>&1 | grep -i 'graph-catchup' | tail -5)" ]; then
+  fail "graph-catchup: no scheduler activity in ${GRAPH_CATCHUP_WINDOW_MIN} min (interval ${GRAPH_CATCHUP_INTERVAL_MIN}m). Total silence past a full interval plus margin is a real stall."
 else
   ok "graph-catchup active"
 fi
