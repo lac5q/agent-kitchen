@@ -4,7 +4,7 @@ import { runConsolidation } from '@/lib/memory/consolidation-scheduler';
 import { getDb } from '@/lib/db';
 import { writeAuditLogFromEntry as writeAuditLog } from '@/lib/store/audit';
 import { authenticateUser } from '@/lib/auth/session';
-import { requireRole } from '@/lib/auth/middleware-roles';
+import { CAPABILITY, requireCapability } from '@/lib/auth/capabilities';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return Response.json({ error: 'authentication required' }, { status: 401 });
   }
-  const roleError = requireRole(session.role, 'operator');
-  if (roleError) return roleError;
+  const capabilityError = requireCapability(session, CAPABILITY.MEMORY_CONSOLIDATE);
+  if (capabilityError) return capabilityError;
   try {
     const run = await runConsolidation();
     const db = getDb();

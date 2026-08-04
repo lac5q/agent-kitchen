@@ -348,3 +348,18 @@
   GitNexus `context` on the symbol answered it faster than grepping.
 - Executor lane honesty (4th time): reported MiniMax-M3 unavailable and named the fallback lane it
   actually used, per the beastmode MODEL DRIFT rule, rather than implying the cheap lane ran.
+
+## BM-20260804 phase-210b-1 capability-model-foundation (v8.35)
+- Director: claude-fable-5 | Executor: gpt-5.6-luna (max) | Result: pass
+- Full suite 3753/0 (director, unsandboxed — matched executor exactly). New ratchet gate
+  check:role-rank-callsites live at 65 (from 74); route-auth + next-trust boundary gates green.
+- The design resolution held: requireRole computes through hasCapability over ROLE_CAPABILITIES,
+  verified in code by the director. ROLE_RANK stays exported for compat consumers but is no
+  longer consulted inside the facade — one model with a view, not two that can disagree.
+  25 equivalence pairs (15 typed + 10 null/undefined) prove they agree everywhere.
+- **Director error worth keeping:** the first 210b-1 launch hung for HOURS on
+  "Reading additional input from stdin" — the prompt was passed in a way that made codex read
+  stdin instead of taking it as an argument. Zero work happened and I reported it as progress.
+  Rule: always write the contract to a FILE and launch with `< /dev/null`; and confirm the
+  executor is producing real output before describing it as running. Absence of a report is not
+  evidence of work.

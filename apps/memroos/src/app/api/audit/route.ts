@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { authenticateUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/auth/middleware-roles";
+import { CAPABILITY, requireCapability } from "@/lib/auth/capabilities";
 import { queryAuditEntries } from "@/lib/audit/query";
 import type { AuditQueryFilter } from "@/lib/audit/schema";
 import type { AuditEventType } from "@/lib/audit/event-types";
@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   const session = await authenticateUser(req);
-  const roleError = requireRole(session?.role, "reviewer");
-  if (roleError) return roleError;
+  const capabilityError = requireCapability(session, CAPABILITY.AUDIT_READ);
+  if (capabilityError) return capabilityError;
   if (!session) return Response.json({ error: "authentication required" }, { status: 401 });
 
   const url = req.nextUrl ?? new URL(req.url);
