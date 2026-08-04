@@ -1,7 +1,8 @@
 ---
 name: memroos-save
 description: Persist durable agent work product to MemroOS MCP knowledge base with verification, metadata, and source-drift support. Use when producing research, competitive analysis, market positioning, comparison posts, benchmarks, RCA documents, or any "save/document/archive" request. Auto-validates the write succeeded.
-version: 1.1.0
+version: 1.2.0
+auto_load: true
 source_repo: https://github.com/lac5q/memroos/blob/main/.agents/skills/memroos-save/SKILL.md
 ---
 

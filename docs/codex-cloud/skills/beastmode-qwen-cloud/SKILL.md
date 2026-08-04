@@ -19,6 +19,20 @@ worker lane by using Qwen as an external executor CLI:
 - Worker: `~/.local/bin/qwen-agent` using `qwen3.7-plus`.
 - Validator: Codex in the current session, plus repo tests/checks.
 
+## Goal memory checkpoints
+
+At the start of every goal, the director must call `memory_prior_work` with the
+goal statement, repo/project scope, and `timing: "before_plan"`, then record the
+returned `receipt` (or receipt id when supplied). A typed `search_skipped`
+receipt is still a receipt; re-probe after a topic shift, unexpected error,
+repeated question, or before guessing at a convention.
+
+At goal close, the director must make a governed `agent_memory_save` for
+durable decisions, outcomes, project facts, or handoff state with outcome,
+scope, entities, and provenance, or record a typed skip/error receipt when no
+learning is justified or the service is unavailable. The Qwen worker cannot
+claim either checkpoint.
+
 ## Start Gate
 
 Confirm the Qwen lane is real before using it for work:
