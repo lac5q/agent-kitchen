@@ -27,11 +27,11 @@ const sampleJob: CronHealthJobInput = {
 };
 
 describe("ensureDefaultCronJobs", () => {
-  it("seeds all 8 default cron jobs when table is empty", () => {
+  it("seeds all 10 default cron jobs when table is empty", () => {
     const db = freshDb();
     ensureDefaultCronJobs(db);
     const jobs = listCronHealthJobs(db);
-    expect(jobs).toHaveLength(8);
+    expect(jobs).toHaveLength(10);
     const ids = jobs.map((j) => j.id);
     expect(ids).toEqual(
       expect.arrayContaining([
@@ -43,6 +43,8 @@ describe("ensureDefaultCronJobs", () => {
         "graph-catchup",
         "wiki-digest",
         "apo-skill-improvement",
+        "observe-sidecar",
+        "observe-capture-gate",
       ]),
     );
   });
@@ -64,7 +66,7 @@ describe("ensureDefaultCronJobs", () => {
     upsertCronHealthJob(db, { ...sampleJob, id: "custom-job", name: "Custom" });
     ensureDefaultCronJobs(db);
     const jobs = listCronHealthJobs(db);
-    expect(jobs).toHaveLength(9);
+    expect(jobs).toHaveLength(11);
     expect(jobs.find((j) => j.id === "custom-job")).toBeDefined();
     expect(jobs.find((j) => j.id === "memory-consolidation")).toBeDefined();
   });
@@ -73,7 +75,7 @@ describe("ensureDefaultCronJobs", () => {
     const db = freshDb();
     ensureDefaultCronJobs(db);
     ensureDefaultCronJobs(db);
-    expect(listCronHealthJobs(db)).toHaveLength(8);
+    expect(listCronHealthJobs(db)).toHaveLength(10);
   });
 });
 
@@ -238,9 +240,9 @@ describe("recordCronHealthRun", () => {
 });
 
 describe("listCronHealthJobs", () => {
-  it("seeds defaults before listing — returns 8 jobs even on empty db", () => {
+  it("seeds defaults before listing — returns 10 jobs even on empty db", () => {
     const db = freshDb();
-    expect(listCronHealthJobs(db)).toHaveLength(8);
+    expect(listCronHealthJobs(db)).toHaveLength(10);
   });
 
   it("groups by source_family and emits at least one row per group", () => {
@@ -251,15 +253,17 @@ describe("listCronHealthJobs", () => {
     expect(families.has("memory")).toBe(true);
     expect(families.has("orchestration")).toBe(true);
     expect(families.has("skills")).toBe(true);
+    expect(families.has("observe")).toBe(true);
     // Each family has the expected count
     expect(jobs.filter((j) => j.sourceFamily === "memory")).toHaveLength(6);
     expect(jobs.filter((j) => j.sourceFamily === "orchestration")).toHaveLength(1);
     expect(jobs.filter((j) => j.sourceFamily === "skills")).toHaveLength(1);
+    expect(jobs.filter((j) => j.sourceFamily === "observe")).toHaveLength(2);
   });
 
   it("seeds defaults automatically when called on empty db", () => {
     const db = freshDb();
-    expect(listCronHealthJobs(db)).toHaveLength(8);
+    expect(listCronHealthJobs(db)).toHaveLength(10);
   });
 });
 

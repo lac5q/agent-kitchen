@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the MemroOS observe session sidecar every five minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5min
+Persistent=true
+Unit=memroos-observe-sidecar.service
+
+[Install]
+WantedBy=timers.target

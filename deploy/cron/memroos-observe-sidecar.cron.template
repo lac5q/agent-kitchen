@@ -1,0 +1,5 @@
+# MemroOS observe sidecar fallback schedule. Install with `crontab` only after
+# reviewing the target user's crontab; the integration installer writes this
+# exact template without clobbering unrelated cron entries.
+SHELL=/bin/bash
+*/5 * * * * /bin/bash __RUNNER__ >>__LOG__ 2>&1 # memroos-observe-sidecar

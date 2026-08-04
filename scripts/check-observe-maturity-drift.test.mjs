@@ -8,9 +8,11 @@ import {
   DEFAULT_INSTALLER_FILE,
   DEFAULT_MATRIX_FILE,
   DEFAULT_SIDECAR_FILE,
+  evaluateHookCapabilityDrift,
   evaluateObserveMaturityDrift,
   extractInstallerTargetNames,
   extractMatrixHarnessNames,
+  extractMatrixHarnessRecords,
   extractObserveHarnessNames,
   runObserveMaturityDriftCheck,
 } from "./check-observe-maturity-drift.mjs";
@@ -160,6 +162,46 @@ describe("extractMatrixHarnessNames", () => {
       () => extractMatrixHarnessNames(drifted),
       /Observe capture matrix/,
     );
+  });
+});
+
+describe("hook capability drift", () => {
+  it("fails when a native hook claim has no installer backing", () => {
+    const result = evaluateHookCapabilityDrift({
+      matrixRecords: [{
+        harness: "claude",
+        hookSupport: "native",
+        installedHooks: "memory-brief + capture-gate",
+        fallback: "skill+sidecar",
+      }],
+      installerText: "declare -a TARGETS=(\"claude|settings\")",
+      hermesPluginText: "",
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some((line) => line.includes("Claude installer backing")));
+  });
+
+  it("fails when the matrix disagrees with the catalog capability", () => {
+    const result = evaluateHookCapabilityDrift({
+      matrixRecords: [{
+        harness: "claude",
+        hookSupport: "native",
+        installedHooks: "memory-brief + capture-gate",
+        fallback: "skill+sidecar",
+      }],
+      sidecarText: 'harness: "claude",\n    hookSupport: "none",\n  },',
+      installerText: 'claude) upsert_session_hooks_json "$HOME/.claude/settings.json"',
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some((line) => line.includes("disagrees with catalog")));
+  });
+
+  it("fails when a no-hook harness claims installed lifecycle hooks", () => {
+    const records = extractMatrixHarnessRecords(MATRIX_FIXTURE);
+    records.push({ harness: "pi", hookSupport: "none", installedHooks: "memory-brief", fallback: "skill+sidecar" });
+    const result = evaluateHookCapabilityDrift({ matrixRecords: [records.at(-1)] });
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some((line) => line.includes("hookSupport=none")));
   });
 });
 

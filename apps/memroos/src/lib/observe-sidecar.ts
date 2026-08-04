@@ -4,11 +4,10 @@
  * The sidecar itself is a Node script under scripts/; this module is the
  * shared path policy used by tests and (later) in-app visibility. Wave 1
  * entries are proven via the Pi/Codex/etc. JSONL watchers. Wave 2 Cursor
- * and Factory/Droid catalog rows carry explicit notes on whether a smoke
- * test path exists (factory/hooks+jsonl) or only an honest "no path"
- * disclaimer applies (cursor/mcp-only, antigravity/no-surface). Wave 3
- * rows document Antigravity as a stub entry with no capture path so we
- * never make a false full-capture claim (OBSERVE-10/11/12).
+ * and Factory/Droid catalog rows carry explicit notes on whether JSONL exists,
+ * whether MCP is the only capture path, and whether lifecycle hooks are
+ * actually verified. Wave 3 rows document Antigravity as a stub entry with no
+ * capture path so we never make a false full-capture claim (OBSERVE-10/11/12).
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -27,6 +26,12 @@ export type ObserveHarness =
 export interface ObserveHarnessPath {
   harness: ObserveHarness;
   wave: 1 | 2 | 3;
+  /** Verified session lifecycle hook surface, independent of JSONL capture. */
+  hookSupport: "native" | "portable" | "plugin" | "none";
+  /** Repo-shipped hooks the installer can actually wire for this harness. */
+  installedHooks: Array<"memory-brief" | "capture-gate">;
+  /** Honest fallback when lifecycle hooks are unavailable. */
+  fallback: "skill+sidecar" | "none";
   /** Glob-like roots relative to home; resolved at runtime. */
   sessionRoots: string[];
   /**
@@ -50,6 +55,9 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "claude",
     wave: 1,
+    hookSupport: "native",
+    installedHooks: ["memory-brief", "capture-gate"],
+    fallback: "skill+sidecar",
     sessionRoots: [".claude/projects"],
     maturity: "jsonl",
     notes:
@@ -58,6 +66,9 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "codex",
     wave: 1,
+    hookSupport: "portable",
+    installedHooks: ["memory-brief", "capture-gate"],
+    fallback: "skill+sidecar",
     sessionRoots: [".codex/sessions"],
     maturity: "jsonl",
     notes:
@@ -66,6 +77,9 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "hermes",
     wave: 1,
+    hookSupport: "plugin",
+    installedHooks: ["memory-brief", "capture-gate"],
+    fallback: "skill+sidecar",
     sessionRoots: [".hermes/sessions"],
     maturity: "plugin",
     notes:
@@ -74,6 +88,9 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "openclaw",
     wave: 1,
+    hookSupport: "none",
+    installedHooks: [],
+    fallback: "skill+sidecar",
     sessionRoots: [".openclaw/sessions", ".hermes/sessions"],
     maturity: "jsonl",
     notes:
@@ -82,6 +99,9 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "pi",
     wave: 1,
+    hookSupport: "none",
+    installedHooks: [],
+    fallback: "skill+sidecar",
     sessionRoots: [".pi/agent/sessions"],
     maturity: "jsonl",
     notes:
@@ -90,9 +110,12 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "cursor",
     wave: 2,
+    hookSupport: "none",
+    installedHooks: [],
+    fallback: "skill+sidecar",
     // Cursor IDE's session export is non-standard: agent-transcripts/<uuid>/<uuid>.jsonl
     // exists but uses vendor-specific tags inside <timestamp>/<user_query>. We do not
-    // promise full-capture fidelity; rely on the MCP server and its hooks.
+    // promise full-capture fidelity; the fallback remains skill + sidecar.
     sessionRoots: [".cursor/projects"],
     maturity: "mcp-partial",
     notes:
@@ -101,21 +124,28 @@ export const OBSERVE_HARNESS_PATHS: ObserveHarnessPath[] = [
   {
     harness: "factory",
     wave: 2,
+    hookSupport: "none",
+    installedHooks: [],
+    fallback: "skill+sidecar",
     // Factory/Droid is the canonical platform=droid runtime (see CodingAgentRuntime).
     // Both the MCP server (configured via ~/.factory/mcp.json) and the structured
     // JSONL session log at ~/.factory/sessions/-<cwd>/<session-uuid>.jsonl are real.
     // The session file begins with a session_start event (id, title, owner, cwd) and
     // continues with message events whose roles map cleanly through the agent
-    // memory continuity capture path. We mark maturity=hooks+jsonl because both
-    // surfaces are observable on this box.
+    // memory continuity capture path. We retain maturity=hooks+jsonl as a
+    // capture label, but do not claim a lifecycle hook surface until an official
+    // hook API is reproducible.
     sessionRoots: [".factory", ".factory/sessions"],
     maturity: "hooks+jsonl",
     notes:
-      "Wave 2 droid with JSONL fallback at ~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl plus MCP hooks via ~/.factory/mcp.json. Both surfaces verified on the dev box; platform=droid captures map through CodingAgentRuntime.droid; promote to first-class jsonl once an official Droid schema lands.",
+      "Wave 2 droid with JSONL fallback at ~/.factory/sessions/-<cwd-dir>/<session-uuid>.jsonl plus MCP configuration via ~/.factory/mcp.json. Lifecycle hooks are not verified; platform=droid captures map through CodingAgentRuntime.droid. Promote only when an official hook surface is reproduced.",
   },
   {
     harness: "antigravity",
     wave: 3,
+    hookSupport: "none",
+    installedHooks: [],
+    fallback: "skill+sidecar",
     // Antigravity has no verified CLI, no JSONL surface, and no MCP server we have
     // observed on a real box. Capture remains a verify-by-design claim: the catalog
     // row exists so the operator health endpoint can honestly report "no path" rather
@@ -168,23 +198,120 @@ export function listSessionJsonlFiles(root: string, maxDepth = 6): string[] {
   return files;
 }
 
+function redactObserveText(value: string): string {
+  return value
+    .replace(/(\bBearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[REDACTED]")
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,})\b/g, "[REDACTED_TOKEN]")
+    .replace(/(\b(?:api[_-]?key|token|password|secret)\s*[:=]\s*["']?)[^\s,"'}]+/gi, "$1[REDACTED]");
+}
+
+function structuredFromJsonl(content: string): {
+  decisions: string[];
+  outcomes: string[];
+  errors: string[];
+  commands: string[];
+  files: string[];
+  entities: string[];
+  verification: Array<{ command: string; status: string; exitCode?: number }>;
+  events: Array<{ role: string; text: string }>;
+} {
+  const decisions: string[] = [];
+  const outcomes: string[] = [];
+  const errors: string[] = [];
+  const commands: string[] = [];
+  const files: string[] = [];
+  const entities: string[] = [];
+  const verification: Array<{ command: string; status: string; exitCode?: number }> = [];
+  const events: Array<{ role: string; text: string }> = [];
+  const seen = (items: string[], value: string) => {
+    const clean = redactObserveText(value).replace(/\s+/g, " ").trim().slice(0, 600);
+    if (clean && !items.includes(clean) && items.length < 40) items.push(clean);
+  };
+  const lines = content.split(/\r?\n/).filter(Boolean);
+  for (const line of lines) {
+    let record: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(line) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) record = parsed as Record<string, unknown>;
+    } catch {
+      record = { text: line };
+    }
+    const role = String(record.role ?? record.type ?? record.event ?? "event");
+    const text = redactObserveText(
+      typeof record.text === "string"
+        ? record.text
+        : typeof record.content === "string"
+          ? record.content
+          : typeof record.message === "string"
+            ? record.message
+            : typeof record.output === "string"
+              ? record.output
+              : line
+    );
+    const assistant = /assistant|agent|model/i.test(role);
+    if (events.length < 80 && text.trim()) events.push({ role, text: text.replace(/\s+/g, " ").slice(0, 500) });
+    for (const key of ["command", "cmd", "shellCommand", "shell_command"]) {
+      if (typeof record[key] === "string") seen(commands, record[key] as string);
+    }
+    for (const match of text.matchAll(/^\s*\$\s+(.+)$/gm)) seen(commands, match[1]);
+    for (const key of ["path", "file", "filePath", "file_path", "target_file", "targetFile"]) {
+      if (typeof record[key] === "string" && !String(record[key]).endsWith(".jsonl")) seen(files, String(record[key]));
+    }
+    for (const match of text.matchAll(/(?:edited|updated|created|modified|wrote)\s+[`']?((?:apps|src|scripts|packages|services|integrations|\.planning|docs)[^`'\s,;)]*)/gi)) seen(files, match[1]);
+    for (const match of text.matchAll(/\b(?:PR|pull request|issue)\s*#?\d+|(?:^|\s)#\d+\b/gi)) seen(entities, match[0]);
+    if (typeof record.repo === "string") seen(entities, `repo:${record.repo}`);
+    if (typeof record.project === "string") seen(entities, `project:${record.project}`);
+    if (typeof record.branch === "string") seen(entities, `branch:${record.branch}`);
+    if (assistant || /\b(?:decision|decided|choose|chosen|adopt|will use)\b/i.test(text)) {
+      for (const match of text.matchAll(/^\s*(?:#{1,4}\s*)?(?:decision|decided)\s*:?[ ]*(.+)$/gim)) seen(decisions, match[1]);
+    }
+    const rawStatus = record.exitCode ?? record.exit_code ?? record.status ?? record.outcome;
+    const statusValue = String(rawStatus ?? "").toLowerCase();
+    const exitCode = typeof rawStatus === "number" ? rawStatus : undefined;
+    const status = exitCode !== undefined ? (exitCode === 0 ? "passed" : "failed") : /pass|success|verified|complete/.test(statusValue) ? "passed" : /fail|error|timeout/.test(statusValue) ? "failed" : "unknown";
+    const command = commands.at(-1);
+    if (command && /(test|lint|typecheck|build|check|verify|compile)/i.test(command) && status !== "unknown") {
+      const item = { command, status, ...(exitCode === undefined ? {} : { exitCode }) };
+      if (!verification.some((existing) => JSON.stringify(existing) === JSON.stringify(item)) && verification.length < 40) verification.push(item);
+      seen(outcomes, `${command} — ${status}`);
+    }
+    if (status === "failed" || /\b(?:error|exception|stack trace|traceback|failed|failure|timeout)\b/i.test(text)) seen(errors, text);
+  }
+  return { decisions, outcomes, errors, commands, files, entities, verification, events };
+}
+
 export function summarizeSessionJsonl(filePath: string): {
   sessionId: string;
   summary: string;
   lineCount: number;
+  decisions: string[];
+  outcomes: string[];
+  errors: string[];
+  commands: string[];
+  files: string[];
+  entities: string[];
+  verification: Array<{ command: string; status: string; exitCode?: number }>;
+  events: Array<{ role: string; text: string }>;
 } {
   const sessionId = path.basename(filePath, ".jsonl");
   let content = "";
   try {
     content = fs.readFileSync(filePath, "utf8");
   } catch {
-    return { sessionId, summary: "", lineCount: 0 };
+    return { sessionId, summary: `Session ${sessionId}`, lineCount: 0, ...structuredFromJsonl("") };
   }
   const lines = content.split(/\r?\n/).filter(Boolean);
-  const preview = lines.slice(0, 5).join(" ").slice(0, 240);
+  const structured = structuredFromJsonl(content);
+  const summary = [
+    ...structured.decisions.map((item) => `Decision: ${item}`),
+    ...structured.outcomes.map((item) => `Outcome: ${item}`),
+    ...structured.verification.map((item) => `${item.command} ${item.status}`),
+    ...structured.events.slice(0, 4).map((item) => item.text),
+  ].join(" ").replace(/\s+/g, " ").trim().slice(0, 600);
   return {
     sessionId,
-    summary: preview || `Session ${sessionId}`,
+    summary: summary || `Session ${sessionId}`,
     lineCount: lines.length,
+    ...structured,
   };
 }
