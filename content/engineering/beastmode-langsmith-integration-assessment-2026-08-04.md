@@ -346,3 +346,10 @@ Recommended separation:
 - The private repo should depend on a pinned public Beastmode release/tag, not fork or copy the public repo. Its `langgraph.json` should point at a private factory that composes `build_pipeline(dependencies=PipelineDependencies(...))`.
 - Keep LangSmith projects/workspaces separate: public examples use each user’s own key/project; the operator’s private runs use a private project such as `beastmode-private`. Never publish API keys, `op://` references tied to private vaults, hostnames, paths, or internal routes.
 - Public release gate: run the public artifact guard and security scan on the exact commit, then tag/release. The public-sharing checklist is `references/public-sharing-checklist.md`.
+
+
+## Private workspace scaffold verification — 2026-08-05
+
+Created a separate local workspace at `/home/lac5q/github/beastmode-workspace` with a pinned dependency on public `lac5q/beastmode` commit `3dfe8494650c9b30a0e5d4cffa98af070b3eadc3`. The workspace contains a LangGraph Studio manifest, a fail-closed private dependency boundary, a 1Password-backed launcher template, and documentation separating public framework code from private executor/validator/reviewer/merger implementations.
+
+Verification completed: private graph pytest passed (1 test), dynamic-port LangGraph Studio launch returned `PRIVATE_STUDIO_LAUNCH_OK`, generated runtime caches are ignored, secret-pattern scan was clean, and the public checkout still shows only the pre-existing `scripts/bm` modification. The private workspace has not been pushed to GitHub. A local Git commit remains pending because the sandbox escalation for writing the sibling repository's Git index timed out.
