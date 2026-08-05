@@ -193,11 +193,107 @@ def test_agent_memory_save_posts_to_memroos_app_with_agent_key(monkeypatch):
 
 def test_agent_memory_save_requires_agent_key(monkeypatch):
     monkeypatch.delenv("MEMROOS_AGENT_API_KEY", raising=False)
+    mcp_server._MCP_BEARER_TOKEN.set(None)
 
     payload = mcp_server.agent_memory_save("no key")
 
     assert payload["status"] == "missing_agent_key"
     assert "MEMROOS_AGENT_API_KEY" in payload["error"]
+
+
+def test_report_issue_posts_with_agent_key(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "report": {"id": "issue-1"}}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.setenv("MEMROOS_AGENT_API_KEY", "agent-key")
+    monkeypatch.setenv("MEMROOS_AGENT_ID", "agent-alpha")
+    mcp_server._MCP_BEARER_TOKEN.set(None)
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    payload = mcp_server.report_issue(
+        "The health probe timed out",
+        "knowledge_health exceeded its timeout",
+        severity="high",
+        component="knowledge-mcp",
+    )
+
+    assert payload == {"status": "ok", "response": {"ok": True, "report": {"id": "issue-1"}}}
+    assert calls[0][0] == "http://memroos.test/api/agent-report"
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer agent-key"
+    assert "X-Memroos-Reporter" not in calls[0][1]["headers"]
+    assert calls[0][1]["json"] == {
+        "title": "The health probe timed out",
+        "body": "knowledge_health exceeded its timeout",
+        "severity": "high",
+        "component": "knowledge-mcp",
+        "agentId": "agent-alpha",
+    }
+
+
+def test_report_issue_posts_without_auth_when_no_agent_surface_is_available(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.delenv("MEMROOS_AGENT_API_KEY", raising=False)
+    monkeypatch.delenv("MEMROOS_AGENT_ID", raising=False)
+    mcp_server._MCP_BEARER_TOKEN.set(None)
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+
+    payload = mcp_server.report_issue("MCP failed", "The fallback should still reach the app")
+
+    assert payload == {"status": "ok", "response": {"ok": True}}
+    assert calls[0][1]["headers"] == {
+        "Content-Type": "application/json",
+        "X-Memroos-Reporter": "knowledge-mcp",
+    }
+
+
+def test_report_issue_forwards_authenticated_mcp_oauth_bearer(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setenv("MEMROOS_APP_URL", "http://memroos.test")
+    monkeypatch.delenv("MEMROOS_AGENT_API_KEY", raising=False)
+    mcp_server._MCP_BEARER_TOKEN.set("oauth-bearer")
+    monkeypatch.setattr(mcp_server.httpx, "post", fake_post)
+    try:
+        mcp_server.report_issue("OAuth path failed", "The app should see the original bearer")
+    finally:
+        mcp_server._MCP_BEARER_TOKEN.set(None)
+
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer oauth-bearer"
 
 
 def test_memory_save_routes_through_governed_memroos_app(monkeypatch):
@@ -484,6 +580,7 @@ def test_agent_tool_outcome_record_posts_to_memroos_app(monkeypatch):
 def test_core_tools_stay_small_for_progressive_disclosure():
     assert CORE_TOOLS == [
         "knowledge_health",
+        "report_issue",
         "knowledge_manifest",
         "knowledge_search",
         "knowledge_read",

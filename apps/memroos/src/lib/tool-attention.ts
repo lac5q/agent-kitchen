@@ -301,6 +301,7 @@ function optionalCapabilityEntries(): ToolAttentionCapability[] {
 function knowledgeCapabilities(): ToolAttentionCapability[] {
   const coreTools = [
     "knowledge_health",
+    "report_issue",
     "knowledge_manifest",
     "knowledge_search",
     "knowledge_read",

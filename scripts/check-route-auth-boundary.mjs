@@ -60,6 +60,10 @@ const routeLocalAuthCoverage = [
     files: [["apps/memroos/src/app/api/onboarding/register/route.ts", ["verifyAgentOnboardingToken("]]],
   },
   {
+    pattern: "/^\\/api\\/agent-report$/",
+    files: [["apps/memroos/src/app/api/agent-report/route.ts", ["authenticateAgentHeaders(", "resolveAccessToken(", "authenticateUser("]]],
+  },
+  {
     pattern: "/^\\/api\\/chatgpt\\/actions\\//",
     files: [
       ["apps/memroos/src/app/api/chatgpt/actions/search/route.ts", ["authorizeChatGptAction("]],

@@ -561,9 +561,13 @@ def discover(query: str = "", limit: int = 25) -> dict[str, Any]:
             ),
             reverse=True,
         )
+    # Categories are a directory of the capability types present in the
+    # (query-filtered) catalog, so summarize before pagination — otherwise a
+    # type whose entries fall past `limit` silently disappears from the summary
+    # (e.g. one more core tool pushes the last skill off the first page).
+    catalog["categories"] = _category_summary(capabilities)
     catalog["capabilities"] = capabilities[: max(1, min(limit, 100))]
     catalog["summary"] = _summary(catalog["capabilities"], catalog["sources"], catalog["recentOutcomes"])
-    catalog["categories"] = _category_summary(catalog["capabilities"])
     return catalog
 
 

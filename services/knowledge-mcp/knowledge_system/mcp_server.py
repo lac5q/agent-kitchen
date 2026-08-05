@@ -133,6 +133,9 @@ def _server_options() -> dict:
 _MCP_AGENT_ID: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
     "memroos_mcp_agent_id", default=None
 )
+_MCP_BEARER_TOKEN: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "memroos_mcp_bearer_token", default=None
+)
 
 
 def _introspect_token(candidate: str) -> bool:
@@ -183,6 +186,7 @@ def _introspect_token(candidate: str) -> bool:
     if not body.get("active"):
         return False
 
+    _MCP_BEARER_TOKEN.set(candidate)
     # The app resolves the token to the agent this connection acts as. Without
     # it we know who the human is but have no identity to record memory under —
     # which is why authenticated clients could read everything and write nothing.
@@ -215,6 +219,7 @@ def _auth_provider():
 
     def validate(candidate: str) -> bool:
         if token and secrets.compare_digest(candidate, token):
+            _MCP_BEARER_TOKEN.set(candidate)
             return True
         if introspection_url:
             return _introspect_token(candidate)
@@ -562,10 +567,11 @@ def _memroos_user_id(user_id: Optional[str] = None) -> Optional[str]:
 
 def _memroos_agent_headers() -> dict[str, str] | None:
     key = os.environ.get("MEMROOS_AGENT_API_KEY", "").strip()
-    if not key:
+    bearer = key or (_MCP_BEARER_TOKEN.get() or "")
+    if not bearer:
         return None
     return {
-        "Authorization": f"Bearer {key}",
+        "Authorization": f"Bearer {bearer}",
         "Content-Type": "application/json",
     }
 
@@ -584,6 +590,31 @@ def _post_memroos_agent_api(path: str, payload: dict, timeout: int = 10) -> dict
     try:
         response = httpx.post(
             f"{_memroos_app_url()}{path}",
+            json=payload,
+            headers=headers,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return {"status": "ok", "response": response.json()}
+    except Exception as exc:
+        return {"status": "unavailable", "error": str(exc)}
+
+
+def _post_memroos_issue_report(payload: dict, timeout: int = 10) -> dict:
+    """Post an issue using the strongest credential available to this MCP call."""
+    if httpx is None:
+        return {"status": "unavailable", "error": "httpx is not installed"}
+
+    headers = _memroos_agent_headers()
+    if headers is None:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Memroos-Reporter": "knowledge-mcp",
+        }
+
+    try:
+        response = httpx.post(
+            f"{_memroos_app_url()}/api/agent-report",
             json=payload,
             headers=headers,
             timeout=timeout,
@@ -726,6 +757,27 @@ def knowledge_health() -> dict:
         "mem0": mem0_status,
         "capability_model": "core-plus-workspaces",
     }
+
+
+@_mcp_tool
+def report_issue(
+    title: str,
+    body: str,
+    severity: str = "medium",
+    component: str = "general",
+    agent_id: Optional[str] = None,
+) -> dict:
+    """Report a problem with MemroOS itself (broken tool, auth failure, timeout). Works even when other agent surfaces are down."""
+    payload = {
+        "title": title,
+        "body": body,
+        "severity": severity,
+        "component": component,
+    }
+    resolved_agent_id = agent_id or _MCP_AGENT_ID.get() or os.environ.get("MEMROOS_AGENT_ID", "").strip()
+    if resolved_agent_id:
+        payload["agentId"] = resolved_agent_id
+    return _post_memroos_issue_report(payload)
 
 
 @_mcp_tool
@@ -1636,7 +1688,7 @@ def knowledge_system_orientation() -> str:
     """Prompt that tells an agent how to use the knowledge system safely."""
     return (
         "Use the memroos MCP server as one progressive facade with progressive disclosure. "
-        "Start with core tools: health, manifest, search, read, memory_prior_work, memory_recall, memory_search, memory_save, agent_memory_save. "
+        "Start with core tools: health, report_issue, manifest, search, read, memory_prior_work, memory_recall, memory_search, memory_save, agent_memory_save. "
         "Memory contract: probe with memory_prior_work at task start; at task end make a governed memory save for durable decisions, outcomes, project facts, or handoff state, or record a typed skip receipt. Procedures and class lessons belong in Skills > Memory (skills first), not as memory prose. "
         "For “find the meeting” / meeting memory, prefer memory_recall — it federates enabled "
         "meeting QMD collections (Circleback, Fathom, Zoom, Google Meet) plus knowledge literal "

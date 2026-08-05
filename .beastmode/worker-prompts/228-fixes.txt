@@ -1,0 +1,47 @@
+BM-RUN: 228-fix-1
+
+TASK: Fix round for Phase 228 (ONBRESCUE) after validator REJECT. First read
+.beastmode/worker-prompts/CONTRACT.md and obey it. The five findings, all confirmed by the
+director; fix all of them:
+
+1. P1 shell injection via URL path/query. apps/memroos/src/app/api/onboarding/script/route.ts
+   line ~8-9 emits MEMROOS_URL="__MEMROOS_URL__" (double-quoted bash), and
+   assertMintableUrl (apps/memroos/src/lib/agent/onboarding.ts) validates only the hostname —
+   a minted URL like https://good.example/$(id) executes command substitution on the invitee's
+   machine. Fix BOTH layers:
+   a) Mint-side: assertMintableUrl also validates the full URL string against a strict
+      allowlist: after parsing, require the ENTIRE raw string matches
+      /^[A-Za-z0-9.:/?#&=_~-]+$/ (no $, backtick, quote, backslash, whitespace, parens, {}).
+      Reject otherwise. This keeps normal https URLs working (scheme, port, path, query).
+   b) Template-side: switch the generated assignments to single-quoted values with proper
+      escaping — reuse/emulate shellQuote from lib/agent/onboarding.ts for both __TOKEN__ and
+      __MEMROOS_URL__ replacements (token is signature-constrained base64url + dot, but
+      single-quote it anyway for defense in depth). Keep the template output byte-stable
+      otherwise; update the route tests that assert on script content.
+2. P1 doubled-host bypass: sub.a.coma.com passes because the whole-string repetition check
+   only runs on the full hostname. In hasRepeatedHostnameSegment, additionally run the
+   "unit containing a dot repeated to form the string" check over EVERY dot-boundary suffix
+   of the hostname (e.g. for sub.a.coma.com check a.coma.com, coma.com, com), so a corrupted
+   concatenation with a legit prefix is still caught. Keep legit hosts passing — add positive
+   tests for x.comcast.com, sub.memroos-cordant.epiloguecapital.com, localhost — and negative
+   tests for sub.a.coma.com, memroos-cordant.epiloguecapital.commemroos-cordant.epiloguecapital.com.
+3. P1 verify script cannot reach the signature branch: scripts/verify-onboarding-deploy.sh
+   only sends token=bad, which fails structural parsing before any signature work. Add a
+   second probe per host with a structurally valid but wrongly signed token, e.g.
+   token=e30.deadbeef (base64url body "{}" + bogus signature). Expect 403 whose body contains
+   "Invalid onboarding token signature"; report the kid detail when the body carries
+   "token kid"/"server kid" so operators can see WHICH secret mismatch occurred. Keep the
+   existing bad-token structural probe too.
+4. P2 legacy-token compat test: add a unit test that hand-crafts a token WITHOUT a kid field
+   (same signing secret, payload missing kid) and proves verifyAgentOnboardingToken still
+   accepts it (signature valid) — pinning backward compatibility for tokens minted before
+   this change.
+5. P2 fallback-audit correctness + tests: in the invite route
+   (apps/memroos/src/app/api/onboarding/invite/route.ts and/or api/auth/invite/route.ts —
+   wherever the ONBRESCUE-05 audit landed), the fallback audit must be recorded ONLY when the
+   minted URL actually came from the request-derived fallback — not when a caller-supplied or
+   env-derived URL was used. Fix the condition, and add route-level tests exercising both
+   mint routes: env-configured (no audit row) vs header-fallback (audit row present).
+
+Then: run the targeted test files you touched, plus the onboarding route suite, plus
+npm run typecheck. Report per the CONTRACT.

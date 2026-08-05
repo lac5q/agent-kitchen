@@ -1,0 +1,25 @@
+BM-RUN: 229-fix-1
+
+TASK: Fix round for Phase 229 after validator REJECT. Read
+.beastmode/worker-prompts/CONTRACT.md first and obey it. Findings to fix, all confirmed:
+
+1. RELEASE BLOCKER — the proxy JWT gate blocks the route before its own auth runs.
+   apps/memroos/src/proxy.ts (~line 82) has a route-local-auth allowlist
+   (ROUTE_LOCAL_AUTH_API_ROUTES or equivalent — read how /api/model-routing/telemetry and
+   /api/onboarding routes are exempted). Add a POST-only exemption for /api/agent-report so
+   the handler's own auth matrix (agent key / MCP OAuth / onboarding lane) decides. GET
+   /api/agent-report and PATCH /api/agent-report/:id must stay behind the normal session
+   gate. Update the route-auth-boundary coverage exactly the way previous route additions
+   did (find scripts/check-route-auth-boundary.mjs or its test/baseline and follow the
+   attestation pattern; check .planning or git log -S ROUTE_LOCAL_AUTH_API_ROUTES for the
+   convention).
+2. Rate limit BEFORE expensive work: in the POST handler, apply the per-principal/IP rate
+   limits before body parsing/validation so anonymous DoS is bounded at the cheapest point.
+3. Missing tests, add all of: proxy-level test that POST /api/agent-report reaches
+   route-local auth while GET/PATCH stay JWT-gated (follow the existing proxy/route-auth
+   boundary test suite conventions); operator-session POST accepted; anonymous POST without
+   component=onboarding rejected 401; payload cap enforcement (title >200, body >8000);
+   each of the three secret patterns (ak_..., SG...., Bearer ..., plus hex-64) rejected 422.
+
+Then run: the touched test files, the route-auth-boundary check, npm run typecheck. Report
+per the CONTRACT.

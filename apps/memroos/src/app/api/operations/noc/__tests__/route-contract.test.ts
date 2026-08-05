@@ -138,6 +138,32 @@ describe("GET /api/operations/noc truthful metric contract", () => {
     expect(env.reason).toBeTruthy();
   });
 
+  it("surfaces urgent agent issues individually and routine issues as one attention item", async () => {
+    const { GET, getDb } = await loadRoute();
+    const now = new Date().toISOString();
+    const insert = getDb().prepare(
+      `INSERT INTO agent_issue_reports
+       (id, reporter_kind, reporter_id, severity, component, title, body, status, created_at)
+       VALUES (?, 'agent_key', ?, ?, ?, ?, ?, 'open', ?)`,
+    );
+    insert.run("issue-critical", "agent-a", "critical", "mcp", "MCP is down", "timeout", now);
+    insert.run("issue-medium", "agent-a", "medium", "auth", "Auth is slow", "latency", now);
+    insert.run("issue-low", "agent-b", "low", "onboarding", "Bootstrap warning", "warning", now);
+
+    const response = await GET(new Request("http://localhost/api/operations/noc?window=24h&workspace=all"));
+    const body = await response.json();
+    const issueItems = body.attention.filter((item: { id: string }) => item.id.startsWith("agent-issues") || item.id.startsWith("agent-issue:"));
+    expect(issueItems).toHaveLength(2);
+    expect(body.attention.find((item: { id: string }) => item.id === "agent-issue:issue-critical")).toMatchObject({
+      severity: "critical",
+      target: "/team#agent-issues",
+    });
+    expect(body.attention.find((item: { id: string }) => item.id === "agent-issues:aggregate")).toMatchObject({
+      severity: "warning",
+      title: "2 agent issue reports need attention",
+    });
+  });
+
 
   it("memoryRows envelope is live and value is preserved when source is healthy", async () => {
     const { GET, getDb } = await loadRoute();

@@ -1,0 +1,27 @@
+You are the VALIDATOR seat in a beastmode run.
+
+Adversarially review the UNSTAGED working-tree diff (git diff + untracked files, notably
+apps/memroos/src/app/api/agent-report/, apps/memroos/src/lib/store/agent-issues.ts, and new
+__tests__ files) against the spec in .beastmode/worker-prompts/229-agent-issue-reporting.md.
+
+Director's evidence: full fast suite passed, typecheck clean, sqlite-allowlist ratchet clean.
+
+This surface is security-sensitive by design — it accepts input from weakly-authenticated
+and (for the onboarding lane) unauthenticated callers. Hunt specifically for:
+1. Auth-matrix holes: can an anonymous caller reach anything beyond the narrow
+   component=onboarding lane? Can the onboarding lane be abused for spam/DoS beyond its
+   IP rate limit? Is the OAuth path actually verifying tokens server-side?
+2. Injection: stored XSS via title/body rendered in Team page/NOC, SQL injection in
+   filters, secret-pattern bypasses (does the credential-shaped rejection actually block
+   ak_/SG./Bearer/hex64?).
+3. The MCP report_issue tool: does its credential fallback order leak anything, and does it
+   degrade gracefully with no credential at all?
+4. The onboarding script self-report block: shell safety (no unquoted interpolation), no
+   token leakage in the report body, fails open (reporting failure never breaks onboarding).
+5. Spec requirements AGENTREPORT-01..05 each genuinely met; test coverage for the auth
+   matrix and rate limits is real, not mocked into tautology.
+
+Do NOT restyle or nitpick. END with exactly one line:
+VERDICT: PASS
+or
+VERDICT: REJECT - <one-line reason>

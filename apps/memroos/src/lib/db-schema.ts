@@ -83,7 +83,7 @@ function addSkillForgeTraceabilityColumns(db: Database.Database): void {
   }
 }
 
-export const CURRENT_SCHEMA_VERSION = 40;
+export const CURRENT_SCHEMA_VERSION = 41;
 
 type SchemaMigration = {
   version: number;
@@ -303,6 +303,11 @@ const SCHEMA_MIGRATIONS: SchemaMigration[] = [
     version: 40,
     name: 'polymorphic-memory-salience',
     up: applyPolymorphicMemorySalienceSchema,
+  },
+  {
+    version: 41,
+    name: 'agent-issue-reporting',
+    up: applyAgentIssueReportsSchema,
   },
 ];
 
@@ -733,6 +738,35 @@ function applyPolymorphicMemorySalienceSchema(db: Database.Database): void {
       ON memory_salience(tier, last_decay_at);
     CREATE INDEX IF NOT EXISTS memory_salience_record_type
       ON memory_salience(record_type, last_decay_at);
+  `);
+}
+
+/** Migration 41 — a small, secret-free intake queue for agent-reported defects. */
+function applyAgentIssueReportsSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_issue_reports (
+      id              TEXT PRIMARY KEY,
+      reporter_kind   TEXT NOT NULL CHECK(reporter_kind IN ('agent_key','oauth','onboarding-script')),
+      reporter_id     TEXT NOT NULL,
+      agent_id        TEXT,
+      severity        TEXT NOT NULL CHECK(severity IN ('low','medium','high','critical')),
+      component       TEXT NOT NULL,
+      title           TEXT NOT NULL,
+      body            TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','acked','resolved')),
+      created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      acked_at        TEXT,
+      resolved_at     TEXT,
+      resolution_note TEXT
+    );
+    CREATE INDEX IF NOT EXISTS agent_issue_reports_status_created
+      ON agent_issue_reports(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS agent_issue_reports_severity_created
+      ON agent_issue_reports(severity, created_at DESC);
+    CREATE INDEX IF NOT EXISTS agent_issue_reports_component_created
+      ON agent_issue_reports(component, created_at DESC);
+    CREATE INDEX IF NOT EXISTS agent_issue_reports_reporter_created
+      ON agent_issue_reports(reporter_kind, reporter_id, created_at DESC);
   `);
 }
 

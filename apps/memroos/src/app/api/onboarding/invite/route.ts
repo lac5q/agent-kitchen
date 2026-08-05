@@ -1,9 +1,17 @@
 import crypto from "crypto";
-import { createAgentOnboardingToken, shellQuote } from "@/lib/agent/onboarding";
+import {
+  createAgentOnboardingToken,
+  OnboardingMintError,
+  shellQuote,
+} from "@/lib/agent/onboarding";
 import { apiError } from "@/lib/api-error";
 import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
 import { getDb } from "@/lib/db";
+import {
+  recordOnboardingBaseUrlFallback,
+  resolvePublicMemroosUrlDetailed,
+} from "@/lib/http/public-base-url";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import type { AgentPlatform, AgentProtocol, RegisteredAgentCapability } from "@/types";
 
@@ -15,16 +23,6 @@ export const MAX_ONBOARDING_TTL_MINUTES = 60;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function originFromRequest(request: Request): string {
-  const url = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (forwardedHost) {
-    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || url.protocol.replace(/:$/, "");
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-  return `${url.protocol}//${url.host}`;
 }
 
 function parseCapabilities(value: unknown): RegisteredAgentCapability[] | undefined {
@@ -51,7 +49,12 @@ async function buildInviteResponse(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as unknown;
   const input = isRecord(body) ? body : {};
-  const memroosUrl = typeof input.memroosUrl === "string" ? input.memroosUrl : originFromRequest(request);
+  const resolvedPublicUrl = resolvePublicMemroosUrlDetailed(request);
+  const callerMemroosUrl = typeof input.memroosUrl === "string" ? input.memroosUrl : undefined;
+  if (callerMemroosUrl === undefined && resolvedPublicUrl.source !== "env") {
+    recordOnboardingBaseUrlFallback(resolvedPublicUrl);
+  }
+  const memroosUrl = callerMemroosUrl ?? resolvedPublicUrl.url;
   const requestedTtlMinutes = typeof input.ttlMinutes === "number" ? input.ttlMinutes : 15;
   const ttlMinutes = Number.isFinite(requestedTtlMinutes) ? requestedTtlMinutes : 15;
   const effectiveTtlMinutes = Math.min(Math.max(1, ttlMinutes), MAX_ONBOARDING_TTL_MINUTES);
@@ -132,6 +135,9 @@ export async function POST(request: Request) {
   try {
     return await buildInviteResponse(request);
   } catch (error: unknown) {
+    if (error instanceof OnboardingMintError) {
+      return apiError(500, `Onboarding server misconfiguration: ${error.message}`);
+    }
     return apiError(500, error instanceof Error ? error.message : "Internal server error");
   }
 }
