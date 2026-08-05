@@ -9,24 +9,77 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE="${MEMROOS_PROFILE:-production}"
-BASE="${MEMROOS_PUBLIC_URL:-https://memroos.epiloguecapital.com}"
+
+if (( $# > 0 )); then
+  HOSTS=("$@")
+elif [[ -n "${MEMROOS_PUBLIC_URL:-}" ]]; then
+  # Preserve the historical single-host environment override for operators
+  # that already use it; explicit positional hosts always take precedence.
+  HOSTS=("$MEMROOS_PUBLIC_URL")
+else
+  HOSTS=(
+    "https://memroos.epiloguecapital.com"
+    "https://memroos-cordant.epiloguecapital.com"
+  )
+fi
+
+if [[ -z "${MEMROOS_ONBOARDING_SECRET:-}" ]]; then
+  echo "WARN: MEMROOS_ONBOARDING_SECRET is unset on the verifier host; cross-host signing-secret checks are informational only."
+else
+  echo "INFO: MEMROOS_ONBOARDING_SECRET is set on the verifier host (value withheld)."
+fi
 
 # --- 1. Onboarding token-auth smoke (legacy Phase 165 check) ---
-SCRIPT_URL="${BASE}/api/onboarding/script?token=bad"
-code="$(curl -sS -o /tmp/memroos-onboarding-verify.txt -w "%{http_code}" "$SCRIPT_URL" || true)"
-body="$(tr '\n' ' ' < /tmp/memroos-onboarding-verify.txt 2>/dev/null | head -c 200)"
+smoke_status=0
+for raw_base in "${HOSTS[@]}"; do
+  BASE="${raw_base%/}"
+  SCRIPT_URL="${BASE}/api/onboarding/script?token=bad"
+  code="$(curl -sS -o /tmp/memroos-onboarding-verify.txt -w "%{http_code}" "$SCRIPT_URL" || true)"
+  body="$(tr '\n' ' ' < /tmp/memroos-onboarding-verify.txt 2>/dev/null | head -c 200)"
 
-if [[ "$code" == "403" ]]; then
-  echo "OK: onboarding script reachable (HTTP 403 for bad token): ${body}"
-elif [[ "$code" == "401" ]]; then
-  echo "FAIL: proxy still requires JWT (HTTP 401). Deploy or DNS may be stale." >&2
-  echo "body: ${body}" >&2
-  exit 1
-else
-  echo "FAIL: unexpected HTTP ${code} from ${SCRIPT_URL}" >&2
-  echo "body: ${body}" >&2
+  if [[ "$code" == "403" && "$body" == *"Invalid onboarding token signature"* ]]; then
+    echo "FAIL: ${BASE} returned a signing-secret mismatch (Invalid onboarding token signature). Compare the token kid with the server kid; the eight-character diagnostics identify which host minted it." >&2
+    echo "body: ${body}" >&2
+    smoke_status=1
+  elif [[ "$code" == "403" && "$body" == *"Invalid onboarding token"* ]]; then
+    echo "OK: ${BASE} onboarding script reachable (HTTP 403; Invalid onboarding token): ${body}"
+  elif [[ "$code" == "401" ]]; then
+    echo "FAIL: ${BASE} proxy still requires JWT (HTTP 401). Deploy or DNS may be stale." >&2
+    echo "body: ${body}" >&2
+    smoke_status=1
+  else
+    echo "FAIL: unexpected HTTP ${code} from ${SCRIPT_URL}" >&2
+    echo "body: ${body}" >&2
+    smoke_status=1
+  fi
+
+  SIGNATURE_SCRIPT_URL="${BASE}/api/onboarding/script?token=e30.deadbeef"
+  signature_code="$(curl -sS -o /tmp/memroos-onboarding-verify.txt -w "%{http_code}" "$SIGNATURE_SCRIPT_URL" || true)"
+  signature_body="$(tr '\n' ' ' < /tmp/memroos-onboarding-verify.txt 2>/dev/null | head -c 300)"
+  if [[ "$signature_code" == "403" && "$signature_body" == *"Invalid onboarding token signature"* ]]; then
+    if [[ "$signature_body" == *"token kid"* || "$signature_body" == *"server kid"* ]]; then
+      echo "OK: ${BASE} rejected a structurally valid token with the expected signature error (kid detail): ${signature_body}"
+    else
+      echo "OK: ${BASE} rejected a structurally valid token with the expected signature error: ${signature_body}"
+    fi
+  elif [[ "$signature_code" == "401" ]]; then
+    echo "FAIL: ${BASE} proxy still requires JWT for the signature probe (HTTP 401). Deploy or DNS may be stale." >&2
+    echo "body: ${signature_body}" >&2
+    smoke_status=1
+  else
+    echo "FAIL: expected HTTP 403 with Invalid onboarding token signature from ${SIGNATURE_SCRIPT_URL}, got HTTP ${signature_code}" >&2
+    echo "body: ${signature_body}" >&2
+    smoke_status=1
+  fi
+done
+
+if (( smoke_status != 0 )); then
   exit 1
 fi
+
+# Use the first requested host for the existing topology health probe. The
+# onboarding smoke above is intentionally run against every requested host.
+BASE="${HOSTS[0]%/}"
 
 # --- 2. Required production services health check (Phase 186 / TOPOPROD-04) ---
 # Use the runtime-topology CLI to validate the production profile's

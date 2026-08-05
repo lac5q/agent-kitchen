@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Btn, PageHeader, Pill } from "@/components/shared/ui";
 import { NOC } from "@/lib/noc-theme";
 import { buildInviteEmailDraft } from "@/lib/email/invite-email-draft";
+import { resolveWorkspaceName } from "@/lib/instance";
 
 interface UserRecord {
   id: string;
@@ -27,6 +28,7 @@ type EmailSendStatus = "sent" | "not_configured" | "dry_run" | "error";
 interface InviteResponse {
   inviteUrl: string;
   email?: { status: EmailSendStatus; reason?: string };
+  workspaceName?: string;
 }
 
 interface Capabilities {
@@ -147,6 +149,7 @@ export default function TeamPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [emailHint, setEmailHint] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<InviteResponse["email"]>(undefined);
   /**
    * Independent of the address field. An invite bound to someone's email is
@@ -184,6 +187,7 @@ export default function TeamPage() {
     mutationFn: createInvite,
     onSuccess: (result) => {
       setInviteUrl(result.inviteUrl);
+      setWorkspaceName(result.workspaceName ?? resolveWorkspaceName(result.inviteUrl));
       setEmailResult(result.email);
       setInviteError("");
       void queryClient.invalidateQueries({ queryKey: ["team-users"] });
@@ -227,6 +231,7 @@ export default function TeamPage() {
     },
     onSuccess: (result) => {
       setInviteUrl(result.inviteUrl);
+      setWorkspaceName(result.workspaceName ?? resolveWorkspaceName(result.inviteUrl));
       setEmailResult(result.email);
       setInviteError("");
       void queryClient.invalidateQueries({ queryKey: ["team-invitations"] });
@@ -337,7 +342,9 @@ export default function TeamPage() {
 
   async function handleCopyDraft() {
     if (!inviteUrl) return;
-    await navigator.clipboard.writeText(buildInviteEmailDraft(inviteUrl));
+    await navigator.clipboard.writeText(
+      buildInviteEmailDraft(inviteUrl, { workspaceName: workspaceName ?? resolveWorkspaceName(inviteUrl) })
+    );
     setDraftCopied(true);
     setTimeout(() => setDraftCopied(false), 2000);
   }
@@ -418,7 +425,9 @@ export default function TeamPage() {
                   </p>
                   <textarea
                     readOnly
-                    value={buildInviteEmailDraft(inviteUrl)}
+                    value={buildInviteEmailDraft(inviteUrl, {
+                      workspaceName: workspaceName ?? resolveWorkspaceName(inviteUrl),
+                    })}
                     rows={10}
                     className="w-full border px-3 py-2 text-xs focus:outline-none"
                     style={{ background: NOC.fog, borderColor: NOC.rule, color: NOC.ink }}

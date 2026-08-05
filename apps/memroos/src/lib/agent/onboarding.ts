@@ -4,6 +4,8 @@ import type { AgentPlatform, AgentProtocol, RegisteredAgentCapability } from "@/
 
 export interface AgentOnboardingTokenPayload {
   version: 1;
+  /** Optional for tokens minted before signing-key diagnostics were added. */
+  kid?: string;
   exp: number;
   memroosUrl: string;
   mcpUrl: string;
@@ -46,6 +48,17 @@ export class OnboardingTokenReplayError extends Error {
   }
 }
 
+export class OnboardingMintError extends Error {
+  readonly code = "onboarding_mint_invalid_url";
+  readonly label: string;
+
+  constructor(label: string, reason: string) {
+    super(`${label} is not a mintable URL: ${reason}`);
+    this.name = "OnboardingMintError";
+    this.label = label;
+  }
+}
+
 const DEFAULT_TTL_SECONDS = 15 * 60;
 
 function base64UrlEncode(value: Buffer | string): string {
@@ -70,6 +83,10 @@ function signingSecret(): string {
   return "local-dev-memroos-onboarding";
 }
 
+function signingKeyId(): string {
+  return crypto.createHash("sha256").update(signingSecret()).digest("hex").slice(0, 8);
+}
+
 function sign(value: string): string {
   return crypto.createHmac("sha256", signingSecret()).update(value).digest("base64url");
 }
@@ -84,16 +101,83 @@ function normalizeUrl(raw: string): string {
   return raw.replace(/\/+$/, "");
 }
 
+function hasRepeatedStringUnit(value: string): boolean {
+  for (let unitLength = 1; unitLength * 2 <= value.length; unitLength += 1) {
+    if (value.length % unitLength !== 0) continue;
+    const unit = value.slice(0, unitLength);
+    if (unit.includes(".") && unit.repeat(value.length / unitLength) === value) return true;
+  }
+  return false;
+}
+
+function hasRepeatedHostnameSegment(hostname: string): boolean {
+  const labels = hostname.split(".").filter(Boolean);
+  for (let size = 1; size * 2 <= labels.length; size += 1) {
+    const previous = labels.slice(-size * 2, -size).join(".");
+    const suffix = labels.slice(-size).join(".");
+    if (previous && previous === suffix) return true;
+  }
+
+  // A corrupted host can concatenate the complete hostname without a dot at
+  // the join (`a.coma.com`). Check every dot-boundary suffix so a legitimate
+  // prefix cannot hide a repeated unit (`sub.a.coma.com`).
+  for (let suffixStart = 0; suffixStart < labels.length; suffixStart += 1) {
+    if (hasRepeatedStringUnit(labels.slice(suffixStart).join("."))) return true;
+  }
+  return false;
+}
+
+export function assertMintableUrl(raw: string, label: string): URL {
+  if (typeof raw !== "string" || /\s/.test(raw)) {
+    throw new OnboardingMintError(label, "it must not contain whitespace");
+  }
+  if (raw.includes(",")) {
+    throw new OnboardingMintError(label, "it must not contain commas");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new OnboardingMintError(label, "it must be an absolute URL");
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new OnboardingMintError(label, "embedded credentials are not allowed");
+  }
+  if (!/^[A-Za-z0-9.:/?#&=_~-]+$/.test(raw)) {
+    throw new OnboardingMintError(label, "it contains unsupported characters");
+  }
+
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (!hostname || (!isLocalhost && !/^[a-z0-9.-]+$/i.test(hostname))) {
+    throw new OnboardingMintError(label, "its hostname contains unsupported characters");
+  }
+  if (hasRepeatedHostnameSegment(hostname)) {
+    throw new OnboardingMintError(label, "its hostname appears to contain a doubled host");
+  }
+  if (!isLocalhost && parsed.protocol !== "https:") {
+    throw new OnboardingMintError(label, "non-localhost URLs must use https");
+  }
+
+  return parsed;
+}
+
 export function createAgentOnboardingToken(input: CreateAgentOnboardingTokenInput): {
   token: string;
   payload: AgentOnboardingTokenPayload;
 } {
   const memroosUrl = normalizeUrl(input.memroosUrl);
+  assertMintableUrl(memroosUrl, "memroosUrl");
+  const mcpUrl = input.mcpUrl ? normalizeUrl(input.mcpUrl) : `${memroosUrl}/mcp`;
+  assertMintableUrl(mcpUrl, "mcpUrl");
   const payload: AgentOnboardingTokenPayload = {
     version: 1,
+    kid: signingKeyId(),
     exp: Math.floor(Date.now() / 1000) + (input.ttlSeconds ?? DEFAULT_TTL_SECONDS),
     memroosUrl,
-    mcpUrl: input.mcpUrl ? normalizeUrl(input.mcpUrl) : `${memroosUrl}/mcp`,
+    mcpUrl,
     allowedAgentIds: input.allowedAgentIds?.filter(Boolean),
     defaultPlatform: input.defaultPlatform,
     defaultProtocol: input.defaultProtocol,
@@ -112,6 +196,18 @@ export function verifyAgentOnboardingToken(token: string): VerifiedOnboardingTok
     return { ok: false, error: "Invalid onboarding token" };
   }
   if (!safeEqual(sign(body), signature)) {
+    const unverifiedPayload = decodeBase64UrlJson<Partial<AgentOnboardingTokenPayload>>(body);
+    const payloadKid =
+      typeof unverifiedPayload?.kid === "string" && /^[0-9a-f]{8}$/i.test(unverifiedPayload.kid)
+        ? unverifiedPayload.kid
+        : null;
+    const serverKid = signingKeyId();
+    if (payloadKid && payloadKid !== serverKid) {
+      return {
+        ok: false,
+        error: `Invalid onboarding token signature (token kid ${payloadKid}, server kid ${serverKid})`,
+      };
+    }
     return { ok: false, error: "Invalid onboarding token signature" };
   }
 

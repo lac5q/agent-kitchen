@@ -88,6 +88,8 @@ export const AUDIT_EVENT_TYPES = {
   VIEW_AS_START: "view_as.start",
   /** A view-as session was exited. */
   VIEW_AS_EXIT: "view_as.exit",
+  /** Production onboarding mint fell back to a request-derived public URL. */
+  ONBOARDING_BASE_URL_FALLBACK: "onboarding.base_url_fallback",
 
   // Knowledge vault access (Phase 125, ENTOPS-03)
   /** Knowledge MCP op (read/write/delete) was centrally audited. Per-tenant hash-chained. */
@@ -279,6 +281,8 @@ export const ENTITY_TYPES = {
   RETRIEVAL_BENCH: "retrieval_bench",
   /** A human user referenced by an administrative audit event. */
   USER: "user",
+  /** An onboarding URL/token mint diagnostic. */
+  ONBOARDING: "onboarding",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

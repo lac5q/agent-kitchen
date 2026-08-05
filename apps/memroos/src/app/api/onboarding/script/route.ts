@@ -1,12 +1,12 @@
-import { verifyAgentOnboardingToken } from "@/lib/agent/onboarding";
+import { shellQuote, verifyAgentOnboardingToken } from "@/lib/agent/onboarding";
 
 export const dynamic = "force-dynamic";
 
 const SCRIPT = String.raw`#!/usr/bin/env bash
 set -euo pipefail
 
-TOKEN="__TOKEN__"
-MEMROOS_URL="__MEMROOS_URL__"
+TOKEN=__TOKEN__
+MEMROOS_URL=__MEMROOS_URL__
 
 AGENT_ID=""
 AGENT_NAME=""
@@ -430,7 +430,10 @@ export async function GET(request: Request) {
   }
 
   return new Response(
-    SCRIPT.replace("__TOKEN__", token).replace("__MEMROOS_URL__", verified.payload.memroosUrl),
+    SCRIPT.replace("__TOKEN__", shellQuote(token)).replace(
+      "__MEMROOS_URL__",
+      shellQuote(verified.payload.memroosUrl)
+    ),
     { headers: { "content-type": "text/x-shellscript; charset=utf-8" } }
   );
 }

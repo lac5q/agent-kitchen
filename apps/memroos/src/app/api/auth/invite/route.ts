@@ -3,7 +3,11 @@ import { createHash, randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
-import { resolvePublicMemroosUrl } from '@/lib/http/public-base-url';
+import {
+  recordOnboardingBaseUrlFallback,
+  resolvePublicMemroosUrlDetailed,
+} from '@/lib/http/public-base-url';
+import { resolveWorkspaceName } from '@/lib/instance';
 import { isValidEmailAddress, sendEmail, type EmailSendResult } from '@/lib/email/send';
 import {
   INVITE_EMAIL_SUBJECT,
@@ -120,7 +124,12 @@ export async function POST(req: NextRequest) {
     ).run(inviteId, tokenHash, role, session.userId, emailHint ?? null, expiresAt);
   })();
 
-  const baseUrl = resolvePublicMemroosUrl(req);
+  const baseUrlResolution = resolvePublicMemroosUrlDetailed(req);
+  if (baseUrlResolution.source !== "env") {
+    recordOnboardingBaseUrlFallback(baseUrlResolution);
+  }
+  const baseUrl = baseUrlResolution.url;
+  const workspaceName = resolveWorkspaceName(baseUrl);
   const inviteUrl = `${baseUrl}/invite/${rawToken}`;
 
   // The invite row is already committed, so a mail failure degrades to the
@@ -131,12 +140,12 @@ export async function POST(req: NextRequest) {
     email = await sendEmail({
       to: recipient,
       subject: INVITE_EMAIL_SUBJECT,
-      text: buildInviteEmailDraft(inviteUrl),
-      html: buildInviteEmailHtml(inviteUrl),
+      text: buildInviteEmailDraft(inviteUrl, { workspaceName }),
+      html: buildInviteEmailHtml(inviteUrl, { workspaceName }),
     });
   }
 
-  return Response.json({ inviteUrl, email }, { status: 201 });
+  return Response.json({ inviteUrl, email, workspaceName }, { status: 201 });
 }
 
 

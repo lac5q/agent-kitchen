@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const TEST_DB_DIR = path.join(os.tmpdir(), `onboarding-route-${crypto.randomUUID()}`);
 const TEST_DB_PATH = path.join(TEST_DB_DIR, "routes.db");
+const INITIAL_NODE_ENV = process.env.NODE_ENV;
 
 async function loadRoutes() {
   process.env.SQLITE_DB_PATH = TEST_DB_PATH;
@@ -16,6 +17,7 @@ async function loadRoutes() {
   process.env.MEMROOS_JWT_SECRET = "test-secret-that-is-long-enough-32ch";
   vi.resetModules();
   const inviteRoute = await import("../invite/route");
+  const authInviteRoute = await import("@/app/api/auth/invite/route");
   const registerRoute = await import("../register/route");
   const scriptRoute = await import("../script/route");
   const bootstrapRoute = await import("../bootstrap/route");
@@ -43,6 +45,7 @@ async function loadRoutes() {
   return {
     listAgents,
     inviteRoute,
+    authInviteRoute,
     registerRoute,
     scriptRoute,
     bootstrapRoute,
@@ -67,6 +70,8 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     delete process.env.MEMROOS_ONBOARDING_SECRET;
     delete process.env.MEMROOS_JWT_SECRET;
     delete process.env.MEMROOS_PUBLIC_BASE_URL;
+    if (INITIAL_NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = INITIAL_NODE_ENV;
   });
 
   it("rejects invite minting without operator authorization", async () => {
@@ -133,6 +138,134 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     const body = await response.json();
     expect(body.command).toContain("https://memroos.public.example/api/onboarding/script?token=");
     expect(body.mcpUrl).toBe("https://memroos.public.example/mcp");
+  });
+
+  it("does not audit an onboarding invite that uses a configured public URL", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.MEMROOS_PUBLIC_BASE_URL = "https://memroos.example.test";
+    const { inviteRoute, getDb } = await loadRoutes();
+
+    const response = await inviteRoute.POST(
+      new Request("https://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-host": "memroos.public.example",
+          "x-forwarded-proto": "https",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ platform: "hermes", ownerUserId: "test-admin" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect((getDb().prepare("SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = ?").get(
+      "onboarding.base_url_fallback"
+    ) as { count: number }).count).toBe(0);
+  });
+
+  it("audits an onboarding invite that uses the forwarded-host fallback", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.MEMROOS_PUBLIC_BASE_URL;
+    const { inviteRoute, getDb } = await loadRoutes();
+
+    const response = await inviteRoute.POST(
+      new Request("https://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-host": "memroos.public.example",
+          "x-forwarded-proto": "https",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({ platform: "hermes", ownerUserId: "test-admin" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect((getDb().prepare("SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = ?").get(
+      "onboarding.base_url_fallback"
+    ) as { count: number }).count).toBe(1);
+  });
+
+  it("does not audit an onboarding invite that uses a caller-supplied URL", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.MEMROOS_PUBLIC_BASE_URL;
+    const { inviteRoute, getDb } = await loadRoutes();
+
+    const response = await inviteRoute.POST(
+      new Request("https://localhost:3002/api/onboarding/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-host": "memroos.public.example",
+          "x-forwarded-proto": "https",
+          "x-memroos-operator-key": "operator-secret",
+        },
+        body: JSON.stringify({
+          platform: "hermes",
+          memroosUrl: "https://caller.example.test",
+          ownerUserId: "test-admin",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect((getDb().prepare("SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = ?").get(
+      "onboarding.base_url_fallback"
+    ) as { count: number }).count).toBe(0);
+  });
+
+  it("does not audit an auth invite that uses a configured public URL", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.MEMROOS_PUBLIC_BASE_URL = "https://memroos.example.test";
+    const { authInviteRoute, getDb } = await loadRoutes();
+    const { signAccessToken } = await import("@/lib/auth/jwt");
+    const adminToken = await signAccessToken("test-admin", "admin");
+
+    const response = await authInviteRoute.POST(
+      new Request("https://localhost:3002/api/auth/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${adminToken}`,
+          "x-forwarded-host": "memroos.public.example",
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({ role: "operator" }),
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect((getDb().prepare("SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = ?").get(
+      "onboarding.base_url_fallback"
+    ) as { count: number }).count).toBe(0);
+  });
+
+  it("audits an auth invite that uses the forwarded-host fallback", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.MEMROOS_PUBLIC_BASE_URL;
+    const { authInviteRoute, getDb } = await loadRoutes();
+    const { signAccessToken } = await import("@/lib/auth/jwt");
+    const adminToken = await signAccessToken("test-admin", "admin");
+
+    const response = await authInviteRoute.POST(
+      new Request("https://localhost:3002/api/auth/invite", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${adminToken}`,
+          "x-forwarded-host": "memroos.public.example",
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({ role: "operator" }),
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect((getDb().prepare("SELECT COUNT(*) AS count FROM audit_entries WHERE event_type = ?").get(
+      "onboarding.base_url_fallback"
+    ) as { count: number }).count).toBe(1);
   });
 
   it("registers an agent from an onboarding token and returns MCP config without storing the raw key in registry output", async () => {
@@ -249,7 +382,8 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     );
     expect(scriptResponse.status).toBe(200);
     const script = await scriptResponse.text();
-    expect(script).toContain("MEMROOS_URL=\"https://memroos.example.test\"");
+    expect(script).toContain("TOKEN='");
+    expect(script).toContain("MEMROOS_URL='https://memroos.example.test'");
     expect(script).toContain("curl -fsSL \"${MEMROOS_URL}/api/onboarding/register\"");
     expect(script).toContain("MCP_TARGET=\"${MEMROOS_MCP_TARGET:-auto}\"");
     expect(script).not.toContain("\\${");
