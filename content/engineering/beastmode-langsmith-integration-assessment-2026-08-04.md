@@ -133,3 +133,38 @@ Therefore, do not treat `langgraph deploy` as the immediate next step. First add
 During the audit, the current `main` worktree changed materially without this session editing it. The final observed status contained 53 entries: 49 modified paths and 4 untracked paths. Newly overlapping paths include the LangGraph adapter, observability reference, Python README, pipeline/runtime tests, and packaging files.
 
 This indicates that another session or process is actively changing the same checkout. Treat the earlier small dirty-file count as a point-in-time observation, not the current count. Do not cherry-pick, merge, resolve conflicts, commit, or remove the feature worktree until the active writer is identified or the checkout stabilizes. Re-run `git status --short`, `git diff --stat`, and the branch comparison immediately before integration.
+
+
+## Merge verification — 2026-08-05
+
+The earlier pending/concurrency assessment is superseded by this verification.
+
+### Final repository state
+
+- `main` and `origin/main` both point to `3dfe8494650c9b30a0e5d4cffa98af070b3eadc3`.
+- The working tree is clean.
+- The separate feature worktree and local `feat/beastmode-langsmith` branch are gone.
+- Original LangSmith commit `661e0e0` is an ancestor of `main`.
+- Integration commit `75681b8` is present with subject `merge: add LangSmith receipt tracing`.
+- `scripts/acn-trace`, `tests/test-acn-trace.sh`, documentation, and test-runner wiring are tracked on `main`.
+
+### Verification evidence
+
+Run against `3dfe849`:
+
+- `./tests/run-all.sh`: 12/12 steps green.
+- Python tests in the hash-locked CI environment: 140 passed.
+- Import-linter: framework-neutral core contract kept; 0 broken.
+- LangGraph Studio discovery/health smoke: passed.
+- Source distribution and wheel build: passed.
+- Public artifact guard against `HEAD`, wheel, and sdist: clean.
+- Isolated no-dependency wheel smoke: passed.
+- Repository remained clean after verification.
+
+The GitHub connector returned no attached status contexts or pull-request workflow runs for the head SHA, so this assessment relies on the complete local CI-equivalent gates rather than claiming a hosted Actions result.
+
+### Conclusion
+
+The LangSmith code is not merely ready to merge; it is already merged and pushed to `origin/main`. It is code-ready and release-green locally.
+
+Operational use still requires LangSmith configuration and a credential. No live trace submission was performed during this verification. Standard graph tracing uses `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT`. The standalone direct-HTTP `scripts/acn-trace` uploader does not currently add the optional `LANGSMITH_WORKSPACE_ID` / `x-tenant-id` header used by multi-workspace API keys; that is a follow-up compatibility enhancement, not a blocker for single-workspace keys or SDK-managed graph tracing.
