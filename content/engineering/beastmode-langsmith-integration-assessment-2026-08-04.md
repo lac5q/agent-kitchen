@@ -360,3 +360,8 @@ Verification completed: private graph pytest passed (1 test), dynamic-port LangG
 The private workspace was committed locally at `8a1f6be`. The user service `beastmode-langsmith-studio.service` now runs from `/home/lac5q/github/beastmode-workspace`, is enabled, and serves `127.0.0.1:2024` persistently with `LANGSMITH_TRACING=false` because the configured LangSmith key is a 1Password reference unavailable to the non-interactive service. Verified through the live API: `/ok` returned OK, assistant discovery returned graph `pipeline`, the graph schema returned 16 nodes and 19 edges, and a non-destructive smoke run completed with the expected fail-closed `blocked` status.
 
 The local LangSmith Studio URL is `https://smith.langchain.com/studio/?baseUrl=http%3A%2F%2F127.0.0.1%3A2024`. The Cloudflare tunnel process is active, but `langsmith.epiloguecapital.com` still has no DNS record and the remotely managed tunnel's Cloudflare-side ingress omits that hostname; completing that public/internal URL requires Cloudflare dashboard/API authorization.
+
+
+## Re-audit — 2026-08-05 continuation
+
+Confirmed again: `beastmode-langsmith-studio.service` is enabled/active, the private workspace is clean at commit `8a1f6be`, and the public checkout remains at `3dfe849` with only the pre-existing `scripts/bm` modification. `langsmith.epiloguecapital.com` still does not resolve; the active remotely managed Maria tunnel reports ingress for existing services but not this hostname. No Cloudflare dashboard/API credential is available in this session to create the DNS record or update remote ingress.
