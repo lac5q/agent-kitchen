@@ -1,0 +1,317 @@
+---
+title: "GSD v8.38: Observability-Gated Memory Engine Modernization"
+name: "gsd-v8-38-observability-gated-memory-engine-modernization"
+description: "The sequenced MemroOS roadmap that makes LangSmith agent tracing a prerequisite for Hindsight shadow evaluation, Recall v2, temporal facts, semantic graph learning, living briefs, and memory-engine promotion."
+publishedAt: "2026-08-04"
+tags: [memroos, gsd, roadmap, langsmith, langchain, langgraph, hindsight, mem0, cognee, recall-v2, agent-observability]
+keywords: [GSD roadmap, LangSmith tracing, agent tracking, Hindsight adapter, hybrid retrieval, temporal memory, semantic graph, living briefs]
+author: "Codex"
+model: "gpt-5"
+sources:
+  - "https://docs.langchain.com/langsmith/trace-with-langgraph"
+  - "https://docs.langchain.com/langsmith/agent-server-distributed-tracing"
+  - "https://docs.langchain.com/langsmith/data-storage-and-privacy"
+  - "repo:beastmode@661e0e0"
+  - "repo:memroos-product@faaa2a6281f2b85382db338a791ab6cfacc7a256"
+derived_from:
+  - "content/research/memroos-vs-hindsight-mem0-cognee-2026-08-04.md"
+  - ".planning/ROADMAP.md"
+  - ".planning/REQUIREMENTS.md"
+  - ".planning/MILESTONES.md"
+regen_prompt: "Refresh the MemroOS v8.38 roadmap from the current MemroOS and Beastmode repositories plus current LangSmith, Hindsight, Mem0, and Cognee capabilities; preserve LangSmith tracing as the prerequisite and rerun equal-model promotion criteria."
+---
+
+# Roadmap: Memroos v8.38 — Observability-Gated Memory Engine Modernization
+
+*Created: 2026-08-04 · Status: planned · Phases 228–235*
+
+## Operator intent
+
+Add LangChain/LangGraph-to-LangSmith agent tracing to the GSD stack **before**
+changing the memory engine, then use the resulting traces and eval receipts to
+compare Hindsight, current Mem0, Cognee-inspired mechanisms, and MemroOS-native
+Recall v2 under identical conditions.
+
+The operator called this “Langston support.” No Langston integration exists in
+the repository or the relevant upstream tooling; the executable target is the
+existing LangChain/LangGraph + LangSmith path. The name is normalized here so
+implementation work lands on the intended SDK and service.
+
+## Sources and reusable work
+
+- MemroOS comparison: `content/research/memroos-vs-hindsight-mem0-cognee-2026-08-04.md`
+  in the MemroOS knowledge store.
+- Existing Beastmode LangSmith work: local branch `feat/beastmode-langsmith`,
+  commit `661e0e0` (`feat: add optional LangSmith receipt tracing`).
+- Beastmode privacy contract: `references/observability.md` on that branch —
+  opt-in, bounded, redacted, fail-open, and never a gate authority.
+- Existing MemroOS foundations: v6.3 Phase 104 memory-trace observability,
+  v8.3 GSD context packet/run ledger, v8.5 Phase 144 LangGraph peer contract,
+  v8.16 multi-harness observe plane, and v8.30 memory-adoption telemetry.
+- Official LangSmith documentation for LangGraph tracing, distributed trace
+  context, privacy controls, and framework-neutral/OpenTelemetry ingestion.
+
+## Governing decision
+
+MemroOS remains the source of truth for task state, policy, provenance, audit,
+memory, and release gates. LangSmith is an optional observability and evaluation
+sink. A missing key, rate limit, timeout, sampling decision, or LangSmith outage
+must never change an agent result, provenance verdict, policy decision, or GSD
+shipcheck outcome.
+
+### Hard sequence lock
+
+**Phase 228 must be complete before Phases 229–235 begin.** The memory work will
+change write latency, retrieval candidates, ranking, context size, and answer
+quality. Those changes are not allowed to start without a trace baseline that
+can attribute the before/after behavior.
+
+## Phase map
+
+| Phase | Name | Priority | Outcome |
+|---|---|---|---|
+| 228 | LangSmith Agent Tracing Bridge | Prerequisite | GSD, LangGraph, Beastmode children, tools, recall, memory writes, and evals share a sanitized distributed trace |
+| 229 | Memory Substrate Stabilization + Hindsight Shadow Lane | P0 | Exact Mem0 contract, engine-neutral adapter, governed Hindsight dual-write/shadow-read, and equal-model bake-off |
+| 230 | Unified Recall v2 | P1 | One authorized hybrid retrieval/fusion/rerank/context-pack contract for every caller |
+| 231 | Temporal Evidence Facts + Reversible Truth Lifecycle | P1 | Canonical valid-time facts, contradiction/supersession edges, evidence, and reversible curation |
+| 232 | Semantic Entity Graph | P1 | Canonical entities, aliases, typed time-aware edges, provenance, and bounded graph expansion |
+| 233 | Governed Observations + Consolidation | P2 | One evidence-backed async learning hierarchy instead of overlapping consolidators |
+| 234 | Living Briefs + Memory Profiles | P2 | Named cached understanding and reusable governed memory lenses |
+| 235 | Standardized External Evaluation + Promotion Gate | P3 | Honest same-model comparisons and a measured decision on the default memory engine |
+
+---
+
+## Phase 228: LangSmith Agent Tracing Bridge
+
+**Requirements:** LANGTRACE-01..12
+
+1. **LANGTRACE-01 — Optional exporter.** Add a LangSmith exporter behind a
+   framework-neutral trace contract. It is disabled by default and configured
+   only through secret-managed `LANGSMITH_*` settings; accepted `LANGCHAIN_*`
+   aliases are normalized once at the boundary.
+2. **LANGTRACE-02 — Reuse Beastmode receipts.** Port or consume the sanitized
+   `beastmode.run` / `beastmode.child` projection from commit `661e0e0` rather
+   than inventing a second child-run schema. Canonical `meta.json` receipts stay
+   authoritative.
+3. **LANGTRACE-03 — Distributed identity.** Propagate MemroOS `goal_id`, GSD run
+   ID, agent ID, tenant/project/space scope, parent trace ID, and correlation ID
+   across Next.js, LangGraph, A2A/MCP dispatch, and isolated executor processes.
+   Client-provided IDs are labels, never authorization inputs.
+4. **LANGTRACE-04 — Span coverage.** Represent planning, model invocation,
+   agent dispatch, tool calls, policy gates, retrieval arms, reranking, context
+   injection, memory writes, consolidation, and eval scoring as parent/child
+   spans with stable names and versions.
+5. **LANGTRACE-05 — Privacy before export.** Apply MemroOS labels and redaction
+   before serialization. The default mode sends bounded metadata, model/usage,
+   stop reason, counts, timing, and receipt IDs—not prompts, raw outputs, file
+   names, diffs, command arguments, retrieved passages, or secrets.
+6. **LANGTRACE-06 — Explicit payload modes.** Support `metadata_only` as the
+   default and an operator-approved richer mode scoped by tenant/project,
+   classification, retention, and sampling. Restricted/confidential payloads
+   fail closed unless an explicit export policy permits them.
+7. **LANGTRACE-07 — Fail-open observability.** Export is asynchronous, bounded,
+   retry-limited, and isolated from gates. Missing credentials or endpoint
+   failure produces an observable skip/failure receipt but never blocks work.
+8. **LANGTRACE-08 — MemroOS cross-links.** Store LangSmith trace/run/project IDs
+   on the GSD run ledger and expose deep links from the run detail/NOC surface.
+   LangSmith links back to stable MemroOS receipt IDs where supported.
+9. **LANGTRACE-09 — Evaluation mapping.** Map MemroOS eval runs, datasets,
+   examples, scores, model versions, and engine configuration to LangSmith
+   experiments without making LangSmith the canonical eval store.
+10. **LANGTRACE-10 — Cost and retention controls.** Add sampling, batch limits,
+    queue caps, retention documentation, and per-project budgets. A local/offline
+    deployment remains fully functional with zero LangSmith traffic.
+11. **LANGTRACE-11 — Representative proof.** One test run must show a complete
+    parent tree from GSD goal → agent/child execution → tool/retrieval spans →
+    answer/eval, including a multi-agent parent/child relationship.
+12. **LANGTRACE-12 — Security and resilience proof.** Tests prove secret and
+    restricted-payload redaction, forged trace-context non-authority, timeout
+    behavior, retry bounds, trace outage non-interference, and no change to
+    offline provenance/shipcheck verdicts.
+
+**Exit gate:** capture a pre-memory-change baseline for representative GSD,
+recall, and memory-write workloads, including p50/p95 latency, token use,
+context bytes, retrieval candidates, and error/skip rates.
+
+---
+
+## Phase 229: Memory Substrate Stabilization + Hindsight Shadow Lane
+
+**Requirements:** MEMENG-01..06
+
+1. **MEMENG-01:** Pin the deployed Mem0 version exactly; add a startup capability
+   manifest covering extraction instructions, graph behavior, temporal fields,
+   reranking, response schema, and write semantics. Fail with an actionable
+   degraded state when configuration and runtime capability disagree.
+2. **MEMENG-02:** Define an engine-neutral `MemoryAdapter` fact/write/search/
+   curation/receipt contract without weakening tenant, label, raw-vault, or
+   audit boundaries.
+3. **MEMENG-03:** Implement `HindsightMemoryAdapter` and map MemroOS tenant,
+   project, user, and agent scopes to server-controlled Hindsight bank IDs. A
+   client-selected raw bank ID is never accepted as authorization.
+4. **MEMENG-04:** Add authorized/redacted dual-write and shadow-read. MemroOS
+   remains the capture/policy/raw-vault boundary; Hindsight results are recorded
+   in traces/eval receipts and are not injected into agents until promoted.
+5. **MEMENG-05:** Run identical LoCoMo, LongMemEval, a bounded BEAM subset, and
+   MemroOS operational recall cases with fixed ingestion/embedding/reader/judge
+   models, top-k, token budget, prompts, hardware, and revisions.
+6. **MEMENG-06:** Measure recall@k, MRR, answer support, temporal/update/
+   contradiction accuracy, abstention, ingest cost, write latency, recall
+   p50/p95, context bytes, policy leakage, legal hold, and erasure propagation.
+
+**Exit gate:** documented integrate/emulate/reject decision. No backend becomes
+default from vendor benchmark claims alone.
+
+---
+
+## Phase 230: Unified Recall v2
+
+**Requirements:** RECALLV2-01..08
+
+1. **RECALLV2-01:** One internal contract serves direct recall, prior-work
+   recollection, dispatch context, MCP recall, proactive recall, and evals.
+2. **RECALLV2-02:** Authorize and scope candidates before retrieval wherever the
+   backend supports it; always re-check before fusion and injection.
+3. **RECALLV2-03:** Run independent BM25/FTS, full-corpus ANN vector,
+   entity/graph, and temporal candidate arms in parallel.
+4. **RECALLV2-04:** Fuse independent candidate sets with RRF or measured calibrated
+   fusion; do not use keyword/entity signals only as boosts over semantic top-k.
+5. **RECALLV2-05:** Apply a local cross-encoder reranker, then deduplicate and
+   assemble a token/character-budgeted context pack.
+6. **RECALLV2-06:** Emit trace/receipt state for every candidate: retrieved,
+   policy-filtered, fused, reranked, deduped, injected, ignored, and why.
+7. **RECALLV2-07:** Replace the recent-row in-process semantic scan with a real
+   full-corpus ANN query or remove it from production.
+8. **RECALLV2-08:** Prove quality, latency, policy, and deterministic-degraded
+   behavior with the Phase 228 trace baseline and Phase 229 evaluation harness.
+
+---
+
+## Phase 231: Temporal Evidence Facts + Reversible Truth Lifecycle
+
+**Requirements:** TEMPFACT-01..07
+
+1. **TEMPFACT-01:** Version a canonical `MemoryFact` with `fact_type`,
+   `occurred_start/end`, `valid_from/until`, source/chunk evidence, extractor,
+   model/prompt/version, confidence, and evidence count.
+2. **TEMPFACT-02:** Represent `active`, `superseded`, `invalidated`, and
+   `disputed` states plus `supersedes`, `contradicts`, `supports`, and `causes`
+   relationships.
+3. **TEMPFACT-03:** Detect likely updates and contradictions on write without
+   silently overwriting raw or previously valid facts.
+4. **TEMPFACT-04:** Parse temporal query intent for current, historical, first,
+   last, before/after, and bounded-range recall.
+5. **TEMPFACT-05:** Edit/invalidate/restore is reversible, audited, and triggers
+   bounded recomputation of links, observations, and living briefs.
+6. **TEMPFACT-06:** Retention, legal hold, DSAR/erasure, labels, raw-vault
+   lineage, and tenant isolation remain authoritative across all derived views.
+7. **TEMPFACT-07:** Tests cover conflicting dates, stale facts, future facts,
+   partial intervals, supersession chains, restoration, and erasure.
+
+---
+
+## Phase 232: Semantic Entity Graph
+
+**Requirements:** SEMGRAPH-01..07
+
+1. **SEMGRAPH-01:** Extract and resolve canonical entities and aliases at write
+   time instead of storing isolated content-only `MemoryFact` nodes.
+2. **SEMGRAPH-02:** Support entity embeddings and deterministic alias evidence
+   for fuzzy resolution; uncertain merges become reviewable proposals.
+3. **SEMGRAPH-03:** Store typed relationships with source provenance,
+   confidence, valid time, security labels, and revision state.
+4. **SEMGRAPH-04:** Add bounded expansion by entity, relationship, temporal
+   adjacency, and causal adjacency; return candidates to Recall v2 fusion.
+5. **SEMGRAPH-05:** Use a small governed upper ontology plus tenant/project
+   packs. New aliases/types follow existing ontology approval governance.
+6. **SEMGRAPH-06:** Repair the direct graph write/query mismatch so content
+   written by the path is actually retrievable and linked.
+7. **SEMGRAPH-07:** Prove multi-hop quality, traversal bounds, tenant isolation,
+   label inheritance, deletion propagation, and query-cost limits.
+
+---
+
+## Phase 233: Governed Observations + Consolidation
+
+**Requirements:** OBSLEARN-01..07
+
+1. **OBSLEARN-01:** Merge the scheduled meta-insight consolidator and the
+   raw-vault/lineage lifecycle consolidator into one async worker/contract.
+2. **OBSLEARN-02:** Create, update, retire, or split observations as evidence
+   changes; never mutate or destroy raw evidence.
+3. **OBSLEARN-03:** Every observation carries supporting and contradicting fact
+   IDs, model/prompt/version, revision history, and a searchable fact type.
+4. **OBSLEARN-04:** Derived observations inherit the strictest source policy
+   label and remain tenant/project/mission scoped.
+5. **OBSLEARN-05:** Consolidation is replay-safe, idempotent, queue-bounded, and
+   observable through Phase 228 traces and NOC health.
+6. **OBSLEARN-06:** Observation changes trigger only affected living briefs and
+   graph projections, with recomputation receipts.
+7. **OBSLEARN-07:** Tests cover evidence addition/removal, contradiction,
+   retirement, split, replay, policy inheritance, and failed-worker recovery.
+
+---
+
+## Phase 234: Living Briefs + Memory Profiles
+
+**Requirements:** LIVING-01..09
+
+1. **LIVING-01:** Create named, query-defined cached understandings such as
+   current project status, operator preferences, customer risk, and service
+   topology.
+2. **LIVING-02:** Each brief declares scope, source query, allowed fact types and
+   labels, refresh mode, token budget, and direct-lookup endpoint.
+3. **LIVING-03:** Support full and typed-delta refresh after consolidation,
+   preserving stable sections and running periodic full rebuilds to reset drift.
+4. **LIVING-04:** Preserve complete revision/evidence history and expose changes
+   as insert/replace/remove operations.
+5. **LIVING-05:** Operator-owned sections cannot be overwritten by automated
+   refresh; conflicts become reviewable proposals.
+6. **LIVING-06:** Bind mission, directives, extraction policy, sources,
+   consolidation tags, ontology pack, retrieval budget, and refresh triggers
+   into reusable memory profiles/lenses.
+7. **LIVING-07:** Profiles narrow existing identity/policy scope and never grant
+   new tenant, role, source, or classification access.
+8. **LIVING-08:** Surface freshness, evidence, refresh state, size, and failures
+   in the operator UI/NOC.
+9. **LIVING-09:** Evaluate brief usefulness, factual support, staleness, delta
+   drift, token savings, and contamination across missions/scopes.
+
+---
+
+## Phase 235: Standardized External Evaluation + Promotion Gate
+
+**Requirements:** MEMEVAL-01..08
+
+1. **MEMEVAL-01:** Complete reproducible LoCoMo, LongMemEval, and bounded BEAM
+   dataset lanes; keep architecture-evidence scores separate from retrieval
+   metrics.
+2. **MEMEVAL-02:** Compare current Mem0, governed Hindsight adapter, and native
+   Recall v2 with identical models, prompts, budgets, hardware, and revisions.
+3. **MEMEVAL-03:** Publish full configurations and commit hashes with accuracy,
+   latency, token, ingest, storage, failure, and cost metrics.
+4. **MEMEVAL-04:** Report temporal, update, multi-hop, contradiction, abstention,
+   and long-context categories separately.
+5. **MEMEVAL-05:** Include operational policy leakage, source freshness, legal
+   hold, tenant isolation, curation, and erasure tests.
+6. **MEMEVAL-06:** Store every run in MemroOS and optionally mirror it to the
+   Phase 228 LangSmith experiment; either store must be independently usable.
+7. **MEMEVAL-07:** Define promotion thresholds and rollback handles before any
+   engine or Recall v2 path becomes default.
+8. **MEMEVAL-08:** Produce a final build/integrate decision: Hindsight default,
+   optional competitor, or rejected dependency; Cognee remains an idea source
+   unless custom ontology/data-ingestion work becomes the product center.
+
+## Locked exclusions
+
+- No hosted trace receives secrets, raw private prompts, retrieved passages,
+  diffs, file names, or command arguments by default.
+- No LangSmith outage or result participates in policy, provenance, or release
+  authority.
+- No Hindsight/Cognee/Mem0 backend switch occurs before equal-model shadow proof
+  and explicit operator approval.
+- No replacement of MemroOS knowledge, raw-vault, governance, agent identity,
+  source freshness, legal-hold/erasure, audit, or skill-promotion planes.
+- No vendor benchmark is presented as an apples-to-apples MemroOS result unless
+  reproduced by Phase 235.
+
