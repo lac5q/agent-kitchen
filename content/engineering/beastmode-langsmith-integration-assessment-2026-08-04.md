@@ -353,3 +353,10 @@ Recommended separation:
 Created a separate local workspace at `/home/lac5q/github/beastmode-workspace` with a pinned dependency on public `lac5q/beastmode` commit `3dfe8494650c9b30a0e5d4cffa98af070b3eadc3`. The workspace contains a LangGraph Studio manifest, a fail-closed private dependency boundary, a 1Password-backed launcher template, and documentation separating public framework code from private executor/validator/reviewer/merger implementations.
 
 Verification completed: private graph pytest passed (1 test), dynamic-port LangGraph Studio launch returned `PRIVATE_STUDIO_LAUNCH_OK`, generated runtime caches are ignored, secret-pattern scan was clean, and the public checkout still shows only the pre-existing `scripts/bm` modification. The private workspace has not been pushed to GitHub. A local Git commit remains pending because the sandbox escalation for writing the sibling repository's Git index timed out.
+
+
+## Persistent Beastmode Studio link verification — 2026-08-05
+
+The private workspace was committed locally at `8a1f6be`. The user service `beastmode-langsmith-studio.service` now runs from `/home/lac5q/github/beastmode-workspace`, is enabled, and serves `127.0.0.1:2024` persistently with `LANGSMITH_TRACING=false` because the configured LangSmith key is a 1Password reference unavailable to the non-interactive service. Verified through the live API: `/ok` returned OK, assistant discovery returned graph `pipeline`, the graph schema returned 16 nodes and 19 edges, and a non-destructive smoke run completed with the expected fail-closed `blocked` status.
+
+The local LangSmith Studio URL is `https://smith.langchain.com/studio/?baseUrl=http%3A%2F%2F127.0.0.1%3A2024`. The Cloudflare tunnel process is active, but `langsmith.epiloguecapital.com` still has no DNS record and the remotely managed tunnel's Cloudflare-side ingress omits that hostname; completing that public/internal URL requires Cloudflare dashboard/API authorization.
