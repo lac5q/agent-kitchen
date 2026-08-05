@@ -323,3 +323,15 @@ Official references:
 - https://docs.langchain.com/langsmith/studio
 - https://docs.langchain.com/langsmith/quick-start-studio
 - https://docs.langchain.com/oss/python/langgraph/deploy
+
+
+## Operator management guide — 2026-08-05
+
+Use four surfaces:
+
+1. GitHub/repository: source code, `main`, pull requests, and deployment version.
+2. maeve-u1: local Agent Server and Beastmode execution. Check `systemctl --user status beastmode-langsmith-studio.service` and `journalctl --user -u beastmode-langsmith-studio.service -f` once the service is enabled.
+3. Cloudflare: DNS, tunnel health, and Access policy for `langsmith.epiloguecapital.com`. Check `systemctl --user status cloudflared-maria.service` on maeve-u1 and the Cloudflare Zero Trust dashboard.
+4. LangSmith: `Projects → beastmode → Runs/Traces` for observability; `Deployments` only for managed LangSmith Cloud agents. The current URL with `baseUrl=127.0.0.1:2024` is local Studio mode.
+
+Current state: repository code is merged; maeve runtime and Studio wrappers are installed; the Cloudflare ingress is staged but DNS was not created; the local Studio unit is staged but disabled pending credential rotation; no managed LangSmith Cloud deployment exists.
