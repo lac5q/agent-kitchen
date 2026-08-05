@@ -295,3 +295,11 @@ A metadata-only remote diagnostic was malformed and emitted the 1Password servic
 - The LangSmith SDK check remains untrusted/failed with HTTP 403 until the LangSmith API key item is replaced or corrected. No server was started.
 - A retry of main-mac SSH still returns `Permission denied (publickey,password,keyboard-interactive)`, so no Mac changes were made.
 - Local temporary staging files were removed; the local Beastmode checkout retains only the pre-existing `M scripts/bm` change.
+
+
+## Current test and operator workflow — 2026-08-05
+
+- Current secret-safe test on maeve-u1: `LANGSMITH_AUTH_BLOCKED_NO_ACTIVE_TOKEN`; `STUDIO_LAUNCH_OK`.
+- To use Studio after credential rotation: run `~/.local/bin/beastmode-langsmith-studio --no-browser` on maeve-u1, forward `ssh -N -L 2024:127.0.0.1:2024 maeve-u1`, then open `https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024` and choose the `pipeline` graph.
+- LangSmith online verification: sign in to the correct workspace, open Projects → `beastmode`, and inspect Runs/Traces after a real traced invocation. The project may be created on first trace ingestion.
+- Official references: `https://docs.langchain.com/oss/python/langgraph/studio`, `https://docs.langchain.com/langsmith/view-traces`, `https://docs.langchain.com/langsmith/log-traces-to-project`.
