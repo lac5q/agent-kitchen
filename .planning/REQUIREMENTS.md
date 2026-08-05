@@ -1,8 +1,122 @@
 # Requirements: Memroos GSD Roadmap
 
-*Updated: 2026-07-16*
+*Updated: 2026-08-04*
 
 ---
+
+## v8.39 Observability-Gated Memory Engine Modernization — Planned 2026-08-04
+
+**Sequencing:** LANGTRACE-01..12 / Phase 228 are prerequisites for MEMENG,
+RECALLV2, TEMPFACT, SEMGRAPH, OBSLEARN, LIVING, and MEMEVAL implementation work.
+The trace baseline must exist before memory behavior changes.
+
+### LangSmith agent tracing prerequisite
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| LANGTRACE-01 | Optional framework-neutral LangSmith exporter, disabled by default and configured only through secret-managed settings | 228 | planned |
+| LANGTRACE-02 | Reuse/port the bounded redacted Beastmode `beastmode.run` and `beastmode.child` receipt projection from commit `661e0e0`; offline receipts stay authoritative | 228 | planned |
+| LANGTRACE-03 | Propagate server-controlled goal/run/agent/tenant/project/space/correlation/parent-trace identity across Next.js, LangGraph, A2A/MCP, and executor children without making trace fields authorization inputs | 228 | planned |
+| LANGTRACE-04 | Stable spans cover planning, model calls, dispatch, tools, policy, retrieval arms, rerank/context injection, memory writes, consolidation, and evals | 228 | planned |
+| LANGTRACE-05 | Labels/redaction run before serialization; metadata-only default excludes prompts, raw outputs, passages, file names, diffs, arguments, and secrets | 228 | planned |
+| LANGTRACE-06 | Richer payload modes require explicit tenant/project/classification/retention/sampling policy; restricted/confidential export fails closed by default | 228 | planned |
+| LANGTRACE-07 | Async bounded retry/failure isolation; missing key, timeout, rate limit, sampling, or outage never blocks work or changes a gate | 228 | planned |
+| LANGTRACE-08 | GSD ledger/NOC store LangSmith IDs and deep links while preserving MemroOS receipt IDs as canonical | 228 | planned |
+| LANGTRACE-09 | MemroOS eval datasets/runs/examples/scores/config map to optional LangSmith experiments without changing the canonical eval store | 228 | planned |
+| LANGTRACE-10 | Sampling, batching, queue caps, retention, budgets, and zero-traffic local/offline operation are documented and tested | 228 | planned |
+| LANGTRACE-11 | Representative end-to-end and multi-agent trace proof from GSD goal through child/tool/retrieval to answer/eval | 228 | planned |
+| LANGTRACE-12 | Security/resilience tests prove redaction, forged-context non-authority, retry bounds, outage non-interference, and unchanged offline verdicts | 228 | planned |
+
+### Memory substrate and shadow comparison
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| MEMENG-01 | Exact deployed Mem0 pin plus startup capability manifest for extraction instructions, graph, temporal, rerank, schema, and write semantics | 229 | planned |
+| MEMENG-02 | Engine-neutral fact/write/search/curation/receipt adapter contract preserves MemroOS tenant, label, raw-vault, lifecycle, and audit boundaries | 229 | planned |
+| MEMENG-03 | Governed `HindsightMemoryAdapter` maps server-controlled MemroOS scopes to banks; raw client bank IDs never authorize access | 229 | planned |
+| MEMENG-04 | Authorized/redacted dual-write and shadow-read; Hindsight results reach traces/evals only until promotion | 229 | planned |
+| MEMENG-05 | Identical-model LoCoMo, LongMemEval, bounded BEAM, and MemroOS operational workload bake-off with fixed budgets/configuration | 229 | planned |
+| MEMENG-06 | Measure quality, temporal/update/contradiction/abstention, latency, cost, context, policy leakage, legal hold, and erasure before integrate/emulate/reject decision | 229 | planned |
+
+### Unified Recall v2
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| RECALLV2-01 | One recall contract serves direct, prior-work, proactive, dispatch, MCP, and eval callers | 230 | planned |
+| RECALLV2-02 | Scope/authorize before backend retrieval where possible and re-check before fusion/injection | 230 | planned |
+| RECALLV2-03 | Parallel independent BM25/FTS, full-corpus ANN, entity/graph, and temporal candidate arms | 230 | planned |
+| RECALLV2-04 | RRF or measured calibrated fusion over independent candidates; lexical/entity evidence is not only a semantic-top-k boost | 230 | planned |
+| RECALLV2-05 | Local cross-encoder rerank, dedupe, and token/character-budgeted context packing | 230 | planned |
+| RECALLV2-06 | Per-candidate retrieved/filtered/fused/reranked/deduped/injected/ignored receipts and reasons | 230 | planned |
+| RECALLV2-07 | Replace or remove the bounded recent-row in-process semantic scan; production semantic recall is full-corpus ANN | 230 | planned |
+| RECALLV2-08 | Quality/latency/policy/degraded-mode proof against the Phase 228 baseline and Phase 229 harness | 230 | planned |
+
+### Temporal evidence facts and reversible truth
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| TEMPFACT-01 | Versioned fact contract carries type, occurred/valid intervals, evidence, extractor/model/prompt/version, confidence, and evidence count | 231 | planned |
+| TEMPFACT-02 | Active/superseded/invalidated/disputed states plus supersedes/contradicts/supports/causes edges | 231 | planned |
+| TEMPFACT-03 | Likely updates/contradictions detected without silently overwriting raw or previously valid facts | 231 | planned |
+| TEMPFACT-04 | Query intent supports current, historical, first, last, before/after, and range behavior | 231 | planned |
+| TEMPFACT-05 | Edit/invalidate/restore is reversible, audited, and recomputes affected derived views | 231 | planned |
+| TEMPFACT-06 | Retention, legal hold, DSAR/erasure, labels, lineage, and tenant isolation remain authoritative | 231 | planned |
+| TEMPFACT-07 | Temporal/conflict/supersession/restoration/erasure regression suite | 231 | planned |
+
+### Semantic entity graph
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| SEMGRAPH-01 | Write-time canonical entity/alias extraction and resolution replaces isolated content-only graph facts | 232 | planned |
+| SEMGRAPH-02 | Entity embeddings plus deterministic alias evidence; uncertain merges enter governed review | 232 | planned |
+| SEMGRAPH-03 | Typed relationships carry provenance, confidence, valid time, labels, and revision state | 232 | planned |
+| SEMGRAPH-04 | Bounded entity/relationship/temporal/causal expansion returns candidates to Recall v2 | 232 | planned |
+| SEMGRAPH-05 | Governed upper ontology plus tenant/project packs; new aliases/types follow approval | 232 | planned |
+| SEMGRAPH-06 | Direct graph write/query mismatch fixed so written content is retrievable and linked | 232 | planned |
+| SEMGRAPH-07 | Multi-hop quality, traversal-cost bounds, tenant/label isolation, and deletion propagation proof | 232 | planned |
+
+### Governed observations and consolidation
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| OBSLEARN-01 | Scheduled meta-insight and raw-vault/lineage consolidators converge on one async contract | 233 | planned |
+| OBSLEARN-02 | Evidence changes create/update/retire/split observations without mutating raw evidence | 233 | planned |
+| OBSLEARN-03 | Observations carry supporting/contradicting fact IDs, model/prompt/version, revisions, and searchable type | 233 | planned |
+| OBSLEARN-04 | Strictest source policy inheritance and tenant/project/mission isolation | 233 | planned |
+| OBSLEARN-05 | Replay-safe, idempotent, bounded, traceable worker with NOC health | 233 | planned |
+| OBSLEARN-06 | Only affected living briefs and graph projections refresh, with recomputation receipts | 233 | planned |
+| OBSLEARN-07 | Evidence removal, contradiction, retirement, split, replay, policy, and recovery tests | 233 | planned |
+
+### Living briefs and memory profiles
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| LIVING-01 | Named query-defined cached understanding for stable operational topics | 234 | planned |
+| LIVING-02 | Brief declares scope, query, allowed facts/labels, refresh mode, token budget, and direct lookup | 234 | planned |
+| LIVING-03 | Full and typed-delta refresh, stable-section preservation, periodic full rebuild | 234 | planned |
+| LIVING-04 | Complete revision/evidence history with typed insert/replace/remove deltas | 234 | planned |
+| LIVING-05 | Operator-owned sections are protected; conflicts become proposals | 234 | planned |
+| LIVING-06 | Reusable profile binds mission, directives, extraction, sources, tags, ontology, retrieval budget, and refresh triggers | 234 | planned |
+| LIVING-07 | Profiles only narrow existing identity/policy scope and never grant access | 234 | planned |
+| LIVING-08 | UI/NOC shows freshness, evidence, refresh state, size, and failures | 234 | planned |
+| LIVING-09 | Usefulness, support, staleness, delta drift, token savings, and cross-scope contamination evals | 234 | planned |
+
+### Standardized evaluation and promotion
+
+| ID | Requirement | Phase | Status |
+|---|---|---:|---|
+| MEMEVAL-01 | Reproducible LoCoMo, LongMemEval, and bounded BEAM lanes; architecture scores stay separate | 235 | planned |
+| MEMEVAL-02 | Same-model/same-budget current Mem0, Hindsight, and native Recall v2 comparison | 235 | planned |
+| MEMEVAL-03 | Publish config/revisions plus accuracy, latency, token, ingest, storage, failure, and cost metrics | 235 | planned |
+| MEMEVAL-04 | Separate temporal, update, multi-hop, contradiction, abstention, and long-context results | 235 | planned |
+| MEMEVAL-05 | Operational policy leakage, freshness, legal hold, tenant isolation, curation, and erasure tests | 235 | planned |
+| MEMEVAL-06 | Canonical MemroOS eval persistence with optional Phase 228 LangSmith experiment mirror | 235 | planned |
+| MEMEVAL-07 | Promotion thresholds and rollback handles defined before default-path changes | 235 | planned |
+| MEMEVAL-08 | Final explicit Hindsight-default/optional/rejected decision; Cognee remains idea source unless product center changes | 235 | planned |
+
+**Locked:** LangSmith is optional and non-authoritative; no backend switch,
+private hosted-trace upload, or replacement of MemroOS knowledge/governance/
+identity/lifecycle planes occurs without shadow proof and operator approval.
 
 ## Current Completed Milestones
 
