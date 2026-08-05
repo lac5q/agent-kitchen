@@ -303,3 +303,11 @@ A metadata-only remote diagnostic was malformed and emitted the 1Password servic
 - To use Studio after credential rotation: run `~/.local/bin/beastmode-langsmith-studio --no-browser` on maeve-u1, forward `ssh -N -L 2024:127.0.0.1:2024 maeve-u1`, then open `https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024` and choose the `pipeline` graph.
 - LangSmith online verification: sign in to the correct workspace, open Projects → `beastmode`, and inspect Runs/Traces after a real traced invocation. The project may be created on first trace ingestion.
 - Official references: `https://docs.langchain.com/oss/python/langgraph/studio`, `https://docs.langchain.com/langsmith/view-traces`, `https://docs.langchain.com/langsmith/log-traces-to-project`.
+
+
+## Cloudflare routing assessment — 2026-08-05
+
+- maeve-u1 has `cloudflared` 2026.3.0 and two running user services: Maria tunnel `faa2bde0-b26a-48d8-95d8-97c177d6359d` and PC2 tunnel `02308b1d-b7ee-4354-9ca6-5680e9bb30dc`.
+- Existing ingress config uses `epiloguecapital.com` hosts only. The requested `langsmith.epiloguecapita.com` (without the `l` in capital) currently has no DNS resolution; confirm whether this is a typo or a separate Cloudflare zone.
+- No generic Cloudflare cert/API environment is present on maeve-u1; tunnel credential JSON files are connector credentials only. DNS route creation therefore needs Cloudflare dashboard/API authorization.
+- No Agent Server is currently listening on 127.0.0.1:2024. Public routing should not be enabled until a persistent origin and Cloudflare Access policy are defined; the local Studio dev endpoint has no built-in authentication.
