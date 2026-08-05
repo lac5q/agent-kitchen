@@ -86,6 +86,40 @@ async function setUserDisabled(data: { userId: string; disabled: boolean }): Pro
 
 interface Me { email: string; role: string }
 
+interface AgentIssueReport {
+  id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  component: string;
+  title: string;
+  body: string;
+  status: "open" | "acked" | "resolved";
+  createdAt: string;
+}
+
+interface AgentIssuesResponse {
+  reports: AgentIssueReport[];
+  count: number;
+}
+
+async function fetchAgentIssues(): Promise<AgentIssuesResponse> {
+  const res = await fetch("/api/agent-report?status=open&limit=100", { credentials: "include" });
+  if (!res.ok) throw new ApiError("Failed to fetch agent issues", res.status);
+  return res.json() as Promise<AgentIssuesResponse>;
+}
+
+async function updateAgentIssue(data: { id: string; action: "ack" | "resolve" }): Promise<void> {
+  const res = await fetch(`/api/agent-report/${encodeURIComponent(data.id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ action: data.action }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to update agent issue");
+  }
+}
+
 async function startViewAs(userId: string): Promise<void> {
   const res = await fetch("/api/admin/view-as", {
     method: "POST",
@@ -203,6 +237,21 @@ export default function TeamPage() {
     queryFn: fetchInvitations,
     retry: (count, err) =>
       err instanceof ApiError && (err.status === 401 || err.status === 403) ? false : count < 2,
+  });
+
+  const { data: issuesData, error: issuesError } = useQuery({
+    queryKey: ["agent-issues", "open"],
+    queryFn: fetchAgentIssues,
+    retry: (count, err) =>
+      err instanceof ApiError && (err.status === 401 || err.status === 403) ? false : count < 2,
+  });
+
+  const issueMutation = useMutation({
+    mutationFn: updateAgentIssue,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agent-issues"] });
+    },
+    onError: (err: Error) => setMemberError(err.message),
   });
 
   /**
@@ -357,6 +406,16 @@ export default function TeamPage() {
           title="Team"
           hint="Members, roles, invitation links, and recent access activity."
         />
+        <Link
+          href="#agent-issues"
+          className="flex items-center gap-2 text-sm underline decoration-dotted underline-offset-2"
+          style={{ color: NOC.muted }}
+        >
+          Issues
+          <Pill tone={(issuesData?.count ?? 0) > 0 ? "terra" : "neutral"}>
+            {issuesData?.count ?? 0}
+          </Pill>
+        </Link>
         <Btn
           onClick={() => {
             setShowInviteForm(true);
@@ -632,6 +691,82 @@ export default function TeamPage() {
           </div>
         </div>
       )}
+
+      <section id="agent-issues" className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium" style={{ color: NOC.ink }}>Agent-reported issues</h2>
+            <p className="mt-1 text-xs" style={{ color: NOC.soft }}>
+              Open reports from the MCP and onboarding lanes. Acknowledge or resolve them after review.
+            </p>
+          </div>
+          <Pill tone={(issuesData?.count ?? 0) > 0 ? "terra" : "neutral"}>
+            {issuesData?.count ?? 0} open
+          </Pill>
+        </div>
+        {issuesError ? (
+          <p className="text-sm" style={{ color: NOC.terra }}>Failed to load agent issues.</p>
+        ) : issuesData?.reports.length ? (
+          <div className="overflow-hidden border" style={{ borderColor: NOC.rule }}>
+            <table className="w-full text-sm">
+              <thead className="text-left" style={{ background: NOC.fog, color: NOC.muted }}>
+                <tr>
+                  <th className="px-4 py-3 font-medium">Issue</th>
+                  <th className="px-4 py-3 font-medium">Severity</th>
+                  <th className="px-4 py-3 font-medium">Reported</th>
+                  <th className="px-4 py-3 font-medium sr-only">Actions</th>
+                </tr>
+              </thead>
+              <tbody style={{ background: NOC.paper }}>
+                {issuesData.reports.map((issue) => (
+                  <tr key={issue.id} style={{ borderTop: `1px solid ${NOC.rule}` }}>
+                    <td className="max-w-xl px-4 py-3" style={{ color: NOC.ink }}>
+                      <div className="font-medium">{issue.title}</div>
+                      <div className="mt-1 text-xs" style={{ color: NOC.soft }}>
+                        {issue.component} · {issue.body.slice(0, 180)}{issue.body.length > 180 ? "…" : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tone={issue.severity === "critical" || issue.severity === "high" ? "terra" : issue.severity === "medium" ? "info" : "neutral"}>
+                        {issue.severity}
+                      </Pill>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs" style={{ color: NOC.soft }}>
+                      {new Date(issue.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => issueMutation.mutate({ id: issue.id, action: "ack" })}
+                          disabled={issueMutation.isPending}
+                          className="text-sm underline disabled:opacity-50"
+                          style={{ color: NOC.muted }}
+                        >
+                          Acknowledge
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => issueMutation.mutate({ id: issue.id, action: "resolve" })}
+                          disabled={issueMutation.isPending}
+                          className="text-sm underline disabled:opacity-50"
+                          style={{ color: NOC.terra }}
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="border px-4 py-3 text-sm" style={{ borderColor: NOC.rule, color: NOC.soft }}>
+            No open agent issues.
+          </p>
+        )}
+      </section>
 
       {/* Pending invitations */}
       {invitesData && invitesData.invitations.length > 0 && (

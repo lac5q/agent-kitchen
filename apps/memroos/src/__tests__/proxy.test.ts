@@ -158,6 +158,34 @@ describe("proxy", () => {
     expect(await registerResponse.text()).toBe("");
   });
 
+  it("lets only POST agent reports reach route-local auth", async () => {
+    const postResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/agent-report", {
+        method: "POST",
+        headers: { host: "localhost:3002", "content-type": "application/json" },
+      })
+    );
+    const getResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/agent-report", {
+        method: "GET",
+        headers: { host: "localhost:3002" },
+      })
+    );
+    const patchResponse = await proxy(
+      new NextRequest("http://localhost:3002/api/agent-report/report-1", {
+        method: "PATCH",
+        headers: { host: "localhost:3002" },
+      })
+    );
+
+    expect(postResponse.status).toBe(200);
+    expect(await postResponse.text()).toBe("");
+    expect(getResponse.status).toBe(401);
+    expect(await getResponse.json()).toEqual({ error: "authentication required" });
+    expect(patchResponse.status).toBe(401);
+    expect(await patchResponse.json()).toEqual({ error: "authentication required" });
+  });
+
   it("rejects expired or malformed JWT credentials on protected API routes", async () => {
     const expired = await expiredAccessToken("reviewer-expired", "reviewer");
     const expiredResponse = await proxy(

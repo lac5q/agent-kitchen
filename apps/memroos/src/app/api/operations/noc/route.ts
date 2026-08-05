@@ -3,6 +3,7 @@ import { collectLocalFootprintInventory } from "@/lib/cloud-offload/footprint";
 import { getDb } from "@/lib/db";
 import { buildMemoryIterationSnapshot } from "@/lib/memory/doctor";
 import { listSecurityAttentionAuditLog } from "@/lib/store/audit";
+import { listOpenAgentIssueReports } from "@/lib/store/agent-issues";
 import {
   classifyScalar,
   metricEnvelope,
@@ -355,6 +356,37 @@ function buildAttention(db: ReturnType<typeof getDb>): AttentionResult {
       timestamp: row.lastFailureAt ?? row.updatedAt,
       target: null,
     })));
+  } catch {
+    sourceState = "stale_or_error";
+  }
+  try {
+    const issueReports = listOpenAgentIssueReports(db);
+    const urgentReports = issueReports.filter((report) => report.severity === "high" || report.severity === "critical");
+    items.push(...urgentReports.map((report) => ({
+      id: `agent-issue:${report.id}`,
+      severity: "critical" as const,
+      title: `Agent issue (${report.severity}): ${report.title}`,
+      detail: `${report.component}: ${report.body.slice(0, 240)}`,
+      timestamp: report.createdAt,
+      target: "/team#agent-issues",
+    })));
+
+    const routineReports = issueReports.filter((report) => report.severity === "medium" || report.severity === "low");
+    if (routineReports.length > 0) {
+      const counts = routineReports.reduce<Record<string, number>>((summary, report) => {
+        summary[report.severity] = (summary[report.severity] ?? 0) + 1;
+        return summary;
+      }, {});
+      const breakdown = Object.entries(counts).map(([severity, count]) => `${count} ${severity}`).join(", ");
+      items.push({
+        id: "agent-issues:aggregate",
+        severity: "warning",
+        title: `${routineReports.length} agent issue reports need attention`,
+        detail: breakdown,
+        timestamp: routineReports[0]?.createdAt ?? null,
+        target: "/team#agent-issues",
+      });
+    }
   } catch {
     sourceState = "stale_or_error";
   }

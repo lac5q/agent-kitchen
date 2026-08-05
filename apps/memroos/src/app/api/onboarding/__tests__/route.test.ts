@@ -383,8 +383,13 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
     expect(scriptResponse.status).toBe(200);
     const script = await scriptResponse.text();
     expect(script).toContain("TOKEN='");
+    expect(script).toContain("TOKEN_KID='");
     expect(script).toContain("MEMROOS_URL='https://memroos.example.test'");
     expect(script).toContain("curl -fsSL \"${MEMROOS_URL}/api/onboarding/register\"");
+    expect(script).toContain("report_onboarding_failure");
+    expect(script).toContain("%{http_code}");
+    expect(script).toContain("X-Memroos-Reporter: onboarding-script");
+    expect(script).toContain('"tokenKid": token_kid');
     expect(script).toContain("MCP_TARGET=\"${MEMROOS_MCP_TARGET:-auto}\"");
     expect(script).not.toContain("\\${");
     expect(script).toContain("MEMROOS_AGENT_ID");

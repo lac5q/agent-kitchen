@@ -12,6 +12,7 @@ from typing import Optional
 
 CORE_TOOLS = [
     "knowledge_health",
+    "report_issue",
     "knowledge_manifest",
     "knowledge_search",
     "knowledge_read",

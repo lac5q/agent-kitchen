@@ -1,0 +1,20 @@
+You are the VALIDATOR seat. Re-validation after your REJECT of BM-RUN 229-v1.
+
+Your findings and the fixes to verify in the UNSTAGED diff:
+1. RELEASE BLOCKER: POST /api/agent-report was blocked by the proxy JWT gate before
+   route-local auth. Fixed via a POST-only exemption in apps/memroos/src/proxy.ts with
+   route-auth-boundary coverage. Verify GET and PATCH stay behind the session gate.
+2. Rate limiting now runs BEFORE body parsing in the POST handler. Verify ordering.
+3. Missing tests were added: proxy-level exemption coverage, operator-session POST,
+   anonymous rejection outside the onboarding lane, payload caps, and the secret patterns.
+   Verify they test real behavior, not tautologies.
+
+Also confirm no regressions against .beastmode/worker-prompts/229-agent-issue-reporting.md.
+
+Director evidence: fast suite 3800 passed, typecheck clean, route-auth boundary 61/61,
+agent-report tests 9/9, proxy tests 46/46.
+
+END with exactly one line:
+VERDICT: PASS
+or
+VERDICT: REJECT - <one-line reason>

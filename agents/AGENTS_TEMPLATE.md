@@ -246,6 +246,14 @@ The `memroos-save` skill (canonical location: `lac5q/memroos/.agents/skills/memr
 - Hermes / OpenClaw: explicit `skill_view(name="memroos-save")`
 - Codex: load via `/skills`
 
+## Reporting problems to MemroOS
+
+When a MemroOS tool, authentication path, or service itself breaks, use the
+standing MCP `report_issue` channel with a concise title, reproduction details,
+severity, and component. Do not include credentials, bearer tokens, API keys,
+or raw secret-bearing responses. If MCP is unavailable, leave a secret-free
+Markdown report in `.health/bug-reports/` as the last resort.
+
 ## How To Update This Directive
 
 1. Edit `agents/AGENTS_TEMPLATE.md` in `lac5q/memroos`

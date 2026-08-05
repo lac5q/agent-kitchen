@@ -16,6 +16,10 @@ export const AUDIT_EVENT_TYPES = {
   AGENT_ESCALATED: "agent.escalated",
   /** Agent persisted a crash-resumable checkpoint with provenance receipts. */
   AGENT_CHECKPOINTED: "agent.checkpointed",
+  /** Operator acknowledged an agent-reported MemroOS issue. */
+  AGENT_ISSUE_ACKNOWLEDGED: "agent_issue.acknowledged",
+  /** Operator resolved an agent-reported MemroOS issue. */
+  AGENT_ISSUE_RESOLVED: "agent_issue.resolved",
 
   // SEAL proposal lifecycle
   /** Reflection generated a proposal. */
@@ -283,6 +287,8 @@ export const ENTITY_TYPES = {
   USER: "user",
   /** An onboarding URL/token mint diagnostic. */
   ONBOARDING: "onboarding",
+  /** An agent-reported MemroOS issue. */
+  AGENT_ISSUE_REPORT: "agent_issue_report",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

@@ -6,6 +6,7 @@ const SCRIPT = String.raw`#!/usr/bin/env bash
 set -euo pipefail
 
 TOKEN=__TOKEN__
+TOKEN_KID=__TOKEN_KID__
 MEMROOS_URL=__MEMROOS_URL__
 
 AGENT_ID=""
@@ -65,6 +66,42 @@ if [[ -z "$AGENT_ID" ]]; then
   AGENT_ID="$(slugify "$AGENT_NAME")"
 fi
 
+report_onboarding_failure() {
+  local step="$1"
+  local status="$2"
+  local detail="$3"
+  python3 - "$step" "$status" "$detail" "$AGENT_ID" "$PLATFORM" "$TOKEN_KID" "$TOKEN" <<'PY' |
+import json
+import re
+import sys
+
+step, status, detail, agent_id, platform, token_kid, token = sys.argv[1:]
+
+def scrub(value):
+    value = value.replace(token, "[redacted]") if token else value
+    for pattern in (
+        r"ak_[A-Za-z0-9_-]{20,}",
+        r"\bSG\.[A-Za-z0-9._-]{10,}",
+        r"(?i)Bearer\s+[A-Za-z0-9._~+/=-]{20,}",
+        r"\b[a-f0-9]{64}\b",
+    ):
+        value = re.sub(pattern, "[redacted]", value)
+    return value[:500]
+
+print(json.dumps({
+    "component": "onboarding",
+    "severity": "high",
+    "title": f"Onboarding {step} failed",
+    "body": f"step={step}; status={status}; agent={agent_id}; platform={platform}; error={scrub(detail)}",
+    "tokenKid": token_kid,
+}))
+PY
+    curl -fsS "\${MEMROOS_URL}/api/agent-report" \
+      -H 'Content-Type: application/json' \
+      -H 'X-Memroos-Reporter: onboarding-script' \
+      --data-binary @- >/dev/null 2>&1 || true
+}
+
 payload="$(python3 - "$TOKEN" "$AGENT_ID" "$AGENT_NAME" "$AGENT_ROLE" "$PLATFORM" "$PROTOCOL" "$LOCATION" <<'PY'
 import json
 import sys
@@ -83,9 +120,19 @@ print(json.dumps({
 PY
 )"
 
-response="$(curl -fsSL "\${MEMROOS_URL}/api/onboarding/register" \
+register_output=""
+register_exit=0
+register_output="$(curl -fsSL "\${MEMROOS_URL}/api/onboarding/register" -w '\n%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d "$payload")"
+  -d "$payload" 2>&1)" || register_exit=$?
+register_status="\${register_output##*$'\n'}"
+register_body="\${register_output%$'\n'$register_status}"
+if [[ "$register_exit" -ne 0 || ! "$register_status" =~ ^2[0-9][0-9]$ ]]; then
+  report_onboarding_failure "registration" "\${register_status:-000}" "$register_body"
+  echo "MemroOS onboarding registration failed (HTTP \${register_status:-000})" >&2
+  exit 1
+fi
+response="$register_body"
 
 mkdir -p "$HOME/.memroos"
 chmod 700 "$HOME/.memroos"
@@ -430,10 +477,9 @@ export async function GET(request: Request) {
   }
 
   return new Response(
-    SCRIPT.replace("__TOKEN__", shellQuote(token)).replace(
-      "__MEMROOS_URL__",
-      shellQuote(verified.payload.memroosUrl)
-    ),
+    SCRIPT.replace("__TOKEN__", shellQuote(token))
+      .replace("__TOKEN_KID__", shellQuote(verified.payload.kid ?? ""))
+      .replace("__MEMROOS_URL__", shellQuote(verified.payload.memroosUrl)),
     { headers: { "content-type": "text/x-shellscript; charset=utf-8" } }
   );
 }
