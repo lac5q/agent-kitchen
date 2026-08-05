@@ -7,7 +7,29 @@ the defense-in-depth layer for privileged APIs.
 ## Reviewed Baseline
 
 - Reviewed Next.js dependency: `^16.2.7`
-- Reviewed proxy sha256: `1b17e771abc0c90aaf17b63885d10b3ec3cfba88802cfb374a28cfd2077a73c8`
+- Reviewed proxy sha256: `d819657727102112420e500aab1aed45d43a90ad6bff3a352721a02e03aca901`
+
+  Re-attested 2026-08-05. Change (PR #6, Phase 229): added
+  `{ method: "POST", pattern: /^\/api\/agent-report$/ }` to
+  `ROUTE_LOCAL_AUTH_API_ROUTES`, so that one route authenticates itself
+  instead of being session-gated by the proxy.
+
+  Reviewed against the handler. `POST /api/agent-report` accepts four
+  principals: an agent API key, an MCP OAuth bearer, an operator session
+  carrying `agent-reports:manage`, and — deliberately — one unauthenticated
+  lane for the onboarding script, which has no credentials yet by
+  construction. That lane is narrow: it is refused outright if any
+  `authorization` header is present, requires `component === "onboarding"`,
+  requires `tokenKid` to match `^[0-9a-f]{8}$`, and is rate-limited and
+  size-capped like every other path.
+
+  **Residual risk, accepted:** `tokenKid` is format-checked, not signature-
+  verified, so an anonymous caller who knows the request shape can write
+  onboarding-component rows. The exposure is bounded to inserting rows in
+  `agent_issue_reports` behind the rate limiter — it grants no read access,
+  and the proxy pattern is anchored to `POST` on the collection, so `GET`
+  and `PATCH` (including `/api/agent-report/[id]`) remain session-gated.
+  Worth revisiting if these reports ever feed an automated action.
 
   Re-attested 2026-08-01. Change (commit `813519b9`): added a rule 1c
   bypass for `/.well-known/*`, ahead of the login-redirect fallback.

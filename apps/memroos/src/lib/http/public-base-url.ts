@@ -1,7 +1,5 @@
-import type Database from "better-sqlite3";
 import { AUDIT_EVENT_TYPES, ENTITY_TYPES } from "@/lib/audit/event-types";
-import { writeAuditEntry } from "@/lib/audit/write";
-import { getDb } from "@/lib/db";
+import { writeAuditEntry, type AuditDb } from "@/lib/audit/write";
 
 export type PublicMemroosUrlSource = "env" | "forwarded-host" | "request-origin";
 
@@ -60,7 +58,7 @@ export function resolvePublicMemroosUrl(request: Request): string {
  */
 export function recordOnboardingBaseUrlFallback(
   resolution: PublicMemroosUrlResolution,
-  db?: Database.Database
+  db?: AuditDb
 ): void {
   if (process.env.NODE_ENV !== "production" || resolution.source === "env") return;
 
@@ -88,7 +86,7 @@ export function recordOnboardingBaseUrlFallback(
           fallback_url: resolution.url,
         },
       },
-      db ?? getDb()
+      db
     );
   } catch (error) {
     // A diagnostic receipt must not turn an otherwise valid onboarding mint

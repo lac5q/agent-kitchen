@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { authenticateAgentHeaders } from "@/lib/agent/registry";
 import { resolveAccessToken } from "@/lib/auth/mcp-oauth-store";
 import { authenticateUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/auth/middleware-roles";
+import { CAPABILITY, requireCapability } from "@/lib/auth/capabilities";
 import { checkScopedRateLimit, getRateLimitIp } from "@/lib/auth/rate-limit";
 import { getDb } from "@/lib/db";
 import {
@@ -102,7 +102,7 @@ async function authenticateReportPrincipal(
 
   const session = await authenticateUser(request);
   if (!session) return null;
-  const roleError = requireRole(session.role, "operator");
+  const roleError = requireCapability(session, CAPABILITY.AGENT_REPORTS_MANAGE);
   if (roleError) return null;
   return {
     reporterKind: "oauth",
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const session = await authenticateUser(request);
   if (!session) return Response.json({ ok: false, error: "authentication required" }, { status: 401 });
-  const roleError = requireRole(session.role, "operator");
+  const roleError = requireCapability(session, CAPABILITY.AGENT_REPORTS_MANAGE);
   if (roleError) return roleError;
 
   const params = (request.nextUrl ?? new URL(request.url)).searchParams;

@@ -9,6 +9,7 @@ export const CAPABILITY = {
   AGENTS_READ: 'agents:read',
   AGENTS_REGISTER: 'agents:register',
   AGENTS_MANAGE: 'agents:manage',
+  AGENT_REPORTS_MANAGE: 'agent-reports:manage',
   AUDIT_READ: 'audit:read',
   AUDIT_EXPORT: 'audit:export',
   AUTH_CAPABILITIES: 'auth:capabilities',
@@ -45,6 +46,7 @@ export const CAPABILITIES = [
   CAPABILITY.AGENTS_READ,
   CAPABILITY.AGENTS_REGISTER,
   CAPABILITY.AGENTS_MANAGE,
+  CAPABILITY.AGENT_REPORTS_MANAGE,
   CAPABILITY.AUDIT_READ,
   CAPABILITY.AUDIT_EXPORT,
   CAPABILITY.AUTH_CAPABILITIES,
@@ -105,6 +107,10 @@ const REVIEWER_CAPABILITIES: readonly Capability[] = [
 
 const OPERATOR_CAPABILITIES: readonly Capability[] = [
   CAPABILITY.AGENTS_REGISTER,
+  // Phase 229's agent issue reports were gated at the operator rank. Placing the
+  // capability here keeps that exact reach — AGENTS_MANAGE is admin-only and
+  // would have silently locked operators out.
+  CAPABILITY.AGENT_REPORTS_MANAGE,
   CAPABILITY.AUDIT_EXPORT,
   CAPABILITY.BELIEFS_REVIEW,
   CAPABILITY.DISPATCH_RUN,
