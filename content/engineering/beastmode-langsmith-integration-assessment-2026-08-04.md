@@ -281,3 +281,8 @@ The repository intentionally does not invent these environment-specific helpers.
 ## 1Password recovery update — 2026-08-05
 
 The interactive attempt on maeve-u1 confirmed that account shorthand `my` is configured as a 1Password `SERVICE_ACCOUNT` with integration ID `A7RNGIAJ3ZECVGGGDTV7SXGMEM`, but its account key has length 0. `op signin --account my` therefore fails with `invalid account key format length 0`; this is not a LangSmith credential failure. Recovery requires either a newly issued/valid service-account token for that integration (entered locally on maeve-u1, never sent in chat) or replacing the dead service-account account entry with an authenticated personal 1Password account. The stale auto-export block was commented out of `.bashrc` after backup at `~/.bashrc.bak-beastmode-langsmith-20260805`.
+
+
+## Credential handling incident — 2026-08-05
+
+A metadata-only remote diagnostic was malformed and emitted the 1Password service-account token in tool output. The token was not a LangSmith key, but it must be treated as compromised. The token file was immediately moved on maeve-u1 from `~/.op/service_account_token` to the recoverable quarantine path `~/.op/service_account_token.compromised-20260805` (mode 600), and the token must be revoked/rotated in 1Password before continuing. The LangSmith SDK check also returned HTTP 403, so the stored LangSmith credential should be replaced/verified after the 1Password service account is rotated. No LangSmith key value was printed.
