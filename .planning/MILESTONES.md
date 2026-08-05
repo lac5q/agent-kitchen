@@ -2,6 +2,26 @@
 
 This file tracks the current high-level product milestone state. Detailed requirement traceability lives in `.planning/REQUIREMENTS.md`; full phase-level history lives in `.planning/ROADMAP.md`.
 
+## Planned: v8.39 Observability-Gated Memory Engine Modernization (Added 2026-08-04)
+
+**Scope and order:**
+
+1. Phase 228 first: add an optional, sanitized LangChain/LangGraph → LangSmith tracing bridge for GSD runs, Beastmode child receipts, agents, tools, retrieval, memory writes, and evals. MemroOS receipts remain authoritative and trace failure never affects work or gates.
+2. Stabilize the current Mem0 contract, add a governed Hindsight adapter in dual-write/shadow-read mode, and run an identical-model bake-off before changing production answers.
+3. Consolidate MemroOS retrieval into Recall v2: authorized parallel BM25/ANN/graph/temporal candidates, fusion, cross-encoder rerank, dedupe, token-budget packing, and end-to-end receipts.
+4. Add temporal/evidence facts, a semantic entity graph, governed observations, Hindsight-style living briefs, and reusable memory profiles without replacing MemroOS governance or knowledge planes.
+5. Complete reproducible external and operational evals; require an explicit promotion/rollback decision before any engine becomes default.
+
+**Phases:** 228–235.
+
+**Requirements:** LANGTRACE-01..12, MEMENG-01..06, RECALLV2-01..08, TEMPFACT-01..07, SEMGRAPH-01..07, OBSLEARN-01..07, LIVING-01..09, MEMEVAL-01..08.
+
+**Full roadmap:** `.planning/milestones/v8.39-observability-gated-memory-engine-ROADMAP.md`.
+
+**Source research:** MemroOS knowledge `content/research/memroos-vs-hindsight-mem0-cognee-2026-08-04.md`; Beastmode LangSmith branch commit `661e0e0`.
+
+---
+
 ## Planned: v8.31 Operator Config Durability + Storage Consolidation (Added 2026-07-26)
 
 **Scope:**

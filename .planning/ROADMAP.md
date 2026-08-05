@@ -80,6 +80,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - ✅ **v8.36 Public / Private Repository Split** — Phases 214-219 (added 2026-07-31, renumbered 2026-08-02; REPOSPLIT-01..23; **shipped 2026-08-01**). `origin` is now the private `lac5q/memroos-product`; `lac5q/memroos` stays public as directed. Public-history secret scan completed 2026-08-01 (gitleaks, 1,454 commits): 25 findings, **none a live credential** — the one real-shaped GitHub PAT verifies as revoked, the golden-sets hits are synthetic eval content, and the three `healthcheck.sh` values are history-only. Every finding hash-compared against live production secrets: no match. Residual: a CI assertion on repo visibility (Phase 219) is still missing. Full roadmap: `.planning/milestones/v8.36-repo-split-ROADMAP.md`
 - 🔄 **v8.33 Ledger + Dashboard Data Honesty** — Phases 204-205 (added 2026-07-31 from the operator dashboard-accuracy session; LEDGHON-01..05 Ledger RTK removal + model-usage double-count guard + workflow map render fix in progress on working tree; KNOWPROV-01..05 oracle knowledge/skills point-and-index provisioning planned, operator-gated)
 - 📋 **v8.38 Onboarding Rescue + Agent Issue Reporting** — Phases 228-229 (added 2026-08-04 from the Eric/cordant onboarding failure RCA; ONBRESCUE-01..05 make onboarding failures impossible-or-diagnosable — instance name from config not hardcoded "(Cordant)", mint-time URL validation, signing-key-id diagnostics on 403, required prod env assertions, cross-host verify script; AGENTREPORT-01..05 an always-available agent→MemRoOS issue-reporting channel that works even when agent-key provisioning failed — operator request 2026-08-04 after the diagnosing agent had to file bug reports by committing markdown into the server checkout because every reporting surface was locked behind the missing key)
+- 📋 **v8.39 Observability-Gated Memory Engine Modernization** — Phases 230-237 (added 2026-08-04 from the Hindsight/Mem0/Cognee comparison plus the operator's LangSmith request; LANGTRACE-01..12, MEMENG-01..06, RECALLV2-01..08, TEMPFACT-01..07, SEMGRAPH-01..07, OBSLEARN-01..07, LIVING-01..09, MEMEVAL-01..08). **Hard ordering: Phase 230 LangChain/LangGraph → LangSmith agent tracing completes first; no memory-engine phase starts without the trace baseline.** Then stabilize Mem0, add a governed Hindsight shadow adapter, ship unified hybrid Recall v2, temporal evidence facts, a semantic entity graph, governed observations, living briefs/profiles, and equal-model promotion proof. Full roadmap: `.planning/milestones/v8.39-observability-gated-memory-engine-ROADMAP.md`
 
 ## Phases
 
@@ -3773,3 +3774,29 @@ and the app image built. **Operator-gated remainder** (permission classifier blo
 credential-file writes and oracle restarts): oracle `.env` base-URL fix + `MEMROOS_ONBOARDING_SECRET`
 on both hosts + oracle `./scripts/memroos-restart.sh` + cordant MCP-service `MEMROOS_AGENT_API_KEY`
 provisioning; exact commands in STATE.md "Latest Position".
+## v8.39 Observability-Gated Memory Engine Modernization (Phases 230–237) — PLANNED (2026-08-04)
+
+*Sources: operator request 2026-08-04; MemroOS knowledge artifact `content/research/memroos-vs-hindsight-mem0-cognee-2026-08-04.md`; Beastmode `feat/beastmode-langsmith` commit `661e0e0`; official LangSmith tracing/privacy/distributed-context documentation.*
+
+**Sequence lock:** Phase 228 is a prerequisite for every later phase. LangSmith
+is an optional, sanitized observability/evaluation sink and never the source of
+truth or a policy/provenance/release authority.
+
+| Phase | Name | Status | Core deliverable |
+|---|---|---|---|
+| 228 | LangSmith Agent Tracing Bridge | Planned — prerequisite | Trace GSD/LangGraph/Beastmode agents, tools, recall, memory writes, and evals with distributed IDs, redaction, offline receipts, NOC links, and fail-open export |
+| 229 | Memory Substrate Stabilization + Hindsight Shadow Lane | Blocked by 228 | Exact Mem0 capability contract, engine-neutral adapter, Hindsight dual-write/shadow-read, and equal-model bake-off |
+| 230 | Unified Recall v2 | Blocked by 228/229 | Authorized parallel BM25/ANN/graph/temporal retrieval, RRF/calibrated fusion, rerank, dedupe, token-budget context, and complete receipts |
+| 231 | Temporal Evidence Facts + Reversible Truth Lifecycle | Blocked by 228/229 | Valid-time fact schema, evidence, contradiction/supersession/causal edges, temporal intent, and reversible curation |
+| 232 | Semantic Entity Graph | Blocked by 228/231 | Canonical entities/aliases, typed time-aware provenance edges, governed ontologies, and bounded expansion into Recall v2 |
+| 233 | Governed Observations + Consolidation | Blocked by 228/231 | One async evidence-backed consolidation hierarchy with policy inheritance, revisions, replay safety, and recomputation receipts |
+| 234 | Living Briefs + Memory Profiles | Blocked by 233 | Named query-defined cached understanding, full/delta refresh, stable/operator sections, history, and reusable governed memory lenses |
+| 235 | Standardized External Evaluation + Promotion Gate | Spans 229–234 | Reproducible LoCoMo/LongMemEval/BEAM subset plus operational policy/lifecycle tests and explicit default-engine go/no-go |
+
+**Locked:** MemroOS continues to own capture, labels, policy, tenant scope,
+raw-vault lineage, audit, source knowledge/freshness, legal hold/erasure, agent
+identity, GSD state, and skill promotion. No vendor benchmark or hosted trace
+authorizes a backend switch.
+
+Full requirements and acceptance criteria:
+`.planning/milestones/v8.39-observability-gated-memory-engine-ROADMAP.md`.
