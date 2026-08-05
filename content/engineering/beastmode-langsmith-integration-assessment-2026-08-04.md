@@ -276,3 +276,8 @@ The repository intentionally does not invent these environment-specific helpers.
 - Credential binding remains blocked: the `my.1password.com` account is configured on maeve-u1 but has no active session. The Windows-side 1Password integration has a deleted service-account token and the desktop app was unavailable. No secret was read, printed, copied, or stored.
 - `main-mac` is online at its Tailscale peer address, with its known host key already verified, but rejected the available `lac5q` SSH identities. No Mac changes were made.
 - Completion condition: unlock/sign in to 1Password on maeve-u1 (or restore an approved service account) and authorize an SSH identity on main-mac; then create an `op://`-backed LangSmith env file and validate `Client().list_projects(limit=1)` plus Studio tracing.
+
+
+## 1Password recovery update — 2026-08-05
+
+The interactive attempt on maeve-u1 confirmed that account shorthand `my` is configured as a 1Password `SERVICE_ACCOUNT` with integration ID `A7RNGIAJ3ZECVGGGDTV7SXGMEM`, but its account key has length 0. `op signin --account my` therefore fails with `invalid account key format length 0`; this is not a LangSmith credential failure. Recovery requires either a newly issued/valid service-account token for that integration (entered locally on maeve-u1, never sent in chat) or replacing the dead service-account account entry with an authenticated personal 1Password account. The stale auto-export block was commented out of `.bashrc` after backup at `~/.bashrc.bak-beastmode-langsmith-20260805`.
