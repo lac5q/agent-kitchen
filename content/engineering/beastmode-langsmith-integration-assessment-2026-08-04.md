@@ -126,3 +126,10 @@ Therefore, do not treat `langgraph deploy` as the immediate next step. First add
 - Trusted Beastmode workers remain in isolated execution infrastructure with repository access and parent-owned model attestation.
 - Distributed trace context or reconstructed receipt spans connect worker visibility back to the control-plane trace.
 - Offline provenance remains authoritative even when LangSmith is unavailable.
+
+
+## Concurrency addendum — 2026-08-04
+
+During the audit, the current `main` worktree changed materially without this session editing it. The final observed status contained 53 entries: 49 modified paths and 4 untracked paths. Newly overlapping paths include the LangGraph adapter, observability reference, Python README, pipeline/runtime tests, and packaging files.
+
+This indicates that another session or process is actively changing the same checkout. Treat the earlier small dirty-file count as a point-in-time observation, not the current count. Do not cherry-pick, merge, resolve conflicts, commit, or remove the feature worktree until the active writer is identified or the checkout stabilizes. Re-run `git status --short`, `git diff --stat`, and the branch comparison immediately before integration.
