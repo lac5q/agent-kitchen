@@ -79,6 +79,7 @@ Refactor until you are happy with the architecture. After each significant step,
 - 🔄 **v8.35 Human-Accountable Agent Identity** — Phases 206-213 (added 2026-07-31, renumbered 2026-08-02; HAIA-01..36). Three governing principles: (P1) every agent has a human responsible; (P2) an agent's access is a subset of its owner's; (P3) clearance is granted per-agent and **never inherited**, because agents read untrusted text and are prompt-injectable. **Delivery log inside the file records what actually landed:** 206/207 shipped (FK enforcement live, Google OIDC live on both hosts), 211 shipped in a different form as the MCP OAuth authorization server, 212 superseded once the MCP-OAuth spike answered yes, 213 partial. **208/209/210 not started** — and that is the half the principles describe. Full roadmap: `.planning/milestones/v8.35-human-accountable-agent-identity-ROADMAP.md`
 - ✅ **v8.36 Public / Private Repository Split** — Phases 214-219 (added 2026-07-31, renumbered 2026-08-02; REPOSPLIT-01..23; **shipped 2026-08-01**). `origin` is now the private `lac5q/memroos-product`; `lac5q/memroos` stays public as directed. Public-history secret scan completed 2026-08-01 (gitleaks, 1,454 commits): 25 findings, **none a live credential** — the one real-shaped GitHub PAT verifies as revoked, the golden-sets hits are synthetic eval content, and the three `healthcheck.sh` values are history-only. Every finding hash-compared against live production secrets: no match. Residual: a CI assertion on repo visibility (Phase 219) is still missing. Full roadmap: `.planning/milestones/v8.36-repo-split-ROADMAP.md`
 - 🔄 **v8.33 Ledger + Dashboard Data Honesty** — Phases 204-205 (added 2026-07-31 from the operator dashboard-accuracy session; LEDGHON-01..05 Ledger RTK removal + model-usage double-count guard + workflow map render fix in progress on working tree; KNOWPROV-01..05 oracle knowledge/skills point-and-index provisioning planned, operator-gated)
+- 📋 **v8.38 Onboarding Rescue + Agent Issue Reporting** — Phases 228-229 (added 2026-08-04 from the Eric/cordant onboarding failure RCA; ONBRESCUE-01..05 make onboarding failures impossible-or-diagnosable — instance name from config not hardcoded "(Cordant)", mint-time URL validation, signing-key-id diagnostics on 403, required prod env assertions, cross-host verify script; AGENTREPORT-01..05 an always-available agent→MemRoOS issue-reporting channel that works even when agent-key provisioning failed — operator request 2026-08-04 after the diagnosing agent had to file bug reports by committing markdown into the server checkout because every reporting surface was locked behind the missing key)
 
 ## Phases
 
@@ -3345,8 +3346,8 @@ update both or fold the TS lib onto the script's parser.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 188. Data-Access Chokepoint | 0/1 | Planned (architecture review 2026-07-24, F4) | — |
-| 189. lib/ Boundary Normalization | 0/1 | Planned (architecture review 2026-07-24, F5) | — |
+| 188. Data-Access Chokepoint | 1/1 | Complete — governed store chokepoint on main (`daf8e92a`, ratchet 116→113); Phase 193 access moved behind it (`f9815bba`) | 2026-08-04 |
+| 189. lib/ Boundary Normalization | 1/1 | Complete — lib/ consolidation on main (`daf8e92a`, ratchet 75→53) | 2026-08-04 |
 | 190. Client Barrel Split | 0/1 | Planned (architecture review 2026-07-24, F6) | — |
 
 ## v8.30 Seamless Memory Adoption (Phases 191-195) — PLANNED (2026-07-26)
@@ -3431,10 +3432,10 @@ update both or fold the TS lib onto the script's parser.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 191. Prior-Work Probe | 0/1 | Planned (operator session 2026-07-26) | — |
-| 192. Session Hooks + Agent Self-Capture | 0/1 | Planned (operator session 2026-07-26) | — |
-| 193. Storage Quality Gate + Auto-Promotion | 0/1 | Planned (operator session 2026-07-26) | — |
-| 194. Habit Layer: Skills + Bootstrap Fix | 0/1 | Planned (operator session 2026-07-26) | — |
+| 191. Prior-Work Probe | 1/1 | Complete — PRIORWORK-01..05 on main (`9b52fc1b`) | 2026-08-04 |
+| 192. Session Hooks + Agent Self-Capture | 1/1 | Complete — SELFCAP-01..05 on main (`e7a8d06c`) | 2026-08-04 |
+| 193. Storage Quality Gate + Auto-Promotion | 1/1 | Complete — SAVEQ-01..05 on main (`a770a616`); async write path fixes the 104s mem0 inline-extraction stall; store access re-gated by `f9815bba` | 2026-08-04 |
+| 194. Habit Layer: Skills + Bootstrap Fix | 1/1 | Complete — MEMHABIT-01..05 on main (`cfe56014`, `f0a88d76`) | 2026-08-04 |
 | 195. Adoption Telemetry + GSD Gates | 0/1 | Planned (operator session 2026-07-26) | — |
 
 **Plans** (all written 2026-07-26; each carries its own audited baseline, design contract, implementation steps, verification list, and risks):
@@ -3699,3 +3700,76 @@ Type=simple, `/health`) and running.
 |-------|----------------|--------|-----------|
 | 204. Ledger Honesty + RTK Removal + Workflow Render | 1/1 | Deployed oracle-1 + live-verified; durable token shipper (`ship-claude-token-usage.mjs` + launchd 30-min timer) feeds token_ledger with explicit input/output split | 2026-07-31 |
 | 205. Knowledge Vault Point-and-Index Provisioning | 1/1 | Deployed oracle-1 + live-verified: mem0→Qdrant Cloud (1436 memories), agent-knowledge clone + 6h pull timer, collections.config.json mounted, SKILLS_PATH (350 skills), knowledge-mcp running with /health | 2026-07-31 |
+
+## v8.38 Onboarding Rescue + Agent Issue Reporting (Phases 228-229) — PLANNED (2026-08-04)
+
+*Added: 2026-08-04 · Source: Eric/cordant onboarding failure RCA (invite emails Aug 1-4 + agent
+`adc486a5-claude` diagnostics committed on cordant-hermes-01: `.health/e2e-adc486a5-claude-report.md`,
+`.health/bug-reports/BUG-2026-08-04-agent-key-and-mem0-timeout.md`) + operator directive same day.*
+
+**Why:** Onboarding Eric onto `memroos-cordant` failed four ways at once, and every failure was
+invisible or misattributed until a human forwarded emails:
+
+1. **Wrong-brain invites.** Aug 2-3 invites said "MemRoOS (Cordant)" but linked to
+   `memroos.epiloguecapital.com` — the string "(Cordant)" is **hardcoded** in
+   `lib/email/invite-email-draft.ts`, so invites minted from any brain claim to be Cordant.
+   oracle-1's `.env` had `MEMROOS_PUBLIC_BASE_URL=http://localhost:3000`, so links fell back to
+   forwarded-host resolution.
+2. **Corrupt onboarding token → 403 "Invalid onboarding token signature".** The decoded payload
+   carried a mangled/doubled mcpUrl host. Nothing validates the URL at mint time, and the 403
+   cannot say *which* signing key the server expected, so cross-brain tokens and key rotation are
+   indistinguishable from tampering.
+3. **`missing_agent_key` lockout.** Because bootstrap failed, `MEMROOS_AGENT_API_KEY` was never
+   provisioned — which locked the agent out of `agent_memory_save`, `agent_context_send`/`inbox`,
+   and `agent_tool_outcome_record`. **The channels for reporting a failure were themselves casualties
+   of the failure.** The diagnosing agent resorted to `git commit`ing bug reports into the server
+   checkout — the only write path left standing.
+4. **mem0 write timeout** (fixed by Phase 193's async write path; was still undeployed on both hosts).
+
+**Operator directive (2026-08-04):** "we need a way for agents to report back to memroos when any
+problems occur … make sure there's an active communication channel for any issues."
+
+### Phase 228 — Onboarding Rescue: fail-proof or fail-diagnosable
+
+**Requirements:** ONBRESCUE-01..05
+
+| ID | Criterion |
+|----|-----------|
+| ONBRESCUE-01 | Invite email workspace name comes from instance config (`MEMROOS_WORKSPACE_NAME`, fallback: hostname of `MEMROOS_PUBLIC_BASE_URL`), never hardcoded. An invite minted on oracle-1 can no longer claim to be Cordant. |
+| ONBRESCUE-02 | Mint-time URL validation: `createAgentOnboardingToken` rejects `memroosUrl`/`mcpUrl` that fail URL parsing, contain commas/whitespace/doubled hosts, or are non-https for non-localhost. A corrupt token can no longer be minted. |
+| ONBRESCUE-03 | Signing-key diagnostics: tokens carry a non-secret `kid` (first 8 hex of SHA-256 of the signing secret); signature-failure 403s report token `kid` vs server `kid` so "wrong brain" / "rotated key" / "tampered" are distinguishable at a glance. |
+| ONBRESCUE-04 | `scripts/verify-onboarding-deploy.sh` covers both production hosts (oracle + cordant) and asserts the signing-secret configuration (explicit `MEMROOS_ONBOARDING_SECRET` present) with a clear warning when signatures ride the rotatable operator key. |
+| ONBRESCUE-05 | Production boot assertion: when `NODE_ENV=production` and `MEMROOS_PUBLIC_BASE_URL` is unset or localhost, minting invite/bootstrap tokens emits a loud warning receipt (NOC Attention item) naming the fallback used — the oracle-1 failure mode can no longer be silent. |
+
+### Phase 229 — Agent Issue Reporting: the channel that survives failure
+
+**Requirements:** AGENTREPORT-01..05
+
+**Design constraint (from the RCA):** the reporting path must ride the *weakest* surviving
+credential, not the strongest. Eric's agent had a working OAuth MCP session (`knowledge_write`
+worked) while every agent-key surface was down. Report intake therefore accepts agent key **or**
+MCP OAuth session identity, and the onboarding script itself reports its own failures.
+
+| ID | Criterion |
+|----|-----------|
+| AGENTREPORT-01 | `agent_issue_reports` table + `POST /api/agent-report`: accepts agent-key auth **or** MCP-OAuth-session auth; rate-limited per principal; size-capped; rejects bodies containing raw credentials (`ak_`, bearer tokens, `SG.` keys) with a coach-back — the WAF lesson enforced server-side. |
+| AGENTREPORT-02 | MCP tool `report_issue` in `CORE_TOOLS`, honest tool description ("report a problem with MemRoOS itself — works even when other agent surfaces are down"); never gated on `MEMROOS_AGENT_API_KEY`. |
+| AGENTREPORT-03 | Reports surface as NOC Attention items and a Team-page badge with ack/resolve transitions, each writing an audit row; open reports are queryable by severity/component. |
+| AGENTREPORT-04 | The onboarding bootstrap script self-reports: on any 4xx/5xx it POSTs a structured, secret-free failure report (step, HTTP status, error body, platform, `kid` from ONBRESCUE-03) to `/api/agent-report` on the same host — failed onboarding becomes server-side visible without a human forwarding emails. |
+| AGENTREPORT-05 | The agent-facing contract (AGENTS.md template §, `knowledge_system_orientation` prompt, memroos-troubleshooter skill) names `report_issue` as the standing channel; `.health/bug-reports/` git-commit fallback documented as last resort only. |
+
+### Progress Table (v8.38 Onboarding Rescue + Agent Issue Reporting)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 228. Onboarding Rescue | 0/1 | Planned (RCA 2026-08-04) | — |
+| 229. Agent Issue Reporting | 0/1 | Planned (operator directive 2026-08-04) | — |
+
+**Ops fixes already executed 2026-08-04 (director-inline, outside these phases):** cordant-hermes-01
+deployed to latest main (Phase 193 async mem0 write + PR #5 health-check fix live; bad-token 403
+verified; MCP HTTP service restarted; agent diagnostic commits preserved by rebase). oracle-1 pulled
+to latest main (health-check email spam stopped — the fixed check runs from the checkout via cron)
+and the app image built. **Operator-gated remainder** (permission classifier blocked remote
+credential-file writes and oracle restarts): oracle `.env` base-URL fix + `MEMROOS_ONBOARDING_SECRET`
+on both hosts + oracle `./scripts/memroos-restart.sh` + cordant MCP-service `MEMROOS_AGENT_API_KEY`
+provisioning; exact commands in STATE.md "Latest Position".

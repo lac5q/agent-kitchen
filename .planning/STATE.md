@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.37 / v8.35 / v8.29 / v8.30
-milestone_name: Ownership + Security + Structural Debt + Memory Adoption (beastmode run 2026-08-03/04)
+milestone: v8.38 / v8.35 / v8.29 / v8.30
+milestone_name: Onboarding Rescue + remaining phase burn-down (goal run 2026-08-04)
 status: active
-stopped_at: "Phases 227/226/225/223/219/208 deployed live to oracle-1 + cordant-hermes-01 (merge a33191dd). v8.29 188-189, v8.30 191, and the MCP OAuth error page are on PR #4 awaiting merge+deploy. 210b-1 in progress. Remaining: v8.30 192-195, 210b-2/3/4, Phase 190, Phase 209 crit-3, and the credential-gated 175/176."
-last_updated: "2026-08-04T06:20:00Z"
+stopped_at: "Eric/cordant onboarding RCA complete; cordant deployed to latest main + verified; oracle pulled (health-email spam stopped) with restart operator-gated. v8.30 191-194 and v8.29 188-189 confirmed merged to main. Remaining code: 195, 190, 210b-2/3/4, 209 crit-3, new 228/229 (v8.38), credential-gated 175/176."
+last_updated: "2026-08-04T22:15:00Z"
 progress:
   total_phases: 124
   completed_phases: 97
@@ -12,6 +12,78 @@ progress:
   completed_plans: 157
   percent: 78
 ---
+
+## Resume Point (2026-08-04 goal run, paused for merge+deploy)
+
+**Merged/shipping this branch (`claude/gsd-roadmap-onboarding-3889e0`):** v8.38 Phase 228
+(ONBRESCUE-01..05) and Phase 229 (AGENTREPORT-01..05), both through the full
+executor→validator→fix→re-validate loop with codex gpt-5.6-luna (max) executor and
+gpt-5.6-sol (high) validator. Sol caught a real P1 shell-injection in 228 and the proxy
+route-local-auth release blocker in 229; both fixed and re-validated PASS. Plus the GitNexus
+"index every repo" directive and the beastmode child-liveness skill upgrade. Fast suite 3800,
+slow suite 38/38, typecheck + route-auth-boundary + sqlite-allowlist green. Claude
+security-review: no exploitable findings.
+
+**REMAINING GSD phases (worker prompts already staged under `.beastmode/worker-prompts/`,
+resume by re-running the beastmode loop in phase order):**
+1. `209-crit3-fail-closed.md` — unowned agents fail closed inside `authenticateAgentKey`
+   (58-call-site blast radius; highest risk; run full suite, not targeted).
+2. `210b-2-clearance-store.md` — clearance columns + lattice; knowledge-mcp reads stored
+   clearance instead of self-asserted `MEMROOS_AGENT_ROLE`.
+3. `210b-3-intersection-granting.md` — P2 intersection + P3 granting rules with expiry;
+   non-vacuous tests.
+4. `210b-4-requireCapability-migration.md` — migrate proxy.ts + top routes to
+   `requireCapability`; ratchet gate `check:role-rank-callsites`.
+5. `195-adoption-telemetry.md` — NOC adoption panel + GSD memory-receipt CI gate
+   (producer-verify FIRST per the plan's hard gate).
+6. `190-client-barrel-split.md` — mechanical api-client barrel split + bundle measurement.
+
+**Loop mechanics learned this run (now in the beastmode skill):** dispatch codex as
+`codex exec --model <m> ... "Read the file <path> and follow it exactly. BM-RUN: <id>"`
+(long inline prompts hang at startup 4/4; file-pointer 8/8 fine); arm a bounded startup probe
+per dispatch grepping `~/.codex/sessions/.../` for the BM-RUN marker; judge liveness by CPU +
+rollout growth, never wall-clock; never `pkill -f <pattern>` where the pattern is in your own
+command line (self-kill, exit 144).
+
+**Excluded (unchanged):** 175/176 credential-gated, 126-127 IdP/MDM, Voyage/166.
+
+## Latest Position (2026-08-04 goal run) — Eric onboarding RCA + fixes + v8.38 added
+
+**RCA (evidence: invite emails Aug 1-4 to luis.calderon@gmail.com; agent `adc486a5-claude`
+diagnostics committed on cordant: `.health/e2e-adc486a5-claude-report.md` + `.health/bug-reports/
+BUG-2026-08-04-agent-key-and-mem0-timeout.md`):** four stacked failures — (1) wrong-brain invites:
+"(Cordant)" is hardcoded in `invite-email-draft.ts` while oracle-1 ran with
+`MEMROOS_PUBLIC_BASE_URL=http://localhost:3000`, so oracle-minted invites claimed to be Cordant;
+(2) corrupt onboarding token (mangled/doubled mcpUrl) → 403 signature rejection with no key-id
+diagnostics; (3) `MEMROOS_AGENT_API_KEY` never provisioned → all audited agent surfaces incl. the
+context bus down, so the agent **could not report the failure through any sanctioned channel** and
+committed markdown into the server checkout instead; (4) mem0 write timeouts (Phase 193 fix was
+merged but undeployed). Health-check email spam: oracle graph-catchup check window (20m) shorter
+than the scheduler interval (30m) — fixed by PR #5, which was also undeployed.
+
+**Executed this session (director-inline):** cordant-hermes-01 rebased onto latest main
+(diagnostic commits preserved), image rebuilt, container recreated, `?token=bad` → 403 verified,
+health verified, `memroos-mcp-http.service` restarted. oracle-1 `git pull --ff-only` to `faaa2a62`
+(cron health check now runs fixed script — ~32 spam emails/day stop) + app image built.
+
+**Operator runbook (permission classifier blocked these from the agent session):**
+1. oracle-1: fix `.env` — `MEMROOS_PUBLIC_BASE_URL=https://memroos.epiloguecapital.com`, add
+   `MEMROOS_APP_URL=https://memroos.epiloguecapital.com`, add
+   `MEMROOS_ONBOARDING_SECRET=$(openssl rand -hex 32)`; then `./scripts/memroos-restart.sh`
+   (image already built).
+2. cordant: add `MEMROOS_ONBOARDING_SECRET=$(openssl rand -hex 32)` to `/home/ubuntu/memroos/.env`;
+   `docker compose -f docker-compose.local.yml up -d memroos` to reload env.
+3. cordant Cowork lane: provision an agent API key for Eric's agent and set
+   `MEMROOS_AGENT_API_KEY` in `/home/ubuntu/.memroos/memroos-mcp-http.env`, then
+   `sudo systemctl restart memroos-mcp-http.service`.
+4. Eric self-serve retry: log into `https://memroos-cordant.epiloguecapital.com` → Connect your
+   agents → Refresh → re-run the one-line command (mint+verify now share one host + stable key).
+
+**v8.38 (Phases 228-229) added to ROADMAP.md** — ONBRESCUE-01..05 (config-driven invite identity,
+mint-time URL validation, kid diagnostics, cross-host verify, prod boot assertion) and
+AGENTREPORT-01..05 (issue-report table/API/MCP tool riding the weakest surviving credential,
+NOC/Team surfacing, onboarding-script self-report, agent-facing contract). Progress tables for
+v8.29 (188/189) and v8.30 (191-194) corrected to Complete.
 
 ## Beastmode run 2026-08-03/04 — what shipped
 

@@ -8,6 +8,8 @@ import { isCordantPublicUrl } from "@/lib/connectors/cowork-connector";
 export type InviteEmailDraftOptions = {
   /** Force Cowork connector step; default auto-on for Cordant invite URLs. */
   includeCowork?: boolean;
+  /** Workspace name shown in the opening invitation line. */
+  workspaceName?: string;
 };
 
 export const INVITE_EMAIL_SUBJECT = "You're invited to MemRoOS";
@@ -17,8 +19,9 @@ export function buildInviteEmailDraft(
   options: InviteEmailDraftOptions = {}
 ): string {
   const includeCowork = options.includeCowork ?? isCordantPublicUrl(inviteUrl);
+  const workspaceName = options.workspaceName?.trim() || "MemRoOS";
   const lines = [
-    "You're invited to MemRoOS (Cordant).",
+    `You're invited to ${workspaceName}.`,
     "",
     "Three easy steps:",
     "",

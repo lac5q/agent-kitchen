@@ -1,0 +1,21 @@
+You are the VALIDATOR seat (re-validation after your REJECT of BM-RUN 228-v4).
+
+Your five findings were fixed by the executor. Re-review the UNSTAGED working-tree diff
+(git diff + untracked files under apps/memroos/src/lib/ and its __tests__ dirs) against:
+1. Your original findings (shell injection via URL path/query — check BOTH the mint-side
+   charset allowlist in assertMintableUrl AND the shell-quoted substitutions in
+   apps/memroos/src/app/api/onboarding/script/route.ts; doubled-host suffix bypass
+   sub.a.coma.com; verify script signature probe; legacy no-kid token compat test;
+   fallback-audit condition on both invite routes).
+2. The original spec .beastmode/worker-prompts/228-onboarding-rescue.md (no regressions).
+
+Director's evidence: full fast suite 3789 passed, typecheck clean.
+
+Confirm each of the five is genuinely closed (not test-only theater). Check the new URL
+charset allowlist does not break normal https URLs with ports, paths, and query strings.
+Do NOT raise new nitpicks unrelated to the spec or your findings unless they are P1.
+
+END with exactly one line:
+VERDICT: PASS
+or
+VERDICT: REJECT - <one-line reason>

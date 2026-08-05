@@ -83,6 +83,9 @@ const ROUTE_LOCAL_AUTH_API_ROUTES: Array<{ method?: string; pattern: RegExp }> =
   // Agent onboarding bootstrap uses signed invite tokens, not human JWTs.
   { method: "GET", pattern: /^\/api\/onboarding\/script$/ },
   { method: "POST", pattern: /^\/api\/onboarding\/register$/ },
+  // Agent issue reporting accepts its own agent-key, MCP OAuth, and narrow
+  // unauthenticated onboarding-lane credentials. GET/PATCH remain session-gated.
+  { method: "POST", pattern: /^\/api\/agent-report$/ },
   { pattern: /^\/api\/chatgpt\/actions\// },
   { pattern: /^\/api\/agent-context(?:\/|$)/ },
   { pattern: /^\/api\/gsd(?:\/|$)/ },

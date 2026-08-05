@@ -14,6 +14,7 @@ describe("buildInviteEmailDraft", () => {
     expect(draft).toContain("2)");
     expect(draft).toContain("3)");
     expect(draft.toLowerCase()).toContain("create your account");
+    expect(draft).not.toContain(["(", "Cordant", ")"].join(""));
     expect(draft).not.toMatch(/HMAC/i);
     expect(draft).not.toMatch(/SendGrid/i);
     expect(draft).not.toMatch(/\bTTL\b/);
@@ -46,6 +47,14 @@ describe("buildInviteEmailDraft", () => {
     expect(googleAt).toBeGreaterThan(-1);
     expect(passwordAt).toBeGreaterThan(googleAt);
   });
+
+  it("uses the configured workspace name in the text draft", () => {
+    const draft = buildInviteEmailDraft("https://memroos.example.test/invite/abc123", {
+      workspaceName: "Cordant",
+    });
+    expect(draft).toContain("You're invited to Cordant.");
+    expect(draft).not.toContain(["(", "Cordant", ")"].join(""));
+  });
 });
 
 describe("buildInviteEmailHtml", () => {
@@ -68,5 +77,11 @@ describe("buildInviteEmailHtml", () => {
     const html = buildInviteEmailHtml(url);
     expect(html).toMatch(/Continue with Google/);
     expect(html).toMatch(/expires in 72 hours/i);
+  });
+
+  it("uses the configured workspace name in the HTML draft", () => {
+    const html = buildInviteEmailHtml(url, { workspaceName: "Oracle" });
+    expect(html).toContain("You're invited to Oracle.");
+    expect(html).not.toContain(["(", "Cordant", ")"].join(""));
   });
 });
