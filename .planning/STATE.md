@@ -13,6 +13,40 @@ progress:
   percent: 78
 ---
 
+## Resume Point (2026-08-04 goal run, paused for merge+deploy)
+
+**Merged/shipping this branch (`claude/gsd-roadmap-onboarding-3889e0`):** v8.38 Phase 228
+(ONBRESCUE-01..05) and Phase 229 (AGENTREPORT-01..05), both through the full
+executor→validator→fix→re-validate loop with codex gpt-5.6-luna (max) executor and
+gpt-5.6-sol (high) validator. Sol caught a real P1 shell-injection in 228 and the proxy
+route-local-auth release blocker in 229; both fixed and re-validated PASS. Plus the GitNexus
+"index every repo" directive and the beastmode child-liveness skill upgrade. Fast suite 3800,
+slow suite 38/38, typecheck + route-auth-boundary + sqlite-allowlist green. Claude
+security-review: no exploitable findings.
+
+**REMAINING GSD phases (worker prompts already staged under `.beastmode/worker-prompts/`,
+resume by re-running the beastmode loop in phase order):**
+1. `209-crit3-fail-closed.md` — unowned agents fail closed inside `authenticateAgentKey`
+   (58-call-site blast radius; highest risk; run full suite, not targeted).
+2. `210b-2-clearance-store.md` — clearance columns + lattice; knowledge-mcp reads stored
+   clearance instead of self-asserted `MEMROOS_AGENT_ROLE`.
+3. `210b-3-intersection-granting.md` — P2 intersection + P3 granting rules with expiry;
+   non-vacuous tests.
+4. `210b-4-requireCapability-migration.md` — migrate proxy.ts + top routes to
+   `requireCapability`; ratchet gate `check:role-rank-callsites`.
+5. `195-adoption-telemetry.md` — NOC adoption panel + GSD memory-receipt CI gate
+   (producer-verify FIRST per the plan's hard gate).
+6. `190-client-barrel-split.md` — mechanical api-client barrel split + bundle measurement.
+
+**Loop mechanics learned this run (now in the beastmode skill):** dispatch codex as
+`codex exec --model <m> ... "Read the file <path> and follow it exactly. BM-RUN: <id>"`
+(long inline prompts hang at startup 4/4; file-pointer 8/8 fine); arm a bounded startup probe
+per dispatch grepping `~/.codex/sessions/.../` for the BM-RUN marker; judge liveness by CPU +
+rollout growth, never wall-clock; never `pkill -f <pattern>` where the pattern is in your own
+command line (self-kill, exit 144).
+
+**Excluded (unchanged):** 175/176 credential-gated, 126-127 IdP/MDM, Voyage/166.
+
 ## Latest Position (2026-08-04 goal run) — Eric onboarding RCA + fixes + v8.38 added
 
 **RCA (evidence: invite emails Aug 1-4 to luis.calderon@gmail.com; agent `adc486a5-claude`
