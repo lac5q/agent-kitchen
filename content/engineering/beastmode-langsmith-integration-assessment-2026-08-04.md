@@ -168,3 +168,100 @@ The GitHub connector returned no attached status contexts or pull-request workfl
 The LangSmith code is not merely ready to merge; it is already merged and pushed to `origin/main`. It is code-ready and release-green locally.
 
 Operational use still requires LangSmith configuration and a credential. No live trace submission was performed during this verification. Standard graph tracing uses `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT`. The standalone direct-HTTP `scripts/acn-trace` uploader does not currently add the optional `LANGSMITH_WORKSPACE_ID` / `x-tenant-id` header used by multi-workspace API keys; that is a follow-up compatibility enhancement, not a blocker for single-workspace keys or SDK-managed graph tracing.
+
+
+## Hosted LangSmith setup procedure — 2026-08-05
+
+This procedure connects the checked-in Beastmode LangGraph runtime to hosted LangSmith for local Studio and observability.
+
+### 1. Create the credential
+
+Sign in at `https://smith.langchain.com`, open **Settings → API Keys**, and create a key. Prefer a service key scoped to exactly one workspace for an application; a PAT is acceptable for personal local testing. Copy it when shown and keep it in a password manager or secret manager.
+
+A single-workspace key is also the current compatibility path for Beastmode's standalone direct-HTTP `scripts/acn-trace` uploader. The LangSmith SDK supports `LANGSMITH_WORKSPACE_ID` for multi-workspace keys, but the standalone uploader does not yet emit the corresponding `x-tenant-id` header.
+
+### 2. Install locally
+
+From the repository root:
+
+```bash
+cd /home/lac5q/github/beastmode
+python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e 'python[langgraph,studio]'
+```
+
+Python 3.11 or newer is required. `.venv/` is gitignored.
+
+### 3. Configure the current shell without putting the key in shell history
+
+```bash
+read -rsp "LangSmith API key: " LANGSMITH_API_KEY
+printf '\n'
+export LANGSMITH_API_KEY
+export LANGSMITH_TRACING=true
+export LANGSMITH_PROJECT=beastmode
+```
+
+For a multi-workspace SDK key, also export `LANGSMITH_WORKSPACE_ID`. For non-US regions set the documented regional `LANGSMITH_ENDPOINT`. Optional first-run privacy masking:
+
+```bash
+export LANGSMITH_HIDE_INPUTS=true
+export LANGSMITH_HIDE_OUTPUTS=true
+```
+
+Leave metadata visible if requested/actual model, drift, and provenance fields should be filterable.
+
+### 4. Start the local Agent Server and Studio
+
+```bash
+langgraph dev
+```
+
+The checked-in `langgraph.json` exposes graph `pipeline`. The command serves the local API at `http://127.0.0.1:2024` and opens/prints the LangSmith Studio URL. If Brave or Safari blocks localhost, use `langgraph dev --tunnel`, then manually approve the tunnel URL in Studio.
+
+The zero-argument Studio factory is suitable for discovery and visualization. A real end-to-end Beastmode execution requires trusted executor, attestor, validator, and reviewer commands; placeholders must not be used.
+
+### 5. Verify a real completed Beastmode receipt directory
+
+First inspect the sanitized payload without sending:
+
+```bash
+scripts/acn-trace /path/to/run-dir \
+  --dry-run \
+  --project beastmode \
+  --goal-id setup-test \
+  --harness pi \
+  --autonomy medium
+```
+
+Then remove `--dry-run` to submit it:
+
+```bash
+scripts/acn-trace /path/to/run-dir \
+  --project beastmode \
+  --goal-id setup-test \
+  --harness pi \
+  --autonomy medium
+```
+
+Use the actual harness name. The run directory must be a real completed Beastmode run containing canonical child `meta.json` receipts.
+
+### 6. Confirm in LangSmith
+
+Open the `beastmode` tracing project in LangSmith. A submitted receipt run appears as a `beastmode.run` parent with `beastmode.child` spans. Filter on `drift`, `unverifiable`, `phase:*`, or `seat:*`.
+
+### 7. Live execution boundary
+
+For live LangGraph execution, use `bm --harness langgraph` only after supplying four real trusted commands:
+
+```bash
+bm "add a health check" --harness langgraph \
+  --executor-command 'your-child-driver' \
+  --attestor-command /trusted/bin/read-harness-journal \
+  --validator-command /trusted/bin/validate-result \
+  --reviewer-command /trusted/bin/review-result
+```
+
+The repository intentionally does not invent these environment-specific helpers. They must satisfy the contracts in `references/beastmode-on-langgraph.md`.
