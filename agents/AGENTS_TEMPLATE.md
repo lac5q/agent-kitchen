@@ -291,6 +291,30 @@ Every agent acts on behalf of the user, but the user is the gateway for things t
 - "Queue the Discord thread" → prepare the thread, return the JSON, wait for GO — do not auto-post.
 - "Open the PR" → make the branch and PR (commit is local), stop. The user pushes and merges.
 
+## GitNexus Code Intelligence (operator directive 2026-08-04)
+
+Every GitHub project an agent works on, on every machine, must have a current GitNexus
+index before non-trivial code work starts. The index is what makes `impact`,
+`detect_changes`, and `query` answer truthfully; without it, blast-radius claims are
+guesses.
+
+### Always Do
+
+- **At session start in any git repo**, check the index: `gitnexus status` (or the
+  `gitnexus://repo/<name>/context` MCP resource). Missing or stale → run
+  `node .gitnexus/run.cjs analyze` from the project root, else `gitnexus analyze`,
+  else `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`).
+- **Index the canonical checkout**, not a worktree; pass the worktree path to
+  `detect_changes` when editing from one.
+- **Run `detect_changes` before committing** and `impact` before editing hot symbols,
+  per the repo CLAUDE.md rules.
+
+### Never Do
+
+- NEVER report "GitNexus unavailable" without first attempting the analyze commands above.
+- NEVER treat a sibling repo's index (e.g. public `memroos` vs private `memroos-product`)
+  as coverage for the repo you are editing — index the repo you are in.
+
 ## Source
 
 - Repo: https://github.com/lac5q/memroos
