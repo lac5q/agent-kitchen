@@ -335,3 +335,14 @@ Use four surfaces:
 4. LangSmith: `Projects → beastmode → Runs/Traces` for observability; `Deployments` only for managed LangSmith Cloud agents. The current URL with `baseUrl=127.0.0.1:2024` is local Studio mode.
 
 Current state: repository code is merged; maeve runtime and Studio wrappers are installed; the Cloudflare ingress is staged but DNS was not created; the local Studio unit is staged but disabled pending credential rotation; no managed LangSmith Cloud deployment exists.
+
+
+## Public framework versus private operator repo — 2026-08-05
+
+Recommended separation:
+
+- Keep `lac5q/beastmode` public as the reusable framework/package: core contracts, adapters, generic LangGraph graph, schemas, examples, tests, and sanitized documentation.
+- Create a separate private repository such as `beastmode-workspace` for the operator’s real setup: trusted executor/attestor/validator/reviewer composition, private prompts/model routing, deployment manifests, internal Cloudflare/LangSmith settings, runbooks, and organization-specific skills.
+- The private repo should depend on a pinned public Beastmode release/tag, not fork or copy the public repo. Its `langgraph.json` should point at a private factory that composes `build_pipeline(dependencies=PipelineDependencies(...))`.
+- Keep LangSmith projects/workspaces separate: public examples use each user’s own key/project; the operator’s private runs use a private project such as `beastmode-private`. Never publish API keys, `op://` references tied to private vaults, hostnames, paths, or internal routes.
+- Public release gate: run the public artifact guard and security scan on the exact commit, then tag/release. The public-sharing checklist is `references/public-sharing-checklist.md`.
