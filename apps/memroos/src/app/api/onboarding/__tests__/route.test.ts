@@ -455,8 +455,10 @@ describe("agent onboarding routes", { tags: ["slow"] }, () => {
       fs.writeFileSync(scriptPath, script, { mode: 0o700 });
       fs.writeFileSync(
         path.join(binDir, "curl"),
+        // Mimic real curl -w '\n%{http_code}': body, then a newline, then the
+        // status. The register parser reads the status from the last line.
         `#!/usr/bin/env bash
-printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"cline-agent"},"apiKey":"ak_cline_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
+printf '%s\\n200' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"cline-agent"},"apiKey":"ak_cline_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
 `,
         { mode: 0o700 }
       );
@@ -531,8 +533,9 @@ printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","
         fs.writeFileSync(scriptPath, script, { mode: 0o700 });
         fs.writeFileSync(
           path.join(binDir, "curl"),
+          // Mimic real curl -w '\n%{http_code}': body, newline, then status.
           `#!/usr/bin/env bash
-printf '%s\\n' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"${agentId}"},"apiKey":"ak_${binary}_login_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
+printf '%s\\n200' '{"ok":true,"env":{"MEMROOS_URL":"https://memroos.example.test","MEMROOS_AGENT_ID":"${agentId}"},"apiKey":"ak_${binary}_login_test","mcp":{"mcpServers":{"memroos":{"url":"https://memroos.example.test/mcp"}}}}'
 `,
           { mode: 0o700 }
         );
