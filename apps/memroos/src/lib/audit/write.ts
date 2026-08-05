@@ -13,14 +13,6 @@ import { getSlaSeconds } from "@/lib/evals/sla-config";
 import type { NewAuditEntry, NewHilEscalation } from "./schema";
 
 /**
- * The audit handle callers may pass through. Exported so modules outside
- * `src/lib/store/**` can forward a database to the audit writers without
- * importing `better-sqlite3` themselves and taking on direct data access
- * (STORE-03).
- */
-export type AuditDb = Database.Database;
-
-/**
  * Inserts a single audit entry. Append-only — never calls UPDATE or DELETE.
  *
  * @param entry - Audit entry data; id and created_at are auto-generated if omitted.
