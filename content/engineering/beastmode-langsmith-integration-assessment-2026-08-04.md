@@ -370,3 +370,10 @@ Confirmed again: `beastmode-langsmith-studio.service` is enabled/active, the pri
 ## Browser-reachable Studio tunnel — 2026-08-05
 
 The Mac browser could not reach `http://127.0.0.1:2024` because the Agent Server runs on maeve-u1. Started a temporary LangGraph CLI Cloudflare quick tunnel on port 2025: `https://ghz-compared-compiler-brush.trycloudflare.com`. Verified through the public endpoint: `/ok` returned OK, assistant discovery returned `pipeline`, and the graph schema returned 16 nodes and 19 edges. This is an account-less temporary tunnel for immediate Studio viewing, not the final protected named hostname; it should be replaced with the authorized `langsmith.epiloguecapital.com` route once Cloudflare credentials are available.
+
+
+## Separate Beastmode Agent Server hostname — 2026-08-05
+
+The hosted LangSmith UI remains at `https://smith.langchain.com`; it is not the Beastmode server. The private Beastmode LangGraph Agent Server runs on maeve-u1 (local port 2024) and should have its own clearly named public hostname, recommended `beastmode.epiloguecapital.com` (or `beastmode-studio.epiloguecapital.com`). LangSmith Studio uses that server via its `baseUrl` query parameter, for example `https://smith.langchain.com/studio/thread?baseUrl=https%3A%2F%2Fbeastmode.epiloguecapital.com&mode=graph&render=interact`.
+
+The `LANGSMITH_API_KEY` is used by the Agent Server to send traces to the hosted LangSmith UI; it does not determine the Agent Server hostname. The current temporary quick tunnel is browser-reachable, but neither `langsmith.epiloguecapital.com` nor `beastmode.epiloguecapital.com` currently resolves in DNS. The local cloudflared draft contains a `langsmith` ingress to port 2024, but the active tunnel is remotely managed, so the Cloudflare DNS record and remote ingress must be updated before a permanent link works. No code change is required to use a new hostname.
