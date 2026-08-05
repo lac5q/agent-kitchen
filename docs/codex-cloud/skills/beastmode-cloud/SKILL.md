@@ -1,17 +1,21 @@
 ---
 name: beastmode-cloud
-description: Run Codex- or Cursor-led Beastmode with pluggable external workers such as Qwen, direct MiniMax API, Droid MiniMax, GLM, or other Droid models.
+description: Run Codex- or Cursor-led Beastmode with GPT-5.6 Luna as the default bounded worker, plus explicitly configured fallback worker lanes.
 ---
 
 # Beastmode Cloud
 
-Use this skill when Luis asks for Beastmode, cheap-worker execution,
-planner/worker/validator loops, Qwen, MiniMax, Droid, or multi-model coding
-support in a cloud coding session.
+Use this skill when Luis asks for Beastmode, bounded worker execution,
+planner/worker/validator loops, Luna Max, Droid, or multi-model coding support
+in a cloud coding session.
 
 The current agent stays the director, reviewer, and merge gate. External models
 are bounded workers only. Never let a worker commit, push, access secrets, or
 claim final verification.
+
+> Current worker lane: Luna Max (`gpt-5.6-luna` / `custom:gpt-5.6-luna-[VP]-0`) at
+> maximum reasoning. The MiniMax and Qwen sections below are retained only as
+> historical audit notes and must not be used for new work.
 
 ## Goal memory checkpoints
 
@@ -33,17 +37,14 @@ Choose the lane that is installed and authenticated on the host:
 
 | Lane | Default model | Command | Smoke gate |
 |------|---------------|---------|------------|
-| Qwen | `qwen3.7-plus` | `~/.local/bin/qwen-agent` | Must return `QWEN OK` |
-| **MiniMax (preferred)** | `MiniMax-M3` | `~/.local/bin/minimax-worker` | `minimax-worker --smoke` must return `MINIMAX OK` |
-| Droid MiniMax | `minimax-m3` | `~/.local/bin/droid exec --model minimax-m3` | `droid exec --model minimax-m3 "Reply with exactly: MINIMAX OK"` |
-| Droid custom | any `droid exec --list-tools` model id | `~/.local/bin/droid exec --model <id>` | Model-specific exact reply |
+| **Luna Max (preferred)** | `gpt-5.6-luna` | `~/.local/bin/droid exec --model custom:gpt-5.6-luna-[VP]-0` or the configured Pi/Codex lane | Must return `DROID_LUNA_OK` with reasoning `max` |
+| Droid custom fallback | any explicitly configured `droid exec --list-tools` model id | `~/.local/bin/droid exec --model <id>` | Model-specific exact reply |
 
-Prefer the direct MiniMax API lane when `MINIMAX_API_KEY` is present and the
-worker only needs to return a patch, plan, or analysis. Use Droid MiniMax when
-you specifically need Factory's agent runtime or tool access. Prefer an
-independent validator model when the authoring worker was MiniMax.
+Prefer Luna Max for bounded worker slices and set reasoning to `max`. Use the
+Factory Droid custom model when the worker needs tool access. Keep the director
+as the independent reviewer and merge gate.
 
-### MiniMax lane: two things that will waste an afternoon
+### Retired MiniMax lane (historical troubleshooting only)
 
 **1. A present key is not a usable key.** `.zshrc` on the operator Mac exports
 `MINIMAX_API_KEY` from `~/.cache/shell/zsh_secrets`, a file that does not exist —
@@ -76,9 +77,9 @@ worker only needs to return a patch, plan, or analysis.
 shape validation. Checking only that the variable is non-empty reproduces the
 exact failure above on every new machine.
 
-## Start Gate
+## Retired MiniMax Start Gate
 
-**Check 1Password before declaring a lane unavailable.** `$MINIMAX_API_KEY` is
+**Historical note. Do not use this lane.** `$MINIMAX_API_KEY` is
 often unset in the shell even when the key exists — it lives in 1Password, not
 the environment. Never conclude MiniMax is "not live" from an absent env var
 alone. Retrieve it first:
@@ -117,6 +118,17 @@ curl -sS https://api.minimax.io/v1/chat/completions \
 If the smoke check fails, continue without that worker and report the lane as
 installed but not live-verified.
 
+## Start Gate
+
+Before delegating, prove the Luna Max lane is configured and live. Do not print or copy API keys. For Factory Droid, use the configured custom model and maximum reasoning:
+
+~~~bash
+~/.local/bin/droid exec --model custom:gpt-5.6-luna-[VP]-0 --thinking max \\
+  "Reply with exactly: DROID_LUNA_OK"
+~~~
+
+For Pi/Codex, verify the effective model is gpt-5.6-luna and the reasoning level is max before launching the worker. If Luna is unavailable, use the explicitly configured fallback lane and report that fallback honestly; never route silently to MiniMax or claim Luna execution without evidence.
+
 ## Operating Loop
 
 1. Director writes the plan, scope, allowed files, acceptance checks, and
@@ -142,7 +154,42 @@ Every worker prompt must include:
 Workers should not receive raw private data, broad environment dumps, API keys,
 production credentials, legal/financial mail, or other sensitive source text.
 
-## Standard Qwen Invocation
+## Standard Luna Max Invocation
+
+```bash
+mkdir -p .codex/beastmode-runs
+run_dir=".codex/beastmode-runs/$(date -u +%Y%m%dT%H%M%SZ)-luna-max"
+mkdir -p "$run_dir"
+cat >"$run_dir/prompt.md" <<'EOF'
+You are the bounded Luna Max worker for a director-led Beastmode run.
+
+REPO:
+<absolute repo path>
+
+TASK:
+<bounded implementation or analysis slice>
+
+ALLOWED FILES:
+<paths>
+
+ACCEPTANCE:
+<checks>
+
+DO NOT:
+- Commit, push, delete, publish, send email, access secrets, or change cloud configuration.
+- Modify files outside the allowed set.
+- Claim verification you did not run.
+
+OUTPUT:
+- Summary.
+- Unified diff or exact files changed.
+- Commands run and results.
+- Risks or blockers.
+EOF
+~/.local/bin/droid exec --auto low --model custom:gpt-5.6-luna-[VP]-0 --thinking max -f "$run_dir/prompt.md" >"$run_dir/output.md" 2>&1
+```
+
+## Retired Qwen Invocation (historical only)
 
 ```bash
 mkdir -p .codex/beastmode-runs
@@ -177,7 +224,7 @@ EOF
 ~/.local/bin/qwen-agent --dangerously-skip-permissions -p "$(cat "$run_dir/prompt.md")" >"$run_dir/output.md" 2>&1
 ```
 
-## Standard Direct MiniMax API Invocation
+## Retired Direct MiniMax API Invocation (historical only)
 
 ```bash
 mkdir -p .codex/beastmode-runs
@@ -248,7 +295,7 @@ patches, plans, or review findings, then have the director apply and verify.
 Use `thinking.type: disabled` for exact-output smoke tests and cleaner worker
 transcripts.
 
-## Standard Droid MiniMax Invocation
+## Retired Droid MiniMax Invocation (historical only)
 
 ```bash
 mkdir -p .codex/beastmode-runs
