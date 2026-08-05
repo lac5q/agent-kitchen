@@ -1,7 +1,48 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OperationsNoc } from "../index";
+
+/**
+ * The NOC loads its nine panels through `next/dynamic`, so in a real browser
+ * the first paint is skeletons and the panels arrive a microtask later. Under
+ * test that made every assertion race the import: the panels own the API hooks
+ * and most of the copy, so a synchronous `toHaveBeenCalledWith` could see zero
+ * calls and a `findByText` could outlive its timeout whenever the machine was
+ * loaded enough to slow module resolution. It reproduced in roughly half of
+ * full-suite runs and never once when this file ran alone.
+ *
+ * Resolving the loaders once in `beforeAll` and rendering the real component
+ * synchronously from then on removes the race outright rather than widening a
+ * timeout, which would only have moved the threshold. No test here asserts the
+ * loading skeletons, so nothing is lost by skipping that state.
+ */
+const dynamicPanels = vi.hoisted(() => ({
+  loaders: [] as Array<() => Promise<unknown>>,
+  resolved: new Map<number, unknown>(),
+}));
+
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    const index = dynamicPanels.loaders.length;
+    dynamicPanels.loaders.push(loader);
+    return function DynamicPanel(props: Record<string, unknown>) {
+      const Panel = dynamicPanels.resolved.get(index) as
+        | ((panelProps: Record<string, unknown>) => JSX.Element)
+        | undefined;
+      return Panel ? <Panel {...props} /> : null;
+    };
+  },
+}));
+
+beforeAll(async () => {
+  await Promise.all(
+    dynamicPanels.loaders.map(async (loader, index) => {
+      const loaded = (await loader()) as { default?: unknown };
+      dynamicPanels.resolved.set(index, loaded?.default ?? loaded);
+    }),
+  );
+});
 
 const api = vi.hoisted(() => ({
   useMemoryStats: vi.fn(),
