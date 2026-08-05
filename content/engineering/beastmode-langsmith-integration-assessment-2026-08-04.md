@@ -365,3 +365,8 @@ The local LangSmith Studio URL is `https://smith.langchain.com/studio/?baseUrl=h
 ## Re-audit — 2026-08-05 continuation
 
 Confirmed again: `beastmode-langsmith-studio.service` is enabled/active, the private workspace is clean at commit `8a1f6be`, and the public checkout remains at `3dfe849` with only the pre-existing `scripts/bm` modification. `langsmith.epiloguecapital.com` still does not resolve; the active remotely managed Maria tunnel reports ingress for existing services but not this hostname. No Cloudflare dashboard/API credential is available in this session to create the DNS record or update remote ingress.
+
+
+## Browser-reachable Studio tunnel — 2026-08-05
+
+The Mac browser could not reach `http://127.0.0.1:2024` because the Agent Server runs on maeve-u1. Started a temporary LangGraph CLI Cloudflare quick tunnel on port 2025: `https://ghz-compared-compiler-brush.trycloudflare.com`. Verified through the public endpoint: `/ok` returned OK, assistant discovery returned `pipeline`, and the graph schema returned 16 nodes and 19 edges. This is an account-less temporary tunnel for immediate Studio viewing, not the final protected named hostname; it should be replaced with the authorized `langsmith.epiloguecapital.com` route once Cloudflare credentials are available.
