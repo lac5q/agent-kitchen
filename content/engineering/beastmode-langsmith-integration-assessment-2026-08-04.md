@@ -311,3 +311,15 @@ A metadata-only remote diagnostic was malformed and emitted the 1Password servic
 - Existing ingress config uses `epiloguecapital.com` hosts only. The requested `langsmith.epiloguecapita.com` (without the `l` in capital) currently has no DNS resolution; confirm whether this is a typo or a separate Cloudflare zone.
 - No generic Cloudflare cert/API environment is present on maeve-u1; tunnel credential JSON files are connector credentials only. DNS route creation therefore needs Cloudflare dashboard/API authorization.
 - No Agent Server is currently listening on 127.0.0.1:2024. Public routing should not be enabled until a persistent origin and Cloudflare Access policy are defined; the local Studio dev endpoint has no built-in authentication.
+
+
+## Local Studio versus LangSmith Cloud — 2026-08-05
+
+The in-app URL uses `baseUrl=http://127.0.0.1:2024`, which is LangSmith Studio connected to a local Agent Server on maeve-u1. This mode does not create an agent under the organization’s Deployments page. A LangSmith API key enables tracing/observability and Studio authentication; it does not deploy repository code or configure Cloudflare. Managed agents appear under LangSmith Deployments after a GitHub-backed LangSmith Cloud deployment. The current repository has `langgraph.json`, but its zero-argument Studio factory is intended for graph discovery; meaningful Beastmode execution still needs trusted executor, attestor, validator, and reviewer dependencies.
+
+The requested Cloudflare route was partially staged: Maria ingress now includes `langsmith.epiloguecapital.com` and a disabled local Studio systemd unit targets `127.0.0.1:2024`; DNS CNAME creation returned `DNS_ROUTE_NOT_CREATED` because no Cloudflare DNS-management credential is present. The tunnel was restarted and remained active. No managed LangSmith deployment was created.
+
+Official references:
+- https://docs.langchain.com/langsmith/studio
+- https://docs.langchain.com/langsmith/quick-start-studio
+- https://docs.langchain.com/oss/python/langgraph/deploy
