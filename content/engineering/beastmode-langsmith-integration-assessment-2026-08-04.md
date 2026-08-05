@@ -265,3 +265,14 @@ bm "add a health check" --harness langgraph \
 ```
 
 The repository intentionally does not invent these environment-specific helpers. They must satisfy the contracts in `references/beastmode-on-langgraph.md`.
+
+
+## Deployment update — 2026-08-05
+
+- `maeve-u1`: repository `/home/lac5q/github/beastmode` was clean on `main` at `3dfe849` (the merged LangSmith integration). Installed the editable `beastmode[langgraph,studio]` runtime in `.venv`.
+- Verified versions: Beastmode 2.4.0, LangGraph 1.2.10, LangSmith 0.10.15, LangGraph CLI 0.4.31.
+- Verified `python/scripts/studio-smoke.py`: LangGraph Studio manifest discovery and health smoke passed.
+- Host prerequisites present: Python, Git, 1Password CLI 2.35.0, and bubblewrap.
+- Credential binding remains blocked: the `my.1password.com` account is configured on maeve-u1 but has no active session. The Windows-side 1Password integration has a deleted service-account token and the desktop app was unavailable. No secret was read, printed, copied, or stored.
+- `main-mac` is online at its Tailscale peer address, with its known host key already verified, but rejected the available `lac5q` SSH identities. No Mac changes were made.
+- Completion condition: unlock/sign in to 1Password on maeve-u1 (or restore an approved service account) and authorize an SSH identity on main-mac; then create an `op://`-backed LangSmith env file and validate `Client().list_projects(limit=1)` plus Studio tracing.
