@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/auth/middleware-roles";
+import { CAPABILITY, requireCapability } from "@/lib/auth/capabilities";
 import { getDb } from "@/lib/db";
 import {
   AgentIssueTransitionError,
@@ -16,7 +16,7 @@ export async function PATCH(
 ) {
   const session = await authenticateUser(request);
   if (!session) return Response.json({ ok: false, error: "authentication required" }, { status: 401 });
-  const roleError = requireRole(session.role, "operator");
+  const roleError = requireCapability(session, CAPABILITY.AGENT_REPORTS_MANAGE);
   if (roleError) return roleError;
 
   const body = (await request.json().catch(() => null)) as unknown;

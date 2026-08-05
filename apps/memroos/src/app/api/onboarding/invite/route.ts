@@ -9,9 +9,9 @@ import { authenticateUser } from "@/lib/auth/session";
 import { requireRole } from "@/lib/auth/middleware-roles";
 import { getDb } from "@/lib/db";
 import {
-  recordOnboardingBaseUrlFallback,
   resolvePublicMemroosUrlDetailed,
 } from "@/lib/http/public-base-url";
+import { recordOnboardingBaseUrlFallback } from "@/lib/store/onboarding-base-url-audit";
 import { authorizeRegistryWrite, registryWriteUnauthorizedResponse } from "@/lib/operator-auth";
 import type { AgentPlatform, AgentProtocol, RegisteredAgentCapability } from "@/types";
 

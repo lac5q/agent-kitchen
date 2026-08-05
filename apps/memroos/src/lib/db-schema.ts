@@ -571,9 +571,22 @@ function applyToolConnectionsSchema(db: Database.Database): void {
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(name),
   );
+  const columnExists = (table: string, column: string): boolean => Boolean(
+    db
+      .prepare('SELECT 1 FROM pragma_table_info(?) WHERE name = ?')
+      .get(table, column),
+  );
   const hasUsers = tableExists('users');
   const hasUserRoles = tableExists('user_roles');
   const hasRawArtifacts = tableExists('raw_artifacts');
+
+  // Phase 199 added disabled_at to migration 1's baseline body, which never
+  // re-runs for a database already stamped above 1 — so an upgrading deployment
+  // reaches here without the column. Filter on it only where it exists; a
+  // database that never got it also never disabled anyone.
+  const enabledOnly = hasUsers && columnExists('users', 'disabled_at')
+    ? 'AND u.disabled_at IS NULL'
+    : '';
 
   const admin = hasUsers && hasUserRoles
     ? db
@@ -581,7 +594,7 @@ function applyToolConnectionsSchema(db: Database.Database): void {
           `SELECT u.id
            FROM users u
            JOIN user_roles ur ON ur.user_id = u.id
-           WHERE ur.role = 'admin' AND u.disabled_at IS NULL
+           WHERE ur.role = 'admin' ${enabledOnly}
            ORDER BY u.created_at ASC, u.id ASC
            LIMIT 1`,
         )

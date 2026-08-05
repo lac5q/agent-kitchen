@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db-schema";
 import {
-  recordOnboardingBaseUrlFallback,
   resolvePublicMemroosUrl,
   resolvePublicMemroosUrlDetailed,
 } from "@/lib/http/public-base-url";
+import { recordOnboardingBaseUrlFallback } from "@/lib/store/onboarding-base-url-audit";
 
 describe("resolvePublicMemroosUrl", () => {
   const prev = {

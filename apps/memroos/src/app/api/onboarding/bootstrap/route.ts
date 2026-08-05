@@ -4,9 +4,9 @@ import {
   shellQuote,
 } from "@/lib/agent/onboarding";
 import {
-  recordOnboardingBaseUrlFallback,
   resolvePublicMemroosUrlDetailed,
 } from "@/lib/http/public-base-url";
+import { recordOnboardingBaseUrlFallback } from "@/lib/store/onboarding-base-url-audit";
 import { apiError } from "@/lib/api-error";
 import { authenticateUser } from "@/lib/auth/session";
 import { PLATFORM_LABELS } from "@/lib/ui-constants";
