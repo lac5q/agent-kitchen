@@ -4,9 +4,9 @@ import { getDb } from '@/lib/db';
 import { authenticateUser } from '@/lib/auth/session';
 import { requireRole } from '@/lib/auth/middleware-roles';
 import {
-  recordOnboardingBaseUrlFallback,
   resolvePublicMemroosUrlDetailed,
 } from '@/lib/http/public-base-url';
+import { recordOnboardingBaseUrlFallback } from '@/lib/store/onboarding-base-url-audit';
 import { resolveWorkspaceName } from '@/lib/instance';
 import { isValidEmailAddress, sendEmail, type EmailSendResult } from '@/lib/email/send';
 import {
