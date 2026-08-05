@@ -125,6 +125,14 @@ left tool_connections rows unowned and tripped the `needs_owner` trigger for no 
 The third case adds `disabled_at` explicitly and asserts migration still succeeds, so the
 test discriminates between the two states rather than passing unconditionally.
 
+## Validated against the real database
+
+The local `data/conversations.db` (1.0 GB) is stamped at **user_version 37**, has
+`user_roles`, and its `users` table has no `disabled_at` — the exact shape the fixture
+models. A copy of it was migrated with the fix in place: it completed without throwing,
+reached `CURRENT_SCHEMA_VERSION` (40), and created `tool_connections`. So the whole
+38 → 39 → 40 chain now runs end-to-end on real data, not just on a synthetic fixture.
+
 ## Still worth doing
 
 The guard fixes this instance. The general hazard remains: **migration 1 never re-runs for
