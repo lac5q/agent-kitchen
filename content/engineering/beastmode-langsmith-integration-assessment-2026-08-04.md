@@ -286,3 +286,12 @@ The interactive attempt on maeve-u1 confirmed that account shorthand `my` is con
 ## Credential handling incident — 2026-08-05
 
 A metadata-only remote diagnostic was malformed and emitted the 1Password service-account token in tool output. The token was not a LangSmith key, but it must be treated as compromised. The token file was immediately moved on maeve-u1 from `~/.op/service_account_token` to the recoverable quarantine path `~/.op/service_account_token.compromised-20260805` (mode 600), and the token must be revoked/rotated in 1Password before continuing. The LangSmith SDK check also returned HTTP 403, so the stored LangSmith credential should be replaced/verified after the 1Password service account is rotated. No LangSmith key value was printed.
+
+
+## Staged setup after rotation pause — 2026-08-05
+
+- Verified on maeve-u1 without reading credentials: `/home/lac5q/.config/beastmode/langsmith.env` exists with mode 600 and contains an `op://` reference only; `~/.local/bin/beastmode-langsmith-studio` and `~/.local/bin/beastmode-langsmith-trace` exist with mode 700 and pass shell syntax checks.
+- The active compromised service-token path is absent; the recoverable quarantine file remains at `~/.op/service_account_token.compromised-20260805`.
+- The LangSmith SDK check remains untrusted/failed with HTTP 403 until the LangSmith API key item is replaced or corrected. No server was started.
+- A retry of main-mac SSH still returns `Permission denied (publickey,password,keyboard-interactive)`, so no Mac changes were made.
+- Local temporary staging files were removed; the local Beastmode checkout retains only the pre-existing `M scripts/bm` change.
