@@ -38,3 +38,14 @@ The supported path is direct CLI execution from the project root:
 `PYTHONPATH=src python -m coach --db data/coach.db brief morning --date 2026-08-06`
 
 This is a text-only advisory brief, but it requires Gate 0 and an existing baseline. The verified help surface exposed `brief morning`, `baseline start|observe|complete`, `context render`, and `gate-set`. This task did not invoke `brief morning` because the database is absent and creating it would violate the requested read-only pass.
+
+
+## Retry result — 2026-08-06
+
+At the user’s request, the local command `PYTHONPATH=src python -m coach --db data/coach.db brief morning --date 2026-08-06` was run. Database initialization succeeded: `data/coach.db` was created at 57,344 bytes, and the audit contains the local `claims.seeded` event for seven claims.
+
+No morning brief was generated. The exact user-facing output was:
+
+`policy error: Blocked by Gate 0. Record outcome, behavior, reason, source-purpose permissions, advisory acknowledgement, and a 7-14 day baseline first.`
+
+A subsequent `gate-status` confirmed `complete: false`, `next: complete Gate 0`, no outcome or behavior, no recorded reason, no permissions, `advisory_only: false`, and no baseline duration. No outbound action occurred.
