@@ -123,3 +123,31 @@ not by a passing implementation assertion. It must remain uncompleted until
 the user restores or configures Kimi K3 high, authorizes source review, and
 provides a supported Luna-Max execution route (or explicitly approves a
 replacement).
+
+
+## Model-routing repair completed
+
+On 2026-08-06, the Pi VibeProxy extension was repaired after explicit user
+approval. It had been configured for an unavailable local endpoint
+(http://localhost:8317/v1). It now uses the healthy shared edge:
+https://vibeproxy.epiloguecapital.com/v1.
+
+Fresh proof:
+
+- Pi discovered Kimi K3 from the repaired endpoint.
+- A Kimi request pinned to provider vibeproxy, model kimi-k3, and high thinking
+  completed with response `KIMI_K3_PROVENANCE_OK`. The session record reported
+  provider vibeproxy, model kimi-k3, response model k3, and reasoning tokens.
+  No project file was attached.
+- The supported Luna executor is gpt-5.6-luna with max reasoning effort. A
+  read-only smoke and the new project launcher both completed successfully.
+  There is no distinct gpt-5.6-luna-max catalog ID.
+- The pilot test suite still passed: 8 tests, plus Python compile check.
+
+New workspace evidence:
+- scripts/run-luna-worker.sh
+- docs/model-routing.md
+- run-records/20260806-vibeproxy-kimi-k3-repair.json
+
+A full Kimi source review remains a separate consent gate: the user must
+explicitly authorize sending the Coach Pilot files to the shared edge.
