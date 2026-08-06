@@ -86,3 +86,22 @@ Passed on 2026-08-06:
 
 The pilot is locally verified but not externally Opus-reviewed. It also cannot
 be recorded as Luna-Max-built because that exact account model is unavailable.
+
+
+## Kimi K3 high watcher preflight update
+
+The requested watcher lane was rechecked on 2026-08-06.
+
+- Pi's model catalog displayed Kimi K3, but the configured local VibeProxy
+  endpoint at localhost:8317 was unreachable.
+- A direct Kimi CLI invocation with model kimi-k3 and enabled thinking returned
+  "LLM not set."
+- No Kimi/VibeProxy process, user service, or Docker container was running.
+- No source code or documents were sent to Kimi.
+
+The Kimi K3 high review is therefore unavailable, not failed review. Its
+required operator action is to configure a live K3 provider (or restore the
+local proxy) and explicitly authorize sending the local project source for
+review. Corresponding run records are in the workspace:
+run-records/20260806-kimi-k3-validator-meta.json and
+run-records/20260806-kimi-k3-validator-output.md.
