@@ -47,7 +47,7 @@ The first end-to-end attempt exposed a runner defect: Python can return timeout 
 
 Gate 0 is currently incomplete, so the strategy correctly reports missing intended outcome, target behavior, rationale, and baseline duration. The first useful user setup is:
 
-`PYTHONPATH=src python3 -m coach --db data/coach.db gate-set --outcome "..." --behavior "..." --reason "..." --permission "bounded Coach data for advisory use only"`
+`PYTHONPATH=src python -m coach --db data/coach.db gate-set --outcome "Protect focused work" --behavior "Choose one vital task" --reason "I want fewer busy-not-vital days" --source-permission self-report:coaching --advisory-only --baseline-days 7`
 
 Then start a bounded baseline before treating patterns as evidence. Disable the schedule with:
 
