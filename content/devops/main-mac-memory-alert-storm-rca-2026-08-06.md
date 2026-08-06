@@ -47,6 +47,7 @@ The alert volume was not one memory failure. Four independent conditions were be
 - Mem0 `/health` gets two 12-second attempts when `/livez` remains healthy before restart/paging.
 - Gmail freshness threshold is 13 hours, so a six-hour job must miss a full run before the stale alert.
 - The monitor inspects the latest Gmail log block for auth/CLI failures instead of trusting `last_run` alone.
+- A failed Gmail run now supersedes missing/stale freshness notifications, so one OAuth failure cannot generate a second alert for the same underlying condition.
 - The resilience installer owns a canonical QMD launch agent backed by a launcher that pins QMD to the Node binary beside the QMD executable and migrates the legacy user-named job.
 
 ## Verification
@@ -59,6 +60,8 @@ The alert volume was not one memory failure. Four independent conditions were be
 - Live source-to-QMD indexing contract: OK.
 - Live Mem0: status OK, vector store connected, queue zero.
 - Scheduled monitor: disk OK at 92%/35 GB; no repeated disk page.
+- Gmail mailbox verification at 11:40 PDT found no new disk, QMD, or Mem0 alert after the 10:17 PDT QMD recovery. The only later message was one accurate Gmail OAuth failure at 10:28 PDT.
+- Gmail alert-priority regression cases passed: failed-over-stale, missing, stale, and fresh-success.
 
 The local WSL degradation harness still reports `SQLITE_CANTOPEN` for its own QMD fixture database. That is a separate local sandbox/index-path issue and did not invalidate the live main-mac repair.
 
@@ -66,4 +69,3 @@ The local WSL degradation harness still reports `SQLITE_CANTOPEN` for its own QM
 
 1. Interactive authentication is required: run `gwsa gmail login` on main-mac and complete OAuth. All three saved `gwsa` account sessions currently report stale, and the personal account fails closed because its identity cannot be verified.
 2. Rotate the 1Password service-account token and Qdrant credential. A read-only launchd metadata inspection exposed inherited credential values in the diagnostic tool output. Values are intentionally omitted here.
-3. Do not commit/push/deploy the broader worktree yet. Native `gpt-5.6-luna` Max was reachable and inspected the diffs, but the worker runtime repeatedly ended before emitting its final verdict. The operator instructed the agent to stop if that validator could not complete.
