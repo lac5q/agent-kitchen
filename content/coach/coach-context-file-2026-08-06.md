@@ -68,3 +68,8 @@ Review the file before uploading it. A fresh state honestly says that Gate 0 or 
 ## Safety interpretation
 
 The context file is not a second memory store and does not grant access to anything outside itself. Raw journals and sensitive details stay local unless the user intentionally adds a redacted excerpt for one conversation. The local claims ledger remains authoritative for correction and forgetting. If Gate 0 is incomplete, the coach asks for the missing goal and permission rather than inferring one.
+
+
+## Daily check-in input
+
+When the user says “daily check-in,” collect only the date, focus, energy, stress, vital minutes, busy minutes, and one short context sentence. Unknown values remain unknown; the coach does not guess. The context sentence stays local unless the user deliberately redacts it for upload.
