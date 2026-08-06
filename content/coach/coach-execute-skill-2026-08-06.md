@@ -64,3 +64,8 @@ From the canonical skill directory:
     scripts/install.sh --targets codex,claude,hermes,pi
 
 Use copy mode by default. Symlink mode is available only when every harness can read the canonical workspace.
+
+
+## Provenance gate refinement
+
+The headless runner now uses the short-lived Codex session metadata to attest actual model and reasoning effort because Codex JSONL does not include those fields in every invocation. It fails on absent or mismatched provenance and removes the session record after a successful stage; failed or drifted stages retain evidence for diagnosis.
