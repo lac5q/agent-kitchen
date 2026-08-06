@@ -105,3 +105,21 @@ local proxy) and explicitly authorize sending the local project source for
 review. Corresponding run records are in the workspace:
 run-records/20260806-kimi-k3-validator-meta.json and
 run-records/20260806-kimi-k3-validator-output.md.
+
+
+## Final blocked-state check
+
+A final read-only check on 2026-08-06 found no change:
+
+- The configured VibeProxy service remains unreachable at localhost:8317.
+- The direct Kimi CLI cannot start its local runtime in the current sandbox
+  because its log path is read-only; its prior elevated probe also reported
+  no configured LLM.
+- The exact requested Luna-Max executor remains unsupported by the
+  authenticated Codex account.
+
+The Beastmode objective is blocked by external model/provider configuration,
+not by a passing implementation assertion. It must remain uncompleted until
+the user restores or configures Kimi K3 high, authorizes source review, and
+provides a supported Luna-Max execution route (or explicitly approves a
+replacement).
