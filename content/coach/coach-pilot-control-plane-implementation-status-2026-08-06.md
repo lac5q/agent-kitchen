@@ -151,3 +151,28 @@ New workspace evidence:
 
 A full Kimi source review remains a separate consent gate: the user must
 explicitly authorize sending the Coach Pilot files to the shared edge.
+
+
+## Route-repair verification and review authorization boundary
+
+On 2026-08-06 the repaired VibeProxy extension was checked from this session.
+It points to https://vibeproxy.epiloguecapital.com/v1, whose model catalog
+responded. A pinned Pi invocation using vibeproxy/kimi-k3 with high thinking
+returned KIMI_K3_HIGH_OK.
+
+The user asked to continue, but the runtime security gate rejected sending the
+review payload because it requires explicit authorization for the exact code
+and document list. The approved prospective review scope is:
+
+- README.md
+- docs/acceptance-contract.md
+- docs/threat-model.md
+- docs/source-permission-matrix.yaml
+- docs/model-routing.md
+- scripts/run-luna-worker.sh
+- src/coach/core.py
+- src/coach/cli.py
+- tests/test_core.py
+
+No project file was exported during the rejected attempt. The next action is
+a user message explicitly authorizing those files to the Kimi K3 endpoint.
