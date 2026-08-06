@@ -176,3 +176,20 @@ and document list. The approved prospective review scope is:
 
 No project file was exported during the rejected attempt. The next action is
 a user message explicitly authorizing those files to the Kimi K3 endpoint.
+
+
+## Bounded voice/chat context bridge added
+
+On 2026-08-06, the pilot gained a generated `coach-context.md` bridge for a manually started ChatGPT Voice conversation. It contains Gate 0 state, aggregate baseline metrics, active claims, experiment state, privacy boundaries, and the daily analyze-think-recommend contract. It intentionally excludes raw observation notes, transcripts, identifiers, audit payloads, and connector data.
+
+Refresh it with:
+
+    PYTHONPATH=src python -m coach context render --output coach-context.md
+
+The daily contract requires the receiving coach to:
+- analyze structured facts while separating facts, hypotheses, and unknowns;
+- think with evidence, confidence, counter-evidence, and an alternative explanation;
+- recommend one small reversible action, one if-then precommitment, one check-in metric, and a stop/adjust condition;
+- remain advisory and never claim access to unconnected systems or diagnose personality.
+
+The local workspace now verifies 9 unit tests and compilation. Durable contract: `content/coach/coach-context-file-2026-08-06.md`.
