@@ -53,3 +53,25 @@ This is a code-level isolation fix, not proof that production Nango accounts are
 5. connmem and provider sync evidence for Linear, Circleback, and Notion.
 
 The native Luna-Max Beastmode audit was attempted with requested `openai-codex/gpt-5.6-luna` at max thinking. The direct read smoke proved the installed launcher can read the repository; the multi-file audit timed out without worker metadata, so no Luna audit claim is made.
+
+
+## Scheduler health follow-up (2026-08-07)
+
+The local fix now also exposes connector scheduler health without changing the shared cron-health core:
+
+- connector-sync is seeded lazily when a cycle actually runs, preserving existing pause/stop state.
+- Successful cycles record a heartbeat, processed count, duplicate/skip counts, and provider metadata.
+- Missing access tokens are reported as <provider>/auth; outer discovery failures are reported as scheduler, so the health row becomes actionable rather than silently green.
+- Observability remains fail-open for legacy/partial databases and cannot turn a provider sync failure into a harder failure.
+- Added focused regression coverage for healthy empty cycles and scheduler discovery failure.
+
+Commit: 2f702d8c on codex/gsd-roadmap-completion.
+
+Verification after this follow-up:
+
+- Full fast suite: 473 files passed, 2 skipped; 3,977 tests passed, 52 skipped.
+- Focused sync-job health tests: 2/2 passed.
+- Typecheck and targeted ESLint passed.
+- GitNexus staged detect-changes: 2 files, 3 symbols, 0 affected processes, low risk.
+
+Production deployment, live Nango fixtures, and live connector recall remain unverified until an authorized push/deploy window.
