@@ -70,3 +70,8 @@ Read-only SSH inspection confirmed the Cordant compose file defined connmem but 
 ## Follow-up Oracle memory alert RCA (2026-08-07)
 
 Oracle logs show the queued Cowork memory write is not an agent-key or Qdrant failure. The Mem0 circuit breaker is open after repeated connection failures to Ollama; Qdrant is reachable. The host Ollama unit and host endpoint are healthy, and the host .env sets OLLAMA_BASE_URL to the Docker gateway (172.18.0.1). The running mem0 container ignored that value because docker-compose.local.yml hard-coded http://ollama:11434 even though the oracle cloud-profile stack has no compose ollama service. Commit d73f3c4d makes OLLAMA_BASE_URL environment-driven, preserving bundled Ollama defaults for local/Cordant installs. The queue will only clear after a governed rebuild/restart and a live replay check.
+
+
+## Follow-up live evidence — Oracle queue schema
+
+Read-only inspection on 2026-08-07 found Oracle's currently deployed `mem0` queue database has one pending request (`id=1`, `retry_count=0`) but lacks the `dead_letter_requests` table. The deployed queue worker therefore cannot complete its retry-to-dead-letter transition until the next application image is deployed with the queue schema initializer. This is consistent with the observed repeated `mem0-ollama circuit OPEN` replay errors. The local source already creates `dead_letter_requests` in `Mem0Queue._init_db`; the pending action is the authorized deployment of the current source, followed by queue replay and health verification. No queue data was deleted or altered.
