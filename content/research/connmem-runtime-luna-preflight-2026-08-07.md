@@ -33,3 +33,7 @@ A native Beastmode preflight was attempted with requested `openai-codex/gpt-5.6-
 ## Remaining evidence gates
 
 Provider OAuth/CLI credentials, approved workspace/team scope, capability and inventory receipts, deletion/webhook evidence, host-side runtime configuration, and explicit deployment approval are still required before claiming production indexing or deploying.
+
+## External validation update
+
+The requested Fable 5 high read-only review was attempted and rejected before analysis with Anthropic HTTP 400: the configured credit balance is too low. The requested Opus 5 xhigh fallback was then attempted and rejected with the same provider-side credit error. Therefore no Fable/Opus verdict is claimed. A direct native `openai-codex/gpt-5.6-luna` smoke returned `LUNA OK`; a bounded Beastmode Pi worker invocation timed out before producing worker provenance or a result. These provider/worker constraints are validation blockers, not repository test failures.
