@@ -55,3 +55,13 @@ The base already includes Nango connection ownership enforcement, governed agent
 6. Deploy to Cordant-Hermes and oracle-1 only after the exact target, revision, environment, and verification commands are approved.
 
 No production push, merge to the default branch, or deployment was performed in this review.
+
+
+## Follow-up host check (2026-08-07)
+
+The public verification script confirms onboarding reaches both hosts with the expected 403 responses. Live health then showed:
+
+- Oracle: mem0 degraded with one queued memory save; connmem up.
+- Cordant: mem0 up; connmem degraded because the service was absent from the running compose project.
+
+Read-only SSH inspection confirmed the Cordant compose file defined connmem but the running stack had no connmem container. The app service did not declare connmem in depends_on, so the documented `up -d memroos` deployment left the connected-memory path silently omitted. The repository now declares connmem as a healthy dependency of memroos (commit `0b090028`); this requires the next governed deploy to rebuild/start the stack before the alert can be cleared. No remote service was restarted in this review.
