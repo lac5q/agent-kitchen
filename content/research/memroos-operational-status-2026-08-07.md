@@ -65,3 +65,8 @@ The public verification script confirms onboarding reaches both hosts with the e
 - Cordant: mem0 up; connmem degraded because the service was absent from the running compose project.
 
 Read-only SSH inspection confirmed the Cordant compose file defined connmem but the running stack had no connmem container. The app service did not declare connmem in depends_on, so the documented `up -d memroos` deployment left the connected-memory path silently omitted. The repository now declares connmem as a healthy dependency of memroos (commit `0b090028`); this requires the next governed deploy to rebuild/start the stack before the alert can be cleared. No remote service was restarted in this review.
+
+
+## Follow-up Oracle memory alert RCA (2026-08-07)
+
+Oracle logs show the queued Cowork memory write is not an agent-key or Qdrant failure. The Mem0 circuit breaker is open after repeated connection failures to Ollama; Qdrant is reachable. The host Ollama unit and host endpoint are healthy, and the host .env sets OLLAMA_BASE_URL to the Docker gateway (172.18.0.1). The running mem0 container ignored that value because docker-compose.local.yml hard-coded http://ollama:11434 even though the oracle cloud-profile stack has no compose ollama service. Commit d73f3c4d makes OLLAMA_BASE_URL environment-driven, preserving bundled Ollama defaults for local/Cordant installs. The queue will only clear after a governed rebuild/restart and a live replay check.
