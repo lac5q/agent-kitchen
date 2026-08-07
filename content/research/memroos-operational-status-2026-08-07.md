@@ -1,0 +1,57 @@
+---
+title: "MemroOS operational alert and roadmap status"
+description: "Evidence-backed status of recent connector and memory alerts, Beastmode Luna host repairs, and remaining live-gated work."
+publishedAt: "2026-08-07"
+tags: [memroos, operations, rca, beastmode, langsmith, connectors]
+keywords: [agent-key, mem0, connector sync, memory isolation, Luna Max, LangGraph, LangSmith, deployment]
+author: "Codex"
+source_session: "019fdac3-ab4e-7a21-bbef-f37ee440470a"
+model: "gpt-5.6-luna"
+sources:
+  - "label:circleback:19fcdf2b9a04caf4"
+  - "label:circleback:19fcdf31a3306949"
+  - "label:circleback:19fcdf2e6f6659a9"
+  - "file:/home/lac5q/github/memroos-product/.planning/ROADMAP.md"
+  - "file:/home/lac5q/github/memroos-product/docs/production-deployment.md"
+derived_from:
+  - "content/research/connector-space-isolation-rca-2026-08-07.md"
+  - "content/research/nango-connection-ownership-rca-2026-08-07.md"
+regen_prompt: "Recheck recent MemroOS alert emails, current branch/test/deploy evidence, and both Beastmode host preflights, then refresh the remaining-live-gates status without claiming unverified provider proof."
+---
+
+# Operational status
+
+## Alert evidence
+
+Circleback surfaced two unread Aug 4 reports from Eric Rosenthal:
+
+- “Fwd: MemRoOS bug report — agent-key unset + mem0 write timeout (+ Cowork connector history)” (thread 19fcdf2b9a04caf4)
+- “Fwd: MemRoOS connectivity test — results & two open issues” (thread 19fcdf31a3306949)
+
+The connected email search exposed subjects and dates, but not the forwarded message bodies. Therefore the specific reported timeout payload is not treated as independently reproduced from email alone.
+
+## Root cause work completed locally
+
+The current codex/connector-isolation-main branch is clean at 2aced7af, two commits ahead of origin/main:
+
+- 13f8aaba: connector memory is isolated by connection/tenant space.
+- 2aced7af: connector sync health exposes scheduler/auth degradation and last-run state.
+
+The base already includes Nango connection ownership enforcement, governed agent authentication, LangGraph-to-LangSmith trace substrate, and GSD closeout gates. Local validation previously passed typecheck, targeted connector/cron tests (62 tests), targeted lint, and the full fast suite (3,977 passed, 52 skipped).
+
+## Beastmode/Luna host evidence
+
+- maeve-u1: native Luna model preflight passed; local bm read-only smoke passed; Beastmode suite is 12/12 green.
+- main-mac (the accessible likely alias for the requested but unresolved main-man): policy digest and Luna preflight passed; non-interactive PATH discovery was repaired; Pi better-sqlite3 was rebuilt from Node ABI 147 to the host ABI 137; the rerun returned expected project facts and BM_EXIT with no warning.
+- main-man: not resolvable by DNS, hosts, SSH config, or Tailscale; no claim is made that it is identical to main-mac.
+
+## Remaining live gates
+
+1. Promote the two connector fixes through the governed branch/PR and production deploy. This requires explicit outbound authorization.
+2. Prove live provider-backed connmem writes/recall for Eric and a second agent on Cordant; code and tests do not substitute for credentials and end-to-end evidence.
+3. Verify Linear/Circleback/Notion onboarding, server indexing, and tenant/agent isolation on the deployed hosts.
+4. Enable and prove LangGraph → LangSmith with production credentials and a trace visible in LangSmith.
+5. Resolve roadmap phases that are explicitly credential/evidence gated (including deferred 175/176, live SLO evidence, production/admin smoke, and Phase 231/237 measured evaluation).
+6. Deploy to Cordant-Hermes and oracle-1 only after the exact target, revision, environment, and verification commands are approved.
+
+No production push, merge to the default branch, or deployment was performed in this review.
