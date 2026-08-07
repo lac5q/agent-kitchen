@@ -75,3 +75,17 @@ Verification after this follow-up:
 - GitNexus staged detect-changes: 2 files, 3 symbols, 0 affected processes, low risk.
 
 Production deployment, live Nango fixtures, and live connector recall remain unverified until an authorized push/deploy window.
+
+
+## Main-base integration follow-up (2026-08-07)
+
+The validated connector commits were carried onto a clean branch from origin/main (1cc84c3f), rather than merging the stale feature tip wholesale. This avoids regressing main's newer SQLite type-boundary and GSD closeout work.
+
+- Integration branch: codex/connector-isolation-main
+- Integration commits: 13f8aaba (space isolation), 2aced7af (scheduler health)
+- Branch delta: 2 commits ahead of main; working tree clean.
+- GitNexus compare against main: 5 files, 7 symbols, 0 affected processes, LOW risk.
+- Current-base full fast gate: 473 files passed, 3,977 tests passed, 52 skipped.
+- Current-base typecheck, targeted ESLint, and connector/cron-health tests (62/62) passed.
+
+The branch has not been pushed, merged into main, or deployed to Cordant/Oracle because outbound authorization is still pending.
