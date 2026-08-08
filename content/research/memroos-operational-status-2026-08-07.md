@@ -135,3 +135,8 @@ The Cordant owner route was exercised with a short-lived in-container admin JWT 
 The Cordant NOC adoption endpoint is live but truthfully reports `sourceState=known_unwired` / metric `unavailable`; no live adoption SLO is claimed. The code-side gates remain green: 474 test files / 3,988 tests passed with 52 skipped in the fast suite, typecheck and targeted lint passed, role-rank/lib-boundary/SQLite allowlist/GSD receipt gates passed, and the final compact Claude Opus 5 xhigh review returned PASS. Its non-blocking advisories are the same-process owner-sync lease, the fixed 30-second throttle window, and keeping the shared-shell backfill predicate explicit.
 
 The roadmap/state docs now distinguish implemented code and production evidence from the remaining external gates: ChatGPT Workspace Admin custom-app/tool-scan/publish smoke, provider-backed Linear/Circleback/Notion reconciliation and recall, live adoption producers/SLO evidence, Phase 175/176 measurements, and Phase 237 external evaluation. No claim is made that those credential/evidence gates are closed.
+
+
+## Provider aggregate after live owner sync — 2026-08-07
+
+A sanitized Cordant database aggregate confirms the owner run materialized private rows by provider without exposing record content: Circleback 20, Google Drive 100, and Linear 80. Notion had one successful sync-state row but no new private rows in this run. Connector sync-state totals report Circleback 3 states/3 successful, Google Drive 2/2 successful, Linear 3 states/1 successful (the other states represent prior/degraded history), and Notion 1/1 successful. These counts are application-level evidence for the deployed owner path; they are not a claim of company-complete provider coverage.
