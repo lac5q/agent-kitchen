@@ -31,7 +31,7 @@ The repository is clean on `main` at `a33c4e26`, and the current roadmap disting
 ## Green or implementation-complete lanes
 
 - Phase 175: two live Oracle 300-second operator waves (510 and 501 requests, zero request errors) and two persisted 25-task lexical controls. Decision is `optimize-current-stack`; public p95 is retained as an unknown boundary because per-request dependency timing is not emitted.
-- Phases 185–190: connected-memory runtime seam, topology/auth gates, structural debt paydown, and client barrel split are on `main); Phase 190 records unavailable bundle metrics rather than fabricating a reduction.
+- Phases 185–190: connected-memory runtime seam, topology/auth gates, structural debt paydown, and client barrel split are on `main`; Phase 190 records unavailable bundle metrics rather than fabricating a reduction.
 - Phases 201–205: invite/multi-harness and Cowork paths, Google OIDC code, ledger honesty, and Oracle point-and-index knowledge provisioning are implemented. Google OAuth client credentials and the live invite→Google smoke remain operator work.
 - Phases 208–211 and 228–236: ownership/capability controls, onboarding rescue/reporting, LangSmith bridge, contained memory-engine work, observations, and living briefs have implementation evidence and are deployed on both production hosts.
 - Production validation: full fast suite 478 files / 4,006 passed / 54 skipped; focused NOC 34/34; evidence tests 20/20; typecheck and lint (0 errors); GitNexus LOW-risk change detection; secret-guard checks; and Fable 5 high read-only validation passed.
