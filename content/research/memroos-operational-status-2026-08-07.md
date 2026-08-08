@@ -148,3 +148,20 @@ The Phase 175 runtime-bottleneck checker still fails closed because the required
 
 
 Roadmap reconciliation itself is committed and pushed as `e210714e05952d1379650809f5d243fb15a19b42`; both production checkouts were fast-forwarded to that commit without rebuilding unchanged containers.
+
+
+## Prime Agent and Cline onboarding follow-up — 2026-08-07
+
+The default branch now includes commit `91bdc3c9`, which adds Prime Agent as a supported onboarding/runtime platform while retaining the existing Cline support. T3 is intentionally not represented as a separate platform or harness. The implementation covers invite/token catalogs, registration/bootstrap allowlists, UI labels and invite options, local process detection, host sync probes, runtime activity mapping, memory capture, hive polling, and onboarding installer instructions.
+
+Prime onboarding is deliberately honest about the integration boundary: Prime Agent's official documentation does not publish a native MCP configuration file path, so the generated installer does not fabricate one. It installs the shared `~/.prime/agent/AGENTS.md`/skills integration, prints the MemroOS MCP endpoint for a manual MCP-backed skill/IPython setup, and records a manual action. Cline keeps its verified CLI/MCP settings path. Official references: https://github.com/PrimeIntellect-ai/prime-agent and https://cline.bot/cli.
+
+Validation for this change passed focused fast/slow onboarding tests (including an executing Prime invite test), typecheck, quiet lint, shell syntax checks, and observe-maturity drift checks. The prior full suite remained green at 3,994 passed / 53 skipped fast and 53 passed / 3,994 skipped slow; the new focused slow route suite passed 48/48.
+
+## Current production deployment checkpoint — 2026-08-07
+
+Commit `91bdc3c9d8530648298bb2403cca8d950468463e` is pushed to `origin/main` and is running on both `cordant-hermes-01` and `oracle-1`. The application container is healthy on each host. `scripts/verify-onboarding-deploy.sh` passed from each host: both public onboarding endpoints return HTTP 403 for invalid and structurally valid bad tokens (including the expected invalid-signature response), `/api/health` returns 200, and mem0, orchestration, and connmem health checks return 200. No volumes, queue rows, or host-only preservation files were deleted.
+
+## Remaining goal gates
+
+The broad roadmap goal is not fully closed. The requested `main-man` host remains undiscoverable, so no claim can be made about completing that host's Luna/Beastmode run. The available Luna host smoke and bounded Beastmode checks passed, but the full Beastmode/GSD audit timed out. Roadmap slices that require external credentials or measured evidence remain open, notably provider-backed sync/recall for additional named agents, ChatGPT Workspace custom-app/tool-scan/publish smoke, live adoption/SLO evidence, Phase 175/176 measurements, and Phase 237 external evaluation. LangGraph-to-LangSmith root export is already live on both production hosts from the earlier deployment; historical 400 receipts remain historical diagnostics, not current export failures.
