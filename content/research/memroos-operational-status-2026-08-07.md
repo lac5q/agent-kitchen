@@ -145,3 +145,6 @@ A sanitized Cordant database aggregate confirms the owner run materialized priva
 ## Remaining evidence probes — 2026-08-07
 
 The Phase 175 runtime-bottleneck checker still fails closed because the required suite manifest, two operator runs, two retrieval runs, CPU/heap/traces, and attribution artifacts are absent. This is an evidence blocker, not a test regression. The future-spike checker remains green (6 reports and 4 fixture tests).
+
+
+Roadmap reconciliation itself is committed and pushed as `e210714e05952d1379650809f5d243fb15a19b42`; both production checkouts were fast-forwarded to that commit without rebuilding unchanged containers.
