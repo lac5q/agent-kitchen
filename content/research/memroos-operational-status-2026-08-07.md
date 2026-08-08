@@ -122,3 +122,16 @@ After the merged image rollout and the host-specific Ollama endpoint fix, the re
 - Oracle still has no local user matching the historical Nango end-user IDs, so its orphaned connections remain intentionally unmaterialized until an owner completes a fresh OAuth flow or an explicit operator-approved identity mapping exists.
 
 Sources: live host env/container inspection, Nango connection metadata (secret-safe), authenticated Cordant `/api/tools/connections` response, repository `sync-job.ts` and focused Vitest run.
+
+
+## Continuation deploy and owner-scope verification — 2026-08-07
+
+The owner-scoped connector sync hardening is merged on `main` as `052ae485320bf8acb8a162120e8d77d8fa0fc82b` and pushed. The stale connector branches were pruned; local `main` is clean and tracks `origin/main`.
+
+Oracle-1 and cordant-hermes-01 were rebuilt with the profile-aware restart wrapper and both containers restarted at that exact commit. `scripts/verify-onboarding-deploy.sh` passed on each host: `/api/health` returned 200, required services were healthy, and invalid/structurally valid bad onboarding tokens returned 403 (not 401). Known host-only preservation/backup files remain untracked by design and were not deleted.
+
+The Cordant owner route was exercised with a short-lived in-container admin JWT for the existing owner. It returned HTTP 200 with `written=200`, `duplicates=0`, `skipped=0`, and `degraded=false`. A sanitized read-only database check then found 3 private connector spaces containing 200 messages, all 3 with the owner member and zero other human members; 4 shared connector spaces contain 467 messages. Three owner-governance audit rows and nine connector sync-state rows are present. Provider content, credentials, and tokens were not recorded here.
+
+The Cordant NOC adoption endpoint is live but truthfully reports `sourceState=known_unwired` / metric `unavailable`; no live adoption SLO is claimed. The code-side gates remain green: 474 test files / 3,988 tests passed with 52 skipped in the fast suite, typecheck and targeted lint passed, role-rank/lib-boundary/SQLite allowlist/GSD receipt gates passed, and the final compact Claude Opus 5 xhigh review returned PASS. Its non-blocking advisories are the same-process owner-sync lease, the fixed 30-second throttle window, and keeping the shared-shell backfill predicate explicit.
+
+The roadmap/state docs now distinguish implemented code and production evidence from the remaining external gates: ChatGPT Workspace Admin custom-app/tool-scan/publish smoke, provider-backed Linear/Circleback/Notion reconciliation and recall, live adoption producers/SLO evidence, Phase 175/176 measurements, and Phase 237 external evaluation. No claim is made that those credential/evidence gates are closed.
