@@ -45,3 +45,12 @@ Resolution requires a LangSmith API key/workspace grant that permits the `memroo
 - LangSmith read authorization is still 403 as described above.
 - Phase 175 sustained runtime evidence, Phase 237 licensed/equal-model provider-backed promotion evidence, and the ChatGPT Workspace Admin custom-app/tool-scan/publish smoke require authorized external fixtures or workspace-admin access.
 - Cline and Prime Agent remain supported onboarding/install targets; T3.codes is intentionally not modeled as a separate harness.
+
+
+## LangSmith credential handoff (2026-08-08)
+
+The official LangSmith Cloud login is https://smith.langchain.com. LangSmith's API documentation identifies https://api.smith.langchain.com as the US Cloud API endpoint and requires the `X-Api-Key` header; regional deployments use their corresponding regional API host. The current MemroOS production configuration points at the US endpoint and project `memroos`.
+
+To resolve the 403, the operator should sign in to the organization/workspace that owns `memroos`, open Settings → API Keys, and create or authorize a workspace-scoped service key (preferred for production) or a PAT with permission to read and write the `memroos` project. If the account spans multiple workspaces, record the non-secret Workspace ID and set `LANGSMITH_WORKSPACE_ID` as required. The API key is displayed once and must be transferred through the approved secret manager/host configuration, never chat, shell history, logs, or git.
+
+Maeve-u1 currently has no LangSmith environment variables configured. This is distinct from the configured cloud/production credential; do not assume the cloud key is available locally or copy it into Maeve-u1. Production secret rotation and a post-rotation `X-Api-Key` read/write probe on both Oracle-1 and cordant-hermes-01 remain pending operator authorization and the non-secret endpoint/workspace details.
