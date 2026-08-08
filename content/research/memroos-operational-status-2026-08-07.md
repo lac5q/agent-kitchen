@@ -106,3 +106,19 @@ Provider-backed connector writes/recall for named users, Linear/Circleback/Notio
 ## Follow-up queue replay check (2026-08-08 UTC)
 
 After the merged image rollout and the host-specific Ollama endpoint fix, the read-only Mem0 queue status is healthy on both production profiles: `queued=0`, `oldest=null`, and no recent replay failures. No queue rows were deleted by the verification.
+
+
+## Connector onboarding recovery — 2026-08-07 continuation
+
+- Cordant host was missing `NANGO_SECRET_KEY` despite the production contract requiring Oracle and Cordant to share the same Nango environment. The production Nango secret was streamed from the 1Password service account to Cordant's mode-600 `/home/ubuntu/memroos/.env`; it was never printed or committed. The app service was recreated with the profile-aware restart wrapper.
+- Cordant now reports the Linear, Circleback, and Notion provider cards as Nango-available. The same check also confirms the Nango-backed Google providers remain available.
+- A read-only inventory showed six historical Nango connections whose end-user ID exactly matched the existing `eric@cordant.ai` user. Only those exact matches were materialized through the existing authenticated OAuth callback; orphaned/test connections with no matching local owner were left untouched. The resulting local rows are private (`is_shared=0`, `needs_owner=0`) and owned by Eric; the authenticated connections endpoint returned all six as `connected`.
+- The connector scheduler previously waited for its first 15-minute interval after startup. `startConnectorJob()` now performs one bounded, fail-open cycle immediately, then retains the 15-minute interval. Focused connector ownership/sync/callback tests pass (3 files, 10 tests).
+- The Python CONNMEM runtime remains intentionally fail-closed and unconfigured on both hosts because no provider registry/credentials have been approved for that separate host-level adapter plane. Nango-backed app connectors are the active user-scoped path; no provider credential was invented or silently adopted.
+
+## Remaining gate
+
+- Run and capture a real provider sync/reconciliation receipt for the exact Cordant-owned Linear/Circleback/Notion connections, including fetched/unique/indexed/failed counts and representative recall. Historical Nango metadata alone is not proof of provider data coverage.
+- Oracle still has no local user matching the historical Nango end-user IDs, so its orphaned connections remain intentionally unmaterialized until an owner completes a fresh OAuth flow or an explicit operator-approved identity mapping exists.
+
+Sources: live host env/container inspection, Nango connection metadata (secret-safe), authenticated Cordant `/api/tools/connections` response, repository `sync-job.ts` and focused Vitest run.
