@@ -75,3 +75,29 @@ Oracle logs show the queued Cowork memory write is not an agent-key or Qdrant fa
 ## Follow-up live evidence — Oracle queue schema
 
 Read-only inspection on 2026-08-07 found Oracle's currently deployed `mem0` queue database has one pending request (`id=1`, `retry_count=0`) but lacks the `dead_letter_requests` table. The deployed queue worker therefore cannot complete its retry-to-dead-letter transition until the next application image is deployed with the queue schema initializer. This is consistent with the observed repeated `mem0-ollama circuit OPEN` replay errors. The local source already creates `dead_letter_requests` in `Mem0Queue._init_db`; the pending action is the authorized deployment of the current source, followed by queue replay and health verification. No queue data was deleted or altered.
+
+
+## Follow-up deployment and LangSmith live proof (2026-08-08 UTC)
+
+The governed merge and production rollout are now complete for the current default branch:
+
+- Local `main` is clean and tracks `origin/main` at merge commit `c22f93f3`.
+- Oracle-1 and Cordant-Hermes are both on that exact revision; local production-only preservation/override files and predeploy backup refs were retained, and no volumes or queue data were deleted.
+- Final remote `verify-onboarding-deploy.sh` and host-profile health checks passed on both hosts. Public `/api/health` returned 200 with mem0, Graph Memory, Agents, APO, and connmem up. RTK and QMD remain explicitly optional/degraded local tools.
+- Onboarding checks on both public endpoints return the expected 403 for invalid/expired inputs, including the expected invalid-signature response.
+
+### LangGraph → LangSmith
+
+The orchestration image was rebuilt from the merged source on both hosts (the initial app-only rebuild had left an older orchestration image running). The LangSmith API key remains sourced from the host's secret manager and is not stored in this report. The organization-scoped key required the authorized workspace target, which is now configured on both hosts. Tracing remains metadata-only and fail-open.
+
+A no-agent, approval-gated smoke route was run on each host and then rejected/cleaned up:
+
+- Cordant trace `d558eeed-ede0-55e0-84a4-16678bfe3796`: LangSmith GET returned `status=success`, `name=memroos.langgraph.run`, `run_type=chain`.
+- Oracle trace `61b76893-790b-5894-b3ce-3648dbea821e`: LangSmith GET returned the same success/name/type proof.
+- Local trace receipts on both hosts have `export_status=queued`, `reason_code=null`, `remote_project=memroos`; the authoritative remote GET is the live export proof.
+- Oracle's container DNS could not resolve the LangSmith endpoint through Docker's embedded resolver even though the host could. The production-only untracked override now bootstraps the orchestration container with the host VCN resolver before uvicorn; resolution and trace export are verified after recreation.
+- All deployment-verifier smoke HIL decisions were rejected after validation; no pending deployment-verifier HIL entries remain.
+
+### Remaining gates
+
+Provider-backed connector writes/recall for named users, Linear/Circleback/Notion onboarding/indexing, live SLO/evaluation phases, and other explicitly credential/evidence-gated roadmap slices remain open. Optional RTK/QMD degradation is expected in these production profiles.
