@@ -101,3 +101,8 @@ A no-agent, approval-gated smoke route was run on each host and then rejected/cl
 ### Remaining gates
 
 Provider-backed connector writes/recall for named users, Linear/Circleback/Notion onboarding/indexing, live SLO/evaluation phases, and other explicitly credential/evidence-gated roadmap slices remain open. Optional RTK/QMD degradation is expected in these production profiles.
+
+
+## Follow-up queue replay check (2026-08-08 UTC)
+
+After the merged image rollout and the host-specific Ollama endpoint fix, the read-only Mem0 queue status is healthy on both production profiles: `queued=0`, `oldest=null`, and no recent replay failures. No queue rows were deleted by the verification.
