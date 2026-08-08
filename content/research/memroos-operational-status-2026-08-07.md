@@ -165,3 +165,8 @@ Commit `91bdc3c9d8530648298bb2403cca8d950468463e` is pushed to `origin/main` and
 ## Remaining goal gates
 
 The broad roadmap goal is not fully closed. The requested `main-man` host remains undiscoverable, so no claim can be made about completing that host's Luna/Beastmode run. The available Luna host smoke and bounded Beastmode checks passed, but the full Beastmode/GSD audit timed out. Roadmap slices that require external credentials or measured evidence remain open, notably provider-backed sync/recall for additional named agents, ChatGPT Workspace custom-app/tool-scan/publish smoke, live adoption/SLO evidence, Phase 175/176 measurements, and Phase 237 external evaluation. LangGraph-to-LangSmith root export is already live on both production hosts from the earlier deployment; historical 400 receipts remain historical diagnostics, not current export failures.
+
+
+## Branch cleanup and latest-main rollout — 2026-08-07
+
+The fully merged `codex/memroos-product-cloud-environment` branch was reviewed, merged into `main`, pushed as `bc9922af`, and removed locally and remotely. Other unmerged remote branches were left untouched. Both production checkouts were fast-forwarded to `bc9922af` without an image rebuild because the merge changed only cloud bootstrap comments/documentation. The onboarding/health verifier was rerun from both hosts and passed with the same 403/200 results described above; both app containers remain healthy.
