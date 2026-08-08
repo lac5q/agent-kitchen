@@ -140,3 +140,8 @@ The roadmap/state docs now distinguish implemented code and production evidence 
 ## Provider aggregate after live owner sync — 2026-08-07
 
 A sanitized Cordant database aggregate confirms the owner run materialized private rows by provider without exposing record content: Circleback 20, Google Drive 100, and Linear 80. Notion had one successful sync-state row but no new private rows in this run. Connector sync-state totals report Circleback 3 states/3 successful, Google Drive 2/2 successful, Linear 3 states/1 successful (the other states represent prior/degraded history), and Notion 1/1 successful. These counts are application-level evidence for the deployed owner path; they are not a claim of company-complete provider coverage.
+
+
+## Remaining evidence probes — 2026-08-07
+
+The Phase 175 runtime-bottleneck checker still fails closed because the required suite manifest, two operator runs, two retrieval runs, CPU/heap/traces, and attribution artifacts are absent. This is an evidence blocker, not a test regression. The future-spike checker remains green (6 reports and 4 fixture tests).
