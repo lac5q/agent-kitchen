@@ -39,7 +39,7 @@ derived_from:
   - strategy/positioning.md
   - strategy/linkedin-agentic-virality-system.md
 regen_prompt: |
-  Preserve the first-person operator story, the exact public source links, the dated personal stack evidence, and the private runtime-neutral framework's Establish / Operate / Compound sequence. Rewrite in accessible language with no AI slop, then regenerate the article, podcast treatment, channel variants, media plan, and source map. Keep fact claims distinct from recommendations.
+  Start with a concrete handoff failure that makes the reader recognize the human coordination tax before introducing the vendor landscape. Preserve the first-person operator story, exact public source links, dated personal stack evidence, and the private runtime-neutral framework's Establish / Operate / Compound sequence. Rewrite in accessible language with no AI slop, then regenerate the article, podcast treatment, channel variants, media plan, and source map. Keep fact claims distinct from recommendations.
 ---
 
 # Full Content Package
@@ -86,13 +86,17 @@ The next generation of agent systems will be won by the layer that coordinates a
 
 ## The opening scene
 
-I recently made a presentation about becoming agentic and managing agent work after watching [Guillermo Rauch's Vercel talk about the agent every company is about to build](https://youtu.be/HQXi4snP36I). The part that stayed with me was not the promise that agents would write more software. It was the quiet admission inside the architecture: every useful agent needs the same production plumbing.
+Most agent demos end when the agent returns an answer. My work usually starts there.
 
-That is exactly what Vercel's eve packages. An agent is a directory. Instructions live in Markdown. Tools live in TypeScript. Sessions are durable. Code runs in a sandbox. Approvals pause the run. Traces and evals make the behavior inspectable.
+I ask one agent to research a market. It returns a useful brief. I pass that to another agent to turn into a plan. The second agent asks for the sources again. The third needs to know which parts are facts and which parts are guesses. Then a reviewer asks whether anyone approved the next step.
 
-Then I looked at my own system.
+Nothing is obviously broken. Each agent did something reasonable. I still have to copy the context, check the sources, reconcile slightly different answers, remember which decision is current, and approve the workflow from another screen. The agents are producing the work. I am carrying the story.
 
-I have run enough harnesses, models, skills, and agents that the first problem is no longer starting an agent. It is getting the right agent to start with the right context, hand work to the next agent, wait for the right approval, and leave behind a useful record for the next run.
+That is when I watched [Guillermo Rauch's Vercel talk about the agent every company is about to build](https://youtu.be/HQXi4snP36I) and made a presentation about it. The talk gave me a name for the problem I was already living with: the machine can become the actor, but the company still needs a system around it.
+
+Vercel's eve packages the production plumbing for one agent. Instructions live in Markdown. Tools live in TypeScript. Sessions can pause and resume. Code runs in a sandbox. Approvals stop the run. Traces and evals make the behavior inspectable.
+
+The next problem is making the right agent start with the right context, hand work to the next agent, wait for the right approval, and leave a useful record for the next run.
 
 The models are not the only systems with context windows anymore. The operator has one too.
 
@@ -348,15 +352,33 @@ source_video_title: "The AI Agent Every Company is About to Build"
 
 # I Built More Agents. The Work Got Harder.
 
-Vercel showed what one production-ready agent looks like. The next problem is getting several agents to work as one system the company actually owns.
+Most agent demos end at the satisfying moment: the agent returns an answer.
+
+My work usually starts there.
+
+I ask one agent to research a market. It comes back with a useful brief. I pass that to another agent to turn into a plan. The second agent asks for the sources again. The third agent needs to know which parts are facts and which parts are guesses. Then a reviewer asks whether anyone approved the next step.
+
+Nothing is obviously broken. Each agent did something reasonable. I still have to copy the context, check the sources, reconcile two slightly different answers, remember which decision is current, and approve the same workflow from a different screen.
+
+By the end, the agents have produced a lot of work. I am the one holding the story together.
+
+That is the pain people feel after the first successful demo. The system is faster at producing outputs, but slower for a human to understand and control.
+
+The human becomes the:
+
+- context courier;
+- approval queue;
+- shared memory;
+- translator between tools;
+- person who restarts the run when a handoff fails.
+
+I have already seen this happen in my own setup. In a late-July inventory, I counted 13 harnesses, the software shells that actually run agents; 12 model IDs, distinct AI models; 48 agent definitions; 390 skills, packaged instructions that teach an agent a specific job; and 27 MCP servers, connectors built on the Model Context Protocol, an open standard that gives agents a common way to reach tools and data. Those numbers describe one moment in one operator's environment. They are not a benchmark. They are a warning about how fast raw capability can outgrow coordination.
 
 I watched [Guillermo Rauch's Vercel talk about the agent every company is about to build](https://youtu.be/HQXi4snP36I), and then I did what I usually do when a talk gets under my skin: I made a presentation about it.
 
-The talk's central idea is easy to follow. Software is gaining a new kind of worker: the agent. An agent is a program that uses an AI model to do real work on its own. It can write code, ship it, check the results, and keep going after the human walks away from the keyboard. Vercel's official session description calls this a shift from a human actor to a machine actor, and frames the challenge as building infrastructure for software that acts in production. [The session page](https://vercel.com/ship/nyc/session/agentic-infrastructure) lists Guillermo Rauch, Malte Ubl, Shar Dara, and the rest of the Vercel team behind that argument.
+The talk argues that software is gaining a new kind of worker: the agent. An agent is a program that uses an AI model to do real work on its own. It can write code, ship it, check the results, and keep going after the human walks away from the keyboard. Vercel's official session description calls this a shift from a human actor to a machine actor, and frames the challenge as building infrastructure for software that acts in production. [The session page](https://vercel.com/ship/nyc/session/agentic-infrastructure) lists Guillermo Rauch, Malte Ubl, Shar Dara, and the rest of the Vercel team behind that argument.
 
-I agreed with the direction. I also felt a familiar discomfort.
-
-I have already seen what happens when the first useful agent becomes the fifth, then the tenth. Each one can be made to work. The system around them gets harder to explain. Information lives in different places. Permissions mean different things in different tools. One agent makes a useful decision, and the next agent never hears about it. I end up carrying the story between them myself.
+I agreed with the direction. The talk also gave me a better name for the problem I was already living with.
 
 AI models have a well-known limit called a context window, the amount of information a model can hold in mind at once. It turns out the models are not the only ones with that limit. The operator has one too.
 
@@ -365,8 +387,6 @@ AI models have a well-known limit called a context window, the amount of informa
 The first agent is satisfying because the feedback loop is short. Give it a task. Watch it work. Check the result. Fix the instructions. Run it again.
 
 The second agent changes the shape of the work. Now someone has to decide which agent gets the task, what information it receives, what it is allowed to do, and what the next agent can trust. That is where the missing system shows up.
-
-I have seen this firsthand in my own setup. In a late-July inventory, I counted 13 harnesses, the software shells that actually run agents; 12 model IDs, distinct AI models; 48 agent definitions; 390 skills, packaged instructions that teach an agent a specific job; and 27 MCP servers, connectors built on the Model Context Protocol, an open standard that gives agents a common way to reach tools and data. Those numbers describe one moment in one operator's environment. They are not a benchmark. They are a warning about how fast raw capability can outgrow coordination.
 
 The work did not get hard because any single agent was bad. It got hard because every agent had its own private idea of what the context was, what tools it had, where things stood, and what counted as proof.
 
@@ -555,7 +575,13 @@ In this episode, I use Vercel's eve, Google ADK, Google's Agent Development Kit,
 
 ### Cold open
 
-I watched a Vercel talk about the agent every company is about to build, and then I made a presentation about it. The talk made one agent look easier to ship. My first reaction was excitement. My second was recognition.
+Most agent demos end when the agent returns an answer. My work usually starts there.
+
+I ask one agent to research a market. It returns a useful brief. I pass that to another agent to turn into a plan. The second agent asks for the sources again. The third needs to know which parts are facts and which parts are guesses. Then a reviewer asks whether anyone approved the next step.
+
+Nothing is obviously broken. Each agent did something reasonable. I still have to copy the context, check the sources, reconcile slightly different answers, remember which decision is current, and approve the workflow from another screen.
+
+That is when I watched a Vercel talk about the agent every company is about to build and made a presentation about it. The talk made one agent look easier to ship. My first reaction was excitement. My second was recognition.
 
 I already knew how to make one agent run. My pain started when the second agent needed the first one's context, the third needed the decision they made, and I became the person carrying the whole story between them.
 
