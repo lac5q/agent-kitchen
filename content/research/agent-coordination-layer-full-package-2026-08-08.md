@@ -1330,3 +1330,11 @@ Premium editorial systems illustration. Show research, drafting, and building as
 ===== runs/active/2026-08-08-agent-coordination/visual-concept-hero-v1.png =====
 
 Binary concept asset stored in the shared contentmachine run folder. Dimensions: 1672x941 PNG. The image is a text-free editorial systems diagram showing three work nodes, a human carrying context, and a governed workplane.
+
+
+## Phase 2 production handoff
+
+- Host-ready script: `runs/active/2026-08-08-agent-coordination/podcast-script.md` (2,637 words including source notes; 12 to 15 minute target).
+- Hero concept: `runs/active/2026-08-08-agent-coordination/visual-concept-hero-v1.png` (1672x941 PNG).
+- Visual production notes: `runs/active/2026-08-08-agent-coordination/visual-concept.md`.
+- Quality gate: the podcast script and article both passed `pre_hil_lint.py`; both contain zero em-dashes.
