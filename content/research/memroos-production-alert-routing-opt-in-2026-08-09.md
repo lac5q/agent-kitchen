@@ -38,3 +38,8 @@ The unwanted monitor emails were enabled by an implicit legacy recipient. The sc
 - Cordant `/forgot-password`: HTTP `200`.
 
 No credentials, access tokens, or secret values are included in this artifact.
+
+
+## Follow-up validation
+
+The scheduler regression suite now covers both sides of the contract: no implicit SendGrid call when the recipient is unset, and a positive explicit-recipient case that verifies the configured address reaches the stubbed SendGrid request. The test suite reports 8/8 scheduler checks green. The latest source checkout commit is `9cccf28a`; production runtime behavior is unchanged from `b21241df`.
