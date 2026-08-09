@@ -26,6 +26,7 @@ The safe ACN default is three independent concurrent executor slices. Each child
 
 - The earlier local ACN attempt requested three Luna workers, but one child reported GPT-5/Codex and the sibling runs lacked independent attestation. That batch was stopped and is not validated.
 - A bounded three-seat read-only smoke batch completed concurrently. All three returned `CODEX_LUNA_OK` and the provenance wrapper independently verified `gpt-5.6-luna` with reasoning `max` from the Codex session artifacts.
+- The Beastmode gate is now 12/12 green, including model preflight, security regressions, installer integrity, and public current-tree scanning.
 - The smoke batch proves lane availability and concurrency, not completion of a product task.
 
 ## Safe acceleration
@@ -34,4 +35,4 @@ Keep concurrency at three; do not add duplicate children to compensate for uncer
 
 ## Release note
 
-Beastmode's current tree passes the public artifact guard. The required full-history scan still finds one pre-existing historical LangSmith installer blob matching private-path/credential patterns. The current Beastmode changes are committed locally in `c266696` and `fdfd89c`; public push is held until that history issue is explicitly remediated without an unsafe history rewrite.
+Beastmode's current tree passes the public artifact guard. The required full-history scan still finds one pre-existing historical LangSmith installer blob matching private-path/credential patterns. The current Beastmode changes are committed locally in `c266696`, `fdfd89c`, and `e64cb8e`; public push is held until that history issue is explicitly remediated without an unsafe history rewrite.
