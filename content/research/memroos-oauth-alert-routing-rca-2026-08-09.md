@@ -66,3 +66,15 @@ Post-deploy evidence:
 - Cordant and Oracle health-check and scheduler-liveness runs exit 0.
 - Public Google OAuth status is configured on both hosts; both start routes redirect to Google with the correct host-specific callback.
 - Public onboarding verifier exits 0.
+
+
+## 2026-08-09 — Post-deploy browser verification and recipient hardening
+
+- Source commit `3241d858` adds an explicit empty-recipient guard to the legacy `services/memory/healthcheck.sh` SendGrid path; the policy regression test now asserts the guard.
+- The same guard was applied to the active Main-Mac checkout after creating a recoverable timestamped backup. Main-Mac reports an empty `SENDGRID_API_KEY` and empty `MEMROOS_ALERT_EMAIL`.
+- Cordant-hermes-01 and oracle-1 rebuilt/restarted from `3241d858`; both source checkouts are clean.
+- Browser smoke against both public login pages found a visible `Continue with Google` link and `/forgot-password`. Clicking Google reached `accounts.google.com` with the exact host callback:
+  - Cordant: `https://memroos-cordant.epiloguecapital.com/api/auth/google/callback`
+  - Oracle: `https://memroos.epiloguecapital.com/api/auth/google/callback`
+- Public checks after deployment: onboarding invalid-token and signature-error cases returned 403; `/api/health` returned 200; `/api/auth/google/status` returned `configured:true` on both hosts.
+- Conclusion: Google OAuth was a stale/pre-hydration display issue, not missing runtime configuration. The unwanted alert route was the historical Main-Mac alias; health-check email is now opt-in and cannot send without an explicit recipient. Interactive Google account consent remains an operator/browser action.
