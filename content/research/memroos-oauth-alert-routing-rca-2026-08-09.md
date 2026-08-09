@@ -55,3 +55,14 @@ Recent SendGrid metadata showed the MemroOS messages were sent by the Main-Mac `
 - `bash services/memory/tests/test_healthcheck_policy.sh` → pass.
 - `bash scripts/verify-onboarding-deploy.sh` → pass (public probes; loopback intentionally skipped).
 - Cordant and Oracle health/liveness scripts → exit 0.
+
+
+## Follow-up hardening (2026-08-09)
+
+The remaining profile-conformance cron path was hardened in repository commit `d6ae215f` and deployed to both operator hosts. It now accepts only the canonical `MEMROOS_ALERT_EMAIL` opt-in and ignores legacy `ALERT_EMAIL`/ `ALERT_EMAIL_TO` aliases. A regression fixture proves a legacy profile recipient cannot trigger SendGrid delivery even when a SendGrid key is present. The Main-Mac memory environment was backed up and its stale `ALERT_EMAIL_TO` entry replaced with an empty `MEMROOS_ALERT_EMAIL`.
+
+Post-deploy evidence:
+- Cordant and Oracle checkouts are at `d6ae215f` and clean.
+- Cordant and Oracle health-check and scheduler-liveness runs exit 0.
+- Public Google OAuth status is configured on both hosts; both start routes redirect to Google with the correct host-specific callback.
+- Public onboarding verifier exits 0.
