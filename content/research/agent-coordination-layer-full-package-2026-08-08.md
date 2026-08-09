@@ -1334,7 +1334,7 @@ Binary concept asset stored in the shared contentmachine run folder. Dimensions:
 
 ## Phase 2 production handoff
 
-- Host-ready script: `runs/active/2026-08-08-agent-coordination/podcast-script.md` (2,637 words including source notes; 12 to 15 minute target).
+- Host-ready script: `runs/active/2026-08-08-agent-coordination/podcast-script.md` (2,636 words including source notes; 12 to 15 minute target).
 - Hero concept: `runs/active/2026-08-08-agent-coordination/visual-concept-hero-v1.png` (1672x941 PNG).
 - Visual production notes: `runs/active/2026-08-08-agent-coordination/visual-concept.md`.
 - Quality gate: the podcast script and article both passed `pre_hil_lint.py`; both contain zero em-dashes.
