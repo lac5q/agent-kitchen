@@ -35,11 +35,13 @@ derived_from:
   - runs/active/2026-08-08-agent-coordination/draft-package.md
   - runs/active/2026-08-08-agent-coordination/media-plan.md
   - runs/active/2026-08-08-agent-coordination/source-map.md
+  - runs/active/2026-08-08-agent-coordination/podcast-script.md
+  - runs/active/2026-08-08-agent-coordination/visual-concept.md
   - modules/writer/SKILL.md
   - strategy/positioning.md
   - strategy/linkedin-agentic-virality-system.md
 regen_prompt: |
-  Start with a concrete handoff failure that makes the reader recognize the human coordination tax before introducing the vendor landscape. Preserve the first-person operator story, exact public source links, dated personal stack evidence, and the private runtime-neutral framework's Establish / Operate / Compound sequence. Rewrite in accessible language with no AI slop, then regenerate the article, podcast treatment, channel variants, media plan, and source map. Keep fact claims distinct from recommendations.
+  Start with a concrete handoff failure that makes the reader recognize the human coordination tax before introducing the vendor landscape. Preserve the first-person operator story, exact public source links, dated personal stack evidence, and the private runtime-neutral framework's Establish / Operate / Compound sequence. Rewrite in accessible language with no AI slop, then regenerate the article, podcast treatment, channel variants, media plan, and source map. Keep fact claims distinct from recommendations. For production, also create a host-ready 12 to 15 minute script and a text-free editorial hero concept that can be cropped across article and social formats.
 ---
 
 # Full Content Package
@@ -1010,3 +1012,321 @@ The following are recommendations, not claims that a source already defines a pr
 - [x] Private framework separated from public claims.
 - [x] Recommendation labeled as synthesis.
 
+
+
+===== runs/active/2026-08-08-agent-coordination/podcast-script.md =====
+
+---
+title: "I Built More Agents. The Work Got Harder."
+format: host-ready podcast script
+status: draft
+date: 2026-08-08
+target_length: 12-15 minutes
+audience: founders, engineering leaders, platform teams, technical operators
+source_video: https://youtu.be/HQXi4snP36I
+---
+
+# I Built More Agents. The Work Got Harder.
+
+## Host notes
+
+This is a first-person field note. Keep the pace conversational and let the opening situation breathe. The framework called the Agent Workplane is a synthesis and recommendation from this project, not an existing industry standard. The private Cordant planning documents should not be named on air unless approved.
+
+## Script
+
+[OPEN MUSIC, 5 seconds]
+
+### Cold open
+
+Most agent demos end at the satisfying moment: the agent returns an answer.
+
+My work usually starts there.
+
+I ask one agent to research a market. It comes back with a useful brief. I pass that brief to another agent and ask for a plan. The second agent asks for the sources again. The third agent needs to know which parts are facts and which parts are guesses. Then a reviewer asks whether anyone approved the next step.
+
+Nothing looks broken. Each agent did something reasonable.
+
+I still have to copy the context, check the sources, reconcile two slightly different answers, remember which decision is current, and approve the same workflow from another screen.
+
+By the end, the agents have produced a lot of work. I am the one holding the story together.
+
+[PAUSE]
+
+That is the pain people feel after the first successful demo. The system is faster at producing outputs, but slower for a human to understand and control.
+
+The human becomes the context courier, the approval queue, the shared memory, the translator between tools, and the person who restarts the run when a handoff fails.
+
+Today I want to talk about that missing layer: the coordination system around the agents.
+
+[MUSIC OUT]
+
+### Introduction
+
+I’m Luis. I build and operate software systems that use AI agents, and recently I realized I was measuring the wrong thing.
+
+I was counting agents, tools, models, and skills. I was not counting the time I spent making sure they understood one another.
+
+In a late-July inventory of my own setup, I counted 13 harnesses. A harness is the software shell that actually runs an agent. I counted 12 model IDs, meaning distinct AI models or model versions, 48 agent definitions, 390 skills, and 27 MCP servers. MCP stands for Model Context Protocol. It is an open standard for connecting agents to tools and data.
+
+Those numbers describe one moment in one operator’s environment. They are not a benchmark. They are a warning about how quickly raw capability can grow beyond one person’s ability to coordinate it.
+
+I had built the doing faster than I had built the coordinating.
+
+### Segment 1: The failure starts after the answer
+
+The first agent is satisfying because the feedback loop is short.
+
+Give it a task. Watch it work. Check the result. Fix the instructions. Run it again.
+
+The second agent changes the shape of the work.
+
+Now someone has to decide which agent gets the task, what information it receives, what it is allowed to do, and what the next agent can trust. That is where the missing system shows up.
+
+The work did not get hard because every agent was bad. It got hard because every agent had its own private idea of the context, the available tools, the current state, and what counted as proof.
+
+Picture a simple workflow. One agent researches a market. Another turns the research into a brief. A third writes a draft. A reviewer checks the result.
+
+On paper, that looks like healthy specialization. In practice, I still had to answer questions that no runtime owned.
+
+A runtime is simply the software that runs an agent.
+
+Which sources was the researcher allowed to use?
+
+Was the brief based on current evidence or an old memory?
+
+Did the drafting agent inherit the doubts, or only the conclusion?
+
+Who owns the next step?
+
+Which actions can happen automatically, and which need my sign-off?
+
+If the run stops halfway, where does it pick back up?
+
+Every unanswered question became a job for me. I was the router, the shared memory, the permission check, and the audit trail.
+
+The handoff usually failed in one of four ways.
+
+First, someone made a short summary. It was easy to read, but it dropped the one qualification that mattered.
+
+Second, someone passed the full transcript. It kept everything, but communicated almost nothing about what was in scope.
+
+Third, I translated one agent’s output for another agent myself.
+
+Fourth, one agent’s private notes quietly became shared truth.
+
+That last failure is expensive because it looks like success for a while. A stale map of buyers gets treated as current. A draft is based on a source the next agent cannot check. A tool permission follows the agent instead of the task.
+
+The system can finish the workflow and still leave no useful explanation of why anyone should trust the result.
+
+### Segment 2: Why the Vercel talk landed
+
+I watched Guillermo Rauch’s Vercel talk, [The AI Agent Every Company is About to Build](https://youtu.be/HQXi4snP36I), and then did what I usually do when a talk gets under my skin: I made a presentation about it.
+
+The talk argues that software is gaining a new kind of worker: the agent. An agent is a program that uses an AI model to do real work on its own. It can write code, ship it, check the result, and continue after a person walks away from the keyboard.
+
+Vercel’s official session page describes this as a shift from a human actor to a machine actor. That is a useful way to frame the change. If software is now taking actions, then the infrastructure around software has to account for those actions.
+
+The part I agreed with immediately was simple: a production agent needs more than a prompt and a model call.
+
+It needs somewhere to work. It needs a way to stop. It needs to recover after an interruption. It needs boundaries around what it can touch. It needs a record of what happened. It needs a human to approve the risky edge of the workflow.
+
+The talk also gave me a better name for the problem I was already living with.
+
+AI models have a limit called a context window. That is the amount of information a model can hold in mind at one time. The models are not the only ones with that limit.
+
+The operator has one too.
+
+### Segment 3: What eve solves, and what remains
+
+This is why Vercel’s eve is interesting. Vercel describes eve as a framework that grew out of teams rebuilding the same production plumbing for internal agents.
+
+Eve gives that plumbing a home.
+
+It supports sessions and workflows that can pause and resume without losing their place. It provides a sandbox, which is a walled-off environment where an agent can act without touching everything else. It supports approvals that can wait for a human. It can use subagents, which are smaller helper agents. It provides activity traces, or records of what happened, along with quality checks and changes tracked through Git.
+
+The filesystem-first design is also practical. Instructions can live in plain Markdown files. Tools can live in code. A team can read, version, run, and deploy the agent like software it owns.
+
+That is real progress. It solves an important layer of the problem: how to make one agent a durable, inspectable software system.
+
+Then the second agent arrives.
+
+A directory can describe one agent. A runtime can resume one workflow. Neither one automatically tells the next agent which decision to inherit, which context to leave out, or what authority was handed over.
+
+That is the layer I want to focus on.
+
+### Segment 4: The frameworks are showing the pieces
+
+I do not think the answer is to pick one vendor and hope it becomes the company’s operating system. The more useful signal is that several frameworks keep surfacing the same categories of need.
+
+Google’s Agent Development Kit, or ADK, separates the current session from working state and longer-lived memory. In ordinary language, it helps distinguish what happened in this run from what the organization has learned over time.
+
+ADK also makes routing visible. Routing is the decision about which agent should handle which task. Its evaluation tools treat agent behavior as something to test, not just demonstrate.
+
+OpenAI’s Agents SDK documents two different ways to coordinate agents. A manager agent can call specialists as if they were tools. Or one agent can hand control to a specialist. That choice changes who owns the conversation and the next decision. The SDK also documents guardrails, which are checks on what an agent takes in and what it produces.
+
+LangGraph works at a lower level. It is software for building custom workflows as graphs. It supports saved state, durable execution that can survive interruptions, streaming output, and points where a human can step in. That is useful when the workflow itself is the product.
+
+MCP gives agents a common way to expose tools, resources, and prompts. A tool might be a search function. A resource might be a document. A prompt might be a reusable instruction. The protocol makes those capabilities easier to connect.
+
+A2A, or Agent2Agent, is aimed at communication between independent agents. It covers how agents can find one another and exchange tasks.
+
+Each of these projects handles a real piece. They help agents run, route, call tools, communicate, pause, resume, and get evaluated.
+
+They do not decide which employee, policy, customer boundary, or approval rule applies to a particular task.
+
+That decision belongs to the company operating the system.
+
+### Segment 5: The layer I call the Agent Workplane
+
+After the Vercel talk, I turned the idea into a runtime-neutral plan. Runtime-neutral means the plan can work above different platforms instead of being tied to one of them.
+
+I call the shared layer the Agent Workplane.
+
+This is my synthesis and recommendation, not an existing standard.
+
+The basic idea is that the agent is a company capability. It is not a model subscription.
+
+The company should own the intelligence contract: the agent’s identity, its job, the boundaries of its memory, its skills, its tool permissions, its approval rules, its audit receipts, its evaluation set, and the work products it creates.
+
+Eve, ADK, the OpenAI Agents SDK, LangGraph, or a future runtime can sit underneath that contract as a replaceable engine.
+
+The plan has three sequences.
+
+First, Establish.
+
+Write the charter. Who owns this agent? Who uses it? What is it for? What is it forbidden to do? What data belongs in its context? How will we measure whether it helps?
+
+Then give it one useful job with a visible baseline. Keep the context scoped. Keep the tools limited. Make the first version read-only wherever possible.
+
+This sounds basic because it is basic. A first win should be easy to explain, easy to measure, and easy to undo. If I cannot say what changed, compare it to a baseline, and roll it back, I have a demo, not an operating capability.
+
+Second, Operate.
+
+There is one front door. Every request enters through the same place.
+
+A router reads the request, figures out what kind of task it is, gathers the right context, chooses a bounded worker, and creates a handoff that can be traced later.
+
+The workers have narrow skills and explicit contracts. A research worker can read approved sources. A content worker can draft. A build worker can run checks. None of them quietly inherits every permission the company has.
+
+Governance lives inside the workflow. Identity, least-privilege access, approvals, removal of sensitive data, safe retries, escalation paths, and audit receipts are steps in the task itself.
+
+An agent should not ask for approval in a side conversation and then continue from some other state. The approval should be recorded where the work happens.
+
+Third, Compound.
+
+Only after the first two sequences work should the system earn more independence.
+
+Events and schedules can start work. Feedback and evaluations can find repeated failures. The system can propose a new skill or a new route, and a human can approve that change before it becomes part of the operating contract.
+
+Portability is the final test. Swap the model or the runtime without losing the company’s business memory, source lineage, permissions, approvals, evaluation history, or work products.
+
+If changing runtimes means rebuilding the company’s intelligence from scratch, then the system was tied to the tool all along.
+
+### Segment 6: The first version I would ship
+
+The useful first version is smaller than the pitch.
+
+I would start with one front door, one router, and three workers with clear limits. The context would be read-only. A human would approve anything that writes data or is visible outside the company.
+
+The first test would run for about twenty hours of real work. I would record a baseline, cost, response time, source errors, recovery time, and the number of actions that happened without review.
+
+The last number should be zero when the first version has outside consequences.
+
+Here is a concrete example. Give the system 10 to 20 named accounts. Ask it to produce five account dossiers. Each dossier must include facts, likely buyers, links to sources, unknowns, and a note about confidence.
+
+The system can read approved information. It cannot send an outbound message. It cannot write to the CRM. It cannot run browser actions. It cannot use a shell. A human owner accepts or rejects each dossier.
+
+That test answers a better question than, “Which agent framework should we choose?”
+
+Can the system keep the contract while doing real work?
+
+If the answer is yes, then choose the smallest runtime that passes the gates. Eve may fit work that needs to pause, resume, and run in a sandbox. ADK may fit a team that wants explicit sessions, routing, and evaluations. OpenAI’s SDK may fit a manager-and-specialists design. LangGraph may fit a custom stateful workflow. A small homegrown runner may be enough for a narrow job.
+
+The runtime is allowed to change.
+
+The workplane is the part the company should keep.
+
+### Closing
+
+The next generation of agent systems will be judged less by how many agents a team can launch and more by how clearly the team can answer five questions.
+
+What does this agent own?
+
+What context did it receive, and where did that context come from?
+
+What authority did it have for this task?
+
+What did it hand off, and who accepted it?
+
+What evidence proves the result is safe to use?
+
+I do not want to spend my day copying summaries between agents or remembering which version of a decision lives in which thread.
+
+I want to set the contract, review the risky edges, inspect the evidence, and improve the system when the evidence says it needs work.
+
+That is the part of the Vercel vision I believe in. The machine can become the actor. The company still has to own the operating model around that actor.
+
+I built more agents. The work got harder because I built execution faster than I built coordination.
+
+The next agent I add will have to earn its place in the workplane.
+
+When did adding the next agent create more review work than useful output for you?
+
+[OUTRO MUSIC, 8 seconds]
+
+## Source notes for production
+
+- [The AI Agent Every Company is About to Build, Guillermo Rauch](https://youtu.be/HQXi4snP36I)
+- [Vercel Ship: Agentic Infrastructure](https://vercel.com/ship/nyc/session/agentic-infrastructure)
+- [Vercel: Introducing eve](https://vercel.com/blog/introducing-eve)
+- [Vercel eve repository](https://github.com/vercel/eve)
+- [Google ADK: Session, State, and Memory](https://adk.dev/sessions/)
+- [Google ADK: Agent routing](https://adk.dev/agents/routing/)
+- [Google ADK: Evaluation](https://adk.dev/evaluate/)
+- [OpenAI Agents SDK: Multi-agent orchestration](https://openai.github.io/openai-agents-python/multi_agent/)
+- [OpenAI Agents SDK: Guardrails](https://openai.github.io/openai-agents-python/guardrails/)
+- [LangGraph](https://langchain-ai.github.io/langgraph/)
+- [Model Context Protocol specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/index)
+- [Agent2Agent protocol specification](https://google-a2a.github.io/A2A/specification/)
+
+
+===== runs/active/2026-08-08-agent-coordination/visual-concept.md =====
+
+---
+title: "Agent Workplane Hero Concept"
+asset: visual-concept-hero-v1.png
+status: concept for review
+format: 16:9 PNG
+dimensions: 1672x941
+generated: 2026-08-08
+---
+
+# Agent Workplane Hero Concept
+
+## What the image communicates
+
+Three capable work nodes produce useful pieces, but a human is still carrying the context between them. The shared workplane on the right collects context, policy, approval, and evidence into one visible path. The human can move from message carrier to reviewer.
+
+## Asset
+
+[Open the 16:9 concept image](./visual-concept-hero-v1.png)
+
+## Intended use
+
+First visual direction for the article hero and the podcast episode. Keep the image text-free so headline type can be added in the publishing template and remain readable across crops.
+
+## Production notes
+
+- Palette: charcoal and ink, warm white, lime for the trusted path, amber for research and uncertainty, coral for approval, muted blue for memory and source lineage.
+- Composition: three nodes on the left, overloaded human near the middle, governed workplane on the right, with negative space in the upper-right area for headline treatment.
+- Guardrails: no vendor logos, robot imagery, neon code rain, circuit-board background, or tiny UI copy.
+- Next crop candidates: article hero at 16:9, LinkedIn at 1200x627, and X at 1600x900.
+
+## Generation brief
+
+Premium editorial systems illustration. Show research, drafting, and building as three distinct small work nodes on the left; a calm but overloaded human carrying loose context cards between them; and a shared workplane on the right with four visual compartments for context, policy, approval, and evidence. Show the loose cards converging into the workplane and a clean lime trusted path leading out. Dark charcoal background, restrained dimensional paper and glass panels, crisp geometry, amber research paths, coral approval gates, muted blue source lineage, no readable text, no logos, no watermark, no robot heads, no glowing brains, no sci-fi server room, no circuit-board background.
+
+
+===== runs/active/2026-08-08-agent-coordination/visual-concept-hero-v1.png =====
+
+Binary concept asset stored in the shared contentmachine run folder. Dimensions: 1672x941 PNG. The image is a text-free editorial systems diagram showing three work nodes, a human carrying context, and a governed workplane.
