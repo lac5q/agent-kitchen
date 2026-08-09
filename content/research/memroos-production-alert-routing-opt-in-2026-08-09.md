@@ -48,3 +48,8 @@ The scheduler regression suite now covers both sides of the contract: no implici
 ## Independent release review
 
 Claude Code `claude -p --model fable --effort high --permission-mode plan` returned **APPROVE** after reviewing the exact shell contract and live verification facts. A prior review attempt was discarded because the shell-quoted prompt expanded a literal variable before reaching the reviewer; no code decision relied on that malformed prompt.
+
+
+## Checkpoint update
+
+After the independent review, the source and both host checkouts advanced to `f349cc12` (documentation-only refresh of the validation checkpoint); runtime health and routing behavior are unchanged and were rechecked on both hosts.
