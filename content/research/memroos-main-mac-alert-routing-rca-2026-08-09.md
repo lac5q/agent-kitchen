@@ -44,3 +44,8 @@ The local log still reports stale Gmail context ingestion because `gwsa` has no 
 - Cordant `/api/health`: core MemroOS, graph, agents, APO, and connmem services up; optional local RTK/QMD tools degraded as expected.
 - Main-Mac env: SendGrid sink disabled; future alert target is the personal Gmail address.
 - Roadmap and state files record the live status and remaining browser/Workspace CLI gates.
+
+
+### Production notification boundary
+
+Oracle and Cordant host profiles still retain `ALERT_EMAIL=luis@epiloguecapital.com` and their production SendGrid healthcheck sinks remain enabled so a real production outage is not silently suppressed. SendGrid activity showed the last MemroOS production failure messages were historical Oracle entries; no new MemroOS message appeared after the Main-Mac sink was disabled. The legacy production destination was intentionally not redirected without a confirmed canonical recipient, because changing it would be an external notification policy change.
