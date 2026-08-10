@@ -30,3 +30,12 @@ regen_prompt: "Re-run the repository verification gates, reconcile only verified
 - RTK and QMD remain intentionally degraded optional local tools; mem0, graph memory, agents, APO, and connmem were up on both hosts.
 
 No credentials, tokens, or private configuration values are included.
+
+## Revalidation run — 2026-08-10
+
+- Local `main`, `origin/main`, Oracle, and Cordant all remained at `9316fe52338389a60f09fa5cf8f46a6573416333`; local and both host worktrees were clean.
+- The documented pull/build/restart wrapper completed successfully on `oracle-1` and `cordant-hermes-01` (Docker build cache was valid; Cordant recreated the app container).
+- Public verifier passed for both URLs: onboarding probes returned expected HTTP 403, structurally invalid signatures returned the expected signature error, and public health returned HTTP 200.
+- Host-local verifier passed on both hosts: memroos-app, mem0-memory, orchestration-service, and connmem each returned HTTP 200.
+
+No credentials or tokens were included.
