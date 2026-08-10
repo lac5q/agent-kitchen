@@ -88,3 +88,13 @@ Luis
 - Changed `~/.config/gws/accounts.json` default from `luis@epiloguecapital.com` to `luis.calderon@cordant.ai`.
 - Verified the repaired `gws` path resolves Gmail profile and Send-As identity to `luis.calderon@cordant.ai`.
 - The per-account OAuth token still has `gmail.readonly` but not `gmail.compose`; a one-time compose-scope consent is active at the time of this note. Once approved, the scope is stored in the Cordant account credentials and should stop recurring prompts.
+
+
+## Finalized OAuth, routing, and draft verification — 2026-08-10
+
+- Wrapper-bound OAuth consent completed for `luis.calderon@cordant.ai` with `gmail.compose`, `gmail.readonly`, profile, email, and OpenID scopes.
+- `gws auth status`, Gmail profile, and Send-As verification all resolve to `luis.calderon@cordant.ai`; the Cordant Send-As identity is primary/default.
+- Hardened `~/.local/bin/gws-account`: the `gws` entrypoint remains routed through the multi-account wrapper; Cordant is the resilient default when configured, while `--account` and `GOOGLE_WORKSPACE_CLI_ACCOUNT` continue to select Gmail or Epilogue explicitly.
+- Hardened account switching so interrupted OAuth preserves real credential files and token caches are retained per account after API calls.
+- Verified explicit account routing against the existing Epilogue and Gmail credentials without sending mail.
+- Created and read back a new unsent Cordant Gmail draft with the requested From/To/Cc/Subject, exact body, Google Doc link, and DOCX attachment. No email has been sent; explicit GO remains required.
