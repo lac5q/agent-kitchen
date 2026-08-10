@@ -52,3 +52,9 @@ Commit `910fe602` enforces the requested behavior:
 No code defect remains for these three items in the current checkout. Issues #15 and #16 remain open in GitHub because changing issue state or posting an external status comment is an outbound action that needs explicit operator approval. PR #17 is already closed/superseded.
 
 No credentials or tokens were included.
+
+
+## Independent validator
+
+- Fable 5 via `claude -p --model fable --effort high` returned `VERDICT: PASS`.
+- It found no gap after reading only the guarded store, MCP health facade, regression tests, and directive.
