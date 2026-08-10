@@ -80,3 +80,11 @@ Luis
 - The local Google Workspace (`gws`) shim is authenticated as `luis.calderon@cordant.ai`; `users.getProfile` returns that address and Gmail Send-As settings report it as the primary identity.
 - The current shim token has Gmail read-only scopes, so compose authorization is required before creating or sending a Cordant draft. OAuth compose authorization was initiated but is waiting for browser consent.
 - No message has been sent. Before sending, the final To/Cc/body must be shown and the user must explicitly say GO.
+
+
+## Permanent gws shim repair — 2026-08-10
+
+- Changed `~/.local/bin/gws` to route through the existing `gws-account` multi-account wrapper instead of bypassing it via `gws-real`.
+- Changed `~/.config/gws/accounts.json` default from `luis@epiloguecapital.com` to `luis.calderon@cordant.ai`.
+- Verified the repaired `gws` path resolves Gmail profile and Send-As identity to `luis.calderon@cordant.ai`.
+- The per-account OAuth token still has `gmail.readonly` but not `gmail.compose`; a one-time compose-scope consent is active at the time of this note. Once approved, the scope is stored in the Cordant account credentials and should stop recurring prompts.
