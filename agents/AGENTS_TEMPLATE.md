@@ -106,10 +106,43 @@ Agent → memroos MCP (mcp_memroos_knowledge_write, mcp_memroos_knowledge_read)
 ```
 Agent → write_file(path="MEMROOS_ROOT/content/<slug>.md")
               ↓
-       git add && git commit && git push
+       verify toplevel == MEMROOS_ROOT   ← MANDATORY, see below
+              ↓
+       git -C "$MEMROOS_ROOT" add <file> && git -C "$MEMROOS_ROOT" commit && git -C "$MEMROOS_ROOT" push
               ↓
        Knowledge base (git-backed markdown, persisted via git)
 ```
+
+#### NEVER let knowledge git commands escape MEMROOS_ROOT
+
+Bare `git add && git commit && git push` run from the knowledge directory **walks up the tree and silently operates on the nearest ancestor repository**. On at least one machine `$HOME` is itself a git repo, so the fallback above resolved to `/Users/<user>` — whose only remote was a **Heroku app** (`git.heroku.com/<app>.git`). A `git add -A && git push` there would have staged large parts of the home directory and pushed it to a deployed application.
+
+**Always do this first — no exceptions:**
+
+```bash
+[ "$(git -C "$MEMROOS_ROOT" rev-parse --show-toplevel 2>/dev/null)" = "$MEMROOS_ROOT" ] || {
+  echo "REFUSING: $MEMROOS_ROOT is not its own git repo (resolves elsewhere)"; exit 1; }
+```
+
+- **NEVER** use `git add -A` / `git add .` for knowledge writes. Stage the explicit file path you just wrote.
+- **NEVER** `cd` into the knowledge dir and run bare git. Always `git -C "$MEMROOS_ROOT"`.
+- If the check fails, **surface the blocker** — do not `git init`, do not push, do not improvise a different directory.
+
+#### Knowledge stores must NEVER be backed by a Heroku app remote
+
+MemroOS knowledge is documents, not a deploy target. A Heroku remote on a knowledge repo is always a misconfiguration and is treated as a hard stop.
+
+- **NEVER** add, push to, or pull from a `git.heroku.com` / `heroku` remote from any knowledge repo or `MEMROOS_ROOT`.
+- **NEVER** store knowledge content inside a directory whose repo has a Heroku remote — including any ancestor directory.
+- **NEVER** connect MemroOS storage to a Heroku app, dyno filesystem, or Heroku-hosted database. Heroku dynos have ephemeral filesystems; content written there is destroyed on restart, which defeats the entire durability guarantee.
+- Before the first write of a session, confirm the destination is clean:
+
+```bash
+git -C "$MEMROOS_ROOT" remote -v | grep -qi heroku && {
+  echo "REFUSING: knowledge root has a Heroku remote"; exit 1; }
+```
+
+Knowledge remotes belong on the owned GitHub knowledge repo. If the only reachable remote is Heroku, **stop and report** rather than pushing.
 
 ### Why MCP-First?
 
