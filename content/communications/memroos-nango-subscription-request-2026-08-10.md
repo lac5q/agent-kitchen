@@ -15,14 +15,21 @@ sources:
   - "repo: docs/connmem-runtime.md"
   - "repo: .env.example"
   - "repo: .planning/ROADMAP.md"
+  - "official pricing: https://nango.dev/pricing"
   - "gmail-profile: connected account returned luis@epiloguecapital.com"
 derived_from: []
-regen_prompt: "Using the current MemroOS connection/auth implementation and recent Cordant email context, refresh the concise Nango subscription request and its technical rationale without including secrets or internal host topology."
+regen_prompt: "Using the current MemroOS connection/auth implementation, official Nango pricing, and recent Cordant email context, refresh the concise Nango subscription request and its technical rationale without including secrets or internal host topology."
 ---
 
 ## Request
 
-Request approval for a paid Nango.dev subscription for the agent-memory product being built for Cordant. The product is known to the recipients in concept; MemroOS is the implementation name. The current trial/free allocation is capped at 10 connections and has been exhausted; more capacity is needed as Cordant ramps up users.
+Ask Lior for help purchasing a paid Nango.dev subscription for the agent-memory product being built for Cordant. Eric suggested reaching out to Lior for purchasing help. The product is known to the recipients in concept; MemroOS is the implementation name. The current trial/free allocation is capped at 10 connections and has been exhausted.
+
+## Plan sizing
+
+Nango's current pricing page lists the Starter plan from $50/month with 20 API-auth connections included and additional connections at $1 per connection. Nango defines a connection as one authorized user account, so 20 connections is not automatically 20 users if each user connects multiple systems. For the initial rollout, 20 is a reasonable target because it provides a 2x buffer over the exhausted 10-connection free tier while adoption is measured; usage should be monitored and the plan upgraded if needed.
+
+Source: [Nango pricing](https://nango.dev/pricing)
 
 ## Email draft
 
@@ -33,15 +40,17 @@ Subject: Request: Nango.dev subscription for MemroOS
 
 Hi Lior,
 
-I’m writing to ask for your help approving a paid Nango.dev subscription for the agent-memory product I’ve been building for Cordant. You’ve seen the product in progress; the name used in the implementation is MemroOS.
+Eric suggested I reach out to you for help purchasing a Nango.dev subscription for MemroOS, the agent-memory product I’ve been building for Cordant.
 
-Nango is the connection layer for the product — it handles OAuth/API-key setup, token refresh, and the connection lifecycle as we connect more of the systems the product needs to work with. I’ve now maxed out the Nango trial/free license at 10 connections, and we’ll need substantially more as we ramp up users.
+Nango is the connection layer for the product—it handles OAuth/API-key setup, token refresh, and the connection lifecycle as we connect the systems MemroOS needs to work with. I’ve now maxed out the Nango trial/free license at 10 connections, and we’ll need more as we ramp up users.
 
-Could we approve a Nango plan with enough capacity for the next phase? I’m open to an alternative if there’s a better fit on cost or deployment, but my preference is not to build this from scratch because provider authentication, refresh/revocation, scopes, secure credential handling, and multi-user connection management are a complicated surface to own. I also explored Composio; Nango is my preference because it fits the connection layer already wired into MemroOS and has an on-prem option if we want that later.
+I checked Nango’s current pricing. The Starter plan is listed from $50/month and includes 20 API-auth connections; additional connections are $1 per connection. Nango counts each authorized user account as one connection, so this is not automatically equivalent to 20 users if each user connects multiple systems. That seems like a reasonable initial capacity because it gives us a 2x buffer over the 10-connection free-tier limit while we measure adoption. [Nango pricing page](https://nango.dev/pricing)
+
+Could you help me purchase that plan? I’m open to an alternative if there’s a better fit on cost or deployment, but my preference is not to build this from scratch. Provider authentication, token refresh/revocation, scopes, secure credential handling, and multi-user connection management are a complicated surface to own. I also explored Composio; Nango is my preference because it fits the connection layer already wired into MemroOS and offers an on-prem option if we want that in the future.
 
 I attached a short technical overview with more detail: [MemroOS + Nango technical context](https://docs.google.com/document/d/1aQYNOmjkF2XjAFk9-ALdRB7fvgB4yc3F_F41GQWcosM/edit)
 
-Thanks,  
+Thanks,
 Luis
 
 ## Technical rationale
@@ -55,8 +64,8 @@ Luis
 
 ## Current draft status
 
-- Gmail draft is saved unsent and includes the DOCX export attachment plus the Google Doc link.
-- The requested sender address was supplied to the Gmail draft update, but the connected Gmail profile is luis@epiloguecapital.com; Gmail normalized the draft's From header to that account.
+- Gmail draft is saved unsent and includes the refreshed DOCX export attachment plus the Google Doc link.
+- The requested sender address was supplied to the Gmail draft update, but the connected Gmail profile is luis@epiloguecapital.com; Gmail normalized the draft’s actual From header to that account.
 - A Cordant mailbox or configured alias must be connected before this can genuinely send from luis.calderon@cordant.ai.
 
 ## Artifacts
