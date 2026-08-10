@@ -48,7 +48,7 @@ When the canonical rule changes:
 | Gemini | `~/.gemini/GEMINI.md` | YAML in adjacent `mcp.yaml` |
 | Qwen | `~/.qwen/QWEN.md` | YAML in adjacent `mcp.yaml` |
 | ZCode | `~/.zcode/AGENTS.md` + `~/.zcode/cli/config.json` | `mcp.servers` block in `config.json` |
-| Pi | `~/.pi/AGENTS.md` + `~/.pi/skills` | JSON MCP companion + onboard invite |
+| Pi | `~/.pi/agent/AGENTS.md` + `~/.pi/agent/skills` | When `pi-mcp-adapter` is installed, the installer preserves and updates the shared `~/.config/mcp/mcp.json`; otherwise it remains instructions/skills only |
 | Droid (Factory) | `~/.factory/AGENTS.md` + `~/.factory/mcp.json` | `mcpServers.memroos` in `mcp.json` |
 | Grok | `~/.grok/AGENTS.md` + `~/.grok/skills` | JSON MCP companion + onboard invite |
 | OpenCode | `~/.config/opencode/instructions.md` | YAML in adjacent `mcp.yaml` |

@@ -16,7 +16,7 @@
    ```bash
    bash scripts/install-agent-integrations.sh
    ```
-4. Confirm Pi is included in TARGETS (`~/.pi/...`) along with Claude/Codex/Cursor/Factory/Hermes. Antigravity also appears in `TARGETS` but the install path is a `none` MCP-style no-op: the installer prints a clear `no installer surface; observe via MCP only (verify-by-design)` warning instead of fabricating an installer.
+4. Confirm Pi is included in TARGETS (`~/.pi/agent/...`) along with Claude/Codex/Cursor/Factory/Hermes. When `pi-mcp-adapter` is installed (`pi install npm:pi-mcp-adapter`), the installer writes the MemroOS stdio entry into the adapter's shared `~/.config/mcp/mcp.json` without replacing other servers. Plain Pi installations remain instructions/skills only and report that no adapter surface is available. Antigravity also appears in `TARGETS` but the install path is a `none` MCP-style no-op: the installer prints a clear `no installer surface; observe via MCP only (verify-by-design)` warning instead of fabricating an installer.
 5. Uninstall / key revoke: `bash scripts/install-agent-integrations.sh --uninstall` and rotate the key in the console.
 
 MCP alone is not a wiretap — pair with the observe sidecar for autonomous capture.

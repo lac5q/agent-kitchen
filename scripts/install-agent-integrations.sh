@@ -158,24 +158,18 @@ declare -a TARGETS=(
   "gemini|$HOME_DIR/.gemini/GEMINI.md|$HOME_DIR/.gemini/skills|$HOME_DIR/.gemini/settings.json|json"
   "qwen|$HOME_DIR/.qwen/QWEN.md|$HOME_DIR/.qwen/skills|$HOME_DIR/.qwen/settings.json|json"
   "zcode|$HOME_DIR/.zcode/AGENTS.md|$HOME_DIR/.zcode/skills|$HOME_DIR/.zcode/cli/config.json|zcode-json"
-  # PI: two separate findings, both verified on cordant-hermes-01 2026-07-27
-  # against pi 0.80.7.
+  # PI: the instruction/skill files live under $PI_CODING_AGENT_DIR. MCP is
+  # conditional because Pi core still has no MCP surface, while the supported
+  # pi-mcp-adapter extension reads the shared ~/.config/mcp/mcp.json file.
   #
   # 1. Config lives in $PI_CODING_AGENT_DIR, which defaults to ~/.pi/agent —
   #    NOT ~/.pi. AGENTS.md and skills were being written one level too high.
   #
-  # 2. pi has NO MCP support. `pi --help` contains no MCP flag, option or
-  #    command; it loads capability through its own extension/package system
-  #    (`pi install <source>`). The AGENTS.mcp.json this installer used to
-  #    write was therefore never read by anything, which is why a pi session on
-  #    that host reported "MCP is configured but not loaded" and fell back to
-  #    filesystem reads. Writing that file was worse than skipping it: it made
-  #    the wiring look done.
-  #
-  # So MCP is skipped for pi (empty mcp_file, format none), matching how grok
-  # is handled below. Restore it when pi ships MCP and the config path is
-  # confirmed.
-  "pi|$HOME_DIR/.pi/agent/AGENTS.md|$HOME_DIR/.pi/agent/skills||none"
+  # 2. pi-mcp-adapter (when installed) reads the tool-agnostic shared config
+  #    before Pi-owned overrides. The resolver below only returns that path
+  #    when the adapter is actually installed, so a plain Pi install remains
+  #    honest and does not get a config file that no process can read.
+  "pi|$HOME_DIR/.pi/agent/AGENTS.md|$HOME_DIR/.pi/agent/skills|__pi_mcp__|json"
   "droid|$HOME_DIR/.factory/AGENTS.md|$HOME_DIR/.factory/skills|$HOME_DIR/.factory/mcp.json|json"
   # GROK: no confirmed MCP file path yet (the @xai/grok CLI does not publish
   # an MCP config location we've verified). We still write AGENTS.md + skill
@@ -273,9 +267,39 @@ log()  { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*" >&2; }
 
+# Return success when the supported Pi MCP adapter is installed. The adapter
+# is commonly installed by `pi install npm:pi-mcp-adapter`, which places the
+# package under the Pi agent's npm store and may not expose a standalone
+# executable on PATH.
+pi_mcp_adapter_available() {
+  command -v pi-mcp-adapter >/dev/null 2>&1 && return 0
+
+  local pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME_DIR/.pi/agent}"
+  # Expand the only shell shorthand we accept; do not eval arbitrary input.
+  if [[ "$pi_agent_dir" == "~" ]]; then
+    pi_agent_dir="$HOME_DIR"
+  elif [[ "$pi_agent_dir" == "~/"* ]]; then
+    pi_agent_dir="$HOME_DIR/${pi_agent_dir#~/}"
+  fi
+
+  local candidate
+  for candidate in \
+    "$pi_agent_dir/npm/node_modules/pi-mcp-adapter" \
+    "$pi_agent_dir/node_modules/pi-mcp-adapter" \
+    "$HOME_DIR/.pi/node_modules/pi-mcp-adapter" \
+    "$pi_agent_dir/extensions/pi-mcp-adapter"; do
+    if [[ -f "$candidate/package.json" ]] \
+      && grep -Eq '"name"[[:space:]]*:[[:space:]]*"pi-mcp-adapter"' "$candidate/package.json"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Resolve a TARGETS-row mcp_file token. "__cline_mcp__" is a placeholder
 # because the Cline MCP settings file lives at a different path on macOS
-# vs. Linux. Any other value is taken literally.
+# vs. Linux. "__pi_mcp__" is conditional on pi-mcp-adapter. Any other value
+# is taken literally.
 resolve_mcp_file() {
   local token="$1"
   if [[ "$token" == "__cline_mcp__" ]]; then
@@ -283,6 +307,10 @@ resolve_mcp_file() {
       echo "$HOME_DIR/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
     else
       echo "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+    fi
+  elif [[ "$token" == "__pi_mcp__" ]]; then
+    if pi_mcp_adapter_available; then
+      echo "$HOME_DIR/.config/mcp/mcp.json"
     fi
   else
     echo "$token"
