@@ -46,3 +46,7 @@ Mixed connector wake results remain visible per agent; only live members receive
 ## Model lanes
 
 Kimi-K3 high-thinking supplied the concept draft. Implementation is deferred to Luna-Max in isolated worktrees (three independent slices at most). Fable via `claude -p` is the judgment validator; Opus xhigh is only a fallback if Fable is rejected.
+
+## Provenance note
+
+The `bm` console did not emit an ACN `meta.json` for this bounded concept pass. The Kimi-K3 selection was preflighted and the concept returned, but it is recorded as an unverified design draft—not as an implementation or validation verdict.
