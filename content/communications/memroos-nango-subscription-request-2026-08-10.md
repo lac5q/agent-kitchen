@@ -72,3 +72,11 @@ Luis
 
 - Google Doc: https://docs.google.com/document/d/1aQYNOmjkF2XjAFk9-ALdRB7fvgB4yc3F_F41GQWcosM/edit
 - Gmail draft: subject “Request: Nango.dev subscription for MemroOS”; saved unsent with a DOCX export attached.
+
+
+## Sender shim diagnosis — 2026-08-10
+
+- The Gmail app connector is authenticated as `luis@epiloguecapital.com`; setting `from_address` to `luis.calderon@cordant.ai` on the existing draft is accepted but Gmail normalizes the saved From header back to the epilogue account.
+- The local Google Workspace (`gws`) shim is authenticated as `luis.calderon@cordant.ai`; `users.getProfile` returns that address and Gmail Send-As settings report it as the primary identity.
+- The current shim token has Gmail read-only scopes, so compose authorization is required before creating or sending a Cordant draft. OAuth compose authorization was initiated but is waiting for browser consent.
+- No message has been sent. Before sending, the final To/Cc/body must be shown and the user must explicitly say GO.
