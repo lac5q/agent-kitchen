@@ -28,3 +28,10 @@ Decision: keep the current Nango Cloud integration for now unless the connection
 ## Clarification: what “MCP” means here
 
 A provider integration named `linear-mcp` or `circleback-mcp` is not a dependency on Nango's Management MCP server. MemroOS retrieves a provider-scoped token from Nango and calls the provider's MCP endpoint directly (`mcp.linear.app` or Circleback); Notion and Google Drive use direct REST calls. The Nango client currently uses only `/connection`, `/connect/sessions`, `/connection/:id`, `/connect/sessions/usage`, and `/integrations`. The API base is hardcoded to `https://api.nango.dev`, so a self-host migration would require making that base URL configurable and re-authorizing or migrating connections before cutover.
+
+
+## Operator answer (2026-08-09)
+
+A call-site audit confirms the current MemroOS path does not depend on Nango Functions, Nango Webhooks, Nango Management MCP, or Nango OpenTelemetry export. The only Nango calls in `apps/memroos/src/lib/tool-auth/nango-client.ts` are connector-control-plane operations: `/connection`, `/connect/sessions`, `/connection/:id`, `/connect/sessions/usage`, and `/integrations`. MemroOS owns provider sync/ingestion and its own observability and issue queue. The `linear-mcp` and `circleback-mcp` integrations are provider MCP endpoints reached with provider-scoped credentials, not a dependency on Nango's Management MCP server.
+
+The current blocker to a free self-host migration is operational and migration work, not a missing Nango feature: the API base is hardcoded to `https://api.nango.dev`, existing cloud connections/tokens must be migrated or re-authorized, OAuth callback URLs must change, and the self-host instance needs production persistence, encryption, TLS, backups, and provider smoke tests. Free self-host is therefore technically compatible with today's feature set, but it is not a drop-in cutover.
