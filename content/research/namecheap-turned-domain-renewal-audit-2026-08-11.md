@@ -30,3 +30,23 @@ Evidence from the SketchPop workspace and DNS:
 ## Recommendations
 
 Keep turnedcomics.com. Keep turncomics.com only if preserving the typo/alternate-name redirect and brand protection is worth the extra annual fee. Turn off auto-renew for turnedproathlete.com, turnedsports.com, turnedmvp.com, turnedjedi.com, and turnjedi.com unless there is a separate untracked project, email setup, or brand-protection reason to retain them. Verify the Namecheap dashboard after changing settings because the API audit still reported all seven as auto-renewing.
+
+
+## Full auto-renew inventory — 2026-08-11
+
+A fresh read-only Namecheap API query found 17 domains currently marked AutoRenew=true:
+
+- Expiring 09/04/2026: turncomics.com, turnedcomics.com, turnedjedi.com, turnedmvp.com, turnedproathlete.com, turnedsports.com, turnjedi.com.
+- Expiring 12/17/2026: turnedtoons.com.
+- Expiring 02/03/2027: popsiths.art, popsiths.com.
+- Expiring 03/24/2027: mmj-links.us, sketchpop-links.us.
+- Expiring 04/01/2027: growthalchemylab.com.
+- Expiring 04/09/2027: frumpyourself.com.
+- Expiring 04/15/2027: gofrumpyourself.com.
+- Expiring 05/08/2027: agentkitchen.dev.
+- Expiring 05/12/2027: memroos.com.
+- Expiring 04/23/2029: epiloguecapital.com.
+
+Two domains are currently AutoRenew=false: sketchpop.art and contextuallyaware.com.
+
+The immediate renewal group is the seven Turned domains expiring September 4, 2026. The remaining auto-renew domains should be reviewed before their listed expiration dates, especially paired/defensive domains such as popsiths.art + popsiths.com and mmj-links.us + sketchpop-links.us.
