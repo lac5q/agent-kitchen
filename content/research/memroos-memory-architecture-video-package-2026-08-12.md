@@ -526,3 +526,29 @@ A high-reasoning, read-only review (Sol, \`gpt-5.6-sol\`, 2026-08-12) checked th
 - **Accessibility completion gate:** The transcript and storyboard are prepared, but a generated video still needs timed-caption review, a transcript check, spoken diagram descriptions, no color-only distinctions, acronym expansion, chapters, deliberate pacing, and periodic summaries. To reduce cognitive load, publish two chapters: “MemroOS architecture walkthrough” and “Enterprise comparison.”
 
 The reviewer made no file edits, did not write to MemroOS, and performed no upload or share action.
+
+
+## Verified NotebookLM / Gemini Notebook handoff procedure
+
+Checked against Google's official help on 2026-08-12. Google’s current help pages redirect NotebookLM documentation to “Gemini Notebook,” while the workflow remains the requested notebook-and-Video-Overview flow.
+
+Google documents that supported sources include Markdown, TXT, PDF, Google Docs, Google Slides, Google Sheets, web URLs, and other listed formats. It documents this flow:
+
+1. Open Gemini Notebook / NotebookLM and create or open a notebook.
+2. Add the prepared Markdown package and any approved source documents or official URLs.
+3. In Studio, choose **Video Overview**.
+4. Choose **Explainer** format, English narration, high-contrast/whiteboard or clean technical visual style, and the steering prompt below.
+5. Generate in the background, review the result for factual accuracy, pronunciation, audio glitches, timing, and accessibility.
+6. Share the full notebook with the recipient or share/download the generated Video Overview. Google’s help says viewers need appropriate notebook access for a shared video.
+
+Recommended steering prompt:
+
+> Create an accessible, transcript-first Explainer Video Overview titled “MemroOS Memory Architecture: How an Agent Remembers Safely.” Teach the architecture in two clearly labeled chapters: (1) the shipped MemroOS architecture walkthrough and (2) the category-aware enterprise comparison. Use the repository sources as implementation authority. Explicitly distinguish the three executable memory tiers—vector, graph, episodic—from recall-v2’s five retrieval arms—BM25, ANN, graph, temporal, derived. Explain asynchronous bronze capture and pending enrichment, the three distinct ingestion/federation paths, policy filtering before fusion, deterministic local reranking, context budgets, receipts, and Hindsight shadow-only behavior. Compare Hindsight, Cognee, Mem0, Zep/Graphiti, AWS AgentCore Memory, Microsoft Foundry Memory, and Letta without inventing benchmark results. Define every acronym on first use. Speak at a measured pace, use high-contrast text, never rely on color alone, verbally describe every diagram, add section breaks and periodic summaries, and keep the comparison separate from the architecture walkthrough to reduce cognitive load.
+
+Official references:
+
+- [Generate Video Overviews](https://support.google.com/notebooklm/answer/16454555)
+- [Add or discover notebook sources](https://support.google.com/notebooklm/answer/16215270)
+- [Work or school account limits](https://support.google.com/notebooklm/answer/16337734)
+
+Important handoff limitation: this Codex session has no callable NotebookLM/Gemini Notebook connector or browser session. The local knowledge path is not itself visible to Google. An outbound step must either use a newly enabled NotebookLM connector or create/share an approved Google Drive source document first. No source or notebook has been uploaded or shared from this task.
