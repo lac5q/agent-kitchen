@@ -34,9 +34,10 @@ bash "$HOME/github/memroos/scripts/install-agent-integrations.sh" --local
 
 Official skills install without `EXTRA_SKILLS`. Optional host-local extras still work via `EXTRA_SKILLS="name|/path"`.
 
-## Hosts to converge
+## Hosts to converge (Epilogue / MemroOS instance only)
 
-- main-mac (this machine)
-- maeve-u1
-- cordant-hermes-01
-- oracle-1 (when memroos checkout present)
+- main-mac (Epilogue instance)
+- maeve-u1 (Epilogue instance)
+- oracle-1 (Epilogue instance)
+
+*Note: `cordant-hermes-01` is the Cordant client instance and is explicitly excluded from this target list.*
