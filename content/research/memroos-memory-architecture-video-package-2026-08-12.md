@@ -512,3 +512,17 @@ Proposed handoff after the connector is enabled and the user explicitly approves
 - **Source payload:** this package plus the cited repository files and official product documentation
 - **Requested artifact:** accessible narrated video overview with captions/transcript, architecture diagrams, and the category-aware comparison
 - **Privacy boundary:** do not upload secrets, credentials, private customer data, raw bearer tokens, or unredacted sensitive session content
+
+
+## Independent validation notes
+
+A high-reasoning, read-only review (Sol, \`gpt-5.6-sol\`, 2026-08-12) checked the repository implementation against this package.
+
+- **Shipped boundary:** The executable memory resolver has three tiers—vector, graph, and episodic. Recall-v2 independently has five arms—BM25, ANN, graph, temporal, and derived. Knowledge/QMD is a separate federated subsystem. Sources: \`apps/memroos/src/lib/memory/tiers.ts\`, \`apps/memroos/src/lib/memory-engine/recall-v2.ts\`, and \`docs/architecture.md\`.
+- **Write-path boundary:** The older diagram in \`docs/memory-architecture.md\` presents a synchronous provider-write shape. The current route is the authority for the video: authenticate and classify, capture durable bronze data, defer adapter push/enrichment, and return pending enrichment status. Source: \`apps/memroos/src/app/api/memory/add/route.ts\`.
+- **Classification nuance:** Policy denial is enforced, but if the classification module cannot load, the route logs a warning and continues for compatibility. The lesson must not claim that every write is unconditionally classified before persistence. Source: \`apps/memroos/src/app/api/memory/add/route.ts\`.
+- **Reranking name:** Recall-v2's local reranker is deterministic lexical-overlap, phrase, and density scoring. It should not be described as a learned transformer cross-encoder. Source: \`apps/memroos/src/lib/memory-engine/recall-v2.ts\`.
+- **Separate pipelines:** Keep API memory capture, agent-session JSONL ingestion into SQLite/FTS, and Knowledge MCP federation across QMD, knowledge, Mem0, and connectors as three related but distinct paths. Sources: \`apps/memroos/src/lib/db-ingest.ts\` and \`services/knowledge-mcp/knowledge_system/memory_recall.py\`.
+- **Accessibility completion gate:** The transcript and storyboard are prepared, but a generated video still needs timed-caption review, a transcript check, spoken diagram descriptions, no color-only distinctions, acronym expansion, chapters, deliberate pacing, and periodic summaries. To reduce cognitive load, publish two chapters: “MemroOS architecture walkthrough” and “Enterprise comparison.”
+
+The reviewer made no file edits, did not write to MemroOS, and performed no upload or share action.
