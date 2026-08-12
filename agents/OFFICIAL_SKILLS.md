@@ -34,10 +34,16 @@ bash "$HOME/github/memroos/scripts/install-agent-integrations.sh" --local
 
 Official skills install without `EXTRA_SKILLS`. Optional host-local extras still work via `EXTRA_SKILLS="name|/path"`.
 
-## Hosts to converge (Epilogue / MemroOS instance only)
+## Governance & Enterprise Scope
 
-- main-mac (Epilogue instance)
-- maeve-u1 (Epilogue instance)
-- oracle-1 (Epilogue instance)
+- **Epilogue Instance (`memroos.epiloguecapital.com`)**: `ponytail` and `no-ai-slop` are **Enterprise-Approved Official Skills** (installed & cataloged fleet-wide across `main-mac`, `maeve-u1`, and `oracle-1`).
+- **Cordant Instance (`memroos-cordant.epiloguecapital.com` / `cordant-hermes-01`)**: Installed on local development harnesses (`~/.claude`, `~/.hermes`, `~/.codex`) for dev use. **NOT** published or propagated to the Cordant tenant catalog as an enterprise-approved skill.
 
-*Note: `cordant-hermes-01` is the Cordant client instance and is explicitly excluded from this target list.*
+## Hosts & Scope Table
+
+| Host / Instance | Role | Dev Harness Installed? | Enterprise Catalog Approved? |
+|-----------------|------|-------------------------|------------------------------|
+| `main-mac` | Epilogue | Yes | Yes (Epilogue Approved) |
+| `maeve-u1` | Epilogue | Yes | Yes (Epilogue Approved) |
+| `oracle-1` | Epilogue | Yes | Yes (Epilogue Approved) |
+| `cordant-hermes-01` | Cordant | Yes (Dev Harness) | **No** (Local Dev Only) |
