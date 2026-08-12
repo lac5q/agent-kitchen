@@ -9,8 +9,12 @@
 #
 # Source of truth:
 #   agents/AGENTS_TEMPLATE.md     → AGENTS.md on every agent CLI
+#   agents/FORBIDDEN.md           → FORBIDDEN.md beside each AGENTS/CLAUDE target
+#   agents/OFFICIAL_SKILLS.md     → approved skill catalog (docs)
 #   .agents/skills/memroos-save/  → memroos-save skill on every agent CLI
 #   .agents/skills/memroos-recall/ → memroos-recall skill on every agent CLI
+#   .agents/skills/ponytail/      → ponytail skill on every agent CLI
+#   .agents/skills/no-ai-slop/    → no-ai-slop skill on every agent CLI
 #   scripts/memroos-mcp.sh        → MemroOS MCP server launcher
 #
 # MCP wiring: each TARGETS row declares the REAL config file the agent
@@ -53,8 +57,12 @@ if [[ ! -d "$MEMROOS_ROOT/services/knowledge-mcp" ]]; then
 fi
 
 TEMPLATE="$MEMROOS_ROOT/agents/AGENTS_TEMPLATE.md"
+FORBIDDEN_SRC="$MEMROOS_ROOT/agents/FORBIDDEN.md"
+OFFICIAL_SKILLS_DOC="$MEMROOS_ROOT/agents/OFFICIAL_SKILLS.md"
 SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-save/SKILL.md"
 RECALL_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/memroos-recall/SKILL.md"
+PONYTAIL_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/ponytail/SKILL.md"
+NO_AI_SLOP_SKILL_SRC="$MEMROOS_ROOT/.agents/skills/no-ai-slop/SKILL.md"
 MCP_SCRIPT="$MEMROOS_ROOT/scripts/memroos-mcp.sh"
 OPERATOR_STUB="$MEMROOS_ROOT/scripts/memroos-operator-stub.sh"
 HOOK_SRC_DIR="$MEMROOS_ROOT/scripts/hooks"
@@ -62,18 +70,19 @@ EXTRACTION_SRC="$MEMROOS_ROOT/scripts/observe-session-extraction.mjs"
 SCHEDULE_INSTALLER="$MEMROOS_ROOT/scripts/install-observe-sidecar-schedule.sh"
 HERMES_PLUGIN_SRC="$MEMROOS_ROOT/integrations/hermes/plugins/memory/memroos"
 
-# ENTOPS-13 (2026-07-22): extra skills to fan out alongside memroos-save.
-# Format: "name|source-dir" (space-separated pairs). Source-dir must contain
-# SKILL.md at the top level. Installed to <skills-dir>/<name>/SKILL.md on
-# every target that has a skills dir (skip the `none` Antigravity row).
-# Use case: upstream skill integration (e.g. petergyang/no-ai-slop) that the
-# operator wants shipped to every agent CLI without forking the canonical repo.
+# Official approved skills always install (see agents/OFFICIAL_SKILLS.md).
+# ENTOPS-13: EXTRA_SKILLS still fans host-local extras beyond the official set.
+# Format: "name|source-dir" (space-separated pairs).
 # Examples:
-#   EXTRA_SKILLS="no-ai-slop|$HOME_DIR/github/no-ai-slop" bash scripts/install-agent-integrations.sh
+#   EXTRA_SKILLS="avoid-ai-writing|$HOME_DIR/github/avoid-ai-writing" bash scripts/install-agent-integrations.sh
 EXTRA_SKILLS="${EXTRA_SKILLS:-}"
 
 if [[ ! -f "$TEMPLATE" ]]; then
   echo "❌ Canonical AGENTS template not found: $TEMPLATE" >&2
+  exit 1
+fi
+if [[ ! -f "$FORBIDDEN_SRC" ]]; then
+  echo "❌ Canonical FORBIDDEN.md not found: $FORBIDDEN_SRC" >&2
   exit 1
 fi
 if [[ ! -f "$SKILL_SRC" ]]; then
@@ -82,6 +91,14 @@ if [[ ! -f "$SKILL_SRC" ]]; then
 fi
 if [[ ! -f "$RECALL_SKILL_SRC" ]]; then
   echo "❌ Canonical memroos-recall skill not found: $RECALL_SKILL_SRC" >&2
+  exit 1
+fi
+if [[ ! -f "$PONYTAIL_SKILL_SRC" ]]; then
+  echo "❌ Canonical ponytail skill not found: $PONYTAIL_SKILL_SRC" >&2
+  exit 1
+fi
+if [[ ! -f "$NO_AI_SLOP_SKILL_SRC" ]]; then
+  echo "❌ Canonical no-ai-slop skill not found: $NO_AI_SLOP_SKILL_SRC" >&2
   exit 1
 fi
 if [[ ! -x "$MCP_SCRIPT" ]]; then
@@ -110,6 +127,18 @@ fi
 
 HOME_DIR="${HOME:-$(eval echo "~$(whoami)")}"
 HOOK_INSTALL_DIR="$HOME_DIR/.memroos/hooks"
+
+# Optional host-local extras beyond the official set.
+if [[ -z "$EXTRA_SKILLS" ]]; then
+  _extra=()
+  if [[ -f "$HOME_DIR/github/avoid-ai-writing/SKILL.md" ]]; then
+    _extra+=("avoid-ai-writing|$HOME_DIR/github/avoid-ai-writing")
+  fi
+  if [[ ${#_extra[@]} -gt 0 ]]; then
+    EXTRA_SKILLS="${_extra[*]}"
+  fi
+  unset _extra
+fi
 
 MODE="install"
 FORCE_LOCAL=0
@@ -761,8 +790,11 @@ uninstall_session_hooks_for_target() {
 
 install_agents_md() {
   local target_file="$1"
+  local target_dir
   mkdir -p "$(dirname "$target_file")"
   cp "$TEMPLATE" "$target_file"
+  target_dir="$(dirname "$target_file")"
+  cp "$FORBIDDEN_SRC" "$target_dir/FORBIDDEN.md"
 }
 
 install_skill() {
@@ -771,6 +803,13 @@ install_skill() {
   cp "$SKILL_SRC" "$skills_dir/memroos-save/SKILL.md"
   mkdir -p "$skills_dir/memroos-recall"
   cp "$RECALL_SKILL_SRC" "$skills_dir/memroos-recall/SKILL.md"
+  mkdir -p "$skills_dir/ponytail"
+  cp "$PONYTAIL_SKILL_SRC" "$skills_dir/ponytail/SKILL.md"
+  mkdir -p "$skills_dir/no-ai-slop"
+  cp "$NO_AI_SLOP_SKILL_SRC" "$skills_dir/no-ai-slop/SKILL.md"
+  if [[ -f "$MEMROOS_ROOT/.agents/skills/no-ai-slop/eval.md" ]]; then
+    cp "$MEMROOS_ROOT/.agents/skills/no-ai-slop/eval.md" "$skills_dir/no-ai-slop/eval.md"
+  fi
   # ENTOPS-13: also install any EXTRA_SKILLS (name|source-dir pairs).
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name src
@@ -790,13 +829,18 @@ install_skill() {
 
 uninstall_agents_md() {
   local target_file="$1"
+  local target_dir
   [[ -f "$target_file" ]] && rm -f "$target_file"
+  target_dir="$(dirname "$target_file")"
+  [[ -f "$target_dir/FORBIDDEN.md" ]] && rm -f "$target_dir/FORBIDDEN.md"
 }
 
 uninstall_skill() {
   local skills_dir="$1"
   rm -rf "$skills_dir/memroos-save"
   rm -rf "$skills_dir/memroos-recall"
+  rm -rf "$skills_dir/ponytail"
+  rm -rf "$skills_dir/no-ai-slop"
   # ENTOPS-13: also remove any EXTRA_SKILLS that were installed.
   if [[ -n "$EXTRA_SKILLS" ]]; then
     local pair name

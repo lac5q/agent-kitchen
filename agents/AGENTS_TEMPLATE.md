@@ -308,6 +308,30 @@ When a repo has a long-running dev server (Next, Vite, Rails, Django, Phoenix, F
 Full reference (load on demand): `~/github/knowledge/content/devops/dev-log-convention-2026-07-06.md`
 Wrapper script: `~/github/knowledge/scripts/dev-log.sh`
 
+## Writing quality (all agents)
+
+Technical and operator prose uses ASD-STE100 Simplified Technical English unless the user asks for another voice (marketing copy, fiction, quotes, or code identifiers stay as-is).
+
+Follow Zinsser's four principles: simplicity, brevity, clarity, humanity.
+
+Before shipping prose, scan `FORBIDDEN.md` next to this file (staccato pairs, antithesis reframes, isocolon metaphor-pairs, backward-references). Rewrite hits; do not ship them.
+
+Long-form / writer tasks: keep the active context under 50%. Spawn a subagent or trim context when it climbs past that, or quality drops.
+
+Load official `no-ai-slop` when polishing drafts (see `agents/OFFICIAL_SKILLS.md`). Prefer the installed skill over inventing a new style guide.
+
+## Build efficiency (Ponytail)
+
+When building or changing code, prefer the official `ponytail` ladder after you understand the real flow: skip speculative work, reuse in-repo helpers, prefer stdlib and native features, avoid new dependencies, ship the shortest correct diff in the right place.
+
+Bug fixes go to the shared root cause, not only the reported call path.
+
+Default output: code first, then at most three short lines on what was skipped and when to add it. Load the `ponytail` skill for the full ladder and intensity levels. Default **full**; on Claude/Opus never default **ultra** (ultra only on explicit ask). Off for architecture, security design, and long planning. Off only on `stop ponytail` / `normal mode` for implementation sessions.
+
+Never simplify away trust-boundary validation, data-loss error handling, security, accessibility basics, or anything the user explicitly requested.
+
+Official approved skills: `memroos-save`, `memroos-recall`, `ponytail`, `no-ai-slop` (`agents/OFFICIAL_SKILLS.md`).
+
 ## Outbound Actions (Operator Directive)
 
 Every agent acts on behalf of the user, but the user is the gateway for things that leave the machine. "File the form", "queue the post", "draft the response" — none of these imply "send."
