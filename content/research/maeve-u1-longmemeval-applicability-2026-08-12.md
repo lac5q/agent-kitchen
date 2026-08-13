@@ -39,7 +39,7 @@ Run date: 2026-08-12 UTC. Dataset: LongMemEval. Adapter: lexical. Top-k: 3.
 - Recall@k: 0.10
 - MRR: 0.06
 - False-positive rate: 0.9533
-- Answer-supported rate: 0.24
+- Expected-answer string present in retrieved text: 0.24 (model judge disabled)
 - p95 latency: 2 ms
 - Abstention accuracy: 0 across four labeled abstention tasks
 - Failed tasks: 0
@@ -67,4 +67,4 @@ Do not:
 - change the governance-first ranking or retrieval scores from this evidence;
 - cite a failed or unavailable adapter as scoring zero.
 
-The strongest genuine claim is: MemroOS now has a licensed external-dataset evaluation path that records the configuration, corpus fingerprint, per-task receipts, contamination state, replay fingerprint, and publication decision. The first semantic measurement is directionally positive and operationally too slow.
+The 0.24 field is a deterministic string-containment measure, not a model judgment of answer support. The strongest genuine claim is: MemroOS now has a licensed external-dataset evaluation path that records the configuration, corpus fingerprint, per-task receipts, contamination state, replay fingerprint, and publication decision. The first semantic measurement is directionally positive and operationally too slow.
