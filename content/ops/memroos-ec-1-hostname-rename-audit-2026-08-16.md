@@ -88,7 +88,7 @@ The remote checkout is `/home/opc/memroos`, its `origin` is `https://github.com/
 After implementation:
 
 - `rg -n -i "oracle-1|oracle1"` over active code/deploy/config paths returns no unexpected runtime references; historical paths are explicitly allowlisted.
-- `npm run check:runtime-topology -- --profile production` (or the repository's supported production invocation) passes.
+- `npm run check:runtime-topology -- production` (or the repository's supported production invocation) passes.
 - `npm run check:cordant-central-mcp` passes with `opc@memroos-ec-1`.
 - `npm run check:agents`, host-profile/install-regression checks, and relevant unit tests pass.
 - From Cordant, the SSH forwarder reaches `memroos-ec-1`; from the host, MCP auth and health checks pass.
