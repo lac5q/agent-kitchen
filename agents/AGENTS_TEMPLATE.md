@@ -200,6 +200,14 @@ the result before acting.
   the menial lane.
 - NEVER report work as Luna-Max-executed when it was not.
 
+## Email Campaign Timing (operator directive 2026-08-17)
+
+For marketing email preparation, testing, scheduling, sending, provider migration,
+or delivery reporting, load `.agents/skills/email-campaign-operations/SKILL.md`.
+Schedule campaigns at the strongest evidence-backed recipient-local-time window
+by default. Immediate sending requires an explicit urgency override such as
+"critical today" or "send now" and applies only to that campaign.
+
 ## MemroOS vs Artyfacts
 
 Artyfacts is a third-party filing-cabinet MCP server (28 tools, plugin name `artyfacts`, serverName `artyfacts`). It is **deprecated for knowledge storage** in this stack — MemroOS is primary.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Email Campaign Operations"
+  short_description: "Schedule and send compliant email campaigns"
+  default_prompt: "Use $email-campaign-operations to plan the best send time and safely execute this email campaign."
