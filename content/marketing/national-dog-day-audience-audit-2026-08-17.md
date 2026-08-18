@@ -68,6 +68,8 @@ Create or replace brand-specific Omnisend keys with these scopes:
 - `email-templates.write`
 - `contacts.read`
 - `segments.read`
+- `segments.write`
+- `images.write` (needed to host the TurnedComics dog-specific campaign hero)
 
 Store the TurnedComics key in the CLI-visible `AgentWritable` vault, and update the MakeMeJedi item with the missing segment and template scopes. Then create the engaged-subscriber segment, import the reviewed HTML templates, create draft campaigns with the audiences above, and send tests only to the approved test address before requesting production-send approval.
 
