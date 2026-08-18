@@ -35,6 +35,8 @@ sources:
   - "https://help.shopify.com/en/manual/promoting-marketing/analyze-marketing/shopify-email-analytics"
   - "https://support.omnisend.com/en/articles/4274532-disable-or-delete-an-automation-workflow"
   - "https://support.omnisend.com/en/articles/3873110-set-up-exit-conditions-for-automations"
+  - "https://support.omnisend.com/en/articles/3533018-omnisend-pricing-plans-2026"
+  - "https://help.shopify.com/en/manual/promoting-marketing/create-marketing/shopify-email/shopify-email-cost"
   - "https://turnedcomics.com/"
   - "https://turnedcomics.com/pages/faqs"
   - "https://turnedcomics.com/products/turned-comics"
@@ -57,6 +59,12 @@ Move event-driven TurnedComics lifecycle email to **Shopify Messaging + Shopify 
 The migration is feasible, but not a direct import. The source material is a set of specs and partial HTML, not proof of live Omnisend configuration. Shopify-native templates cover welcome, browse abandonment, cart abandonment, checkout abandonment, post-purchase, and win-back. Two moments require extra work: the custom portrait-ready/download event, and any review/UGC automation.
 
 The recommended boundary is **forward-only by flow**: do not recreate a person's historical position in Shopify. At cutover, disable the Omnisend workflow and choose **Exit from the workflow** for all already-enrolled contacts. Snapshot that canceled cohort for measurement and support, but do not restart or advance it in Shopify. This creates a small, explicit message gap while preserving the stronger invariant that exactly one platform owns each lifecycle flow. Omnisend documents the exit-all option and preserves statistics when a workflow is disabled rather than deleted.
+
+### Economic sanity check
+
+Do not migrate solely because Shopify exists. Omnisend's 2026 free plan is $0 but is limited to 250 reachable contacts and 500 email sends per month. Shopify Messaging includes 10,000 email sends per calendar month with an eligible Shopify plan, then charges $1 per additional 1,000 up to 300,000; abandoned-checkout automation messages are excluded from that quota.
+
+If TurnedComics has a genuinely grandfathered Omnisend plan that supports its full audience and lifecycle volume at $0, retaining Omnisend for lifecycle can be rational, and the migration should be justified by simpler event ownership or operations—not savings. If the last audited audience of roughly 1,367 contacts is representative and the account is on the current free plan, Omnisend cannot reach the full audience or sustain the planned flow volume. In that case, Shopify is likely the lower-cost native lifecycle owner while broadcasts remain in SendGrid. Phase 0 must record the actual Omnisend plan, invoice, contact limit, email-credit limit, current usage, and any grandfathered terms before approving migration on economic grounds.
 
 ## Scope contract
 
