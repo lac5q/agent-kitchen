@@ -25,16 +25,17 @@ Audit performed on August 17, 2026 (America/Los_Angeles). Counts are point-in-ti
 
 ## Recommendation
 
-- **MakeMeJedi:** Target the existing pet-interest Omnisend segment `6937e74a6309f67af1bc42a0`. It currently contains **277 subscribed contacts**, compared with **313 total subscribed contacts** in the brand. The segment was previously attached to the campaign named `Copy of: 4/10 ED: Make your pet a Jedi 🐶⚔️`, making it the strongest available first-party relevance signal for a National Dog Day message.
+- **MakeMeJedi:** Target a new transparent **Engaged Subscribers** segment: email subscription status `subscribed` AND engagement tag `engagement_high` or `engagement_medium`. Identifier-level validation finds **7,824 unique subscribed contacts** in this cohort: 3,978 high engagement plus 3,846 medium engagement, with zero overlap. Do not describe historical segment `6937e74a6309f67af1bc42a0` as pet-interest; it is reused across unrelated campaigns and its rules are not readable with the current credential.
 - **TurnedComics:** Target active Omnisend email subscribers, but reconcile the count against Shopify before sending. Shopify contains **1,042 customers with explicit SUBSCRIBED email-marketing consent and valid email formats**. It also contains **32 UNSUBSCRIBED** and **60 NOT_SUBSCRIBED** customers, which must remain excluded. The final Omnisend sendable count can be lower because of provider suppressions or synchronization differences.
 - **PopSmiths:** The completed production send used the compliant union of customers and OMS imports, then applied local and provider suppression checks. **876 messages were accepted with 0 failures**. An additional **80 unique addresses** exist across auxiliary tables, but those tables do not contain explicit marketing-consent evidence, so the addresses were excluded.
 
 ## MakeMeJedi evidence
 
 - Omnisend brand verified as `Make Me Jedi` (`68d6bddb656d7043634a21e6`).
-- Current Omnisend contact status count: **313 subscribed**.
-- Engagement tags among subscribed contacts included 94 high, 94 medium, and 94 low; 39 subscribed contacts did not carry one of those three tags.
-- Current membership in the prior pet-interest segment: **277 subscribed** and **7,569 total contacts across all subscription states**. Omnisend must enforce active subscriber status at send time.
+- The convenience query parameter `status=subscribed` returned only 313 records and materially undercounted the active audience. It is not suitable for campaign sizing in this account.
+- Identifier-level validation controls the recommendation: `engagement_high` contains **3,978** contacts whose email identifier is subscribed; `engagement_medium` contains **3,846**; their intersection is zero, producing a **7,824-contact engaged union**.
+- `engagement_low` contains another **5,018** contacts whose email identifier is subscribed. High, medium, and low together account for at least **12,842** subscribed contacts, before any unclassified subscribers.
+- Historical segment `6937e74a6309f67af1bc42a0` contains **7,569 total contacts**, including **6,313** whose email identifiers are subscribed and have recorded email consent. Because the segment appears on unrelated campaigns and its rules cannot be read with the current key, it is not a defensible pet-interest proxy.
 - The most recent listed campaign was sent July 21, 2026, so this August 17 preparation does not conflict with a same-day campaign in the accessible history.
 
 ## TurnedComics evidence
@@ -53,7 +54,7 @@ Before an Omnisend production send, compare Omnisend active subscribers with the
 
 ## Credential and execution blockers
 
-- The MakeMeJedi 1Password Omnisend key can read contacts and campaigns but lacks `email-templates.write`; Omnisend rejected HTML template import with HTTP 403. No MakeMeJedi draft or test email was created from that key.
+- The MakeMeJedi 1Password Omnisend key can read contacts and campaigns but lacks `segments.read`, `segments.write`, `email-templates.read`, and `email-templates.write`. Omnisend rejected segment creation and HTML template import with HTTP 403. No MakeMeJedi draft or test email was created from that key.
 - The TurnedComics mkt-hub Omnisend key returns HTTP 403 even for brand verification, and no valid TurnedComics Omnisend key was found in the checked 1Password vaults. No TurnedComics draft or test email was created.
 - No audience send endpoint was called for either MakeMeJedi or TurnedComics.
 
@@ -68,4 +69,8 @@ Create or replace brand-specific Omnisend keys with these scopes:
 - `contacts.read`
 - `segments.read`
 
-Store the TurnedComics key in 1Password, and update the MakeMeJedi item with the missing template scopes. Then import the reviewed HTML templates, create draft campaigns with the audiences above, and send tests only to the approved test address before requesting production-send approval.
+Store the TurnedComics key in the CLI-visible `AgentWritable` vault, and update the MakeMeJedi item with the missing segment and template scopes. Then create the engaged-subscriber segment, import the reviewed HTML templates, create draft campaigns with the audiences above, and send tests only to the approved test address before requesting production-send approval.
+
+## Correction log
+
+An earlier pass inferred that historical segment `6937e74a6309f67af1bc42a0` represented pet interest because it appeared on a copied pet campaign and because `GET /contacts?segmentID=...&status=subscribed` returned 277 records. Broader campaign-history review showed the segment was reused on unrelated campaigns, and identifier-level reads showed the status filter materially undercounted subscribers. The temporary classification tags based on that inference were removed. No campaign or email was sent from the incorrect interpretation.
