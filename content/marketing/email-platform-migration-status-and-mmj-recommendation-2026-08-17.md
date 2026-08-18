@@ -11,6 +11,7 @@ sources:
   - "SendGrid account and API audit, 2026-08-17"
   - "Omnisend brand APIs and user-provided September renewal amount, 2026-08-17"
   - "Namecheap DNS API verification, 2026-08-17"
+  - "Gmail received-message header audit, 2026-08-17"
   - "https://www.twilio.com/docs/sendgrid/api-reference/domain-authentication/authenticate-a-domain"
   - "https://www.twilio.com/docs/sendgrid/api-reference/suppressions-unsubscribe-groups/create-a-new-suppression-group"
   - "https://www.twilio.com/docs/sendgrid/for-developers/sending-email/suppressions"
@@ -37,8 +38,20 @@ Do not cancel MakeMeJedi Omnisend solely because broadcast sending has moved. Fi
 - The brand-specific `TurnedComics Marketing` ASM group was created as group ID `37327`.
 - The source audience remains Omnisend segment `6a83cae66556c429fe55ccfb`, which contains 1,367 subscribed contacts.
 - SendGrid suppression reconciliation excluded two members of that source audience, leaving 1,365 currently eligible recipients.
-- A SendGrid test from `contact@turnedcomics.com` to `luis@epiloguecapital.com` was accepted with message ID `_6SOb8c0RyqjUygzo33JUQ`.
-- Production remains gated and has not been sent through SendGrid.
+- A SendGrid test from `contact@turnedcomics.com` to `luis@epiloguecapital.com` was accepted with message ID `_6SOb8c0RyqjUygzo33JUQ` and arrived in Gmail's inbox under Promotions.
+- The received test passed SPF, DKIM, and DMARC. Gmail showed both `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers generated from the attached ASM group.
+- Production was explicitly approved as a critical same-day urgency override. SendGrid accepted all 1,365 preflight-eligible recipients with zero Mail Send API failures.
+- Accepted is not equivalent to delivered. Provider delivery, bounce, block, spam, unsubscribe, click, and conversion events must be monitored separately.
+
+## Post-send hardening
+
+An independent Luna Max review identified and the primary agent corrected three future-run issues:
+
+- SendGrid group suppressions are returned as email strings and are not paginated; the runner now parses the correct response and avoids an infinite pagination loop.
+- The Omnisend credential now verifies the `Turned Comics` brand, and contacts must also have explicit `status: subscribed` even though the source segment already encodes that condition.
+- A production lock now prevents concurrent runs. Network errors and provider 5xx responses remain `uncertain` and cannot be retried until reconciled; only definite 4xx failures are retryable.
+
+The completed campaign's hashed ledger causes the next preflight to report zero eligible recipients, preventing an accidental resend.
 
 ## MakeMeJedi economics and readiness
 
