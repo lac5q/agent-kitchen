@@ -22,7 +22,7 @@ regen_prompt: Re-run the TurnedComics Omnisend trigger-origin audit, PopSmiths l
 - PopSmiths lifecycle automation was already live on a five-minute worker cadence. A duplicate-checkout bug could have sent multiple recoveries to the same email; it was fixed, tested, committed, and deployed.
 - A second PopSmiths issue allowed GET requests to unsubscribe immediately. Email security scanners could therefore opt recipients out merely by previewing/following links. GET now renders a confirmation page; only POST changes preferences.
 - Two branded incident-recovery tests were sent to the requested reviewer. SendGrid Email Activity confirmed both as `delivered`.
-- No production incident-recovery audience was sent during this audit. The send remains gated on reviewer approval.
+- TurnedComics production recovery was approved and sent on 2026-08-19 after a fresh consent, suppression, and purchase reconciliation. All three eligible messages were confirmed delivered.
 
 ## TurnedComics repair
 
@@ -122,10 +122,36 @@ SendGrid accepted both brand tests and Email Activity later reported one matchin
 
 ## Remaining gate
 
-Before a production recovery send:
+Before a PopSmiths production recovery send:
 
 1. Reviewer approves both delivered tests.
 2. Re-run provider suppression, current preference/subscription, and purchase reconciliation immediately before send.
 3. Send only to the final 3 + 3 identified recipients.
 4. Use provider unsubscribe/preference controls and a send ledger.
 5. Verify delivery events after provider acceptance.
+
+## TurnedComics production outcome — 2026-08-19
+
+The reviewer confirmed that turnedcomics.com was working and explicitly approved the production send. Immediate delivery was recorded as an urgency override rather than the default evidence-based scheduling policy.
+
+Fresh preflight:
+
+- 4 identified recipients had delivered clicks to the TurnedComics product CTA
+- all 4 remained subscribed in Omnisend
+- 1 matched a current SendGrid suppression and was excluded
+- 0 matched campaign bounce/drop/spam/unsubscribe events
+- 0 had a post-incident Shopify purchase
+- final eligible audience: **3**
+- sender domain authentication: valid
+- TurnedComics ASM group: `37327`
+
+Production subject: `The site is working again`
+
+Outcome:
+
+- accepted: **3**
+- failed: **0**
+- uncertain: **0**
+- confirmed delivered in SendGrid Email Activity: **3**
+
+The per-recipient production ledger stores only SHA-256 recipient hashes and provider message IDs; no subscriber addresses were logged to chat or the knowledge artifact.
