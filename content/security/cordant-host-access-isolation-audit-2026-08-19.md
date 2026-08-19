@@ -41,3 +41,12 @@ The shell history contained references to `~/github/memroos` and `github/memroos
 5. Enable auditd or equivalent command/file audit before granting any further access. Without pre-existing audit rules, past source reads cannot be proven or disproven.
 
 This audit recorded findings only; it did not yet change the Tailscale configuration, SSH authorized keys, GitHub token, or source tree.
+
+
+## Remediation update — auditd enabled (2026-08-19)
+
+Installed [1mauditd[0m and [1maudispd-plugins[0m on cordant-hermes-01. The audit daemon is active and enabled at boot. Persistent rules are stored in [1m/etc/audit/rules.d/50-memroos-access.rules[0m and load successfully through augenrules.
+
+The rules record login-attributed command execution, reads from [1m/home/ubuntu/memroos[0m, source/Git metadata changes, GitHub credential changes, SSH authorized-key changes, Tailscale node-state changes, SSH/sudo/systemd/audit-rule changes, and the ubuntu shell history. Audit log rotation was increased to 64 MB per file with 10 rotated files. A benign source-read verification generated matching audit events; audit status reported active, enabled, and zero lost events at verification time.
+
+Audit is detection, not prevention. A root user can disable or erase host-local auditing, so this must be combined with removal of shared sudo/root access and Tailscale isolation. Use [1msudo ausearch -if /var/log/audit/audit.log -k memroos-source-read -i[0m (and the other rule keys) when reviewing events; the default current-log selector did not include the rotated/current audit file consistently on this host.
