@@ -1,6 +1,22 @@
 ---
 title: Checkout incident recovery and abandoned-cart audit — TurnedComics and PopSmiths
 date: 2026-08-18
+description: Production audit, repair, consent reconciliation, and delivery outcome for TurnedComics and PopSmiths checkout-recovery email systems.
+publishedAt: 2026-08-18
+tags:
+  - email-operations
+  - incident-recovery
+  - abandoned-cart
+  - turnedcomics
+  - popsmiths
+keywords:
+  - SendGrid
+  - Omnisend
+  - Shopify
+  - cart recovery
+  - consent reconciliation
+author: Codex
+source_session: codex-mkt-hub-checkout-recovery-2026-08-18
 model: GPT-5.6
 sources:
   - /home/lac5q/github/popsmiths_app/apps/backend/src/services/lifecycle.js
@@ -10,7 +26,8 @@ sources:
   - Omnisend Event Metadata API (2026-03-15)
   - SendGrid Email Activity and Suppressions APIs
   - Shopify Admin GraphQL API
-derived_from: Live production audit and repair requested after the 2026-08-17 checkout incident
+derived_from:
+  - Live production audit and repair requested after the 2026-08-17 checkout incident
 regen_prompt: Re-run the TurnedComics Omnisend trigger-origin audit, PopSmiths lifecycle worker/readiness checks, storefront-click audience reconciliation, provider suppressions, post-campaign purchase exclusions, and delivery verification. Never print PII, signed URLs, or credentials.
 ---
 
