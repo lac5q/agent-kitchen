@@ -3,6 +3,8 @@ title: "TurnedComics Shopify lifecycle migration plan"
 date: 2026-08-18
 author: "Codex"
 model: "gpt-5.6"
+reviewers:
+  - "claude-fable-5"
 status: "implementation plan; cutover blocked on signed live inventory"
 tags:
   - turnedcomics
@@ -41,6 +43,8 @@ sources:
   - "https://turnedcomics.com/pages/faqs"
   - "https://turnedcomics.com/products/turned-comics"
   - "https://turnedcomics.com/pages/contact"
+  - "fable-session:112932be-ad07-4da0-8833-ff581a3d27bf"
+  - "fable-session:c8fce8c7-be5b-4470-978d-c9cf8aa9b3a5"
 regen_prompt: >-
   Re-audit every TurnedComics lifecycle automation and template in mkt-hub and the
   live Omnisend and Shopify admins. Verify current Shopify Messaging/Flow features
@@ -460,6 +464,40 @@ MakeMeJedi is strictly a post-acceptance reuse phase and is not part of TurnedCo
 4. Re-run every capability and compliance gate; do not infer that a passing TurnedComics app/plan/market configuration exists in the MakeMeJedi store.
 5. Cut over MakeMeJedi flow-by-flow only after TurnedComics findings are folded into the template.
 
+## Fable independent architecture and security validation
+
+On 2026-08-18, the installed Claude-Pro watcher lane was smoke-tested and returned `claude-fable-5` with complete execution metadata. The review was deliberately split into bounded architecture and webhook-security gates after larger non-interactive prompts returned no execution record; those empty attempts were treated as unverified and did not count.
+
+### Overall verdict: ACCEPT_WITH_CHANGES
+
+Fable found the per-brand split coherent: PopSmiths can retain its custom SendGrid lifecycle engine; TurnedComics and then MakeMeJedi can use Shopify for lifecycle; SendGrid can retain scheduled broadcasts; and the single-owner queue-empty migration boundary is sound.
+
+Required architecture change: Shopify-to-SendGrid consent/suppression synchronization is a permanent runtime dependency, not merely a migration task. Monitor sync freshness continuously and **halt all affected-brand SendGrid broadcasts globally** whenever the suppression dataset is stale or the sync cannot be proven current. Per-address fail-closed behavior is insufficient when the source dataset itself may be stale.
+
+### SendGrid webhook verdict: FIX_NOW, staged
+
+PopSmiths production currently skips SendGrid event-webhook signature verification because `SENDGRID_WEBHOOK_PUBLIC_KEY` is absent. The code also fails open when a configured key is malformed. Fable judged this worth fixing now because an unauthenticated caller can forge delivery, bounce, spam, unsubscribe, click, and related telemetry.
+
+The key must **not** simply be pasted into Heroku. Safe rollout:
+
+1. Change present-but-malformed key handling to fail closed (or refuse startup) and add an explicit `off | observe | enforce` verification mode. Deploy while the key remains absent and behavior remains unchanged.
+2. Enable SendGrid Signed Event Webhook and capture its public key. Leave receiver enforcement off so signed and unsigned transition traffic is not lost.
+3. Configure the key and switch the receiver to `observe`: verify ECDSA/SHA256 against timestamp plus the exact raw request body and enforce/log the five-minute replay window, but continue processing during observation.
+4. Observe 24–48 hours, including retries. Reconcile SendGrid webhook delivery/failure telemetry with application ingestion and investigate every verification failure, clock-skew issue, or raw-body mismatch.
+5. Switch to `enforce`, rejecting missing/invalid/stale signatures, and monitor SendGrid retries plus ingestion volume.
+
+Rollback: return the receiver to `observe` while leaving SendGrid signing enabled and retaining the valid key. Do not return to an unsigned sender configuration unless a separately approved emergency procedure requires it.
+
+Evidence required before enforcement:
+
+- the public key is obtained from the authenticated PopSmiths SendGrid signed-webhook configuration and stored without transformation loss;
+- test vectors prove valid signature acceptance and invalid, missing, stale, replayed, body-mutated, and malformed-key rejection;
+- raw-body capture occurs before JSON parsing and matches the bytes SendGrid signed;
+- observation shows near-100% valid signatures across a complete traffic/retry cycle;
+- event-volume reconciliation and alerting can detect loss immediately;
+- rollback to `observe` is tested and owned;
+- forged webhook events are proven unable to directly alter canonical consent/suppression, or that mutation path is separately protected and tested.
+
 ## Beastmode phase record
 
 - **Director:** primary Codex agent; owned contract, evidence synthesis, decisions, final verification, persistence, and publication.
@@ -467,6 +505,7 @@ MakeMeJedi is strictly a post-acceptance reuse phase and is not part of TurnedCo
 - **Executor 2:** lower worker, requested `gpt-5.6-luna` low; mapped current official Shopify capabilities and gaps. Actual worker-capacity telemetry was not exposed.
 - **Reviewer:** separate lower worker, requested `gpt-5.6-luna` medium; adversarially challenged scope, migration boundary, consent, precedence, QA, cutover, rollback, metrics, and estimates. Actual worker-capacity telemetry was not exposed.
 - **Review result:** initial draft rejected; all P0/P1 issues corrected; amended full draft accepted with no remaining P0/P1 findings.
+- **Fable watcher:** requested and actual `claude-fable-5` through `claude -p --permission-mode plan`; architecture verdict `ACCEPT_WITH_CHANGES`; webhook verdict `FIX_NOW` with staged observe-before-enforce rollout. Recorded Fable costs: USD 0.706245 for the architecture verdict and USD 0.712795 for the webhook verdict. Empty intermediate calls produced no execution record and were excluded from validation.
 - **Budget/time telemetry:** no explicit budget, used/remaining token counts, or per-agent wall-clock allocation was exposed by the harness; no unsupported numbers are claimed.
 - **Merge boundary:** no live-system or mkt-hub code changes were authorized or performed. The durable output is this MemroOS plan.
 
