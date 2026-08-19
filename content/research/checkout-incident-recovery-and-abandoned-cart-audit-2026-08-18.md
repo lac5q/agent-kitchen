@@ -126,7 +126,7 @@ Before a PopSmiths production recovery send:
 
 1. Reviewer approves both delivered tests.
 2. Re-run provider suppression, current preference/subscription, and purchase reconciliation immediately before send.
-3. Send only to the final 3 + 3 identified recipients.
+3. Send only to the final 3 identified PopSmiths recipients.
 4. Use provider unsubscribe/preference controls and a send ledger.
 5. Verify delivery events after provider acceptance.
 
