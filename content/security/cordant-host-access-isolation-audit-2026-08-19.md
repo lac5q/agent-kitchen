@@ -64,3 +64,8 @@ The host-side MCP HTTP and control-plane services now run as the non-login memro
 The Cordant GitHub CLI credential file and the additional root-owned /etc/memroos/gh-token file were removed. The private-repository fetch test now fails and ubuntu has no GitHub CLI login or Docker access. The deleted token was a 40-byte GitHub-format token; because its value is no longer available, it still must be revoked in GitHub account settings as a provider-side precaution. No token value was recorded.
 
 Auditd remains active and enabled at boot, with persistent rules for commands, source reads/changes, SSH keys, credentials, Tailscale state, firewall configuration, and service-control changes. Verification reported zero lost audit events.
+
+
+## GitHub credential revocation completion — 2026-08-19
+
+The GitHub CLI OAuth token grant was revoked provider-side through GitHub's OAuth application API. The token check identified the GitHub CLI application, and deleting the application grant returned HTTP 204. This revokes all GitHub CLI OAuth tokens for the account, including the exposed Cordant credential if it was the copied GitHub CLI token. The local Maeve gh session is now intentionally invalid and requires re-authentication. No token value was recorded.
