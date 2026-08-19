@@ -49,3 +49,18 @@ Installed auditd and audispd-plugins on cordant-hermes-01. The audit daemon is a
 The rules record login-attributed command execution, reads from /home/ubuntu/memroos, source/Git metadata changes, GitHub credential changes, SSH authorized-key changes, Tailscale node-state changes, SSH/sudo/systemd/audit-rule changes, and the ubuntu shell history. Audit log rotation was increased to 64 MB per file with 10 rotated files. A benign source-read verification generated matching audit events; audit status reported active, enabled, and zero lost events at verification time.
 
 Audit is detection, not prevention. A root user can disable or erase host-local auditing, so this must be combined with removal of shared sudo/root access and Tailscale isolation. Use sudo ausearch -if /var/log/audit/audit.log -k memroos-source-read -i (and the other rule keys) when reviewing events; the default current-log selector did not include the rotated/current audit file consistently on this host.
+
+
+## Hardening update — deployment and access isolation (2026-08-19)
+
+The requested hardening was applied without changing the Cloudflare tunnel configuration. A new administrator account, luis, was created with the existing Maeve key and the known main-mac key. SSH now permits only luis, disables password and keyboard-interactive authentication, and disables root SSH. The shared ubuntu account is locked, has a nologin shell, has no authorized keys, and is no longer in sudo, docker, lxd, or other supplementary groups. luis access was verified over both the Tailscale hostname and the public SSH address.
+
+Cordant now has a persistent nftables/systemd egress isolation rule. New traffic from Cordant to Maeve-u1 (IPv4 and IPv6), main-mac (IPv4 and IPv6), and the shared public endpoint on TCP/22 is blocked. Replies to inbound SSH on Cordant are allowed, so owner administration remains possible. Actual SSH probes to all four Tailnet addresses returned BLOCKED; inbound luis SSH and Cloudflare access remained healthy.
+
+A hardened image, memroos-cordant-hardened:20260819-r2, was built from a multi-stage Dockerfile at /etc/memroos/Dockerfile.hardened. The final image contains no application src tree, .env file, or source-map files; it runs as UID/GID 10001, uses a read-only root filesystem, drops all Linux capabilities, enables no-new-privileges, and has an unless-stopped restart policy. The running container is healthy and Cloudflare continues to return HTTP 200. The old application image and build cache were removed.
+
+The host-side MCP HTTP and control-plane services now run as the non-login memroos-svc account. The deployed source and runtime data are protected from other local users; no source files are world-readable. Host build artifacts (.next and application node_modules) were removed after the hardened image passed its smoke checks. The existing bidirectional Oracle forward remains under the locked, non-login ubuntu service identity to preserve its established SSH forwarding session; it does not provide an interactive login path.
+
+The Cordant GitHub CLI credential file and the additional root-owned /etc/memroos/gh-token file were removed. The private-repository fetch test now fails and ubuntu has no GitHub CLI login or Docker access. The deleted token was a 40-byte GitHub-format token; because its value is no longer available, it still must be revoked in GitHub account settings as a provider-side precaution. No token value was recorded.
+
+Auditd remains active and enabled at boot, with persistent rules for commands, source reads/changes, SSH keys, credentials, Tailscale state, firewall configuration, and service-control changes. Verification reported zero lost audit events.
