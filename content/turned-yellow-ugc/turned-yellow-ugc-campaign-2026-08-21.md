@@ -1,36 +1,34 @@
 ---
 name: "turned-yellow-ugc-campaign-2026-08-21"
 title: "Turned Yellow UGC Platform Decision and Blocked Launch Package"
-description: "Primary-source comparison, NO-GO decision, economics sensitivity, and safe campaign operations package."
+description: "Final primary-source comparison, NO-GO decision, economics, safe operations, and accepted verification package."
 publishedAt: "2026-08-21"
 tags: [turned-yellow, ugc, creator-marketing, joinbrands, campaign-operations]
 keywords: [JoinBrands, Collabstr, Insense, Billo, UGC, micro-creators]
 author: "Codex director"
 source_session: "01a024f9-15f8-7703-9f40-f6653786101d"
+source_commit: "49b720bcd90fa4d4cbbbc5f34069b4145659a680"
 model: "gpt-5.6-sol director with gpt-5.6-luna max research/review workers"
 sources:
   - "https://joinbrands.com/pricing/"
   - "https://joinbrands.com/terms/"
-  - "https://help.joinbrands.com/en/articles/8732671-brands-a-guide-to-job-status-and-timers"
-  - "https://help.joinbrands.com/en/articles/6662946-creators-guide-for-tiktok-jobs"
   - "https://collabstr.com/pricing"
   - "https://collabstr.com/terms/"
   - "https://insense.pro/pricing"
   - "https://insense.pro/terms-of-service"
   - "https://billo.app/terms-of-service-2026/"
-  - "https://www.ftc.gov/business-guidance/resources/disclosures-101-social-media-influencers"
-  - "https://adstandards.ca/wp-content/uploads/AdStandards-Influencer-Guidelines-EN-2023-FIN.pdf"
-  - "mkt-hub:campaign/PHASE-CONTRACT.md"
+  - "mkt-hub:49b720bcd90fa4d4cbbbc5f34069b4145659a680"
   - "MemroOS:memory_recall receipt 2026-08-21"
 derived_from:
   - "mkt-hub:campaign/PHASE-CONTRACT.md"
   - "mkt-hub:goal-objective attachment 269da385-e052-4766-b295-9947d85dbc2a"
-regen_prompt: "Refresh official primary sources, rerun the locked decision contract, rebuild economics and schedule evidence, and do not launch unless every gate passes."
+  - "MemroOS:content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md@39e28fd271a6a00927a87966900af461c063f06c"
+regen_prompt: "Refresh official primary sources, rerun the locked decision contract and independent review, rebuild economics and schedule evidence, and do not launch unless every gate passes."
 ---
 
 # Turned Yellow UGC campaign package
 
-> Canonical status: **NO-GO**. No platform login, configuration, spend, Shopify mutation, creator commitment, or publication occurred.
+> Canonical status: **NO-GO**. Independent corrected-package review: **ACCEPT**. No platform login, configuration, spend, Shopify mutation, creator commitment, or publication occurred.
 
 
 ---
@@ -127,8 +125,8 @@ Reopen the decision only after receiving, in writing: (1) a deduplicated eligibl
 
 # JP recommendation recall receipt
 
-Status: **NOT RECOVERED / UNVERIFIED**  
-Belief stage: `unverified-memory`  
+Status: **NOT RECOVERED / UNVERIFIED**
+Belief stage: `unverified-memory`
 Search date: 2026-08-21
 
 MemroOS was searched before platform research using these queries: `JP meeting JoinBrands recommendation Turned Yellow UGC creators`, `JP recommended JoinBrands meeting`, `JoinBrands Collabstr creator seeding JP`, `JoinBrands`, `Join Brands`, `UGC creator platform`, `JP creator marketing`, and `micro creator seeding`.
@@ -138,7 +136,6 @@ The gated MemroOS `memory_recall` path searched the knowledge, connector, QMD, a
 Conclusion: no claim about what JP recommended is treated as evidence. “JP recommended JoinBrands” remains an unverified recollection and has no weight in the decision. A meeting recording, transcript, note, or direct confirmation from JP would be required to promote it to verified.
 
 Tool note: the live Codex MCP surface did not expose `mcp_memroos_knowledge_search`; the MemroOS installer was rerun, then the same MemroOS gatekeeper server function was used directly. No knowledge-repository files were read directly.
-
 
 
 ---
@@ -291,7 +288,6 @@ Status: **not qualified and not authorized for launch.** Public workflow labels 
 | Checkout | submit order / fund campaign | STOP | action | yes | platform workflow | User | explicit approval after requalification | irreversible boundary |
 
 Collabstr cannot replace JoinBrands without a quote, exact filtered supply count, batch SLA, campaign-specific rights, and enforceable early-removal remedies. Public examples establish creator existence, not the required deduplicated cohort of 120.
-
 
 
 ---
@@ -531,4 +527,67 @@ WORKED: Every required artifact was created as a non-executable draft with unsup
 
 FAILED: The platform gate did not authorize authenticated configuration or launch, so no screenshots or live URLs exist.
 
+FAILED: An attempted reviewer resume drifted from the requested `gpt-5.6-luna` to `gpt-5.6-sol`. It was stopped before its output could count; a new pinned Luna/max session completed the v2 review with `ACCEPT` and 20/20 normalized checks.
+
 PROPOSED: Add a reusable validator for tracker headers, enums, UTM uniqueness, and 90-day monitoring dates; capture historical completion, revision, unusable, and affiliate-order rates for narrower future sensitivities.
+
+
+---
+
+## Repository artifact: `campaign/verification-report.md`
+
+# Requirement verification report
+
+Status: independent v2 review ACCEPT; launch remains NO-GO.
+
+| Objective requirement | Artifact/evidence | Status |
+|---|---|---|
+| Consolidate branches | `lessons.md`; master `9b7d8d16`; isolated task branch | PASS |
+| Luna/max parallel research, requested vs actual | three research `meta.json` files; concurrency 3/3; session evidence | PASS |
+| JP recommendation recall | `research/jp-recommendation.md` | PASS: miss remains unverified |
+| JoinBrands + Collabstr + two alternatives | `research/platform-comparison.md`; direct official sources | PASS |
+| Fully loaded economics | `research/unit-economics.md` full variable ledger and six recalculated sensitivities | PASS as bounded evidence; procurement quote remains UNKNOWN |
+| Supply/targeting/turnaround/payment/enforcement/analytics/API/rights | comparison matrix and worker evidence | PASS as decision research; critical unknowns explicit |
+| Explicit decision | exactly one `Decision: NO-GO` | PASS |
+| Field configurations | `campaign/joinbrands-campaign.md`, `campaign/collabstr-alternative.md` | PASS as blocked paper mappings |
+| Hooks, structure, do/don't, disclosure | `campaign/creative-brief.md` | PASS |
+| Two-hour weighted rubric | `campaign/creator-rubric.md`; weights 100 | PASS |
+| Milestones and deadline | `campaign/operations.md`, comparison schedule input/lower-bound tables | PASS: infeasible/unknown and launch blocked |
+| Codes/UTMs | `campaign/operations.md` | PASS |
+| Tracker | exact 53-column `campaign/creator-tracker.csv` | PASS |
+| Shopify zero-cost workflow | guarded `draftOrderCreate` / `draftOrderComplete` specification | PASS as unexecuted design |
+| Execution | decision gate did not pass | NOT AUTHORIZED; no external action |
+| MemroOS persist/readback | `content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md`; commit `39e28fd271a6a00927a87966900af461c063f06c`; exact 57,414-character readback | PASS via MemroOS gatekeeper server-function fallback |
+| Independent corrected-package review | `.codex/beastmode-runs/20260821T203000Z-luna-final-review-v2/`; 20/20 normalized deterministic checks | ACCEPT |
+
+Persistence note: the live Codex MCP tool surface lacked `mcp_memroos_knowledge_write`. The installer was rerun, then the same registered MemroOS gatekeeper function was invoked directly with `require_frontmatter=True` and `auto_commit=True`; the write returned `status=ok`, 57,620 bytes, and the SHA above. `knowledge_read` returned the exact intended 57,414-character content with title and canonical NO-GO status.
+
+Pre-commit verification: staged diff whitespace check passed; all run JSON parsed; the high-confidence and generic-assignment secret scans covered the complete staged diff with zero findings. GitNexus staged `detect_changes` reported low risk and zero affected execution flows. Its registered `mkt-hub` index warned that it was 44 commits behind the consolidated worktree; a worktree refresh was attempted but did not register a separate index, so the zero-flow result is retained with that freshness limitation. Merge into `master` remains subject to the Beastmode merge approval gate.
+
+
+---
+
+## Repository artifact: `.codex/beastmode-runs/20260821T203000Z-luna-final-review-v2/output.md`
+
+ACCEPT
+
+## Blockers
+
+None. Package accepted; launch remains canonical `NO-GO` due the verified JoinBrands schedule failure.
+
+## Non-blocking corrections
+
+- Economics inputs use a document-level retrieval date rather than row-level source/precision metadata; the Collabstr configuration also lacks a local retrieval date.
+- The alternatives worker output retains stronger Billo raw-footage wording than the corrected canonical comparison. Align it if reused.
+
+## Checks/results
+
+- 20/20 deterministic checks passed: economics, CSV schema, rubric, decision count, schedule, citations, state machine, Shopify mapping, metadata, and persistence receipt.
+- MemroOS path: `content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md`; commit `39e28fd271a6a00927a87966900af461c063f06c`; 57,414-character readback, 57,620 bytes written.
+- Relevant model/concurrency/cost records and the v1 REJECT output/meta are complete.
+- Shopify fields and guarded `draftOrderCreate`/`draftOrderComplete` mapping match the current Admin GraphQL schema.
+- The reviewer made no edits, commits, logins, or mutations.
+
+## Traceability
+
+Economics: `research/unit-economics.md`. Schedule and decision: `research/platform-comparison.md`. State persistence and rubric: `campaign/operations.md` and `campaign/creator-rubric.md`. Themes and disclosure: `campaign/creative-brief.md`. Persistence: `campaign/verification-report.md`.
