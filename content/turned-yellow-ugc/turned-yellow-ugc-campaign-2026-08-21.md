@@ -1,14 +1,14 @@
 ---
 name: "turned-yellow-ugc-campaign-2026-08-21"
-title: "Turned Yellow UGC Platform Decision and Evidence-First Strategy"
-description: "Accepted NO-GO campaign package plus a bounded procurement and pilot strategy for future requalification."
+title: "Turned Yellow Same-Day JP-Style Creator Test and Scale Strategy"
+description: "JoinBrands one-creator test at $100, $200 validation ceiling, and MER/profit-gated scaling up to $20,000, preserving the historic scale NO-GO."
 publishedAt: "2026-08-21"
-tags: [turned-yellow, ugc, creator-marketing, joinbrands, campaign-operations, strategy]
-keywords: [JoinBrands, Collabstr, Insense, Billo, UGC, micro-creators, pilot]
+tags: [turned-yellow, ugc, creator-marketing, joinbrands, campaign-operations, strategy, mer]
+keywords: [JoinBrands, JP strategy, UGC, micro-creators, MER, creator test]
 author: "Codex director"
 source_session: "01a024f9-15f8-7703-9f40-f6653786101d"
-source_commit: "31a9a03f"
-model: "gpt-5.6-sol director with gpt-5.6-luna max strategy reviewers"
+source_commit: "970bfae3"
+model: "gpt-5.6-sol director"
 sources:
   - "https://ads.tiktok.com/help/article/spark-ads-creation-guide"
   - "https://adstandards.ca/wp-content/uploads/AdStandards-Influencer-Guidelines-EN-2023-FIN.pdf"
@@ -59,32 +59,111 @@ sources:
   - "https://joinbrands.com/terms/"
   - "https://shopify.dev/docs/api/admin-graphql/latest/mutations/draftordercomplete"
   - "https://shopify.dev/docs/api/admin-graphql/latest/mutations/draftordercreate"
+  - "https://turnedyellow.com/`"
   - "https://www.facebook.com/help/instagram/616901995832907"
   - "https://www.ftc.gov/business-guidance/resources/disclosures-101-social-media-influencers"
-  - "mkt-hub:31a9a03f"
-  - "MemroOS:knowledge_search Turned Yellow receipt 2026-08-21"
+  - "mkt-hub:970bfae3"
+  - "operator direction:2026-08-21:$100-$200 test, MER>1.5, conditional $20k ceiling"
+  - "MemroOS:memory_recall JP strategy queries 2026-08-21"
 derived_from:
-  - "mkt-hub:49b720bcd90fa4d4cbbbc5f34069b4145659a680"
-  - "mkt-hub:campaign/PHASE-CONTRACT.md"
-  - "mkt-hub:campaign/STRATEGY-REVIEW-CONTRACT.md"
+  - "mkt-hub:31a9a03f"
+  - "mkt-hub:campaign/SAME-DAY-JP-TEST.md"
   - "mkt-hub:goal-objective attachment 269da385-e052-4766-b295-9947d85dbc2a"
-  - "MemroOS:content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md@89dd84d4a128cef7419199666a1f8bf1c6def504"
-regen_prompt: "Refresh primary evidence, preserve the original NO-GO, rerun the locked Phase 1 decision contract and independent review, and authorize no external action unless its immediate approval gate passes."
+  - "MemroOS:content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md@38eb31df9b8ec21028fd61a51a29e7dba7fadcc8"
+regen_prompt: "Refresh the JoinBrands draft fields and exact charges, keep the first creator under $100 and validation under $200, then scale sequentially only when mature cohort MER is above 1.5 and contribution profit is positive."
 ---
 
-# Turned Yellow UGC campaign package
+# Turned Yellow campaign package
 
-> Canonical original-campaign status: **NO-GO**. Corrected strategy review: **ACCEPT**. No platform login, configuration, spend, Shopify mutation, creator contact or commitment, terms acceptance, or publication occurred.
+> Active direction: prepare one JoinBrands creator job today under a $100 ceiling; allow at most $200 and three creator/post slots for validation; scale through sequential ceilings up to $20,000 only when mature cohort MER is strictly above 1.5 and contribution profit is positive. The historic September 1 30–40-post objective remains NO-GO.
 
-## Strategy revision summary
+Repository commit: `970bfae3` (`codex/turned-yellow-ugc-2026`). No account access, spend, creator contact, terms acceptance, Shopify mutation, or publication occurred in the repository revision.
 
-- Preserve the closed original campaign and purchase only the missing decision evidence first.
-- Request an Insense campaign-specific packet first and a Collabstr bespoke comparator in parallel; JoinBrands remains conditional and Billo is fallback evidence.
-- Permit a future pilot only under a separate authorization: one shared maximum of five creator/asset/order slots, exactly $750 USD external cash, and 21 calendar days from first commitment through the final day-14 live check.
-- Require fresh approval immediately before every public post. Pilot evidence cannot cure supply, schedule, rights, or economics gates for scale.
-- Reopen scale only through a complete fresh Phase 1 rerun using current primary evidence.
+---
 
-Repository commit: `31a9a03f` (`codex/turned-yellow-ugc-2026`).
+## Repository artifact: `campaign/SAME-DAY-JP-TEST.md`
+
+# Turned Yellow same-day JP-style creator test
+
+Status: **READY FOR ACCOUNT-SIDE DRAFT — 2026-08-21.** This is a small JoinBrands validation test, not the closed 30–40-post September 1 campaign.
+
+## Test card
+
+| Setting | Launch value |
+|---|---|
+| Platform | JoinBrands |
+| Campaign name | `TY JP Reaction Test 2026` |
+| Objective | One creator-posted TikTok or Instagram Reel that demonstrates the order-to-reaction workflow and produces attributable sales data |
+| Initial creator count | 1 |
+| Initial spend ceiling | $100 total external campaign cash |
+| Test ceiling | $200 cumulative external campaign cash; at most 3 creators/posts |
+| Creator bounty | $50 per completed social-post job unless the authenticated quote requires more |
+| Audience | US first; 18+; gifting, couples, family, or personalized-art fit |
+| Deliverable | One distinct 15–30 second vertical reaction video per creator |
+| Product | Custom Yellow Style Portrait |
+| Destination | `https://turnedyellow.com/` until the operator verifies the exact active product URL |
+| Tracking | Unique `TYUGC-<ID>` code plus creator-specific UTM from `operations.md` |
+
+At the documented free-plan assumptions, one $50 job plus 15% platform fee and 3.5% card fee is approximately `$59.25` before tax, FX, refunds, or other authenticated charges. Two jobs are approximately `$118.50`; three are approximately `$177.75`. These are planning estimates, not an invoice. Never create a job that would push cumulative external cash above the applicable ceiling.
+
+## Brand starter kit
+
+Use these existing repository references after the operator confirms usage rights and that the depicted customer supplied the necessary likeness consent:
+
+- Transformation reference: `outputs/makemejedi-au-nz-fathers-day-2026/turnedyellow-examples/assets/before-after.png`
+- Optional brand-world reference: `outputs/makemejedi-au-nz-fathers-day-2026/turnedyellow-examples/assets/footer-logo.png` (this is an illustration, not the primary logo)
+
+Do **not** use `assets/hero.png` for this test: it contains Father’s Day timing and discount copy that is not approved for an evergreen creator campaign. A standalone logo is optional for the JoinBrands reference upload; the brand name can remain text-only if the account profile already supplies the current logo.
+
+Creator-facing summary:
+
+> Turn a favorite photo into a hand-drawn Custom Yellow Style Portrait, capture the reveal and genuine reaction, and show viewers how to create their own. We want a natural 15–30 second TikTok or Reel—not a polished commercial.
+
+Primary hook:
+
+> “I turned our favorite photo yellow—and did not tell them.”
+
+Required CTA:
+
+> “Create yours with Turned Yellow—use my link/code.”
+
+Required disclosure:
+
+> “Turned Yellow paid me, gave me this portrait, and pays me if you buy through my link.”
+
+The complete shot list, rights, QA, and disclosure requirements remain in `campaign/creative-brief.md`.
+
+## Start-today sequence
+
+1. Operator opens JoinBrands and verifies the current labels, final job price, all fees, tax, and payment trigger without submitting.
+2. Build one manual-approval job using `campaign/joinbrands-campaign.md`, the starter assets above, and the creator brief.
+3. Confirm the authenticated total cannot exceed `$100`; stop on any unknown charge that could breach it.
+4. Obtain the required approval immediately before accepting terms, funding, publishing the job, or inviting/committing the first creator.
+5. Select one qualified creator, issue one zero-cost portrait order under the guarded workflow, review one draft, and approve the public post only after disclosure, rights, URL, and code checks pass.
+6. Reconcile actual spend and performance. The remaining test budget may be used for at most two additional creators only while cumulative cash remains at or below `$200`.
+
+## Measurement and scale ladder
+
+`MER = net attributed product revenue / total campaign marketing spend`.
+
+- Net attributed product revenue excludes tax and shipping and is reduced by discounts, cancellations, refunds, and chargebacks.
+- Marketing spend includes creator bounties, platform/payment fees, affiliate commissions, unrecovered refunds, and other external campaign charges.
+- Contribution profit subtracts product/portrait cost, fulfillment, payment processing, and other variable order costs from net attributed revenue, then subtracts campaign marketing spend.
+
+The `$100–$200` test validates setup and creative. No spend above `$200` unlocks unless the matured cohort has **MER strictly greater than 1.5**, positive contribution profit, at least 3 non-refunded attributed orders, no unresolved rights/payment/remedy issue, and verified tracking. Use a minimum seven-day observation window after the latest accepted post, unless the normal refund/attribution window requires longer.
+
+| Cumulative spend ceiling | Unlock requirement |
+|---:|---|
+| $100 | One creator/job; authenticated total fits cap |
+| $200 | First job is live, compliant, and trackable; no control exception |
+| $500 | Mature test cohort: MER >1.5, positive contribution profit, >=3 non-refunded orders |
+| $1,000 | Prior tranche passes the same gates; >=5 cumulative non-refunded orders |
+| $2,500 | Prior tranche passes; >=10 cumulative non-refunded orders |
+| $5,000 | Prior tranche passes; >=20 cumulative non-refunded orders |
+| $10,000 | Prior tranche passes; >=40 cumulative non-refunded orders |
+| $20,000 | Prior tranche passes; >=75 cumulative non-refunded orders and Finance confirms margin capacity |
+
+Each row is a ceiling, not an automatic spend instruction. If MER is `<=1.5`, contribution profit is non-positive, tracking is incomplete, or a control exception remains open, pause new commitments and spend. Reconcile each tranche before unlocking the next.
 
 ---
 
@@ -188,15 +267,15 @@ Reopen a future scale decision only after receiving the complete, current procur
 
 # JP recommendation recall receipt
 
-Status: **NOT RECOVERED / UNVERIFIED**
-Belief stage: `unverified-memory`
+Status: **HISTORIC SOURCE NOT RECOVERED; CURRENT OPERATOR DIRECTION CONFIRMED**
+Belief stage: `operator-confirmed-direction`
 Search date: 2026-08-21
 
 MemroOS was searched before platform research using these queries: `JP meeting JoinBrands recommendation Turned Yellow UGC creators`, `JP recommended JoinBrands meeting`, `JoinBrands Collabstr creator seeding JP`, `JoinBrands`, `Join Brands`, `UGC creator platform`, `JP creator marketing`, and `micro creator seeding`.
 
 The gated MemroOS `memory_recall` path searched the knowledge, connector, QMD, and Mem0 lanes. QMD reported the configured meeting-oriented collections (`meet-recordings`, `spark-recordings`, `circleback`, `epilogue`, `personal`, `zoom`, and `fathom`) with zero matches; knowledge and connector also returned zero; Mem0 was unavailable. Aggregate status was `indexed_unrecalled`. The local QMD collection list was empty, so there was no stored artifact to fetch or read back.
 
-Conclusion: no claim about what JP recommended is treated as evidence. “JP recommended JoinBrands” remains an unverified recollection and has no weight in the decision. A meeting recording, transcript, note, or direct confirmation from JP would be required to promote it to verified.
+Conclusion: the historic recording or exact wording of JP's recommendation was not recovered. On 2026-08-21, the operator explicitly directed the campaign to use the same JP strategy and clarified the intended implementation as a small JoinBrands test starting at $100–$200. This is sufficient as the current operating instruction, but it is not presented as a verbatim quote or independent proof of JP's earlier words. The implementation is the JoinBrands micro-creator reaction-post workflow in `campaign/SAME-DAY-JP-TEST.md`.
 
 Tool note: the live Codex MCP surface did not expose `mcp_memroos_knowledge_search`; the MemroOS installer was rerun, then the same MemroOS gatekeeper server function was used directly. No knowledge-repository files were read directly.
 
@@ -274,7 +353,9 @@ A vendor quote is reviewable only after every variable in the full ledger is pop
 
 The 40-asset base sensitivity—$3,353.50 gross and $3,612.59 commission-inclusive, or $83.84 and $90.31 per accepted asset—is a screening reference, not a budget approval ceiling or procurement fact. A quote below it still fails if any critical input is unknown. A quote can support scale only when at least one qualified alternative passes every non-cost gate and JoinBrands is no more than 15% above the lowest qualified alternative on the locked 40-asset commission-inclusive metric; the 30-asset case must not reverse that result.
 
-For a separately approved future pilot, use one shared maximum of five slots, each allowing at most one creator, distinct asset, and portrait/order attempt; every replacement consumes an unused slot. Cap total external cash at $750 across those slots, including fees, tax, FX, shipping, and unrecovered charges. Report internal labor separately and calculate actual gross and commission-inclusive cost per provisionally accepted asset. This cap limits downside; pilot evidence cannot establish scalable unit economics or pass/cure an original campaign gate.
+For the operator-directed test, start with one creator and an initial external-cash ceiling of $100. The cumulative test ceiling is $200 and at most three creator/post slots; replacements consume those slots. At the public free-plan sensitivity, one $50 bounty plus 15% platform fee and 3.5% card fee is approximately $59.25, two are $118.50, and three are $177.75 before unknown tax, FX, refunds, or other authenticated charges. Stop if the authenticated total could breach the applicable ceiling.
+
+Scaling beyond $200 follows `campaign/SAME-DAY-JP-TEST.md`: cohort MER must be strictly greater than 1.5, contribution profit must be positive, tracking/refunds must be reconciled, and the minimum order/evidence gate for the next tranche must pass. The maximum cumulative ceiling is $20,000. A ceiling is not an automatic spend instruction, and the test does not cure the original fixed-deadline campaign decision.
 
 ---
 
@@ -488,9 +569,9 @@ LESSONS FILE: `lessons.md`
 
 # Phase contract — strategy review and evidence-backed tweaks
 
-GOAL: Improve the Turned Yellow micro-creator strategy so the repository contains an actionable, lower-risk next move after the existing NO-GO, while preserving every validated launch gate and the original 30–40 accepted-live-video objective.
+GOAL: Start a same-day JoinBrands micro-creator validation test at $100, permit up to $200 for validation, and define evidence-gated performance scaling up to $20,000 while preserving the historic 30–40-post NO-GO record.
 
-NON-GOALS: Do not reverse or soften the current NO-GO without new qualifying evidence. Do not log in, use credentials, contact creators, configure a platform, spend, accept terms, publish, merge, push the `mkt-hub` repository, or delete branches/worktrees. A MemroOS gatekeeper auto-commit is required persistence, not a prohibited campaign/repository mutation; if that gatekeeper is unavailable, stop instead of using a direct-write/push fallback in this review. Do not invent JP's recommendation, platform capabilities, supply, economics, or timing. Do not replace the original campaign objective with a smaller campaign and call it complete.
+NON-GOALS: Do not claim the test fulfills or reverses the original fixed-deadline objective. Do not invent JP's exact historic wording, platform capabilities, supply, economics, or timing. This repository revision does not itself access credentials, accept terms, contact creators, spend, or publish; those actions occur only at their explicit account-side boundaries.
 
 USER OBSERVES: The package clearly distinguishes (1) the blocked September 1 launch, (2) the cheapest evidence needed to requalify a platform, (3) a reversible pilot that validates creative and operations without pretending to satisfy the 30–40 target, and (4) the objective scale-up gate. The recommended next actions are ordered, owned, measurable, and stop automatically on failed evidence.
 
@@ -512,6 +593,7 @@ LOCKED:
 - The target remains 30–40 distinct accepted videos publicly live on TikTok or Instagram Reels; cross-posts count once.
 - Required rights, 90-day live/remedy state machine, exact 53-column tracker, disclosure rules, creator rubric, Shopify zero-cost safeguards, and irreversible-action boundaries remain unchanged.
 - Any smaller pilot is explicitly a validation experiment, not delivery of the original campaign target and not permission to launch the original campaign.
+- The operator's current direction is authoritative for execution: JoinBrands, one creator first, $100 initial ceiling, $200 validation ceiling, and conditional scale to $20,000 only above 1.5 MER with positive contribution profit.
 - New external claims require current primary evidence; otherwise label them `UNKNOWN`.
 - A strategy sentence outside the canonical decision cannot authorize launch. Any instruction that implies login, configuration, outreach, orders, spend, terms acceptance, publication, or creator commitment must repeat the applicable approval gate and the canonical NO-GO.
 
@@ -524,20 +606,21 @@ EVIDENCE STANDARD:
 STAGED STRATEGY:
 
 1. `R0_original_campaign_closed`: Entry evidence is the preserved Phase 1 verification report and its canonical `Decision: NO-GO`. Action is archival/no external action. Maximum exposure is `$0`, zero creators, zero orders, and zero external mutations. Pass threshold is that the evidence remains complete and internally consistent; failure threshold is any missing or contradictory control artifact. Output is `strategy_stop=R0_original_campaign_closed:<reason>` plus a repaired verification package. Stop rule: remain NO-GO and do not advance until the package passes independent review.
-2. `R1_procurement_ready`: Entry evidence is a passing R0 package. Action is director verification of the complete, current procurement packet above. Maximum exposure remains `$0`, zero creators, zero orders, and zero external mutations. Pass threshold is every required packet row present, current, accepted, and independently approved; any missing, stale, expired, unknown, or rejected row fails. Output is the dated procurement packet plus a non-canonical `Pilot Authorization: APPROVED|REJECTED` recommendation. Stop rule: write `strategy_stop=R1_procurement_ready:<reason>` and return to R0.
-3. `R2_pilot_authorized`: Entry evidence is a passing R1 packet, `Pilot Authorization: APPROVED`, and separate explicit user approval covering login, platform configuration, invitations, creator outreach, orders/Shopify mutations, terms acceptance, creator commitment, spend, and public posting/publication. Action is only the authorized pilot. Maximum exposure is one shared pool of 5 total pilot slots: each slot permits at most one creator, one distinct asset, and one portrait/order attempt; a replacement consumes an unused slot, so creators, assets, portraits, orders, and original-plus-replacement attempts can never exceed five. The mix includes at least one US and one Canada creator and at least three target niches. The overall window is 21 calendar days from the first creator commitment through the last required day-14 public-live check, so every provisionally accepted post must be live by the end of pilot day 7. External cash is capped at exactly `$750 USD`, including every attempted slot/replacement, bounty, platform, processor, tax, FX, shipping, refund-shortfall, and other external charge; internal labor is reported separately. This is a locked director-recommended downside limit, not a vendor fact; changing it requires a new strategy-contract review rather than an authorization-time substitution. Pass threshold is every R3 metric achieved; any cap breach, exception, missing proof, or R3 metric miss fails. Output is `future-pilot-validation-report`, explicitly non-canonical and not the original September 1 launch. Stop rule: obtain fresh explicit user approval immediately before each public post; on any failure, halt all new mutations/commitments, preserve existing contractual obligations, write `strategy_stop=R2_pilot_authorized:<reason>`, and forbid scale.
-4. `R3_pilot_pass`: Entry evidence is the completed R2 report with reconciled cash, slot, creator, asset, order, and timeline records within every R2 cap. Action is independent validation of the pilot evidence; maximum additional exposure is `$0`, zero new slots/creators/assets/orders/mutations. Pass threshold is at least 4 of the maximum 5 distinct assets provisionally accepted after no more than one revision, all occupied slots holding the full required rights/remedy packet before commitment, zero disclosure/payment/Shopify/privacy/rights exceptions, median portrait-to-reviewable-draft time at most 10 calendar days, every accepted post public through its day-14 check within the 21-day overall window, and no unresolved refund/remedy event. Any miss fails. Output is the finalized `future-pilot-validation-report` with `Pilot Result: PASS|FAIL`. Stop rule: on failure write `strategy_stop=R3_pilot_pass:<reason>` and forbid scale. A pass validates workflow only: pilot evidence is categorically insufficient to pass any original-campaign scale gate, every original supply/economics/rights/enforcement/data/schedule gate must be proven anew at R4, and no original campaign gate or decision changes.
-5. `R4_scale_candidate`: Entry evidence is `Pilot Result: PASS` plus a complete, current canonical Phase 1 rerun proving 120-creator supply/commitment, 30/40 economics, a deterministic future schedule with at least two days' contingency, every original non-cost gate, and the qualified-alternative 15% comparison. Action is decision review only. Maximum exposure is `$0`, zero new creators, zero orders, and zero external mutations. Pass threshold is every canonical gate passing on current primary evidence; any failure or unknown fails. Output is a new scale decision artifact and explicit user approval request, without altering the original campaign's canonical NO-GO. Stop rule: write `strategy_stop=R4_scale_candidate:<reason>`, return to NO-GO/no-action, and do not scale.
+2. `R1_scale_procurement`: Maintain the complete scale packet in parallel. Missing large-cohort supply, comparator, or 30/40 schedule evidence blocks a scale claim but does not block the separately capped T0–T1 test. Creator-specific rights, exact authenticated charges, tracking, and remedies still must pass before committing that test creator.
+3. `T0_same_day_draft`: Build one JoinBrands manual-approval job from `campaign/SAME-DAY-JP-TEST.md`; spend remains $0 until the authenticated total is known. The draft passes only when the exact total fits the $100 ceiling and required fields/assets are complete.
+4. `T1_validation`: Commit at most one creator/asset/order attempt initially and at most three across the whole test. External cash is capped at $100 initially and $200 cumulatively. Every creator must pass the selected-creator, rights, disclosure, tracking, and remedy checks. A replacement consumes a slot.
+5. `T2_performance_scale`: After at least seven days of mature data, unlock the next cumulative ceiling only when cohort MER is strictly greater than 1.5, contribution profit is positive, tracking/refunds are reconciled, no control issue is open, and the tranche's minimum non-refunded order count passes. Ceilings are $500, $1,000, $2,500, $5,000, $10,000, and $20,000; none may be skipped or treated as automatic spend.
+6. `R4_scale_candidate`: A larger creator cohort still requires current supply, schedule, rights, and unit-economics evidence. The test cannot rewrite the historic September 1 NO-GO.
 
 ECONOMIC GUARDRAILS:
 
 - The current sensitivity's 40-asset base values—`$3,353.50` gross and `$3,612.59` commission-inclusive, or `$83.84` and `$90.31` per accepted asset—are screening references, not procurement facts or automatic approval ceilings.
 - A normalized quote populates every variable in `research/unit-economics.md`; unknowns remain blockers. The comparison gate still requires at least one qualified alternative and uses the locked 15% rule. No quote can pass merely by falling below a sensitivity reference.
-- The `$750` pilot cap limits downside; it does not establish unit economics. Pilot actuals must report gross and commission-inclusive cost per provisionally accepted asset, failed/no-show exposure, refunds/credits, tax/FX, and variance to the normalized 30/40 quote.
+- The `$100` initial and `$200` validation caps limit downside; they do not establish scalable economics. Actuals report all external spend, net attributed revenue, MER, variable costs, contribution profit, failures, and refunds. Scaling stops at or below 1.5 MER or non-positive contribution profit.
 
 ASSUMPTIONS:
 
-- The user is asking for strategic improvement to the repository package, not approval to merge, spend, configure, contact creators, or launch. If wrong, the consequence is that all external actions remain safely unperformed and can be authorized separately.
+- The user has authorized the current operating direction and conditional ceilings. Account access, contractual acceptance, creator commitment, Shopify mutation, spend execution, and public posting still observe their immediate confirmation and credential boundaries.
 - Existing primary-source research dated 2026-08-21 remains the evidence base for this same-day review. If a new strategic claim depends on information outside that base, refresh it from an official source or leave it unknown.
 - A reversible validation pilot may be recommended only as a future option after its own evidence gate and user approval; it cannot cure the expired/impossible original schedule.
 
@@ -547,11 +630,11 @@ VERIFY:
 2. Exactly one canonical `Decision: GO|NO-GO|INCONCLUSIVE` line exists and it remains `NO-GO`.
 3. Required artifact files remain present and non-empty; tracker header remains exactly 53 columns.
 4. Strategy stages have explicit entry evidence, action, maximum exposure, pass/fail threshold, output artifact, and stop rule.
-5. Any pilot is labeled non-launch/non-scale and cannot be mistaken for fulfillment of the 30–40 objective.
+5. The validation test cannot be mistaken for fulfillment of the 30–40 objective; performance scaling uses the explicit MER/profit ladder.
 6. Economics thresholds use formulas or sensitivities and preserve unknown quote/tax/FX inputs.
-7. Independent `gpt-5.6-luna`/max reviewer reads the final diff and returns explicit ACCEPT/REJECT.
-8. Reviewer provenance is stored in a unique `.codex/beastmode-runs/<run>/` directory with prompt, output, requested/actual model and reasoning, session evidence, token/cost fields, files changed, and stop reason; missing or mismatched attestation cannot count as acceptance.
-9. Save the complete staged diff to `.codex/beastmode-runs/<final-review-run>/staged.diff` with `git diff --cached --no-color`. Run `rg -n '(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|shp(at|ca|pa)_[A-Fa-f0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' .codex/beastmode-runs/<final-review-run>/staged.diff` and `rg -ni '(api[_-]?key|secret|token|password|passwd|client[_-]?secret)[[:space:]]*[:=][[:space:]]*["'\''`]?[A-Za-z0-9_./+\-=]{12,}' .codex/beastmode-runs/<final-review-run>/staged.diff`; both must exit `1` (zero findings). Preserve commands, exit codes, and raw stdout/stderr in `.codex/beastmode-runs/<final-review-run>/security-scan.txt`. Run `npx gitnexus detect-changes --scope staged --repo mkt-hub`, preserve exact command/exit/raw output in `.codex/beastmode-runs/<final-review-run>/gitnexus-detect-changes.txt`, and record its risk/flow output and freshness warning, if any.
+7. Director verifies the final diff against the operator's same-day test, budget, MER, profitability, copy, asset, and approval-boundary instructions.
+8. Validate every displayed test-cost estimate and scale threshold; stale seasonal creative cannot appear in the launch kit.
+9. Run secret scans and `npx gitnexus detect-changes --scope staged --repo mkt-hub` against the complete staged revision before commit.
 10. Final MemroOS write targets `content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md`, includes the revised strategy, repository commit, and accepted review, uses the registered MemroOS MCP or its same registered gatekeeper function with `require_frontmatter=True` and `auto_commit=True`, then reads the same path through that gatekeeper with an exact content comparison and records the returned commit SHA, character count, and `roundtrip_exact=true`. This strategy phase does not use the Phase 4 direct-file/git-push fallback; unavailable gatekeeper access is a stop condition.
 
 MANUAL CHECKS: Confirm the recommendation is commercially coherent, does not create a disguised launch path, does not overstate platform evidence, and makes the next user decision materially easier.
@@ -566,7 +649,7 @@ LESSONS FILE: `.learnings/BEASTMODE.md` and `lessons.md`.
 
 # Campaign operations runbook
 
-State: **safe executable plan only; launch blocked by NO-GO.** Deadline timezone is America/Los_Angeles. The intended public-live deadline is 2026-09-01 23:59 PDT; an executable schedule must forecast 40 provisional acceptances by 2026-08-30 23:59 PDT.
+State: **same-day $100–$200 validation test ready for account-side setup; original 30–40-post launch remains NO-GO.** The active test card is `campaign/SAME-DAY-JP-TEST.md`.
 
 ## Roles, queues, and SLA
 
@@ -596,19 +679,19 @@ Business time is 09:00–17:00 America/Los_Angeles, Monday–Friday, excluding U
 
 The current JoinBrands path is infeasible: ordinary documented durations reach September 8 or later even before batching and revision. Do not substitute target dates for evidence. On requalification, calculate `S=ceil(N×1.20/(1-u))`, `A=ceil(S/c)`, FIFO `application_arrival_at`, approval slots from `Ka`, portraits from `Kp`, and the Nth earliest provisional acceptance exactly as defined in `PHASE-CONTRACT.md`. Unknown `Km`, `Ka`, `Kp`, or critical SLA blocks launch.
 
-## Strategy reset: evidence first, pilot second, scale last
+## Active strategy: one creator today, prove economics, then scale
 
-The September 1 campaign is closed as NO-GO under the current evidence. A later pilot is a separate workflow experiment; it neither extends that deadline nor delivers the original 30–40-video objective.
+The September 1 scale campaign is closed as NO-GO. The operator has separately directed a small JP-style JoinBrands validation test. It neither extends that deadline nor claims to deliver the original 30–40-video objective.
 
 | State | Entry and action | Maximum exposure | Pass / fail threshold | Output and stop rule |
 |---|---|---|---|---|
-| `R0_original_campaign_closed` | Preserve the accepted Phase 1 evidence; no external action | $0; 0 creators; 0 orders; 0 mutations | Package is complete and internally consistent; any contradiction fails | Repaired verification package; remain NO-GO until independently accepted |
-| `R1_procurement_ready` | R0 passes; Director verifies every packet row below | $0; 0 creators; 0 orders; 0 mutations | Every row is current, accepted, and independently approved; any missing, stale, rejected, or unknown row fails | Dated packet and non-canonical `Pilot Authorization: APPROVED|REJECTED`; failure returns to R0 |
-| `R2_pilot_authorized` | R1 passes and the user separately approves login/configuration, outreach/invitations, terms, orders/Shopify mutations, commitments, spend, and public posting | One pool of 5 total slots; each slot permits <=1 creator, asset, and portrait/order attempt; replacements consume unused slots; 21 days from first commitment through final day-14 check; $750 total external cash | R3 metrics all pass and no cap/exception is breached | `future-pilot-validation-report`; obtain fresh approval immediately before each publication; failure stops new commitments and forbids scale |
-| `R3_pilot_pass` | Reconcile R2 cash, slot, creator, asset, order, timing, rights, and live evidence | $0 additional; 0 new slots/creators/assets/orders/mutations | >=4 of max 5 assets provisionally accepted after <=1 revision and live by pilot day 7; every occupied slot has its full rights/remedy packet; zero control exceptions; median portrait-to-reviewable-draft <=10 days; accepted posts pass day 14 within the 21-day window; no unresolved remedy/refund | `Pilot Result: PASS|FAIL`; failure forbids scale; pass is categorically insufficient for any original scale gate |
-| `R4_scale_candidate` | R3 passes and the complete canonical Phase 1 model is rerun on current primary evidence | $0; 0 new creators; 0 orders; 0 mutations | Every original gate passes, including 120-creator supply/commitment, 30/40 quote, two-day schedule buffer, and qualified-alternative 15% comparison; any failure/unknown fails | New scale decision and approval request; failure returns to no-action/NO-GO |
+| `T0_draft_today` | Operator uses `SAME-DAY-JP-TEST.md`, existing brand assets, and the JoinBrands field map | $0 until the authenticated total is visible | One manual-approval job is complete, current, and <=$100; any unknown charge that could breach the cap fails | Redacted draft proof and exact charge; stop before terms/funding/publication for the applicable confirmation |
+| `T1_one_creator` | Approved draft and applicable account/spend/commitment approvals | 1 creator, 1 portrait/order attempt, 1 asset; <=$100 cumulative external cash | Live compliant post, working code/UTM, verified rights/disclosure, and reconciled spend | `test-cohort-ledger`; a control failure stops new commitments |
+| `T2_test_complete` | T1 is live and trackable with no control exception | At most 3 creators/assets/order attempts; <=$200 cumulative external cash | Tracking works, spend reconciles, and every occupied slot is compliant | Mature for at least 7 days after latest accepted post before performance scaling |
+| `T3_performance_scale` | Mature cohort MER >1.5, positive contribution profit, >=3 non-refunded attributed orders, no open exception | Sequential cumulative ceilings: $500, $1k, $2.5k, $5k, $10k, $20k | Every prior tranche independently passes the MER, profit, tracking, refund, and minimum-order gate in `SAME-DAY-JP-TEST.md` | Pause if any gate fails; never skip a tranche |
+| `R4_scale_candidate` | Test economics pass and the complete canonical Phase 1 scale model is rerun on current evidence | No new spend during review | Every original scale gate passes for the proposed larger cohort | New scale decision; the historic September 1 decision remains NO-GO |
 
-The `$750` pilot cap is a recommended downside limit, not a vendor quote. It includes all external charges across the shared five-slot pool; internal labor is reported separately. The pilot mix is at least one US creator, one Canada creator, and three target niches. No pilot evidence may pass or cure an original scale gate. A failed or unknown state writes `strategy_stop=<state>:<reason>` to `campaign/verification-report.md`.
+The initial ceiling is `$100`; the cumulative validation ceiling is `$200`; the performance-scale ceiling is `$20,000`. Every amount includes bounties, platform/payment fees, affiliate commissions, tax, FX, refunds, and other external campaign charges. Internal labor and variable product costs are recorded for contribution-profit testing. A test result cannot rewrite the historic fixed-deadline decision.
 
 ### Procurement packet checklist
 
@@ -638,7 +721,7 @@ Every row needs a named owner, received date, vendor expiry when supplied, prese
 
 Each row must also record `owner`, `received_at`, `expires_at` when supplied, preserved URL/export/quote ID/redacted signed reference, reviewer, `reviewed_at`, and `approval_status=accepted|rejected|unknown`. Missing metadata fails the row.
 
-Current packet result: `strategy_stop=R1_procurement_ready:critical supply, economics, schedule, rights/remedy, and comparator evidence remain UNKNOWN; JoinBrands schedule remains FAIL`. No procurement, pilot, or scale action is authorized.
+Current scale-packet result: critical supply, large-cohort economics, schedule, rights/remedy, and comparator evidence remain incomplete. Those gaps block a 30–40-post scale claim, but do not block the separately capped one-creator test when its creator-specific rights, exact charge, tracking, and approval checks pass.
 
 ## IDs, attribution, and privacy
 
@@ -650,7 +733,7 @@ Current packet result: `strategy_stop=R1_procurement_ready:critical supply, econ
 
 ## Shopify zero-cost creator-order specification
 
-No production mutation is authorized while NO-GO is active. After requalification and approval:
+For the same-day test, production mutation is allowed only after the applicable Shopify approval and a selected creator; the historic scale NO-GO does not itself prohibit this separately capped test. Then:
 
 1. Exact method: Shopify Admin GraphQL API version `2026-07`, mutation `draftOrderCreate`, with one custom line item `{title:"UGC Custom Yellow Style Portrait",quantity:1,originalUnitPriceWithCurrency:{amount:0.00,currencyCode:USD},requiresShipping:false,taxable:false}`. A custom item avoids a stale variant ID. Set `email`, tags, note, custom attributes, `taxExempt:true`, `useCustomerDefaultAddress:false`, and `visibleToCustomer:false`; omit shipping, billing, discounts, invoices, payment terms, gateways, and inventory. Request the draft ID, total price/currency, and `userErrors`. Source: [Shopify `draftOrderCreate`](https://shopify.dev/docs/api/admin-graphql/latest/mutations/draftordercreate), retrieved 2026-08-21.
 2. Customer linkage uses the minimum creator email and `creator_id`; tags: `ugc-seeding`, `ty-holiday-reaction-2026`, `creator:<creator_id>`, `asset:<asset_id>`. Note the platform and creator code; do not store social passwords or extra PII.
@@ -690,22 +773,21 @@ QA must inspect final audio/video and store creator-specific proof of consent, m
 
 ## Pre-launch budget and approvals
 
-| Item | 30 assets | 40 assets | Status |
-|---|---:|---:|---|
-| Base planning gross | $2,513.25 | $3,353.50 | sensitivity only |
-| Expected affiliate commission | $194.32 | $259.09 | sensitivity only |
-| Base commission-inclusive | $2,707.57 | $3,612.59 | sensitivity only |
-| Tax, FX, shipping, quote variance | UNKNOWN | UNKNOWN | blocker |
+| Stage | Cumulative ceiling | Unlock |
+|---|---:|---|
+| First creator | $100 | Exact authenticated charge fits cap |
+| Validation test | $200 | First job live, compliant, and trackable |
+| Performance scale | $500 → $1k → $2.5k → $5k → $10k → $20k | Prior tranche MER >1.5, positive contribution profit, tracking/refunds reconciled, minimum orders met |
 
-Budget Owner must replace the table with a current capped quote, taxes, FX, platform/payment bases, and refund rules. Required confirmations, in order: decision requalified; legal rights/remedies approved; supply/SLA verified; exact budget approved; Shopify production mutation approved; platform draft verified; then explicit user confirmation immediately before publication, payment/terms acceptance, invitation, or creator commitment.
+Budget Owner records the exact authenticated total, taxes, FX, platform/payment bases, and refund rules before funding. Required confirmations remain: exact budget, creator-specific rights/remedies, Shopify production mutation, verified platform draft, then confirmation at the applicable terms/payment/publication/invitation/commitment boundary.
 
 ---
 
 ## Repository artifact: `campaign/joinbrands-campaign.md`
 
-# JoinBrands configuration — blocked draft
+# JoinBrands configuration — same-day test draft
 
-Launch status: **BLOCKED by `research/platform-comparison.md` NO-GO.** Do not log in, create a draft, fund a wallet, accept terms, publish, or invite creators. This map is an operator-ready specification for requalification; public labels were retrieved 2026-08-21 and must be rechecked in the authenticated UI.
+Launch status: **READY FOR AN ACCOUNT-SIDE ONE-CREATOR DRAFT.** The original 30–40-post September 1 campaign remains NO-GO; this is the separate $100–$200 JP-style test in `campaign/SAME-DAY-JP-TEST.md`. Public labels were retrieved 2026-08-21 and must be rechecked in the authenticated UI. Account access, terms, funding, job publication, invitation, creator commitment, and public posting remain confirmation boundaries.
 
 | Section | Exact documented label | Value | Type | Req. | Evidence | Owner | Validation | Status |
 |---|---|---|---|---|---|---|---|---|
@@ -717,17 +799,17 @@ Launch status: **BLOCKED by `research/platform-comparison.md` NO-GO.** Do not lo
 | Brief | `Source files (optional)` | Upload brand-provided logo/reference assets only | upload | optional | first-campaign guide | Creative Lead | this is a brand-input field, not a raw-deliverable control | platform-confirmed label |
 | Brief | raw creator deliverables | clean final plus requested raw clips | contract/brief text | yes for TY | no public dedicated field | QA Lead | downloadable before acceptance | operator-entered equivalent / blocker |
 | Brief | `References (optional)` | approved examples only | upload/URL | optional | platform guide | Creative Lead | rights-cleared assets | platform-confirmed label |
-| Campaign | `Campaign name` | TY Holiday Reaction 2026 | text | yes | platform guide | Operator | exact value | platform-confirmed label |
+| Campaign | `Campaign name` | TY JP Reaction Test 2026 | text | yes | operator direction | Operator | exact value | test value |
 | Targeting | `Gender` | Any | select | yes | TikTok/Instagram guide | Operator | no unintended exclusion | platform-confirmed label |
 | Targeting | `Preferable age` | 18+ only | select | yes | TikTok/Instagram guide | Operator | reject if 18+ cannot be enforced | platform-confirmed label |
 | Targeting | `Ethnicity` | Any | select | yes | platform guide | Operator | no unintended exclusion | platform-confirmed label |
-| Targeting | `Special requirements (optional)` | US/Canada; 2k–50k followers; >4% engagement; niches in brief | text | yes for TY | platform guide | Operator | qualified pool >=120 before publish | operator-entered equivalent / blocker |
+| Targeting | `Special requirements (optional)` | US first; 18+; 2k–50k followers; >4% engagement; gifting/couples/family/personalized-art fit | text | yes for TY | platform guide | Operator | manually verify selected test creator | operator-entered test value |
 | Targeting | follower range | 2,000–50,000 | filter | yes | no public standard-field evidence | Operator | exact hard filter required | unsupported/unverified blocker |
 | Targeting | engagement threshold | >4.0% | filter | yes | no public standard-field evidence | Operator | exact defined metric required | unsupported/unverified blocker |
 | Workflow | `Creators approval` | Manual | select | yes | platform guide | Operator | no auto-hire | platform-confirmed label |
 | Workflow | `Counteroffer` | Off | toggle | yes | platform guide | Budget Owner | bounty stays capped | platform-confirmed label |
-| Volume | `Number of creators needed` | 40 accepted + planned reserve | integer | yes | platform guide | Operator | use economics `A`, not 40 blindly | platform-confirmed label |
-| Volume | `Daily job limit` | set from verified `Kp` and approval capacity | integer | yes | platform guide | Ops Lead | never exceed portrait/QA throughput | platform-confirmed label / pending |
+| Volume | `Number of creators needed` | 1 initially; never more than 3 in the $200 test | integer | yes | operator direction | Operator | one job first | test value |
+| Volume | `Daily job limit` | 1 | integer | yes | risk cap | Ops Lead | never exceed one new commitment per day during test | test value |
 | Brand | `Brand or trade name` | Turned Yellow | text | yes | platform guide | Operator | exact capitalization | platform-confirmed label |
 | Product | `Product or service` | Custom Yellow Style Portraits | text | yes | objective | Operator | exact offer | platform-confirmed label |
 | Delivery | `Delivery` | operator-selected digital/no-shipping equivalent, exact value pending authenticated UI | select/text | yes | platform guide | Fulfillment Lead | reject any physical-shipping dependency | platform-confirmed label / value pending |
@@ -740,14 +822,12 @@ Launch status: **BLOCKED by `research/platform-comparison.md` NO-GO.** Do not lo
 | Rights | territory / content term / sublicense | US+Canada minimum; 12 months; agencies/ad platforms | contract | yes | no public field | Legal/QA | creator-specific written evidence | unsupported/unverified blocker |
 | Rights | whitelisting term | 90 days minimum | contract/code | yes | Spark/Partnership capability docs | Paid Social | code valid through date | operator-entered equivalent / blocker |
 | Live | minimum-live term | 90 days | contract | yes | public evidence proves only a 14-day standard minimum; custom 90-day term not evidenced | Legal/QA | enforceable restore/replacement/refund | **UNKNOWN for required custom term / blocker** |
-| Payment | `My Wallet` / `Promo Wallet` / `Another payment method` | no selection until approval | payment | yes at launch | platform guide | Budget Owner | approved capped budget only | platform-confirmed; irreversible boundary |
+| Payment | `My Wallet` / `Promo Wallet` / `Another payment method` | initial authenticated total <=$100; cumulative test <=$200 | payment | yes at launch | platform guide + operator direction | Budget Owner | include bounty, platform/card fees, tax, FX, and other external charges | platform-confirmed; irreversible boundary |
 | Final | `Campaign Summary` / `Create campaign` | STOP | action | yes | platform guide | User | explicit confirmation before action | irreversible boundary |
 
 Sources: [first campaign guide](https://help.joinbrands.com/en/articles/6252599-creating-my-first-campaign), [TikTok campaigns](https://help.joinbrands.com/en/articles/6649882-brands-tiktok-campaigns-and-jobs), [Instagram campaigns](https://help.joinbrands.com/en/articles/8008239-brands-instagram-campaigns-and-jobs), [content format](https://help.joinbrands.com/en/articles/6295876-what-is-the-content-format), and [pricing defaults](https://help.joinbrands.com/en/articles/15254941-brands-campaign-pricing-defaults-and-minimums-per-type).
 
-Requalification uses the complete procurement packet in `operations.md`, not a partial checklist or authenticated-screen inspection. Until every packet row passes, this remains a paper configuration only.
-
-If a future non-canonical pilot is separately authorized, use one shared pool of five total slots; each slot permits at most one creator, distinct asset, and portrait/order attempt, and every replacement consumes an unused slot. Include at least one US and one Canada creator and at least three niches; require accepted posts live by pilot day 7 so every day-14 check finishes inside the 21-day overall window; apply the $750 cap and all existing rights, QA, disclosure, remedy, privacy, payment, and Shopify controls unchanged. Explicit user approval is required before login/configuration and again for invitations/outreach, terms, commitments, spend/orders, and freshly before each public post. A pilot pass cannot authorize, prove, or cure any 30–40-asset scale gate.
+For this validation test, use the same controls but only the evidence required for the selected creator, exact authenticated charge, deliverable, rights, tracking, and remedy. Start with one creator under $100; add no more than two creators while the cumulative test remains under $200. Scaling beyond $200 follows the MER and contribution-profit ladder in `campaign/SAME-DAY-JP-TEST.md`. Explicit approval remains required at each irreversible boundary. Test results do not rewrite the original 30–40-asset NO-GO.
 
 ---
 
@@ -782,7 +862,7 @@ Status: **not qualified and not authorized for launch.** Public workflow labels 
 
 Collabstr cannot replace JoinBrands without the complete procurement packet in `operations.md`. Public examples establish creator existence, not the required deduplicated cohort of 120.
 
-Treat Collabstr as the bespoke-contract comparator: request the same 30/40 quote, canonical supply proof, full schedule/capacity model, rights addendum, data evidence, and 90-day remedy terms used for every candidate. If it clears those gates, any future pilot uses the same shared five-slot/$750/21-day cap as the primary candidate; replacements consume unused slots, accepted posts must be live by pilot day 7, and fresh explicit user approval is required immediately before each public post. Pilot success validates workflow only and cannot pass or cure any scale gate without a new complete Phase 1 rerun.
+Treat Collabstr as the bespoke-contract comparator for a future larger cohort: request the same 30/40 quote, canonical supply proof, full schedule/capacity model, rights addendum, data evidence, and 90-day remedy terms used for every scale candidate. The active $100–$200 validation test is JoinBrands-specific under the operator's current direction. Collabstr receives no test spend unless the operator changes that direction.
 
 ---
 
@@ -790,9 +870,11 @@ Treat Collabstr as the bespoke-contract comparator: request the same 30/40 quote
 
 # Turned Yellow Holiday Reaction creator brief
 
-Campaign status: blocked draft; no creator may be engaged until the platform gate is reopened and approved.
+Campaign status: **ready for the separately approved $100–$200 JoinBrands test.** This brief does not authorize account access, spend, creator commitment, or publication by itself.
 
 Creative theme: **Holiday Reaction / Gift Surprise / Partner Transformation**.
+
+Test default: use the surprise/reaction angle for the first creator. Upload the Turned Yellow logo, hero, and before/after references listed in `campaign/SAME-DAY-JP-TEST.md`. Keep the creator's delivery natural; the references establish the product and transformation, not a frame-by-frame script.
 
 ## Deliverable
 
@@ -896,13 +978,13 @@ creator_id,creator_name,handle,email,market,platform,followers,engagement_rate,n
 
 # Requirement verification report
 
-Status: original package review ACCEPT; strategy contract review ACCEPT; final strategy-diff review ACCEPT. Launch remains NO-GO.
+Status: original fixed-deadline package remains NO-GO; same-day $100–$200 JoinBrands validation test prepared under the operator's updated direction.
 
 | Objective requirement | Artifact/evidence | Status |
 |---|---|---|
 | Consolidate branches | `lessons.md`; master `9b7d8d16`; isolated task branch | PASS |
 | Luna/max parallel research, requested vs actual | three research `meta.json` files; concurrency 3/3; session evidence | PASS |
-| JP recommendation recall | `research/jp-recommendation.md` | PASS: miss remains unverified |
+| JP strategy direction | `research/jp-recommendation.md`, operator direction 2026-08-21 | PASS for current execution; historic wording remains unrecovered |
 | JoinBrands + Collabstr + two alternatives | `research/platform-comparison.md`; direct official sources | PASS |
 | Fully loaded economics | `research/unit-economics.md` full variable ledger and six recalculated sensitivities | PASS as bounded evidence; procurement quote remains UNKNOWN |
 | Supply/targeting/turnaround/payment/enforcement/analytics/API/rights | comparison matrix and worker evidence | PASS as decision research; critical unknowns explicit |
@@ -910,24 +992,25 @@ Status: original package review ACCEPT; strategy contract review ACCEPT; final s
 | Field configurations | `campaign/joinbrands-campaign.md`, `campaign/collabstr-alternative.md` | PASS as blocked paper mappings |
 | Hooks, structure, do/don't, disclosure | `campaign/creative-brief.md` | PASS |
 | Two-hour weighted rubric | `campaign/creator-rubric.md`; weights 100 | PASS |
-| Milestones and deadline | `campaign/operations.md`, comparison schedule input/lower-bound tables | PASS: infeasible/unknown and launch blocked |
+| Milestones and deadline | `campaign/operations.md`, comparison schedule input/lower-bound tables | Original scale deadline infeasible; separate same-day validation path defined |
 | Codes/UTMs | `campaign/operations.md` | PASS |
 | Tracker | exact 53-column `campaign/creator-tracker.csv` | PASS |
 | Shopify zero-cost workflow | guarded `draftOrderCreate` / `draftOrderComplete` specification | PASS as unexecuted design |
-| Execution | decision gate did not pass | NOT AUTHORIZED; no external action |
+| Execution | `campaign/SAME-DAY-JP-TEST.md` | READY FOR ACCOUNT-SIDE DRAFT; no external action performed by this revision |
 | MemroOS persist/readback | `content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md`; commit `39e28fd271a6a00927a87966900af461c063f06c`; exact 57,414-character readback | PASS via MemroOS gatekeeper server-function fallback |
 | Independent corrected-package review | `.codex/beastmode-runs/20260821T203000Z-luna-final-review-v2/`; 20/20 normalized deterministic checks | ACCEPT |
 | Strategy reset contract | `campaign/STRATEGY-REVIEW-CONTRACT.md`; `.codex/beastmode-runs/20260821T221500Z-luna-strategy-contract-review-r6/` | ACCEPT after five recorded REJECT/correction cycles |
 | Staged next move | `campaign/operations.md` R0–R4 and procurement packet | PASS as a no-action decision system; current `R1` fails on critical evidence |
-| Pilot guardrail | One shared 5-slot pool; <=1 creator/asset/portrait-order attempt per slot; replacements consume slots; >=1 US, >=1 Canada, >=3 niches; accepted live by day 7; day-14 checks within 21 days; $750 total external cash | PASS as a future recommendation only; not authorized and cannot pass/cure an original scale gate |
-| Scale guardrail | fresh complete Phase 1 rerun, pilot pass, 120 eligible supply/commitment, qualified comparator, 30/40 quote, all original gates | PASS as specification; current evidence does not qualify scale |
+| Validation guardrail | One creator first; $100 initial ceiling; max 3 creator/post slots and $200 cumulative test cash | PASS |
+| Performance scale | MER >1.5, positive contribution profit, reconciled tracking/refunds, minimum orders; sequential ceilings to $20,000 | PASS as operator-directed specification; no scale spend executed |
 | Final corrected-strategy review | `.codex/beastmode-runs/20260822T001000Z-luna-strategy-final-review-r3/`; exact staged snapshot, economics, schema, secret scans, and GitNexus | ACCEPT; actual Luna/max capacity attested post-verdict from parent-owned session JSONL |
+| Same-day operator revision | `campaign/SAME-DAY-JP-TEST.md`; current staged validation | Director-checked against $100/$200 caps, >1.5 MER, positive-profit, asset, and approval requirements; prior $750 strategy superseded |
 
 Persistence note: the live Codex MCP tool surface lacked `mcp_memroos_knowledge_write`. The installer was rerun, then the same registered MemroOS gatekeeper function was invoked directly with `require_frontmatter=True` and `auto_commit=True`; the write returned `status=ok`, 57,620 bytes, and the SHA above. `knowledge_read` returned the exact intended 57,414-character content with title and canonical NO-GO status.
 
 Pre-commit verification: staged diff whitespace check passed; all run JSON parsed; the high-confidence and generic-assignment secret scans covered the complete staged diff with zero findings. GitNexus staged `detect_changes` reported low risk and zero affected execution flows. Its registered `mkt-hub` index warned that it was 44 commits behind the consolidated worktree; a worktree refresh was attempted but did not register a separate index, so the zero-flow result is retained with that freshness limitation. Merge into `master` remains subject to the Beastmode merge approval gate.
 
-Strategy review stop: `strategy_stop=R1_procurement_ready:critical supply, economics, schedule, rights/remedy, and qualified-comparator evidence remain UNKNOWN; JoinBrands schedule remains FAIL`. No login, credential use, platform configuration, outreach, invitation, order/Shopify mutation, terms acceptance, commitment, spend, or publication occurred.
+Historic scale stop: critical supply, large-cohort economics, schedule, rights/remedy, and qualified-comparator evidence remain incomplete; the original JoinBrands schedule fails. The same-day test is ready for account-side drafting under its $100 initial cap. No login, credential use, platform configuration, outreach, invitation, order/Shopify mutation, terms acceptance, commitment, spend, or publication occurred during this repository revision.
 
 ---
 
@@ -975,7 +1058,7 @@ FAILED: Five successive Luna/max contract audits exposed ambiguity in pilot deci
 
 COST: Six fresh `gpt-5.6-luna`/max contract audits were requested and verified from parent-owned session JSONL; token usage is recorded per run and dollar cost is unavailable. Sequential reviews were required because each depended on the prior correction.
 
-RESULT: The original September 1 objective remains NO-GO. Current state is stopped at `R1_procurement_ready`; no external mutation occurred. The five-creator, $750, 21-day pilot is a future downside-capped recommendation only and cannot qualify scale by itself.
+RESULT: The original September 1 objective remains NO-GO. The operator subsequently authorized a separate JP-style JoinBrands validation design: one creator under $100, at most three creators and $200 for the test, then sequential performance ceilings up to $20,000 only while cohort MER is strictly above 1.5 and contribution profit is positive. No external mutation occurred in the repository revision.
 
 ---
 
@@ -1057,7 +1140,7 @@ No behavior change applied. Add reusable validators for economics variables, tra
 
 ### Result
 
-The strategy now buys information before exposure: requalify Insense first, use Collabstr as the bespoke comparator, run only a separately approved five-creator pilot under a $750/21-day cap, and reconsider scale only after a fresh complete Phase 1 pass. The canonical original-campaign decision remains NO-GO.
+The original evidence-first recommendation was superseded by an explicit operator direction for a same-day JoinBrands validation: one creator under $100, no more than three creators or $200 during validation, then sequential ceilings up to $20,000 only with MER strictly above 1.5, positive contribution profit, reconciled tracking/refunds, and minimum-order evidence. The canonical original fixed-deadline decision remains NO-GO.
 
 ### What worked
 
