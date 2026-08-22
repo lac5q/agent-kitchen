@@ -1,13 +1,13 @@
 ---
 name: "turned-yellow-ugc-campaign-2026-08-21"
-title: "Turned Yellow Same-Day JP-Style Creator Test and Scale Strategy"
-description: "JoinBrands one-creator test at $100, $200 validation ceiling, and MER/profit-gated scaling up to $20,000, preserving the historic scale NO-GO."
-publishedAt: "2026-08-21"
-tags: [turned-yellow, ugc, creator-marketing, joinbrands, campaign-operations, strategy, mer]
-keywords: [JoinBrands, JP strategy, UGC, micro-creators, MER, creator test]
+title: "Turned Yellow JoinBrands Test — Paste-Ready Copy and Authentication Handoff"
+description: "Playful JoinBrands launch copy, $100/$200 controls, MER/profit scale gates, and the verified authentication stop point."
+publishedAt: "2026-08-22"
+tags: [turned-yellow, ugc, creator-marketing, joinbrands, campaign-operations, brand-voice, mer]
+keywords: [JoinBrands, JP strategy, UGC, micro-creators, playful copy, authentication handoff]
 author: "Codex director"
 source_session: "01a024f9-15f8-7703-9f40-f6653786101d"
-source_commit: "970bfae3"
+source_commit: "99dc912c"
 model: "gpt-5.6-sol director"
 sources:
   - "https://ads.tiktok.com/help/article/spark-ads-creation-guide"
@@ -62,22 +62,24 @@ sources:
   - "https://turnedyellow.com/`"
   - "https://www.facebook.com/help/instagram/616901995832907"
   - "https://www.ftc.gov/business-guidance/resources/disclosures-101-social-media-influencers"
-  - "mkt-hub:970bfae3"
+  - "mkt-hub:99dc912c"
+  - "browser verification:https://us.brand.joinbrands.com/login:2026-08-22"
   - "operator direction:2026-08-21:$100-$200 test, MER>1.5, conditional $20k ceiling"
-  - "MemroOS:memory_recall JP strategy queries 2026-08-21"
 derived_from:
-  - "mkt-hub:31a9a03f"
-  - "mkt-hub:campaign/SAME-DAY-JP-TEST.md"
-  - "mkt-hub:goal-objective attachment 269da385-e052-4766-b295-9947d85dbc2a"
-  - "MemroOS:content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md@38eb31df9b8ec21028fd61a51a29e7dba7fadcc8"
-regen_prompt: "Refresh the JoinBrands draft fields and exact charges, keep the first creator under $100 and validation under $200, then scale sequentially only when mature cohort MER is above 1.5 and contribution profit is positive."
+  - "mkt-hub:970bfae3"
+  - "mkt-hub:aef34787"
+  - "mkt-hub:campaign/JOINBRANDS-PASTE-COPY.md"
+  - "MemroOS:content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md@375182aff381b4ec694d06687c4aa102b78eef8e"
+regen_prompt: "After the operator authenticates to JoinBrands, paste the approved playful campaign copy into one manual-approval draft, verify the all-in total is at most $100, and stop at Campaign Summary for terms and fee review."
 ---
 
-# Turned Yellow campaign package
+# Turned Yellow campaign handoff
 
-> Active direction: prepare one JoinBrands creator job today under a $100 ceiling; allow at most $200 and three creator/post slots for validation; scale through sequential ceilings up to $20,000 only when mature cohort MER is strictly above 1.5 and contribution profit is positive. The historic September 1 30–40-post objective remains NO-GO.
+> Current status: ACCOUNT AUTHENTICATION REQUIRED. The public JoinBrands site and brand login page were verified on 2026-08-22. No valid automation auth session was available; no password was read or entered, and no campaign/account mutation occurred.
 
-Repository commit: `970bfae3` (`codex/turned-yellow-ugc-2026`). No account access, spend, creator contact, terms acceptance, Shopify mutation, or publication occurred in the repository revision.
+The paste-ready playful campaign copy is complete. After authentication, create one manual-approval job, keep the authenticated all-in total at or below $100, and stop at Campaign Summary before terms/funding/publication.
+
+Repository commit: `99dc912c` (`codex/turned-yellow-ugc-2026`).
 
 ---
 
@@ -85,14 +87,14 @@ Repository commit: `970bfae3` (`codex/turned-yellow-ugc-2026`). No account acces
 
 # Turned Yellow same-day JP-style creator test
 
-Status: **READY FOR ACCOUNT-SIDE DRAFT — 2026-08-21.** This is a small JoinBrands validation test, not the closed 30–40-post September 1 campaign.
+Status: **ACCOUNT AUTHENTICATION REQUIRED — 2026-08-22.** The public JoinBrands flow and brand login page were verified, but no authenticated JoinBrands session or saved automation credential was available. No password was read or entered, and no campaign/account mutation occurred. After the operator signs in, paste `campaign/JOINBRANDS-PASTE-COPY.md` into one draft and stop at Campaign Summary for the fee/terms check. This is a small validation test, not the closed 30–40-post September 1 campaign.
 
 ## Test card
 
 | Setting | Launch value |
 |---|---|
 | Platform | JoinBrands |
-| Campaign name | `TY JP Reaction Test 2026` |
+| Campaign name | `TY Favorite Photo Plot Twist` |
 | Objective | One creator-posted TikTok or Instagram Reel that demonstrates the order-to-reaction workflow and produces attributable sales data |
 | Initial creator count | 1 |
 | Initial spend ceiling | $100 total external campaign cash |
@@ -117,15 +119,15 @@ Do **not** use `assets/hero.png` for this test: it contains Father’s Day timin
 
 Creator-facing summary:
 
-> Turn a favorite photo into a hand-drawn Custom Yellow Style Portrait, capture the reveal and genuine reaction, and show viewers how to create their own. We want a natural 15–30 second TikTok or Reel—not a polished commercial.
+> Take a favorite photo, turn everyone yellow, and film the moment your family realizes the couch has acquired a new cast member. Show the quick ordering process, the portrait reveal, and the real reaction. Natural family chaos beats polished ad-face.
 
 Primary hook:
 
-> “I turned our favorite photo yellow—and did not tell them.”
+> “I turned our favorite photo yellow. Nobody approved this casting decision.”
 
 Required CTA:
 
-> “Create yours with Turned Yellow—use my link/code.”
+> “Turn your favorite photo yellow before the family group chat chooses one for you—use my link/code.”
 
 Required disclosure:
 
@@ -164,6 +166,68 @@ The `$100–$200` test validates setup and creative. No spend above `$200` unloc
 | $20,000 | Prior tranche passes; >=75 cumulative non-refunded orders and Finance confirms margin capacity |
 
 Each row is a ceiling, not an automatic spend instruction. If MER is `<=1.5`, contribution profit is non-positive, tracking is incomplete, or a control exception remains open, pause new commitments and spend. Reconcile each tranche before unlocking the next.
+
+---
+
+## Repository artifact: `campaign/JOINBRANDS-PASTE-COPY.md`
+
+# JoinBrands paste-ready copy — Turned Yellow test
+
+Use only after the authenticated UI confirms the matching fields and the exact total remains within the approved ceiling.
+
+## Campaign name
+
+`TY Favorite Photo Plot Twist`
+
+## Short campaign description
+
+Turn a favorite photo into a hand-drawn Custom Yellow Style Portrait and film the moment your family realizes the couch has acquired a new cast member. Show the quick ordering process, the portrait reveal, and the genuine reaction. Natural family chaos beats polished ad-face.
+
+## Primary hook
+
+`I turned our favorite photo yellow. Nobody approved this casting decision.`
+
+## Deliverable
+
+One original 15–30 second vertical TikTok or Instagram Reel. Show the source photo, explain that you uploaded a photo to order, reveal the finished portrait, capture a genuine reaction, and finish with the tracked link/code. Supply a clean final file and requested raw clips. One revision round may be requested.
+
+## Creator requirements
+
+US-based creator, age 18+, approximately 2,000–50,000 followers, above 4% engagement under the campaign method, and a natural fit for family, couples, gifting, personalized art, or pet/family-sitcom content. Manual approval only.
+
+## Reference note
+
+The before/after reference shows the transformation, not a required script or visual replica. Keep the creator's own voice, home, people, and reaction. Do not use unapproved music, third-party clips, characters, logos, or copied dialogue.
+
+## CTA
+
+`Turn your favorite photo yellow before the family group chat chooses one for you—use my link/code.`
+
+## Caption template
+
+`Ad: I turned our favorite photo yellow. Nobody approved this casting decision. [ONE TRUE, SPECIFIC REACTION LINE.] Turn yours yellow before the family group chat chooses the photo for you: [TRACKED URL] — code [CREATOR CODE]. Turned Yellow paid me, gave me this portrait, and pays me if you buy through my link.`
+
+## Special requirements
+
+- Start the caption with `Ad:` or `#ad` and show a readable in-video disclosure.
+- Enable the platform's branded-content/content-disclosure tool.
+- Use only truthful claims and a genuine reaction.
+- Keep the post public for the agreed term; do not publish before written QA approval.
+- Provide the clean final, requested raw clips, live URL, tracking code, and paid-ad authorization evidence.
+- Obtain written consent for every identifiable person. All creators must be 18+; minors require verified guardian consent.
+
+## Rights and remedy addendum
+
+Before creator commitment, obtain written creator-specific approval for organic reposting; editing, cropping, captioning, and derivative cutdowns; paid social use; TikTok Spark Ads and Meta Partnership Ads where applicable; US and Canada territory; 12 months of content-use rights from acceptance; at least 90 days of whitelisting authorization; delivery of the clean final and requested raw clips; limited sublicensing to Turned Yellow's agencies, contractors, and advertising platforms; commercial-use clearance for music, likenesses, locations, marks, and other third-party material; and the agreed public-live obligation and early-removal remedy.
+
+## Budget fields
+
+- Creator bounty: `$50` unless the authenticated minimum is higher.
+- Initial creators: `1`.
+- Daily job limit: `1`.
+- Counteroffers: `Off`.
+- Creators approval: `Manual`.
+- Stop if the authenticated all-in external total could exceed `$100` for the first creator.
 
 ---
 
@@ -799,7 +863,7 @@ Launch status: **READY FOR AN ACCOUNT-SIDE ONE-CREATOR DRAFT.** The original 30�
 | Brief | `Source files (optional)` | Upload brand-provided logo/reference assets only | upload | optional | first-campaign guide | Creative Lead | this is a brand-input field, not a raw-deliverable control | platform-confirmed label |
 | Brief | raw creator deliverables | clean final plus requested raw clips | contract/brief text | yes for TY | no public dedicated field | QA Lead | downloadable before acceptance | operator-entered equivalent / blocker |
 | Brief | `References (optional)` | approved examples only | upload/URL | optional | platform guide | Creative Lead | rights-cleared assets | platform-confirmed label |
-| Campaign | `Campaign name` | TY JP Reaction Test 2026 | text | yes | operator direction | Operator | exact value | test value |
+| Campaign | `Campaign name` | TY Favorite Photo Plot Twist | text | yes | operator direction | Operator | exact value | test value |
 | Targeting | `Gender` | Any | select | yes | TikTok/Instagram guide | Operator | no unintended exclusion | platform-confirmed label |
 | Targeting | `Preferable age` | 18+ only | select | yes | TikTok/Instagram guide | Operator | reject if 18+ cannot be enforced | platform-confirmed label |
 | Targeting | `Ethnicity` | Any | select | yes | platform guide | Operator | no unintended exclusion | platform-confirmed label |
@@ -882,9 +946,9 @@ Create one distinct, publicly posted 9:16 TikTok or Instagram Reel, 15.0–30.9 
 
 ## Choose one 0–3 second hook
 
-1. Surprise: “I turned our favorite photo yellow—and did not tell them.”
-2. Couple humor: “I found the only gift that made my partner stop roasting my gift choices.”
-3. Personalized gifting: “If they’re impossible to shop for, turn their favorite memory yellow.”
+1. Surprise: “I turned our favorite photo yellow. Nobody approved this casting decision.”
+2. Couple humor: “My partner said no more weird gifts. Anyway, meet our new yellow selves.”
+3. Personalized gifting: “For the person who has everything—except a suspiciously yellow version of the family.”
 
 Natural variations are welcome only if the hook meaning and truthful experience remain intact.
 
@@ -996,7 +1060,7 @@ Status: original fixed-deadline package remains NO-GO; same-day $100–$200 Join
 | Codes/UTMs | `campaign/operations.md` | PASS |
 | Tracker | exact 53-column `campaign/creator-tracker.csv` | PASS |
 | Shopify zero-cost workflow | guarded `draftOrderCreate` / `draftOrderComplete` specification | PASS as unexecuted design |
-| Execution | `campaign/SAME-DAY-JP-TEST.md` | READY FOR ACCOUNT-SIDE DRAFT; no external action performed by this revision |
+| Execution | `campaign/SAME-DAY-JP-TEST.md`, `campaign/JOINBRANDS-PASTE-COPY.md` | Public site and brand login verified 2026-08-22; stopped at authentication because no valid session/credential was available; no external mutation |
 | MemroOS persist/readback | `content/turned-yellow-ugc/turned-yellow-ugc-campaign-2026-08-21.md`; commit `39e28fd271a6a00927a87966900af461c063f06c`; exact 57,414-character readback | PASS via MemroOS gatekeeper server-function fallback |
 | Independent corrected-package review | `.codex/beastmode-runs/20260821T203000Z-luna-final-review-v2/`; 20/20 normalized deterministic checks | ACCEPT |
 | Strategy reset contract | `campaign/STRATEGY-REVIEW-CONTRACT.md`; `.codex/beastmode-runs/20260821T221500Z-luna-strategy-contract-review-r6/` | ACCEPT after five recorded REJECT/correction cycles |
