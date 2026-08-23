@@ -29,9 +29,11 @@ regen_prompt: "Re-run live read-only provider, audience, cadence, approval, seed
 
 # Email send hold decision — August 23, 2026
 
+> **Superseded later on August 23, 2026:** after the operator clarified that Father’s Day lead time is the controlling constraint, the recommendation changed from a blanket hold to a targeted AU/NZ cutoff send. See `content/marketing/au-nz-fathers-day-urgency-override-2026-08-23.md`.
+
 ## Decision
 
-Do not send a production marketing campaign today, Sunday, August 23, 2026. No brand has an authorized August 23 campaign, and the next planned EcommerceBoost slot is Tuesday, August 25.
+This initial decision held all production marketing on Sunday, August 23, 2026 because no dated August 23 campaign was authorized. It did not adequately weight the operator’s required Father’s Day lead time and is no longer the active recommendation.
 
 | Brand | Live state today | Next intended slot | Release constraint |
 |---|---|---|---|
